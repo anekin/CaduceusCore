@@ -28,6 +28,7 @@ from models.dram import DRAMModel
 from engine.timeline import (
     CoreTimeline, LayerBreakdown, SimulationReport, breakdown_events,
 )
+from engine.multicore import MultiCoreTimeline, FIFOConfig, CrossbarConfig
 
 
 # ── Default 3B model trace ──────────────────────────────────────────
@@ -173,6 +174,81 @@ class NPUSimulator:
         )
         return report
 
+    # ── L2: ISA instruction interface ───────────────────────────────
+
+    def run_instructions(self, program: "List[NPUInstruction]") -> SimulationReport:
+        """L2 interface: execute NPU ISA program on the simulator.
+
+        Maps each ISA instruction to the appropriate model call,
+        advancing the timeline with proper overlap semantics.
+        """
+        from engine.isa import NPUInstruction, OpCode
+
+        timeline = CoreTimeline(core_id=0)
+        layer_data: Dict[int, LayerBreakdown] = {}
+        current_layer = 0
+
+        for instr in program:
+            op = instr.opcode
+            ops = instr.operands
+
+            if op in (OpCode.NOP, OpCode.BARRIER):
+                continue
+
+            if op == OpCode.MMUL:
+                N = ops.get("N", 2560)
+                M = 1  # decode mode
+                K = 2560  # hidden_size
+                mxu_result = self.mxu.estimate(M, K, N, weight_preloaded=True)
+                timeline.add_mxu(f"MMUL N={N}", mxu_result.total_cycles, current_layer)
+                if current_layer not in layer_data:
+                    layer_data[current_layer] = LayerBreakdown(layer=current_layer)
+                layer_data[current_layer].mxu += mxu_result.total_cycles
+
+            elif op == OpCode.DMA_LD:
+                size = ops.get("size", 0)
+                dma_cycles = self.dma.estimate_transfer(size, "load")
+                timeline.add_dma_parallel(f"DMA_LD {size}B", dma_cycles, current_layer)
+
+            elif op == OpCode.DMA_ST:
+                size = ops.get("size", 0)
+                dma_cycles = self.dma.estimate_transfer(size, "store")
+                timeline.add_dma_parallel(f"DMA_ST {size}B", dma_cycles, current_layer)
+
+            elif op in (OpCode.SOFTMAX, OpCode.LAYERNORM, OpCode.GELU, OpCode.RELU,
+                        OpCode.SILU, OpCode.MAXPOOL, OpCode.AVGPOOL, OpCode.ROPE):
+                length = ops.get("len", 2560)
+                op_name = op.name.lower()
+                sfu_cycles = self.sfu.estimate(op_name, length)
+                timeline.add_sfu(op_name, sfu_cycles, current_layer)
+                if current_layer not in layer_data:
+                    layer_data[current_layer] = LayerBreakdown(layer=current_layer)
+                layer_data[current_layer].sfu += sfu_cycles
+
+            elif op in (OpCode.KV_LOAD, OpCode.KV_STORE):
+                kv_cycles = self.kv.estimate_per_decode(128, 128)
+                timeline.add_kv(op.name.lower(), kv_cycles, current_layer)
+
+        # DRAM refresh
+        refresh_cycles = self.dram.add_refresh_overhead(timeline.total_cycles)
+        timeline.add_kv("dram_refresh", refresh_cycles, -1)
+
+        total_cycles = timeline.total_cycles
+        decode_us = total_cycles / self.f_mhz
+        decode_tok_per_s = 1e6 / decode_us if decode_us > 0 else 0
+
+        breakdown = breakdown_events(timeline.events)
+
+        return SimulationReport(
+            model_name="Qwen2.5-3B",
+            num_layers=28,
+            decode_per_token_us=decode_us,
+            decode_tok_per_s=decode_tok_per_s,
+            decode_breakdown={k: v / self.f_mhz for k, v in breakdown.items()},
+            layer_breakdowns=sorted(layer_data.values(), key=lambda lb: lb.layer),
+            events=timeline.events,
+        )
+
     def simulate_prefill(self, prompt_len: int = 128) -> SimulationReport:
         """Simulate prefill: M=prompt_len per GEMM.
 
@@ -231,43 +307,61 @@ class NPUSimulator:
 # ── CLI ──────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="NPU System Simulator — Phase 1")
-    parser.add_argument("-c", "--config", default="config/npu_config.yaml",
-                        help="NPU config file")
-    parser.add_argument("-t", "--trace", default=None,
-                        help="CSV trace file (M,K,N,layer,op)")
-    parser.add_argument("--prefill", type=int, default=128,
-                        help="Prefill prompt length (default: 128)")
-    parser.add_argument("-o", "--output", default=None,
-                        help="Output JSON file for results")
-    parser.add_argument("--json", action="store_true",
-                        help="Output JSON to stdout")
+    parser = argparse.ArgumentParser(description="NPU System Simulator — Phase 3")
+    parser.add_argument("-c", "--config", default="config/npu_config.yaml")
+    parser.add_argument("--prefill", type=int, default=128)
+    parser.add_argument("--isa", action="store_true",
+                        help="Use ISA instruction mode (L2 interface)")
+    parser.add_argument("-o", "--output", default=None)
+    parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     sim_dir = Path(__file__).parent
     config_path = sim_dir / args.config
-
     sim = NPUSimulator(str(config_path))
 
-    # Full simulation: decode + prefill
-    decode_trace = generate_qwen3b_trace(prompt_len=1)
-    decode_report = sim.simulate_decode(decode_trace)
+    if args.isa:
+        # ── L2: ISA instruction mode ─────────────────────────────
+        from engine.compiler import NPUCompiler
+        compiler = NPUCompiler(num_cores=1)
+        decode_trace = generate_qwen3b_trace(prompt_len=1)
+        program = compiler.compile_decode(decode_trace, weight_preloaded=True)
+        print(f"[ISA] Compiled {len(program)} instructions for decode")
+        report = sim.run_instructions(program)
+    else:
+        # ── L1: CSV trace mode ───────────────────────────────────
+        decode_trace = generate_qwen3b_trace(prompt_len=1)
+        report = sim.simulate_decode(decode_trace)
 
-    # Inject prefill results into decode report
+    # Inject prefill results
     prefill_report = sim.simulate_prefill(prompt_len=args.prefill)
-    decode_report.prefill_prompt_len = args.prefill
-    decode_report.prefill_total_ms = prefill_report.prefill_total_ms
-    decode_report.prefill_breakdown = prefill_report.prefill_breakdown
+    report.prefill_prompt_len = args.prefill
+    report.prefill_total_ms = prefill_report.prefill_total_ms
+    report.prefill_breakdown = prefill_report.prefill_breakdown
 
-    print(decode_report.to_text())
+    print(report.to_text())
+
+    # ── Multi-core projection ────────────────────────────────────
+    if report.decode_tok_per_s > 0:
+        print(f"\n--- Multi-core Projection ---")
+        mct = MultiCoreTimeline(num_cores=1)
+        base_us = report.decode_per_token_us
+        print(f"  {'Config':12s} {'Decode':>10s} {'Area':>8s} {'Notes'}")
+        print(f"  {'─'*50}")
+        for nc in [1, 2, 4, 8]:
+            mct.num_cores = nc
+            dp = mct.simulate_data_parallel(int(base_us), 1)
+            area = {1: 27, 2: 42, 4: 69, 8: 122}.get(nc, 0)
+            note = "Baseline" if nc == 1 else f"DP, -{int((1-dp['contention_penalty'])*100)}% contention"
+            print(f"  {f'{nc} core':12s} {dp['effective_tok_per_s']:7,.0f} tok/s  {area:4d}mm²  {note}")
 
     # JSON output
     if args.json or args.output:
         output = {
             "decode": {
-                "per_token_us": round(decode_report.decode_per_token_us, 1),
-                "tok_per_s": round(decode_report.decode_tok_per_s, 0),
-                "breakdown": {k: round(v, 1) for k, v in decode_report.decode_breakdown.items()},
+                "per_token_us": round(report.decode_per_token_us, 1),
+                "tok_per_s": round(report.decode_tok_per_s, 0),
+                "breakdown": {k: round(v, 1) for k, v in report.decode_breakdown.items()},
             },
             "prefill": {
                 "prompt_len": args.prefill,
