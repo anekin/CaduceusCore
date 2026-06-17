@@ -1,4 +1,4 @@
-# NPU SoC — 端侧 LLM 推理协处理器
+# CaduceusCore — 端侧 LLM 推理 NPU 协处理器
 
 PCIe 协处理器形态，目标跑通 3B 参数大模型 @ 25+ tok/s。
 
