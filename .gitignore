@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+scale-sim-v3/
+.DS_Store
