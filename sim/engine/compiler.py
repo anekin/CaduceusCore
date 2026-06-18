@@ -30,12 +30,13 @@ class NPUCompiler:
         self._addr = AddressAllocator()
 
     def compile_decode(self, trace: List[Tuple[int, int, int, int, str]],
-                       weight_preloaded: bool = True) -> List[NPUInstruction]:
+                       weight_preloaded: bool = False) -> List[NPUInstruction]:
         """Compile decode token trace → ISA program.
 
         Args:
             trace: List of (M, K, N, layer, op_name)
-            weight_preloaded: True for decode (weights in SRAM), False for prefill
+            weight_preloaded: v2 default False — 3B weights (1.5GB) > SRAM (2.5MB),
+                              always stream from DRAM. Set True only for v1 compat.
         """
         program = []
         prev_layer = -1

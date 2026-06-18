@@ -1,0 +1,294 @@
+#!/usr/bin/env python3
+"""设计空间搜索器 — 多引擎多配置对比，输出 Pareto 前沿
+
+用法:
+  python3 design_space_explorer.py              # 默认搜索
+  python3 design_space_explorer.py --quick      # 快速扫描（减少组合）
+  python3 design_space_explorer.py --output results/pareto.json
+"""
+
+import sys, json, copy, math, itertools
+from pathlib import Path
+from typing import Dict, Any, List, Tuple
+
+sys.path.insert(0, str(Path(__file__).parent))
+from engine.ppa_model import AreaModel, PowerModel, PPA
+from engine.mac_engine import create_engine
+
+import yaml
+
+SIM_DIR = Path(__file__).parent
+Qwen3B_TRACE = [
+    # (M, K, N, layer, op_name) — just dimensions, layers handled by caller
+    # Attention
+    (1, 2560, 4096, 0, "Q_proj"),
+    (1, 2560, 256, 0, "K_proj"),
+    (1, 2560, 256, 0, "V_proj"),
+    (1, 4096, 2560, 0, "O_proj"),
+    # FFN
+    (1, 2560, 9728, 0, "FFN_gate"),
+    (1, 2560, 9728, 0, "FFN_up"),
+    (1, 9728, 2560, 0, "FFN_down"),
+]
+
+SFU_CYCLES_PER_LAYER = {
+    "attn": 33,   # softmax + layernorm + rope (simplified)
+    "ffn": 8,     # gelu + layernorm
+}
+
+KV_CYCLES_PER_LAYER = 125  # per-layer KV access
+
+
+def simulate_layer(config: Dict[str, Any]) -> Tuple[int, int]:
+    """Simulate one transformer layer. Returns (total_cycles, weight_bytes)."""
+    engine = create_engine(config)
+    opts = config.get("optimizations", {})
+    weight_cache = opts.get("weight_cache", False)
+
+    total = 0
+    weight_bytes = 0
+    i = 0
+    ops = Qwen3B_TRACE
+
+    while i < len(ops):
+        M, K, N, _, name = ops[i]
+
+        # Weight cache merge
+        if (weight_cache and name == "FFN_gate" and i + 1 < len(ops)
+                and ops[i + 1][4] == "FFN_up"):
+            r = engine.estimate_weight_cache_pair(M, K, N)
+            i += 2
+        else:
+            r = engine.estimate(M, K, N)
+            i += 1
+
+        total += r.total_cycles
+        weight_bytes += r.weight_bytes
+
+        # SFU
+        if name == "O_proj":
+            total += SFU_CYCLES_PER_LAYER["attn"]
+        elif name == "FFN_down":
+            total += SFU_CYCLES_PER_LAYER["ffn"]
+
+    # KV cache
+    total += KV_CYCLES_PER_LAYER * len(ops)
+
+    return total, weight_bytes
+
+
+def tok_s_from_layer(layer_cycles: int, num_layers: int = 28) -> float:
+    """Convert per-layer cycles to tok/s @ 1GHz"""
+    f_mhz = 1000
+    total_us = layer_cycles * num_layers / f_mhz
+    return round(1e6 / total_us, 1) if total_us > 0 else 0
+
+
+def generate_configs(quick: bool = False) -> List[Dict[str, Any]]:
+    """Generate design space configurations to sweep."""
+    with open(SIM_DIR / "config" / "design_space.yaml") as f:
+        base = yaml.safe_load(f)
+
+    configs = []
+
+    # Engine types
+    engines = ["systolic", "block"]
+
+    # Array dimensions (constrained by area)
+    if quick:
+        dims = [(128, 128), (128, 256), (256, 256)]
+    else:
+        dims = [(64, 64), (96, 96), (128, 128), (128, 192),
+                (128, 256), (192, 256), (256, 256)]
+
+    # DMA bandwidth multipliers
+    if quick:
+        bw_mults = [1.0, 2.0]
+    else:
+        bw_mults = [1.0, 2.0, 4.0]
+
+    # Weight precision
+    if quick:
+        precisions = [4, 2]
+    else:
+        precisions = [4, 2]  # INT4, INT2
+
+    # Frequency
+    freqs = [800, 1000] if not quick else [1000]
+
+    # DRAM width
+    dram_widths = [64, 128] if not quick else [64]
+
+    for engine_type in engines:
+        for H, W in dims:
+            # Block engine: area scales as H*W/128² * 32
+            # Constrain to <200mm² for feasibility
+            if engine_type == "block" and H * W / (128 * 128) * 32 > 200:
+                continue
+            if engine_type == "systolic" and H * W / (128 * 128) * 8 > 80:
+                continue
+
+            for bw_mult in bw_mults:
+                for w_bits in precisions:
+                    for freq in freqs:
+                        for dw in dram_widths:
+                            # weight_cache only makes sense with sufficient DMA
+                            for wc in [False, True]:
+                                if wc and bw_mult < 1.0:
+                                    continue  # cache needs enough BW
+
+                                cfg = copy.deepcopy(base)
+                                cfg["mac_engine"]["type"] = engine_type
+                                cfg["mac_engine"]["array_height"] = H
+                                cfg["mac_engine"]["array_width"] = W
+                                cfg["mac_engine"]["weight_precision_bits"] = w_bits
+                                cfg["mac_engine"]["frequency_mhz"] = freq
+                                cfg["memory"]["dram_width_bits"] = dw
+                                if dw >= 128:
+                                    cfg["memory"]["bandwidth_gbps"] = 51.2 * (dw / 64)
+                                    cfg["memory"]["bandwidth_bytes_per_cycle"] = (
+                                        51.2 * (dw / 64) * (freq / 1000))
+                                cfg["optimizations"]["weight_cache"] = wc
+                                cfg["optimizations"]["dma_bw_multiplier"] = bw_mult
+
+                                configs.append(cfg)
+
+    return configs
+
+
+def evaluate_config(cfg: Dict[str, Any], area_model: AreaModel,
+                    power_model: PowerModel) -> PPA:
+    """Evaluate one configuration → PPA."""
+    engine_type = cfg["mac_engine"]["type"]
+
+    layer_cycles, _ = simulate_layer(cfg)
+    tok_s = tok_s_from_layer(layer_cycles)
+    area = area_model.estimate(cfg, engine_type)
+    power = power_model.estimate(area_model, cfg, engine_type)
+
+    H = cfg["mac_engine"]["array_height"]
+    W = cfg["mac_engine"]["array_width"]
+    w_bits = cfg["mac_engine"]["weight_precision_bits"]
+    wc = cfg["optimizations"]["weight_cache"]
+    bw = cfg["optimizations"]["dma_bw_multiplier"]
+    freq = cfg["mac_engine"]["frequency_mhz"]
+
+    label = (f"{engine_type[:4]} {H}×{W} INT{w_bits} "
+             f"{freq}MHz "
+             f"{'WC' if wc else ''} "
+             f"{'BW×'+str(int(bw)) if bw > 1 else ''}")
+
+    return PPA(tok_s=tok_s, area_mm2=area, power_w=power, config_label=label)
+
+
+def find_pareto(ppas: List[PPA]) -> List[PPA]:
+    """Find Pareto-optimal points (max tok/s, min area)."""
+    pareto = []
+    for p in ppas:
+        dominated = False
+        for q in ppas:
+            if (q.tok_s >= p.tok_s and q.area_mm2 <= p.area_mm2 and
+                    (q.tok_s > p.tok_s or q.area_mm2 < p.area_mm2)):
+                dominated = True
+                break
+        if not dominated:
+            pareto.append(p)
+    return sorted(pareto, key=lambda x: x.area_mm2)
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--quick", action="store_true")
+    parser.add_argument("--output", default=None)
+    parser.add_argument("--top", type=int, default=20,
+                        help="Show top N results")
+    args = parser.parse_args()
+
+    with open(SIM_DIR / "config" / "design_space.yaml") as f:
+        base_cfg = yaml.safe_load(f)
+
+    area_model = AreaModel(base_cfg)
+    power_model = PowerModel(base_cfg)
+
+    configs = generate_configs(quick=args.quick)
+    print(f"Design space: {len(configs)} configurations")
+    print(f"  Engine types: systolic, block")
+    dim_set = set((c['mac_engine']['array_height'],
+                   c['mac_engine']['array_width']) for c in configs)
+    print(f"  Array dims: {len(dim_set)}")
+    print(f"  Sweeping...", end=" ", flush=True)
+
+    results: List[PPA] = []
+    for cfg in configs:
+        try:
+            ppa = evaluate_config(cfg, area_model, power_model)
+            # Filter: unreasonable area
+            if ppa.area_mm2 <= 200:
+                results.append(ppa)
+        except Exception as e:
+            pass
+
+    print(f"{len(results)} valid")
+
+    # Pareto frontier
+    pareto = find_pareto(results)
+
+    # Top by tok/s (filter by area < 150mm²)
+    reasonable = [r for r in results if r.area_mm2 <= 150]
+    reasonable.sort(key=lambda x: x.tok_s, reverse=True)
+
+    # ── Output ──
+    print(f"\n{'='*90}")
+    print(f"  Pareto 前沿 (面积 vs 性能)")
+    print(f"  {'Config':<45} {'tok/s':>8} {'Area':>8} {'Power':>8} {'tok/W':>8}")
+    print(f"  {'-'*85}")
+    for p in pareto[:15]:
+        arrow = "← Pareto" if p in pareto else ""
+        print(f"  {p.config_label:<45} {p.tok_s:>7.0f} {p.area_mm2:>6.0f}mm² "
+              f"{p.power_w:>6.1f}W {p.efficiency_tok_per_watt:>7.1f}")
+
+    # ── Top by tok/s ──
+    print(f"\n  Top {args.top} by tok/s (area ≤ 150mm²):")
+    print(f"  {'Config':<45} {'tok/s':>8} {'Area':>8} {'Power':>8} {'tok/W':>8}")
+    print(f"  {'-'*85}")
+    for p in reasonable[:args.top]:
+        pareto_flag = "←" if p in pareto else ""
+        print(f"  {p.config_label:<45} {p.tok_s:>7.0f} {p.area_mm2:>6.0f}mm² "
+              f"{p.power_w:>6.1f}W {p.efficiency_tok_per_watt:>7.1f} {pareto_flag}")
+
+    # ── Best per engine type ──
+    print(f"\n  Best per engine type (area ≤ 80mm²):")
+    for eng in ["systolic", "block"]:
+        eng_results = [r for r in results
+                       if eng in r.config_label and r.area_mm2 <= 80]
+        if eng_results:
+            best = max(eng_results, key=lambda x: x.tok_s)
+            print(f"    {eng}: {best.tok_s:.0f} tok/s, {best.area_mm2:.0f}mm², "
+                  f"{best.power_w:.1f}W — {best.config_label}")
+
+    # ── Save ──
+    if args.output:
+        output = {
+            "total_configs": len(configs),
+            "valid_results": len(results),
+            "pareto_frontier": [
+                {"label": p.config_label, "tok_s": p.tok_s,
+                 "area_mm2": p.area_mm2, "power_w": p.power_w}
+                for p in pareto
+            ],
+            "top_results": [
+                {"label": p.config_label, "tok_s": p.tok_s,
+                 "area_mm2": p.area_mm2, "power_w": p.power_w}
+                for p in reasonable[:args.top]
+            ],
+        }
+        out_path = SIM_DIR / args.output if not args.output.startswith("/") else Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w") as f:
+            json.dump(output, f, indent=2)
+        print(f"\n  Saved to {args.output}")
+
+
+if __name__ == "__main__":
+    main()

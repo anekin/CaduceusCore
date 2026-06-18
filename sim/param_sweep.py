@@ -97,7 +97,7 @@ class ParamSweeper:
         # Simulate 28 layers × 7 matmuls
         for layer in range(28):
             for (M, K, N, op_name) in gemms:
-                r = mxu.estimate(M, K, N, weight_preloaded=True)
+                r = mxu.estimate(M, K, N)  # v2: weight_preloaded removed, default False
                 total_mxu += r.total_cycles
             # SFU per layer
             total_mxu += sfu.estimate("softmax", 2560)

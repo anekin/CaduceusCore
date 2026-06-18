@@ -1,0 +1,88 @@
+# ═══════════════════════════════════════════════════
+# NPU 设计空间基准配置 — 所有可调参数
+# ═══════════════════════════════════════════════════
+
+# ── MAC 引擎 ──
+mac_engine:
+  type: systolic          # systolic | block
+  array_height: 128       # 64, 96, 128, 192, 256
+  array_width: 128        # 64, 96, 128, 192, 256, 384
+  frequency_mhz: 1000     # 500, 800, 1000, 1200
+  weight_precision_bits: 4    # 2(INT2), 4(INT4), 8(INT8)
+  activation_precision_bits: 8  # 8(INT8), 16(BF16)
+  accumulate_precision_bits: 32
+  dataflow: weight_stationary  # weight_stationary | output_stationary (systolic only)
+  double_buffer: true
+  ops_per_mac: 2
+
+# ── 存储层次 ──
+memory:
+  type: LPDDR5-6400       # LPDDR5-6400 | LPDDR5X-8533 | HBM3
+  bandwidth_gbps: 51.2    # 51.2, 102.4, 204.8
+  bandwidth_bytes_per_cycle: 51.2
+  dram_efficiency: 0.85   # 0.80-0.90
+  dram_width_bits: 64     # 64 | 128
+  tRC_cycles: 48
+  tRAS_cycles: 42
+  refresh_overhead_percent: 3.0
+
+sram:
+  l1_per_core_kb: 512
+  l2_shared_kb: 2048
+  banks: 16
+  read_width_bits: 256
+  write_width_bits: 256
+
+# ── 硬件优化开关 ──
+optimizations:
+  weight_cache: false     # PE 双 weight 寄存器
+  dma_bw_multiplier: 1.0  # 1.0=64-bit, 2.0=128-bit/4ch
+
+# ── 外设 ──
+dma:
+  channels: 2
+  burst_size_bytes: 256
+  descriptor_overhead_cycles: 5
+  max_pending_descriptors: 16
+
+sfu:
+  width: 128
+  pipeline_cycles:
+    softmax: 8
+    layernorm: 6
+    gelu: 4
+    relu: 1
+    silu: 4
+    rope: 12
+    maxpool: 3
+    avgpool: 3
+
+kv_cache:
+  sram_kb: 256
+  dram_region_mb: 96
+  precision_bits: 8
+
+interconnect:
+  type: crossbar
+  port_bandwidth_gbps: 500
+
+# ── 面积模型参数 ──
+area_model:
+  process_node: 12        # nm (TSMC)
+  systolic_pe_area_mm2: 8.0      # 128×128 baseline
+  block_pe_area_mm2: 32.0        # 128×128 baseline (~4× systolic)
+  sfu_area_mm2: 2.0
+  l1_sram_per_kb_mm2: 0.002
+  l2_sram_per_kb_mm2: 0.0015
+  dma_area_mm2: 1.0
+  riscv_area_mm2: 1.0
+  pcie_area_mm2: 3.5
+  dram_phy_area_mm2: 7.0
+  crossbar_area_mm2: 1.5
+  dma_channels_area_per_channel_mm2: 0.5
+
+# ── 约束 ──
+constraints:
+  max_area_mm2: 150
+  max_power_w: 50
+  target_tok_s: 25

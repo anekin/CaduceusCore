@@ -93,54 +93,81 @@ class NPUSimulator:
         )
 
     def simulate_decode(self, trace: List[Tuple[int, int, int, int, str]]) -> SimulationReport:
-        """Simulate decode: M=1 per GEMM.
+        """Simulate decode: M=1 per GEMM — v2 bandwidth-aware model.
 
-        Key insight: for weight-stationary decode, weights are loaded ONCE
-        at inference start (prefill). Per-token decode only streams
-        activations and KV cache through the array.
+        v2: Weights stream from DRAM every token (too large for SRAM).
+        MXU v2 model accounts for weight tiling + DMA overlap internally.
+
+        v3: weight_cache optimization — merges FFN_gate+FFN_up pairs
+        that share (M,K) into a single dual-weight-register estimation.
         """
         timeline = CoreTimeline(core_id=0)
         layer_data: Dict[int, LayerBreakdown] = {}
-        total_tokens = 128  # base context size for KV estimation
+        total_tokens = 128
+        total_weight_bytes = 0
 
-        for (M, K, N, layer, op_name) in trace:
+        # Check optimizations
+        opts = self.config.get("optimizations", {})
+        weight_cache_enabled = opts.get("weight_cache", False)
+
+        # Pre-process: merge gate+up pairs if weight_cache enabled
+        i = 0
+        while i < len(trace):
+            M, K, N, layer, op_name = trace[i]
+
             if layer not in layer_data:
                 layer_data[layer] = LayerBreakdown(layer=layer)
-                # Layer switch: KV cache SRAM reload overhead
                 kv_switch = self.kv.layer_switch_cost()
-                timeline.add_kv(f"layer_switch", kv_switch, layer)
+                timeline.add_kv("layer_switch", kv_switch, layer)
                 layer_data[layer].kv_cache += kv_switch
 
-            # MXU: GEMM execution (weights preloaded for decode)
-            mxu_result = self.mxu.estimate(M, K, N, weight_preloaded=True)
+            # ── Weight Cache: merge FFN_gate + FFN_up ──
+            if (weight_cache_enabled and op_name == "FFN_gate"
+                    and i + 1 < len(trace)):
+                next_M, next_K, next_N, next_layer, next_op = trace[i + 1]
+                if (next_op == "FFN_up" and next_M == M
+                        and next_K == K and next_layer == layer):
+                    # Merged estimation
+                    mxu_result = self.mxu.estimate_weight_cache_pair(M, K, N)
+                    mxu_cycles = mxu_result.total_cycles
+                    timeline.add_mxu(
+                        f"Gate+Up (cache, {M}×{K}×{N}, "
+                        f"{mxu_result.num_tiles} dual-tiles)",
+                        mxu_cycles, layer)
+                    layer_data[layer].mxu += mxu_cycles
+                    total_weight_bytes += mxu_result.weight_bytes
+
+                    # KV access (once for the pair)
+                    kv_cycles = self.kv.estimate_per_decode(total_tokens, total_tokens)
+                    timeline.add_kv("kv_access", kv_cycles, layer)
+                    layer_data[layer].kv_cache += kv_cycles
+
+                    i += 2  # skip both gate and up
+                    continue
+
+            # ── Standard single GEMM ──
+            mxu_result = self.mxu.estimate(M, K, N)
             mxu_cycles = mxu_result.total_cycles
-            timeline.add_mxu(f"{op_name} ({M}×{K}×{N})", mxu_cycles, layer)
+            timeline.add_mxu(
+                f"{op_name} ({M}×{K}×{N}, {mxu_result.num_tiles}tiles)",
+                mxu_cycles, layer)
             layer_data[layer].mxu += mxu_cycles
+            total_weight_bytes += mxu_result.weight_bytes
 
-            # DMA: activation load only (weights pre-loaded, decode-only)
-            # Activation: M×K elements × activation_bits/8 bytes
-            act_bytes = math.ceil(M * K * self.config["mxu"]["activation_precision_bits"] / 8)
-            dma_raw = self.dma.estimate_transfer(act_bytes, "load")
-            eff, hidden = self.dma.estimate_effective(dma_raw, mxu_cycles)
-            timeline.add_dma_parallel(f"Load Act({op_name})", dma_raw, layer)
-            layer_data[layer].dma_weight += dma_raw
-            layer_data[layer].dma_effective += eff
-
-            # SFU: applied once per layer (not per GEMM)
-            # We apply it after the last GEMM of the layer
-            if op_name in ("O_proj",):  # after attention
+            # SFU: applied once per layer
+            if op_name in ("O_proj",):
                 sfu_cycles = self.sfu.estimate("softmax", 2560)
                 sfu_cycles += self.sfu.estimate("layernorm", 2560)
                 sfu_cycles += self.sfu.estimate("rope", 2560 * 2)
                 timeline.add_sfu("attn_sfu", sfu_cycles, layer)
                 layer_data[layer].sfu += sfu_cycles
-            elif op_name in ("FFN_down",):  # after FFN
+            elif op_name in ("FFN_down",):
                 sfu_cycles = self.sfu.estimate("gelu", 9728)
                 sfu_cycles += self.sfu.estimate("layernorm", 2560)
                 timeline.add_sfu("ffn_sfu", sfu_cycles, layer)
                 layer_data[layer].sfu += sfu_cycles
 
-            # KV Cache: per-GEMM access (amortized)
+            # KV Cache: per-GEMM access
             kv_cycles = self.kv.estimate_per_decode(total_tokens, total_tokens)
             timeline.add_kv("kv_access", kv_cycles, layer)
             layer_data[layer].kv_cache += kv_cycles
@@ -148,6 +175,8 @@ class NPUSimulator:
             # Update layer total
             layer_data[layer].total = (layer_data[layer].mxu + layer_data[layer].sfu
                                         + layer_data[layer].kv_cache)
+
+            i += 1
 
         # Add DRAM refresh overhead (proportional to total)
         total_cycles_before = timeline.total_cycles
@@ -199,7 +228,7 @@ class NPUSimulator:
                 N = ops.get("N", 2560)
                 M = 1  # decode mode
                 K = 2560  # hidden_size
-                mxu_result = self.mxu.estimate(M, K, N, weight_preloaded=True)
+                mxu_result = self.mxu.estimate(M, K, N)
                 timeline.add_mxu(f"MMUL N={N}", mxu_result.total_cycles, current_layer)
                 if current_layer not in layer_data:
                     layer_data[current_layer] = LayerBreakdown(layer=current_layer)
@@ -259,14 +288,9 @@ class NPUSimulator:
         timeline = CoreTimeline(core_id=0)
 
         for (M, K, N, layer, op_name) in trace:
-            mxu_result = self.mxu.estimate(M, K, N, weight_preloaded=False)
+            mxu_result = self.mxu.estimate(M, K, N)
             mxu_cycles = mxu_result.total_cycles
             timeline.add_mxu(f"{op_name} ({M}×{K}×{N})", mxu_cycles, layer)
-
-            # DMA: load weights (prefill — first time)
-            weight_bytes = math.ceil(K * N * self.config["mxu"]["weight_precision_bits"] / 8)
-            dma_raw = self.dma.estimate_transfer(weight_bytes, "load")
-            timeline.add_dma_parallel(f"Load W({op_name})", dma_raw, layer)
 
             if op_name in ("O_proj",):
                 sfu_cycles = self.sfu.estimate("softmax", 2560 * prompt_len)
@@ -325,7 +349,7 @@ def main():
         from engine.compiler import NPUCompiler
         compiler = NPUCompiler(num_cores=1)
         decode_trace = generate_qwen3b_trace(prompt_len=1)
-        program = compiler.compile_decode(decode_trace, weight_preloaded=True)
+        program = compiler.compile_decode(decode_trace)  # v2: weights stream from DRAM (compiler default=False)
         print(f"[ISA] Compiled {len(program)} instructions for decode")
         report = sim.run_instructions(program)
     else:
