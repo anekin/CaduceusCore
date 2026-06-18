@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 scale-sim-v3/
 .DS_Store
+ggml-npu/baseline.json
+ggml-npu/sim_baseline.json
+ggml-npu/per_op_baseline.json
