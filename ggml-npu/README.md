@@ -464,28 +464,47 @@ cd ~/npu/ggml-npu
 
 ---
 
-## 九、当前项目状态（Phase 2）
+## 九、当前项目状态（Phase 3: Hex File Protocol）
 
-### 架构
+### 9.1 架构
 
 ```
-llama.cpp (CPU)                     npu_server.py (NPU)
-──────────────                      ──────────────────
-BLAS: ADD/ROPE/NORM/...             Socket batch compute
-  │                                 ├─ 接收批量 MUL_MAT
-  │  MUL_MAT ──Socket batch──►      ├─ 逐个计算（Phase2: 返零）
-  │  ◄──结果────────────────        └─ 返回所有结果
-  │
-  └─ token 采样
+llama.cpp (CPU)                     npu_server.py (NPU Hex Watcher)
+──────────────                      ──────────────────────────────
+  graph_compute()
+    → collect MUL_MAT tasks           scan /tmp/npu_stimulus/
+    → write batch_N/act_*.hex           → find READY sentinels
+    → write manifest.json               → read manifest + act hex
+    → write READY ──────────────►       → lazy dequant weight (Q4_K/Q6_K)
+                                       → numpy.matmul (real compute)
+    ◄──────────── write DONE            → write out_*.hex + DONE
+    → read out_*.hex
+    → memcpy → tensor->data
+    │
+    └─ token 采样 (CPU)
 ```
+
+**文件接口（非 Socket）：**
+- 所有数据通过 `/tmp/npu_stimulus/batch_NNNNN/` 交换
+- hex 格式：每行 8 位十六进制 = 一个 float32
+- 协议：`READY`→`DONE` sentinels
+- **兼容 RTL**：`$readmemh("act_0.hex", mem)` / `$writememh("out_0.hex", mem)`
+
+### 9.2 Phase 进展
+
+| 阶段 | 内容 | 状态 |
+|------|------|------|
+| Phase 1 | Skeleton: 日志 + MUL_MAT 拦截 | ✅ |
+| Phase 2 | Socket batch compute（返零） | ✅ |
+| **Phase 3** | **Hex 文件协议 + 真 MUL_MAT (numpy)** | ✅ 当前 |
+| Phase 4 | 性能优化（共享内存 / 多进程） | 待推进 |
 
 ### 双模运行
 
 | 模式 | 命令 | 说明 |
 |------|------|------|
-| Phase 2 计算 | `python3 npu_server.py` | CPU 真把 MUL_MAT 发给 NPU |
-| 性能仿真 | 自动随 batch 触发 | 跑 NPUSimulator（128×128 WC，3B→20 tok/s，7B→8.7 tok/s） |
-| Hex stimulus | 自动生成 | `/tmp/npu_stimulus/` 供 RTL 验证用 |
+| Hex watcher | `python3 npu_server.py --model 3B` | 扫描 batch 目录做真 MUL_MAT, Q4_K/Q6_K 反量化 |
+| 性能仿真 | 自动随 batch 触发 | 跑 NPUSimulator（128×128 WC, 3B→20 tok/s, 7B→8.7 tok/s） |
 
 ### Dev Loop
 
@@ -504,13 +523,13 @@ python3 npu_dev_loop.py --sim-model 7B --force
 
 | 文件 | 作用 |
 |------|------|
-| `ggml-npu.cpp` | NPU backend：supports_op(MUL_MAT), batched graph_compute, hex dump |
+| `ggml-npu.cpp` | NPU backend: supports_op(MUL_MAT), hex file batch compute |
 | `ggml-npu.h` | 头文件 |
-| `npu_server.py` | Phase 2 计算服务器 + NPU 性能仿真 |
+| `npu_server.py` | Phase 3 hex watcher: 反量化 + numpy matmul + NPU 仿真 |
+| `q4_dequant.py` | Q4_K/Q6_K 向量化反量化 (numpy, QK_K=256) |
 | `npu_dev_loop.py` | 自动化编译→测试→对比→回归检测 |
-| `qwen7b_sim.py` | 7B trace 生成器 |
 | `CMakeLists.txt` | CMake 集成 |
-| `/tmp/npu_stimulus/manifest.json` | Hex 刺激文件索引（RTL 就绪后直接用） |
+| `/tmp/npu_stimulus/batch_N/` | Hex batch 目录（manifest.json, act_*.hex, out_*.hex） |
 
 ### 性能基线（128×128 WC, INT4, 1000MHz）
 
@@ -518,3 +537,14 @@ python3 npu_dev_loop.py --sim-model 7B --force
 |------|--------|-------|------|
 | Qwen2.5-3B | 50,245 μs | 20 | MXU 94.7% |
 | Qwen2.5-7B | 114,491 μs | 8.7 | MXU 94.8% |
+
+### 🔬 Phase 3 实测数据
+
+| 指标 | 值 |
+|------|-----|
+| Python numpy GFLOPS (matmul) | ~0.2 GFLOPS |
+| 首次 dequant (大权重, ~1200 MFLOP) | ~16s |
+| Cache 命中 dequant | 0ms |
+| 权重加载 (399 tensors, 5GB Q4_K/Q6_K) | ~3.5s |
+| C++ 写 hex 文件 | <1ms/batch |
+| 端到端吞吐 (受 Python 限制) | ~0.2 tok/s（实际受 numpy 逐 batch 开销主导） |
