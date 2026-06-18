@@ -21,6 +21,7 @@ class LayerBreakdown:
     layer: int
     mxu: int = 0
     sfu: int = 0
+    vector: int = 0
     dma_weight: int = 0
     dma_effective: int = 0
     kv_cache: int = 0
@@ -134,6 +135,15 @@ class CoreTimeline:
         self.events.append(ev)
         return ev
 
+    def add_vector(self, op: str, cycles: int, layer: int) -> TimelineEvent:
+        """Vector unit: can overlap with SFU (separate datapath)."""
+        start = self._current_cycle
+        end = start + cycles
+        self._current_cycle = end
+        ev = TimelineEvent("vector", op, start, end, layer)
+        self.events.append(ev)
+        return ev
+
     def add_dma_parallel(self, op: str, cycles: int, layer: int) -> TimelineEvent:
         """DMA that can overlap with MXU: starts now, may extend beyond MXU."""
         start = self._current_cycle
@@ -172,6 +182,7 @@ def breakdown_events(events: List[TimelineEvent]) -> Dict[str, float]:
             key = {
                 "mxu": "MXU",
                 "sfu": "SFU",
+                "vector": "Vector",
                 "dma": "DMA (stall)",
                 "kv": "KV Cache",
                 "riscv": "RISC-V",

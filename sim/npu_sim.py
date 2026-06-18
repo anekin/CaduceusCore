@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from models.mxu import MXUModel
 from models.sfu import SFUModel
+from models.vector import VectorModel
 from models.dma import DMAModel
 from models.kv_cache import KVCacheModel
 from models.dram import DRAMModel
@@ -83,6 +84,7 @@ class NPUSimulator:
         # Initialize models
         self.mxu = MXUModel(self.config)
         self.sfu = SFUModel(self.config)
+        self.vector = VectorModel(self.config)
         self.dma = DMAModel(self.config)
         self.kv = KVCacheModel(self.config)
         self.dram = DRAMModel(self.config)
@@ -154,18 +156,34 @@ class NPUSimulator:
             layer_data[layer].mxu += mxu_cycles
             total_weight_bytes += mxu_result.weight_bytes
 
-            # SFU: applied once per layer
+            # ── SFU + Vector: decomposed softmax ──
             if op_name in ("O_proj",):
-                sfu_cycles = self.sfu.estimate("softmax", 2560)
-                sfu_cycles += self.sfu.estimate("layernorm", 2560)
-                sfu_cycles += self.sfu.estimate("rope", 2560 * 2)
-                timeline.add_sfu("attn_sfu", sfu_cycles, layer)
+                # Softmax decomposition: Vector(max_reduce, sub) → SFU(exp) → Vector(sum_reduce) → SFU(div)
+                HIDDEN = 2560
+                vec_softmax = self.vector.estimate_softmax_vector_parts(HIDDEN)
+                sfu_softmax = self.sfu.estimate_softmax_decomposed(HIDDEN)
+
+                sfu_cycles = vec_softmax["max_reduce"] + sfu_softmax["exp"] + vec_softmax["sum_reduce"] + sfu_softmax["div"]
+                sfu_cycles += self.sfu.estimate("layernorm", HIDDEN)
+                sfu_cycles += self.sfu.estimate("rope", HIDDEN * 2)
+                timeline.add_sfu("attn_sfu (exp+div+ln+rope)", sfu_cycles, layer)
                 layer_data[layer].sfu += sfu_cycles
+
+                vec_cycles = vec_softmax["scale_sub"] + self.vector.estimate_residual_add(HIDDEN)
+                timeline.add_vector("attn_vec (sub+residual)", vec_cycles, layer)
+                layer_data[layer].vector += vec_cycles
+
             elif op_name in ("FFN_down",):
-                sfu_cycles = self.sfu.estimate("gelu", 9728)
-                sfu_cycles += self.sfu.estimate("layernorm", 2560)
-                timeline.add_sfu("ffn_sfu", sfu_cycles, layer)
+                INTERMEDIATE = 9728
+                HIDDEN = 2560
+                sfu_cycles = self.sfu.estimate("gelu", INTERMEDIATE)
+                sfu_cycles += self.sfu.estimate("layernorm", HIDDEN)
+                timeline.add_sfu("ffn_sfu (gelu+ln)", sfu_cycles, layer)
                 layer_data[layer].sfu += sfu_cycles
+
+                vec_cycles = self.vector.estimate_residual_add(HIDDEN)
+                timeline.add_vector("ffn_vec (residual)", vec_cycles, layer)
+                layer_data[layer].vector += vec_cycles
 
             # KV Cache: per-GEMM access
             kv_cycles = self.kv.estimate_per_decode(total_tokens, total_tokens)
@@ -174,7 +192,7 @@ class NPUSimulator:
 
             # Update layer total
             layer_data[layer].total = (layer_data[layer].mxu + layer_data[layer].sfu
-                                        + layer_data[layer].kv_cache)
+                                        + layer_data[layer].vector + layer_data[layer].kv_cache)
 
             i += 1
 

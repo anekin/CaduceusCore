@@ -29,7 +29,12 @@ sram:
 sfu:
   width: 128                    # 每 cycle 处理 128 个元素
   pipeline_cycles:
-    softmax: 8
+    softmax: 8                  # legacy（向后兼容）
+    exp: 12                     # exponential
+    div: 16                     # division
+    sqrt: 20                    # square root
+    log: 18                     # natural log
+    tanh: 14                    # hyperbolic tangent
     layernorm: 6
     gelu: 4
     relu: 1
@@ -37,6 +42,16 @@ sfu:
     rope: 12
     maxpool: 3
     avgpool: 3
+
+vector:
+  width: 128                    # SIMD width (elements/cycle), INT8=256, FP16=128
+  ops:
+    add: 1                      # element-wise
+    mul: 1
+    scale: 1                    # scalar broadcast
+    bias: 1
+    relu: 1
+    mask: 1
 
 kv_cache:
   sram_kb: 256
