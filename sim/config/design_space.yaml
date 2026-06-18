@@ -18,10 +18,10 @@ mac_engine:
 # ── 存储层次 ──
 memory:
   type: LPDDR5-6400       # LPDDR5-6400 | LPDDR5X-8533 | HBM3
-  bandwidth_gbps: 51.2    # 51.2, 102.4, 204.8
+  bandwidth_gbps: 51.2    # swept: 51.2, 102.4, 204.8, 460, 819
   bandwidth_bytes_per_cycle: 51.2
   dram_efficiency: 0.85   # 0.80-0.90
-  dram_width_bits: 64     # 64 | 128
+  dram_width_bits: 64     # 64 | 128 | 256 | 1024
   tRC_cycles: 48
   tRAS_cycles: 42
   refresh_overhead_percent: 3.0

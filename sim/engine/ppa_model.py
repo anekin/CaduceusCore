@@ -33,6 +33,8 @@ class AreaModel:
         self.os_pe_baseline = float(am.get("os_pe_area_mm2", 32.0))
         self.input_stationary_pe_baseline = float(am.get("is_pe_area_mm2", 24.0))
         self.tensor_core_pe_baseline = float(am.get("tc_pe_area_mm2", 32.0))
+        self.wmma_pe_baseline = float(am.get("wmma_pe_area_mm2", 36.8))   # 32×1.15
+        self.gmma_pe_baseline = float(am.get("gmma_pe_area_mm2", 40.0))   # 32+2+6
         self.sfu = float(am.get("sfu_area_mm2", 2.0))
         self.l1_per_kb = float(am.get("l1_sram_per_kb_mm2", 0.002))
         self.l2_per_kb = float(am.get("l2_sram_per_kb_mm2", 0.0015))
@@ -51,10 +53,17 @@ class AreaModel:
         scale = (H * W) / (128 * 128)
 
         # PE array
-        if engine_type == "systolic":
-            pe_area = self.systolic_pe_baseline * scale
-        else:  # block
-            pe_area = self.block_pe_baseline * scale
+        engine_area_map = {
+            "systolic": self.systolic_pe_baseline,
+            "os_systolic": self.block_pe_baseline,
+            "block": self.block_pe_baseline,
+            "tensor_core": self.tensor_core_pe_baseline,
+            "wmma": self.wmma_pe_baseline,
+            "gmma": self.gmma_pe_baseline,
+            "input_stationary": self.input_stationary_pe_baseline,
+        }
+        pe_base = engine_area_map.get(engine_type, self.block_pe_baseline)
+        pe_area = pe_base * scale
 
         # SRAM
         sram = config.get("sram", {})
@@ -101,10 +110,17 @@ class PowerModel:
         freq_scale = float(mac.get("frequency_mhz", 1000)) / 1000
 
         # Logic power
-        if engine_type == "systolic":
-            logic_mm2 = area_model.systolic_pe_baseline * scale + area_model.sfu
-        else:
-            logic_mm2 = area_model.block_pe_baseline * scale + area_model.sfu
+        engine_area_map = {
+            "systolic": area_model.systolic_pe_baseline,
+            "os_systolic": area_model.block_pe_baseline,
+            "block": area_model.block_pe_baseline,
+            "tensor_core": area_model.tensor_core_pe_baseline,
+            "wmma": area_model.wmma_pe_baseline,
+            "gmma": area_model.gmma_pe_baseline,
+            "input_stationary": area_model.input_stationary_pe_baseline,
+        }
+        pe_base = engine_area_map.get(engine_type, area_model.block_pe_baseline)
+        logic_mm2 = pe_base * scale + area_model.sfu
 
         logic_power = logic_mm2 * self.logic_power_density * freq_scale
 

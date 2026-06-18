@@ -33,6 +33,12 @@ class SimulationReport:
     """Complete simulation output."""
     model_name: str
     num_layers: int
+    # NPU config for display
+    array_height: int = 128
+    array_width: int = 128
+    weight_bits: int = 4
+    freq_mhz: int = 1000
+    engine_type: str = "systolic"
     # Prefill
     prefill_prompt_len: int = 0
     prefill_total_ms: float = 0.0
@@ -50,7 +56,9 @@ class SimulationReport:
         lines.append("=" * 60)
         lines.append(f"  NPU System Simulation Report")
         lines.append(f"  Model: {self.model_name} | Layers: {self.num_layers}")
-        lines.append(f"  NPU: 1 core, 128×128, INT4, 1GHz")
+        lines.append(f"  NPU: 1 core, {self.engine_type}, "
+                     f"{self.array_height}×{self.array_width}, "
+                     f"INT{self.weight_bits}, {self.freq_mhz}MHz")
         lines.append("=" * 60)
 
         # Prefill section

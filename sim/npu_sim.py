@@ -193,6 +193,11 @@ class NPUSimulator:
         report = SimulationReport(
             model_name="Qwen2.5-3B",
             num_layers=28,
+            array_height=int(self.config.get("mxu", {}).get("array_height", 128)),
+            array_width=int(self.config.get("mxu", {}).get("array_width", 128)),
+            weight_bits=int(self.config.get("mxu", {}).get("weight_precision_bits", 4)),
+            freq_mhz=int(self.config.get("mxu", {}).get("frequency_mhz", 1000)),
+            engine_type=str(self.config.get("mxu", {}).get("type", "systolic")),
             prefill_prompt_len=128,
             prefill_total_ms=0.0,  # Not simulated in Phase 1
             decode_per_token_us=decode_us,
@@ -271,6 +276,11 @@ class NPUSimulator:
         return SimulationReport(
             model_name="Qwen2.5-3B",
             num_layers=28,
+            array_height=int(self.config.get("mxu", {}).get("array_height", 128)),
+            array_width=int(self.config.get("mxu", {}).get("array_width", 128)),
+            weight_bits=int(self.config.get("mxu", {}).get("weight_precision_bits", 4)),
+            freq_mhz=int(self.config.get("mxu", {}).get("frequency_mhz", 1000)),
+            engine_type=str(self.config.get("mxu", {}).get("type", "systolic")),
             decode_per_token_us=decode_us,
             decode_tok_per_s=decode_tok_per_s,
             decode_breakdown={k: v / self.f_mhz for k, v in breakdown.items()},
@@ -338,11 +348,96 @@ def main():
                         help="Use ISA instruction mode (L2 interface)")
     parser.add_argument("-o", "--output", default=None)
     parser.add_argument("--json", action="store_true")
+
+    # ── Live override args ──
+    parser.add_argument("--engine", default=None,
+                        choices=["systolic", "os_systolic", "block", "tensor_core",
+                                 "wmma", "gmma", "input_stationary"],
+                        help="Override engine type (ignores config)")
+    parser.add_argument("--dram", default=None,
+                        choices=["25", "50", "100", "200", "460", "819"],
+                        help="Override DRAM bandwidth in GB/s")
+    parser.add_argument("--array", default=None,
+                        help="Override array dimensions, e.g. 128x256")
+    parser.add_argument("--freq", type=int, default=None,
+                        help="Override frequency in MHz")
+    parser.add_argument("--precision", type=int, default=None, choices=[2, 4, 8],
+                        help="Override weight precision bits")
+    parser.add_argument("--weight-cache", action="store_true", default=None,
+                        help="Enable weight cache (PE dual register)")
+    parser.add_argument("--list-engines", action="store_true",
+                        help="List available engines and exit")
+    parser.add_argument("--list-dram", action="store_true",
+                        help="List DRAM bandwidth presets and exit")
     args = parser.parse_args()
+
+    # List modes
+    if args.list_engines:
+        print("Available MAC engines:")
+        print("  systolic          Weight-Stationary Systolic Array (TPUv1)")
+        print("  os_systolic       Output-Stationary Systolic (Gemmini)")
+        print("  block             Block Engine — full parallel MAC (TPUv4 VMU)")
+        print("  tensor_core       Multi 16×16 Tensor Cores (A100 style)")
+        print("  wmma              16×16 Warp MMA (Volta/Ampere style)")
+        print("  gmma              Group MMA + TMA async DMA (Hopper H100 style)")
+        print("  input_stationary  Input-Stationary (Eyeriss)")
+        return
+    if args.list_dram:
+        print("DRAM bandwidth presets:")
+        print("  25   LPDDR5-32b  (25.6 GB/s) — low-end mobile")
+        print("  50   LPDDR5-64b  (51.2 GB/s) — baseline")
+        print("  100  LPDDR5-128b (102.4 GB/s) — dual channel")
+        print("  200  LPDDR5-256b (204.8 GB/s) — quad channel")
+        print("  460  HBM2e-1024b (460 GB/s)")
+        print("  819  HBM3-1024b  (819 GB/s)")
+        return
 
     sim_dir = Path(__file__).parent
     config_path = sim_dir / args.config
     sim = NPUSimulator(str(config_path))
+
+    # Override config from CLI args
+    overrides = []
+    cfg = sim.config
+    if args.engine:
+        mac = cfg.get("mxu", cfg.get("mac_engine", {}))
+        mac["type"] = args.engine
+        overrides.append(f"engine={args.engine}")
+    if args.dram:
+        bw = {"25": 25.6, "50": 51.2, "100": 102.4, "200": 204.8,
+              "460": 460.0, "819": 819.2}[args.dram]
+        mem = cfg.get("memory", {})
+        mem["bandwidth_gbps"] = bw
+        mem["bandwidth_bytes_per_cycle"] = bw
+        mem["dram_width_bits"] = {"25": 32, "50": 64, "100": 128,
+                                  "200": 256, "460": 1024, "819": 1024}[args.dram]
+        overrides.append(f"DRAM={bw}GB/s")
+    if args.array:
+        h, w = args.array.split("x")
+        mac = cfg.get("mxu", cfg.get("mac_engine", {}))
+        mac["array_height"] = int(h)
+        mac["array_width"] = int(w)
+        overrides.append(f"array={h}×{w}")
+    if args.freq:
+        mac = cfg.get("mxu", cfg.get("mac_engine", {}))
+        mac["frequency_mhz"] = args.freq
+        overrides.append(f"freq={args.freq}MHz")
+    if args.precision:
+        mac = cfg.get("mxu", cfg.get("mac_engine", {}))
+        mac["weight_precision_bits"] = args.precision
+        overrides.append(f"INT{args.precision}")
+    if args.weight_cache is not None:
+        opts = cfg.get("optimizations", {})
+        opts["weight_cache"] = args.weight_cache
+        overrides.append(f"wc={args.weight_cache}")
+
+    if overrides:
+        print(f"[override] {', '.join(overrides)}")
+        # Re-init models with overridden config
+        sim.mxu = MXUModel(cfg)
+        sim.dma = DMAModel(cfg)
+        sim.dram = DRAMModel(cfg)
+        sim.config = cfg
 
     if args.isa:
         # ── L2: ISA instruction mode ─────────────────────────────

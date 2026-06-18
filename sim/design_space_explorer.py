@@ -91,8 +91,12 @@ def generate_configs(quick: bool = False) -> List[Dict[str, Any]]:
 
     configs = []
 
-    # Engine types
-    engines = ["systolic", "block"]
+    # Engine types — all seven architectures
+    if quick:
+        engines = ["systolic", "block", "gmma"]
+    else:
+        engines = ["systolic", "os_systolic", "block",
+                   "tensor_core", "wmma", "gmma", "input_stationary"]
 
     # Array dimensions (constrained by area)
     if quick:
@@ -101,57 +105,73 @@ def generate_configs(quick: bool = False) -> List[Dict[str, Any]]:
         dims = [(64, 64), (96, 96), (128, 128), (128, 192),
                 (128, 256), (192, 256), (256, 256)]
 
-    # DMA bandwidth multipliers
+    # DRAM bandwidth configurations (GB/s, width_bits, description)
     if quick:
-        bw_mults = [1.0, 2.0]
+        dram_configs = [
+            (51.2, 64, "LPDDR5-64b"),
+            (102.4, 128, "LPDDR5-128b"),
+        ]
     else:
-        bw_mults = [1.0, 2.0, 4.0]
+        dram_configs = [
+            (25.6, 32, "LPDDR5-32b"),      # Low-end mobile
+            (51.2, 64, "LPDDR5-64b"),      # Baseline
+            (102.4, 128, "LPDDR5-128b"),   # Dual channel / 128-bit
+            (204.8, 256, "LPDDR5-256b"),   # Quad channel
+            (460.0, 1024, "HBM2e-1024b"),  # HBM2e 3.6Gbps
+            (819.2, 1024, "HBM3-1024b"),   # HBM3 6.4Gbps
+        ]
 
     # Weight precision
     if quick:
-        precisions = [4, 2]
+        precisions = [4]
     else:
         precisions = [4, 2]  # INT4, INT2
 
     # Frequency
-    freqs = [800, 1000] if not quick else [1000]
-
-    # DRAM width
-    dram_widths = [64, 128] if not quick else [64]
+    freqs = [1000] if quick else [800, 1000, 1200]
 
     for engine_type in engines:
         for H, W in dims:
-            # Block engine: area scales as H*W/128² * 32
-            # Constrain to <200mm² for feasibility
-            if engine_type == "block" and H * W / (128 * 128) * 32 > 200:
+            # Area constraints
+            if engine_type in ("block", "os_systolic") and H * W / (128 * 128) * 32 > 200:
                 continue
             if engine_type == "systolic" and H * W / (128 * 128) * 8 > 80:
                 continue
+            if engine_type in ("tensor_core", "wmma") and H * W / (128 * 128) * 37 > 200:
+                continue
+            if engine_type == "gmma" and H * W / (128 * 128) * 40 > 200:
+                continue
+            if engine_type == "input_stationary" and H * W / (128 * 128) * 24 > 150:
+                continue
 
-            for bw_mult in bw_mults:
+            for bw_gbps, dw_bits, dram_label in dram_configs:
                 for w_bits in precisions:
                     for freq in freqs:
-                        for dw in dram_widths:
-                            # weight_cache only makes sense with sufficient DMA
-                            for wc in [False, True]:
-                                if wc and bw_mult < 1.0:
-                                    continue  # cache needs enough BW
+                        # weight_cache only for systolic
+                        wc_options = [False]
+                        if engine_type in ("systolic", "block", "gmma"):
+                            wc_options = [False, True]
 
-                                cfg = copy.deepcopy(base)
-                                cfg["mac_engine"]["type"] = engine_type
-                                cfg["mac_engine"]["array_height"] = H
-                                cfg["mac_engine"]["array_width"] = W
-                                cfg["mac_engine"]["weight_precision_bits"] = w_bits
-                                cfg["mac_engine"]["frequency_mhz"] = freq
-                                cfg["memory"]["dram_width_bits"] = dw
-                                if dw >= 128:
-                                    cfg["memory"]["bandwidth_gbps"] = 51.2 * (dw / 64)
-                                    cfg["memory"]["bandwidth_bytes_per_cycle"] = (
-                                        51.2 * (dw / 64) * (freq / 1000))
-                                cfg["optimizations"]["weight_cache"] = wc
-                                cfg["optimizations"]["dma_bw_multiplier"] = bw_mult
+                        for wc in wc_options:
+                            # Block/GMMA with weight_cache skip if bandwidth too low
+                            if wc and engine_type != "systolic" and bw_gbps < 51.2:
+                                continue
 
-                                configs.append(cfg)
+                            cfg = copy.deepcopy(base)
+                            cfg["mac_engine"]["type"] = engine_type
+                            cfg["mac_engine"]["array_height"] = H
+                            cfg["mac_engine"]["array_width"] = W
+                            cfg["mac_engine"]["weight_precision_bits"] = w_bits
+                            cfg["mac_engine"]["frequency_mhz"] = freq
+                            cfg["memory"]["bandwidth_gbps"] = bw_gbps
+                            cfg["memory"]["bandwidth_bytes_per_cycle"] = bw_gbps
+                            cfg["memory"]["dram_width_bits"] = dw_bits
+                            cfg["memory"]["dram_efficiency"] = 0.85
+                            cfg["optimizations"]["weight_cache"] = wc
+                            cfg["optimizations"]["dma_bw_multiplier"] = 1.0
+                            cfg["_dram_label"] = dram_label
+
+                            configs.append(cfg)
 
     return configs
 
@@ -176,7 +196,7 @@ def evaluate_config(cfg: Dict[str, Any], area_model: AreaModel,
     label = (f"{engine_type[:4]} {H}×{W} INT{w_bits} "
              f"{freq}MHz "
              f"{'WC' if wc else ''} "
-             f"{'BW×'+str(int(bw)) if bw > 1 else ''}")
+             f"{cfg.get('_dram_label', '')}")
 
     return PPA(tok_s=tok_s, area_mm2=area, power_w=power, config_label=label)
 
@@ -258,8 +278,8 @@ def main():
               f"{p.power_w:>6.1f}W {p.efficiency_tok_per_watt:>7.1f} {pareto_flag}")
 
     # ── Best per engine type ──
-    print(f"\n  Best per engine type (area ≤ 80mm²):")
-    for eng in ["systolic", "block"]:
+    print(f"\n  Best per engine type (area ≤ 80mm², DRAM ≤ 102.4 GB/s):")
+    for eng in ["systolic", "os_systolic", "block", "tensor_core", "wmma", "gmma"]:
         eng_results = [r for r in results
                        if eng in r.config_label and r.area_mm2 <= 80]
         if eng_results:

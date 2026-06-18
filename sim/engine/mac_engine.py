@@ -102,6 +102,12 @@ def create_engine(config: Dict[str, Any]) -> MACEngine:
     elif engine_type == "tensor_core":
         from engine.tensor_core_engine import TensorCoreEngine
         return TensorCoreEngine(config)
+    elif engine_type == "wmma":
+        from engine.wmma_engine import WMMAEngine
+        return WMMAEngine(config)
+    elif engine_type == "gmma":
+        from engine.gmma_engine import GMMAEngine
+        return GMMAEngine(config)
     elif engine_type == "block":
         from engine.block_engine import BlockEngine
         return BlockEngine(config)
