@@ -10,26 +10,27 @@
 ```
                      DMA 碎片 ←──────────────────────────→ 面积
 
-  WMMA (6 tok/s)     TensorCore (28)    Block (29)     GMMA (29→240)
+  WMMA (7 tok/s)     TensorCore (28)    Block (32)     GMMA (32→240)
   16×16 小块         64×16×16           128×128 大块    128×128 + TMA
        │                  │                  │               │
        ▼                  ▼                  ▼               ▼
   ┌─────────────────────────────────────────────────────────────┐
   │                    面积-性能 Pareto 前沿                     │
   │                                                             │
-  │  28mm² ── Systolic 128×128 (16 tok/s)                       │
-  │  28mm² ── Systolic +WC      (21 tok/s)  ← 最省面积           │
-  │  36mm² ── Systolic 128×256+WC (27 tok/s) ← ✅ 50GB/s最优    │
-  │  52mm² ── OS-Systolic       (29 tok/s)                      │
-  │  52mm² ── Block Engine      (29 tok/s)  ← DRAM墙            │
-  │  60mm² ── GMMA              (29 tok/s)  ← TMA无助力          │
-  │  57mm² ── WMMA               (6 tok/s)  ← ☠️               │
+  │  28mm² ── Systolic 128×128+WC (21 tok/s) ← ✅ 推荐         │
+  │  36mm² ── Systolic 128×256+WC (23 tok/s*)                   │
+  │  48mm² ── Input-Stationary    (28 tok/s*)                   │
+  │  52mm² ── OS-Systolic         (28 tok/s*)                   │
+  │  52mm² ── Block Engine        (28 tok/s*) ← DRAM墙          │
+  │  60mm² ── GMMA                (28 tok/s*) ← TMA无助力       │
+  │  57mm² ── WMMA                 (7 tok/s)  ← ☠️              │
   │                                                             │
-  │  ═══════════ DRAM 50GB/s 物理天花板 ~29 tok/s ════════════   │
+  │  * 75% LPDDR5 效率下实际值，名义值更高但DRAM无法支撑         │
+  │  ═══════ DRAM 50GB/s × 75%效率 = 38.4 GB/s 天花板 ═══════  │
   └─────────────────────────────────────────────────────────────┘
 ```
 
-**核心洞察：** 不改 DRAM，所有引擎最终撞在同一个墙上。引擎选择本质上是在 **面积 vs 可扩展性** 之间做 trade-off。
+**核心洞察：** LPDDR5 实际效率 75-80%，不改 DRAM 时所有大引擎（Block/OS/GMMA/IS）的算力优势被带宽浪费。128×128+WC 在 28mm² 实现 21 tok/s，DRAM 利用率 74%，是面积-性能-余量三者的帕累托最优点。引擎选择本质上是 **面积 vs 可扩展性** 的 trade-off——小引擎留面积给未来的 DRAM 升级。
 
 ---
 
@@ -272,10 +273,10 @@
            YES │        │ NO     YES │        │ NO
                ▼        ▼           ▼        ▼
           Systolic   OS/Block    GMMA      Block
-          128×256    128×128    128×128    128×128
-          +WC        29 tok/s   240 tok/s  63 tok/s
-          27 tok/s   52mm²      74mm²      59mm²
-          36mm²
+          128×128    128×128    128×128    128×128
+          +WC        28 tok/s*  240 tok/s  63 tok/s
+          21 tok/s   52mm²      74mm²      59mm²
+          28mm²
 ```
 
 ---
