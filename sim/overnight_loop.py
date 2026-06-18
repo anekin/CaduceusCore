@@ -324,19 +324,24 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
     e2e_v2 = "from models.mxu import" in e2e_code
     health.append(f"| validate_e2e uses v2 MXU | {'✅' if e2e_v2 else '❌'} | {'Imports MXUModel from models.mxu' if e2e_v2 else 'Wrong import'} |")
 
-    # DRAM BW analysis
-    dram_demand = 0.5  # GB/s per token with M=1 (tiling overhead dominant)
+    # DRAM BW analysis — compute actual weight traffic from model trace
+    from npu_sim import generate_qwen3b_trace
+    import math as _math
+    trace = generate_qwen3b_trace(prompt_len=1)
+    total_weight_gb = sum(_math.ceil(K*N*4/8) for _, K, N, _, _ in trace) / 1e9
+    dram_demand = 0.0
     if sweep.get("all_results"):
         for r in sweep["all_results"]:
             if "M=1" in r.get("config", ""):
                 tok = r.get("tok_s", 0)
                 if tok > 0:
-                    dram_demand = tok * 0.015  # ~15MB per token * tok/s
+                    dram_demand = tok * total_weight_gb
                     break
     dram_available = 43.5  # GB/s effective
-    bw_pct = (dram_demand / dram_available) * 100
+    bw_pct = (dram_demand / dram_available) * 100 if dram_available > 0 else 0
     bw_ok = dram_demand < dram_available
-    health.append(f"| DRAM BW (demand vs effective) | {'✅' if bw_ok else '⚠️'} | {dram_demand:.1f} / {dram_available} GB/s ({bw_pct:.1f}%) |")
+    bottleneck = "DRAM" if bw_pct > 80 else ("接近DRAM" if bw_pct > 60 else "NPU")
+    health.append(f"| DRAM BW (demand vs effective) | {'✅' if bw_ok else '⚠️'} | {dram_demand:.1f} / {dram_available} GB/s ({bw_pct:.0f}%) → {bottleneck} |")
 
     # All engines checked
     engine_dir = SIM_DIR / "engine"
