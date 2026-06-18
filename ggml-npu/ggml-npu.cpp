@@ -5,74 +5,58 @@
 #include <cstring>
 #include <cstdlib>
 #include <string>
-#include <fstream>
 #include <vector>
-#include <sys/socket.h>
-#include <sys/un.h>
+#include <atomic>
 #include <unistd.h>
 #include <sys/stat.h>
 
-#define NPU_SOCK_PATH "/tmp/ggml-npu.sock"
 #define NPU_STIMULUS_DIR "/tmp/npu_stimulus"
 
-// ─── Hex dump ─────────────────────────────────────
+// ─── Hex I/O for float32 ──────────────────────────
+
+static void f32_to_hex_str(float v, char * out) {
+    uint32_t bits;
+    memcpy(&bits, &v, 4);
+    snprintf(out, 10, "%08x\n", bits);
+}
+
+static void write_f32_hex(const char * path, const float * data, size_t n) {
+    FILE * f = fopen(path, "w");
+    if (!f) return;
+    char buf[10];
+    for (size_t i = 0; i < n; i++) {
+        f32_to_hex_str(data[i], buf);
+        fwrite(buf, 1, 9, f);
+    }
+    fclose(f);
+}
+
+static size_t read_f32_hex(const char * path, float * buf, size_t max_n) {
+    FILE * f = fopen(path, "r");
+    if (!f) return 0;
+    size_t i = 0;
+    unsigned int bits;
+    while (i < max_n && fscanf(f, "%x", &bits) == 1) {
+        memcpy(&buf[i], &bits, 4);
+        i++;
+    }
+    fclose(f);
+    return i;
+}
+
+static void write_sentinel(const char * path) {
+    FILE * f = fopen(path, "w");
+    if (f) fclose(f);
+}
+
+static bool file_exists(const char * path) {
+    struct stat st;
+    return stat(path, &st) == 0;
+}
 
 static void ensure_dir(const char * path) { mkdir(path, 0755); }
 
-static void dump_hex(const char * filename, const void * data, size_t n_bytes, int type_size) {
-    std::ofstream f(filename);
-    if (!f.is_open()) return;
-    const uint8_t * bytes = (const uint8_t *)data;
-    for (size_t i = 0; i < n_bytes; i += type_size) {
-        uint32_t val = 0;
-        for (int j = 0; j < type_size && (i + j) < n_bytes; j++)
-            val |= ((uint32_t)bytes[i + j]) << (j * 8);
-        char buf[16];
-        snprintf(buf, sizeof(buf), "%0*x ", type_size * 2, val);
-        f << buf;
-        if ((i / type_size + 1) % 16 == 0) f << "\n";
-    }
-    f << "\n";
-    f.close();
-}
-
-// ─── Socket ───────────────────────────────────────
-
-static int npu_sock = -1;
-
-static bool sock_connect() {
-    if (npu_sock >= 0) return true;
-    npu_sock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (npu_sock < 0) return false;
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, NPU_SOCK_PATH, sizeof(addr.sun_path) - 1);
-    if (connect(npu_sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(npu_sock); npu_sock = -1; return false;
-    }
-    return true;
-}
-
-static void sock_send(const void * data, size_t len) {
-    if (!sock_connect()) return;
-    uint32_t hdr = (uint32_t)len;
-    write(npu_sock, &hdr, 4);
-    write(npu_sock, data, len);
-}
-
-static bool sock_recv_exact(void * buf, size_t n) {
-    if (npu_sock < 0) return false;
-    size_t got = 0;
-    while (got < n) {
-        ssize_t r = read(npu_sock, (char*)buf + got, n - got);
-        if (r <= 0) return false;
-        got += r;
-    }
-    return true;
-}
-
-// ─── Phase 2: Batched compute ─────────────────────
+// ─── Phase 3: Hex-file batch compute ───────────────
 
 struct MulMatTask {
     struct ggml_tensor * tensor;
@@ -80,51 +64,87 @@ struct MulMatTask {
     size_t act_bytes, out_bytes;
 };
 
-static bool npu_compute_batch(const std::vector<MulMatTask> & tasks) {
+static std::atomic<int> g_batch_id{0};
+
+static bool npu_compute_batch_hex(const std::vector<MulMatTask> & tasks) {
     if (tasks.empty()) return true;
-    if (!sock_connect()) return false;
 
-    // Build JSON batch request
-    std::string json = "{\"type\":\"batch\",\"n_ops\":";
-    json += std::to_string(tasks.size());
-    json += ",\"ops\":[";
+    int bid = g_batch_id.fetch_add(1);
+    char dir[256];
+    snprintf(dir, sizeof(dir), NPU_STIMULUS_DIR "/batch_%05d", bid);
+    ensure_dir(dir);
 
-    size_t total_act_bytes = 0;
+    // ── Write manifest.json ──
+    char mpath[512];
+    snprintf(mpath, sizeof(mpath), "%s/manifest.json", dir);
+    FILE * mf = fopen(mpath, "w");
+    if (!mf) return false;
+    fprintf(mf, "{\"batch_id\":%d,\"ops\":[\n", bid);
+
+    // ── Write activation hex files ──
     for (size_t i = 0; i < tasks.size(); i++) {
-        if (i > 0) json += ",";
-        char buf[256];
-        snprintf(buf, sizeof(buf),
-            "{\"M\":%lld,\"K\":%lld,\"N\":%lld,\"act_bytes\":%zu,\"out_bytes\":%zu}",
-            (long long)tasks[i].M, (long long)tasks[i].K, (long long)tasks[i].N,
-            tasks[i].act_bytes, tasks[i].out_bytes);
-        json += buf;
-        total_act_bytes += tasks[i].act_bytes;
+        if (i > 0) fprintf(mf, ",\n");
+
+        char act_path[512], out_path[512];
+        snprintf(act_path, sizeof(act_path), "%s/act_%zu.hex", dir, i);
+        snprintf(out_path, sizeof(out_path), "%s/out_%zu.hex", dir, i);
+
+        // Write activation data as float32 hex
+        const float * act = (const float *)tasks[i].tensor->src[1]->data;
+        size_t n_floats = tasks[i].act_bytes / sizeof(float);
+        write_f32_hex(act_path, act, n_floats);
+
+        const char * tname = tasks[i].tensor->src[0]->name;
+        if (!tname || !tname[0]) tname = "";
+
+        fprintf(mf, "  {\"name\":\"%s\",\"M\":%lld,\"K\":%lld,\"N\":%lld,"
+                "\"act_file\":\"act_%zu.hex\",\"out_file\":\"out_%zu.hex\","
+                "\"out_bytes\":%zu}",
+                tname,
+                (long long)tasks[i].M, (long long)tasks[i].K, (long long)tasks[i].N,
+                i, i, tasks[i].out_bytes);
     }
-    json += "]}";
 
-    // Send JSON header
-    sock_send(json.c_str(), json.size());
+    fprintf(mf, "\n]}\n");
+    fclose(mf);
 
-    // Send all activation data concatenated
-    for (size_t i = 0; i < tasks.size(); i++) {
-        const void * act = tasks[i].tensor->src[1]->data;
-        if (write(npu_sock, act, tasks[i].act_bytes) != (ssize_t)tasks[i].act_bytes)
+    // ── Write READY sentinel ──
+    char ready_path[512];
+    snprintf(ready_path, sizeof(ready_path), "%s/READY", dir);
+    write_sentinel(ready_path);
+
+    if (tasks.size() <= 3)
+        fprintf(stderr, "[NPU] wrote batch %d (%zu ops) to %s/\n", bid, tasks.size(), dir);
+
+    // ── Poll for DONE ──
+    char done_path[512];
+    snprintf(done_path, sizeof(done_path), "%s/DONE", dir);
+
+    int timeout = 30000;  // 30s timeout (long for first dequant)
+    int waited = 0;
+    while (!file_exists(done_path)) {
+        usleep(10000);  // 10ms
+        waited += 10;
+        if (waited > timeout) {
+            fprintf(stderr, "[NPU] timeout waiting for DONE in %s/\n", dir);
             return false;
+        }
     }
 
-    // Receive response: first 4B = total output bytes, then all output data
-    uint32_t total_out;
-    if (!sock_recv_exact(&total_out, 4)) return false;
-
-    // Receive all output data into one buffer, then split per task
-    std::vector<uint8_t> all_out(total_out);
-    if (!sock_recv_exact(all_out.data(), total_out)) return false;
-
-    size_t offset = 0;
+    // ── Read results ──
     for (size_t i = 0; i < tasks.size(); i++) {
-        if (offset + tasks[i].out_bytes > total_out) return false;
-        memcpy(tasks[i].tensor->data, all_out.data() + offset, tasks[i].out_bytes);
-        offset += tasks[i].out_bytes;
+        char out_path[512];
+        snprintf(out_path, sizeof(out_path), "%s/out_%zu.hex", dir, i);
+        float * dst = (float *)tasks[i].tensor->data;
+        size_t n_out = tasks[i].out_bytes / sizeof(float);
+        size_t nread = read_f32_hex(out_path, dst, n_out);
+        if (nread != n_out) {
+            fprintf(stderr, "[NPU] short read %s: %zu/%zu floats\n",
+                    out_path, nread, n_out);
+            // Zero-fill remainder
+            if (nread < n_out)
+                memset(dst + nread, 0, (n_out - nread) * sizeof(float));
+        }
     }
 
     return true;
@@ -137,7 +157,6 @@ static const char * npu_backend_get_name(ggml_backend_t backend) {
 }
 
 static void npu_backend_free(ggml_backend_t backend) {
-    if (npu_sock >= 0) { uint32_t z=0; write(npu_sock, &z, 4); close(npu_sock); npu_sock = -1; }
     delete backend;
 }
 
@@ -146,7 +165,7 @@ static enum ggml_status npu_backend_graph_compute(ggml_backend_t backend, struct
     call_count++;
 
     if (call_count <= 3) {
-        fprintf(stderr, "[NPU] graph_compute #%d: %d nodes (Phase 2 batched)\n",
+        fprintf(stderr, "[NPU] graph_compute #%d: %d nodes (Phase 3 hex)\n",
                 call_count, cgraph->n_nodes);
         if (call_count == 3) fprintf(stderr, "[NPU] (further logs suppressed)\n");
     }
@@ -164,70 +183,15 @@ static enum ggml_status npu_backend_graph_compute(ggml_backend_t backend, struct
         task.M = t->ne[1];  // rows (1 for decode)
         task.N = t->ne[0];  // cols (output dim)
         task.K = t->src[0]->ne[0];  // inner dim
-        task.act_bytes = ggml_nbytes(t->src[1]);
-        task.out_bytes = ggml_nbytes(t);
+        task.act_bytes = t->ne[1] * t->src[1]->ne[0] * ggml_type_size(t->src[1]->type);  // M * K * sizeof
+        task.out_bytes = t->ne[1] * t->ne[0] * ggml_type_size(t->type);  // M * N * sizeof
         tasks.push_back(task);
     }
 
-    // Batch compute
-    bool ok = npu_compute_batch(tasks);
-    if (call_count <= 3)
+    // Batch compute via hex files
+    bool ok = npu_compute_batch_hex(tasks);
+    if (tasks.size() > 0 && call_count <= 3)
         fprintf(stderr, "[NPU] batch %zu MUL_MAT: %s\n", tasks.size(), ok ? "OK" : "FAIL");
-
-    // Dump stimulus hex on first call
-    if (call_count == 1) {
-        ensure_dir(NPU_STIMULUS_DIR);
-        std::string meta = "{\"ops\":[";
-        int dumped = 0;
-        for (int i = 0; i < cgraph->n_nodes && dumped < 60; i++) {
-            struct ggml_tensor * t = cgraph->nodes[i];
-            if (t->op != GGML_OP_MUL_MAT) continue;
-            if (!t->src[0] || !t->src[1] || !t->data) continue;
-            if (!t->src[0]->data || !t->src[1]->data) continue;
-
-            int tsz = (int)ggml_type_size(t->src[0]->type);
-            int asz = (int)ggml_type_size(t->src[1]->type);
-            int osz = (int)ggml_type_size(t->type);
-            if (tsz <= 0) tsz = 4;
-
-            size_t wb = ggml_nbytes(t->src[0]), ab = ggml_nbytes(t->src[1]), ob = ggml_nbytes(t);
-            char pw[256], pa[256], po[256];
-            snprintf(pw, sizeof(pw), "%s/op%02d_weight.hex", NPU_STIMULUS_DIR, dumped);
-            snprintf(pa, sizeof(pa), "%s/op%02d_act.hex",   NPU_STIMULUS_DIR, dumped);
-            snprintf(po, sizeof(po), "%s/op%02d_golden.hex", NPU_STIMULUS_DIR, dumped);
-
-            dump_hex(pw, t->src[0]->data, wb, tsz);
-            dump_hex(pa, t->src[1]->data, ab, asz);
-            dump_hex(po, t->data, ob, osz);
-
-            if (dumped > 0) meta += ",";
-            char mb[512];
-            snprintf(mb, sizeof(mb),
-                "{\"id\":%d,\"op\":\"MUL_MAT\",\"M\":%lld,\"K\":%lld,\"N\":%lld,"
-                "\"weight_type\":\"%s\",\"act_type\":\"%s\",\"out_type\":\"%s\","
-                "\"weight_bytes\":%zu,\"act_bytes\":%zu,\"out_bytes\":%zu,"
-                "\"files\":{\"weight\":\"op%02d_weight.hex\",\"activation\":\"op%02d_act.hex\",\"golden\":\"op%02d_golden.hex\"}}",
-                dumped, (long long)t->ne[0], (long long)t->ne[1],
-                (long long)(t->src[1] ? t->src[1]->ne[0] : 1),
-                ggml_type_name(t->src[0]->type), ggml_type_name(t->src[1]->type), ggml_type_name(t->type),
-                wb, ab, ob, dumped, dumped, dumped);
-            meta += mb;
-            dumped++;
-        }
-        meta += "]}";
-        std::string mp = std::string(NPU_STIMULUS_DIR) + "/manifest.json";
-        std::ofstream mf(mp); mf << meta; mf.close();
-        fprintf(stderr, "[NPU] dumped %d MUL_MAT to %s/\n", dumped, NPU_STIMULUS_DIR);
-
-        std::string msg = "{\"type\":\"stimulus\",\"manifest\":\"" + mp + "\",\"n_ops\":" + std::to_string(dumped) + "}";
-        sock_send(msg.c_str(), msg.size());
-    }
-
-    // Monitoring trace
-    if (call_count == 1) {
-        std::string j = "{\"type\":\"graph_compute\",\"call\":1,\"n_nodes\":" + std::to_string(cgraph->n_nodes) + ",\"ops\":[]}";
-        sock_send(j.c_str(), j.size());
-    }
 
     GGML_UNUSED(backend);
     return GGML_STATUS_SUCCESS;
@@ -244,9 +208,16 @@ static struct ggml_backend_i npu_backend_i = {
 // ─── Device ──────────────────────────────────────
 
 static const char * npu_device_get_name(ggml_backend_dev_t dev)     { GGML_UNUSED(dev); return "NPU0"; }
-static const char * npu_device_get_description(ggml_backend_dev_t dev)  { GGML_UNUSED(dev); return "CaduceusCore NPU (Phase 2)"; }
-static void npu_device_get_memory(ggml_backend_dev_t dev, size_t * f, size_t * t) { GGML_UNUSED(dev); *f=0; *t=0; }
-static enum ggml_backend_dev_type npu_device_get_type(ggml_backend_dev_t dev) { GGML_UNUSED(dev); return GGML_BACKEND_DEVICE_TYPE_ACCEL; }
+static const char * npu_device_get_description(ggml_backend_dev_t dev)  { GGML_UNUSED(dev); return "CaduceusCore NPU (Phase 3 hex)"; }
+static void npu_device_get_memory(ggml_backend_dev_t dev, size_t * f, size_t * t) {
+    GGML_UNUSED(dev);
+    // Report host memory so the scheduler will allocate tensors on NPU.
+    // NPU uses CPU-side buffers (shared memory), so this is the system's
+    // available RAM, not dedicated NPU memory.
+    *f = 16ull * 1024 * 1024 * 1024;  // 16 GB free
+    *t = 32ull * 1024 * 1024 * 1024;  // 32 GB total
+}
+static enum ggml_backend_dev_type npu_device_get_type(ggml_backend_dev_t dev) { GGML_UNUSED(dev); return GGML_BACKEND_DEVICE_TYPE_GPU; }
 
 static void npu_device_get_props(ggml_backend_dev_t dev, struct ggml_backend_dev_props * props) {
     props->name = npu_device_get_name(dev);
@@ -258,7 +229,7 @@ static void npu_device_get_props(ggml_backend_dev_t dev, struct ggml_backend_dev
 
 static ggml_backend_t npu_device_init(ggml_backend_dev_t dev, const char * params) {
     GGML_UNUSED(params);
-    fprintf(stderr, "[NPU] Phase 2 device initialized\n");
+    fprintf(stderr, "[NPU] Phase 3 device initialized\n");
     ggml_backend_t backend = new ggml_backend;
     backend->iface = npu_backend_i;
     backend->device = dev;
