@@ -35,7 +35,7 @@ sram:
 
 # ── 硬件优化开关 ──
 optimizations:
-  weight_cache: false     # PE 双 weight 寄存器
+  weight_cache: true     # PE 双 weight 寄存器
   dma_bw_multiplier: 1.0  # 1.0=64-bit, 2.0=128-bit/4ch
 
 # ── 外设 ──

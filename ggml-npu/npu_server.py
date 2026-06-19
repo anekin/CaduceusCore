@@ -125,6 +125,66 @@ def write_sentinel(path: str):
     Path(path).touch()
 
 
+# ─── Verification ───────────────────────────────────
+_verify_count = 0
+_verify_log = None
+_MAX_VERIFY_OPS = 20  # only verify first N ops to limit overhead
+
+
+def _verify_result(batch_dir, op, result, W, act, idx):
+    """Self-check: hex round-trip + alternative matmul path."""
+    global _verify_count, _verify_log
+
+    _verify_count += 1
+    if _verify_count > _MAX_VERIFY_OPS:
+        return
+
+    if _verify_log is None:
+        _verify_log = open("/tmp/npu_stimulus/verify.log", "w")
+        _verify_log.write("# NPU verify log\n")
+        _verify_log.flush()
+
+    name = op["name"]
+    issues = []
+
+    # 1. Hex round-trip: write → read → compare
+    tmp_path = str(batch_dir / f"_vr_{idx}.hex")
+    write_f32_hex(tmp_path, result.ravel()[:result.size])
+    rt = read_f32_hex(tmp_path, result.size)
+    os.remove(tmp_path)
+    rt_diff = np.max(np.abs(result.ravel()[:rt.size] - rt)) if rt.size > 0 else float('inf')
+    if rt_diff > 1e-7:
+        issues.append(f"hex_rt_diff={rt_diff:.2e}")
+
+    # 2. Reference matmul: compute with np.dot instead of @ operator
+    if W is None:
+        ref = np.zeros((op["M"], op["N"]), dtype=np.float32)
+    elif W.shape[0] == op["K"]:
+        ref = np.dot(act, W)
+    else:
+        ref = np.dot(act, W.T)
+
+    max_abs = np.max(np.abs(result - ref))
+    rel = np.max(np.abs((result - ref) / (np.abs(ref) + 1e-8))) if np.any(ref) else 0.0
+
+    if max_abs > 1e-5 or rel > 1e-5:
+        issues.append(f"matmul_diff max_abs={max_abs:.2e} rel={rel:.2e}")
+
+    # 3. Basic sanity: no NaNs, no Infs
+    n_nan = np.sum(np.isnan(result))
+    n_inf = np.sum(np.isinf(result))
+    if n_nan > 0 or n_inf > 0:
+        issues.append(f"nan={n_nan} inf={n_inf}")
+
+    status = "PASS" if not issues else "FAIL: " + "; ".join(issues)
+    line = f"[VERIFY #{_verify_count}] {name} M={op['M']} K={op['K']} N={op['N']} {status}\n"
+    _verify_log.write(line)
+    _verify_log.flush()
+
+    if issues:
+        print(f"  !! {line.strip()}", flush=True)
+
+
 def process_batch(batch_dir: Path):
     """Process a single batch directory."""
     manifest_path = batch_dir / "manifest.json"
@@ -178,6 +238,9 @@ def process_batch(batch_dir: Path):
 
         # Write result
         write_f32_hex(str(out_file), result.ravel()[:n_out])
+
+        # ── Verification: round-trip hex + reference matmul ──
+        _verify_result(batch_dir, op, result, W, act, i)
 
     elapsed = time.time() - t0
     gflops = total_flops / elapsed / 1e9 if elapsed > 0 else 0
@@ -245,6 +308,10 @@ def main():
         scan_and_process()
     except KeyboardInterrupt:
         pass
+    finally:
+        if _verify_log:
+            _verify_log.close()
+            print(f"[NPU-PY] verify log: /tmp/npu_stimulus/verify.log", flush=True)
 
 
 if __name__ == "__main__":

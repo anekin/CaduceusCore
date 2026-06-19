@@ -183,8 +183,16 @@ static enum ggml_status npu_backend_graph_compute(ggml_backend_t backend, struct
         task.M = t->ne[1];  // rows (1 for decode)
         task.N = t->ne[0];  // cols (output dim)
         task.K = t->src[0]->ne[0];  // inner dim
-        task.act_bytes = t->ne[1] * t->src[1]->ne[0] * ggml_type_size(t->src[1]->type);  // M * K * sizeof
-        task.out_bytes = t->ne[1] * t->ne[0] * ggml_type_size(t->type);  // M * N * sizeof
+        task.act_bytes = t->ne[1] * t->src[1]->ne[0] * ggml_type_size(t->src[1]->type);
+        task.out_bytes = t->ne[1] * t->ne[0] * ggml_type_size(t->type);
+
+        // Skip KV cache and contiguity runtime tensors — not static weights
+        const char * sname = t->src[0]->name;
+        if (sname) {
+            if (strstr(sname, "cache_")) continue;
+            if (strstr(sname, "_cont")) continue;
+        }
+
         tasks.push_back(task);
     }
 

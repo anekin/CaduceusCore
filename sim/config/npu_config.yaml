@@ -5,7 +5,7 @@ cores: 1
 
 # ── 硬件优化开关（v0.3 新增）──
 optimizations:
-  weight_cache: false          # PE 双 weight 寄存器，gate/up 共享 pipeline fill
+  weight_cache: true              # PE 双 weight 寄存器，gate/up 共享 pipeline fill
   dma_bw_multiplier: 1.0       # DMA 带宽倍率: 1.0=64-bit, 2.0=128-bit/4ch
 
 mxu:

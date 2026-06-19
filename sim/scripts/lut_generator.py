@@ -76,8 +76,7 @@ def build_analytical_lut(config_path: str) -> Dict:
 
     for c in combos:
         key = c["combo"]
-        result = mxu.estimate(c["M"], c["K"], c["N"],
-                              weight_preloaded=(c["mode"] == "decode"))
+        result = mxu.estimate(c["M"], c["K"], c["N"])  # v2: weight_preloaded ignored
         lut["entries"][key] = {
             "compute": result.compute_cycles,
             "stall_dram": result.stall_cycles_dram,
