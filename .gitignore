@@ -5,3 +5,4 @@ scale-sim-v3/
 ggml-npu/baseline.json
 ggml-npu/sim_baseline.json
 ggml-npu/per_op_baseline.json
+sim/test_vectors/

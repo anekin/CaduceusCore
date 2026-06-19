@@ -26,6 +26,16 @@ class OpCode(IntEnum):
     KV_STORE = 0x0C   # 存储当前计算的 KV 到 DRAM
     BARRIER  = 0x0D   # 流水线同步栅栏
     NOP      = 0x0E   # 空操作
+    # ── Vector unit instructions (v2) ────────────────────────────
+    VADD     = 0x0F   # 逐元素加
+    VMUL     = 0x10   # 逐元素乘
+    VRED_MAX = 0x11   # 树规约求最大值
+    VRED_SUM = 0x12   # 树规约求和
+    VCONV    = 0x13   # INT32 → BF16 类型转换
+    VRESID   = 0x14   # 残差连接: da = sa + sb
+    # ── DMA descriptor instructions (v2) ─────────────────────────
+    DMA_LDD  = 0x15   # DMA 加载（描述符链模式）
+    DMA_STD  = 0x16   # DMA 存储（描述符链模式）
 
     @classmethod
     def from_mnemonic(cls, mnemonic: str) -> "OpCode":
@@ -37,6 +47,12 @@ class OpCode(IntEnum):
             "dma_ld": cls.DMA_LD, "dma_st": cls.DMA_ST,
             "kv_load": cls.KV_LOAD, "kv_store": cls.KV_STORE,
             "barrier": cls.BARRIER, "nop": cls.NOP,
+            # v2: Vector
+            "vadd": cls.VADD, "vmul": cls.VMUL,
+            "vred_max": cls.VRED_MAX, "vred_sum": cls.VRED_SUM,
+            "vconv": cls.VCONV, "vresid": cls.VRESID,
+            # v2: DMA descriptor
+            "dma_ldd": cls.DMA_LDD, "dma_std": cls.DMA_STD,
         }
         return mn_map[mnemonic.lower()]
 
@@ -118,6 +134,15 @@ class NPUEncoder:
             words = [w0]
         elif op in (OpCode.BARRIER, OpCode.NOP,):
             words = [op << 27]
+        elif op in (OpCode.VADD, OpCode.VMUL, OpCode.VRED_MAX,
+                    OpCode.VRED_SUM, OpCode.VCONV, OpCode.VRESID,
+                    OpCode.DMA_LDD, OpCode.DMA_STD,):
+            # Generic Vector/DMA: op + sa + da + len
+            sa = ops.get("sa", 0)
+            da = ops.get("da", 0)
+            length = ops.get("len", 0) & 0xFFF
+            w0 = (op << 27) | ((sa & 0xFFF) << 15) | ((da & 0xFFF) << 3) | (length & 0x7)
+            words = [w0]
         else:
             # Generic: SOFTMAX, LAYERNORM, GELU, RELU, SILU
             # Format: op + sa + da + len
@@ -169,6 +194,15 @@ class NPUDecoder:
             }
         elif op in (OpCode.BARRIER, OpCode.NOP):
             pass
+        elif op in (OpCode.VADD, OpCode.VMUL, OpCode.VRED_MAX,
+                    OpCode.VRED_SUM, OpCode.VCONV, OpCode.VRESID,
+                    OpCode.DMA_LDD, OpCode.DMA_STD,):
+            # Generic Vector/DMA
+            operands = {
+                "sa": (w0 >> 15) & 0xFFF,
+                "da": (w0 >> 3) & 0xFFF,
+                "len": w0 & 0x7,
+            }
         else:
             # Generic SFU: SOFTMAX, LAYERNORM, GELU, RELU, SILU
             operands = {
