@@ -1,0 +1,22 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 1 item
+
+sim/tests/test_golden_deprecation.py::test_models_golden_deprecated FAILED [100%]
+
+=================================== FAILURES ===================================
+________________________ test_models_golden_deprecated _________________________
+
+    def test_models_golden_deprecated():
+        """Importing from models.golden must emit DeprecationWarning."""
+>       with pytest.warns(DeprecationWarning, match="golden_executor"):
+E       Failed: DID NOT WARN. No warnings of type (<class 'DeprecationWarning'>,) were emitted.
+E        Emitted warnings: [].
+
+sim/tests/test_golden_deprecation.py:16: Failed
+=========================== short test summary info ============================
+FAILED sim/tests/test_golden_deprecation.py::test_models_golden_deprecated - ...
+============================== 1 failed in 0.06s ===============================
