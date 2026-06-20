@@ -27,8 +27,16 @@ def _make_firmware() -> NPUFirmware:
 
 
 def _write_descriptor(firmware: NPUFirmware, desc_addr: int = 0x8000_0100) -> int:
-    """Write a valid 15-uint32 descriptor to DRAM at desc_addr."""
-    data = struct.pack("<15I", *([0] * 15))
+    """Write a valid 15-uint32 descriptor to DRAM at desc_addr.
+
+    Indices: [12]=M, [13]=K, [14]=N must be positive integers
+    for tile_mmul() validation.
+    """
+    fields = [0] * 15
+    fields[12] = 1    # M
+    fields[13] = 128  # K
+    fields[14] = 128  # N
+    data = struct.pack("<15I", *fields)
     off = desc_addr - 0x8000_0000
     firmware.mod["dram"][off : off + 60] = data
     return desc_addr
