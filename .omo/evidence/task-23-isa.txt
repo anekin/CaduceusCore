@@ -1,0 +1,46 @@
+=== Task 23: ISA Table Expansion + Vector Unit Chapter (D2/D3) ===
+Date: 2026-06-20
+Source: sim/engine/isa.py OpCode enum (23 values)
+Golden reference: sim/golden_executor.py GoldenVector (lines 608-704)
+
+--- ISA Table Count ---
+Before: 14 opcodes
+After:  23 opcodes (0x00 - 0x16)
+
+Incremental additions:
+ 0x06 SILU     - SiLU activation (reuses GELU LUT per §3.3)
+ 0x0F VADD     - Element-wise INT32 add (Vector Unit)
+ 0x10 VMUL     - Element-wise INT32 mul (Vector Unit)
+ 0x11 VRED_MAX - Tree reduction max (Vector Unit)
+ 0x12 VRED_SUM - Tree reduction sum (Vector Unit)
+ 0x13 VCONV    - INT32→BF16 type convert (Vector Unit)
+ 0x14 VRESID   - Residual add da+=sa (Vector Unit)
+ 0x15 DMA_LDD  - DMA load (descriptor chain mode)
+ 0x16 DMA_STD  - DMA store (descriptor chain mode)
+
+--- Cross-references added ---
+- sim/engine/isa.py line 12-38 (OpCode enum)
+- sim/engine/isa.py line 82-156 (NPUEncoder)
+- sim/golden_executor.py line 608-704 (GoldenVector class)
+
+--- New chapter ---
+§3.8 Vector Unit (向量处理单元): 128-wide SIMD pipeline
+- 7 vector ops with hardware structure and latency
+- Area estimate: ~0.5mm²
+- Role in Transformer: residual add, type conversion, softmax decomposition
+
+--- Verification ---
+$ grep '0x[0-9A-F]\{2\}' docs/NPU硬件详细架构设计v0.1.md | grep '| 0x'
+  23 table rows confirmed (0x00-0x16)
+
+$ grep '§3\.8\|Vector Unit\|128-wide SIMD' docs/NPU硬件详细架构设计v0.1.md
+  Chapter heading + architecture diagram + instruction table + area table + cross-references present
+
+$ grep -c 'DMA_LDD\|DMA_STD' docs/NPU硬件详细架构设计v0.1.md
+  Both DMA descriptor instructions present (3 matches in table + footer)
+
+--- File modified ---
+docs/NPU硬件详细架构设计v0.1.md (v0.5)
+- Lines 327-354: Expanded ISA table (14 → 23 rows, added OpCode column)
+- Lines 356-420: New §3.8 Vector Unit chapter
+- Lines 753-756: Updated version footer

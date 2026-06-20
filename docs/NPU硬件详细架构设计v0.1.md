@@ -353,6 +353,72 @@ CISC 风格，一条指令 = 一个完整算子。32-bit 定长指令字。
 
 ---
 
+### 3.8 Vector Unit（向量处理单元）
+
+向量单元是 MXU（INT32 输出）与 SFU（BF16 输入）之间的桥梁，同时承担逐元素运算和规约操作。它是一个 128-wide SIMD 流水线，与 MXU/SFU 共享 SRAM 带宽。
+
+```
+    MXU 输出 (INT32)                SFU 输入 (BF16)
+         │                                ▲
+         │    ┌───────────────────┐       │
+         └───►│    Vector Unit     │───────┘
+              │   128-wide SIMD    │
+              │                   │
+              │  · VADD / VMUL    │
+              │  · VRED_MAX/SUM   │
+              │  · VCONV          │
+              │  · VRESID         │
+              └───────────────────┘
+```
+
+#### 设计参考
+- **TPUv2 Vector Unit**：可编程向量单元，替代 TPUv1 固定函数数据通路
+- **本设计**：固定功能向量单元——7 条专用指令，无程序计数器，无分支，面积更小
+
+#### 指令清单
+
+| 指令 | 操作 | 硬件结构 | 延迟 |
+|------|------|---------|:---:|
+| **VADD** | 逐元素 INT32 加法 | 128 个并行 INT32 加法器 | 1 cycle |
+| **VMUL** | 逐元素 INT32 乘法 | 128 个并行 INT32 乘法器 | 1 cycle |
+| **VRED_MAX** | 树规约求最大值 | log₂(128)=7 级比较器树 | 7 cycles |
+| **VRED_SUM** | 树规约求和（带溢保） | log₂(128)=7 级加法器树 + INT32 饱和逻辑 | 7 cycles |
+| **VCONV** | INT32 → BF16 类型转换 | 128 个并行的 INT32→FP32→FP16 截断 + 饱和电路 | 1 cycle |
+| **VRESID** | 残差连接 da += sa | 128 个 INT32 加法器 + INT32 饱和逻辑 | 1 cycle |
+| **—** | Softmax 分解辅助 | 复用 VRED_MAX + VADD + VRED_SUM | — |
+
+> **VRED_MAX + VRED_SUM 为什么是 7 cycles？** 128 元素的二叉树规约：第 1 级 64 对并行运算 → 第 2 级 32 对 → ... → 第 7 级 1 对。每级 1 cycle。
+
+#### 在 Transformer 中的角色
+
+向量单元承担 Transformer Block 中 SFU 前后的数据搬运和类型转换：
+
+1. **FFN 残差连接**（VRESID）：`hidden_states = hidden_states + FFN_output`，在 INT32 域完成，避免精度损失
+2. **Attention 残差连接**（VRESID）：同上
+3. **INT32→BF16 转换**（VCONV）：MXU 输出 INT32 累加结果在进入 SFU 前转为 BF16
+4. **Softmax 分解**（VRED_MAX + VRED_SUM）：SFU 的 Softmax 硬件用查表算 exp(x)，用向量单元做 max 减法和 sum 规约
+5. **RMSNorm / LayerNorm 辅助**：均值/方差计算可用 VRED_SUM 加速
+
+#### 面积估算
+
+| 组件 | 面积 | 说明 |
+|------|:---:|------|
+| 128×INT32 加法器（VADD/VRESID 复用） | ~0.15mm² | |
+| 128×INT32 乘法器（VMUL） | ~0.2mm² | |
+| 规约树（VRED_MAX/SUM 共享比较器/加法器） | ~0.1mm² | |
+| INT32→BF16 转换器（VCONV） | ~0.05mm² | |
+| **合计** | **~0.5mm²** | |
+
+#### 交叉引用
+
+- **OpCode 定义**：`sim/engine/isa.py` 第 29-36 行（VADD=0x0F .. VRESID=0x14）
+- **指令编码**：`sim/engine/isa.py` 第 137-145 行（Generic Vector: op + sa + da + len）
+- **Bit-accurate 参考模型**：`sim/golden_executor.py` 第 608-704 行 `GoldenVector` 类
+  - `add()` (L625), `mul()` (L630), `max_reduce()` (L637), `sum_reduce()` (L645)
+  - `conv_i32_to_f16()` (L657), `residual_add()` (L677)
+
+---
+
 ## 四、数据流与流水线
 
 ### 4.1 LLM Decode 阶段流水线
@@ -444,7 +510,11 @@ SoC 客户配 `NUM_CORES=4`，综合工具自动生成 4 核。
 
 ### 5.5 性能缩放（v0.3 修正，基于 v2 tiling-aware simulator）
 
-| 配置 | 面积 | M=1 decode | M≥2 batch | 数据并行加速比 |
+> **注意**：下表 M=1 decode 列为 128×128 裸 systolic 基线（无 WeightCache）。推荐配置 **128×128+WC 在 M=1 达 21 tok/s**，见 §2.4 和 §9.3 全局 PPA 表。
+> - 基线（无 WC）：M=1 15 tok/s，M≥2 batch 31 tok/s（continuous batching 消除 tiling 开销）
+> - 推荐（+WC）：M=1 21 tok/s，M≥2 batch 回升至更高（WC 减少权重重载，§9.3）
+
+| 配置 | 面积 | M=1 decode (基线/无WC) | M≥2 batch | 数据并行加速比 |
 |------|:---:|------|------|:---:|
 | 1 核 | 27mm² | 15 tok/s | **31 tok/s** ✅ | 1.0× |
 | 2 核 | 42mm² | 28 tok/s | 59 tok/s | 1.9× |
@@ -683,4 +753,4 @@ python3 design_space_explorer.py           # 完整 2550 配置
 
 ---
 
-> **文档版本**：v0.5 | **v0.5 变更**：修正 Unified Buffer 容量为 4 MB（与 `golden_executor.py` SRAM_SIZE=4MB 和 `func_model_architecture.md` 统一）；新增 §3.2 L1 SRAM (256KB×2) 与 Unified Buffer (4MB) 区分说明 | **v0.4 变更**：新增第九章「多引擎设计空间探索」，含五引擎 INT4 统一精度全局 PPA 对比、六条核心结论、推荐参数配置、Simulator 入口说明 | **v0.3 变更**：性能数字从理论估算修正为 v2 tiling-aware simulator 实测；新增 5.6 瓶颈分析章节；第八章替换为实际模拟结果；新增 continuous batching 优化路径 | **v0.2 变更**：NPU 核改为可参数化 IP；多核扩展从 PCIe P2P 改为片内实例化 | **下一步**：软件架构方案更新 + batch scheduler 设计
+> **文档版本**：v0.5 | **v0.5 变更**：(1) 修正 Unified Buffer 容量为 4 MB（与 `golden_executor.py` SRAM_SIZE=4MB 和 `func_model_architecture.md` 统一）；(2) 新增 §3.2 L1 SRAM (256KB×2) 与 Unified Buffer (4MB) 区分说明；(3) ISA 表从 14 条扩展至 23 条（新增 SILU + Vector Unit 7 条 + DMA_LDD/DMA_STD），含 OpCode hex 值；(4) 新增 §3.8「Vector Unit」章节，描述 128-wide SIMD 流水线及 7 条向量指令；交叉引用 `sim/engine/isa.py` OpCode 枚举与 `sim/golden_executor.py` GoldenVector 参考模型 | **v0.4 变更**：新增第九章「多引擎设计空间探索」，含五引擎 INT4 统一精度全局 PPA 对比、六条核心结论、推荐参数配置、Simulator 入口说明 | **v0.3 变更**：性能数字从理论估算修正为 v2 tiling-aware simulator 实测；新增 5.6 瓶颈分析章节；第八章替换为实际模拟结果；新增 continuous batching 优化路径 | **v0.2 变更**：NPU 核改为可参数化 IP；多核扩展从 PCIe P2P 改为片内实例化 | **下一步**：软件架构方案更新 + batch scheduler 设计
