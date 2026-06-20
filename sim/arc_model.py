@@ -262,11 +262,20 @@ class ArcModel:
 
     def print_table(self, report: ArcReport):
         """Print final summary table."""
-        pr = report.precision
-        pf = report.perf
         print(f"\n{'='*80}")
         print(f"Arc Model — Final Report: {report.model_name}")
         print(f"{'='*80}")
+
+        if report.error:
+            print(f"  Error: {report.error}")
+            return
+
+        pr = report.precision
+        if pr is None:
+            print("  No precision data (evaluation incomplete)")
+            return
+
+        pf = report.perf
         print(f"{'Dimension':<15} {'Metric':<22} {'Value':>15}")
         print(f"{'-'*15} {'-'*22} {'-'*15}")
         print(f"{'Precision':<15} {'layers':<22} {pr.n_layers:>15d}")
@@ -281,8 +290,6 @@ class ArcModel:
             print(f"{'Performance':<15} {'DRAM stall':<22} {pf.dram_stall_pct:>14.1f}%")
         print(f"{'='*80}")
         print(f"  Overall: {'✓ PASS' if report.passed else '✗ FAIL'}")
-        if report.error:
-            print(f"  Error: {report.error}")
 
 
 if __name__ == "__main__":

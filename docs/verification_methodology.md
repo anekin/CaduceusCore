@@ -70,7 +70,7 @@ qwen2.5-coder-7b-instruct-q4_k_m      ... (+ 10 more)
 
 **运行**：
 ```bash
-cd ~/npu && PYTHONPATH=. python3 sim/arc_model.py --model ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf --scheme both
+cd ~/npu/sim && PYTHONPATH=. /usr/bin/python3 arc_model.py --model ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf --scheme both
 ```
 
 ## FM 验证
@@ -118,7 +118,7 @@ cd ~/npu && PYTHONPATH=. python3 sim/func_model.py
 
 **运行**：
 ```bash
-cd ~/npu && PYTHONPATH=. python3 sim/e2e_llamacpp.py --model ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf --layers 2
+cd ~/npu/sim && PYTHONPATH=. /usr/bin/python3 e2e_llamacpp.py --model ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf --layers 2
 ```
 
 ## 验证门禁
