@@ -1,0 +1,23 @@
+1:# NPU 硬件详细架构设计 v0.5
+5:> **v0.2 更新**：NPU 改为 IP 核架构，支持单核/多核实例化
+59:│  │128   │  │      │  │ 256KB │ │
+63:│  │    L1 SRAM 256KB×2 (双口) │ │
+79:| L1 SRAM 256KB×2 | 1mm² | — | 标准 SRAM 宏 | 低 |
+81:| KV Cache SRAM 256KB | 1mm² | — | 自研 | 高 |
+101:> **v0.5 更新**：基于 v3 simulator + 75% LPDDR5 实际效率（38.4 GB/s eff）。单核 128×128+WC = 21 tok/s。M=1 瓶颈在 systolic tiling overhead，M≥2 continuous batching 可恢复效率至 31 tok/s。多核走数据并行，含 ~10% crossbar contention。带宽需求 28.6 GB/s < 38.4 GB/s 可用（74%），留有余量。
+166:### 3.2 Unified Buffer + Accumulator
+169:- **TPUv1**：Unified Buffer 24MB，双缓冲，直接连 MXU
+179:│  DMA    │  │  Unified Buffer      │
+181:└─────────┘  │  4 MB, 16 Banks      │
+199:| 容量 | 4 MB | 约 TPUv1 的 1/6，匹配 128×128 阵列 |
+204:> **注：L1 SRAM 与 Unified Buffer 的区分**
+206:> - **L1 SRAM（256KB×2，双端口）**：每核心本地紧耦合存储，MXU/SFU 直接访问，用于权重的双缓冲与激活值暂存。两个 256KB bank 各有一组独立读写端口，Ping-Pong 切换以掩盖 DMA 延迟。
+207:> - **Unified Buffer（4 MB scratchpad SRAM）**：每核心独立的中等容量缓冲区，承接 DMA 引擎批量搬移的权重/数据块，为 MXU 提供输入数据流并接收部分和输出。相比 TPUv1 的 24 MB，本设计匹配 128×128 阵列规模，面积效率更高。
+275:2000 token 的 KV cache 需 96 MB，远超 2 MB L2 SRAM。只能放 LPDDR5。256 KB SRAM 缓存最近 token 足够——Transformer decode 只访问当前 token 和最近几个 token 的 KV。
+434:### 5.5 性能缩放（v0.3 修正，基于 v2 tiling-aware simulator）
+446:### 5.6 性能瓶颈分析（v0.3 新增）
+520:| **Unified Buffer** | TPUv1 | 双缓冲架构，容量缩小 | 小 |
+550:## 八、模拟器验证结果（v0.3 更新）
+573:## 九、多引擎设计空间探索（v0.4 新增）
+613:> **约束说明**：所有配置统一 INT4 权重精度、1GHz 频率、64-bit LPDDR5-6400（50GB/s）。面积含 MXU+SFU+L1 SRAM。DMA×2 表示 128-bit DRAM 接口（100GB/s），非 64-bit 单扩 DMA 通道。
+675:> **文档版本**：v0.5 | **v0.5 变更**：修正 Unified Buffer 容量为 4 MB（与 `golden_executor.py` SRAM_SIZE=4MB 和 `func_model_architecture.md` 统一）；新增 §3.2 L1 SRAM (256KB×2) 与 Unified Buffer (4MB) 区分说明 | **v0.4 变更**：新增第九章「多引擎设计空间探索」，含五引擎 INT4 统一精度全局 PPA 对比、六条核心结论、推荐参数配置、Simulator 入口说明 | **v0.3 变更**：性能数字从理论估算修正为 v2 tiling-aware simulator 实测；新增 5.6 瓶颈分析章节；第八章替换为实际模拟结果；新增 continuous batching 优化路径 | **v0.2 变更**：NPU 核改为可参数化 IP；多核扩展从 PCIe P2P 改为片内实例化 | **下一步**：软件架构方案更新 + batch scheduler 设计

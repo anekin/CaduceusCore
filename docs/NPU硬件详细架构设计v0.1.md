@@ -1,4 +1,4 @@
-# NPU 硬件详细架构设计 v0.2
+# NPU 硬件详细架构设计 v0.5
 
 > 基于 Phase 1 MRD/PRD 的技术指标，进入微架构设计
 > 2026-06-17
@@ -178,7 +178,7 @@
 ┌─────────┐  ┌─────────────────────┐
 │  DMA    │  │  Unified Buffer      │
 │  Engine │──┤  (Scratchpad SRAM)   │
-└─────────┘  │  2 MB, 16 Banks      │
+└─────────┘  │  4 MB, 16 Banks      │
              │  双缓冲 Ping/Pong    │
              └──────────┬──────────┘
                         │
@@ -196,10 +196,15 @@
 
 | 参数 | 值 | 说明 |
 |------|-----|------|
-| 容量 | 2 MB | 约 TPUv1 的 1/12，匹配 128×128 阵列 |
+| 容量 | 4 MB | 约 TPUv1 的 1/6，匹配 128×128 阵列 |
 | Bank | 16 | 并行读写避免冲突 |
 | 双缓冲 | Ping-Pong | 一区运算，一区 DMA 加载 |
 | 接口 | 读写 256-bit/cycle | 喂饱 128×128 阵列 |
+
+> **注：L1 SRAM 与 Unified Buffer 的区分**
+> 
+> - **L1 SRAM（256KB×2，双端口）**：每核心本地紧耦合存储，MXU/SFU 直接访问，用于权重的双缓冲与激活值暂存。两个 256KB bank 各有一组独立读写端口，Ping-Pong 切换以掩盖 DMA 延迟。
+> - **Unified Buffer（4 MB scratchpad SRAM）**：每核心独立的中等容量缓冲区，承接 DMA 引擎批量搬移的权重/数据块，为 MXU 提供输入数据流并接收部分和输出。相比 TPUv1 的 24 MB，本设计匹配 128×128 阵列规模，面积效率更高。
 
 ---
 
@@ -318,22 +323,33 @@
 
 CISC 风格，一条指令 = 一个完整算子。32-bit 定长指令字。
 
-| 指令 | 格式 | 说明 |
-|------|------|------|
-| `MMUL wa, ia, oa, N` | 4 字段 | 权重地址 wa，输入地址 ia，输出地址 oa，大小 N。触发 MXU |
-| `SOFTMAX sa, da, len` | 3 字段 | 源地址，目标地址，向量长度 |
-| `LAYERNORM sa, da, len` | 3 字段 | |
-| `GELU sa, da, len` | 3 字段 | |
-| `RELU sa, da, len` | 3 字段 | |
-| `MAXPOOL sa, da, H, W` | 4 字段 | |
-| `AVGPOOL sa, da, H, W` | 4 字段 | |
-| `ROPE sa, da, len, theta` | 4 字段 | |
-| `DMA_LD dram, sram, size` | 3 字段 | LPDDR5→SRAM |
-| `DMA_ST sram, dram, size` | 3 字段 | SRAM→LPDDR5 |
-| `KV_LOAD token_id` | 1 字段 | 将指定 token 的 KV 加载到 SRAM cache |
-| `KV_STORE token_id` | 1 字段 | 当前计算的 KV 写入 LPDDR5 |
-| `BARRIER` | 0 字段 | 流水线同步 |
-| `NOP` | 0 字段 | |
+| OpCode | 指令 | 格式 | 说明 |
+|:------:|------|------|------|
+| 0x00 | `MMUL wa, ia, oa, N` | 4 字段 | 权重地址 wa，输入地址 ia，输出地址 oa，大小 N。触发 MXU |
+| 0x01 | `SOFTMAX sa, da, len` | 3 字段 | Softmax 激活：源地址，目标地址，向量长度 |
+| 0x02 | `LAYERNORM sa, da, len` | 3 字段 | Layer Normalization |
+| 0x03 | `GELU sa, da, len` | 3 字段 | GELU 激活 |
+| 0x04 | `RELU sa, da, len` | 3 字段 | ReLU 激活 |
+| 0x05 | `ROPE sa, da, len, theta` | 4 字段 | RoPE 位置编码 |
+| 0x06 | `SILU sa, da, len` | 3 字段 | SiLU 激活（复用 GELU 查表，见 §3.3） |
+| 0x07 | `MAXPOOL sa, da, H, W` | 4 字段 | Max Pooling 2×2 |
+| 0x08 | `AVGPOOL sa, da, H, W` | 4 字段 | Avg Pooling 2×2 |
+| 0x09 | `DMA_LD dram, sram, size` | 3 字段 | LPDDR5→SRAM（直接地址模式） |
+| 0x0A | `DMA_ST sram, dram, size` | 3 字段 | SRAM→LPDDR5（直接地址模式） |
+| 0x0B | `KV_LOAD token_id` | 1 字段 | 将指定 token 的 KV 加载到 SRAM cache |
+| 0x0C | `KV_STORE token_id` | 1 字段 | 当前计算的 KV 写入 LPDDR5 |
+| 0x0D | `BARRIER` | 0 字段 | 流水线同步栅栏 |
+| 0x0E | `NOP` | 0 字段 | 空操作 |
+| 0x0F | `VADD sa, da, len` | 3 字段 | 逐元素 INT32 加法（向量单元 §3.8） |
+| 0x10 | `VMUL sa, da, len` | 3 字段 | 逐元素 INT32 乘法（向量单元 §3.8） |
+| 0x11 | `VRED_MAX sa, da, len` | 3 字段 | 树规约求最大值，log₂(N) 级（向量单元 §3.8） |
+| 0x12 | `VRED_SUM sa, da, len` | 3 字段 | 树规约求和，INT32 溢保（向量单元 §3.8） |
+| 0x13 | `VCONV sa, da, len` | 3 字段 | INT32→BF16 类型转换，MXU↔SFU 桥梁（向量单元 §3.8） |
+| 0x14 | `VRESID sa, da, len` | 3 字段 | 残差连接 da += sa，INT32 饱和（向量单元 §3.8） |
+| 0x15 | `DMA_LDD dram, sram, size` | 3 字段 | DMA 加载（描述符链模式） |
+| 0x16 | `DMA_STD sram, dram, size` | 3 字段 | DMA 存储（描述符链模式） |
+
+> **OpCode 定义来源**：`sim/engine/isa.py` 第 12-38 行 `OpCode(IntEnum)`，当前共 23 条指令（v2 新增：Vector 7 条 + DMA 描述符 2 条）。指令编码格式见同文件 `NPUEncoder`（第 82-156 行）。
 
 ---
 
@@ -667,4 +683,4 @@ python3 design_space_explorer.py           # 完整 2550 配置
 
 ---
 
-> **文档版本**：v0.4 | **v0.4 变更**：新增第九章「多引擎设计空间探索」，含五引擎 INT4 统一精度全局 PPA 对比、六条核心结论、推荐参数配置、Simulator 入口说明 | **v0.3 变更**：性能数字从理论估算修正为 v2 tiling-aware simulator 实测；新增 5.6 瓶颈分析章节；第八章替换为实际模拟结果；新增 continuous batching 优化路径 | **v0.2 变更**：NPU 核改为可参数化 IP；多核扩展从 PCIe P2P 改为片内实例化 | **下一步**：软件架构方案更新 + batch scheduler 设计
+> **文档版本**：v0.5 | **v0.5 变更**：修正 Unified Buffer 容量为 4 MB（与 `golden_executor.py` SRAM_SIZE=4MB 和 `func_model_architecture.md` 统一）；新增 §3.2 L1 SRAM (256KB×2) 与 Unified Buffer (4MB) 区分说明 | **v0.4 变更**：新增第九章「多引擎设计空间探索」，含五引擎 INT4 统一精度全局 PPA 对比、六条核心结论、推荐参数配置、Simulator 入口说明 | **v0.3 变更**：性能数字从理论估算修正为 v2 tiling-aware simulator 实测；新增 5.6 瓶颈分析章节；第八章替换为实际模拟结果；新增 continuous batching 优化路径 | **v0.2 变更**：NPU 核改为可参数化 IP；多核扩展从 PCIe P2P 改为片内实例化 | **下一步**：软件架构方案更新 + batch scheduler 设计
