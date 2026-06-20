@@ -1,5 +1,12 @@
 # NPU 软件架构方案 v0.1
 
+> ⚠️ **DEPRECATED — 本方案已由 v0.2 替代**
+> 请参阅 `docs/NPU软件架构方案v0.2.md`。
+> v0.2 将策略从 IREE/MLIR（本方案）调整为两阶段方案：
+>   阶段 1：GGUF → llama.cpp → ggml NPU backend → Python Model
+>   阶段 2：PyTorch → ExecuTorch NPU Delegate → NPU 硬件
+> 本文件保留仅供历史参考。
+>
 > 2026-06-17
 > 配套硬件架构 v0.2：NPU 作为 IP 核，支持单核/多核实例化
 

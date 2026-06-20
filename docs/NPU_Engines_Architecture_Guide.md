@@ -17,8 +17,8 @@
   ┌─────────────────────────────────────────────────────────────┐
   │                    面积-性能 Pareto 前沿                     │
   │                                                             │
-  │  28mm² ── Systolic 128×128+WC (21 tok/s) ← ✅ 推荐         │
-  │  36mm² ── Systolic 128×256+WC (23 tok/s*)                   │
+│  28mm² ── Systolic 128×128+WC (21 tok/s) ← ✅ 推荐         │
+│  36mm² ── Systolic 128×256+WC (27 tok/s*)                   │
   │  48mm² ── Input-Stationary    (28 tok/s*)                   │
   │  52mm² ── OS-Systolic         (28 tok/s*)                   │
   │  52mm² ── Block Engine        (28 tok/s*) ← DRAM墙          │
