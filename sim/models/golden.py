@@ -8,12 +8,19 @@ Functional mode: 真实计算 MXU 矩阵乘法 + SFU 激活函数 + KV Cache 地
 - Functional: numpy 逐 bit 计算，输出 hash/checksum 用于比对
 """
 
+import warnings
 import hashlib
 import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+
+warnings.warn(
+    "models.golden is deprecated, use golden_executor instead",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 @dataclass

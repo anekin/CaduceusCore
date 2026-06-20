@@ -1,0 +1,15 @@
+=== Task F3: DeprecationWarning for models/golden.py ===
+
+Test Results:
+- pytest sim/tests/test_golden_deprecation.py -v: 1 passed
+- python3 -W all -c "from models.golden import GoldenMXU": DeprecationWarning shown
+
+Manual Verification:
+$ PYTHONPATH=sim python3 -W all -c "from models.golden import GoldenMXU"
+<string>:1: DeprecationWarning: models.golden is deprecated, use golden_executor instead
+
+File Modified:
+- sim/models/golden.py: added import warnings + warnings.warn() at module top
+
+Commit Message:
+- chore(golden): add DeprecationWarning to stale models/golden.py (F3)
