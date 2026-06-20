@@ -82,6 +82,30 @@ cd ~/npu && PYTHONPATH=. python3 sim/e2e_llamacpp.py --model ~/models/qwen2.5-1.
 
 | 门禁 | 验证形态 | 要求 |
 |------|---------|------|
+| Spike 编译 | 固件构建 | `make -C firmware` + patch apply 通过 |
 | 量化方案精度 | Arc Model | cos_sim ≥ 0.96（全层） |
 | 硬件链路正确 | FM 验证 | smoke test PASS |
 | 全栈数据流 | E2E 验证 | 前 2 层 attention ops PASS |
+
+## 依赖构建
+
+### Spike RISC-V 模拟器（patch 方式）
+
+Spike 上游 `riscv-software-src/riscv-isa-sim` 通过 patch 集成 NPU 设备，不维护 fork。
+
+```bash
+# 初始构建（仅一次）
+cd spike_src
+bash ../patches/apply_spike_patches.sh .
+mkdir build && cd build
+../configure --prefix=$HOME/.local
+make -j$(sysctl -n hw.ncpu)
+make install
+
+# 后续重新构建
+cd spike_src/build && make -j$(sysctl -n hw.ncpu)
+```
+
+Patch 内容（`patches/` 目录）：
+- `spike_npu.patch` — `sim.cc`（npu_factory 注册）+ `riscv.mk.in`（编译 npu_device.cc）+ `spike_main.mk.in`（注释修正）
+- `npu_device.cc` — NPU MMIO 设备实现（RISC-V 端门铃寄存器）

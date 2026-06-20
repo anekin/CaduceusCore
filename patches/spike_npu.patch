@@ -1,0 +1,48 @@
+diff --git a/riscv/riscv.mk.in b/riscv/riscv.mk.in
+index b44fc28..6efc08f 100644
+--- a/riscv/riscv.mk.in
++++ b/riscv/riscv.mk.in
+@@ -53,6 +53,7 @@ riscv_precompiled_hdrs = \
+ 	insn_template.h \
+ 
+ riscv_srcs = \
++	npu_device.cc \
+ 	processor.cc \
+ 	execute.cc \
+ 	dts.cc \
+diff --git a/riscv/sim.cc b/riscv/sim.cc
+index d88c21c..bc817ac 100644
+--- a/riscv/sim.cc
++++ b/riscv/sim.cc
+@@ -36,6 +36,7 @@ const size_t sim_t::INTERLEAVE;
+ extern device_factory_t* clint_factory;
+ extern device_factory_t* plic_factory;
+ extern device_factory_t* ns16550_factory;
++extern device_factory_t* npu_factory;
+ 
+ sim_t::sim_t(const cfg_t *cfg, bool halted,
+              std::vector<std::pair<reg_t, abstract_mem_t*>> mems,
+@@ -128,7 +129,9 @@ sim_t::sim_t(const cfg_t *cfg, bool halted,
+   std::vector<device_factory_sargs_t> device_factories = {
+     {clint_factory, {}},
+     {plic_factory, {}},
+-    {ns16550_factory, {}}};
++    {ns16550_factory, {}},
++    {npu_factory, {}}
++  };
+ 
+   // Load dtb_file if provided, otherwise self-generate a dts/dtb
+   if (dtb_file) {
+diff --git a/spike_main/spike_main.mk.in b/spike_main/spike_main.mk.in
+index c842c4e..e1b7657 100644
+--- a/spike_main/spike_main.mk.in
++++ b/spike_main/spike_main.mk.in
+@@ -15,6 +15,6 @@ spike_main_srcs = \
+ 
+ spike_main_CFLAGS = -fPIC
+ 
+-# This hack adds all symbols from extension.o to spike's dynamic symbol
+-# table, which is required for dynamically loaded --extension libraries
++# extension.o forces all extension symbols into the dynamic symbol table
++# required for dynamically loaded --extension libraries
+ spike_main_LDFLAGS = extension.o
