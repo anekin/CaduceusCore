@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Arc Model — INT4 quantization validation (simplified, fast)."""
 import sys, time, numpy as np
-sys.path.insert(0, "/Users/zheng/npu/sim")
-sys.path.insert(0, "/Users/zheng/npu/ggml-npu")
+from pathlib import Path
+_HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(_HERE))                                    # sim/
+sys.path.insert(0, str(_HERE.parent / "ggml-npu"))                # ggml-npu/
 
 from q4_dequant import load_weights_from_gguf
 from golden_executor import GoldenMXU

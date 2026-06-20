@@ -1,0 +1,16 @@
+Task: Fix B2 — replace hardcoded /Users/zheng/npu/sim path with cross-platform resolution
+File: sim/validate_quant.py
+Date: 2026-06-20
+
+Evidence:
+1. grep /Users/zheng sim/validate_quant.py → No matches (path removed)
+2. pytest sim/tests/test_arc_model.py::test_validate_quant_path_flexible -v → PASSED
+3. python3 sim/validate_quant.py → loads tensors without FileNotFoundError (timed out on computation)
+
+Changes made:
+- Removed sys.path.insert(0, "/Users/zheng/npu/sim")
+- Removed sys.path.insert(0, "/Users/zheng/npu/ggml-npu")
+- Added from pathlib import Path
+- Added _HERE = Path(__file__).resolve().parent
+- Added sys.path.insert(0, str(_HERE))  # sim/
+- Added sys.path.insert(0, str(_HERE.parent / "ggml-npu"))  # ggml-npu/
