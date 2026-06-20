@@ -10,7 +10,7 @@
 
 ## Model Zoo
 
-已验证和可验证的模型矩阵：
+### Transformer / LLM 类
 
 | 模型 | 参数量 | Arc Model | FM 验证 | E2E 验证 | 备注 |
 |------|:------:|:---------:|:------:|:-------:|------|
@@ -20,12 +20,30 @@
 | Qwen3-8B | 8B | 已配置 | — | — | GGUF 已下载 |
 | Gemma-4-12B | 12B | 已配置 | — | — | GGUF 已下载 |
 
-**验证覆盖度说明**：
-- **Arc Model**：`arc_model.py` 内置 5 模型架构参数（d_model/d_intermediate/n_layers/n_kv_heads），目前只有 1.5B 实际跑过精度+性能评估
-- **FM 验证**：独立于模型，使用 Python 合成数据验证硬件链路，所有模型共享
-- **E2E 验证**：需要 GGUF 文件 + per-block 量化 + tile-major 打包，目前只有 1.5B 跑通
+### CV 类（架构设计中，待落地验证）
 
-**扩展计划**：新模型加入 E2E 验证时，只需 `--model` 参数指向对应 GGUF，无需改代码。
+来自 `docs/NPU软件架构方案v0.1.md` 明确的工作负载目标：`3B LLM / YOLOv8 / ResNet`。
+
+| 模型 | 参数量 | 输入 | 关键算子 | 验证状态 | MXU 映射方式 |
+|------|:------:|------|------|:------:|------|
+| YOLOv8n | 3.2M | 640×640 | Conv2D + SiLU + Concat | 已规划 | im2col → MatMul |
+| ResNet-18 | 11.7M | 224×224 | Conv2D + BN + ReLU + Residual | 已规划 | im2col → MatMul |
+| ViT-Base | 86M | 224×224 | MatMul + Softmax + LayerNorm | 已规划 | 原生 MatMul（架构同 LLM） |
+| MobileNetV3-S | 2.5M | 224×224 | Depthwise Conv + SE Block | 已规划 | im2col + Element-wise |
+| EfficientNet-B0 | 5.3M | 224×224 | MBConv (DW + SE + PW) | 已规划 | im2col + MatMul |
+
+**CV 验证待办**（与 LLM 验证的差异）：
+1. **数据路径**：CV 模型不走 llama.cpp hex 协议，需要独立的 ONNX → IREE/自研 → NPU ISA 流程
+2. **量化**：per-block INT4 已验证可行（LLM），CV Conv2D 需验证 im2col→matmul 后相同量化路径的精度
+3. **FM 验证**：硬件链路（MXU/DMA/MIMO）复用现有验证，需新增 Conv2D golden reference
+4. **Arc Model**：需扩展精度评估维度（mAP/Accuracy，不仅是 cos_sim）
+
+**验证覆盖度说明**：
+- **Arc Model**：`arc_model.py` 内置 5 LLM 架构参数，CV 模型需补充 ONNX 解析 + Conv2D 性能模型
+- **FM 验证**：独立于模型，使用 Python 合成数据验证硬件链路，所有模型共享
+- **E2E 验证**：LLM 通过 GGUF 路径，CV 需独立 ONNX→ISA 路径（IREE HAL 后端计划中）
+
+**扩展计划**：LLM 新模型只需 `--model` 参数；CV 模型需 ONNX 模型文件 + 预处理脚本（待开发）。
 
 本地 GGUF 可用列表（17 个，`~/models/`）：
 ```
