@@ -1,0 +1,55 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 4 items
+
+sim/tests/test_arc_model.py::test_qkv_dimension_1_5b PASSED              [ 25%]
+sim/tests/test_arc_model.py::test_qkv_dimension_3b FAILED                [ 50%]
+sim/tests/test_arc_model.py::test_qkv_dimension_7b PASSED                [ 75%]
+sim/tests/test_arc_model.py::test_validate_quant_path_flexible FAILED    [100%]
+
+=================================== FAILURES ===================================
+____________________________ test_qkv_dimension_3b _____________________________
+
+    def test_qkv_dimension_3b():
+        """3B: hidden=2560, num_heads=32 → qkv should be 4096, code gives 2560. RED."""
+        spec = ArcModel.MODELS["qwen2.5-3b"]
+        num_heads = 32
+        expected_qkv = num_heads * HEAD_DIM  # 4096
+        actual_qkv = spec[0]  # BUG: spec[0] is hidden (2560), not num_heads * head_dim
+>       assert actual_qkv == expected_qkv, (
+            f"QKV dimension mismatch: got {actual_qkv}, expected {expected_qkv} "
+            f"(num_heads={num_heads} * head_dim={HEAD_DIM}). "
+            f"Bug: code uses spec[0]={actual_qkv} (hidden) instead of num_heads * head_dim."
+        )
+E       AssertionError: QKV dimension mismatch: got 2560, expected 4096 (num_heads=32 * head_dim=128). Bug: code uses spec[0]=2560 (hidden) instead of num_heads * head_dim.
+E       assert 2560 == 4096
+
+sim/tests/test_arc_model.py:30: AssertionError
+______________________ test_validate_quant_path_flexible _______________________
+
+    def test_validate_quant_path_flexible():
+        """RED: validate_quant.py should use cross-platform path resolution, not a
+        hardcoded macOS path like /Users/zheng/npu/sim.  Importing the module
+        triggers sys.path.insert(0, ...) with that literal path — this test asserts
+        it is NOT there, which will fail as long as the hardcoded path remains."""
+        import validate_quant  # noqa: F401  — triggers sys.path.insert(0, "/Users/zheng/npu/sim")
+    
+        # If validate_quant.py used proper __file__-relative resolution, the hardcoded
+        # macOS path would not appear in sys.path.  This assertion will fail (RED)
+        # until the bug is fixed.
+>       assert not any("/Users/zheng" in p for p in sys.path), (
+            "validate_quant.py hardcodes '/Users/zheng/npu/sim' in sys.path.insert "
+            "instead of using cross-platform resolution (e.g. Path(__file__).parent)"
+        )
+E       AssertionError: validate_quant.py hardcodes '/Users/zheng/npu/sim' in sys.path.insert instead of using cross-platform resolution (e.g. Path(__file__).parent)
+E       assert not True
+E        +  where True = any(<generator object test_validate_quant_path_flexible.<locals>.<genexpr> at 0x7f797eef5460>)
+
+sim/tests/test_arc_model.py:61: AssertionError
+=========================== short test summary info ============================
+FAILED sim/tests/test_arc_model.py::test_qkv_dimension_3b - AssertionError: Q...
+FAILED sim/tests/test_arc_model.py::test_validate_quant_path_flexible - Asser...
+========================= 2 failed, 2 passed in 0.07s ==========================
