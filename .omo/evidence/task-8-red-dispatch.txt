@@ -1,0 +1,72 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 4 items
+
+sim/tests/test_firmware.py::test_dispatch_mmul PASSED                    [ 25%]
+sim/tests/test_firmware.py::test_dispatch_sfu FAILED                     [ 50%]
+sim/tests/test_firmware.py::test_dispatch_vector FAILED                  [ 75%]
+sim/tests/test_firmware.py::test_dispatch_dma FAILED                     [100%]
+
+=================================== FAILURES ===================================
+______________________________ test_dispatch_sfu _______________________________
+
+    def test_dispatch_sfu():
+        """SFU dispatch currently returns 'unknown' — test expects 'done' (RED)."""
+        fw = _make_firmware()
+        _write_descriptor(fw)
+        op = _isa_opcode(OpCode.SOFTMAX)  # 0x01
+        result = fw._dispatch(_make_cmd(op))
+>       assert result["status"] == "done", (
+            f"SFU dispatch returned '{result['status']}', expected 'done'"
+        )
+E       AssertionError: SFU dispatch returned 'unknown', expected 'done'
+E       assert 'unknown' == 'done'
+E         
+E         - done
+E         + unknown
+
+sim/tests/test_firmware.py:67: AssertionError
+_____________________________ test_dispatch_vector _____________________________
+
+    def test_dispatch_vector():
+        """VECTOR dispatch currently returns 'unknown' — test expects 'done' (RED)."""
+        fw = _make_firmware()
+        _write_descriptor(fw)
+        op = _isa_opcode(OpCode.VADD)  # 0x0F
+        result = fw._dispatch(_make_cmd(op))
+>       assert result["status"] == "done", (
+            f"VECTOR dispatch returned '{result['status']}', expected 'done'"
+        )
+E       AssertionError: VECTOR dispatch returned 'unknown', expected 'done'
+E       assert 'unknown' == 'done'
+E         
+E         - done
+E         + unknown
+
+sim/tests/test_firmware.py:78: AssertionError
+______________________________ test_dispatch_dma _______________________________
+
+    def test_dispatch_dma():
+        """DMA dispatch currently returns 'unknown' — test expects 'done' (RED)."""
+        fw = _make_firmware()
+        _write_descriptor(fw)
+        op = _isa_opcode(OpCode.DMA_LD)  # 0x09
+        result = fw._dispatch(_make_cmd(op))
+>       assert result["status"] == "done", (
+            f"DMA dispatch returned '{result['status']}', expected 'done'"
+        )
+E       AssertionError: DMA dispatch returned 'unknown', expected 'done'
+E       assert 'unknown' == 'done'
+E         
+E         - done
+E         + unknown
+
+sim/tests/test_firmware.py:89: AssertionError
+=========================== short test summary info ============================
+FAILED sim/tests/test_firmware.py::test_dispatch_sfu - AssertionError: SFU di...
+FAILED sim/tests/test_firmware.py::test_dispatch_vector - AssertionError: VEC...
+FAILED sim/tests/test_firmware.py::test_dispatch_dma - AssertionError: DMA di...
+========================= 3 failed, 1 passed in 0.29s ==========================
