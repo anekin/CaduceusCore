@@ -37,6 +37,9 @@ class PrecisionReport:
     worst_layer: str = ""
     worst_cos: float = 1.0
     passed: bool = False
+    mse_mean: float = 0.0
+    mse_min: float = 0.0
+    max_abs_error: float = 0.0
 
     def to_dict(self) -> dict:
         return {
@@ -47,6 +50,9 @@ class PrecisionReport:
             "worst_layer": self.worst_layer,
             "worst_cos": self.worst_cos,
             "passed": self.passed,
+            "mse_mean": self.mse_mean,
+            "mse_min": self.mse_min,
+            "max_abs_error": self.max_abs_error,
         }
 
 
@@ -134,6 +140,8 @@ class ArcModel:
 
         use_block = (scheme == "per-block")
         cos_values = []
+        mse_values = []
+        max_abs_values = []
         worst_layer = ""
         worst_cos = 1.0
         n_tested = 0
@@ -162,12 +170,18 @@ class ArcModel:
             cos_val = float(np.dot(g_vec, t_vec)) / max(ng * nt, 1e-16)
             cos_values.append(cos_val)
 
+            diff = g_vec - t_vec
+            mse_values.append(float(np.mean(diff * diff)))
+            max_abs_values.append(float(np.max(np.abs(diff))))
+
             if cos_val < worst_cos:
                 worst_cos = cos_val
                 worst_layer = name
             n_tested += 1
 
         cos_arr = np.array(cos_values)
+        mse_arr = np.array(mse_values) if mse_values else np.array([0.0])
+        max_abs_arr = np.array(max_abs_values) if max_abs_values else np.array([0.0])
         return PrecisionReport(
             n_layers=n_tested,
             cos_mean=float(np.mean(cos_arr)),
@@ -176,6 +190,9 @@ class ArcModel:
             worst_layer=worst_layer,
             worst_cos=worst_cos,
             passed=worst_cos >= self.COS_THRESHOLD,
+            mse_mean=float(np.mean(mse_arr)),
+            mse_min=float(np.min(mse_arr)),
+            max_abs_error=float(np.max(max_abs_arr)),
         )
 
     def evaluate(self, gguf_path: str,
@@ -236,6 +253,8 @@ class ArcModel:
                 icon = "PASS" if pr.passed else "FAIL"
                 logger.info(f"\n  [{label}] {pr.n_layers} layers in {dt:.1f}s")
                 logger.info(f"    cos_sim: mean={pr.cos_mean:.6f}  min={pr.cos_min:.6f}  std={pr.cos_std:.6f}")
+                logger.info(f"    mse:     mean={pr.mse_mean:.6e}  min={pr.mse_min:.6e}")
+                logger.info(f"    max_abs_error: {pr.max_abs_error:.6e}")
                 logger.info(f"    worst:   {pr.worst_layer[-60:]}  cos={pr.worst_cos:.6f}")
                 logger.info(f"    gate:    {icon} (threshold={self.COS_THRESHOLD})")
         except Exception as e:
@@ -336,6 +355,9 @@ class ArcModel:
         logger.info(f"{'Precision':<15} {'cos_sim (mean)':<22} {pr.cos_mean:>15.6f}")
         logger.info(f"{'Precision':<15} {'cos_sim (min)':<22} {pr.cos_min:>15.6f}")
         logger.info(f"{'Precision':<15} {'cos_sim (std)':<22} {pr.cos_std:>15.6f}")
+        logger.info(f"{'Precision':<15} {'mse (mean)':<22} {pr.mse_mean:>15.6e}")
+        logger.info(f"{'Precision':<15} {'mse (min)':<22} {pr.mse_min:>15.6e}")
+        logger.info(f"{'Precision':<15} {'max_abs_error':<22} {pr.max_abs_error:>15.6e}")
         logger.info(f"{'Precision':<15} {'gate passed':<22} {str(pr.passed):>15}")
         if pf:
             logger.info(f"{'Performance':<15} {'decode tok/s':<22} {pf.decode_tok_s:>15.1f}")

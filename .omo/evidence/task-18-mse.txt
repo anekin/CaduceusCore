@@ -1,0 +1,26 @@
+Task 18 Arc Model MSE / Max-Abs-Error Metrics — Evidence
+==========================================================
+
+Changes in sim/arc_model.py:
+1. Added mse_mean, mse_min, and max_abs_error fields to PrecisionReport.
+2. Extended PrecisionReport.to_dict() to include the new fields.
+3. In _run_precision(), compute per-layer MSE and max absolute error between the
+   golden FP32 vector (g_vec) and the quantized INT4 result vector (t_vec).
+4. Aggregate per-layer values: mse_mean = mean(MSEs), mse_min = min(MSEs),
+   max_abs_error = max(per-layer max absolute errors).
+5. Updated evaluate() logger output to print MSE and max_abs_error alongside cos_sim.
+6. Updated print_table() to display mse (mean), mse (min), and max_abs_error.
+
+New test file sim/tests/test_arc_precision.py:
+- test_precision_report_mse_fields() verifies direct construction, to_dict(), and
+  that _run_precision() populates the new fields for a minimal synthetic weight set.
+
+Verification:
+- Constructor smoke test (Task 18 explicit check): OK
+  cd /home/prj/zhengs/caduceuscore/CaduceusCore && PYTHONPATH=sim python3 -c \
+    "from arc_model import PrecisionReport; pr = PrecisionReport(1, 0.99, 0.97, 0.01, 'l0', 0.97, True, 0.001, 0.0005, 0.05); print(pr.mse_mean, pr.max_abs_error)"
+  Output: 0.001 0.05
+
+- Full pytest suite: all pass
+  cd /home/prj/zhengs/caduceuscore/CaduceusCore && PYTHONPATH=sim python3 -m pytest sim/tests/ -v
+  Output: 13 passed in 0.29s
