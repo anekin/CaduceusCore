@@ -45,7 +45,7 @@
 
 **扩展计划**：LLM 新模型只需 `--model` 参数；CV 模型需 ONNX 模型文件 + 预处理脚本（待开发）。
 
-本地 GGUF 可用列表（17 个，`~/models/`）：
+本地 GGUF 可用列表（17 个，`$HOME/models/`）：
 ```
 qwen2.5-1.5b-instruct-q4_k_m.gguf    Qwen2.5-7B-Instruct-Q4_K_M.gguf
 Qwen3-8B-Q4_K_M.gguf                  Qwen3-14B-Q4_K_M.gguf
@@ -68,9 +68,11 @@ qwen2.5-coder-7b-instruct-q4_k_m      ... (+ 10 more)
 - **per-block: mean_cos=0.9903, min=0.9707** ✅
 - 性能: 43.3 tok/s, MXU 94.5% util
 
+**B1 qkv 维度修复（Task 11）**：3B 及以上模型 qkv 维度计算错误已修复，qkv = num_heads × head_dim 现已正确。修复后 3B/7B/8B/12B 模型均可加载测试（证据：`$HOME/npu/.omo/evidence/task-11-green-qkv.txt`，3/3 测试通过）。
+
 **运行**：
 ```bash
-cd ~/npu/sim && PYTHONPATH=. /usr/bin/python3 arc_model.py --model ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf --scheme both
+cd sim && PYTHONPATH=. python3 arc_model.py --model $HOME/models/qwen2.5-1.5b-instruct-q4_k_m.gguf --scheme both
 ```
 
 ## FM 验证
@@ -81,19 +83,25 @@ cd ~/npu/sim && PYTHONPATH=. /usr/bin/python3 arc_model.py --model ~/models/qwen
 
 **覆盖**：
 - MMIO Bridge 寄存器读写
+- **SFU 处理器**（F1, Task 13）：`_handle_sfu()` 已实现，支持 softmax、gelu、silu、layernorm、rope 五类算子，float16 I/O 通过 SRAM
+- **Vector 处理器**（F1, Task 13）：`_handle_vector()` 已实现，支持 ADD、MUL、RED_MAX、RED_SUM、CONV、RESID 六类算子
 - DMA DRAM ↔ SRAM 搬运（双通道 CH0/CH1）
 - MXU per-block INT4 矩阵乘（含 ACCUMULATE 模式）
+- **固件 opcode 分发**（F2, Task 14）：`NPUFirmware._dispatch()` 现已覆盖 SFU、VECTOR、DMA 全部 opcode（此前仅实现 MMUL tile 路径）
 - 固件 tile 级双缓冲调度（tile_scheduler.py）
 - AXI Trace 事务顺序验证
 
-**当前状态**：✅ PASS
+**当前状态**：✅ PASS（F1/F2 已完成）
 - 256×256 矩阵，2 K-blocks × 2 N-tiles
 - 512KB SRAM
 - 91 AXI 事务（DMA 55 + MXU 36）
+- SFU/Vector handler 回归通过（test_mmio_bridge.py 2/2）
+- 全 opcode 分发通过（test_firmware.py 4/4）
+- 已知问题：func_model.py trace 导出依赖硬编码 `/Users/zheng/` 路径，核心验证逻辑无影响（见 Task 19 证据）
 
 **运行**：
 ```bash
-cd ~/npu && PYTHONPATH=. python3 sim/func_model.py
+cd CaduceusCore && PYTHONPATH=sim python3 sim/func_model.py
 ```
 
 ## E2E 验证
@@ -118,8 +126,34 @@ cd ~/npu && PYTHONPATH=. python3 sim/func_model.py
 
 **运行**：
 ```bash
-cd ~/npu/sim && PYTHONPATH=. /usr/bin/python3 e2e_llamacpp.py --model ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf --layers 2
+cd sim && PYTHONPATH=. python3 e2e_llamacpp.py --model $HOME/models/qwen2.5-1.5b-instruct-q4_k_m.gguf --layers 2
 ```
+
+## pytest 测试套件
+
+**目录**：`sim/tests/`（10 个测试文件，109 项测试，全部通过，Task 21）
+
+**命令**：
+```bash
+cd CaduceusCore && PYTHONPATH=sim python3 -m pytest sim/tests/ -v
+```
+
+**测试覆盖**：
+
+| 测试文件 | 项数 | 覆盖范围 |
+|---------|:----:|---------|
+| `test_golden_smoke.py` | 60 | 10 种 tile/矩阵布局 × 6 维度验证（确定性/哈希/溢出/形状/输入/校验） |
+| `test_golden_sfu.py` | 36 | softmax（15）/ layernorm（6）/ rope（6）/ gelu（5）/ silu（4）精度回归 |
+| `test_arc_model.py` | 4 | qkv 维度（3）+ 跨平台路径验证 |
+| `test_firmware.py` | 4 | MMUL / SFU / VECTOR / DMA 全 opcode 分发 |
+| `test_mmio_bridge.py` | 2 | SFU / Vector handler 端到端计算 |
+| `test_tile_scheduler.py` | 1 | 输入验证（非法 descriptor） |
+| `test_arc_precision.py` | 1 | 精度报告 MSE 字段校验 |
+| `test_golden_deprecation.py` | 1 | 旧版 models.golden 模块弃用确认 |
+
+**证据目录**：
+- `.omo/evidence/` — 各任务验证证据（task-11-green-qkv, task-13-green-mmio, task-14-green-dispatch, task-21-pytest-full 等）
+- `logs/` — 脚本执行日志（verify_smoke.log, verify_sfu.log, verify_func_model.log 等）
 
 ## 验证门禁
 
@@ -144,11 +178,11 @@ cd spike_src
 bash ../patches/apply_spike_patches.sh .
 mkdir build && cd build
 ../configure --prefix=$HOME/.local
-make -j$(sysctl -n hw.ncpu)
+make -j$(nproc)
 make install
 
 # 后续重新构建
-cd spike_src/build && make -j$(sysctl -n hw.ncpu)
+cd spike_src/build && make -j$(nproc)
 ```
 
 Patch 内容（`patches/` 目录）：

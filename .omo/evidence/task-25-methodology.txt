@@ -1,0 +1,44 @@
+============================================================
+Task 25 — Verification Methodology Post-Fix Update
+============================================================
+Date: 2026-06-20
+File: docs/verification_methodology.md (190 lines, updated)
+
+--- Verification: No hardcoded user paths in commands ---
+$ grep -n -E '/home/zhengs|/Users/zheng' docs/verification_methodology.md
+100:- 已知问题：func_model.py trace 导出依赖硬编码 `/Users/zheng/` 路径，核心验证逻辑无影响（见 Task 19 证据）
+
+Only match is line 100 — a known-bug documentation line (not a command example).
+All runnable command examples now use $HOME or project-relative paths.
+
+--- Arc Model Section (B1 fix) ---
+- Added qkv dimension fix (Task 11): 3B/7B/8B/12B now testable
+- Evidence ref: .omo/evidence/task-11-green-qkv.txt
+- Command: cd sim && PYTHONPATH=. python3 arc_model.py ...
+
+--- Func Model Section (F1/F2 fix) ---
+- Added SFU handler (F1, Task 13): softmax, gelu, silu, layernorm, rope
+- Added Vector handler (F1, Task 13): ADD, MUL, RED_MAX, RED_SUM, CONV, RESID
+- Added opcode dispatch (F2, Task 14): SFU, VECTOR, DMA in _dispatch()
+- Status: PASS, test_mmio_bridge.py 2/2, test_firmware.py 4/4
+- Known issue: trace export hardcoded /Users/zheng/ path (Task 19)
+- Command: cd CaduceusCore && PYTHONPATH=sim python3 sim/func_model.py
+
+--- pytest Section (new) ---
+- Command: cd CaduceusCore && PYTHONPATH=sim python3 -m pytest sim/tests/ -v
+- 10 test files, 109 tests, all pass (Task 21)
+- Test coverage table with all 8 test files
+- Evidence directories: .omo/evidence/, logs/
+
+--- Cross-platform fixes ---
+- Changed sysctl -n hw.ncpu → nproc (Spike build)
+- Changed ~/npu/sim → cd sim (Arc Model, E2E)
+- Changed ~/npu → cd CaduceusCore (FM)
+- Changed ~/models/ → $HOME/models/ (user data references)
+
+--- Unchanged (preserved historical context) ---
+- Model Zoo with all 5 LLM + 5 CV models
+- CV validation checklist
+- E2E pipeline description and pitfalls
+- 验证门禁 (quality gates)
+- Spike build section (with cross-platform fix)
