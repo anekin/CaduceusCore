@@ -11,6 +11,8 @@ import struct
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
+from sim.engine.isa import OpCode
+
 
 @dataclass
 class RV32State:
@@ -284,12 +286,13 @@ class NPUFirmware:
 
     def _dispatch(self, cmd: dict) -> dict:
         """Dispatch command to NPU modules via MMIO."""
-        from sim.regmap import MXU, SFU, DMA
+        from sim.regmap import MXU, SFU, VECTOR, DMA
 
         desc = self._read_descriptor(cmd['desc_addr'])
         result = {'opcode': cmd['opcode'], 'status': 'unknown'}
+        op = cmd['opcode']
 
-        if cmd['opcode'] == 0:  # MMUL — tile-level scheduling
+        if op == OpCode.MMUL:  # MMUL — tile-level scheduling
             from sim.tile_scheduler import tile_mmul
             from sim.regmap import DMA, MXU
 
@@ -319,6 +322,56 @@ class NPUFirmware:
                 MXU=MXU,
             )
 
+            result['status'] = 'done'
+
+        elif op in (OpCode.SOFTMAX, OpCode.LAYERNORM, OpCode.GELU,
+                    OpCode.RELU, OpCode.SILU, OpCode.ROPE):
+            sfu_op = {
+                OpCode.SOFTMAX: 0,
+                OpCode.LAYERNORM: 1,
+                OpCode.GELU: 2,
+                OpCode.RELU: 3,
+                OpCode.SILU: 4,
+                OpCode.ROPE: 5,
+            }[op]
+            self._mmio_write(SFU.BASE + SFU.CTRL, sfu_op)
+            self._mmio_write(SFU.BASE + SFU.I_ADDR, desc['input_addr'])
+            self._mmio_write(SFU.BASE + SFU.O_ADDR, desc['output_addr'])
+            self._mmio_write(SFU.BASE + SFU.DIM, desc['input_size'])
+            self._mmio_write(SFU.BASE + SFU.CMD, 1)
+            self._wait_done(SFU.BASE + SFU.STATUS)
+            result['status'] = 'done'
+
+        elif op in (OpCode.VADD, OpCode.VMUL, OpCode.VRED_MAX,
+                    OpCode.VRED_SUM, OpCode.VCONV, OpCode.VRESID):
+            vec_op = {
+                OpCode.VADD: 0,
+                OpCode.VMUL: 1,
+                OpCode.VRED_MAX: 2,
+                OpCode.VRED_SUM: 3,
+                OpCode.VCONV: 4,
+                OpCode.VRESID: 5,
+            }[op]
+            self._mmio_write(VECTOR.BASE + VECTOR.CTRL, vec_op)
+            self._mmio_write(VECTOR.BASE + VECTOR.A_ADDR, desc['input_addr'])
+            self._mmio_write(VECTOR.BASE + VECTOR.B_ADDR, desc['weight_addr'])
+            self._mmio_write(VECTOR.BASE + VECTOR.O_ADDR, desc['output_addr'])
+            self._mmio_write(VECTOR.BASE + VECTOR.DIM, desc['input_size'])
+            self._mmio_write(VECTOR.BASE + VECTOR.CMD, 1)
+            self._wait_done(VECTOR.BASE + VECTOR.STATUS)
+            result['status'] = 'done'
+
+        elif op in (OpCode.DMA_LD, OpCode.DMA_ST, OpCode.DMA_LDD, OpCode.DMA_STD):
+            if op in (OpCode.DMA_LD, OpCode.DMA_LDD):
+                self._mmio_write(DMA.BASE + DMA.CH0_SRC, desc['input_addr'])
+                self._mmio_write(DMA.BASE + DMA.CH0_DST, desc['input_sram'])
+                self._mmio_write(DMA.BASE + DMA.CH0_SIZE, desc['input_size'])
+            else:
+                self._mmio_write(DMA.BASE + DMA.CH1_SRC, desc['weight_addr'])
+                self._mmio_write(DMA.BASE + DMA.CH1_DST, desc['weight_sram'])
+                self._mmio_write(DMA.BASE + DMA.CH1_SIZE, desc['weight_size'])
+            self._mmio_write(DMA.BASE + DMA.CMD, 1)
+            self._wait_done(DMA.BASE + DMA.STATUS)
             result['status'] = 'done'
 
         return result

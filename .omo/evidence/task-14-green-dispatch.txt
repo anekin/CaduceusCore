@@ -1,0 +1,21 @@
+Evidence: F2 opcode dispatch fix
+================================
+
+Command:
+  cd /home/prj/zhengs/caduceuscore/CaduceusCore
+  PYTHONPATH=sim python3 -m pytest sim/tests/test_firmware.py -v
+
+Result:
+  sim/tests/test_firmware.py::test_dispatch_mmul PASSED
+  sim/tests/test_firmware.py::test_dispatch_sfu PASSED
+  sim/tests/test_firmware.py::test_dispatch_vector PASSED
+  sim/tests/test_firmware.py::test_dispatch_dma PASSED
+
+  4 passed in 0.28s
+
+Change:
+  sim/miniv.py
+  - Imported OpCode from sim.engine.isa.
+  - Extended NPUFirmware._dispatch() to handle SFU, VECTOR, and DMA opcodes
+    by writing the appropriate CTRL/ADDR/DIM registers and triggering CMD=1,
+    while preserving the existing MMUL tile-level dispatch path.
