@@ -66,7 +66,7 @@ class FuncModel:
         """
         defaults = {
             'input_addr': 0x80010000, 'weight_addr': 0x80020000,
-            'output_addr': 0x80030000, 'scale_addr': 0,
+            'output_addr': 0x81000000, 'scale_addr': 0,
             'input_sram': 0x00000000, 'weight_sram': 0x00400000,
             'output_sram': 0x00800000, 'scale_sram': 0x00C00000,
             'M': 4, 'K': 8, 'N': 4,
@@ -143,7 +143,7 @@ class FuncModel:
 
         # Host writes data to DRAM
         wgt_addr, act_addr, out_addr, scale_addr = (
-            0x80020000, 0x80010000, 0x80030000, 0x80040000)
+            0x80020000, 0x80010000, 0x81000000, 0x80100000)
         self.host_write_data(wgt_addr, np.frombuffer(wgt_tile_bytes, dtype=np.uint8))
         self.host_write_data(act_addr, act)
         self.host_write_data(scale_addr, np.frombuffer(scale_tile_bytes, dtype=np.float32))
@@ -216,10 +216,10 @@ if __name__ == "__main__":
 
     model2.host_write_data(0x80020000, np.frombuffer(wgt_bytes, dtype=np.uint8))
     model2.host_write_data(0x80010000, act)
-    model2.host_write_data(0x80040000, np.frombuffer(sc_bytes, dtype=np.float32))
+    model2.host_write_data(0x80100000, np.frombuffer(sc_bytes, dtype=np.float32))
     model2.host_write_descriptor(0x80000080,
-        input_addr=0x80010000, weight_addr=0x80020000, output_addr=0x80030000,
-        scale_addr=0x80040000, scale_size=len(sc_bytes),
+        input_addr=0x80010000, weight_addr=0x80020000, output_addr=0x81000000,
+        scale_addr=0x80100000, scale_size=len(sc_bytes),
         input_size=act.nbytes, weight_size=len(wgt_bytes), output_size=M*N*4,
         M=M, K=K, N=N)
     model2.host_write_command(0, 0x80000080)

@@ -181,6 +181,9 @@ class MMIOBridge:
                             src_mem[src_off:src_off + ch1_size]
 
                 self._status[DMA.BASE + DMA.STATUS] = 2  # DONE
+                # Clear sizes to prevent stale re-trigger on next CMD
+                self._status[DMA.BASE + DMA.CH0_SIZE] = 0
+                self._status[DMA.BASE + DMA.CH1_SIZE] = 0
                 if self._status.get(DMA.BASE + DMA.IRQ_EN, 0) & 1:
                     self._set_irq(3)  # DMA IRQ
             else:

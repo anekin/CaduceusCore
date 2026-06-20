@@ -82,18 +82,23 @@ def e2e_verify(gguf_path: str, layers: int, M: int = 1):
 
             # Func Model
             model = FuncModel()
-            model.host_write_data(0x80020000, np.frombuffer(wgt_tm, dtype=np.uint8))
-            model.host_write_data(0x80010000, act)
-            model.host_write_data(0x80040000, np.frombuffer(sc_tm, dtype=np.float32))
+            # Safe addresses: scale after weight to avoid collision
+            wgt_addr = 0x80020000
+            act_addr = 0x80010000
+            out_addr = 0x81000000
+            scale_addr = wgt_addr + len(wgt_tm) + 0x100000  # 1MB gap after weights
+            model.host_write_data(wgt_addr, np.frombuffer(wgt_tm, dtype=np.uint8))
+            model.host_write_data(act_addr, act)
+            model.host_write_data(scale_addr, np.frombuffer(sc_tm, dtype=np.float32))
             model.host_write_descriptor(0x80000080,
-                input_addr=0x80010000, weight_addr=0x80020000, output_addr=0x80030000,
-                scale_addr=0x80040000, scale_size=len(sc_tm),
+                input_addr=act_addr, weight_addr=wgt_addr, output_addr=out_addr,
+                scale_addr=scale_addr, scale_size=len(sc_tm),
                 input_size=act.nbytes, weight_size=len(wgt_tm),
                 output_size=M * N * 4, M=M, K=K, N=N)
             model.host_write_command(0, 0x80000080)
             model.run()
 
-            out_off = 0x80030000 - Addr.DRAM_BASE
+            out_off = out_addr - Addr.DRAM_BASE
             out_fw = np.frombuffer(model.dram[out_off:out_off + M * N * 4],
                                    dtype=np.float32).reshape(M, N)
             ok = np.allclose(out_fw, golden, rtol=1e-5)
