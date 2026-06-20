@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, Optional
 
 import numpy as np
 
+from sim.golden_executor import GoldenSFU, GoldenVector
 from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
 
 
@@ -118,12 +119,57 @@ class MMIOBridge:
     def _handle_sfu(self, rw: str, addr: int, value: int) -> int:
         off = addr - SFU.BASE
         sfu = self.modules.get('sfu')
+        if sfu is None:
+            sfu = GoldenSFU()
+            self.modules['sfu'] = sfu
 
         if rw == 'write':
             if off == SFU.CMD and (value & 1):
-                self._status[SFU.BASE + SFU.STATUS] = 1
-                # (simplified — full dispatch in firmware loop)
-                self._status[SFU.BASE + SFU.STATUS] = 2
+                self._status[SFU.BASE + SFU.STATUS] = 1  # BUSY
+
+                sram = self.modules.get('sram')
+                i_addr = self._status.get(SFU.BASE + SFU.I_ADDR, 0)
+                o_addr = self._status.get(SFU.BASE + SFU.O_ADDR, 0)
+                dim = self._status.get(SFU.BASE + SFU.DIM, 0)
+                length = dim & 0xFFFF
+                head_dim = (dim >> 16) & 0xFFFF
+                pos = self._status.get(SFU.BASE + SFU.POS, 0)
+                op = self._status.get(SFU.BASE + SFU.CTRL, 0) & 0xF
+
+                if sram is not None and length > 0:
+                    inp = np.frombuffer(
+                        sram[i_addr:i_addr + length * 2], dtype=np.float16
+                    ).astype(np.float32)
+
+                    if op == 0:       # SOFTMAX
+                        out = sfu.softmax_hw(inp)
+                    elif op == 1:     # LAYERNORM
+                        out = sfu.layernorm_hw(inp)
+                    elif op == 2:     # GELU
+                        out = sfu.gelu_hw(inp)
+                    elif op in (3, 4): # SiLU / (RELU slot fallback)
+                        out = sfu.silu_hw(inp)
+                    elif op == 5:     # ROPE
+                        half = length // 2
+                        q_in = inp[:half]
+                        k_in = inp[half:half + half] if length > half else q_in
+                        hd = head_dim if head_dim else (half if half % 2 == 0 else max(half, 2))
+                        nq = max(1, half // hd) if hd else 1
+                        nk = max(1, len(k_in) // hd) if hd else 1
+                        q_out, k_out = sfu.rope_hw(
+                            q_in, k_in, position=pos,
+                            num_heads=nq, head_dim=hd
+                        )
+                        out = np.concatenate([q_out, k_out])
+                    else:
+                        out = inp
+
+                    out_bytes = out.astype(np.float16).tobytes()
+                    sram[o_addr:o_addr + len(out_bytes)] = out_bytes
+
+                self._status[SFU.BASE + SFU.STATUS] = 2  # DONE
+                if self._status.get(SFU.BASE + SFU.IRQ_EN, 0) & 1:
+                    self._set_irq(1)  # SFU IRQ
             else:
                 self._status[addr & 0xFFFFFFFC] = value
         elif rw == 'read':
@@ -134,11 +180,58 @@ class MMIOBridge:
 
     def _handle_vector(self, rw: str, addr: int, value: int) -> int:
         off = addr - VECTOR.BASE
+        vector = self.modules.get('vector')
+        if vector is None:
+            vector = GoldenVector()
+            self.modules['vector'] = vector
 
         if rw == 'write':
             if off == VECTOR.CMD and (value & 1):
-                self._status[VECTOR.BASE + VECTOR.STATUS] = 1
-                self._status[VECTOR.BASE + VECTOR.STATUS] = 2
+                self._status[VECTOR.BASE + VECTOR.STATUS] = 1  # BUSY
+
+                sram = self.modules.get('sram')
+                a_addr = self._status.get(VECTOR.BASE + VECTOR.A_ADDR, 0)
+                b_addr = self._status.get(VECTOR.BASE + VECTOR.B_ADDR, 0)
+                o_addr = self._status.get(VECTOR.BASE + VECTOR.O_ADDR, 0)
+                dim = self._status.get(VECTOR.BASE + VECTOR.DIM, 0) & 0xFFFF
+                op = self._status.get(VECTOR.BASE + VECTOR.CTRL, 0) & 0xF
+
+                if sram is not None and dim > 0:
+                    if op == 0:       # ADD
+                        a = np.frombuffer(sram[a_addr:a_addr + dim * 4], dtype=np.int32)
+                        b = np.frombuffer(sram[b_addr:b_addr + dim * 4], dtype=np.int32)
+                        out = vector.add(a, b).astype(np.int32)
+                        out_bytes = out.tobytes()
+                    elif op == 1:     # MUL
+                        a = np.frombuffer(sram[a_addr:a_addr + dim * 4], dtype=np.int32)
+                        b = np.frombuffer(sram[b_addr:b_addr + dim * 4], dtype=np.int32)
+                        out = vector.mul(a, b).astype(np.int32)
+                        out_bytes = out.tobytes()
+                    elif op == 2:     # RED_MAX
+                        a = np.frombuffer(sram[a_addr:a_addr + dim * 2], dtype=np.float16).astype(np.float32)
+                        out = np.array([vector.max_reduce(a)], dtype=np.float16)
+                        out_bytes = out.tobytes()
+                    elif op == 3:     # RED_SUM
+                        a = np.frombuffer(sram[a_addr:a_addr + dim * 2], dtype=np.float16).astype(np.float32)
+                        out = np.array([vector.sum_reduce(a)], dtype=np.float16)
+                        out_bytes = out.tobytes()
+                    elif op == 4:     # CONV (INT32 -> BF16)
+                        a = np.frombuffer(sram[a_addr:a_addr + dim * 4], dtype=np.int32)
+                        out = vector.conv_i32_to_f16(a)
+                        out_bytes = out.tobytes()
+                    elif op == 5:     # RESID
+                        a = np.frombuffer(sram[a_addr:a_addr + dim * 2], dtype=np.float16).astype(np.float32)
+                        b = np.frombuffer(sram[b_addr:b_addr + dim * 4], dtype=np.int32)
+                        out = vector.residual_add(a, b).astype(np.int32)
+                        out_bytes = out.tobytes()
+                    else:
+                        out_bytes = b''
+
+                    sram[o_addr:o_addr + len(out_bytes)] = out_bytes
+
+                self._status[VECTOR.BASE + VECTOR.STATUS] = 2  # DONE
+                if self._status.get(VECTOR.BASE + VECTOR.IRQ_EN, 0) & 1:
+                    self._set_irq(2)  # VECTOR IRQ
             else:
                 self._status[addr & 0xFFFFFFFC] = value
         elif rw == 'read':
