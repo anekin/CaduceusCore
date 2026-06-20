@@ -1,0 +1,25 @@
+=== Task 20: E2E Command Fix Verification ===
+Date: 2026-06-20
+
+=== Command ===
+cd /home/prj/zhengs/caduceuscore/CaduceusCore && PYTHONPATH=.:sim:ggml-npu timeout 180 python3 sim/e2e_llamacpp.py --model $HOME/models/qwen2.5-1.5b-instruct-q4_k_m.gguf --layers 1
+
+=== Output ===
+E2E Verify: qwen2.5-1.5b-instruct-q4_k_m.gguf  layers=1  M=1
+======================================================================
+[NPU-PY] Loaded 339 tensors, 1777.1M elements in 71.7s
+[1] Loaded 339 tensors in 72.0s
+  [✅] L0 Q_proj       (1536×1536)
+  [✅] L0 K_proj       (256×1536)
+  [✅] L0 V_proj       (256×1536)
+
+======================================================================
+E2E Summary: 3 PASS, 0 FAIL
+======================================================================
+EXIT: 0
+=== VERDICT: PASS ===
+
+=== Files Changed ===
+1. README.md line 141: PYTHONPATH=sim:ggml-npu -> PYTHONPATH=.:sim:ggml-npu
+2. .omo/plans/caduceuscore-verify.md line 955: PYTHONPATH=sim:ggml-npu -> PYTHONPATH=.:sim:ggml-npu
+3. .omo/plans/caduceuscore-verify.md line 1252: PYTHONPATH=sim:ggml-npu -> PYTHONPATH=.:sim:ggml-npu

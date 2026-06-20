@@ -138,7 +138,7 @@ cd sim && python3 golden_executor.py smoke
 cd sim && python3 golden_executor.py sfu-verify
 
 # E2E 全链路验证
-PYTHONPATH=sim:ggml-npu python3 sim/e2e_llamacpp.py \
+PYTHONPATH=.:sim:ggml-npu python3 sim/e2e_llamacpp.py \
     --model $HOME/models/qwen2.5-1.5b-instruct-q4_k_m.gguf \
     --layers 2
 
