@@ -31,6 +31,60 @@ def tile_mmul(desc: dict, mmio_write, mmio_read, wait_done,
       (n_tile * num_blocks + k_block) * TILE_WEIGHT_BYTES (weights)
       (n_tile * num_blocks + k_block) * TILE_SCALE_BYTES (scales)
     """
+    _SRAM_SIZE = 0x40000  # 256 KB
+
+    # ── Descriptor type check ─────────────────────────────────────
+    if not isinstance(desc, dict):
+        raise ValueError(
+            f"descriptor must be a dict, got {type(desc).__name__}")
+
+    # ── Required keys ─────────────────────────────────────────────
+    required_keys = {'M', 'K', 'N', 'input_addr', 'input_size',
+                     'weight_addr', 'scale_addr', 'output_addr'}
+    missing = required_keys - desc.keys()
+    if missing:
+        raise ValueError(
+            "descriptor missing required keys: "
+            f"{', '.join(sorted(missing))}")
+
+    # ── Shape fields (M, K, N) must be positive integers ─────────
+    for field in ('M', 'K', 'N'):
+        val = desc[field]
+        if not isinstance(val, int) or val <= 0:
+            raise ValueError(
+                f"descriptor field '{field}' must be a positive "
+                f"integer, got {val!r}")
+
+    # ── Address / size fields must be non-negative integers ───────
+    for field in ('input_addr', 'weight_addr', 'scale_addr',
+                  'output_addr'):
+        val = desc[field]
+        if not isinstance(val, int) or val < 0:
+            raise ValueError(
+                f"descriptor field '{field}' must be a non-negative "
+                f"integer address, got {val!r}")
+
+    input_size = desc['input_size']
+    if not isinstance(input_size, int) or input_size < 0:
+        raise ValueError(
+            "descriptor field 'input_size' must be a non-negative "
+            f"integer, got {input_size!r}")
+
+    # ── SRAM address range validation ─────────────────────────────
+    sram_addrs = [0x000000, 0x010000, 0x012000, 0x014000, 0x015000, 0x018000]
+    for addr in sram_addrs:
+        if not (0 <= addr <= _SRAM_SIZE):
+            raise ValueError(
+                f"internal SRAM address 0x{addr:06x} out of range "
+                f"(0-{_SRAM_SIZE})")
+
+    # ── MMIO write failure wrapper ────────────────────────────────
+    def _write(base, offset, val, label=""):
+        ret = mmio_write(base, offset, val)
+        if ret is False:
+            raise ValueError(
+                f"MMIO write failed: {label} "
+                f"(base=0x{base:x}, offset=0x{offset:x})")
 
     M = desc['M']
     K = desc['K']
@@ -44,10 +98,10 @@ def tile_mmul(desc: dict, mmio_write, mmio_read, wait_done,
     out_sram = 0x018000
 
     # ── Step 1: DMA activation → SRAM (once) ─────────────────────
-    mmio_write(DMA_BASE, DMA.CH0_SRC, desc['input_addr'])
-    mmio_write(DMA_BASE, DMA.CH0_DST, act_sram)
-    mmio_write(DMA_BASE, DMA.CH0_SIZE, desc['input_size'])
-    mmio_write(DMA_BASE, DMA.CMD, 1)
+    _write(DMA_BASE, DMA.CH0_SRC, desc['input_addr'], "CH0_SRC")
+    _write(DMA_BASE, DMA.CH0_DST, act_sram, "CH0_DST")
+    _write(DMA_BASE, DMA.CH0_SIZE, desc['input_size'], "CH0_SIZE")
+    _write(DMA_BASE, DMA.CMD, 1, "DMA_CMD")
     wait_done(DMA_BASE, DMA.STATUS)
 
     # ── Step 2: N-tile outer loop ────────────────────────────────
@@ -69,18 +123,18 @@ def tile_mmul(desc: dict, mmio_write, mmio_read, wait_done,
             # ── DMA weight tile ────────────────────────────────
             wgt_offset = (n_tile * num_blocks + k_block) * TILE_WEIGHT_BYTES
             wgt_bytes = (block_height * tile_width + 1) // 2
-            mmio_write(DMA_BASE, DMA.CH0_SRC, desc['weight_addr'] + wgt_offset)
-            mmio_write(DMA_BASE, DMA.CH0_DST, w_addr)
-            mmio_write(DMA_BASE, DMA.CH0_SIZE, wgt_bytes)
-            mmio_write(DMA_BASE, DMA.CMD, 1)
+            _write(DMA_BASE, DMA.CH0_SRC, desc['weight_addr'] + wgt_offset, "CH0_SRC")
+            _write(DMA_BASE, DMA.CH0_DST, w_addr, "CH0_DST")
+            _write(DMA_BASE, DMA.CH0_SIZE, wgt_bytes, "CH0_SIZE")
+            _write(DMA_BASE, DMA.CMD, 1, "DMA_CMD")
             wait_done(DMA_BASE, DMA.STATUS)
 
             # ── DMA scale tile ─────────────────────────────────
             scale_offset = (n_tile * num_blocks + k_block) * TILE_SCALE_BYTES
-            mmio_write(DMA_BASE, DMA.CH0_SRC, desc['scale_addr'] + scale_offset)
-            mmio_write(DMA_BASE, DMA.CH0_DST, s_addr)
-            mmio_write(DMA_BASE, DMA.CH0_SIZE, tile_width * 4)
-            mmio_write(DMA_BASE, DMA.CMD, 1)
+            _write(DMA_BASE, DMA.CH0_SRC, desc['scale_addr'] + scale_offset, "CH0_SRC")
+            _write(DMA_BASE, DMA.CH0_DST, s_addr, "CH0_DST")
+            _write(DMA_BASE, DMA.CH0_SIZE, tile_width * 4, "CH0_SIZE")
+            _write(DMA_BASE, DMA.CMD, 1, "DMA_CMD")
             wait_done(DMA_BASE, DMA.STATUS)
 
             # ── MXU partial compute ────────────────────────────
@@ -88,19 +142,19 @@ def tile_mmul(desc: dict, mmio_write, mmio_read, wait_done,
             dim0 = (M & 0xFFFF) | ((block_height & 0xFFFF) << 16)
             ctrl_val = 4 if k_block > 0 else 0  # bit[2] = ACCUMULATE after first block
 
-            mmio_write(MXU_BASE, MXU.I_ADDR, act_offset)
-            mmio_write(MXU_BASE, MXU.W_ADDR, w_addr)
-            mmio_write(MXU_BASE, MXU.SCALE_ADDR, s_addr)
-            mmio_write(MXU_BASE, MXU.O_ADDR, out_offset)
-            mmio_write(MXU_BASE, MXU.CTRL, ctrl_val)
-            mmio_write(MXU_BASE, MXU.DIM0, dim0)
-            mmio_write(MXU_BASE, MXU.DIM1, tile_width & 0xFFFF)
-            mmio_write(MXU_BASE, MXU.CMD, 1)
+            _write(MXU_BASE, MXU.I_ADDR, act_offset, "I_ADDR")
+            _write(MXU_BASE, MXU.W_ADDR, w_addr, "W_ADDR")
+            _write(MXU_BASE, MXU.SCALE_ADDR, s_addr, "SCALE_ADDR")
+            _write(MXU_BASE, MXU.O_ADDR, out_offset, "O_ADDR")
+            _write(MXU_BASE, MXU.CTRL, ctrl_val, "CTRL")
+            _write(MXU_BASE, MXU.DIM0, dim0, "DIM0")
+            _write(MXU_BASE, MXU.DIM1, tile_width & 0xFFFF, "DIM1")
+            _write(MXU_BASE, MXU.CMD, 1, "MXU_CMD")
             wait_done(MXU_BASE, MXU.STATUS)
 
         # ── DMA output tile → DRAM ────────────────────────────────
-        mmio_write(DMA_BASE, DMA.CH1_SRC, out_offset)
-        mmio_write(DMA_BASE, DMA.CH1_DST, desc['output_addr'] + n_start * 4)
-        mmio_write(DMA_BASE, DMA.CH1_SIZE, M * tile_width * 4)
-        mmio_write(DMA_BASE, DMA.CMD, 1)
+        _write(DMA_BASE, DMA.CH1_SRC, out_offset, "CH1_SRC")
+        _write(DMA_BASE, DMA.CH1_DST, desc['output_addr'] + n_start * 4, "CH1_DST")
+        _write(DMA_BASE, DMA.CH1_SIZE, M * tile_width * 4, "CH1_SIZE")
+        _write(DMA_BASE, DMA.CMD, 1, "DMA_CMD")
         wait_done(DMA_BASE, DMA.STATUS)

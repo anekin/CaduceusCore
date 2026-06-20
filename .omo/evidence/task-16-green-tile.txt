@@ -1,0 +1,10 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 1 item
+
+sim/tests/test_tile_scheduler.py::test_invalid_descriptor_shape PASSED   [100%]
+
+============================== 1 passed in 0.02s ===============================
