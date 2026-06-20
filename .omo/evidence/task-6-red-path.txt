@@ -1,0 +1,35 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 1 item
+
+sim/tests/test_arc_model.py::test_validate_quant_path_flexible FAILED    [100%]
+
+=================================== FAILURES ===================================
+______________________ test_validate_quant_path_flexible _______________________
+
+    def test_validate_quant_path_flexible():
+        """RED: validate_quant.py should use cross-platform path resolution, not a
+        hardcoded macOS path like /Users/zheng/npu/sim.  Importing the module
+        triggers sys.path.insert(0, ...) with that literal path — this test asserts
+        it is NOT there, which will fail as long as the hardcoded path remains."""
+>       import validate_quant  # noqa: F401  — triggers sys.path.insert(0, "/Users/zheng/npu/sim")
+
+sim/tests/test_arc_model.py:11: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    #!/usr/bin/env python3
+    """Arc Model — INT4 quantization validation (simplified, fast)."""
+    import sys, time, numpy as np
+    sys.path.insert(0, "/Users/zheng/npu/sim")
+    sys.path.insert(0, "/Users/zheng/npu/ggml-npu")
+    
+>   from q4_dequant import load_weights_from_gguf
+E   ModuleNotFoundError: No module named 'q4_dequant'
+
+sim/validate_quant.py:7: ModuleNotFoundError
+=========================== short test summary info ============================
+FAILED sim/tests/test_arc_model.py::test_validate_quant_path_flexible - Modul...
+============================== 1 failed in 0.06s ===============================
