@@ -8,6 +8,33 @@
 | **FM验证** | Func Model 验证 | `sim/func_model.py` | MMIO → DMA → MXU → 固件调度 |
 | **E2E验证** | 端到端验证 | `sim/e2e_llamacpp.py` | Host CPU(hex) → DDR → 固件 → NPU → 输出 |
 
+## Model Zoo
+
+已验证和可验证的模型矩阵：
+
+| 模型 | 参数量 | Arc Model | FM 验证 | E2E 验证 | 备注 |
+|------|:------:|:---------:|:------:|:-------:|------|
+| Qwen2.5-1.5B | 1.5B | ✅ 0.990 | ✅ | ✅ 6/6 | 主力验证模型 |
+| Qwen2.5-3B | 3B | 已配置 | — | — | arc_model.py 参数就绪 |
+| Qwen2.5-7B | 7B | 已配置 | — | — | GGUF 已下载 |
+| Qwen3-8B | 8B | 已配置 | — | — | GGUF 已下载 |
+| Gemma-4-12B | 12B | 已配置 | — | — | GGUF 已下载 |
+
+**验证覆盖度说明**：
+- **Arc Model**：`arc_model.py` 内置 5 模型架构参数（d_model/d_intermediate/n_layers/n_kv_heads），目前只有 1.5B 实际跑过精度+性能评估
+- **FM 验证**：独立于模型，使用 Python 合成数据验证硬件链路，所有模型共享
+- **E2E 验证**：需要 GGUF 文件 + per-block 量化 + tile-major 打包，目前只有 1.5B 跑通
+
+**扩展计划**：新模型加入 E2E 验证时，只需 `--model` 参数指向对应 GGUF，无需改代码。
+
+本地 GGUF 可用列表（17 个，`~/models/`）：
+```
+qwen2.5-1.5b-instruct-q4_k_m.gguf    Qwen2.5-7B-Instruct-Q4_K_M.gguf
+Qwen3-8B-Q4_K_M.gguf                  Qwen3-14B-Q4_K_M.gguf
+Qwen3-30B-A3B-Instruct-2507-Q4_K_M    gemma-4-12B-it-Q4_K_M.gguf
+qwen2.5-coder-7b-instruct-q4_k_m      ... (+ 10 more)
+```
+
 ## Arc Model 验证
 
 **目标**：架构决策前验证量化方案精度 + 性能。
