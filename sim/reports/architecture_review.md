@@ -31,7 +31,23 @@
 **关键设计决策**：
 - hex 协议实现 C++/Python/RTL 完全解耦（RTL 可用 `$readmemh` 直接读）
 - 仅权重 MUL_MAT 走 NPU；KV cache（`cache_*`）和 contiguous 副本（`*_cont`）留 CPU
-- Weight Stationary 数据流 + `weight_cache=ON`（gate/up 共享 pipeline fill）
+- Weight Stationary 数据流 + `weight_cache=ON`（PE 双 weight 寄存器，乒乓加载）
+- **INT4 per-block 量化** (g=128)：预 Arc Model 对比 per-channel vs per-block，per-block 胜出（cos_sim +0.014）
+- **Tile 级双缓冲 SRAM 调度**：固件按 K-block × N-tile 双循环，每次只 DMA 一个 tile (8KB weight + 512B scale) 到 SRAM
+
+## 量化方案演进（2026-06）
+| 阶段 | 方案 | 发现 | 决策 |
+|------|------|------|------|
+| v0.1 | INT4 全局 scale | Arc Model 验证：rel_err 10³-10⁴，不可用 | 废弃 |
+| v0.2 | per-channel | cos_sim 0.976, 个别层跌至 0.90 | 备选 |
+| v0.3 | **per-block (g=128)** | cos_sim 0.990, 最弱层 0.971 | ✅ 当前 |
+
+## 验证体系
+| 形态 | 入口 | 覆盖 |
+|------|------|------|
+| Arc Model | `sim/arc_model.py --scheme both` | 量化方案精度 + 性能 |
+| FM 验证 | `sim/func_model.py` | 硬件链路 bit-exact |
+| E2E 验证 | `sim/e2e_llamacpp.py` | llama.cpp → Func Model 全栈 |
 
 ---
 

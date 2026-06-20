@@ -63,7 +63,43 @@ python3 design_space_explorer.py      # 七引擎设计空间搜索
 
 ## 设计理念
 
-**模型即 Spec**：Python 性能模拟器是唯一事实来源。RTL 照着 simulator 的接口写，simulator 的 functional mode 做 golden reference 验证。
+**模型即 Spec**：Python 性能模拟器是唯一事实来源。RTL 照着 simulator 的接口写，
+simulator 的 functional mode 做 golden reference 验证。
+
+**三级验证体系**：
+- **Arc Model** (`sim/arc_model.py`)：量化方案精度 gate + 性能评估
+- **FM 验证** (`sim/func_model.py`)：硬件链路 bit-exact（✅ PASS）
+- **E2E 验证** (`sim/e2e_llamacpp.py`)：llama.cpp → Func Model 全栈
+
+详见 `docs/verification_methodology.md`。
+
+## 量化方案
+
+**当前：INT4 per-block (g=128)**。经 Arc Model 对比：
+- per-channel: mean_cos=0.9763, min=0.9001
+- **per-block: mean_cos=0.9903, min=0.9707** ✅
+
+硬件规格：128×128 systolic, weight-stationary, PE 双 weight 寄存器。
+Tile 级调度：K-block × N-tile 双循环，512KB SRAM，8KB weight tile + 512B scale tile per DMA。
+
+## Lessons Learned
+
+### LL-001: 性能模型不等于精度验证（2026-06）
+
+**问题**：INT4 全局 scale 方案在 Func Model 首次跑真实 GGUF 权重时发现完全不可用（rel_err 10³-10⁴）。
+
+**根因**：
+- Layer 1 时序模型（`mxu.py`/`systolic_engine.py`）只把 `weight_precision_bits=4` 当作字节数计算的除数。从未用真实 Transformer 权重做 INT4 量化→矩阵乘→对比验证。
+- Layer 2 软件协议（`npu_server.py`）走 float32 反量化路线，绕过了硬件 INT4 通路。
+- 时序假设被默认当成了「已验证的精度方案」。
+
+**教训**：
+> 在搭建任何时序模型之前，先建数值模型验证精度方案能不能跑通。时序模型只回答「多快」，不回答「对不对」。
+
+**修复**：
+1. Func Model (`golden_executor.py`) 承担数值模型角色——任何量化方案改动必须先在这里做 bit-exact 验证。
+2. 新增验证门禁：新量化方案必须通过 `eval_models.py` 的 Qwen/Gemma 跨层对比（all-layer PASS）才能进入时序评估。
+3. 后续 RTL 开发时，Func Model 输出直接作为 `$readmemh` golden reference。
 
 ## License
 

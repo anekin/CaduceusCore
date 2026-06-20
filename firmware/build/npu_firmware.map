@@ -1,0 +1,141 @@
+
+Discarded input sections
+
+ .group         0x00000000        0xc build/npu_firmware.o
+ .group         0x00000000        0xc build/npu_firmware.o
+ .group         0x00000000        0xc build/npu_firmware.o
+ .comment       0x00000000       0x33 build/npu_firmware.o
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+SRAM             0x80000000         0x00040000         xrw
+DDR              0x80100000         0x00040000         rw
+*default*        0x00000000         0xffffffff
+
+Linker script and memory map
+
+LOAD build/startup.o
+LOAD build/npu_firmware.o
+LOAD build/test_data.o
+                0x00004000                        STACK_SIZE = 0x4000
+
+.text           0x80000000      0x308
+ *(.text.startup)
+ .text.startup  0x80000000       0x48 build/startup.o
+                0x80000000                _start
+ *(.text .text.*)
+ .text          0x80000048        0x0 build/startup.o
+ .text.trap     0x80000048       0x10 build/startup.o
+ .text          0x80000058      0x2b0 build/npu_firmware.o
+                0x80000058                firmware_main
+                0x800002cc                trap_handler
+ .text          0x80000308        0x0 build/test_data.o
+ *(.text.trap)
+
+.rela.dyn       0x80000308        0x0
+ .rela.text.startup
+                0x80000308        0x0 build/startup.o
+
+.rodata
+ *(.rodata .rodata.*)
+
+.data           0x80000310        0x0
+ *(.data .data.*)
+ .data          0x80000310        0x0 build/startup.o
+ .data          0x80000310        0x0 build/npu_firmware.o
+ .data          0x80000310        0x0 build/test_data.o
+ *(.sdata .sdata.*)
+
+.bss            0x80000310        0x4
+                0x80000310                        __bss_start = .
+ *(.bss .bss.*)
+ .bss           0x80000310        0x0 build/startup.o
+ .bss           0x80000310        0x0 build/npu_firmware.o
+ .bss           0x80000310        0x0 build/test_data.o
+ *(.sbss .sbss.*)
+ .sbss          0x80000310        0x4 build/npu_firmware.o
+                0x80000314                        . = ALIGN (0x4)
+                0x80000314                        __bss_end = .
+                0x80000320                        . = ALIGN (0x10)
+                0x80004320                        . = (. + STACK_SIZE)
+                0x80004320                        _stack_top = .
+
+.data_dram      0x80100000    0x40000
+ *(.data_dram)
+ .data_dram     0x80100000    0x40000 build/test_data.o
+                0x80100000                _test_data_start
+
+/DISCARD/
+ *(.comment)
+ *(.note)
+ *(.eh_frame)
+OUTPUT(build/npu_firmware.elf elf32-littleriscv)
+
+.riscv.attributes
+                0x00000000       0x37
+ .riscv.attributes
+                0x00000000       0x35 build/startup.o
+ .riscv.attributes
+                0x00000035       0x37 build/npu_firmware.o
+ .riscv.attributes
+                0x0000006c       0x31 build/test_data.o
+
+.note.GNU-stack
+                0x00000000        0x0
+ .note.GNU-stack
+                0x00000000        0x0 build/npu_firmware.o
+
+.debug_line     0x00000000      0xa46
+ .debug_line    0x00000000       0xb0 build/startup.o
+ .debug_line    0x000000b0      0x996 build/npu_firmware.o
+
+.debug_line_str
+                0x00000000       0xb1
+ .debug_line_str
+                0x00000000       0xb1 build/startup.o
+                                 0x24 (size before relaxing)
+ .debug_line_str
+                0x000000b1        0x0 build/npu_firmware.o
+                                 0xa7 (size before relaxing)
+
+.debug_info     0x00000000      0xdcf
+ .debug_info    0x00000000       0x23 build/startup.o
+ .debug_info    0x00000023      0xdac build/npu_firmware.o
+
+.debug_abbrev   0x00000000      0x2fc
+ .debug_abbrev  0x00000000       0x12 build/startup.o
+ .debug_abbrev  0x00000012      0x2ea build/npu_firmware.o
+
+.debug_aranges  0x00000000       0x48
+ .debug_aranges
+                0x00000000       0x28 build/startup.o
+ .debug_aranges
+                0x00000028       0x20 build/npu_firmware.o
+
+.debug_str      0x00000000     0x3d8e
+ .debug_str     0x00000000     0x3d8e build/startup.o
+                                 0x30 (size before relaxing)
+ .debug_str     0x00003d8e        0x0 build/npu_firmware.o
+                               0x4173 (size before relaxing)
+
+.debug_rnglists
+                0x00000000      0x138
+ .debug_rnglists
+                0x00000000       0x19 build/startup.o
+ .debug_rnglists
+                0x00000019      0x11f build/npu_firmware.o
+
+.debug_loclists
+                0x00000000      0x4ce
+ .debug_loclists
+                0x00000000      0x4ce build/npu_firmware.o
+
+.debug_macro    0x00000000      0xe6b
+ .debug_macro   0x00000000       0x5d build/npu_firmware.o
+ .debug_macro   0x0000005d      0x82c build/npu_firmware.o
+ .debug_macro   0x00000889      0x523 build/npu_firmware.o
+ .debug_macro   0x00000dac       0xbf build/npu_firmware.o
+
+.debug_frame    0x00000000       0x60
+ .debug_frame   0x00000000       0x60 build/npu_firmware.o

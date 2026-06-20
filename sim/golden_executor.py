@@ -149,6 +149,114 @@ class GoldenMXU:
 
         return self.matmul_int32(act, wgt_packed, M, K, N)
 
+    # ── Per-channel matmul ──────────────────────────────────────────
+
+    def matmul_int4_per_channel(self, activation: np.ndarray,
+                                weight_packed: np.ndarray,
+                                weight_scales: np.ndarray,
+                                M: int, K: int, N: int) -> np.ndarray:
+        """INT4 per-channel: INT32 accumulate → FP16 scale per output channel.
+
+        Hardware flow:
+        1. PE array: INT4 weights × INT8 activations → INT32 partial sums (same as matmul_int32)
+        2. At output: each column's INT32 result × FP16 scale[channel] → FP32
+
+        This matches the systolic array hardware where scale multiplication
+        happens in the accumulator/output stage, not during MAC operations.
+
+        Args:
+            activation: INT8, shape (M, K), range [-128, 127]
+            weight_packed: packed INT4, uint8, (K*N+1)//2 bytes, values [-7, 7]
+            weight_scales: float32 per-channel scales, shape (N,)
+            M, K, N: matrix dimensions
+
+        Returns:
+            float32 result, shape (M, N)
+        """
+        # Step 1: INT32 accumulate (same as matmul_int32)
+        int32_result = self.matmul_int32(activation, weight_packed, M, K, N)
+
+        # Step 2: Per-channel scale (hardware: column accumulator × FP16 scale)
+        # scales shape (N,) → broadcast to (M, N)
+        scales_fp32 = np.asarray(weight_scales, dtype=np.float32)
+        assert scales_fp32.shape == (N,), \
+            f"Expected scales shape ({N},), got {scales_fp32.shape}"
+
+        fp32_result = int32_result.astype(np.float32) * scales_fp32[np.newaxis, :]
+        return fp32_result
+
+    def matmul_int4_per_block(self, activation: np.ndarray,
+                              weight_packed: np.ndarray,
+                              block_scales: np.ndarray,
+                              M: int, K: int, N: int,
+                              group_size: int = 128) -> np.ndarray:
+        """INT4 per-block: K-dimension split into blocks, each with per-channel scales.
+
+        Hardware flow (matches systolic array tiling):
+        1. For each N-tile (width=ARRAY_W=128):
+        2.   Split K into blocks of group_size
+        3.   For each K-block: INT4×INT8 → INT32 partial for that block × N-tile
+        4.   Scale partial by block_scales[block_idx, n_start:n_end]
+        5.   Accumulate scaled partial into float32 accumulator
+
+        This is more expensive than per-channel (scale multiplication happens per-block,
+        not just once per column), but isolates outliers to individual blocks.
+
+        Args:
+            activation: INT8, shape (M, K)
+            weight_packed: packed INT4, uint8
+            block_scales: float32, shape (num_blocks, N)
+            M, K, N: matrix dimensions
+            group_size: block size along K (default 128, matches ARRAY_H)
+
+        Returns:
+            float32 result, shape (M, N)
+        """
+        # Unpack weights
+        w_flat = self.unpack_int4(weight_packed).astype(np.int32)
+        expected_len = K * N
+        if len(w_flat) < expected_len:
+            w_flat = np.pad(w_flat, (0, expected_len - len(w_flat)), constant_values=0)
+        W = w_flat[:expected_len].reshape(K, N)
+
+        # Activations: INT8
+        A = np.asarray(activation, dtype=np.int8)
+        if A.size < M * K:
+            A = np.pad(A.flatten(), (0, M * K - A.size), constant_values=0)
+        A = A.flatten()[:M * K].reshape(M, K)
+
+        scales = np.asarray(block_scales, dtype=np.float32)
+        num_blocks = (K + group_size - 1) // group_size
+        assert scales.shape == (num_blocks, N), \
+            f"Expected block_scales ({num_blocks},{N}), got {scales.shape}"
+
+        # Accumulate in float32 (hardware: FP32 accumulator after scale multiply)
+        result = np.zeros((M, N), dtype=np.float32)
+
+        # Tile over N (systolic array width)
+        for n_start in range(0, N, self.W):
+            n_end = min(n_start + self.W, N)
+
+            # Per K-block: compute INT32 partial → scale → accumulate
+            for b in range(num_blocks):
+                k_start = b * group_size
+                k_end = min(k_start + group_size, K)
+
+                a_block = A[:, k_start:k_end].astype(np.int32)          # (M, block_size)
+                w_block = W[k_start:k_end, n_start:n_end].astype(np.int32)  # (block_size, N_tile)
+
+                # INT32 matmul for this block × tile
+                partial = np.dot(a_block, w_block)   # (M, N_tile)
+                partial = np.clip(partial, INT32_MIN, INT32_MAX)
+
+                # Scale by block's per-channel scales
+                block_sc = scales[b, n_start:n_end].astype(np.float32)  # (N_tile,)
+                scaled = partial.astype(np.float32) * block_sc[np.newaxis, :]
+
+                result[:, n_start:n_end] += scaled
+
+        return result
+
     @staticmethod
     def hash_output(arr: np.ndarray) -> str:
         """MD5 hash for fast comparison (first 16 hex chars)."""

@@ -1,0 +1,733 @@
+{
+  "total_transactions": 91,
+  "transactions": [
+    {
+      "seq": 1,
+      "op": "write",
+      "addr": "0x40003010",
+      "data": "0x80010000",
+      "module": "DMA",
+      "ts": 2.5e-05
+    },
+    {
+      "seq": 2,
+      "op": "write",
+      "addr": "0x40003014",
+      "data": "0x00000000",
+      "module": "DMA",
+      "ts": 2.9e-05
+    },
+    {
+      "seq": 3,
+      "op": "write",
+      "addr": "0x40003018",
+      "data": "0x00000100",
+      "module": "DMA",
+      "ts": 3.1e-05
+    },
+    {
+      "seq": 4,
+      "op": "write",
+      "addr": "0x40003004",
+      "data": "0x00000001",
+      "module": "DMA",
+      "ts": 3.3e-05
+    },
+    {
+      "seq": 5,
+      "op": "read",
+      "addr": "0x40003008",
+      "data": "0x00000000",
+      "module": "DMA",
+      "ts": 3.6e-05
+    },
+    {
+      "seq": 6,
+      "op": "write",
+      "addr": "0x40003010",
+      "data": "0x80020000",
+      "module": "DMA",
+      "ts": 3.9e-05
+    },
+    {
+      "seq": 7,
+      "op": "write",
+      "addr": "0x40003014",
+      "data": "0x00010000",
+      "module": "DMA",
+      "ts": 4.1e-05
+    },
+    {
+      "seq": 8,
+      "op": "write",
+      "addr": "0x40003018",
+      "data": "0x00002000",
+      "module": "DMA",
+      "ts": 4.3e-05
+    },
+    {
+      "seq": 9,
+      "op": "write",
+      "addr": "0x40003004",
+      "data": "0x00000001",
+      "module": "DMA",
+      "ts": 4.5e-05
+    },
+    {
+      "seq": 10,
+      "op": "read",
+      "addr": "0x40003008",
+      "data": "0x00000000",
+      "module": "DMA",
+      "ts": 4.8e-05
+    },
+    {
+      "seq": 11,
+      "op": "write",
+      "addr": "0x40003010",
+      "data": "0x80040000",
+      "module": "DMA",
+      "ts": 4.9e-05
+    },
+    {
+      "seq": 12,
+      "op": "write",
+      "addr": "0x40003014",
+      "data": "0x00014000",
+      "module": "DMA",
+      "ts": 5e-05
+    },
+    {
+      "seq": 13,
+      "op": "write",
+      "addr": "0x40003018",
+      "data": "0x00000200",
+      "module": "DMA",
+      "ts": 5.1e-05
+    },
+    {
+      "seq": 14,
+      "op": "write",
+      "addr": "0x40003004",
+      "data": "0x00000001",
+      "module": "DMA",
+      "ts": 5.2e-05
+    },
+    {
+      "seq": 15,
+      "op": "read",
+      "addr": "0x40003008",
+      "data": "0x00000000",
+      "module": "DMA",
+      "ts": 5.4e-05
+    },
+    {
+      "seq": 16,
+      "op": "write",
+      "addr": "0x40000014",
+      "data": "0x00000000",
+      "module": "MXU",
+      "ts": 5.5e-05
+    },
+    {
+      "seq": 17,
+      "op": "write",
+      "addr": "0x40000018",
+      "data": "0x00010000",
+      "module": "MXU",
+      "ts": 5.7e-05
+    },
+    {
+      "seq": 18,
+      "op": "write",
+      "addr": "0x40000024",
+      "data": "0x00014000",
+      "module": "MXU",
+      "ts": 5.8e-05
+    },
+    {
+      "seq": 19,
+      "op": "write",
+      "addr": "0x4000001C",
+      "data": "0x00018000",
+      "module": "MXU",
+      "ts": 5.9e-05
+    },
+    {
+      "seq": 20,
+      "op": "write",
+      "addr": "0x40000000",
+      "data": "0x00000000",
+      "module": "MXU",
+      "ts": 6e-05
+    },
+    {
+      "seq": 21,
+      "op": "write",
+      "addr": "0x4000000C",
+      "data": "0x00800001",
+      "module": "MXU",
+      "ts": 6.1e-05
+    },
+    {
+      "seq": 22,
+      "op": "write",
+      "addr": "0x40000010",
+      "data": "0x00000080",
+      "module": "MXU",
+      "ts": 6.2e-05
+    },
+    {
+      "seq": 23,
+      "op": "write",
+      "addr": "0x40000004",
+      "data": "0x00000001",
+      "module": "MXU",
+      "ts": 6.3e-05
+    },
+    {
+      "seq": 24,
+      "op": "read",
+      "addr": "0x40000008",
+      "data": "0x00000000",
+      "module": "MXU",
+      "ts": 0.000151
+    },
+    {
+      "seq": 25,
+      "op": "write",
+      "addr": "0x40003010",
+      "data": "0x80022000",
+      "module": "DMA",
+      "ts": 0.000153
+    },
+    {
+      "seq": 26,
+      "op": "write",
+      "addr": "0x40003014",
+      "data": "0x00012000",
+      "module": "DMA",
+      "ts": 0.000155
+    },
+    {
+      "seq": 27,
+      "op": "write",
+      "addr": "0x40003018",
+      "data": "0x00002000",
+      "module": "DMA",
+      "ts": 0.000156
+    },
+    {
+      "seq": 28,
+      "op": "write",
+      "addr": "0x40003004",
+      "data": "0x00000001",
+      "module": "DMA",
+      "ts": 0.000157
+    },
+    {
+      "seq": 29,
+      "op": "read",
+      "addr": "0x40003008",
+      "data": "0x00000000",
+      "module": "DMA",
+      "ts": 0.00016
+    },
+    {
+      "seq": 30,
+      "op": "write",
+      "addr": "0x40003010",
+      "data": "0x80040200",
+      "module": "DMA",
+      "ts": 0.000161
+    },
+    {
+      "seq": 31,
+      "op": "write",
+      "addr": "0x40003014",
+      "data": "0x00015000",
+      "module": "DMA",
+      "ts": 0.000162
+    },
+    {
+      "seq": 32,
+      "op": "write",
+      "addr": "0x40003018",
+      "data": "0x00000200",
+      "module": "DMA",
+      "ts": 0.000163
+    },
+    {
+      "seq": 33,
+      "op": "write",
+      "addr": "0x40003004",
+      "data": "0x00000001",
+      "module": "DMA",
+      "ts": 0.000164
+    },
+    {
+      "seq": 34,
+      "op": "read",
+      "addr": "0x40003008",
+      "data": "0x00000000",
+      "module": "DMA",
+      "ts": 0.000166
+    },
+    {
+      "seq": 35,
+      "op": "write",
+      "addr": "0x40000014",
+      "data": "0x00000080",
+      "module": "MXU",
+      "ts": 0.000167
+    },
+    {
+      "seq": 36,
+      "op": "write",
+      "addr": "0x40000018",
+      "data": "0x00012000",
+      "module": "MXU",
+      "ts": 0.000168
+    },
+    {
+      "seq": 37,
+      "op": "write",
+      "addr": "0x40000024",
+      "data": "0x00015000",
+      "module": "MXU",
+      "ts": 0.000169
+    },
+    {
+      "seq": 38,
+      "op": "write",
+      "addr": "0x4000001C",
+      "data": "0x00018000",
+      "module": "MXU",
+      "ts": 0.00017
+    },
+    {
+      "seq": 39,
+      "op": "write",
+      "addr": "0x40000000",
+      "data": "0x00000004",
+      "module": "MXU",
+      "ts": 0.000171
+    },
+    {
+      "seq": 40,
+      "op": "write",
+      "addr": "0x4000000C",
+      "data": "0x00800001",
+      "module": "MXU",
+      "ts": 0.000172
+    },
+    {
+      "seq": 41,
+      "op": "write",
+      "addr": "0x40000010",
+      "data": "0x00000080",
+      "module": "MXU",
+      "ts": 0.000173
+    },
+    {
+      "seq": 42,
+      "op": "write",
+      "addr": "0x40000004",
+      "data": "0x00000001",
+      "module": "MXU",
+      "ts": 0.000174
+    },
+    {
+      "seq": 43,
+      "op": "read",
+      "addr": "0x40000008",
+      "data": "0x00000000",
+      "module": "MXU",
+      "ts": 0.000211
+    },
+    {
+      "seq": 44,
+      "op": "write",
+      "addr": "0x40003020",
+      "data": "0x00018000",
+      "module": "DMA",
+      "ts": 0.000213
+    },
+    {
+      "seq": 45,
+      "op": "write",
+      "addr": "0x40003024",
+      "data": "0x80030000",
+      "module": "DMA",
+      "ts": 0.000214
+    },
+    {
+      "seq": 46,
+      "op": "write",
+      "addr": "0x40003028",
+      "data": "0x00000200",
+      "module": "DMA",
+      "ts": 0.000215
+    },
+    {
+      "seq": 47,
+      "op": "write",
+      "addr": "0x40003004",
+      "data": "0x00000001",
+      "module": "DMA",
+      "ts": 0.000216
+    },
+    {
+      "seq": 48,
+      "op": "read",
+      "addr": "0x40003008",
+      "data": "0x00000000",
+      "module": "DMA",
+      "ts": 0.000218
+    },
+    {
+      "seq": 49,
+      "op": "write",
+      "addr": "0x40003010",
+      "data": "0x80024000",
+      "module": "DMA",
+      "ts": 0.00022
+    },
+    {
+      "seq": 50,
+      "op": "write",
+      "addr": "0x40003014",
+      "data": "0x00010000",
+      "module": "DMA",
+      "ts": 0.000221
+    },
+    {
+      "seq": 51,
+      "op": "write",
+      "addr": "0x40003018",
+      "data": "0x00002000",
+      "module": "DMA",
+      "ts": 0.000222
+    },
+    {
+      "seq": 52,
+      "op": "write",
+      "addr": "0x40003004",
+      "data": "0x00000001",
+      "module": "DMA",
+      "ts": 0.000223
+    },
+    {
+      "seq": 53,
+      "op": "read",
+      "addr": "0x40003008",
+      "data": "0x00000000",
+      "module": "DMA",
+      "ts": 0.000225
+    },
+    {
+      "seq": 54,
+      "op": "write",
+      "addr": "0x40003010",
+      "data": "0x80040400",
+      "module": "DMA",
+      "ts": 0.000226
+    },
+    {
+      "seq": 55,
+      "op": "write",
+      "addr": "0x40003014",
+      "data": "0x00014000",
+      "module": "DMA",
+      "ts": 0.000227
+    },
+    {
+      "seq": 56,
+      "op": "write",
+      "addr": "0x40003018",
+      "data": "0x00000200",
+      "module": "DMA",
+      "ts": 0.000228
+    },
+    {
+      "seq": 57,
+      "op": "write",
+      "addr": "0x40003004",
+      "data": "0x00000001",
+      "module": "DMA",
+      "ts": 0.000229
+    },
+    {
+      "seq": 58,
+      "op": "read",
+      "addr": "0x40003008",
+      "data": "0x00000000",
+      "module": "DMA",
+      "ts": 0.000231
+    },
+    {
+      "seq": 59,
+      "op": "write",
+      "addr": "0x40000014",
+      "data": "0x00000000",
+      "module": "MXU",
+      "ts": 0.000232
+    },
+    {
+      "seq": 60,
+      "op": "write",
+      "addr": "0x40000018",
+      "data": "0x00010000",
+      "module": "MXU",
+      "ts": 0.000233
+    },
+    {
+      "seq": 61,
+      "op": "write",
+      "addr": "0x40000024",
+      "data": "0x00014000",
+      "module": "MXU",
+      "ts": 0.000234
+    },
+    {
+      "seq": 62,
+      "op": "write",
+      "addr": "0x4000001C",
+      "data": "0x00018200",
+      "module": "MXU",
+      "ts": 0.000235
+    },
+    {
+      "seq": 63,
+      "op": "write",
+      "addr": "0x40000000",
+      "data": "0x00000000",
+      "module": "MXU",
+      "ts": 0.000236
+    },
+    {
+      "seq": 64,
+      "op": "write",
+      "addr": "0x4000000C",
+      "data": "0x00800001",
+      "module": "MXU",
+      "ts": 0.000238
+    },
+    {
+      "seq": 65,
+      "op": "write",
+      "addr": "0x40000010",
+      "data": "0x00000080",
+      "module": "MXU",
+      "ts": 0.000239
+    },
+    {
+      "seq": 66,
+      "op": "write",
+      "addr": "0x40000004",
+      "data": "0x00000001",
+      "module": "MXU",
+      "ts": 0.000241
+    },
+    {
+      "seq": 67,
+      "op": "read",
+      "addr": "0x40000008",
+      "data": "0x00000000",
+      "module": "MXU",
+      "ts": 0.000275
+    },
+    {
+      "seq": 68,
+      "op": "write",
+      "addr": "0x40003010",
+      "data": "0x80026000",
+      "module": "DMA",
+      "ts": 0.000276
+    },
+    {
+      "seq": 69,
+      "op": "write",
+      "addr": "0x40003014",
+      "data": "0x00012000",
+      "module": "DMA",
+      "ts": 0.000277
+    },
+    {
+      "seq": 70,
+      "op": "write",
+      "addr": "0x40003018",
+      "data": "0x00002000",
+      "module": "DMA",
+      "ts": 0.000278
+    },
+    {
+      "seq": 71,
+      "op": "write",
+      "addr": "0x40003004",
+      "data": "0x00000001",
+      "module": "DMA",
+      "ts": 0.000279
+    },
+    {
+      "seq": 72,
+      "op": "read",
+      "addr": "0x40003008",
+      "data": "0x00000000",
+      "module": "DMA",
+      "ts": 0.000282
+    },
+    {
+      "seq": 73,
+      "op": "write",
+      "addr": "0x40003010",
+      "data": "0x80040600",
+      "module": "DMA",
+      "ts": 0.000283
+    },
+    {
+      "seq": 74,
+      "op": "write",
+      "addr": "0x40003014",
+      "data": "0x00015000",
+      "module": "DMA",
+      "ts": 0.000283
+    },
+    {
+      "seq": 75,
+      "op": "write",
+      "addr": "0x40003018",
+      "data": "0x00000200",
+      "module": "DMA",
+      "ts": 0.000284
+    },
+    {
+      "seq": 76,
+      "op": "write",
+      "addr": "0x40003004",
+      "data": "0x00000001",
+      "module": "DMA",
+      "ts": 0.000285
+    },
+    {
+      "seq": 77,
+      "op": "read",
+      "addr": "0x40003008",
+      "data": "0x00000000",
+      "module": "DMA",
+      "ts": 0.000287
+    },
+    {
+      "seq": 78,
+      "op": "write",
+      "addr": "0x40000014",
+      "data": "0x00000080",
+      "module": "MXU",
+      "ts": 0.000289
+    },
+    {
+      "seq": 79,
+      "op": "write",
+      "addr": "0x40000018",
+      "data": "0x00012000",
+      "module": "MXU",
+      "ts": 0.00029
+    },
+    {
+      "seq": 80,
+      "op": "write",
+      "addr": "0x40000024",
+      "data": "0x00015000",
+      "module": "MXU",
+      "ts": 0.00029
+    },
+    {
+      "seq": 81,
+      "op": "write",
+      "addr": "0x4000001C",
+      "data": "0x00018200",
+      "module": "MXU",
+      "ts": 0.000291
+    },
+    {
+      "seq": 82,
+      "op": "write",
+      "addr": "0x40000000",
+      "data": "0x00000004",
+      "module": "MXU",
+      "ts": 0.000292
+    },
+    {
+      "seq": 83,
+      "op": "write",
+      "addr": "0x4000000C",
+      "data": "0x00800001",
+      "module": "MXU",
+      "ts": 0.000293
+    },
+    {
+      "seq": 84,
+      "op": "write",
+      "addr": "0x40000010",
+      "data": "0x00000080",
+      "module": "MXU",
+      "ts": 0.000294
+    },
+    {
+      "seq": 85,
+      "op": "write",
+      "addr": "0x40000004",
+      "data": "0x00000001",
+      "module": "MXU",
+      "ts": 0.000295
+    },
+    {
+      "seq": 86,
+      "op": "read",
+      "addr": "0x40000008",
+      "data": "0x00000000",
+      "module": "MXU",
+      "ts": 0.000326
+    },
+    {
+      "seq": 87,
+      "op": "write",
+      "addr": "0x40003020",
+      "data": "0x00018200",
+      "module": "DMA",
+      "ts": 0.000328
+    },
+    {
+      "seq": 88,
+      "op": "write",
+      "addr": "0x40003024",
+      "data": "0x80030200",
+      "module": "DMA",
+      "ts": 0.000329
+    },
+    {
+      "seq": 89,
+      "op": "write",
+      "addr": "0x40003028",
+      "data": "0x00000200",
+      "module": "DMA",
+      "ts": 0.00033
+    },
+    {
+      "seq": 90,
+      "op": "write",
+      "addr": "0x40003004",
+      "data": "0x00000001",
+      "module": "DMA",
+      "ts": 0.000331
+    },
+    {
+      "seq": 91,
+      "op": "read",
+      "addr": "0x40003008",
+      "data": "0x00000000",
+      "module": "DMA",
+      "ts": 0.000333
+    }
+  ]
+}
