@@ -71,13 +71,13 @@ class ArcModel:
         "per-block":   {"name": "Per-Block INT4 (g=128)", "desc": "TensorRT/GPTQ standard"},
     }
 
-    # Known model configs
+    # Known model configs: (qkv, hidden, intermediate, layers, num_heads, kv_heads)
     MODELS = {
-        "qwen2.5-1.5b":  (1536, 8960, 28, 2),
-        "qwen2.5-3b":    (2560, 9728, 28, 2),
-        "qwen2.5-7b":    (3584, 18944, 28, 4),
-        "qwen3-8b":      (4096, 12288, 32, 4),
-        "gemma-4-12b":   (4096, 16384, 40, 8),
+        "qwen2.5-1.5b":  (1536, 1536, 8960, 28, 12, 2),
+        "qwen2.5-3b":    (4096, 2560, 9728, 28, 32, 2),
+        "qwen2.5-7b":    (3584, 3584, 18944, 28, 28, 4),
+        "qwen3-8b":      (4096, 4096, 12288, 32, 32, 4),
+        "gemma-4-12b":   (4096, 4096, 16384, 40, 16, 8),
     }
 
     def __init__(self, config_path: str = "config/npu_config.yaml"):
@@ -144,7 +144,7 @@ class ArcModel:
         Args:
             gguf_path: path to Q4_K GGUF model
             scheme: "per-channel", "per-block", or "both"
-            model_spec: optional (hidden, intermediate, layers, kv_heads) tuple
+            model_spec: optional (qkv, hidden, intermediate, layers, num_heads, kv_heads) tuple
 
         Returns:
             ArcReport with precision and performance dimensions.
@@ -160,10 +160,10 @@ class ArcModel:
                     spec = val
                     break
         if spec is None:
-            report.error = f"Unknown model spec for {name}. Pass model_spec=(H,I,L,KV)"
+            report.error = f"Unknown model spec for {name}. Pass model_spec=(QKV,H,I,L,NH,KV)"
             return report
 
-        report.hidden, report.intermediate, report.layers = spec[0], spec[1], spec[2]
+        report.hidden, report.intermediate, report.layers = spec[1], spec[2], spec[3]
 
         # ── Load weights ────────────────────────────────────────────
         print(f"\n{'='*60}")
@@ -220,9 +220,10 @@ class ArcModel:
         print(f"{'='*60}")
 
         H, I, L = report.hidden, report.intermediate, report.layers
-        kv_heads = spec[3]
-        head_dim = 128
-        qkv = spec[0]
+        num_heads = spec[4]
+        kv_heads = spec[5]
+        head_dim = spec[0] // num_heads
+        qkv = num_heads * head_dim
         kv = kv_heads * head_dim
 
         trace = []
@@ -299,7 +300,7 @@ if __name__ == "__main__":
     parser.add_argument("--scheme", default="per-block",
                         choices=["per-channel", "per-block", "both"],
                         help="INT4 quantization scheme (default: per-block)")
-    parser.add_argument("--spec", help="Model spec: H,I,L,KV (e.g., 1536,8960,28,2)")
+    parser.add_argument("--spec", help="Model spec: QKV,H,I,L,NH,KV (e.g., 4096,2560,9728,28,32,2)")
     args = parser.parse_args()
 
     spec = None

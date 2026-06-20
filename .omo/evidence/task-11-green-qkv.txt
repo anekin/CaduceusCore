@@ -1,0 +1,21 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 3 items
+
+sim/tests/test_arc_model.py::test_qkv_dimension_1_5b PASSED              [ 33%]
+sim/tests/test_arc_model.py::test_qkv_dimension_3b PASSED                [ 66%]
+sim/tests/test_arc_model.py::test_qkv_dimension_7b PASSED                [100%]
+
+============================== 3 passed in 0.04s ===============================
+
+=== MODELS spec verification ===
+qwen2.5-1.5b: hidden=1536, num_heads=12, head_dim=128, qkv=1536
+qwen2.5-3b: hidden=2560, num_heads=32, head_dim=128, qkv=4096
+qwen2.5-7b: hidden=3584, num_heads=28, head_dim=128, qkv=3584
+qwen3-8b: hidden=4096, num_heads=32, head_dim=128, qkv=4096
+gemma-4-12b: hidden=4096, num_heads=16, head_dim=256, qkv=4096
+
+All qkv dimensions match num_heads * head_dim.
