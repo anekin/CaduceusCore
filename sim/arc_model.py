@@ -8,6 +8,8 @@ Two dimensions:
 Gate rule: all weight layers must pass cos_sim ≥ 0.97 before performance eval.
 """
 
+import json
+import logging
 import sys
 import time
 import numpy as np
@@ -18,6 +20,8 @@ from typing import Optional
 _HERE = Path(__file__).parent
 sys.path.insert(0, str(_HERE.parent / "ggml-npu"))
 sys.path.insert(0, str(_HERE))
+
+logger = logging.getLogger(__name__)
 
 from q4_dequant import load_weights_from_gguf
 from golden_executor import GoldenMXU
@@ -34,6 +38,17 @@ class PrecisionReport:
     worst_cos: float = 1.0
     passed: bool = False
 
+    def to_dict(self) -> dict:
+        return {
+            "n_layers": self.n_layers,
+            "cos_mean": self.cos_mean,
+            "cos_min": self.cos_min,
+            "cos_std": self.cos_std,
+            "worst_layer": self.worst_layer,
+            "worst_cos": self.worst_cos,
+            "passed": self.passed,
+        }
+
 
 @dataclass
 class PerfReport:
@@ -42,6 +57,15 @@ class PerfReport:
     mxu_util_pct: float = 0.0
     dram_stall_pct: float = 0.0
     total_mac_g: float = 0.0
+
+    def to_dict(self) -> dict:
+        return {
+            "decode_tok_s": self.decode_tok_s,
+            "decode_us_tok": self.decode_us_tok,
+            "mxu_util_pct": self.mxu_util_pct,
+            "dram_stall_pct": self.dram_stall_pct,
+            "total_mac_g": self.total_mac_g,
+        }
 
 
 @dataclass
@@ -54,6 +78,21 @@ class ArcReport:
     perf: Optional[PerfReport] = None
     passed: bool = False
     error: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "model_name": self.model_name,
+            "hidden": self.hidden,
+            "intermediate": self.intermediate,
+            "layers": self.layers,
+            "precision": self.precision.to_dict() if self.precision else None,
+            "perf": self.perf.to_dict() if self.perf else None,
+            "passed": self.passed,
+            "error": self.error,
+        }
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), indent=2)
 
 
 class ArcModel:
@@ -82,7 +121,10 @@ class ArcModel:
 
     def __init__(self, config_path: str = "config/npu_config.yaml"):
         from npu_sim import NPUSimulator
-        self.sim = NPUSimulator(config_path)
+        config_file = Path(config_path)
+        if not config_file.is_absolute():
+            config_file = _HERE / config_file
+        self.sim = NPUSimulator(str(config_file))
         self.mxu = GoldenMXU()
         self.rng = np.random.RandomState(42)
 
@@ -166,42 +208,48 @@ class ArcModel:
         report.hidden, report.intermediate, report.layers = spec[1], spec[2], spec[3]
 
         # ── Load weights ────────────────────────────────────────────
-        print(f"\n{'='*60}")
-        print(f"Arc Model — Precision Gate")
-        print(f"{'='*60}")
+        logger.info(f"\n{'='*60}")
+        logger.info("Arc Model — Precision Gate")
+        logger.info(f"{'='*60}")
 
         t0 = time.time()
         try:
             weights = load_weights_from_gguf(gguf_path)
         except Exception as e:
             report.error = f"GGUF load failed: {e}"
+            logger.error(report.error)
             return report
-        print(f"Loaded {len(weights)} tensors in {time.time()-t0:.1f}s")
+        logger.info(f"Loaded {len(weights)} tensors in {time.time()-t0:.1f}s")
 
         # ── A. Precision ────────────────────────────────────────────
         schemes_to_run = list(self.SCHEMES.keys()) if scheme == "both" else [scheme]
 
         scheme_results = {}
-        for s in schemes_to_run:
-            t1 = time.time()
-            pr = self._run_precision(weights, s)
-            dt = time.time() - t1
-            scheme_results[s] = pr
+        try:
+            for s in schemes_to_run:
+                t1 = time.time()
+                pr = self._run_precision(weights, s)
+                dt = time.time() - t1
+                scheme_results[s] = pr
 
-            label = self.SCHEMES[s]["name"]
-            icon = "✓" if pr.passed else "✗"
-            print(f"\n  [{label}] {pr.n_layers} layers in {dt:.1f}s")
-            print(f"    cos_sim: mean={pr.cos_mean:.6f}  min={pr.cos_min:.6f}  std={pr.cos_std:.6f}")
-            print(f"    worst:   {pr.worst_layer[-60:]}  cos={pr.worst_cos:.6f}")
-            print(f"    gate:    {icon} PASS (threshold={self.COS_THRESHOLD})")
+                label = self.SCHEMES[s]["name"]
+                icon = "PASS" if pr.passed else "FAIL"
+                logger.info(f"\n  [{label}] {pr.n_layers} layers in {dt:.1f}s")
+                logger.info(f"    cos_sim: mean={pr.cos_mean:.6f}  min={pr.cos_min:.6f}  std={pr.cos_std:.6f}")
+                logger.info(f"    worst:   {pr.worst_layer[-60:]}  cos={pr.worst_cos:.6f}")
+                logger.info(f"    gate:    {icon} (threshold={self.COS_THRESHOLD})")
+        except Exception as e:
+            report.error = f"Precision evaluation failed: {e}"
+            logger.error(report.error)
+            return report
 
         if scheme == "both":
             pc_pr = scheme_results["per-channel"]
             pb_pr = scheme_results["per-block"]
             delta = pb_pr.cos_mean - pc_pr.cos_mean
             winner = "per-block" if delta > 0 else "per-channel"
-            print(f"\n  Comparison: per-block − per-channel = {delta:+.4f} cos_sim")
-            print(f"  → {winner} wins  (min: {pc_pr.cos_min:.4f} vs {pb_pr.cos_min:.4f})")
+            logger.info(f"\n  Comparison: per-block − per-channel = {delta:+.4f} cos_sim")
+            logger.info(f"  → {winner} wins  (min: {pc_pr.cos_min:.4f} vs {pb_pr.cos_min:.4f})")
             best = pb_pr if delta > 0 else pc_pr
             report.precision = best
             pr = best
@@ -211,13 +259,13 @@ class ArcModel:
 
         # ── B. Performance Model ────────────────────────────────────
         if not pr.passed:
-            print(f"\n  → Skipping performance eval: precision gate not met")
+            logger.warning("\n  → Skipping performance eval: precision gate not met")
             report.passed = False
             return report
 
-        print(f"\n{'='*60}")
-        print(f"Arc Model — Performance")
-        print(f"{'='*60}")
+        logger.info(f"\n{'='*60}")
+        logger.info("Arc Model — Performance")
+        logger.info(f"{'='*60}")
 
         H, I, L = report.hidden, report.intermediate, report.layers
         num_heads = spec[4]
@@ -236,7 +284,12 @@ class ArcModel:
             trace.append((1, H, I,   layer, "FFN_up"))
             trace.append((1, I, H,   layer, "FFN_down"))
 
-        perf = self.sim.simulate_decode(trace)
+        try:
+            perf = self.sim.simulate_decode(trace)
+        except Exception as e:
+            report.error = f"Performance simulation failed: {e}"
+            logger.error(report.error)
+            return report
         total_mac = sum(m * k * n for m, k, n, _, _ in trace) * 2
 
         mxu_us = perf.decode_breakdown.get("MXU", 0)
@@ -253,44 +306,44 @@ class ArcModel:
         report.perf = pf
         report.passed = True
 
-        print(f"\n  Config: {H} hidden, {I} intermediate, {L} layers")
-        print(f"  Decode: {pf.decode_tok_s:.1f} tok/s  ({pf.decode_us_tok:.0f} us/tok)")
-        print(f"  MXU:    {pf.mxu_util_pct:.1f}% util")
-        print(f"  DRAM:   {pf.dram_stall_pct:.1f}% stall")
-        print(f"  MAC:    {pf.total_mac_g:.2f}G")
+        logger.info(f"\n  Config: {H} hidden, {I} intermediate, {L} layers")
+        logger.info(f"  Decode: {pf.decode_tok_s:.1f} tok/s  ({pf.decode_us_tok:.0f} us/tok)")
+        logger.info(f"  MXU:    {pf.mxu_util_pct:.1f}% util")
+        logger.info(f"  DRAM:   {pf.dram_stall_pct:.1f}% stall")
+        logger.info(f"  MAC:    {pf.total_mac_g:.2f}G")
 
         return report
 
     def print_table(self, report: ArcReport):
         """Print final summary table."""
-        print(f"\n{'='*80}")
-        print(f"Arc Model — Final Report: {report.model_name}")
-        print(f"{'='*80}")
+        logger.info(f"\n{'='*80}")
+        logger.info(f"Arc Model — Final Report: {report.model_name}")
+        logger.info(f"{'='*80}")
 
         if report.error:
-            print(f"  Error: {report.error}")
+            logger.error(f"  Error: {report.error}")
             return
 
         pr = report.precision
         if pr is None:
-            print("  No precision data (evaluation incomplete)")
+            logger.warning("  No precision data (evaluation incomplete)")
             return
 
         pf = report.perf
-        print(f"{'Dimension':<15} {'Metric':<22} {'Value':>15}")
-        print(f"{'-'*15} {'-'*22} {'-'*15}")
-        print(f"{'Precision':<15} {'layers':<22} {pr.n_layers:>15d}")
-        print(f"{'Precision':<15} {'cos_sim (mean)':<22} {pr.cos_mean:>15.6f}")
-        print(f"{'Precision':<15} {'cos_sim (min)':<22} {pr.cos_min:>15.6f}")
-        print(f"{'Precision':<15} {'cos_sim (std)':<22} {pr.cos_std:>15.6f}")
-        print(f"{'Precision':<15} {'gate passed':<22} {str(pr.passed):>15}")
+        logger.info(f"{'Dimension':<15} {'Metric':<22} {'Value':>15}")
+        logger.info(f"{'-'*15} {'-'*22} {'-'*15}")
+        logger.info(f"{'Precision':<15} {'layers':<22} {pr.n_layers:>15d}")
+        logger.info(f"{'Precision':<15} {'cos_sim (mean)':<22} {pr.cos_mean:>15.6f}")
+        logger.info(f"{'Precision':<15} {'cos_sim (min)':<22} {pr.cos_min:>15.6f}")
+        logger.info(f"{'Precision':<15} {'cos_sim (std)':<22} {pr.cos_std:>15.6f}")
+        logger.info(f"{'Precision':<15} {'gate passed':<22} {str(pr.passed):>15}")
         if pf:
-            print(f"{'Performance':<15} {'decode tok/s':<22} {pf.decode_tok_s:>15.1f}")
-            print(f"{'Performance':<15} {'decode us/tok':<22} {pf.decode_us_tok:>15.0f}")
-            print(f"{'Performance':<15} {'MXU utilization':<22} {pf.mxu_util_pct:>14.1f}%")
-            print(f"{'Performance':<15} {'DRAM stall':<22} {pf.dram_stall_pct:>14.1f}%")
-        print(f"{'='*80}")
-        print(f"  Overall: {'✓ PASS' if report.passed else '✗ FAIL'}")
+            logger.info(f"{'Performance':<15} {'decode tok/s':<22} {pf.decode_tok_s:>15.1f}")
+            logger.info(f"{'Performance':<15} {'decode us/tok':<22} {pf.decode_us_tok:>15.0f}")
+            logger.info(f"{'Performance':<15} {'MXU utilization':<22} {pf.mxu_util_pct:>14.1f}%")
+            logger.info(f"{'Performance':<15} {'DRAM stall':<22} {pf.dram_stall_pct:>14.1f}%")
+        logger.info(f"{'='*80}")
+        logger.info(f"  Overall: {'PASS' if report.passed else 'FAIL'}")
 
 
 if __name__ == "__main__":

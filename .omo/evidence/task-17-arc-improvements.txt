@@ -1,0 +1,18 @@
+Task 17 Arc Model Improvements — Evidence
+==========================================
+
+Changes in sim/arc_model.py:
+1. Added module-level logger = logging.getLogger(__name__).
+2. Replaced all print() calls in evaluate() and print_table() with logger.info(), logger.warning(), and logger.error().
+3. Added to_dict() and to_json() methods to PrecisionReport, PerfReport, and ArcReport.
+4. Wrapped GGUF loading, precision evaluation, and performance simulation in try/except; report.error is set and logged on exceptions.
+5. ArcModel.__init__ resolves relative config_path against Path(__file__).resolve().parent so it works from any CWD.
+
+Verification:
+- Import test from /tmp: OK
+  cd /tmp && PYTHONPATH=/home/prj/zhengs/caduceuscore/CaduceusCore/sim python3 -c "from arc_model import ArcModel; m=ArcModel(); print('OK')"
+  Output: OK
+
+- Unit tests: all pass
+  cd /home/prj/zhengs/caduceuscore/CaduceusCore && PYTHONPATH=sim python3 -m pytest sim/tests/test_arc_model.py -v
+  Output: 4 passed in 0.03s
