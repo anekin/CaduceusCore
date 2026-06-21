@@ -57,7 +57,7 @@ CaduceusCore 的开发遵循严格的三阶段流程：
 
 **模型即 Spec**：Arc Model 选定的配置是唯一标准。Func Model 照此实现 golden reference。RTL 照 Func Model 接口写，Func Model 输出做 RTL 验证的 bit-exact 参考数据。
 
-## Func Model — 双重角色
+## Func Model — 三重角色
 
 1. **RTL 开发的 Spec**：RTL 开发者只需看 Func Model 定义的接口和行为，
    不需要了解 Arc Model 的几百种配置。模块划分、寄存器布局、ISA 指令集
@@ -69,6 +69,24 @@ CaduceusCore 的开发遵循严格的三阶段流程：
    - RTL 仿真结果必须逐比特匹配 Func Model 的 golden 输出
    - 验证流程: `golden_executor.py gen-test` → Verilog `$readmemh` →
      `compare_rtl.py` → PASS/FAIL
+
+3. **性能测量**（计划中）：
+   - 给 MXU/DMA/SFU/固件等模块加 cycle 计数，不改行为逻辑
+   - 输出 TTFT（首 token 延迟）、TPS（decode 吞吐）、cycle breakdown
+   - 比 Arc Model 的解析公式更准确——包含固件开销、DMA 调度、MMIO 延迟
+
+### Arc vs Func 对比
+
+| | Arc Model | Func Model |
+|------|------|------|
+| 用途 | 架构选型（扫参） | 精确实现 + 性能验证 |
+| 速度 | 秒级 | 分钟级 |
+| 精度 | 近似（解析公式） | 精确（逐 cycle） |
+| 测 TPS | ✅ 公式估算 | ✅ 真实流程 |
+| 测 TTFT | ❌ 不模拟 prefill | ✅ 包含全部开销 |
+| 输出 | PPA 报告 | Golden Ref + 性能报告 |
+
+详见 [`docs/arc_vs_func.md`](docs/arc_vs_func.md)。
 
 ## 验证体系
 
