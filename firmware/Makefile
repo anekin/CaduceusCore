@@ -1,8 +1,8 @@
 # NPU Firmware Makefile
-# 使用 riscv-none-elf-gcc (xPack) 交叉编译
+# 使用系统 riscv64-unknown-elf-gcc 交叉编译
 
-TOOLCHAIN_DIR ?= $(HOME)/tools/xpack-riscv-none-elf-gcc-15.2.0-1
-PREFIX       ?= riscv-none-elf-
+TOOLCHAIN_DIR ?= /usr
+PREFIX       ?= riscv64-unknown-elf-
 CC            = $(TOOLCHAIN_DIR)/bin/$(PREFIX)gcc
 OBJCOPY       = $(TOOLCHAIN_DIR)/bin/$(PREFIX)objcopy
 OBJDUMP       = $(TOOLCHAIN_DIR)/bin/$(PREFIX)objdump
@@ -11,8 +11,8 @@ SIZE          = $(TOOLCHAIN_DIR)/bin/$(PREFIX)size
 BUILD_DIR     = build
 TARGET        = $(BUILD_DIR)/npu_firmware
 
-# RV32IM: Integer + Multiply
-ARCH          = rv32im_zicsr
+# RV32IM: Integer + Multiply (no _zicsrf — system GCC 10.2.0 rejects it)
+ARCH          = rv32im
 ABI           = ilp32
 
 CFLAGS        = -march=$(ARCH) -mabi=$(ABI) \

@@ -6,3 +6,6 @@ ggml-npu/baseline.json
 ggml-npu/sim_baseline.json
 ggml-npu/per_op_baseline.json
 sim/test_vectors/
+spike_src/build/
+ddr.bin
+logs/
