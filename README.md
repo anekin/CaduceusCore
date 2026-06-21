@@ -91,24 +91,28 @@ CaduceusCore 的开发遵循严格的三阶段流程：
 
 详见 `docs/verification_methodology.md`。
 
-## CV 模型支持
+## Model Zoo
 
-### 状态: 规划中（Arc Model 评估阶段）
+完整的 Model Zoo 规划定义了 19 个模型（LLM 10 + CV 9），按 B类（Baseline，竞品对标）和 C类（Competitive，独有优势）分层。
 
-CV 模型（YOLOv8、ResNet 等卷积网络）的支持遵循与 LLM 相同的三阶段流程：
+详见 [`docs/model_zoo.md`](docs/model_zoo.md)。
 
-1. **Arc Model 阶段**（当前）：评估 im2col → GEMM 通路在现有 MXU 阵列上的
-   TPS 和量化精度，确定最优硬件配置
-2. **Func Model 阶段**：按选定配置实现 Conv2D golden reference（im2col +
-   MXU + ReLU/Sigmoid + Pooling）
-3. **RTL 实现**：照 Func Model 接口实现
+### 快速总览
 
-详见 `../.omo/drafts/caduceuscore-cv-analysis.md`（2026-06-20 硬件复用分析报告）。
+| | LLM | CV |
+|------|:---:|:---:|
+| B类（竞品对标） | Llama 3.2-1B/3B, Qwen2.5-1.5B, Phi-3.5-mini | MobileNetV3-Small, ResNet-18, YOLOv8n, EfficientDet-Lite0 |
+| C类（独有优势） | Qwen2.5-3B, DeepSeek-R1-1.5B, Qwen3-8B, Llama 3.1-8B, Gemma-4-12B, Mistral-7B | **ViT-B/16**（竞品不支持）, ResNet-50, YOLOv8s, EfficientNet-B0, YOLOv8s-seg |
+
+### CV 支持
+
+CV 模型通过 im2col → GEMM 通路复用 MXU 128×128 阵列。核心差异：CaduceusCore 是唯一同时支持 CNN（im2col）和 Transformer（Self-Attention）视觉模型的边缘 NPU。
 
 ### 关键结论
 - MXU 128×128 阵列 ✅ 可完全复用（im2col→GEMM）
-- 需新增: im2col 引擎、ReLU/LeakyReLU/Sigmoid、CV 模型加载器
-- SRAM 512KB 需 tiled im2col（全量展开需要 ~14MB）
+- **ViT-B 零新硬件**（全 GEMM 路径，复用 LLM 的 Self-Attention）
+- 需新增: im2col 引擎、ReLU/SiLU/Swish（SFU 扩展）、Pool2D
+- SRAM 512KB 需 tiled im2col（YOLOv8s 峰值激活 ~300MB）
 
 ## 快速开始
 
