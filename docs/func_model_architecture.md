@@ -38,13 +38,14 @@
 │                             │                                      │
 │  ┌──────────────────────────▼──────────────────────────────────┐ │
 │  │               SRAM Unified Buffer (4 MB)                     │ │
+│  │  L1 ScratchPad (512 KB/core)                                 │ │
 │  │  共享工作区: 权重 | 激活 | 输出 | 中间结果                     │ │
 │  └───────┬──────────────────┬──────────────────┬───────────────┘ │
 │          │                  │                  │                  │
 │  ┌───────▼──────┐  ┌────────▼───────┐  ┌──────▼──────────────┐  │
 │  │     MXU      │  │      SFU       │  │   Vector Unit       │  │
-│  │ 128×128      │  │ LUT/CORDIC     │  │ 128-wide SIMD       │  │
-│  │ Systolic     │  │ Softmax/GELU   │  │ add/mul/reduce      │  │
+│  │ 64×64        │  │ LUT/CORDIC     │  │ 128-wide SIMD       │  │
+│  │ Block        │  │ Softmax/GELU   │  │ add/mul/reduce      │  │
 │  │ INT4×INT8    │  │ RoPE/LayerNorm │  │ INT32↔BF16 bridge   │  │
 │  │ →INT32       │  │ →BF16          │  │ →INT32/BF16         │  │
 │  └──────────────┘  └────────────────┘  └─────────────────────┘  │
@@ -101,11 +102,11 @@
 
 ```
 规格:
-  阵列: 128×128 weight-stationary systolic array
+  阵列: 64×64 broadcast-based block array
   权重: INT4 (packed 2/byte, 范围 [-8, 7])
   激活: INT8 (范围 [-128, 127])
   累加: INT32 (带饱和截断)
-  分块: 自动按 128×128 tile 执行
+  分块: 自动按 64×64 tile 执行
 
 寄存器接口 (struct npu_mxu_t, 基址 0x4000_0000):
   Offset  | Name       | Description
