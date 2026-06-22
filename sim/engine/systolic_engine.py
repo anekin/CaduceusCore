@@ -73,7 +73,9 @@ class SystolicEngine(MACEngine):
         total_tiles = K_tiles * N_tiles
 
         tile_weight_bytes = math.ceil(self.H * self.W * self.w_bits / 8)
-        tile_act_bytes = math.ceil(M * self.H * self.a_bits / 8)
+        # Per M-tile: H activation rows × H input channels (K-tile).
+        # Using total M here would inflate DMA by M_tiles× for large M (e.g. depthwise conv).
+        per_m_tile_act_bytes = math.ceil(self.H * self.H * self.a_bits / 8)
 
         M_tiles = math.ceil(M / self.H)
 
@@ -82,7 +84,7 @@ class SystolicEngine(MACEngine):
         per_m_tile_compute = pipeline_fill + pipeline_drain
         per_tile_compute = M_tiles * per_m_tile_compute
 
-        per_tile_dma = (tile_weight_bytes + M_tiles * tile_act_bytes) / self.eff_bw
+        per_tile_dma = (tile_weight_bytes + M_tiles * per_m_tile_act_bytes) / self.eff_bw
 
         bottleneck_per_tile = max(per_tile_compute, per_tile_dma)
         first_tile_cold = per_tile_dma + per_tile_compute
@@ -92,7 +94,7 @@ class SystolicEngine(MACEngine):
         else:
             total_cycles = first_tile_cold
 
-        total_weight_bytes = total_tiles * tile_weight_bytes + total_tiles * M_tiles * tile_act_bytes
+        total_weight_bytes = total_tiles * tile_weight_bytes + total_tiles * M_tiles * per_m_tile_act_bytes
         total_macs = M * K * N
         ideal_cycles = math.ceil(total_macs / self.peak_macs_per_cycle)
         utilization = ideal_cycles / total_cycles if total_cycles > 0 else 0.0
