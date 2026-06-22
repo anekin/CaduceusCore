@@ -1,0 +1,7 @@
+Channel-tiling verification
+N_tile= 1: util=0.8% cycles=22059.823529411762
+N_tile= 4: util=3.1% cycles=22059.823529411762
+N_tile= 8: util=6.2% cycles=22059.823529411762
+N_tile=16: util=12.5% cycles=22059.823529411762
+Baseline util: 0.8%, Best util: 12.5%
+Improvement: True

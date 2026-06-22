@@ -1,0 +1,5 @@
+ONNX importer verification
+Total layers: 124
+Depthwise convs: 11
+SE blocks: 9
+Assertions: len>=15 (True), depthwise>0 (True)

@@ -1,0 +1,1118 @@
+[
+  {
+    "type": "shape",
+    "name": "node_Shape_0",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_506",
+    "M": 12544,
+    "K": 27,
+    "N": 16,
+    "im2col_overhead_cycles": 31129.41176470588,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 1568
+  },
+  {
+    "type": "depthwise_conv",
+    "name": "node_Conv_508",
+    "M": 50176,
+    "K": 9,
+    "N": 1,
+    "im2col_overhead_cycles": 41505.882352941175,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 392
+  },
+  {
+    "type": "global_avg_pool",
+    "name": "node_mean",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_2",
+    "M": 1,
+    "K": 16,
+    "N": 8,
+    "im2col_overhead_cycles": 1.4705882352941175,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu_1",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 1
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_3",
+    "M": 1,
+    "K": 8,
+    "N": 16,
+    "im2col_overhead_cycles": 0.7352941176470588,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_sigmoid",
+    "name": "node_hardsigmoid",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 1
+  },
+  {
+    "type": "mul",
+    "name": "node_mul_141",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_510",
+    "M": 3136,
+    "K": 16,
+    "N": 16,
+    "im2col_overhead_cycles": 4611.764705882352,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_512",
+    "M": 3136,
+    "K": 16,
+    "N": 72,
+    "im2col_overhead_cycles": 4611.764705882352,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu_2",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 1764
+  },
+  {
+    "type": "depthwise_conv",
+    "name": "node_Conv_514",
+    "M": 56448,
+    "K": 9,
+    "N": 1,
+    "im2col_overhead_cycles": 46694.11764705882,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu_3",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 441
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_516",
+    "M": 784,
+    "K": 72,
+    "N": 24,
+    "im2col_overhead_cycles": 5188.235294117647,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_518",
+    "M": 784,
+    "K": 24,
+    "N": 88,
+    "im2col_overhead_cycles": 1729.4117647058822,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu_4",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 539
+  },
+  {
+    "type": "depthwise_conv",
+    "name": "node_Conv_520",
+    "M": 68992,
+    "K": 9,
+    "N": 1,
+    "im2col_overhead_cycles": 57070.58823529411,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu_5",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 539
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_522",
+    "M": 784,
+    "K": 88,
+    "N": 24,
+    "im2col_overhead_cycles": 6341.176470588235,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "add",
+    "name": "node_add_201",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_524",
+    "M": 784,
+    "K": 24,
+    "N": 96,
+    "im2col_overhead_cycles": 1729.4117647058822,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_2",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 588
+  },
+  {
+    "type": "depthwise_conv",
+    "name": "node_Conv_526",
+    "M": 18816,
+    "K": 25,
+    "N": 1,
+    "im2col_overhead_cycles": 43235.294117647056,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_3",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 147
+  },
+  {
+    "type": "global_avg_pool",
+    "name": "node_mean_1",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_13",
+    "M": 1,
+    "K": 96,
+    "N": 24,
+    "im2col_overhead_cycles": 8.823529411764705,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu_6",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 1
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_14",
+    "M": 1,
+    "K": 24,
+    "N": 96,
+    "im2col_overhead_cycles": 2.205882352941176,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_sigmoid",
+    "name": "node_hardsigmoid_1",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 1
+  },
+  {
+    "type": "mul",
+    "name": "node_mul_465",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_528",
+    "M": 196,
+    "K": 96,
+    "N": 40,
+    "im2col_overhead_cycles": 1729.4117647058822,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_530",
+    "M": 196,
+    "K": 40,
+    "N": 240,
+    "im2col_overhead_cycles": 720.5882352941176,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_4",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 368
+  },
+  {
+    "type": "depthwise_conv",
+    "name": "node_Conv_532",
+    "M": 47040,
+    "K": 25,
+    "N": 1,
+    "im2col_overhead_cycles": 108088.23529411764,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_5",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 368
+  },
+  {
+    "type": "global_avg_pool",
+    "name": "node_mean_2",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_18",
+    "M": 1,
+    "K": 240,
+    "N": 64,
+    "im2col_overhead_cycles": 22.058823529411764,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu_7",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 1
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_19",
+    "M": 1,
+    "K": 64,
+    "N": 240,
+    "im2col_overhead_cycles": 5.88235294117647,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_sigmoid",
+    "name": "node_hardsigmoid_2",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 2
+  },
+  {
+    "type": "mul",
+    "name": "node_mul_725",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_534",
+    "M": 196,
+    "K": 240,
+    "N": 40,
+    "im2col_overhead_cycles": 4323.529411764705,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "add",
+    "name": "node_add_421",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_536",
+    "M": 196,
+    "K": 40,
+    "N": 240,
+    "im2col_overhead_cycles": 720.5882352941176,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_6",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 368
+  },
+  {
+    "type": "depthwise_conv",
+    "name": "node_Conv_538",
+    "M": 47040,
+    "K": 25,
+    "N": 1,
+    "im2col_overhead_cycles": 108088.23529411764,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_7",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 368
+  },
+  {
+    "type": "global_avg_pool",
+    "name": "node_mean_3",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_23",
+    "M": 1,
+    "K": 240,
+    "N": 64,
+    "im2col_overhead_cycles": 22.058823529411764,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu_8",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 1
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_24",
+    "M": 1,
+    "K": 64,
+    "N": 240,
+    "im2col_overhead_cycles": 5.88235294117647,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_sigmoid",
+    "name": "node_hardsigmoid_3",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 2
+  },
+  {
+    "type": "mul",
+    "name": "node_mul_991",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_540",
+    "M": 196,
+    "K": 240,
+    "N": 40,
+    "im2col_overhead_cycles": 4323.529411764705,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "add",
+    "name": "node_add_539",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_542",
+    "M": 196,
+    "K": 40,
+    "N": 120,
+    "im2col_overhead_cycles": 720.5882352941176,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_8",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 184
+  },
+  {
+    "type": "depthwise_conv",
+    "name": "node_Conv_544",
+    "M": 23520,
+    "K": 25,
+    "N": 1,
+    "im2col_overhead_cycles": 54044.11764705882,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_9",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 184
+  },
+  {
+    "type": "global_avg_pool",
+    "name": "node_mean_4",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_28",
+    "M": 1,
+    "K": 120,
+    "N": 32,
+    "im2col_overhead_cycles": 11.029411764705882,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu_9",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 1
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_29",
+    "M": 1,
+    "K": 32,
+    "N": 120,
+    "im2col_overhead_cycles": 2.941176470588235,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_sigmoid",
+    "name": "node_hardsigmoid_4",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 1
+  },
+  {
+    "type": "mul",
+    "name": "node_mul_1257",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_546",
+    "M": 196,
+    "K": 120,
+    "N": 48,
+    "im2col_overhead_cycles": 2161.7647058823527,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_548",
+    "M": 196,
+    "K": 48,
+    "N": 144,
+    "im2col_overhead_cycles": 864.7058823529411,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_10",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 221
+  },
+  {
+    "type": "depthwise_conv",
+    "name": "node_Conv_550",
+    "M": 28224,
+    "K": 25,
+    "N": 1,
+    "im2col_overhead_cycles": 64852.94117647058,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_11",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 221
+  },
+  {
+    "type": "global_avg_pool",
+    "name": "node_mean_5",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_33",
+    "M": 1,
+    "K": 144,
+    "N": 40,
+    "im2col_overhead_cycles": 13.235294117647058,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu_10",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 1
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_34",
+    "M": 1,
+    "K": 40,
+    "N": 144,
+    "im2col_overhead_cycles": 3.676470588235294,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_sigmoid",
+    "name": "node_hardsigmoid_5",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 2
+  },
+  {
+    "type": "mul",
+    "name": "node_mul_1517",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_552",
+    "M": 196,
+    "K": 144,
+    "N": 48,
+    "im2col_overhead_cycles": 2594.1176470588234,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "add",
+    "name": "node_add_759",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_554",
+    "M": 196,
+    "K": 48,
+    "N": 288,
+    "im2col_overhead_cycles": 864.7058823529411,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_12",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 441
+  },
+  {
+    "type": "depthwise_conv",
+    "name": "node_Conv_556",
+    "M": 14112,
+    "K": 25,
+    "N": 1,
+    "im2col_overhead_cycles": 32426.47058823529,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_13",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 111
+  },
+  {
+    "type": "global_avg_pool",
+    "name": "node_mean_6",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_38",
+    "M": 1,
+    "K": 288,
+    "N": 72,
+    "im2col_overhead_cycles": 26.470588235294116,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu_11",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 1
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_39",
+    "M": 1,
+    "K": 72,
+    "N": 288,
+    "im2col_overhead_cycles": 6.617647058823529,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_sigmoid",
+    "name": "node_hardsigmoid_6",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 3
+  },
+  {
+    "type": "mul",
+    "name": "node_mul_1783",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_558",
+    "M": 49,
+    "K": 288,
+    "N": 96,
+    "im2col_overhead_cycles": 1297.0588235294117,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_560",
+    "M": 49,
+    "K": 96,
+    "N": 576,
+    "im2col_overhead_cycles": 432.35294117647055,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_14",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 221
+  },
+  {
+    "type": "depthwise_conv",
+    "name": "node_Conv_562",
+    "M": 28224,
+    "K": 25,
+    "N": 1,
+    "im2col_overhead_cycles": 64852.94117647058,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_15",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 221
+  },
+  {
+    "type": "global_avg_pool",
+    "name": "node_mean_7",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_43",
+    "M": 1,
+    "K": 576,
+    "N": 144,
+    "im2col_overhead_cycles": 52.94117647058823,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu_12",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 2
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_44",
+    "M": 1,
+    "K": 144,
+    "N": 576,
+    "im2col_overhead_cycles": 13.235294117647058,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_sigmoid",
+    "name": "node_hardsigmoid_7",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 5
+  },
+  {
+    "type": "mul",
+    "name": "node_mul_2043",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_564",
+    "M": 49,
+    "K": 576,
+    "N": 96,
+    "im2col_overhead_cycles": 2594.1176470588234,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "add",
+    "name": "node_add_979",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_566",
+    "M": 49,
+    "K": 96,
+    "N": 576,
+    "im2col_overhead_cycles": 432.35294117647055,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_16",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 221
+  },
+  {
+    "type": "depthwise_conv",
+    "name": "node_Conv_568",
+    "M": 28224,
+    "K": 25,
+    "N": 1,
+    "im2col_overhead_cycles": 64852.94117647058,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_17",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 221
+  },
+  {
+    "type": "global_avg_pool",
+    "name": "node_mean_8",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_48",
+    "M": 1,
+    "K": 576,
+    "N": 144,
+    "im2col_overhead_cycles": 52.94117647058823,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "relu",
+    "name": "node_relu_13",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 2
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_conv2d_49",
+    "M": 1,
+    "K": 144,
+    "N": 576,
+    "im2col_overhead_cycles": 13.235294117647058,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_sigmoid",
+    "name": "node_hardsigmoid_8",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 5
+  },
+  {
+    "type": "mul",
+    "name": "node_mul_2309",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_570",
+    "M": 49,
+    "K": 576,
+    "N": 96,
+    "im2col_overhead_cycles": 2594.1176470588234,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "add",
+    "name": "node_add_1097",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "pointwise_conv",
+    "name": "node_Conv_572",
+    "M": 49,
+    "K": 96,
+    "N": 576,
+    "im2col_overhead_cycles": 432.35294117647055,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_18",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 221
+  },
+  {
+    "type": "global_avg_pool",
+    "name": "node_mean_9",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "concat",
+    "name": "node_Concat_402",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "reshape",
+    "name": "node_view",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "gemm",
+    "name": "node_linear",
+    "M": 1,
+    "K": 576,
+    "N": 1024,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  },
+  {
+    "type": "hard_swish",
+    "name": "n0_19",
+    "M": 0,
+    "K": 0,
+    "N": 0,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 8
+  },
+  {
+    "type": "gemm",
+    "name": "node_linear_1",
+    "M": 1,
+    "K": 1024,
+    "N": 1000,
+    "im2col_overhead_cycles": 0,
+    "sfu_cycles": 0
+  }
+]

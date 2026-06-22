@@ -300,8 +300,10 @@ if __name__ == "__main__":
     print(f"Generated trace with {len(trace)} entries")
     print(f"Total MACs: {total_macs:,}  (expected 50M-62M)")
 
-    # Save to temp location for verification
-    save_trace(trace, "/tmp/mnv3_trace.json")
+    # Save trace JSON for downstream tools
+    trace_out = os.path.join(repo_root, "results", "cv", "mobilenetv3_small", "trace.json")
+    os.makedirs(os.path.dirname(trace_out), exist_ok=True)
+    save_trace(trace, trace_out)
 
     # Save evidence
     evidence_dir = os.path.join(repo_root, ".omo", "evidence")
