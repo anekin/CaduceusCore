@@ -17,13 +17,13 @@ import pytest
 
 @pytest.fixture
 def golden_mxu():
-    """Default GoldenMXU instance (128x128 systolic array)."""
+    """Default GoldenMXU instance (64x64 broadcast-based block array)."""
     return GoldenMXU()
 
 
 @pytest.fixture
 def golden_executor():
-    """Default GoldenExecutor instance with 128x128 MXU."""
+    """Default GoldenExecutor instance with 64x64 broadcast-based block MXU."""
     return GoldenExecutor()
 
 

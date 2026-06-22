@@ -7,7 +7,7 @@ Phase B: ISA instruction execution + SRAM memory model.
 Phase C: Test vector generation + RTL comparison framework.
 
 Hardware spec reference: NPU硬件详细架构设计v0.2
-- MXU: 128×128 systolic, INT4 weights × INT8 activations → INT32 accumulate
+- MXU: 64×64 broadcast-based block, INT4 weights × INT8 activations → INT32 accumulate
 - SFU: LUT-based (Softmax 256-entry, GELU 4-segment, RoPE CORDIC 12-stage)
 - SRAM: 2MB Unified Buffer, 256KB×2 L1 per core
 """
@@ -24,8 +24,8 @@ import numpy as np
 # Constants from hardware spec
 # ══════════════════════════════════════════════════════════════════════
 
-ARRAY_H = 128          # systolic array height
-ARRAY_W = 128          # systolic array width
+ARRAY_H = 64           # broadcast-based block array height
+ARRAY_W = 64           # broadcast-based block array width
 SRAM_SIZE = 4 * 1024 * 1024  # 4 MB Unified Buffer (L2 configurable 2-8 MB)
 L1_SRAM = 256 * 1024   # 256 KB L1 per core
 INT32_MAX = 2**31 - 1
@@ -39,9 +39,10 @@ INT32_MIN = -2**31
 class GoldenMXU:
     """Bit-accurate MXU: INT4 weights × INT8 activations → INT32 accumulate.
 
-    Matches hardware: 128×128 weight-stationary systolic array.
+    Matches hardware: 64×64 broadcast-based block array.
     Each PE: INT4×INT8→INT32 MAC per cycle.
-    Weight-stationary: weight tiles are preloaded, activations stream through.
+    Broadcast-based: weights and activations broadcast to all PEs per tile,
+    all PEs fire in parallel with zero pipeline fill/drain overhead.
     """
 
     def __init__(self, array_h: int = ARRAY_H, array_w: int = ARRAY_W):
@@ -93,7 +94,7 @@ class GoldenMXU:
         Weights are pre-unpacked INT4 (range [-8, 7]) in shape (K, N).
         Activations are INT8 (range [-128, 127]) in shape (M, K).
 
-        Tiling matches hardware: 128×128 weight-stationary.
+        Tiling matches hardware: 64×64 broadcast-based block.
         K dimension is the reduction axis — accumulates in INT32.
         """
         # Unpack weights
@@ -111,7 +112,7 @@ class GoldenMXU:
 
         result = np.zeros((M, N), dtype=np.int32)
 
-        # Tile over M and N (matching hardware systolic array boundaries)
+        # Tile over M and N (matching hardware 64×64 block array boundaries)
         for m_start in range(0, M, self.H):
             m_end = min(m_start + self.H, M)
             for n_start in range(0, N, self.W):
@@ -161,7 +162,7 @@ class GoldenMXU:
         1. PE array: INT4 weights × INT8 activations → INT32 partial sums (same as matmul_int32)
         2. At output: each column's INT32 result × FP16 scale[channel] → FP32
 
-        This matches the systolic array hardware where scale multiplication
+        This matches the block array hardware where scale multiplication
         happens in the accumulator/output stage, not during MAC operations.
 
         Args:
@@ -192,8 +193,8 @@ class GoldenMXU:
                               group_size: int = 128) -> np.ndarray:
         """INT4 per-block: K-dimension split into blocks, each with per-channel scales.
 
-        Hardware flow (matches systolic array tiling):
-        1. For each N-tile (width=ARRAY_W=128):
+        Hardware flow (matches 64×64 block array tiling):
+        1. For each N-tile (width=ARRAY_W=64):
         2.   Split K into blocks of group_size
         3.   For each K-block: INT4×INT8 → INT32 partial for that block × N-tile
         4.   Scale partial by block_scales[block_idx, n_start:n_end]
@@ -207,7 +208,7 @@ class GoldenMXU:
             weight_packed: packed INT4, uint8
             block_scales: float32, shape (num_blocks, N)
             M, K, N: matrix dimensions
-            group_size: block size along K (default 128, matches ARRAY_H)
+            group_size: block size along K (default 128, independent of ARRAY_H)
 
         Returns:
             float32 result, shape (M, N)
@@ -233,7 +234,7 @@ class GoldenMXU:
         # Accumulate in float32 (hardware: FP32 accumulator after scale multiply)
         result = np.zeros((M, N), dtype=np.float32)
 
-        # Tile over N (systolic array width)
+        # Tile over N (64×64 block array width)
         for n_start in range(0, N, self.W):
             n_end = min(n_start + self.W, N)
 
@@ -1238,13 +1239,14 @@ class GoldenExecutor:
 
     @staticmethod
     def _estimate_mxu_cycles(M: int, K: int, N: int) -> int:
-        """Estimate MXU cycles for tiled matmul (matching hardware pipeline)."""
+        """Estimate MXU cycles for tiled matmul (Block 64×64 broadcast engine)."""
         H, W = ARRAY_H, ARRAY_W
         m_tiles = (M + H - 1) // H
         n_tiles = (N + W - 1) // W
-        # Weight-stationary: K cycles per tile + pipeline fill/drain
-        cycles_per_tile = K + H + W  # K compute + pipeline latency
-        return m_tiles * n_tiles * cycles_per_tile
+        k_tiles = (K + H - 1) // H
+        # Broadcast-based block array: all PEs fire in parallel per tile,
+        # no pipeline fill/drain. One tile completes in steady state per cycle.
+        return m_tiles * n_tiles * k_tiles
 
 
 # ══════════════════════════════════════════════════════════════════════
