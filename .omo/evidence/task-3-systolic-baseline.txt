@@ -1,0 +1,21 @@
+{
+  "decode": {
+    "per_token_us": 50244.5,
+    "tok_per_s": 20.0,
+    "breakdown": {
+      "KV Cache": 2613.6,
+      "MXU": 47581.5,
+      "SFU": 47.7,
+      "Vector": 1.7
+    }
+  },
+  "prefill": {
+    "prompt_len": 128,
+    "total_ms": 103.2,
+    "breakdown": {
+      "MXU": 93.7,
+      "KV Cache": 5.3,
+      "SFU": 4.2
+    }
+  }
+}

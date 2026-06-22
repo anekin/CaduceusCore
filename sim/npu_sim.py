@@ -20,7 +20,7 @@ import yaml
 # Add parent to path for relative imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from models.mxu import MXUModel
+from engine.mac_engine import create_engine
 from models.sfu import SFUModel
 from models.vector import VectorModel
 from models.dma import DMAModel
@@ -82,7 +82,7 @@ class NPUSimulator:
         self.f_mhz = int(self.config["mxu"]["frequency_mhz"])
 
         # Initialize models
-        self.mxu = MXUModel(self.config)
+        self.mxu = create_engine(self.config)
         self.sfu = SFUModel(self.config)
         self.vector = VectorModel(self.config)
         self.dma = DMAModel(self.config)
@@ -215,7 +215,7 @@ class NPUSimulator:
             array_width=int(self.config.get("mxu", {}).get("array_width", 128)),
             weight_bits=int(self.config.get("mxu", {}).get("weight_precision_bits", 4)),
             freq_mhz=int(self.config.get("mxu", {}).get("frequency_mhz", 1000)),
-            engine_type=str(self.config.get("mxu", {}).get("type", "systolic")),
+            engine_type=self.mxu.engine_type,
             prefill_prompt_len=128,
             prefill_total_ms=0.0,  # Not simulated in Phase 1
             decode_per_token_us=decode_us,
@@ -298,7 +298,7 @@ class NPUSimulator:
             array_width=int(self.config.get("mxu", {}).get("array_width", 128)),
             weight_bits=int(self.config.get("mxu", {}).get("weight_precision_bits", 4)),
             freq_mhz=int(self.config.get("mxu", {}).get("frequency_mhz", 1000)),
-            engine_type=str(self.config.get("mxu", {}).get("type", "systolic")),
+            engine_type=self.mxu.engine_type,
             decode_per_token_us=decode_us,
             decode_tok_per_s=decode_tok_per_s,
             decode_breakdown={k: v / self.f_mhz for k, v in breakdown.items()},
@@ -450,9 +450,10 @@ def main():
         overrides.append(f"wc={args.weight_cache}")
 
     if overrides:
-        print(f"[override] {', '.join(overrides)}")
+        if not args.json:
+            print(f"[override] {', '.join(overrides)}")
         # Re-init models with overridden config
-        sim.mxu = MXUModel(cfg)
+        sim.mxu = create_engine(cfg)
         sim.dma = DMAModel(cfg)
         sim.dram = DRAMModel(cfg)
         sim.config = cfg
@@ -476,23 +477,7 @@ def main():
     report.prefill_total_ms = prefill_report.prefill_total_ms
     report.prefill_breakdown = prefill_report.prefill_breakdown
 
-    print(report.to_text())
-
-    # ── Multi-core projection ────────────────────────────────────
-    if report.decode_tok_per_s > 0:
-        print(f"\n--- Multi-core Projection ---")
-        mct = MultiCoreTimeline(num_cores=1)
-        base_us = report.decode_per_token_us
-        print(f"  {'Config':12s} {'Decode':>10s} {'Area':>8s} {'Notes'}")
-        print(f"  {'─'*50}")
-        for nc in [1, 2, 4, 8]:
-            mct.num_cores = nc
-            dp = mct.simulate_data_parallel(int(base_us), 1)
-            area = {1: 27, 2: 42, 4: 69, 8: 122}.get(nc, 0)
-            note = "Baseline" if nc == 1 else f"DP, -{int((1-dp['contention_penalty'])*100)}% contention"
-            print(f"  {f'{nc} core':12s} {dp['effective_tok_per_s']:7,.0f} tok/s  {area:4d}mm²  {note}")
-
-    # JSON output
+    # JSON output — when --json, suppress text report and multi-core projection
     if args.json or args.output:
         output = {
             "decode": {
@@ -507,11 +492,27 @@ def main():
             },
         }
         if args.json:
-            print("\n" + json.dumps(output, indent=2))
+            print(json.dumps(output, indent=2))
         if args.output:
             with open(sim_dir / args.output, "w") as f:
                 json.dump(output, f, indent=2)
                 print(f"\nResults saved to {args.output}")
+    else:
+        print(report.to_text())
+
+        # ── Multi-core projection ────────────────────────────────────
+        if report.decode_tok_per_s > 0:
+            print(f"\n--- Multi-core Projection ---")
+            mct = MultiCoreTimeline(num_cores=1)
+            base_us = report.decode_per_token_us
+            print(f"  {'Config':12s} {'Decode':>10s} {'Area':>8s} {'Notes'}")
+            print(f"  {'─'*50}")
+            for nc in [1, 2, 4, 8]:
+                mct.num_cores = nc
+                dp = mct.simulate_data_parallel(int(base_us), 1)
+                area = {1: 27, 2: 42, 4: 69, 8: 122}.get(nc, 0)
+                note = "Baseline" if nc == 1 else f"DP, -{int((1-dp['contention_penalty'])*100)}% contention"
+                print(f"  {f'{nc} core':12s} {dp['effective_tok_per_s']:7,.0f} tok/s  {area:4d}mm²  {note}")
 
 
 if __name__ == "__main__":
