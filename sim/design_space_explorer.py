@@ -14,6 +14,7 @@ from typing import Dict, Any, List, Tuple
 sys.path.insert(0, str(Path(__file__).parent))
 from engine.ppa_model import AreaModel, PowerModel, PPA
 from engine.mac_engine import create_engine
+from model_specs import get_spec, all_aliases
 
 import yaml
 
@@ -23,18 +24,30 @@ _CV_MODEL: str = ""
 _CV_TRACE: List[Any] = []
 _CV_ONNX_PATH: str = ""
 
-Qwen3B_TRACE = [
-    # (M, K, N, layer, op_name) — just dimensions, layers handled by caller
-    # Attention
-    (1, 2560, 4096, 0, "Q_proj"),
-    (1, 2560, 256, 0, "K_proj"),
-    (1, 2560, 256, 0, "V_proj"),
-    (1, 4096, 2560, 0, "O_proj"),
-    # FFN
-    (1, 2560, 9728, 0, "FFN_gate"),
-    (1, 2560, 9728, 0, "FFN_up"),
-    (1, 9728, 2560, 0, "FFN_down"),
-]
+_NUM_LAYERS: int = 28
+_LLM_TRACE: List[Tuple] = []
+
+
+def generate_trace_from_spec(alias: str, batch_m: int = 1) -> List[Tuple]:
+    spec = get_spec(alias)
+    H = spec.hidden
+    I = spec.intermediate
+    qkv = spec.qkv_dim
+    kv = spec.kv_heads * spec.head_dim
+    trace = []
+    m_attn = batch_m  # attention: batch tokens can be concatenated
+    m_ffn = 1         # FFN gate/up/down remain M=1 per token (per plan spec)
+    trace.append((m_attn, H, qkv, 0, "Q_proj"))
+    trace.append((m_attn, H, kv,  0, "K_proj"))
+    trace.append((m_attn, H, kv,  0, "V_proj"))
+    trace.append((m_attn, qkv, H, 0, "O_proj"))
+    trace.append((m_ffn, H, I,    0, "FFN_gate"))
+    trace.append((m_ffn, H, I,    0, "FFN_up"))
+    trace.append((m_ffn, I, H,    0, "FFN_down"))
+    return trace
+
+
+_LLM_TRACE = generate_trace_from_spec("qwen2.5-3b", batch_m=1)
 
 SFU_CYCLES_PER_LAYER = {
     "attn": 33,   # softmax + layernorm + rope (simplified)
@@ -53,7 +66,7 @@ def simulate_layer(config: Dict[str, Any]) -> Tuple[int, int]:
     total = 0
     weight_bytes = 0
     i = 0
-    ops = Qwen3B_TRACE
+    ops = _LLM_TRACE
 
     while i < len(ops):
         M, K, N, _, name = ops[i]
@@ -82,8 +95,7 @@ def simulate_layer(config: Dict[str, Any]) -> Tuple[int, int]:
     return total, weight_bytes
 
 
-def tok_s_from_layer(layer_cycles: int, num_layers: int = 28) -> float:
-    """Convert per-layer cycles to tok/s @ 1GHz"""
+def tok_s_from_layer(layer_cycles: int, num_layers: int) -> float:
     f_mhz = 1000
     total_us = layer_cycles * num_layers / f_mhz
     return round(1e6 / total_us, 1) if total_us > 0 else 0
@@ -206,7 +218,7 @@ def evaluate_config(cfg: Dict[str, Any], area_model: AreaModel,
         dw_util = _depthwise_util_from_cv_result(cv_result)
     else:
         layer_cycles, _ = simulate_layer(cfg)
-        fps = tok_s_from_layer(layer_cycles)
+        fps = tok_s_from_layer(layer_cycles, _NUM_LAYERS)
         area_result = area_model.estimate(cfg, engine_type)
         area = area_result["total_mm2"]
         power = power_model.estimate(area_model, cfg, engine_type)
@@ -260,14 +272,28 @@ def main():
     parser.add_argument("--cv-model", choices=["mobilenetv3-small"],
                         default=None,
                         help="Run CV design-space exploration")
+    parser.add_argument("--model-spec", choices=all_aliases(),
+                        default=None,
+                        help="LLM model spec alias for DSE")
+    parser.add_argument("--batch-m", type=int, choices=[1, 2], default=None,
+                        help="Batch M dimension for attention ops (1 or 2)")
     args = parser.parse_args()
 
-    global _CV_MODEL, _CV_TRACE, _CV_ONNX_PATH
+    if args.cv_model and (args.model_spec is not None or args.batch_m is not None):
+        parser.error("--cv-model is mutually exclusive with --model-spec and --batch-m")
+
+    model_spec = args.model_spec if args.model_spec is not None else "qwen2.5-3b"
+    batch_m = args.batch_m if args.batch_m is not None else 1
+
+    global _CV_MODEL, _CV_TRACE, _CV_ONNX_PATH, _LLM_TRACE, _NUM_LAYERS
     _CV_MODEL = args.cv_model or ""
     if _CV_MODEL:
         from cv.cv_trace import generate_mobilenetv3_trace
         _CV_ONNX_PATH = str(Path(__file__).parent.parent / "assets" / "mobilenetv3_small.onnx")
         _CV_TRACE = generate_mobilenetv3_trace(_CV_ONNX_PATH)
+    else:
+        _LLM_TRACE = generate_trace_from_spec(model_spec, batch_m)
+        _NUM_LAYERS = get_spec(model_spec).layers
 
     with open(SIM_DIR / "config" / "design_space.yaml") as f:
         base_cfg = yaml.safe_load(f)
@@ -376,6 +402,8 @@ def main():
         else:
             output = {
                 "cv_model": _CV_MODEL,
+                "model_spec": model_spec,
+                "batch_m": batch_m,
                 "total_configs": len(configs),
                 "valid_results": len(results),
                 "pareto_frontier": [_result_dict(p, True) for p in pareto],
