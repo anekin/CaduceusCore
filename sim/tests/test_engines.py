@@ -97,6 +97,37 @@ def test_block_weight_cache():
     )
 
 
+def test_wmma_decode():
+    """WMMA decode should be drastically slower than every other engine.
+
+    Reference: Qwen2.5-3B FFN_down (M=1, K=11008, N=2048) on 128x128 INT4
+    51.2GB/s.  WMMA 16x16 fragments with single-die NPU serialization
+    produce ~88k fragments, each paying warp-sync + issue overhead.
+    """
+    M, K, N = 1, 11008, 2048
+
+    wmma = create_engine(_engine_config("wmma"))
+    r_wmma = wmma.estimate(M, K, N)
+
+    other_types = ["systolic", "block", "tensor_core", "gmma",
+                   "os_systolic", "input_stationary"]
+    for engine_type in other_types:
+        engine = create_engine(_engine_config(engine_type))
+        r_other = engine.estimate(M, K, N)
+        assert r_wmma.total_cycles > r_other.total_cycles * 10, (
+            f"WMMA ({r_wmma.total_cycles}) not >> {engine_type} "
+            f"({r_other.total_cycles})"
+        )
+
+    wmma_tok_s = _tok_s(r_wmma)
+    assert wmma_tok_s < 10, (
+        f"WMMA tok/s={wmma_tok_s:.2f} should be < 10 for FFN_down"
+    )
+
+    assert r_wmma.details["total_fragments"] == 88064
+    assert r_wmma.details["fragments_per_tile"] == 64
+
+
 def test_tensor_core_decode():
     """TensorCore 64×16×16 sub-tiles fragment large GEMM vs monolithic Block."""
     M, K, N = 1, 11008, 2048
@@ -206,6 +237,38 @@ def test_os_systolic_decode():
         f"BlockEngine tok/s ({block_tok_s:.1f})"
     )
     assert r_os.details["per_tile_compute"] >= 3
+
+
+def test_input_stationary_decode():
+    """M=1 decode: IS has no activation reuse, so it should be >= SystolicEngine."""
+    M, K, N = 1, 11008, 2048
+
+    is_eng = create_engine(_engine_config("input_stationary"))
+    systolic = create_engine(_engine_config("systolic"))
+
+    r_is = is_eng.estimate(M, K, N)
+    r_systolic = systolic.estimate(M, K, N)
+
+    assert r_is.total_cycles >= r_systolic.total_cycles, (
+        f"IS total_cycles={r_is.total_cycles} should be >= "
+        f"SystolicEngine total_cycles={r_systolic.total_cycles} for M=1 decode"
+    )
+
+
+def test_input_stationary_prefill():
+    """M=128 prefill: IS reuses activations across rows, so it should be <= SystolicEngine."""
+    M, K, N = 128, 11008, 2048
+
+    is_eng = create_engine(_engine_config("input_stationary"))
+    systolic = create_engine(_engine_config("systolic"))
+
+    r_is = is_eng.estimate(M, K, N)
+    r_systolic = systolic.estimate(M, K, N)
+
+    assert r_is.total_cycles <= r_systolic.total_cycles, (
+        f"IS total_cycles={r_is.total_cycles} should be <= "
+        f"SystolicEngine total_cycles={r_systolic.total_cycles} for M=128 prefill"
+    )
 
 
 def test_systolic_vs_mxumodel_decode():

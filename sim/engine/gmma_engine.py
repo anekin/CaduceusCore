@@ -3,12 +3,12 @@
 参考: NVIDIA Hopper H100 GMMA + TMA (Tensor Memory Accelerator)
 
 GMMA = Block Engine 的异步升级版:
-  1. Tile 粒度: 128×128×32 (Block Engine 的 K 维无上限，每次 tile K 不定)
-  2. TMA: 异步 DMA 引擎，数据搬移和计算完全重叠
+  1. Tile 粒度: 128×128 (large tiles, low fragmentation)
+  2. TMA: 异步 DMA 引擎，通过 descriptor 在后台预取下一 tile
   3. Shared Memory: 大容量片上 SRAM 做权重 buffer
 
 对单 die NPU decode:
-  - TMA 的价值: DMA 不阻塞计算 (不是带宽翻倍，而是时间重叠)
+  - TMA 的价值: 隐藏部分 DMA 时间 (不是 100%，有 descriptor 开销)
   - 代价: TMA 单元面积 + Shared Memory 容量
   - DRAM 墙仍在 — 但利用率可到 100%
 """
@@ -22,8 +22,13 @@ class GMMAEngine(MACEngine):
     """GMMA — Group MMA with async TMA DMA.
 
     Key architectural difference from Block Engine:
-      Block: DMA → compute → DMA → compute  (sequential)
-      GMMA:  DMA overlap compute             (async via TMA)
+      Block: DMA → compute → DMA → compute  (sequential, double-buffered)
+      GMMA:  DMA overlap compute             (async via TMA descriptors)
+
+    Tile shape follows the configured array dimensions (default 128×128).
+    Per-tile compute retains a systolic-like fill/drain shape, but the
+    asynchronous descriptor issue and large tile make the per-tile
+    pipeline penalty much smaller than a pure weight-stationary array.
 
     Area model:
       - MAC array: same as Block Engine
@@ -31,7 +36,19 @@ class GMMAEngine(MACEngine):
       - Shared Memory for weight buffer: +4MB → +6mm² (0.0015mm²/KB)
     """
 
-    TILE_K_GMMA = 32   # GMMA processes K in chunks of 32
+    # TMA hides roughly half of the per-tile DMA time via asynchronous
+    # descriptors.  100% overlap is impossible because the TMA unit still
+    # pays descriptor-setup, dependency-tracking and shared-memory bank
+    # arbitration overhead.  Empirical H100 literature points to ~40-60%
+    # effective overlap for decode-style GEMMs, so we use 0.5.
+    TMA_OVERLAP = 0.5
+
+    # GMMA's group-MMA unit still has a systolic-like fill/drain pipeline,
+    # but the async TMA front-end and 128×128 tile amortize the overhead.
+    # We keep the (H+W)+(M+H) shape from SystolicEngine and scale it down
+    # to reflect the much shorter effective pipeline in a group-MMA unit.
+    GMMA_PIPELINE_SCALE = 0.05
+
     TMA_AREA_MM2 = 2.0
     SHMEM_KB = 4096    # 4MB shared memory for weights
 
@@ -39,36 +56,45 @@ class GMMAEngine(MACEngine):
     def engine_type(self) -> str:
         return "gmma"
 
+    def _per_tile_compute(self, M: int) -> int:
+        """Systolic-like fill/drain scaled to GMMA's async pipeline."""
+        systolic_like = (self.H + self.W) + (M + self.H)
+        return max(1, int(systolic_like * self.GMMA_PIPELINE_SCALE))
 
     def estimate(self, M: int, K: int, N: int,
                  weight_preloaded: bool = False) -> EngineResult:
-        """GMMA GEMM — DMA/compute overlap model.
+        """GMMA GEMM — DMA/compute overlap model with TMA.
 
-        TMA enables FULL overlap: while computing tile N, TMA loads tile N+1.
-        effective_time = max(compute, dma) not compute + dma.
+        TMA does NOT give 100% overlap.  Effective per-tile DMA is:
+            effective_per_tile_dma = per_tile_dma * (1 - TMA_OVERLAP)
+        where TMA_OVERLAP = 0.5 (50% of DMA time hidden by async descriptors).
+
+        Pipeline shape:
+            first_tile  = per_tile_dma + per_tile_compute  (cold start)
+            pipeline    = max(per_tile_compute, effective_per_tile_dma)
+            total       = first_tile + (num_tiles - 1) * pipeline
         """
 
-        H_tiles = math.ceil(K / self.H)
-        W_tiles = math.ceil(N / self.W)
-        total_tiles = H_tiles * W_tiles
+        K_tiles = math.ceil(K / self.H)
+        N_tiles = math.ceil(N / self.W)
+        total_tiles = K_tiles * N_tiles
 
-        # Per-tile data (weights cover H×W via K-slices of TILE_K_GMMA)
-        K_slices_per_tile = math.ceil(self.H / self.TILE_K_GMMA)
-        tile_weight_bytes = (
-            K_slices_per_tile * self.TILE_K_GMMA * self.W * self.w_bits // 8
-        )
+        # Large 128×128 tiles: load H×W weights + M×H activations per tile.
+        tile_weight_bytes = math.ceil(self.H * self.W * self.w_bits / 8)
         tile_act_bytes = math.ceil(M * self.H * self.a_bits / 8)
 
-        # DMA time per tile
-        dma_time = (tile_weight_bytes + tile_act_bytes) / self.eff_bw
-        # Compute time per tile: 1 cycle (all MACs fire in parallel)
-        compute_time = 1.0
+        # Raw DMA time per tile.
+        per_tile_dma = (tile_weight_bytes + tile_act_bytes) / self.eff_bw
 
-        # ── GMMA async model ──
-        # Cold start: first tile DMA + compute (no overlap possible)
-        # Pipeline: subsequent tiles overlap — bottleneck = max(compute,dma)
-        bottleneck = max(compute_time, dma_time)
-        first_tile = dma_time + compute_time
+        # TMA overlap: only a fraction of DMA is exposed on the critical path.
+        effective_per_tile_dma = per_tile_dma * (1 - self.TMA_OVERLAP)
+
+        # Systolic-like pipeline fill/drain, scaled for GMMA async issue.
+        per_tile_compute = self._per_tile_compute(M)
+
+        # Critical-path bottleneck after the cold-start tile.
+        bottleneck = max(per_tile_compute, effective_per_tile_dma)
+        first_tile = per_tile_dma + per_tile_compute
 
         if total_tiles > 1:
             total = int(first_tile + (total_tiles - 1) * bottleneck)
@@ -76,28 +102,36 @@ class GMMAEngine(MACEngine):
             total = int(first_tile)
 
         total_macs = M * K * N
-        weight_bytes = total_tiles * (tile_weight_bytes + tile_act_bytes)
+        total_weight_bytes = total_tiles * (tile_weight_bytes + tile_act_bytes)
         ideal = math.ceil(total_macs / self.peak_macs_per_cycle)
         util = ideal / total if total > 0 else 0.0
 
-        # How much of DMA was hidden by overlap?
-        dma_no_overlap = total_tiles * dma_time
-        dma_with_overlap = total - total_tiles  # non-compute cycles
-        dma_hidden_pct = (1 - dma_with_overlap / max(dma_no_overlap, 1)) * 100
+        compute_cycles = int(per_tile_compute * total_tiles)
+        dma_cycles = int(total - compute_cycles)
+
+        # How much of the raw DMA was hidden by TMA overlap?
+        dma_no_overlap = total_tiles * per_tile_dma
+        dma_hidden_pct = (
+            (1 - dma_cycles / max(dma_no_overlap, 1.0)) * 100
+            if dma_no_overlap > 0 else 0.0
+        )
 
         return EngineResult(
-            compute_cycles=total_tiles,
-            dma_cycles=int(total - total_tiles),
+            compute_cycles=compute_cycles,
+            dma_cycles=dma_cycles,
             total_cycles=total,
             utilization=util,
             ops=total_macs,
             num_tiles=total_tiles,
-            weight_bytes=weight_bytes,
-            bottleneck="dma" if dma_time > compute_time else "compute",
+            weight_bytes=total_weight_bytes,
+            bottleneck="dma" if effective_per_tile_dma > per_tile_compute else "compute",
             details={
-                "total_tiles": total_tiles,
-                "per_tile_dma": round(dma_time, 1),
-                "compute_per_tile": compute_time,
+                "K_tiles": K_tiles,
+                "N_tiles": N_tiles,
+                "per_tile_dma": round(per_tile_dma, 1),
+                "effective_per_tile_dma": round(effective_per_tile_dma, 1),
+                "per_tile_compute": per_tile_compute,
+                "tma_overlap": self.TMA_OVERLAP,
                 "dma_hidden_pct": round(dma_hidden_pct, 1),
                 "tma_async": True,
                 "shared_mem_kb": self.SHMEM_KB,
@@ -105,33 +139,61 @@ class GMMAEngine(MACEngine):
         )
 
     def estimate_weight_cache_pair(self, M: int, K: int, N: int) -> EngineResult:
-        """Gate+Up with GMMA — TMA overlap already handles this.
+        """Gate+Up with GMMA — dual weight registers + TMA overlap.
 
-        GMMA with TMA already achieves near-perfect DMA/compute overlap.
-        Weight cache for gate/up pair saves weight reload but TMA hides it.
+        The weight cache holds both gate and up tiles in shared memory.
+        Each tile still loads only one set of activations but two sets of
+        weights; the two matmuls run back-to-back on the same GMMA unit.
+        TMA overlap applies to the (heavier) DMA stream as well.
         """
-        r1 = self.estimate(M, K, N)
-        r2 = self.estimate(M, K, N)
+        K_tiles = math.ceil(K / self.H)
+        N_tiles = math.ceil(N / self.W)
+        total_tiles = K_tiles * N_tiles
 
-        # Savings: shared activations for same K-tile
-        activation_savings = (
-            math.ceil(M * min(self.H, K) * self.a_bits / 8)
-            / self.eff_bw
-        )
+        tile_weight_bytes = math.ceil(self.H * self.W * self.w_bits / 8)
+        tile_act_bytes = math.ceil(M * self.H * self.a_bits / 8)
 
-        total = r1.total_cycles + r2.total_cycles - int(activation_savings)
+        # Dual weights (gate + up) but shared activations.
+        dual_weight_bytes = 2 * tile_weight_bytes
+        per_tile_dma = (dual_weight_bytes + tile_act_bytes) / self.eff_bw
+        effective_per_tile_dma = per_tile_dma * (1 - self.TMA_OVERLAP)
+
+        # Two matmuls per tile on the same GMMA unit.
+        single_compute = self._per_tile_compute(M)
+        per_tile_compute = 2 * single_compute
+
+        bottleneck = max(per_tile_compute, effective_per_tile_dma)
+        first_tile = per_tile_dma + per_tile_compute
+
+        if total_tiles > 1:
+            total = int(first_tile + (total_tiles - 1) * bottleneck)
+        else:
+            total = int(first_tile)
+
+        total_macs = M * K * N * 2
+        total_weight_bytes = total_tiles * (dual_weight_bytes + tile_act_bytes)
+        ideal = math.ceil(total_macs / self.peak_macs_per_cycle)
+        util = ideal / total if total > 0 else 0.0
+
+        compute_cycles = int(per_tile_compute * total_tiles)
+        dma_cycles = int(total - compute_cycles)
 
         return EngineResult(
-            compute_cycles=r1.compute_cycles + r2.compute_cycles,
-            dma_cycles=total - (r1.compute_cycles + r2.compute_cycles),
+            compute_cycles=compute_cycles,
+            dma_cycles=dma_cycles,
             total_cycles=total,
-            utilization=(r1.utilization + r2.utilization) / 2,
-            ops=r1.ops + r2.ops,
-            num_tiles=r1.num_tiles + r2.num_tiles,
-            weight_bytes=r1.weight_bytes + r2.weight_bytes,
-            bottleneck="dma",
+            utilization=util,
+            ops=total_macs,
+            num_tiles=total_tiles,
+            weight_bytes=total_weight_bytes,
+            bottleneck="dma" if effective_per_tile_dma > per_tile_compute else "compute",
             details={
-                "note": "TMA hides most weight cache benefit; activation sharing only",
-                "activation_savings_cycles": round(activation_savings),
+                "K_tiles": K_tiles,
+                "N_tiles": N_tiles,
+                "per_tile_dma": round(per_tile_dma, 1),
+                "effective_per_tile_dma": round(effective_per_tile_dma, 1),
+                "per_tile_compute": per_tile_compute,
+                "tma_overlap": self.TMA_OVERLAP,
+                "weight_cache": True,
             },
         )
