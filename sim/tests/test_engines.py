@@ -316,14 +316,15 @@ def test_gmma_decode():
     )
 
     assert r.details.get("tma_overlap") == 0.5
-    assert r.details["effective_per_tile_dma"] < r.details["per_tile_dma"]
+    assert r.details["tma_exposed_dma"] < r.details["per_tile_dma"]
 
 
 def test_gmma_tma_overlap():
     """GMMA with HBM2e should outperform the same config on LPDDR5.
 
-    TMA hides DMA proportionally to bandwidth; when DRAM is plentiful
-    the effective per-tile DMA drops and tok/s rises significantly.
+    HBM2e provides much higher bandwidth, so the same GEMM moves from
+    bandwidth-bound to compute-bound and tok/s rises significantly.
+    TMA can hide DMA latency but cannot exceed physical DRAM bandwidth.
     """
     M, K, N = 1, 11008, 2048
 

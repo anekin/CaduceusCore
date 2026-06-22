@@ -36,11 +36,11 @@ class GMMAEngine(MACEngine):
       - Shared Memory for weight buffer: +4MB → +6mm² (0.0015mm²/KB)
     """
 
-    # TMA hides roughly half of the per-tile DMA time via asynchronous
-    # descriptors.  100% overlap is impossible because the TMA unit still
-    # pays descriptor-setup, dependency-tracking and shared-memory bank
-    # arbitration overhead.  Empirical H100 literature points to ~40-60%
-    # effective overlap for decode-style GEMMs, so we use 0.5.
+    # TMA can hide DMA latency behind compute when the engine is
+    # compute-bound, but it cannot exceed the physical DRAM bandwidth.
+    # This factor is applied only to the exposed DMA on the critical
+    # path; the steady-state pipeline bottleneck is still clamped to
+    # the raw per-tile DMA time.
     TMA_OVERLAP = 0.5
 
     # GMMA's group-MMA unit still has a systolic-like fill/drain pipeline,
@@ -65,13 +65,16 @@ class GMMAEngine(MACEngine):
                  weight_preloaded: bool = False) -> EngineResult:
         """GMMA GEMM — DMA/compute overlap model with TMA.
 
-        TMA does NOT give 100% overlap.  Effective per-tile DMA is:
-            effective_per_tile_dma = per_tile_dma * (1 - TMA_OVERLAP)
-        where TMA_OVERLAP = 0.5 (50% of DMA time hidden by async descriptors).
+        TMA can hide DMA latency behind compute, but it cannot exceed the
+        physical DRAM bandwidth.  Therefore the steady-state pipeline
+        bottleneck is never less than the raw per-tile DMA time:
+            bottleneck = max(per_tile_compute, per_tile_dma)
+        TMA_OVERLAP only reduces the exposed DMA latency on the critical
+        path when the engine is compute-bound; it does not create bandwidth.
 
         Pipeline shape:
             first_tile  = per_tile_dma + per_tile_compute  (cold start)
-            pipeline    = max(per_tile_compute, effective_per_tile_dma)
+            pipeline    = max(per_tile_compute, per_tile_dma)
             total       = first_tile + (num_tiles - 1) * pipeline
         """
 
@@ -83,17 +86,18 @@ class GMMAEngine(MACEngine):
         tile_weight_bytes = math.ceil(self.H * self.W * self.w_bits / 8)
         tile_act_bytes = math.ceil(M * self.H * self.a_bits / 8)
 
-        # Raw DMA time per tile.
+        # Raw DMA time per tile (physical DRAM bandwidth limit).
         per_tile_dma = (tile_weight_bytes + tile_act_bytes) / self.eff_bw
 
-        # TMA overlap: only a fraction of DMA is exposed on the critical path.
-        effective_per_tile_dma = per_tile_dma * (1 - self.TMA_OVERLAP)
+        # TMA overlap: reduces exposed DMA latency when compute-bound, but the
+        # steady-state bottleneck can never drop below physical per_tile_dma.
+        tma_exposed_dma = per_tile_dma * (1 - self.TMA_OVERLAP)
 
         # Systolic-like pipeline fill/drain, scaled for GMMA async issue.
         per_tile_compute = self._per_tile_compute(M)
 
         # Critical-path bottleneck after the cold-start tile.
-        bottleneck = max(per_tile_compute, effective_per_tile_dma)
+        bottleneck = max(per_tile_compute, per_tile_dma)
         first_tile = per_tile_dma + per_tile_compute
 
         if total_tiles > 1:
@@ -124,12 +128,12 @@ class GMMAEngine(MACEngine):
             ops=total_macs,
             num_tiles=total_tiles,
             weight_bytes=total_weight_bytes,
-            bottleneck="dma" if effective_per_tile_dma > per_tile_compute else "compute",
+            bottleneck="dma" if per_tile_dma > per_tile_compute else "compute",
             details={
                 "K_tiles": K_tiles,
                 "N_tiles": N_tiles,
                 "per_tile_dma": round(per_tile_dma, 1),
-                "effective_per_tile_dma": round(effective_per_tile_dma, 1),
+                "tma_exposed_dma": round(tma_exposed_dma, 1),
                 "per_tile_compute": per_tile_compute,
                 "tma_overlap": self.TMA_OVERLAP,
                 "dma_hidden_pct": round(dma_hidden_pct, 1),
@@ -156,13 +160,13 @@ class GMMAEngine(MACEngine):
         # Dual weights (gate + up) but shared activations.
         dual_weight_bytes = 2 * tile_weight_bytes
         per_tile_dma = (dual_weight_bytes + tile_act_bytes) / self.eff_bw
-        effective_per_tile_dma = per_tile_dma * (1 - self.TMA_OVERLAP)
+        tma_exposed_dma = per_tile_dma * (1 - self.TMA_OVERLAP)
 
         # Two matmuls per tile on the same GMMA unit.
         single_compute = self._per_tile_compute(M)
         per_tile_compute = 2 * single_compute
 
-        bottleneck = max(per_tile_compute, effective_per_tile_dma)
+        bottleneck = max(per_tile_compute, per_tile_dma)
         first_tile = per_tile_dma + per_tile_compute
 
         if total_tiles > 1:
@@ -186,12 +190,12 @@ class GMMAEngine(MACEngine):
             ops=total_macs,
             num_tiles=total_tiles,
             weight_bytes=total_weight_bytes,
-            bottleneck="dma" if effective_per_tile_dma > per_tile_compute else "compute",
+            bottleneck="dma" if per_tile_dma > per_tile_compute else "compute",
             details={
                 "K_tiles": K_tiles,
                 "N_tiles": N_tiles,
                 "per_tile_dma": round(per_tile_dma, 1),
-                "effective_per_tile_dma": round(effective_per_tile_dma, 1),
+                "tma_exposed_dma": round(tma_exposed_dma, 1),
                 "per_tile_compute": per_tile_compute,
                 "tma_overlap": self.TMA_OVERLAP,
                 "weight_cache": True,
