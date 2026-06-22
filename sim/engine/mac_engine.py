@@ -24,12 +24,15 @@ class EngineResult:
     weight_bytes: int = 0
     bottleneck: str = ""      # "compute" | "dma"
     details: Dict[str, Any] = field(default_factory=dict)
+    stall_cycles_dram: int = 0
+    stall_cycles_sram: int = 0
 
     def __repr__(self):
         return (f"Engine(total={self.total_cycles}c, "
                 f"compute={self.compute_cycles}c, dma={self.dma_cycles}c, "
                 f"util={self.utilization:.1%}, tiles={self.num_tiles}, "
-                f"bottleneck={self.bottleneck})")
+                f"bottleneck={self.bottleneck}, "
+                f"stall_dram={self.stall_cycles_dram}, stall_sram={self.stall_cycles_sram})")
 
 
 class MACEngine(ABC):
@@ -78,11 +81,6 @@ class MACEngine(ABC):
         """引擎类型标识"""
         ...
 
-    @property
-    @abstractmethod
-    def area_estimate_mm2(self) -> float:
-        """面积估算 (mm²)"""
-        ...
 
 
 def create_engine(config: Dict[str, Any]) -> MACEngine:
