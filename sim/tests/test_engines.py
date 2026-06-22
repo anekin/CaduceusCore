@@ -1,6 +1,7 @@
 """Engine calibration tests — BlockEngine broadcast pipeline model + SystolicEngine regression."""
 
 import json
+import math
 import subprocess
 from pathlib import Path
 
@@ -94,6 +95,35 @@ def test_block_weight_cache():
     assert r_pair.bottleneck == "dma", (
         f"Expected DMA-bound weight-cache pair, got {r_pair.bottleneck}"
     )
+
+
+def test_tensor_core_decode():
+    """TensorCore 64×16×16 sub-tiles fragment large GEMM vs monolithic Block."""
+    M, K, N = 1, 11008, 2048
+
+    tc = create_engine(_engine_config("tensor_core"))
+    block = create_engine(_engine_config("block"))
+
+    r_tc = tc.estimate(M, K, N)
+    r_block = block.estimate(M, K, N)
+
+    tc_tok_s = _tok_s(r_tc)
+    block_tok_s = _tok_s(r_block)
+
+    assert r_tc.total_cycles > r_block.total_cycles, (
+        f"TensorCore total_cycles ({r_tc.total_cycles}) should exceed "
+        f"BlockEngine ({r_block.total_cycles}) due to sub-tile fragmentation"
+    )
+
+    assert tc_tok_s < block_tok_s, (
+        f"TensorCore tok/s ({tc_tok_s:.1f}) should be below "
+        f"BlockEngine ({block_tok_s:.1f}) for large K/N decode"
+    )
+
+    # Sanity: model uses the expected 64×16×16 sub-tile geometry.
+    assert r_tc.details.get("subtile_size") == "64×16×16"
+    assert r_tc.details.get("sub_K") == math.ceil(K / 64)
+    assert r_tc.details.get("sub_N") == math.ceil(N / 16)
 
 
 _SYSTOLIC_CONFIG = {
@@ -205,6 +235,49 @@ def test_systolic_vs_mxumodel_prefill():
             f"[{name}] SystolicEngine total_cycles={r_sys.total_cycles} "
             f"≠ MXUModel total_cycles={r_mxu.total_cycles}"
         )
+
+
+def test_gmma_decode():
+    """GMMA decode on LPDDR5 should be DMA-bound and report valid tok/s."""
+    M, K, N = 1, 11008, 2048
+
+    gmma = create_engine(_engine_config("gmma"))
+    r = gmma.estimate(M, K, N)
+
+    tok_s = _tok_s(r)
+    assert tok_s > 0 and math.isfinite(tok_s), (
+        f"GMMA decode tok/s invalid: {tok_s}"
+    )
+    assert r.bottleneck == "dma", (
+        f"Expected DMA-bound GMMA decode, got {r.bottleneck}"
+    )
+
+    assert r.details.get("tma_overlap") == 0.5
+    assert r.details["effective_per_tile_dma"] < r.details["per_tile_dma"]
+
+
+def test_gmma_tma_overlap():
+    """GMMA with HBM2e should outperform the same config on LPDDR5.
+
+    TMA hides DMA proportionally to bandwidth; when DRAM is plentiful
+    the effective per-tile DMA drops and tok/s rises significantly.
+    """
+    M, K, N = 1, 11008, 2048
+
+    cfg_lpddr5 = _engine_config("gmma")
+    cfg_hbm2e = _engine_config("gmma")
+    cfg_hbm2e["memory"]["bandwidth_bytes_per_cycle"] = 460.0
+
+    r_lpddr5 = create_engine(cfg_lpddr5).estimate(M, K, N)
+    r_hbm2e = create_engine(cfg_hbm2e).estimate(M, K, N)
+
+    lpddr5_tok_s = _tok_s(r_lpddr5)
+    hbm2e_tok_s = _tok_s(r_hbm2e)
+
+    assert hbm2e_tok_s > 2 * lpddr5_tok_s, (
+        f"HBM2e tok/s ({hbm2e_tok_s:.0f}) not significantly higher than "
+        f"LPDDR5 ({lpddr5_tok_s:.0f}); TMA overlap did not scale with BW"
+    )
 
 
 def test_systolic_npu_sim_baseline():
