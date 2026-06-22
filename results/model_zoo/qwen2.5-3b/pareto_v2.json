@@ -1,0 +1,605 @@
+{
+  "cv_model": "",
+  "model_spec": "qwen2.5-3b",
+  "batch_m": 1,
+  "total_configs": 2436,
+  "valid_results": 2220,
+  "pareto_frontier": [
+    {
+      "label": "syst 64\u00d764 INT2 800MHz WC LPDDR5-32b",
+      "tok_s": 11.8,
+      "area_mm2": 18.7,
+      "power_w": 5.7
+    },
+    {
+      "label": "syst 64\u00d764 INT2 1000MHz WC LPDDR5-32b",
+      "tok_s": 11.8,
+      "area_mm2": 18.7,
+      "power_w": 6.1
+    },
+    {
+      "label": "syst 64\u00d764 INT2 1200MHz WC LPDDR5-32b",
+      "tok_s": 11.8,
+      "area_mm2": 18.7,
+      "power_w": 6.5
+    },
+    {
+      "label": "syst 96\u00d796 INT2 800MHz WC LPDDR5-32b",
+      "tok_s": 16.8,
+      "area_mm2": 21.2,
+      "power_w": 6.7
+    },
+    {
+      "label": "syst 96\u00d796 INT2 1000MHz WC LPDDR5-32b",
+      "tok_s": 16.8,
+      "area_mm2": 21.2,
+      "power_w": 7.3
+    },
+    {
+      "label": "syst 96\u00d796 INT2 1200MHz WC LPDDR5-32b",
+      "tok_s": 16.8,
+      "area_mm2": 21.2,
+      "power_w": 8.0
+    },
+    {
+      "label": "os_s 64\u00d764 INT2 800MHz  LPDDR5-32b",
+      "tok_s": 30.1,
+      "area_mm2": 24.7,
+      "power_w": 8.1
+    },
+    {
+      "label": "os_s 64\u00d764 INT2 1000MHz  LPDDR5-32b",
+      "tok_s": 30.1,
+      "area_mm2": 24.7,
+      "power_w": 9.1
+    },
+    {
+      "label": "os_s 64\u00d764 INT2 1200MHz  LPDDR5-32b",
+      "tok_s": 30.1,
+      "area_mm2": 24.7,
+      "power_w": 10.1
+    },
+    {
+      "label": "bloc 64\u00d764 INT2 800MHz  LPDDR5-32b",
+      "tok_s": 30.1,
+      "area_mm2": 24.7,
+      "power_w": 8.1
+    },
+    {
+      "label": "bloc 64\u00d764 INT2 1000MHz  LPDDR5-32b",
+      "tok_s": 30.1,
+      "area_mm2": 24.7,
+      "power_w": 9.1
+    },
+    {
+      "label": "bloc 64\u00d764 INT2 1200MHz  LPDDR5-32b",
+      "tok_s": 30.1,
+      "area_mm2": 24.7,
+      "power_w": 10.1
+    },
+    {
+      "label": "gmma 64\u00d764 INT2 800MHz  LPDDR5-32b",
+      "tok_s": 60.2,
+      "area_mm2": 26.7,
+      "power_w": 8.9
+    },
+    {
+      "label": "gmma 64\u00d764 INT2 1000MHz  LPDDR5-32b",
+      "tok_s": 60.2,
+      "area_mm2": 26.7,
+      "power_w": 10.1
+    },
+    {
+      "label": "gmma 64\u00d764 INT2 1200MHz  LPDDR5-32b",
+      "tok_s": 60.2,
+      "area_mm2": 26.7,
+      "power_w": 11.3
+    },
+    {
+      "label": "bloc 64\u00d764 INT2 800MHz WC LPDDR5-64b",
+      "tok_s": 61.2,
+      "area_mm2": 28.2,
+      "power_w": 9.6
+    },
+    {
+      "label": "bloc 64\u00d764 INT2 1000MHz WC LPDDR5-64b",
+      "tok_s": 61.2,
+      "area_mm2": 28.2,
+      "power_w": 10.6
+    },
+    {
+      "label": "bloc 64\u00d764 INT2 1200MHz WC LPDDR5-64b",
+      "tok_s": 61.2,
+      "area_mm2": 28.2,
+      "power_w": 11.6
+    },
+    {
+      "label": "gmma 64\u00d764 INT2 800MHz WC LPDDR5-64b",
+      "tok_s": 122.1,
+      "area_mm2": 30.2,
+      "power_w": 10.4
+    },
+    {
+      "label": "gmma 64\u00d764 INT2 1000MHz WC LPDDR5-64b",
+      "tok_s": 122.1,
+      "area_mm2": 30.2,
+      "power_w": 11.6
+    },
+    {
+      "label": "gmma 64\u00d764 INT2 1200MHz WC LPDDR5-64b",
+      "tok_s": 122.1,
+      "area_mm2": 30.2,
+      "power_w": 12.8
+    },
+    {
+      "label": "gmma 64\u00d764 INT2 800MHz  LPDDR5-128b",
+      "tok_s": 166.8,
+      "area_mm2": 37.2,
+      "power_w": 13.4
+    },
+    {
+      "label": "gmma 64\u00d764 INT2 800MHz WC LPDDR5-128b",
+      "tok_s": 166.8,
+      "area_mm2": 37.2,
+      "power_w": 13.4
+    },
+    {
+      "label": "gmma 64\u00d764 INT2 1000MHz  LPDDR5-128b",
+      "tok_s": 166.8,
+      "area_mm2": 37.2,
+      "power_w": 14.6
+    },
+    {
+      "label": "gmma 64\u00d764 INT2 1000MHz WC LPDDR5-128b",
+      "tok_s": 166.8,
+      "area_mm2": 37.2,
+      "power_w": 14.6
+    },
+    {
+      "label": "gmma 64\u00d764 INT2 1200MHz  LPDDR5-128b",
+      "tok_s": 166.8,
+      "area_mm2": 37.2,
+      "power_w": 15.8
+    },
+    {
+      "label": "gmma 64\u00d764 INT2 1200MHz WC LPDDR5-128b",
+      "tok_s": 166.8,
+      "area_mm2": 37.2,
+      "power_w": 15.8
+    },
+    {
+      "label": "bloc 64\u00d764 INT2 800MHz WC LPDDR5-256b",
+      "tok_s": 243.4,
+      "area_mm2": 49.2,
+      "power_w": 18.6
+    },
+    {
+      "label": "bloc 64\u00d764 INT2 1000MHz WC LPDDR5-256b",
+      "tok_s": 243.4,
+      "area_mm2": 49.2,
+      "power_w": 19.6
+    },
+    {
+      "label": "bloc 64\u00d764 INT2 1200MHz WC LPDDR5-256b",
+      "tok_s": 243.4,
+      "area_mm2": 49.2,
+      "power_w": 20.6
+    },
+    {
+      "label": "gmma 128\u00d7128 INT2 800MHz WC LPDDR5-128b",
+      "tok_s": 248.5,
+      "area_mm2": 67.2,
+      "power_w": 25.4
+    },
+    {
+      "label": "gmma 128\u00d7128 INT2 1000MHz WC LPDDR5-128b",
+      "tok_s": 248.5,
+      "area_mm2": 67.2,
+      "power_w": 29.6
+    },
+    {
+      "label": "gmma 128\u00d7128 INT2 1200MHz WC LPDDR5-128b",
+      "tok_s": 248.5,
+      "area_mm2": 67.2,
+      "power_w": 33.8
+    },
+    {
+      "label": "bloc 128\u00d7128 INT2 800MHz WC LPDDR5-256b",
+      "tok_s": 248.9,
+      "area_mm2": 73.2,
+      "power_w": 28.2
+    },
+    {
+      "label": "bloc 128\u00d7128 INT2 1000MHz WC LPDDR5-256b",
+      "tok_s": 248.9,
+      "area_mm2": 73.2,
+      "power_w": 31.6
+    },
+    {
+      "label": "bloc 128\u00d7128 INT2 1200MHz WC LPDDR5-256b",
+      "tok_s": 248.9,
+      "area_mm2": 73.2,
+      "power_w": 35.0
+    },
+    {
+      "label": "gmma 128\u00d7128 INT2 800MHz  LPDDR5-256b",
+      "tok_s": 314.5,
+      "area_mm2": 81.2,
+      "power_w": 31.4
+    },
+    {
+      "label": "gmma 128\u00d7128 INT2 800MHz WC LPDDR5-256b",
+      "tok_s": 314.5,
+      "area_mm2": 81.2,
+      "power_w": 31.4
+    },
+    {
+      "label": "gmma 128\u00d7128 INT2 1000MHz  LPDDR5-256b",
+      "tok_s": 314.5,
+      "area_mm2": 81.2,
+      "power_w": 35.6
+    },
+    {
+      "label": "gmma 128\u00d7128 INT2 1000MHz WC LPDDR5-256b",
+      "tok_s": 314.5,
+      "area_mm2": 81.2,
+      "power_w": 35.6
+    },
+    {
+      "label": "gmma 128\u00d7128 INT2 1200MHz  LPDDR5-256b",
+      "tok_s": 314.5,
+      "area_mm2": 81.2,
+      "power_w": 39.8
+    },
+    {
+      "label": "gmma 128\u00d7128 INT2 1200MHz WC LPDDR5-256b",
+      "tok_s": 314.5,
+      "area_mm2": 81.2,
+      "power_w": 39.8
+    },
+    {
+      "label": "gmma 128\u00d7192 INT2 800MHz  LPDDR5-256b",
+      "tok_s": 393.5,
+      "area_mm2": 101.2,
+      "power_w": 39.4
+    },
+    {
+      "label": "gmma 128\u00d7192 INT2 800MHz WC LPDDR5-256b",
+      "tok_s": 393.5,
+      "area_mm2": 101.2,
+      "power_w": 39.4
+    },
+    {
+      "label": "gmma 128\u00d7192 INT2 1000MHz  LPDDR5-256b",
+      "tok_s": 393.5,
+      "area_mm2": 101.2,
+      "power_w": 45.6
+    },
+    {
+      "label": "gmma 128\u00d7192 INT2 1000MHz WC LPDDR5-256b",
+      "tok_s": 393.5,
+      "area_mm2": 101.2,
+      "power_w": 45.6
+    },
+    {
+      "label": "gmma 128\u00d7192 INT2 1200MHz  LPDDR5-256b",
+      "tok_s": 393.5,
+      "area_mm2": 101.2,
+      "power_w": 51.8
+    },
+    {
+      "label": "gmma 128\u00d7192 INT2 1200MHz WC LPDDR5-256b",
+      "tok_s": 393.5,
+      "area_mm2": 101.2,
+      "power_w": 51.8
+    },
+    {
+      "label": "gmma 128\u00d7256 INT2 800MHz  LPDDR5-256b",
+      "tok_s": 474.6,
+      "area_mm2": 121.2,
+      "power_w": 47.4
+    },
+    {
+      "label": "gmma 128\u00d7256 INT2 800MHz WC LPDDR5-256b",
+      "tok_s": 474.6,
+      "area_mm2": 121.2,
+      "power_w": 47.4
+    },
+    {
+      "label": "gmma 128\u00d7256 INT2 1000MHz  LPDDR5-256b",
+      "tok_s": 474.6,
+      "area_mm2": 121.2,
+      "power_w": 55.6
+    },
+    {
+      "label": "gmma 128\u00d7256 INT2 1000MHz WC LPDDR5-256b",
+      "tok_s": 474.6,
+      "area_mm2": 121.2,
+      "power_w": 55.6
+    },
+    {
+      "label": "gmma 128\u00d7256 INT2 1200MHz  LPDDR5-256b",
+      "tok_s": 474.6,
+      "area_mm2": 121.2,
+      "power_w": 63.8
+    },
+    {
+      "label": "gmma 128\u00d7256 INT2 1200MHz WC LPDDR5-256b",
+      "tok_s": 474.6,
+      "area_mm2": 121.2,
+      "power_w": 63.8
+    },
+    {
+      "label": "os_s 96\u00d796 INT2 800MHz  HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 58.6
+    },
+    {
+      "label": "os_s 96\u00d796 INT2 1000MHz  HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 60.6
+    },
+    {
+      "label": "os_s 96\u00d796 INT2 1200MHz  HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 62.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 800MHz  HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 58.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 800MHz WC HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 58.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 1000MHz  HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 60.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 1000MHz WC HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 60.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 1200MHz  HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 62.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 1200MHz WC HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 62.6
+    },
+    {
+      "label": "bloc 128\u00d7128 INT2 800MHz WC HBM3-1024b",
+      "tok_s": 976.5,
+      "area_mm2": 157.2,
+      "power_w": 64.2
+    },
+    {
+      "label": "bloc 128\u00d7128 INT2 1000MHz WC HBM3-1024b",
+      "tok_s": 976.5,
+      "area_mm2": 157.2,
+      "power_w": 67.6
+    },
+    {
+      "label": "bloc 128\u00d7128 INT2 1200MHz WC HBM3-1024b",
+      "tok_s": 976.5,
+      "area_mm2": 157.2,
+      "power_w": 71.0
+    },
+    {
+      "label": "bloc 128\u00d7256 INT2 800MHz WC HBM3-1024b",
+      "tok_s": 987.5,
+      "area_mm2": 189.2,
+      "power_w": 77.0
+    },
+    {
+      "label": "bloc 128\u00d7256 INT2 1000MHz WC HBM3-1024b",
+      "tok_s": 987.5,
+      "area_mm2": 189.2,
+      "power_w": 83.6
+    },
+    {
+      "label": "bloc 128\u00d7256 INT2 1200MHz WC HBM3-1024b",
+      "tok_s": 987.5,
+      "area_mm2": 189.2,
+      "power_w": 90.2
+    }
+  ],
+  "top_results": [
+    {
+      "label": "os_s 96\u00d796 INT2 800MHz  HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 58.6
+    },
+    {
+      "label": "os_s 96\u00d796 INT2 1000MHz  HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 60.6
+    },
+    {
+      "label": "os_s 96\u00d796 INT2 1200MHz  HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 62.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 800MHz  HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 58.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 800MHz WC HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 58.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 1000MHz  HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 60.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 1000MHz WC HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 60.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 1200MHz  HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 62.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 1200MHz WC HBM3-1024b",
+      "tok_s": 813.1,
+      "area_mm2": 143.2,
+      "power_w": 62.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 800MHz WC HBM2e-1024b",
+      "tok_s": 539.3,
+      "area_mm2": 143.2,
+      "power_w": 37.5
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 1000MHz WC HBM2e-1024b",
+      "tok_s": 539.3,
+      "area_mm2": 143.2,
+      "power_w": 39.5
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 1200MHz WC HBM2e-1024b",
+      "tok_s": 539.3,
+      "area_mm2": 143.2,
+      "power_w": 41.5
+    },
+    {
+      "label": "os_s 96\u00d796 INT2 800MHz  HBM2e-1024b",
+      "tok_s": 533.8,
+      "area_mm2": 143.2,
+      "power_w": 37.5
+    },
+    {
+      "label": "os_s 96\u00d796 INT2 1000MHz  HBM2e-1024b",
+      "tok_s": 533.8,
+      "area_mm2": 143.2,
+      "power_w": 39.5
+    },
+    {
+      "label": "os_s 96\u00d796 INT2 1200MHz  HBM2e-1024b",
+      "tok_s": 533.8,
+      "area_mm2": 143.2,
+      "power_w": 41.5
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 800MHz  HBM2e-1024b",
+      "tok_s": 533.8,
+      "area_mm2": 143.2,
+      "power_w": 37.5
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 1000MHz  HBM2e-1024b",
+      "tok_s": 533.8,
+      "area_mm2": 143.2,
+      "power_w": 39.5
+    },
+    {
+      "label": "bloc 96\u00d796 INT2 1200MHz  HBM2e-1024b",
+      "tok_s": 533.8,
+      "area_mm2": 143.2,
+      "power_w": 41.5
+    },
+    {
+      "label": "bloc 96\u00d796 INT4 800MHz WC HBM3-1024b",
+      "tok_s": 488.2,
+      "area_mm2": 143.2,
+      "power_w": 58.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT4 1000MHz WC HBM3-1024b",
+      "tok_s": 488.2,
+      "area_mm2": 143.2,
+      "power_w": 60.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT4 1200MHz WC HBM3-1024b",
+      "tok_s": 488.2,
+      "area_mm2": 143.2,
+      "power_w": 62.6
+    },
+    {
+      "label": "os_s 96\u00d796 INT4 800MHz  HBM3-1024b",
+      "tok_s": 485.7,
+      "area_mm2": 143.2,
+      "power_w": 58.6
+    },
+    {
+      "label": "os_s 96\u00d796 INT4 1000MHz  HBM3-1024b",
+      "tok_s": 485.7,
+      "area_mm2": 143.2,
+      "power_w": 60.6
+    },
+    {
+      "label": "os_s 96\u00d796 INT4 1200MHz  HBM3-1024b",
+      "tok_s": 485.7,
+      "area_mm2": 143.2,
+      "power_w": 62.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT4 800MHz  HBM3-1024b",
+      "tok_s": 485.7,
+      "area_mm2": 143.2,
+      "power_w": 58.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT4 1000MHz  HBM3-1024b",
+      "tok_s": 485.7,
+      "area_mm2": 143.2,
+      "power_w": 60.6
+    },
+    {
+      "label": "bloc 96\u00d796 INT4 1200MHz  HBM3-1024b",
+      "tok_s": 485.7,
+      "area_mm2": 143.2,
+      "power_w": 62.6
+    },
+    {
+      "label": "gmma 128\u00d7256 INT2 800MHz  LPDDR5-256b",
+      "tok_s": 474.6,
+      "area_mm2": 121.2,
+      "power_w": 47.4
+    },
+    {
+      "label": "gmma 128\u00d7256 INT2 800MHz WC LPDDR5-256b",
+      "tok_s": 474.6,
+      "area_mm2": 121.2,
+      "power_w": 47.4
+    },
+    {
+      "label": "gmma 128\u00d7256 INT2 1000MHz  LPDDR5-256b",
+      "tok_s": 474.6,
+      "area_mm2": 121.2,
+      "power_w": 55.6
+    }
+  ]
+}
