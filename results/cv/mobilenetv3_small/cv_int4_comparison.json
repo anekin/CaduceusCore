@@ -1,0 +1,74 @@
+{
+  "config": {
+    "array": "64x64",
+    "weight_bits": 4,
+    "activation_bits": 8,
+    "frequency_mhz": 1000,
+    "bandwidth_bytes_per_cycle": 51.2,
+    "dram_efficiency": 0.85
+  },
+  "engines": [
+    {
+      "engine_type": "systolic",
+      "array": "64x64",
+      "fps": 298.76,
+      "area_mm2": 22.2,
+      "power_w": 7.6,
+      "sram_spill_mb": 0.0,
+      "depthwise_util_pct": 0.05,
+      "label": "systolic 64x64 INT4/INT8",
+      "total_cycles": 3347168
+    },
+    {
+      "engine_type": "block",
+      "array": "64x64",
+      "fps": 677.9,
+      "area_mm2": 28.2,
+      "power_w": 10.6,
+      "sram_spill_mb": 0.0,
+      "depthwise_util_pct": 0.17,
+      "label": "block 64x64 INT4/INT8",
+      "total_cycles": 1475151
+    },
+    {
+      "engine_type": "gmma",
+      "array": "64x64",
+      "fps": 667.92,
+      "area_mm2": 30.2,
+      "power_w": 11.6,
+      "sram_spill_mb": 0.0,
+      "depthwise_util_pct": 0.17,
+      "label": "gmma 64x64 INT4/INT8",
+      "total_cycles": 1497178
+    },
+    {
+      "engine_type": "tensor_core",
+      "array": "64x64",
+      "fps": 517.63,
+      "area_mm2": 28.2,
+      "power_w": 10.6,
+      "sram_spill_mb": 0.0,
+      "depthwise_util_pct": 0.11,
+      "label": "tensor_core 64x64 INT4/INT8",
+      "total_cycles": 1931895
+    },
+    {
+      "engine_type": "input_stationary",
+      "array": "64x64",
+      "fps": 412.32,
+      "area_mm2": 26.2,
+      "power_w": 9.6,
+      "sram_spill_mb": 0.0,
+      "depthwise_util_pct": 0.13,
+      "label": "input_stationary 64x64 INT4/INT8",
+      "total_cycles": 2425320
+    }
+  ],
+  "summary": {
+    "best_engine": "block",
+    "best_fps": 677.9,
+    "best_area_mm2": 28.2,
+    "constraint": "area_mm2 <= 30",
+    "note": "block delivers highest FPS among engines meeting the area constraint."
+  }
+}
