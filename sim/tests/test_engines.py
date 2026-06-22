@@ -149,6 +149,35 @@ def _make_engines():
     return systolic, mxumodel
 
 
+def test_os_systolic_decode():
+    """OS-Systolic decode tok/s should not exceed BlockEngine for the same array.
+
+    OS avoids WS pipeline fill/drain, but its PEs are wider (accumulator +
+    output register) so the same die area buys fewer MACs. For an equal 128×128
+    array it should land in the same DMA-bound ballpark as BlockEngine, not
+    above it.
+    """
+    M, K, N = 1, 11008, 2048
+
+    os_engine = create_engine(_engine_config("os_systolic"))
+    block = create_engine(_engine_config("block"))
+
+    r_os = os_engine.estimate(M, K, N)
+    r_block = block.estimate(M, K, N)
+
+    os_tok_s = _tok_s(r_os)
+    block_tok_s = _tok_s(r_block)
+
+    assert r_os.bottleneck == "dma", (
+        f"Expected DMA-bound OS-Systolic engine, got {r_os.bottleneck}"
+    )
+    assert os_tok_s <= block_tok_s, (
+        f"OS-Systolic tok/s ({os_tok_s:.1f}) should not exceed "
+        f"BlockEngine tok/s ({block_tok_s:.1f})"
+    )
+    assert r_os.details["per_tile_compute"] >= 3
+
+
 def test_systolic_vs_mxumodel_decode():
     """SystolicEngine decode (M=1, M=2) total_cycles match MXUModel byte-for-byte."""
     systolic, mxumodel = _make_engines()
