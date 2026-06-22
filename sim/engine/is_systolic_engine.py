@@ -24,9 +24,6 @@ class InputStationaryEngine(MACEngine):
     def engine_type(self) -> str:
         return "input_stationary"
 
-    @property
-    def area_estimate_mm2(self) -> float:
-        return (self.H * self.W / (128 * 128)) * 8.0
 
     def estimate(self, M: int, K: int, N: int,
                  weight_preloaded: bool = False) -> EngineResult:

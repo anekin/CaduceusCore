@@ -28,12 +28,6 @@ class WMMAEngine(MACEngine):
     def engine_type(self) -> str:
         return "wmma"
 
-    @property
-    def area_estimate_mm2(self) -> float:
-        # More area than Block due to register file pressure
-        # + warp scheduler overhead
-        base = (self.H * self.W / (128 * 128)) * 32.0
-        return base * 1.15
 
     @property
     def num_warps(self) -> int:

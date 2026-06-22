@@ -30,10 +30,6 @@ class OutputStationaryEngine(MACEngine):
     def engine_type(self) -> str:
         return "os_systolic"
 
-    @property
-    def area_estimate_mm2(self) -> float:
-        # Same PE count as WS, similar area (slightly more for routing)
-        return (self.H * self.W / (128 * 128)) * 8.5
 
     def estimate(self, M: int, K: int, N: int,
                  weight_preloaded: bool = False) -> EngineResult:

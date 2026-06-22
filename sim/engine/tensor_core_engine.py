@@ -37,12 +37,6 @@ class TensorCoreEngine(MACEngine):
     def engine_type(self) -> str:
         return "tensor_core"
 
-    @property
-    def area_estimate_mm2(self) -> float:
-        # 64 TCs × 16×16 = same MAC count as 128×128 block
-        # But register file + scheduler overhead: +30%
-        base = (self.H * self.W / (128 * 128)) * 32.0
-        return base * 1.3  # +30% for TC orchestration
 
     def estimate(self, M: int, K: int, N: int,
                  weight_preloaded: bool = False) -> EngineResult:

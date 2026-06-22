@@ -31,11 +31,6 @@ class BlockEngine(MACEngine):
     def engine_type(self) -> str:
         return "block"
 
-    @property
-    def area_estimate_mm2(self) -> float:
-        # Block engine: ~4× area vs systolic for same dimensions
-        # 128×128 systolic = 8mm² → block = ~32mm²
-        return (self.H * self.W / (128 * 128)) * 32.0
 
     def estimate(self, M: int, K: int, N: int,
                  weight_preloaded: bool = False) -> EngineResult:

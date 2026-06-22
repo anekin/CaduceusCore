@@ -39,12 +39,6 @@ class GMMAEngine(MACEngine):
     def engine_type(self) -> str:
         return "gmma"
 
-    @property
-    def area_estimate_mm2(self) -> float:
-        # Block engine base + TMA + shared memory
-        base = (self.H * self.W / (128 * 128)) * 32.0
-        smem_area = self.SHMEM_KB * 0.0015  # mm² per KB
-        return base + self.TMA_AREA_MM2 + smem_area
 
     def estimate(self, M: int, K: int, N: int,
                  weight_preloaded: bool = False) -> EngineResult:
