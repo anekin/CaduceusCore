@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 from q4_dequant import load_weights_from_gguf
 from golden_executor import GoldenMXU
 from quantize import quantize_int4_per_block
+from model_specs import MODELS, get_spec
 
 
 @dataclass
@@ -117,13 +118,7 @@ class ArcModel:
     }
 
     # Known model configs: (qkv, hidden, intermediate, layers, num_heads, kv_heads)
-    MODELS = {
-        "qwen2.5-1.5b":  (1536, 1536, 8960, 28, 12, 2),
-        "qwen2.5-3b":    (4096, 2560, 9728, 28, 32, 2),
-        "qwen2.5-7b":    (3584, 3584, 18944, 28, 28, 4),
-        "qwen3-8b":      (4096, 4096, 12288, 32, 32, 4),
-        "gemma-4-12b":   (4096, 4096, 16384, 40, 16, 8),
-    }
+    MODELS = MODELS
 
     def __init__(self, config_path: str = "config/npu_config.yaml"):
         from npu_sim import NPUSimulator
@@ -214,7 +209,7 @@ class ArcModel:
         # Auto-detect model spec
         spec = model_spec
         if spec is None:
-            for key, val in self.MODELS.items():
+            for key, val in MODELS.items():
                 if key.replace(".", "").replace("-", "") in name.lower().replace(".", "").replace("-", ""):
                     spec = val
                     break
