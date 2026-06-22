@@ -1,0 +1,37 @@
+=== cv-task-9-report.txt ===
+Date: 2026-06-22
+Task: Create CaduceusCore/sim/cv/cv_ppa_report.py — generates CV-specific PPA report in Markdown and JSON formats.
+
+=== Files Created ===
+1. CaduceusCore/sim/cv/cv_ppa_report.py — CVPpaReport dataclass + generate_report()
+2. CaduceusCore/results/cv/mobilenetv3_small/cv_ppa_report.md — Markdown report
+3. CaduceusCore/results/cv/mobilenetv3_small/cv_ppa_report.json — JSON report
+
+=== CVPpaReport Dataclass Fields ===
+- fps: float
+- area_mm2: float
+- power_w: float
+- sram_spill_mb: float
+- depthwise_util_pct: float
+- total_macs: float
+- total_cycles: int
+- engine_type: str
+
+=== generate_report(results, output_dir) ===
+- Creates output_dir if missing
+- Writes cv_ppa_report.md with:
+  - Title: "# CV PPA Report — MobileNetV3-Small"
+  - Engine Comparison pipe table (Engine, FPS, Area, Power, SRAM Spill, DW Util)
+  - Pareto Frontier (best per engine sorted by FPS descending)
+  - ONNX Runtime Validation table (Total MACs)
+- Writes cv_ppa_report.json with same data structured
+
+=== Smoke Test Output ===
+Input: 4 CVPpaReport instances (2 systolic, 2 block)
+Report generated to results/cv/mobilenetv3_small/
+- cv_ppa_report.md: 25 lines, all sections present
+- cv_ppa_report.json: 68 lines, all 3 sections present
+- Pareto: systolic 145.2 FPS > block 105.8 FPS (correct sort)
+
+=== LSP Diagnostics ===
+No errors, no warnings.

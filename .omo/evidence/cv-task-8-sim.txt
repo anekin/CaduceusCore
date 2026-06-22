@@ -1,0 +1,38 @@
+CV Task 8 — cv_sim.py verification
+====================================
+File: sim/cv/cv_sim.py
+Status: PASSED
+
+Verification method:
+  - Loaded npu_config.yaml
+  - Built mock MobileNetV3-Small trace (13 layers: conv, DW, SFU, element-wise, metadata, GEMM)
+  - Called simulate_cv(mock_trace, config)
+  - Validated output schema and layer-level correctness
+
+Results:
+  total_cycles:     410,923
+  total_macs:       8,566,528
+  total_dma_cycles: 301,201.0
+  sram_spill_mb:    0.0000
+  layers processed: 13
+
+Per-layer checks:
+  - Conv layers (Pw, DW, GEMM): MACEngine.estimate() called, im2col overhead added
+  - SFU layers: cycles match sfu_cycles from trace
+  - Element-wise: cycles = ceil(elements / vector_width)
+  - Metadata (reshape, shape, concat): 0 cycles
+  - mxu_util_pct extracted from engine.utilization
+
+Edge cases verified:
+  - sram_spill_mb >= 0 (returns 0 when negative)
+  - All required keys in result dict
+  - All required fields in each layer dict
+  - Conv/gemm layers have mxu_util_pct > 0
+  - Metadata layers have 0 cycles
+
+Dependencies:
+  - engine.mac_engine.create_engine (factory)
+  - engine.mac_engine.MACEngine.estimate (MAC engine simulation)
+  - config/npu_config.yaml (SRAM, MXU, vector config)
+  - No modifications to MACEngine source
+  - No new MACEngine subclasses

@@ -1,0 +1,30 @@
+{
+  "report": "CV PPA Report \u2014 MobileNetV3-Small",
+  "engine_comparison": [
+    {
+      "engine": "systolic",
+      "fps": 120,
+      "area_mm2": 28.0,
+      "power_w": 3.5,
+      "sram_spill_mb": 0.0,
+      "depthwise_util_pct": 12.5,
+      "total_macs": 56510400,
+      "total_cycles": 2596157
+    }
+  ],
+  "pareto_frontier": [
+    {
+      "engine": "systolic",
+      "fps": 120,
+      "area_mm2": 28.0,
+      "power_w": 3.5,
+      "sram_spill_mb": 0.0,
+      "depthwise_util_pct": 12.5
+    }
+  ],
+  "onnx_validation": {
+    "arc_model_macs": 56510400,
+    "onnx_runtime_macs": null,
+    "delta_pct": null
+  }
+}
