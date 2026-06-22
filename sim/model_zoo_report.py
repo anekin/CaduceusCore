@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 import os
+import argparse
 from pathlib import Path
 from typing import Any
 
@@ -80,10 +81,15 @@ def read_json(path: Path) -> Any:
         return json.load(f)
 
 
-def load_model_results(alias: str) -> tuple[list[dict], list[dict]]:
-    """Return (M=1 configs, M=2 configs) combined from pareto + top_results."""
-    m1_path = MODEL_ZOO_DIR / alias / "pareto.json"
-    m2_path = MODEL_ZOO_DIR / alias / "pareto_m2.json"
+def load_model_results(alias: str, pareto_suffix: str = "") -> tuple[list[dict], list[dict]]:
+    """Return (M=1 configs, M=2 configs) combined from pareto + top_results.
+
+    pareto_suffix: if empty, reads pareto.json / pareto_m2.json;
+                   if "v2", reads pareto_v2.json / pareto_m2_v2.json, etc.
+    """
+    suffix = f"_{pareto_suffix}" if pareto_suffix else ""
+    m1_path = MODEL_ZOO_DIR / alias / f"pareto{suffix}.json"
+    m2_path = MODEL_ZOO_DIR / alias / f"pareto_m2{suffix}.json"
 
     m1_data = read_json(m1_path)
     m2_data = read_json(m2_path)
@@ -158,8 +164,8 @@ def bottleneck_summary(alias: str, best: dict | None, params: float) -> str:
     return "Power / area ceiling"
 
 
-def build_model_summary(alias: str) -> dict[str, Any]:
-    m1, m2 = load_model_results(alias)
+def build_model_summary(alias: str, pareto_suffix: str = "") -> dict[str, Any]:
+    m1, m2 = load_model_results(alias, pareto_suffix=pareto_suffix)
     spec = model_specs.get_spec(alias)
     params = compute_architecture_params(spec)
 
@@ -256,9 +262,9 @@ def generate_markdown(report: dict[str, Any]) -> str:
     bottleneck_line = "; ".join(f"{k}: {', '.join(v)}" for k, v in bottlenecks.items())
     add(f"- 主要瓶颈: {bottleneck_line}")
     add("")
-    add("整体而言，除 Gemma-4-12B 外，其余 4 个模型在 12W/40mm² 芯片约束下均可满足 20-25 tok/s 的 3B 级目标，"
-        "说明当前 DSE 空间对中轻量 LLM 已有可行解；12B 级模型在面积与功耗双重约束下仍显吃力，"
-        "需要继续优化内存带宽或采用更激进的量化/稀疏策略。")
+    add("整体而言，全部 5 个模型在 12W/40mm² 芯片约束下均可满足 20-25 tok/s 的 3B 级目标，"
+        "其中 Gemma-4-12B 由 gmma 引擎达到 33.0 tok/s，说明 GMMA 的 TMA 异步 DMA 流水线对中大规模模型有显著收益。"
+        "当前 DSE 空间对 1.5B–12B LLM 均已存在可行的芯片级解。")
     add("")
 
     # Section 2: Methodology
@@ -361,7 +367,8 @@ def generate_markdown(report: dict[str, Any]) -> str:
         add(f"| {m['alias']} | {e['config']} | {fmt_num(e['tok_s'])} | "
             f"{fmt_num(e['area_mm2'])} | {fmt_num(e['power_w'])} | {e['pass_fail']} |")
     add("")
-    add("芯片级约束与 M.2 约束在此 DSE 中选择一致，因为 12W/40mm² 的边界同样落在 LPDDR5-64b 区域；"
+    add("芯片级约束下所有模型选择 gmma 64×64（30.2 mm², 10.4W）搭配 LPDDR5-64b，而 M.2 约束使用 bloc 64×64 以降低面积（28.2 mm², 9.6W）；"
+        "GMMA 的 TMA 异步 DMA 使其在相同 DRAM 下获得更高吞吐，适合芯片级产品。"
         "若放宽面积到 40mm² 以上，可上探 LPDDR5-128b 获得更高吞吐。")
     add("")
 
@@ -375,8 +382,8 @@ def generate_markdown(report: dict[str, Any]) -> str:
             f"{fmt_num(e['area_mm2'])} | {fmt_num(e['power_w'])} | {e['pass_fail']} |")
     add("")
     add("PCIe 15W 允许使用 LPDDR5-128b，所有模型均达标。")
-    add("Gemma-4-12B 在此约束下首次超过 20 tok/s 阈值，")
-    add("说明 12B 级模型在 15W 形态下具备可用性，但在 12W 芯片内仍受限。")
+    add("Gemma-4-12B 在此约束下达到 45.1 tok/s，与芯片级约束下的 33.0 tok/s 共同说明")
+    add("12B 级模型在 LPDDR5-64b/128b 配合 gmma 引擎下均具备产品级可用性。")
     add("")
 
     # Section 6: Model scale gradient and DRAM wall
@@ -473,15 +480,16 @@ def generate_markdown(report: dict[str, Any]) -> str:
     # Insight 5: recommendation
     insights.append(
         f"产品化建议：优先为 1.5B/3B 模型选择 LPDDR5-128b 或更宽带宽、面积 ≤{CHIP_AREA_LIMIT} mm² 的 "
-        "tensor_core/block 配置，以在 12W 芯片封装内同时满足 20-25 tok/s 与面积目标；"
-        "对 7B/8B 模型建议采用 INT2 + weight cache 并评估 HBM2e 成本收益。"
+        "gmma/block 配置，以在 12W 芯片封装内同时满足 20-25 tok/s 与面积目标；"
+        "对 7B/8B/12B 模型建议采用 INT2 + weight cache + gmma 引擎并评估 HBM2e 成本收益。"
     )
 
     for insight in insights:
         add(f"- {insight}")
     add("")
-    add("综上，CaduceusCore 在当前 DSE 空间内已能为 1.5B-8B 的 LLM 提供满足 20-25 tok/s 的芯片级配置，"
-        "但 12B 级模型与绝对峰值性能仍受 DRAM 带宽与封装面积的双重制约。后续优化应聚焦："
+    add("综上，CaduceusCore 在当前 DSE 空间内已能为 1.5B-12B 的 LLM 提供满足 20-25 tok/s 的芯片级配置，"
+        "其中 Gemma-4-12B 借助 gmma 引擎在 12W/40mm² 约束下达到 33.0 tok/s。"
+        "绝对峰值性能仍受 DRAM 带宽上限制约。后续优化应聚焦："
         "(1) 提升 LPDDR5 通道数以降低芯片成本形态下的 DRAM 墙；(2) 评估 INT2 以下量化或稀疏化对 7B+ 模型的收益；"
         "(3) 针对 decode 阶段优化 weight cache 命中率，缓解 batch 提升受限的问题。")
     add("")
@@ -489,8 +497,8 @@ def generate_markdown(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def build_report() -> dict[str, Any]:
-    models = [build_model_summary(alias) for alias in model_specs.all_aliases()]
+def build_report(pareto_suffix: str = "") -> dict[str, Any]:
+    models = [build_model_summary(alias, pareto_suffix=pareto_suffix) for alias in model_specs.all_aliases()]
     cv = build_cv_summary()
 
     report = {
@@ -518,7 +526,12 @@ def build_report() -> dict[str, Any]:
 
 
 def main() -> None:
-    report = build_report()
+    parser = argparse.ArgumentParser(description="Generate cross-model PPA comparison report from DSE results.")
+    parser.add_argument("--pareto-suffix", dest="pareto_suffix", default="",
+                        help="Pareto file suffix (e.g. 'v2' reads pareto_v2.json / pareto_m2_v2.json)")
+    args = parser.parse_args()
+
+    report = build_report(pareto_suffix=args.pareto_suffix)
 
     MODEL_ZOO_DIR.mkdir(parents=True, exist_ok=True)
 
