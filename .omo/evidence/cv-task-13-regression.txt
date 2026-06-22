@@ -1,0 +1,13 @@
+=== CV Task 13: LLM Regression Evidence ===
+Date: 2026-06-22
+
+--- pytest (sim/tests/) ---
+Result: 118 passed in 4.71s
+
+--- LLM DSE (--quick) ---
+Output:
+  Pareto 前沿 (面积 vs 性能)
+  Config                                           tok/s     Area    Power    tok/W
+  Top 20 by tok/s (area ≤ 150mm²):
+
+Verdict: PASS — All 118 tests pass; DSE tok/s-based Pareto frontier produced.

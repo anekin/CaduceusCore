@@ -1,0 +1,29 @@
+=== CV Task 12: Full Seven-Engine Pareto Sweep — MobileNetV3-Small ===
+Timestamp: 2026-06-22 12:49
+Status: PASS
+
+--- Design Space Explorer Run ---
+Command: cd CaduceusCore && PYTHONPATH=sim timeout 300 python3 sim/design_space_explorer.py --cv-model mobilenetv3-small --output results/cv/mobilenetv3_small/pareto_full.json
+Total configurations swept: 2436
+Valid results: 2220
+Pareto frontier points: 30
+Timeout: 300s (completed within limit)
+
+--- Engine Types Found ---
+5 engine types represented across Pareto + top_results:
+  - systolic       (best: 497.6 fps, 22.2mm², 7.2W)
+  - input_stationary (best: 532.6 fps, 22.7mm², 7.3W)
+  - tensor_core    (best: 1243.3 fps, 133.2mm², 54.6W)
+  - block          (best: 1218.6 fps, 133.2mm², 54.6W)
+  - gmma           (best: 1218.6 fps, 135.2mm², 55.4W)
+
+--- Output Files ---
+results/cv/mobilenetv3_small/pareto_full.json  — 30 Pareto pts, 20 top-pts (11,591 bytes)
+results/cv/mobilenetv3_small/cv_ppa_report.md   — PPA Markdown report (1,080 bytes)
+results/cv/mobilenetv3_small/cv_ppa_report.json — PPA JSON report (2,455 bytes)
+
+--- Verification ---
+- pareto_full.json exists: YES
+- Pareto points ≥5: YES (30)
+- Engine types ≥4: YES (5)
+- PPA report regenerated: YES (md + json)

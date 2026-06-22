@@ -344,21 +344,43 @@ def main():
 
     # ── Save ──
     if args.output:
-        def _result_dict(p):
+        def _result_dict(p, on_pareto=False):
             d = {"label": p.config_label, "tok_s": p.tok_s,
                  "area_mm2": p.area_mm2, "power_w": p.power_w}
             if _CV_MODEL:
                 d["sram_spill_mb"] = p.sram_spill_mb
                 d["depthwise_util_pct"] = p.depthwise_util_pct
+                prefix = (p.config_label or "").split()[0]
+                engine_map = {
+                    "syst": "systolic",
+                    "os_s": "os_systolic",
+                    "bloc": "block",
+                    "tens": "tensor_core",
+                    "wmma": "wmma",
+                    "gmma": "gmma",
+                    "inpu": "input_stationary",
+                }
+                d["engine_type"] = engine_map.get(prefix, prefix)
+                d["pareto"] = on_pareto
             return d
 
-        output = {
-            "cv_model": _CV_MODEL,
-            "total_configs": len(configs),
-            "valid_results": len(results),
-            "pareto_frontier": [_result_dict(p) for p in pareto],
-            "top_results": [_result_dict(p) for p in reasonable[:args.top]],
-        }
+        if _CV_MODEL:
+            # CV mode: flat list of Pareto + top results so downstream tools
+            # can verify engine diversity while keeping Pareto points primary.
+            points = [_result_dict(p, True) for p in pareto]
+            seen = {p.config_label for p in pareto}
+            for p in reasonable[:args.top]:
+                if p.config_label not in seen:
+                    points.append(_result_dict(p, False))
+            output = points
+        else:
+            output = {
+                "cv_model": _CV_MODEL,
+                "total_configs": len(configs),
+                "valid_results": len(results),
+                "pareto_frontier": [_result_dict(p, True) for p in pareto],
+                "top_results": [_result_dict(p, False) for p in reasonable[:args.top]],
+            }
         out_path = SIM_DIR / args.output if not args.output.startswith("/") else Path(args.output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, "w") as f:
