@@ -10,27 +10,27 @@
 ```
                      DMA 碎片 ←──────────────────────────→ 面积
 
-  WMMA (7 tok/s)     TensorCore (28)    Block (32)     GMMA (32→240)
+  WMMA (0.05 tok/s)  TensorCore (28)    Block (30)     GMMA (60→234)
   16×16 小块         64×16×16           128×128 大块    128×128 + TMA
        │                  │                  │               │
        ▼                  ▼                  ▼               ▼
   ┌─────────────────────────────────────────────────────────────┐
   │                    面积-性能 Pareto 前沿                     │
   │                                                             │
-│  28mm² ── Systolic 128×128+WC (21 tok/s) ← ✅ 推荐         │
-│  36mm² ── Systolic 128×256+WC (27 tok/s*)                   │
-  │  48mm² ── Input-Stationary    (28 tok/s*)                   │
-  │  52mm² ── OS-Systolic         (28 tok/s*)                   │
-  │  52mm² ── Block Engine        (28 tok/s*) ← DRAM墙          │
-  │  60mm² ── GMMA                (28 tok/s*) ← TMA无助力       │
-  │  57mm² ── WMMA                 (7 tok/s)  ← ☠️              │
+│  28mm² ── Systolic 128×128+WC (20 tok/s) ← ✅ 推荐         │
+│  36mm² ── Systolic 128×256+WC (25 tok/s*)                   │
+  │  48mm² ── Input-Stationary    (4 tok/s)                     │
+  │  52mm² ── OS-Systolic         (30 tok/s*)                   │
+   │  52mm² ── Block Engine        (30 tok/s*) ← DRAM墙          │
+  │  60mm² ── GMMA                (60 tok/s*) ← TMA见效！       │
+  │  57mm² ── WMMA                 (0.05 tok/s)  ← ☠️           │
   │                                                             │
-  │  * 75% LPDDR5 效率下实际值，名义值更高但DRAM无法支撑         │
-  │  ═══════ DRAM 50GB/s × 75%效率 = 38.4 GB/s 天花板 ═══════  │
+│  * Systolic/Block/OS 为 DRAM 瓶颈值；GMMA 因 TMA 重叠额外翻倍   │
+│  ═══════ DRAM 50GB/s × 75%效率 = 38.4 GB/s 天花板 ═══════      │
   └─────────────────────────────────────────────────────────────┘
 ```
 
-**核心洞察：** LPDDR5 实际效率 75-80%，不改 DRAM 时所有大引擎（Block/OS/GMMA/IS）的算力优势被带宽浪费。128×128+WC 在 28mm² 实现 21 tok/s，DRAM 利用率 74%，是面积-性能-余量三者的帕累托最优点。引擎选择本质上是 **面积 vs 可扩展性** 的 trade-off——小引擎留面积给未来的 DRAM 升级。
+**核心洞察：** LPDDR5 实际效率 75-80%，不改 DRAM 时 Block/OS 的算力优势被带宽浪费，GMMA 因 TMA 重叠突破带宽限制，IS 为计算瓶颈。128×128+WC 在 28mm² 实现 20 tok/s，DRAM 利用率 74%，是面积-性能-余量三者的帕累托最优点。引擎选择本质上是 **面积 vs 可扩展性** 的 trade-off——小引擎留面积给未来的 DRAM 升级。
 
 ---
 
@@ -122,8 +122,8 @@
 | 每 tile 时间 | **1 cycle compute + DMA time** |
 | 面积 | 约 32mm² @ 128×128（~4× systolic 同规模）|
 | 瓶颈 | **DMA** — 算得再快，数据从 DRAM 搬不过来 |
-| 适合场景 | DRAM≥100GB/s 时放量 — 63 tok/s @ 128-bit |
-| 不适合场景 | DRAM 50GB/s — 与 systolic 差距仅 2 tok/s |
+| 适合场景 | DRAM≥100GB/s 时放量 — 60 tok/s @ 128-bit |
+| 不适合场景 | DRAM 50GB/s — 与 systolic 差距约 10 tok/s |
 
 **一句话：** 计算能力过剩，DRAM 带宽是唯一瓶颈。带宽翻倍性能翻倍。
 
@@ -150,7 +150,7 @@
 | 数据流 | 64 个独立 16×16 TC 并行，各自 DMA |
 | 碎片度 | **高** — 比 Block 多 64× 的 DMA 事务 |
 | 面积 | 52mm²（~32mm² PE + 30% TC orchestration）|
-| 性能 @ 50GB/s | 28 tok/s（接近 Block 的 29）|
+| 性能 @ 50GB/s | 28 tok/s（略低于 Block 的 30）|
 | 适合场景 | 需要小块灵活性时（非规则矩阵、稀疏）|
 | NVIDIA 差异 | GPU 有 warp scheduler 隐藏 DMA 延迟，单 die NPU 没有 |
 
@@ -178,7 +178,7 @@
 
 | 特性 | 值 |
 |------|-----|
-| 性能 @ 50GB/s | **6 tok/s** — 比 Block 慢 5× |
+| 性能 @ 50GB/s | **0.05 tok/s** — 比 Block 慢 600× |
 | 根因 | DMA 启动开销爆炸（每次启动 10 cycles × 10 万次 = 100 万 cycles 纯等）|
 | GPU 怎么解决的 | **数千个 warp 同时跑** — 一个 warp 等 DMA 时，scheduler 切到另一个 warp |
 | 单 die NPU 为何不行 | 只有 1 个指令流 — 等 DMA 时 CPU 完全 idle |
@@ -212,12 +212,12 @@
 | 数据流 | 同 Block + TMA 异步 DMA 引擎 |
 | 异步重叠 | DMA 和 compute **完全重叠** — 不等数据 |
 | 面积 | 60mm²（Block 的 52 + TMA 2 + SharedMem 6）|
-| 性能 @ 50GB/s | 29 tok/s — **与 Block 相同**（DMA 仍快于 compute）|
-| 性能 @ 100GB/s | 63 tok/s — **与 Block 相同**（TMA 未体现优势）|
-| 性能 @ 200GB/s | **240 tok/s** — Block 只有 125。TMA 开始生效！|
-| TMA 生效条件 | **DMA 时间 > compute 时间**—即 DRAM ≥200GB/s 时 |
+| 性能 @ 50GB/s | 60 tok/s — **是 Block 的 2×**（TMA 重叠隐藏一半 DMA）|
+| 性能 @ 100GB/s | 120 tok/s — **是 Block 的 2×**（TMA 重叠持续生效）|
+| 性能 @ 200GB/s | **234 tok/s** — Block 只有 119。TMA 重叠持续生效！|
+| TMA 生效条件 | **所有带宽有效** — LPDDR5 下已是 Block 的 2×，带宽越高收益越大 |
 
-**一句话：TMA 是 DRAM 扩带宽的催化剂。100GB/s 以下无意义，200GB/s 以上拉开差距。**
+**一句话：TMA 是 DRAM 扩带宽的催化剂。LPDDR5 下已是 Block 的 2×，带宽越高优势越大。**
 
 ---
 
@@ -240,7 +240,7 @@
 |------|-----|
 | 数据流 | 输入静态（激活值驻留），权重广播 |
 | 适合场景 | 大 batch prefill、CNN — 激活值可复用 |
-| M=1 decode | 15 tok/s — 阵列利用率极低 |
+| M=1 decode | 4 tok/s — 阵列利用率极低 |
 | 面积 | 44mm² |
 | 参考 | MIT Eyeriss (2016) |
 
@@ -252,12 +252,12 @@
 
 | 场景 | 推荐引擎 | 阵列 | DRAM | tok/s | 面积 |
 |------|---------|------|------|:---:|:---:|
-| **低成本端侧（50GB/s）** | Systolic +WC | 128×256 | LPDDR5-64b | 27 | 36mm² |
-| **中端（100GB/s）** | Block | 128×128 | LPDDR5-128b | 63 | 59mm² |
-| **高端（200GB/s）** | GMMA | 128×128 | LPDDR5-256b | 240 | 74mm² |
+| **低成本端侧（50GB/s）** | Systolic +WC | 128×256 | LPDDR5-64b | 25 | 36mm² |
+| **中端（100GB/s）** | Block | 128×128 | LPDDR5-128b | 60 | 59mm² |
+| **高端（200GB/s）** | GMMA | 128×128 | LPDDR5-256b | 234 | 74mm² |
 | **旗舰（HBM3）** | Block/GMMA | 256×256 | HBM3-1024b | 942 | 133mm² |
-| **最小面积** | Systolic | 128×128 | LPDDR5-64b | 16 | 28mm² |
-| **绝对不要用** | WMMA | — | 任意 | 6-25 | 57mm² |
+| **最小面积** | Systolic | 128×128 | LPDDR5-64b | 20 | 28mm² |
+| **绝对不要用** | WMMA | — | 任意 | 0.05 | 57mm² |
 
 ---
 
@@ -274,8 +274,8 @@
                ▼        ▼           ▼        ▼
           Systolic   OS/Block    GMMA      Block
           128×128    128×128    128×128    128×128
-          +WC        28 tok/s*  240 tok/s  63 tok/s
-          21 tok/s   52mm²      74mm²      59mm²
+           +WC        30 tok/s*  234 tok/s  60 tok/s
+           20 tok/s   52mm²      74mm²      59mm²
           28mm²
 ```
 
