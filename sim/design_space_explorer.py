@@ -18,6 +18,11 @@ from engine.mac_engine import create_engine
 import yaml
 
 SIM_DIR = Path(__file__).parent
+
+_CV_MODEL: str = ""
+_CV_TRACE: List[Any] = []
+_CV_ONNX_PATH: str = ""
+
 Qwen3B_TRACE = [
     # (M, K, N, layer, op_name) — just dimensions, layers handled by caller
     # Attention
@@ -82,6 +87,15 @@ def tok_s_from_layer(layer_cycles: int, num_layers: int = 28) -> float:
     f_mhz = 1000
     total_us = layer_cycles * num_layers / f_mhz
     return round(1e6 / total_us, 1) if total_us > 0 else 0
+
+
+def _depthwise_util_from_cv_result(cv_result: Dict[str, Any]) -> float:
+    utils = [
+        layer.get("mxu_util_pct", 0.0)
+        for layer in cv_result.get("layers", [])
+        if layer.get("type") == "depthwise_conv"
+    ]
+    return sum(utils) / len(utils) if utils else 0.0
 
 
 def generate_configs(quick: bool = False) -> List[Dict[str, Any]]:
@@ -181,11 +195,23 @@ def evaluate_config(cfg: Dict[str, Any], area_model: AreaModel,
     """Evaluate one configuration → PPA."""
     engine_type = cfg["mac_engine"]["type"]
 
-    layer_cycles, _ = simulate_layer(cfg)
-    tok_s = tok_s_from_layer(layer_cycles)
-    area_result = area_model.estimate(cfg, engine_type)
-    area = area_result["total_mm2"]
-    power = power_model.estimate(area_model, cfg, engine_type)
+    if _CV_MODEL:
+        from cv.cv_sim import simulate_cv
+        cv_result = simulate_cv(_CV_TRACE, cfg)
+        fps = 1e9 / cv_result["total_cycles"] if cv_result["total_cycles"] > 0 else 0.0
+        area_result = area_model.estimate(cfg, engine_type)
+        area = area_result["total_mm2"]
+        power = power_model.estimate(area_model, cfg, engine_type)
+        sram_spill = cv_result.get("sram_spill_mb", 0.0)
+        dw_util = _depthwise_util_from_cv_result(cv_result)
+    else:
+        layer_cycles, _ = simulate_layer(cfg)
+        fps = tok_s_from_layer(layer_cycles)
+        area_result = area_model.estimate(cfg, engine_type)
+        area = area_result["total_mm2"]
+        power = power_model.estimate(area_model, cfg, engine_type)
+        sram_spill = 0.0
+        dw_util = 0.0
 
     H = cfg["mac_engine"]["array_height"]
     W = cfg["mac_engine"]["array_width"]
@@ -199,7 +225,14 @@ def evaluate_config(cfg: Dict[str, Any], area_model: AreaModel,
              f"{'WC' if wc else ''} "
              f"{cfg.get('_dram_label', '')}")
 
-    return PPA(tok_s=tok_s, area_mm2=area, power_w=power, config_label=label)
+    return PPA(
+        tok_s=fps,
+        area_mm2=area,
+        power_w=power,
+        config_label=label,
+        sram_spill_mb=sram_spill,
+        depthwise_util_pct=dw_util,
+    )
 
 
 def find_pareto(ppas: List[PPA]) -> List[PPA]:
@@ -224,7 +257,17 @@ def main():
     parser.add_argument("--output", default=None)
     parser.add_argument("--top", type=int, default=20,
                         help="Show top N results")
+    parser.add_argument("--cv-model", choices=["mobilenetv3-small"],
+                        default=None,
+                        help="Run CV design-space exploration")
     args = parser.parse_args()
+
+    global _CV_MODEL, _CV_TRACE, _CV_ONNX_PATH
+    _CV_MODEL = args.cv_model or ""
+    if _CV_MODEL:
+        from cv.cv_trace import generate_mobilenetv3_trace
+        _CV_ONNX_PATH = str(Path(__file__).parent.parent / "assets" / "mobilenetv3_small.onnx")
+        _CV_TRACE = generate_mobilenetv3_trace(_CV_ONNX_PATH)
 
     with open(SIM_DIR / "config" / "design_space.yaml") as f:
         base_cfg = yaml.safe_load(f)
@@ -259,24 +302,35 @@ def main():
     reasonable = [r for r in results if r.area_mm2 <= 150]
     reasonable.sort(key=lambda x: x.tok_s, reverse=True)
 
+    perf_label = "fps" if _CV_MODEL else "tok/s"
+    eff_label = "fps/W" if _CV_MODEL else "tok/W"
+    cv_extra_header = f" {'SRAM(MB)':>10} {'DW(%)':>8}" if _CV_MODEL else ""
+    line_width = 100 if _CV_MODEL else 85
+
     # ── Output ──
     print(f"\n{'='*90}")
     print(f"  Pareto 前沿 (面积 vs 性能)")
-    print(f"  {'Config':<45} {'tok/s':>8} {'Area':>8} {'Power':>8} {'tok/W':>8}")
-    print(f"  {'-'*85}")
+    print(f"  {'Config':<45} {perf_label:>8} {'Area':>8} {'Power':>8} {eff_label:>8}{cv_extra_header}")
+    print(f"  {'-'*line_width}")
     for p in pareto[:15]:
         arrow = "← Pareto" if p in pareto else ""
+        extra = ""
+        if _CV_MODEL:
+            extra = f" {p.sram_spill_mb:>9.1f} {p.depthwise_util_pct:>7.3f}"
         print(f"  {p.config_label:<45} {p.tok_s:>7.0f} {p.area_mm2:>6.0f}mm² "
-              f"{p.power_w:>6.1f}W {p.efficiency_tok_per_watt:>7.1f}")
+              f"{p.power_w:>6.1f}W {p.efficiency_tok_per_watt:>7.1f}{extra}")
 
     # ── Top by tok/s ──
-    print(f"\n  Top {args.top} by tok/s (area ≤ 150mm²):")
-    print(f"  {'Config':<45} {'tok/s':>8} {'Area':>8} {'Power':>8} {'tok/W':>8}")
-    print(f"  {'-'*85}")
+    print(f"\n  Top {args.top} by {perf_label} (area ≤ 150mm²):")
+    print(f"  {'Config':<45} {perf_label:>8} {'Area':>8} {'Power':>8} {eff_label:>8}{cv_extra_header}")
+    print(f"  {'-'*line_width}")
     for p in reasonable[:args.top]:
         pareto_flag = "←" if p in pareto else ""
+        extra = ""
+        if _CV_MODEL:
+            extra = f" {p.sram_spill_mb:>9.1f} {p.depthwise_util_pct:>7.3f}"
         print(f"  {p.config_label:<45} {p.tok_s:>7.0f} {p.area_mm2:>6.0f}mm² "
-              f"{p.power_w:>6.1f}W {p.efficiency_tok_per_watt:>7.1f} {pareto_flag}")
+              f"{p.power_w:>6.1f}W {p.efficiency_tok_per_watt:>7.1f}{extra} {pareto_flag}")
 
     # ── Best per engine type ──
     print(f"\n  Best per engine type (area ≤ 80mm², DRAM ≤ 102.4 GB/s):")
@@ -285,24 +339,25 @@ def main():
                        if eng in r.config_label and r.area_mm2 <= 80]
         if eng_results:
             best = max(eng_results, key=lambda x: x.tok_s)
-            print(f"    {eng}: {best.tok_s:.0f} tok/s, {best.area_mm2:.0f}mm², "
+            print(f"    {eng}: {best.tok_s:.0f} {perf_label}, {best.area_mm2:.0f}mm², "
                   f"{best.power_w:.1f}W — {best.config_label}")
 
     # ── Save ──
     if args.output:
+        def _result_dict(p):
+            d = {"label": p.config_label, "tok_s": p.tok_s,
+                 "area_mm2": p.area_mm2, "power_w": p.power_w}
+            if _CV_MODEL:
+                d["sram_spill_mb"] = p.sram_spill_mb
+                d["depthwise_util_pct"] = p.depthwise_util_pct
+            return d
+
         output = {
+            "cv_model": _CV_MODEL,
             "total_configs": len(configs),
             "valid_results": len(results),
-            "pareto_frontier": [
-                {"label": p.config_label, "tok_s": p.tok_s,
-                 "area_mm2": p.area_mm2, "power_w": p.power_w}
-                for p in pareto
-            ],
-            "top_results": [
-                {"label": p.config_label, "tok_s": p.tok_s,
-                 "area_mm2": p.area_mm2, "power_w": p.power_w}
-                for p in reasonable[:args.top]
-            ],
+            "pareto_frontier": [_result_dict(p) for p in pareto],
+            "top_results": [_result_dict(p) for p in reasonable[:args.top]],
         }
         out_path = SIM_DIR / args.output if not args.output.startswith("/") else Path(args.output)
         out_path.parent.mkdir(parents=True, exist_ok=True)

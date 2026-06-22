@@ -1,0 +1,11 @@
+cv validate_onnx.py — Arc vs ONNX MAC validation
+====================================================
+
+ONNX file:  /home/prj/zhengs/caduceuscore/CaduceusCore/assets/mobilenetv3_small.onnx
+Arc  MACs:    56,510,400
+ONNX MACs:    56,510,400
+Delta:             0.00%
+Threshold:  < 5.0%
+PASS:       True
+
+ONNX Runtime inference: OK (random input, top-5 logits printed)

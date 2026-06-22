@@ -13,6 +13,8 @@ class PPA:
     efficiency_tok_per_watt: float = 0.0
     efficiency_tok_per_mm2: float = 0.0
     config_label: str = ""
+    sram_spill_mb: float = 0.0
+    depthwise_util_pct: float = 0.0
 
     def __post_init__(self):
         self.efficiency_tok_per_watt = self.tok_s / max(self.power_w, 0.1)
