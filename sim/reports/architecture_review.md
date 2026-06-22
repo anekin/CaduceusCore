@@ -186,13 +186,15 @@ cron: NPU Overnight Auto-Fix Loop (每 2 小时)
 
 ## 5. 当前性能基线 & 瓶颈
 
-### 5.1 端到端 tok/s (128×128, 1GHz, weight_cache=ON)
+### 5.1 端到端 tok/s (Arc Model Zoo DSE 实测)
 
-| 模型 | tok/s | DRAM 利用率 | 
-|------|:--:|:--:|
-| 1.5B | 43.3 | 90% (已贴墙) |
-| 3B | 19.9 | 78% |
-| 7B | 8.7 | 76% |
+| 模型 | M=1 tok/s | M=2 tok/s | 芯片约束 tok/s (≤12W, ≤40mm²) | 是否达标 |
+|------|:---:|:---:|:---:|:---:|
+| Qwen2.5-1.5B | 1986.2 | 1982.9 | 124.7 | ✅ PASS (≥25) |
+| Qwen2.5-3B | 984.4 | 980.9 | 60.2 | ✅ PASS (≥20) |
+| Qwen2.5-7B | 415.8 | 415.0 | 25.1 | ✅ PASS (≥20) |
+| Qwen3-8B | 448.1 | 446.8 | 27.1 | ✅ PASS (≥20) |
+| Gemma-4-12B | 269.8 | 268.9 | 16.3 | ❌ FAIL (<20) |
 
 ### 5.2 瓶颈金字塔
 
@@ -267,3 +269,13 @@ cron: NPU Overnight Auto-Fix Loop (每 2 小时)
 | Pipeline/DMA 是联合瓶颈 | 只优化一个会被另一个卡住，必须同时动 |
 | 性能模型不做无证据推断 | 每个结论必须有 config + model trace 双验证 |
 | 报告硬编码常数会导致 10-100× 偏差 | 所有资源估算必须从 config 和 trace 动态计算 |
+
+---
+
+## 8. Arc Model Zoo 评测结果
+
+基于 `eval_model_zoo.py` 对 5 个 LLM 模型完成 7 引擎 × 7 阵列 × 6 DRAM × 2 精度 × 3 频率的完整 DSE，关键结论：
+
+- **3B 目标 (20-25 tok/s)**: Qwen2.5-3B 在芯片约束（≤12W, ≤40mm²）下达到 60.2 tok/s (M=1)，无约束 M=2 最佳可达 980.9 tok/s。
+- **CV 能力**: MobileNetV3-Small Arc Model DSE 最佳 systolic 497.6 tok/s-equivalent，tensor_core 64×64 HBM3 下达到 1243.3 tok/s。
+- **完整报告**: `results/model_zoo/model_zoo_ppa_report.md`

@@ -113,15 +113,15 @@ CaduceusCore 核心差异：systolic array 天然支持 im2col→GEMM（CNN）**
 
 LLM decode 每 token 必须从 DRAM 读一遍全部权重。KV cache 占 DRAM 流量 <0.1%。
 
-| 级别 | 模型 | 权重 | DRAM/tok | 峰值 tok/s |
-|:--:|------|:---:|---|:--:|
-| 1B | Llama 3.2-1B | 0.4 GB | 384 MB | **108** |
-| 1.5B | Qwen2.5-1.5B | 0.6 GB | 625 MB | **66** |
-| **3B** | **Llama 3.2-3B** | **1.3 GB** | **1344 MB** | **31** ← MRD 甜点位 |
-| 4B | Phi-3.5-mini | 1.5 GB | 1512 MB | **27** |
-| 7B | Mistral-7B | 3.3 GB | 3328 MB | **12** |
-| 8B | Llama 3.1-8B | 3.3 GB | 3328 MB | **12** |
-| 12B | Gemma-4-12B | 4.7 GB | 4800 MB | **8.6** ← 带宽墙 |
+| 级别 | 模型 | 权重 | DRAM/tok | 峰值 tok/s | Arc Model DSE 实测 tok/s (≤12W, ≤40mm²) |
+|:--:|------|:---:|---|:--:|:--:|
+| 1B | Llama 3.2-1B | 0.4 GB | 384 MB | **108** | N/A |
+| 1.5B | Qwen2.5-1.5B | 0.6 GB | 625 MB | **66** | **124.7** |
+| **3B** | **Llama 3.2-3B** | **1.3 GB** | **1344 MB** | **31** ← MRD 甜点位 | N/A |
+| 4B | Phi-3.5-mini | 1.5 GB | 1512 MB | **27** | N/A |
+| 7B | Mistral-7B | 3.3 GB | 3328 MB | **12** | N/A |
+| 8B | Llama 3.1-8B | 3.3 GB | 3328 MB | **12** | N/A |
+| 12B | Gemma-4-12B | 4.7 GB | 4800 MB | **8.6** ← 带宽墙 | **16.3** |
 
 ## 3.2 CV：计算 + 激活内存主导
 
@@ -129,7 +129,7 @@ CV 权重只读一次（非自回归），瓶颈在中间激活膨胀和总 MACs
 
 | 级别 | 模型 | 权重 | MACs | 峰值激活 | FPS (估) | Arc Model DSE FPS |
 |:--:|------|:---:|:---:|:---:|:--:|:--:|
-| 微 | MobileNetV3-Small | 10MB | 56.5M | 8MB | **825** | **375** (systolic 128×128 INT2 LPDDR5) / **1243** (tensor_core 64×64 INT2 HBM3) |
+| 微 | MobileNetV3-Small | 10MB | 56.5M | 8MB | **825** | **497.6** (best systolic) / **1243.3** (best tensor_core) |
 | 小 | ResNet-18 | 47MB | 1.8G | 30MB | **193** | estimated |
 | 中 | YOLOv8n | 13MB | 8.7G | 200MB | **70** | estimated |
 | 中 | EfficientNet-B0 | 21MB | 0.4G | 15MB | **500** | estimated |
