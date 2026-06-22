@@ -1,44 +1,9 @@
 # CaduceusCore Model Zoo 实施路线图 v2.0
 
-> 基于硬件需求分析重新排序，2026-06-21
+> 详细规划见 `model_zoo.md`，本文档只跟踪执行进度。
+>
+> 基于硬件需求分析重新排序，2026-06-22
 > 原则：最少新代码验证最多硬件 → 最快展示竞争力 → 最难问题前置
-
----
-
-## 一、硬件覆盖矩阵
-
-每个模型新增/验证的硬件子系统：
-
-| 模型 | im2col | Conv SFU | Pool2D | ResAdd | Concat | Upsample | BN Fold | Self-Attn | **新增硬件** |
-|------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| ViT-B/16 | — | — | — | — | — | — | — | ✅(已有) | **0** |
-| MobileNetV3 | ✅ | ✅ | ✅ | — | — | — | ✅ | — | 3 (im2col+SFU+Pool) |
-| ResNet-18 | ✅ | — | ✅ | ✅ | — | — | ✅ | — | 3 |
-| EfficientNet-B0 | ✅ | ✅ | ✅ | — | — | — | ✅ | — | 3 |
-| YOLOv8n | ✅ | ✅ | — | — | ✅ | ✅ | ✅ | — | 4 (im2col+SFU+Concat+Upsample) |
-| EfficientDet-Lite0 | ✅ | ✅ | ✅ | — | ✅ | — | ✅ | — | 4 |
-| YOLOv8s | ✅ | ✅ | — | — | ✅ | ✅ | ✅ | — | 4 |
-| ResNet-50 | ✅ | — | ✅ | ✅ | — | — | ✅ | — | 3 |
-| YOLOv8s-seg | ✅ | ✅ | — | — | ✅ | ✅ | ✅ | — | 4 |
-
-**关键发现**：ViT-B/16 新增硬件 = 0，直接复用 LLM 的 Self-Attention 路径。
-
----
-
-## 二、LLM 硬件差异
-
-| 模型 | 新增硬件 | GGUF 加载 | 特殊需求 |
-|------|:---:|:---:|------|
-| Llama 3.2-1B | 0 | 新 tensor 名 | SwiGLU(已有) |
-| Llama 3.2-3B | 0 | 同 Llama | — |
-| Qwen2.5-1.5B ✅ | 0 | 已有 | — |
-| Qwen2.5-3B ✅ | 0 | 已有 | — |
-| Phi-3.5-mini | 0 | 新 tensor 名 | — |
-| DeepSeek-R1-1.5B | 0 | 同 Qwen | 推理链 KV 行为不同 |
-| Mistral-7B | 0 | 新 tensor 名 | SWA(非标准GQA) |
-| Llama 3.1-8B | 0 | 新 tensor 名 | — |
-| Qwen3-8B ✅ | 0 | 已有 | — |
-| Gemma-4-12B ✅ | 0 | 已有 | — |
 
 ---
 
@@ -56,7 +21,7 @@
 
 | 顺序 | 模型 | 新增代码 | 验证的硬件 |
 |:--:|------|------|------|
-| 1.1 | **MobileNetV3-Small** | ONNX 加载器 + im2col + ReLU/Swish(SFU) + Pool2D | im2col, Conv SFU, Pool |
+| 1.1 | **MobileNetV3-Small** ✅ 已完成 | ONNX 加载器 + im2col + ReLU/Swish(SFU) + Pool2D | im2col, Conv SFU, Pool |
 | 1.2 | Arc Model 适配 | CV 精度门：im2col→GEMM 的 cos_sim | 量化精度 |
 | 1.3 | Func Model 适配 | Conv2D golden reference (im2col+MXU+ReLU+Pool) | bit-exact 参考 |
 
