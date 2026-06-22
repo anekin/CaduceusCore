@@ -1,0 +1,526 @@
+{
+  "summary": {
+    "target_tok_s": 20,
+    "target_tok_s_1_5b": 25,
+    "models_evaluated": 5,
+    "chip_power_limit_w": 12,
+    "chip_area_limit_mm2": 40,
+    "m2_power_limit_w": 10,
+    "pcie_power_limit_w": 15,
+    "dram_efficiency": 0.85
+  },
+  "models": [
+    {
+      "alias": "qwen2.5-1.5b",
+      "params": 1310195712.0,
+      "hidden": 1536,
+      "layers": 28,
+      "best_m1": {
+        "config": "bloc 128×256 INT2 800MHz WC HBM3-1024b",
+        "tok_s": 1986.2,
+        "area_mm2": 189.2,
+        "power_w": 77.0,
+        "tok_per_w": 25.794805194805196,
+        "tok_per_mm2": 10.497885835095138,
+        "pass_fail": "Pass"
+      },
+      "best_m2": {
+        "config": "bloc 128×256 INT2 800MHz WC HBM3-1024b",
+        "tok_s": 1982.9,
+        "area_mm2": 189.2,
+        "power_w": 77.0,
+        "tok_per_w": 25.75194805194805,
+        "tok_per_mm2": 10.480443974630022,
+        "pass_fail": "Pass"
+      },
+      "m2_10w": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 124.7,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 12.989583333333334,
+        "tok_per_mm2": 4.421985815602837,
+        "pass_fail": "Pass"
+      },
+      "chip_12w_40mm2": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 124.7,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 12.989583333333334,
+        "tok_per_mm2": 4.421985815602837,
+        "pass_fail": "Pass"
+      },
+      "pcie_15w": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-128b",
+        "tok_s": 248.5,
+        "area_mm2": 35.2,
+        "power_w": 12.6,
+        "tok_per_w": 19.72222222222222,
+        "tok_per_mm2": 7.05965909090909,
+        "pass_fail": "Pass"
+      },
+      "bottleneck": "DRAM bandwidth wall"
+    },
+    {
+      "alias": "qwen2.5-3b",
+      "params": 2605711360.0,
+      "hidden": 2560,
+      "layers": 28,
+      "best_m1": {
+        "config": "bloc 128×256 INT2 800MHz WC HBM3-1024b",
+        "tok_s": 984.4,
+        "area_mm2": 189.2,
+        "power_w": 77.0,
+        "tok_per_w": 12.784415584415584,
+        "tok_per_mm2": 5.202959830866808,
+        "pass_fail": "Pass"
+      },
+      "best_m2": {
+        "config": "bloc 128×256 INT2 800MHz  HBM3-1024b",
+        "tok_s": 980.9,
+        "area_mm2": 189.2,
+        "power_w": 77.0,
+        "tok_per_w": 12.738961038961039,
+        "tok_per_mm2": 5.18446088794926,
+        "pass_fail": "Pass"
+      },
+      "m2_10w": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 60.2,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 6.270833333333334,
+        "tok_per_mm2": 2.1347517730496457,
+        "pass_fail": "Pass"
+      },
+      "chip_12w_40mm2": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 60.2,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 6.270833333333334,
+        "tok_per_mm2": 2.1347517730496457,
+        "pass_fail": "Pass"
+      },
+      "pcie_15w": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-128b",
+        "tok_s": 120.3,
+        "area_mm2": 35.2,
+        "power_w": 12.6,
+        "tok_per_w": 9.547619047619047,
+        "tok_per_mm2": 3.417613636363636,
+        "pass_fail": "Pass"
+      },
+      "bottleneck": "DRAM bandwidth wall"
+    },
+    {
+      "alias": "qwen2.5-7b",
+      "params": 6525288448.0,
+      "hidden": 3584,
+      "layers": 28,
+      "best_m1": {
+        "config": "bloc 128×256 INT2 800MHz  HBM3-1024b",
+        "tok_s": 415.8,
+        "area_mm2": 189.2,
+        "power_w": 77.0,
+        "tok_per_w": 5.4,
+        "tok_per_mm2": 2.1976744186046515,
+        "pass_fail": "Pass"
+      },
+      "best_m2": {
+        "config": "bloc 128×256 INT2 800MHz  HBM3-1024b",
+        "tok_s": 415.0,
+        "area_mm2": 189.2,
+        "power_w": 77.0,
+        "tok_per_w": 5.3896103896103895,
+        "tok_per_mm2": 2.1934460887949263,
+        "pass_fail": "Pass"
+      },
+      "m2_10w": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 25.1,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 2.6145833333333335,
+        "tok_per_mm2": 0.8900709219858157,
+        "pass_fail": "Pass"
+      },
+      "chip_12w_40mm2": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 25.1,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 2.6145833333333335,
+        "tok_per_mm2": 0.8900709219858157,
+        "pass_fail": "Pass"
+      },
+      "pcie_15w": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-128b",
+        "tok_s": 50.2,
+        "area_mm2": 35.2,
+        "power_w": 12.6,
+        "tok_per_w": 3.9841269841269846,
+        "tok_per_mm2": 1.4261363636363635,
+        "pass_fail": "Pass"
+      },
+      "bottleneck": "DRAM bandwidth wall"
+    },
+    {
+      "alias": "qwen3-8b",
+      "params": 6039797760.0,
+      "hidden": 4096,
+      "layers": 32,
+      "best_m1": {
+        "config": "bloc 128×256 INT2 800MHz  HBM3-1024b",
+        "tok_s": 448.1,
+        "area_mm2": 189.2,
+        "power_w": 77.0,
+        "tok_per_w": 5.8194805194805195,
+        "tok_per_mm2": 2.368393234672305,
+        "pass_fail": "Pass"
+      },
+      "best_m2": {
+        "config": "bloc 128×256 INT2 800MHz WC HBM3-1024b",
+        "tok_s": 446.8,
+        "area_mm2": 189.2,
+        "power_w": 77.0,
+        "tok_per_w": 5.802597402597403,
+        "tok_per_mm2": 2.3615221987315014,
+        "pass_fail": "Pass"
+      },
+      "m2_10w": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 27.1,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 2.822916666666667,
+        "tok_per_mm2": 0.9609929078014185,
+        "pass_fail": "Pass"
+      },
+      "chip_12w_40mm2": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 27.1,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 2.822916666666667,
+        "tok_per_mm2": 0.9609929078014185,
+        "pass_fail": "Pass"
+      },
+      "pcie_15w": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-128b",
+        "tok_s": 54.2,
+        "area_mm2": 35.2,
+        "power_w": 12.6,
+        "tok_per_w": 4.301587301587302,
+        "tok_per_mm2": 1.5397727272727273,
+        "pass_fail": "Pass"
+      },
+      "bottleneck": "DRAM bandwidth wall"
+    },
+    {
+      "alias": "gemma-4-12b",
+      "params": 10066329600.0,
+      "hidden": 4096,
+      "layers": 40,
+      "best_m1": {
+        "config": "bloc 128×256 INT2 800MHz WC HBM3-1024b",
+        "tok_s": 269.8,
+        "area_mm2": 189.2,
+        "power_w": 77.0,
+        "tok_per_w": 3.503896103896104,
+        "tok_per_mm2": 1.4260042283298098,
+        "pass_fail": "Pass"
+      },
+      "best_m2": {
+        "config": "bloc 128×256 INT2 800MHz  HBM3-1024b",
+        "tok_s": 268.9,
+        "area_mm2": 189.2,
+        "power_w": 77.0,
+        "tok_per_w": 3.492207792207792,
+        "tok_per_mm2": 1.4212473572938689,
+        "pass_fail": "Pass"
+      },
+      "m2_10w": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 16.3,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 1.6979166666666667,
+        "tok_per_mm2": 0.5780141843971631,
+        "pass_fail": "Fail"
+      },
+      "chip_12w_40mm2": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 16.3,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 1.6979166666666667,
+        "tok_per_mm2": 0.5780141843971631,
+        "pass_fail": "Fail"
+      },
+      "pcie_15w": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-128b",
+        "tok_s": 32.5,
+        "area_mm2": 35.2,
+        "power_w": 12.6,
+        "tok_per_w": 2.5793650793650795,
+        "tok_per_mm2": 0.9232954545454545,
+        "pass_fail": "Pass"
+      },
+      "bottleneck": "DRAM bandwidth wall"
+    }
+  ],
+  "best_m1": {
+    "qwen2.5-1.5b": {
+      "config": "bloc 128×256 INT2 800MHz WC HBM3-1024b",
+      "tok_s": 1986.2,
+      "area_mm2": 189.2,
+      "power_w": 77.0,
+      "tok_per_w": 25.794805194805196,
+      "tok_per_mm2": 10.497885835095138,
+      "pass_fail": "Pass"
+    },
+    "qwen2.5-3b": {
+      "config": "bloc 128×256 INT2 800MHz WC HBM3-1024b",
+      "tok_s": 984.4,
+      "area_mm2": 189.2,
+      "power_w": 77.0,
+      "tok_per_w": 12.784415584415584,
+      "tok_per_mm2": 5.202959830866808,
+      "pass_fail": "Pass"
+    },
+    "qwen2.5-7b": {
+      "config": "bloc 128×256 INT2 800MHz  HBM3-1024b",
+      "tok_s": 415.8,
+      "area_mm2": 189.2,
+      "power_w": 77.0,
+      "tok_per_w": 5.4,
+      "tok_per_mm2": 2.1976744186046515,
+      "pass_fail": "Pass"
+    },
+    "qwen3-8b": {
+      "config": "bloc 128×256 INT2 800MHz  HBM3-1024b",
+      "tok_s": 448.1,
+      "area_mm2": 189.2,
+      "power_w": 77.0,
+      "tok_per_w": 5.8194805194805195,
+      "tok_per_mm2": 2.368393234672305,
+      "pass_fail": "Pass"
+    },
+    "gemma-4-12b": {
+      "config": "bloc 128×256 INT2 800MHz WC HBM3-1024b",
+      "tok_s": 269.8,
+      "area_mm2": 189.2,
+      "power_w": 77.0,
+      "tok_per_w": 3.503896103896104,
+      "tok_per_mm2": 1.4260042283298098,
+      "pass_fail": "Pass"
+    }
+  },
+  "best_m2": {
+    "qwen2.5-1.5b": {
+      "config": "bloc 128×256 INT2 800MHz WC HBM3-1024b",
+      "tok_s": 1982.9,
+      "area_mm2": 189.2,
+      "power_w": 77.0,
+      "tok_per_w": 25.75194805194805,
+      "tok_per_mm2": 10.480443974630022,
+      "pass_fail": "Pass"
+    },
+    "qwen2.5-3b": {
+      "config": "bloc 128×256 INT2 800MHz  HBM3-1024b",
+      "tok_s": 980.9,
+      "area_mm2": 189.2,
+      "power_w": 77.0,
+      "tok_per_w": 12.738961038961039,
+      "tok_per_mm2": 5.18446088794926,
+      "pass_fail": "Pass"
+    },
+    "qwen2.5-7b": {
+      "config": "bloc 128×256 INT2 800MHz  HBM3-1024b",
+      "tok_s": 415.0,
+      "area_mm2": 189.2,
+      "power_w": 77.0,
+      "tok_per_w": 5.3896103896103895,
+      "tok_per_mm2": 2.1934460887949263,
+      "pass_fail": "Pass"
+    },
+    "qwen3-8b": {
+      "config": "bloc 128×256 INT2 800MHz WC HBM3-1024b",
+      "tok_s": 446.8,
+      "area_mm2": 189.2,
+      "power_w": 77.0,
+      "tok_per_w": 5.802597402597403,
+      "tok_per_mm2": 2.3615221987315014,
+      "pass_fail": "Pass"
+    },
+    "gemma-4-12b": {
+      "config": "bloc 128×256 INT2 800MHz  HBM3-1024b",
+      "tok_s": 268.9,
+      "area_mm2": 189.2,
+      "power_w": 77.0,
+      "tok_per_w": 3.492207792207792,
+      "tok_per_mm2": 1.4212473572938689,
+      "pass_fail": "Pass"
+    }
+  },
+  "product_matrix": {
+    "m2_10w": {
+      "qwen2.5-1.5b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 124.7,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 12.989583333333334,
+        "tok_per_mm2": 4.421985815602837,
+        "pass_fail": "Pass"
+      },
+      "qwen2.5-3b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 60.2,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 6.270833333333334,
+        "tok_per_mm2": 2.1347517730496457,
+        "pass_fail": "Pass"
+      },
+      "qwen2.5-7b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 25.1,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 2.6145833333333335,
+        "tok_per_mm2": 0.8900709219858157,
+        "pass_fail": "Pass"
+      },
+      "qwen3-8b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 27.1,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 2.822916666666667,
+        "tok_per_mm2": 0.9609929078014185,
+        "pass_fail": "Pass"
+      },
+      "gemma-4-12b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 16.3,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 1.6979166666666667,
+        "tok_per_mm2": 0.5780141843971631,
+        "pass_fail": "Fail"
+      }
+    },
+    "chip_12w_40mm2": {
+      "qwen2.5-1.5b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 124.7,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 12.989583333333334,
+        "tok_per_mm2": 4.421985815602837,
+        "pass_fail": "Pass"
+      },
+      "qwen2.5-3b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 60.2,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 6.270833333333334,
+        "tok_per_mm2": 2.1347517730496457,
+        "pass_fail": "Pass"
+      },
+      "qwen2.5-7b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 25.1,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 2.6145833333333335,
+        "tok_per_mm2": 0.8900709219858157,
+        "pass_fail": "Pass"
+      },
+      "qwen3-8b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 27.1,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 2.822916666666667,
+        "tok_per_mm2": 0.9609929078014185,
+        "pass_fail": "Pass"
+      },
+      "gemma-4-12b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-64b",
+        "tok_s": 16.3,
+        "area_mm2": 28.2,
+        "power_w": 9.6,
+        "tok_per_w": 1.6979166666666667,
+        "tok_per_mm2": 0.5780141843971631,
+        "pass_fail": "Fail"
+      }
+    },
+    "pcie_15w": {
+      "qwen2.5-1.5b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-128b",
+        "tok_s": 248.5,
+        "area_mm2": 35.2,
+        "power_w": 12.6,
+        "tok_per_w": 19.72222222222222,
+        "tok_per_mm2": 7.05965909090909,
+        "pass_fail": "Pass"
+      },
+      "qwen2.5-3b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-128b",
+        "tok_s": 120.3,
+        "area_mm2": 35.2,
+        "power_w": 12.6,
+        "tok_per_w": 9.547619047619047,
+        "tok_per_mm2": 3.417613636363636,
+        "pass_fail": "Pass"
+      },
+      "qwen2.5-7b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-128b",
+        "tok_s": 50.2,
+        "area_mm2": 35.2,
+        "power_w": 12.6,
+        "tok_per_w": 3.9841269841269846,
+        "tok_per_mm2": 1.4261363636363635,
+        "pass_fail": "Pass"
+      },
+      "qwen3-8b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-128b",
+        "tok_s": 54.2,
+        "area_mm2": 35.2,
+        "power_w": 12.6,
+        "tok_per_w": 4.301587301587302,
+        "tok_per_mm2": 1.5397727272727273,
+        "pass_fail": "Pass"
+      },
+      "gemma-4-12b": {
+        "config": "bloc 64×64 INT2 800MHz  LPDDR5-128b",
+        "tok_s": 32.5,
+        "area_mm2": 35.2,
+        "power_w": 12.6,
+        "tok_per_w": 2.5793650793650795,
+        "tok_per_mm2": 0.9232954545454545,
+        "pass_fail": "Pass"
+      }
+    }
+  },
+  "cv": {
+    "best_fps": {
+      "config": "tens 64×64 INT2 800MHz  HBM3-1024b",
+      "fps": 1243.348087730641,
+      "area_mm2": 133.2,
+      "power_w": 54.6
+    },
+    "best_area_efficient": {
+      "config": "tens 64×64 INT2 800MHz  LPDDR5-64b",
+      "fps": 835.4400346206351,
+      "area_mm2": 28.2,
+      "fps_per_mm2": 29.625533142575712
+    },
+    "sram_spill_mb": 0
+  }
+}
