@@ -1,8 +1,14 @@
-"""Engine calibration tests — BlockEngine broadcast pipeline model."""
+"""Engine calibration tests — BlockEngine broadcast pipeline model + SystolicEngine regression."""
+
+import json
+import subprocess
+from pathlib import Path
 
 import pytest
 
 from engine.mac_engine import create_engine
+from models.mxu import MXUModel
+from model_specs import get_spec
 
 
 _BASE_CONFIG = {
@@ -87,4 +93,105 @@ def test_block_weight_cache():
     # Pair is still DMA-bound for the representative decode config.
     assert r_pair.bottleneck == "dma", (
         f"Expected DMA-bound weight-cache pair, got {r_pair.bottleneck}"
+    )
+
+
+_SYSTOLIC_CONFIG = {
+    "mxu": {
+        "type": "systolic",
+        "array_height": 128,
+        "array_width": 128,
+        "frequency_mhz": 1000,
+        "weight_precision_bits": 4,
+        "activation_precision_bits": 8,
+        "ops_per_mac": 2,
+        "double_buffer": True,
+    },
+    "memory": {
+        "bandwidth_bytes_per_cycle": 51.2,
+        "dram_efficiency": 0.85,
+    },
+}
+
+
+def _qwen3b_geometries(M: int):
+    """Yield (name, M, K, N) for each of the 7 GEMM ops in Qwen2.5-3B.
+
+    Shapes match the trace produced by npu_sim.generate_qwen3b_trace:
+      - Q_proj: (M, hidden, qkv_dim)     — H=2560, QKV=4096
+      - K_proj: (M, hidden, kv_dim)      — KV=256
+      - V_proj: (M, hidden, kv_dim)
+      - O_proj: (M, qkv_dim, hidden)
+      - FFN_gate: (M, hidden, intermediate)  — I=9728
+      - FFN_up: (M, hidden, intermediate)
+      - FFN_down: (M, intermediate, hidden)
+    """
+    spec = get_spec("qwen2.5-3b")
+    H = spec.hidden
+    I = spec.intermediate
+    QKV = spec.qkv_dim
+    KV = spec.kv_heads * spec.head_dim
+
+    return [
+        ("Q_proj", M, H, QKV),
+        ("K_proj", M, H, KV),
+        ("V_proj", M, H, KV),
+        ("O_proj", M, QKV, H),
+        ("FFN_gate", M, H, I),
+        ("FFN_up", M, H, I),
+        ("FFN_down", M, I, H),
+    ]
+
+
+def _make_engines():
+    systolic = create_engine(_SYSTOLIC_CONFIG)
+    mxumodel = MXUModel(_SYSTOLIC_CONFIG)
+    return systolic, mxumodel
+
+
+def test_systolic_vs_mxumodel_decode():
+    """SystolicEngine decode (M=1, M=2) total_cycles match MXUModel byte-for-byte."""
+    systolic, mxumodel = _make_engines()
+
+    for M in (1, 2):
+        for name, M_used, K, N in _qwen3b_geometries(M):
+            r_sys = systolic.estimate(M_used, K, N)
+            r_mxu = mxumodel.estimate(M_used, K, N)
+
+            assert r_sys.total_cycles == r_mxu.total_cycles, (
+                f"[{name} M={M}] SystolicEngine total_cycles={r_sys.total_cycles} "
+                f"≠ MXUModel total_cycles={r_mxu.total_cycles}"
+            )
+
+
+def test_systolic_vs_mxumodel_prefill():
+    """SystolicEngine prefill (M=128) total_cycles match MXUModel byte-for-byte."""
+    systolic, mxumodel = _make_engines()
+
+    for name, M_used, K, N in _qwen3b_geometries(128):
+        r_sys = systolic.estimate(M_used, K, N)
+        r_mxu = mxumodel.estimate(M_used, K, N)
+
+        assert r_sys.total_cycles == r_mxu.total_cycles, (
+            f"[{name}] SystolicEngine total_cycles={r_sys.total_cycles} "
+            f"≠ MXUModel total_cycles={r_mxu.total_cycles}"
+        )
+
+
+def test_systolic_npu_sim_baseline():
+    """npu_sim.py --engine systolic --json produces decode tok/s near 20.0."""
+    sim_dir = Path(__file__).resolve().parent.parent
+    result = subprocess.run(
+        ["python", "npu_sim.py", "--engine", "systolic", "--json"],
+        cwd=str(sim_dir),
+        capture_output=True, text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, f"npu_sim.py failed:\n{result.stderr}"
+
+    output = json.loads(result.stdout)
+    tok_per_s = output["decode"]["tok_per_s"]
+
+    assert tok_per_s == pytest.approx(20.0, rel=0.01), (
+        f"Systolic decode tok/s={tok_per_s} not within ±1% of 20.0"
     )
