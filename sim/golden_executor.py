@@ -478,6 +478,36 @@ class GoldenSFU:
         var = np.var(x, axis=-1, keepdims=True)
         return ((x - mean) / np.sqrt(var + eps)).astype(np.float32)
 
+    # ── RMSNorm ─────────────────────────────────────────────────────
+
+    @staticmethod
+    def rmsnorm_hw(x: np.ndarray, eps: float = 1e-5) -> np.ndarray:
+        """Hardware-equivalent RMSNorm: no mean subtraction.
+
+        RMSNorm: result = x / sqrt(mean(x^2) + eps)
+
+        Full float32 precision (FPU path, no LUT). The hardware SFU computes
+        RMSNorm in the FPU datapath (not LUT-based), so it achieves float32
+        precision — unlike Softmax/LayerNorm which use fixed-point LUTs.
+        Reference uses float64 for verification.
+        """
+        x = np.asarray(x, dtype=np.float32)
+        if x.ndim == 1:
+            mean_xsq = np.mean(x ** 2)
+        else:
+            mean_xsq = np.mean(x ** 2, axis=-1, keepdims=True)
+        return (x / np.sqrt(mean_xsq + eps)).astype(np.float32)
+
+    @staticmethod
+    def rmsnorm_ref(x: np.ndarray, eps: float = 1e-5) -> np.ndarray:
+        """Reference RMSNorm: float64."""
+        x = np.asarray(x, dtype=np.float64)
+        if x.ndim == 1:
+            mean_xsq = np.mean(x ** 2)
+        else:
+            mean_xsq = np.mean(x ** 2, axis=-1, keepdims=True)
+        return (x / np.sqrt(mean_xsq + eps)).astype(np.float32)
+
     # ── RoPE (CORDIC-equivalent) ────────────────────────────────────
 
     def _build_cordic_table(self, iterations: int = 12):

@@ -67,6 +67,7 @@ def get_scale_min_k4_vectorized(scales_bytes, j_indices):
 def dequantize_q6_k(raw_bytes: bytes) -> np.ndarray:
     """Dequantize Q6_K block encoding to float32. Vectorized.
 
+    Matches llama.cpp ggml-quants.c dequantize_row_q6_K layout:
     Q6_K block: 210 bytes → 256 floats
     formula: y[i] = d * scales[i//16] * (q[i] - 32)
     """
@@ -77,38 +78,35 @@ def dequantize_q6_k(raw_bytes: bytes) -> np.ndarray:
     if n_blocks == 0 or len(raw_bytes) % BLOCK_SIZE != 0:
         raise ValueError(f"Invalid Q6_K data: {len(raw_bytes)} bytes")
 
-    raw = np.frombuffer(raw_bytes, dtype=np.uint8)
-
-    # Reshape to (n_blocks, BLOCK_SIZE)
-    ql = raw[0::BLOCK_SIZE][:, None]  # Wrong — need proper reshape
-    # Actually, let's use a different approach
-
-    # Build full q values (n_blocks, 256) using numpy indexing
-    ql = raw.reshape(n_blocks, BLOCK_SIZE)[:, :128]  # (n_blocks, 128)
-    qh = raw.reshape(n_blocks, BLOCK_SIZE)[:, 128:192]  # (n_blocks, 64)
-    scales_raw = raw.reshape(n_blocks, BLOCK_SIZE)[:, 192:208]  # (n_blocks, 16)
-    # d is bytes 208-209
-    d_bytes = raw.reshape(n_blocks, BLOCK_SIZE)[:, 208:210]
+    data = np.frombuffer(raw_bytes, dtype=np.uint8).reshape(n_blocks, BLOCK_SIZE)
+    ql = data[:, :128].astype(np.uint8)          # (n_blocks, 128)
+    qh = data[:, 128:192].astype(np.uint8)       # (n_blocks, 64)
+    scales_raw = data[:, 192:208].astype(np.int8)  # (n_blocks, 16)
+    d_bytes = data[:, 208:210]
     d_uint16 = d_bytes[:, 0].astype(np.uint16) | (d_bytes[:, 1].astype(np.uint16) << 8)
-    d = fp16_to_fp32(d_uint16)  # (n_blocks,)
+    d = fp16_to_fp32(d_uint16).astype(np.float32)  # (n_blocks,)
 
-    # Vectorized q extraction for all 256 positions
-    # For each i: q_low = (ql[i//2] >> (4*(i%2))) & 0xF
-    #             q_high = (qh[i//4] >> (2*(i%4))) & 0x3
-    i_low_idx = np.arange(256) // 2   # [0,0,1,1,2,2,...127,127]
-    i_low_shift = 4 * (np.arange(256) % 2)  # [0,4,0,4,...]
-    i_high_idx = np.arange(256) // 4  # [0,0,0,0,1,1,1,1,...63,63,63,63]
-    i_high_shift = 2 * (np.arange(256) % 4)  # [0,2,0,2,0,2,0,2,...]
+    output = np.zeros((n_blocks, QK_K), dtype=np.float32)
+    l_idx = np.arange(32)
+    is_idx = (l_idx // 16).astype(np.int64)
 
-    q_low = (ql[:, i_low_idx] >> i_low_shift) & 0xF
-    q_high = ((qh[:, i_high_idx] >> i_high_shift) & 0x3) << 4
-    q = (q_low | q_high).astype(np.float32)  # (n_blocks, 256)
+    for c in range(2):  # two 128-element chunks per block
+        ql_chunk = ql[:, c * 64:(c + 1) * 64]
+        qh_chunk = qh[:, c * 32:(c + 1) * 32]
+        sc_chunk = scales_raw[:, c * 8:(c + 1) * 8]
+        base = c * 128
 
-    # scales: repeat each scale 16 times
-    sc = scales_raw[:, np.arange(256) // 16].astype(np.float32)  # (n_blocks, 256)
+        q1 = ((ql_chunk[:, l_idx] & 0xF) | (((qh_chunk[:, l_idx] >> 0) & 3) << 4)).astype(np.float32) - 32.0
+        q2 = ((ql_chunk[:, l_idx + 32] & 0xF) | (((qh_chunk[:, l_idx] >> 2) & 3) << 4)).astype(np.float32) - 32.0
+        q3 = ((ql_chunk[:, l_idx] >> 4) | (((qh_chunk[:, l_idx] >> 4) & 3) << 4)).astype(np.float32) - 32.0
+        q4 = ((ql_chunk[:, l_idx + 32] >> 4) | (((qh_chunk[:, l_idx] >> 6) & 3) << 4)).astype(np.float32) - 32.0
 
-    result = d[:, np.newaxis] * sc * (q - 32.0)
-    return result.reshape(-1).astype(np.float32)
+        output[:, base + l_idx] = d[:, None] * sc_chunk[:, is_idx + 0] * q1
+        output[:, base + l_idx + 32] = d[:, None] * sc_chunk[:, is_idx + 2] * q2
+        output[:, base + l_idx + 64] = d[:, None] * sc_chunk[:, is_idx + 4] * q3
+        output[:, base + l_idx + 96] = d[:, None] * sc_chunk[:, is_idx + 6] * q4
+
+    return output.reshape(-1).astype(np.float32)
 
 
 def dequantize_q4_k(raw_bytes: bytes) -> np.ndarray:

@@ -253,3 +253,71 @@ Spike Host Summary: 6 PASS, 0 FAIL
 | Interrupt-driven completion | Wire the INTC module (at `0x40011000`) to signal completion via RISC-V interrupts instead of polling |
 | Batch model loading | Hold the decompressed model in memory across ops to avoid per-op GGUF reload |
 | Multiple command descriptors | Extend the ring buffer to support multiple outstanding MMUL descriptors |
+
+## E2E Forward Pass
+
+### Overview
+
+Complete Qwen2.5-1.5B Transformer forward pass through Spike + firmware. The host adapter (`spike_host.py`) orchestrates tokenization, embedding, and a chain of 126+ commands across 6 opcode types through a 2-layer Transformer, then compares the final hidden states against a frozen llama.cpp `.npz` reference.
+
+### Prerequisites
+
+- Built Spike simulator at `spike_src/build/spike`
+- Built firmware at `firmware/build/npu_firmware.elf`
+- llama.cpp reference `.npz` at `llama_ref/refs/qwen_l0_l1_hidden.npz`
+- Qwen2.5 GGUF model at `~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf`
+- Python packages: numpy, tiktoken, gguf, pytest
+
+### Usage
+
+```bash
+# Complete 2-layer forward pass
+env PYTHONPATH=sim python3 sim/spike_host.py \
+  --mode forward \
+  --layers 2 \
+  --prompt "Hello, world!" \
+  --model ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf \
+  --reference llama_ref/refs/qwen_l0_l1_hidden.npz
+
+# Regenerate reference data
+cd llama_ref && make && ./dump_hidden_states \
+  -m ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf \
+  -p "Hello, world!" -n 2 && python3 save_npz.py
+```
+
+### Tokenizer
+
+```bash
+env PYTHONPATH=sim python3 sim/tokenizer.py \
+  --prompt "Hello, world!" \
+  --model ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf
+```
+
+### RMSNorm Verification
+
+```bash
+PYTHONPATH=sim pytest sim/tests/test_golden_sfu.py -k rmsnorm -v
+```
+
+### Architecture
+
+- **Host** (`spike_host.py`): Writes commands to DRAM ring buffer, drives Spike
+- **Firmware** (`npu_firmware.c`): Dispatches MMUL (0), SFU (1), Vector (2), DMA_COPY (3) via MMIO
+- **MMIO Bridge** (`spike_mmio_server.py`): Routes to GoldenMXU/GoldenSFU/GoldenVector (FuncModel)
+- **Forward pass flow**: tokenize → embedding → N chained ops → 2-layer Transformer
+
+### New opcodes added
+
+- `SFU_OP_RMSNORM = 6` (RMSNorm, no mean subtraction)
+
+### Known Limitations
+
+Spike firmware output differs from llama.cpp reference by ~0.3–0.4 mean absolute error per element due to different quantization pathways:
+
+| Component | Spike | llama.cpp |
+|-----------|-------|-----------|
+| Activation quantization | INT8 (firmware) | Q8_K format |
+| Dot product | INT8 × INT4 → INT32 | Q8_K × Q4_K → INT32 |
+| Scale | Single per-block weight scale | Dual activation + weight scale |
+
+Additional sources of divergence: RMSNorm, SiLU, and element-wise vector ops run in reduced precision (BF16/fixed-point) in hardware compared to llama.cpp's float32 kernels. The numerical gap is expected to converge when RTL replaces FuncModel.

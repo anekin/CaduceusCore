@@ -54,7 +54,7 @@ class MXU:
 class SFU:
     BASE = Addr.SFU_BASE
 
-    CTRL    = 0x00   # R/W: [3:0]=OP (0=SOFTMAX,1=LAYERNORM,2=GELU,3=RELU,4=SILU,5=ROPE)
+    CTRL    = 0x00   # R/W: [3:0]=OP (0=SOFTMAX,1=LAYERNORM,2=GELU,3=RELU,4=SILU,5=ROPE,6=RMSNORM)
     CMD     = 0x04   # W:   bit[0]=START
     STATUS  = 0x08   # R:   bit[0]=BUSY, bit[1]=DONE
     I_ADDR  = 0x0C   # R/W: SRAM 中输入起始地址

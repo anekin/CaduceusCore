@@ -53,6 +53,7 @@ typedef struct {
 #define SFU_OP_RELU      3
 #define SFU_OP_SILU      4
 #define SFU_OP_ROPE      5
+#define SFU_OP_RMSNORM   6
 
 /* ── VECTOR Registers ───────────────────────────────────────────── */
 

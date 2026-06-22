@@ -17,6 +17,11 @@
 #define SRAM_BASE  0x20000000UL
 #define SRAM_SIZE  0x00400000UL   // 4 MB
 
+/* Vector 运算使用的固定 SRAM scratch 区域 */
+#define VEC_A_SRAM (SRAM_BASE + 0x000000UL)
+#define VEC_B_SRAM (SRAM_BASE + 0x100000UL)
+#define VEC_O_SRAM (SRAM_BASE + 0x200000UL)
+
 /* ── Ring Buffer 配置 ────────────────────────────────────────────── */
 
 #define RING_BUF_ADDR       DRAM_BASE   // Ring Buffer 基址 (DRAM 数据区开头)
@@ -57,6 +62,24 @@ typedef struct __attribute__((packed)) {
     uint32_t pos;          // position for ROPE
     uint32_t _pad[4];
 } sfu_desc_t;
+
+/* 操作描述符 — Vector */
+typedef struct __attribute__((packed)) {
+    uint32_t op;
+    uint32_t a_addr;
+    uint32_t b_addr;
+    uint32_t o_addr;
+    uint32_t dim;
+    uint32_t _pad[3];
+} vector_desc_t;
+
+/* 操作描述符 — DMA_COPY */
+typedef struct __attribute__((packed)) {
+    uint32_t src_addr;
+    uint32_t dst_addr;
+    uint32_t size;
+    uint32_t _pad[5];
+} dma_copy_desc_t;
 
 /* 完成条目 */
 typedef struct __attribute__((packed)) {
@@ -167,6 +190,22 @@ static void read_sfu_desc(uint32_t desc_addr, sfu_desc_t *desc) {
     desc->pos         = src[7];
 }
 
+static void read_vector_desc(uint32_t desc_addr, vector_desc_t *desc) {
+    volatile uint32_t *src = (volatile uint32_t *)(uintptr_t)desc_addr;
+    desc->op     = src[0];
+    desc->a_addr = src[1];
+    desc->b_addr = src[2];
+    desc->o_addr = src[3];
+    desc->dim    = src[4];
+}
+
+static void read_dma_copy_desc(uint32_t desc_addr, dma_copy_desc_t *desc) {
+    volatile uint32_t *src = (volatile uint32_t *)(uintptr_t)desc_addr;
+    desc->src_addr = src[0];
+    desc->dst_addr = src[1];
+    desc->size     = src[2];
+}
+
 /* ── 命令消费 ────────────────────────────────────────────────────── */
 
 static cmd_entry_t read_cmd_entry(uint32_t head) {
@@ -216,6 +255,24 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
         dma_copy(desc.output_sram, desc.output_addr, desc.size, 1);
         return 0;
     }
+    case 2: {  /* Vector */
+        vector_desc_t desc;
+        read_vector_desc(cmd->desc_addr, &desc);
+
+        uint32_t size = desc.dim * sizeof(uint32_t);
+        dma_copy(desc.a_addr, VEC_A_SRAM, size, 0);
+        dma_copy(desc.b_addr, VEC_B_SRAM, size, 0);
+        vector_start(desc.op, VEC_A_SRAM, VEC_B_SRAM, VEC_O_SRAM, desc.dim);
+        dma_copy(VEC_O_SRAM, desc.o_addr, size, 1);
+        return 0;
+    }
+    case 3: {  /* DMA_COPY */
+        dma_copy_desc_t desc;
+        read_dma_copy_desc(cmd->desc_addr, &desc);
+
+        dma_copy(desc.src_addr, desc.dst_addr, desc.size, 0);
+        return 0;
+    }
     default:
         return 1;  /* unknown opcode */
     }
@@ -235,9 +292,8 @@ static void handle_irq(void) {
 /* ── 主循环 ──────────────────────────────────────────────────────── */
 
 void firmware_main(void) {
-    /* 初始化 Doorbell — 自触发第一条命令 */
+    /* 初始化 Doorbell — 等待 Host 设置 HOST_TAIL */
     NPU_DB->NPU_HEAD = 0;
-    NPU_DB->HOST_TAIL = 1;  /* 模拟 Host 已写入一条命令 */
 
     /* 使能中断 */
     NPU_INTC->ENABLE = 0xFF;  /* 全部使能 */

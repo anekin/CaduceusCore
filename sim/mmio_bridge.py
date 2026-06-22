@@ -68,10 +68,10 @@ class MMIOBridge:
                 M = (self._status.get(MXU.BASE + MXU.DIM0, 0)) & 0xFFFF
                 K = (self._status.get(MXU.BASE + MXU.DIM0, 0) >> 16) & 0xFFFF
                 N = self._status.get(MXU.BASE + MXU.DIM1, 0) & 0xFFFF
-                i_addr = self._status.get(MXU.BASE + MXU.I_ADDR, 0)
-                w_addr = self._status.get(MXU.BASE + MXU.W_ADDR, 0)
-                o_addr = self._status.get(MXU.BASE + MXU.O_ADDR, 0)
-                s_addr = self._status.get(MXU.BASE + MXU.SCALE_ADDR, 0)
+                i_addr = self._translate_addr(self._status.get(MXU.BASE + MXU.I_ADDR, 0))
+                w_addr = self._translate_addr(self._status.get(MXU.BASE + MXU.W_ADDR, 0))
+                o_addr = self._translate_addr(self._status.get(MXU.BASE + MXU.O_ADDR, 0))
+                s_addr = self._translate_addr(self._status.get(MXU.BASE + MXU.SCALE_ADDR, 0))
                 sram = self.modules.get('sram', bytearray())
 
                 if sram and M > 0 and K > 0 and N > 0:
@@ -128,8 +128,8 @@ class MMIOBridge:
                 self._status[SFU.BASE + SFU.STATUS] = 1  # BUSY
 
                 sram = self.modules.get('sram')
-                i_addr = self._status.get(SFU.BASE + SFU.I_ADDR, 0)
-                o_addr = self._status.get(SFU.BASE + SFU.O_ADDR, 0)
+                i_addr = self._translate_addr(self._status.get(SFU.BASE + SFU.I_ADDR, 0))
+                o_addr = self._translate_addr(self._status.get(SFU.BASE + SFU.O_ADDR, 0))
                 dim = self._status.get(SFU.BASE + SFU.DIM, 0)
                 length = dim & 0xFFFF
                 head_dim = (dim >> 16) & 0xFFFF
@@ -149,6 +149,8 @@ class MMIOBridge:
                         out = sfu.gelu_hw(inp)
                     elif op in (3, 4): # SiLU / (RELU slot fallback)
                         out = sfu.silu_hw(inp)
+                    elif op == 6:     # RMSNORM
+                        out = sfu.rmsnorm_hw(inp)
                     elif op == 5:     # ROPE
                         half = length // 2
                         q_in = inp[:half]
@@ -190,9 +192,9 @@ class MMIOBridge:
                 self._status[VECTOR.BASE + VECTOR.STATUS] = 1  # BUSY
 
                 sram = self.modules.get('sram')
-                a_addr = self._status.get(VECTOR.BASE + VECTOR.A_ADDR, 0)
-                b_addr = self._status.get(VECTOR.BASE + VECTOR.B_ADDR, 0)
-                o_addr = self._status.get(VECTOR.BASE + VECTOR.O_ADDR, 0)
+                a_addr = self._translate_addr(self._status.get(VECTOR.BASE + VECTOR.A_ADDR, 0))
+                b_addr = self._translate_addr(self._status.get(VECTOR.BASE + VECTOR.B_ADDR, 0))
+                o_addr = self._translate_addr(self._status.get(VECTOR.BASE + VECTOR.O_ADDR, 0))
                 dim = self._status.get(VECTOR.BASE + VECTOR.DIM, 0) & 0xFFFF
                 op = self._status.get(VECTOR.BASE + VECTOR.CTRL, 0) & 0xF
 
@@ -316,7 +318,9 @@ class MMIOBridge:
         """Convert absolute address to buffer offset."""
         if addr >= Addr.DRAM_BASE:
             return addr - Addr.DRAM_BASE
-        return addr  # SRAM starts at 0
+        if 0x20000000 <= addr < 0x20400000:
+            return addr - 0x20000000
+        return addr
 
     def _set_irq(self, module_bit: int):
         base = INTC.BASE

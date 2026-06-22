@@ -1,0 +1,8 @@
+{
+  "name": "Qcur-18 (view) (permuted)",
+  "type": "f32",
+  "ne": [128, 4, 12, 1],
+  "nb": [4, 6144, 512, 24576],
+  "n_elements": 6144,
+  "n_bytes": 24576
+}

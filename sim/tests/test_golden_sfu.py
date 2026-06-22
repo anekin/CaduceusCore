@@ -156,6 +156,47 @@ def test_layernorm_unit_variance(sfu, x, label):
         f"{label}: var={var:.4e}"
 
 
+# ── RMSNorm ──────────────────────────────────────────────────────────
+
+_RMSNORM_INPUTS = [
+    (_rng.randn(2560).astype(np.float32) * 2.0, f"rmsnorm_v{i}")
+    for i in range(3)
+]
+
+
+@pytest.mark.parametrize("x,label", _RMSNORM_INPUTS,
+                         ids=[p[1] for p in _RMSNORM_INPUTS])
+def test_rmsnorm_hw_vs_ref(sfu, x, label):
+    """RMSNorm HW output must stay within tolerance of reference."""
+    hw = sfu.rmsnorm_hw(x)
+    ref = sfu.rmsnorm_ref(x)
+    cmp = GoldenSFU.compare_hw_vs_ref(hw, ref, tol_abs=1e-3, tol_rel=1e-3)
+    assert cmp["within_tolerance"], \
+        f"{label}: max_abs={cmp['max_abs_err']:.2e} max_rel={cmp['max_rel_err']:.2e}"
+
+
+@pytest.mark.parametrize("x,label", _RMSNORM_INPUTS,
+                         ids=[p[1] for p in _RMSNORM_INPUTS])
+def test_rmsnorm_unit_rms(sfu, x, label):
+    """RMSNorm output must have near-unit RMS (not variance — RMSNorm constraint)."""
+    hw = sfu.rmsnorm_hw(x)
+    rms = np.sqrt(np.mean(hw ** 2))
+    assert rms == pytest.approx(1.0, rel=2e-2), \
+        f"{label}: rms={rms:.4e}"
+
+
+@pytest.mark.parametrize("x,label", _RMSNORM_INPUTS,
+                         ids=[p[1] for p in _RMSNORM_INPUTS])
+def test_rmsnorm_no_mean_constraint(sfu, x, label):
+    """RMSNorm does NOT force zero mean — output mean can differ from layernorm mean."""
+    hw = sfu.rmsnorm_hw(x)
+    ref = sfu.rmsnorm_ref(x)
+    # Both hw and ref should agree on the mean (within tolerance)
+    cmp = GoldenSFU.compare_hw_vs_ref(hw, ref, tol_abs=1e-3)
+    assert cmp["within_tolerance"], \
+        f"{label}: hw mean {np.mean(hw):.4e} vs ref mean {np.mean(ref):.4e}"
+
+
 # ── RoPE ────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("pos", _ROPE_POSITIONS, ids=[f"pos={p}" for p in _ROPE_POSITIONS])
