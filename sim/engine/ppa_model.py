@@ -45,6 +45,11 @@ class AreaModel:
         self.crossbar = float(am.get("crossbar_area_mm2", 1.5))
         self.dma_per_ch = float(am.get("dma_channels_area_per_channel_mm2", 0.5))
 
+        # CV-specific hardware units
+        self.im2col_feeder = float(am.get("im2col_feeder_mm2", 0.002))   # scales with array
+        self.pool2d = float(am.get("pool2d_mm2", 0.05))                   # fixed cost
+        self.conv_sfu = float(am.get("conv_sfu_mm2", 0.10))               # fixed cost
+
     def estimate(self, config: Dict[str, Any], engine_type: str) -> float:
         """估算总面积"""
         mac = config.get("mac_engine", {})
@@ -85,10 +90,21 @@ class AreaModel:
         dram_width = int(mem.get("dram_width_bits", 64))
         dram_phy_area = self.dram_phy * (dram_width / 64)
 
-        total = (pe_area + self.sfu + self.riscv + self.pcie +
-                 self.crossbar + l1 + l2 + dma_area + dram_phy_area)
+        # CV hardware units
+        im2col_feeder_area = self.im2col_feeder * scale     # scales with array size
+        pool2d_area = self.pool2d
+        conv_sfu_area = self.conv_sfu
 
-        return round(total, 1)
+        total = (pe_area + self.sfu + self.riscv + self.pcie +
+                 self.crossbar + l1 + l2 + dma_area + dram_phy_area +
+                 im2col_feeder_area + pool2d_area + conv_sfu_area)
+
+        return {
+            "total_mm2": round(total, 1),
+            "im2col_feeder_mm2": im2col_feeder_area,
+            "pool2d_mm2": pool2d_area,
+            "conv_sfu_mm2": conv_sfu_area,
+        }
 
 
 class PowerModel:
@@ -135,5 +151,12 @@ class PowerModel:
         bw_ratio = float(mem.get("bandwidth_gbps", 51.2)) / 51.2
         dram_power = self.dram_phy_power * bw_ratio
 
-        total = logic_power + sram_power + dram_power + 2.0  # +2W misc
+        # CV unit power
+        cv_area = area_model.estimate(config, engine_type)
+        im2col_power = cv_area["im2col_feeder_mm2"] * 0.1    # SRAM-dense logic
+        pool2d_power = cv_area["pool2d_mm2"] * 0.5           # combinational logic
+        conv_sfu_power = cv_area["conv_sfu_mm2"] * 0.3       # LUT + control
+
+        total = (logic_power + sram_power + dram_power + 2.0  # +2W misc
+                 + im2col_power + pool2d_power + conv_sfu_power)
         return round(total, 1)

@@ -29,6 +29,7 @@ class VectorModel:
             "bias": 1,     # element-wise add bias
             "relu": 1,     # max(0, x)
             "mask": 1,     # boolean mask select
+            "multiply_broadcast": 1,  # SE block Mul: scalar broadcast
         }
 
         # DMA bandwidth shared with MXU (SRAM ↔ Vector)

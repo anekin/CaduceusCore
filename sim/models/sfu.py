@@ -39,6 +39,12 @@ class SFUModel:
             "rope": int(sfu.get("pipeline_cycles", {}).get("rope", 12)),
             # unified softmax (kept for backward compat)
             "softmax": int(sfu.get("pipeline_cycles", {}).get("softmax", 8)),
+            # CV-specific ops
+            "h_swish": 4,                                          # clip+add+mul+div pipeline
+            "hard_sigmoid": 3,                                     # clip+add+mul pipeline
+            "global_avg_pool": 8,                                  # reduction tree
+            "maxpool": int(sfu.get("pipeline_cycles", {}).get("maxpool", 3)),
+            "avgpool": int(sfu.get("pipeline_cycles", {}).get("avgpool", 3)),
         }
 
     def estimate(self, op_type: str, num_elements: int) -> int:

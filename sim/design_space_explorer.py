@@ -183,7 +183,8 @@ def evaluate_config(cfg: Dict[str, Any], area_model: AreaModel,
 
     layer_cycles, _ = simulate_layer(cfg)
     tok_s = tok_s_from_layer(layer_cycles)
-    area = area_model.estimate(cfg, engine_type)
+    area_result = area_model.estimate(cfg, engine_type)
+    area = area_result["total_mm2"]
     power = power_model.estimate(area_model, cfg, engine_type)
 
     H = cfg["mac_engine"]["array_height"]

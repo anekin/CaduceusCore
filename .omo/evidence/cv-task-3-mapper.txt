@@ -1,0 +1,3 @@
+PW: M=12544 K=27 N=16 MACs=5419008
+DW: M=50176 K=9 N=1 MACs=451584
+Tiling: best_util=12.5%

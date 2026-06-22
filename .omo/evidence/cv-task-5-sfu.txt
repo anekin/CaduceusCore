@@ -1,0 +1,21 @@
+CV Task 5 — SFU + Vector CV operation latencies
+=================================================
+
+SFUModel — added to latency_map:
+  h_swish:         4 cycles (clip+add+mul+div pipeline)
+  hard_sigmoid:    3 cycles (clip+add+mul pipeline)
+  global_avg_pool: 8 cycles (reduction tree)
+  maxpool:         3 cycles (from config)
+  avgpool:         3 cycles (from config)
+
+VectorModel — added to op_latency:
+  multiply_broadcast: 1 cycle (SE block Mul: scalar broadcast)
+
+Verification (npu_config.yaml: width=128, 256 elements):
+  SFU h_swish        :  8 cycles  (= ceil(256/128) * 4)
+  SFU hard_sigmoid   :  6 cycles  (= ceil(256/128) * 3)
+  SFU global_avg_pool: 16 cycles  (= ceil(256/128) * 8)
+  SFU maxpool        :  6 cycles  (= ceil(256/128) * 3)
+  SFU avgpool        :  6 cycles  (= ceil(256/128) * 3)
+  VEC multiply_broadcast: 2 cycles (= ceil(256/128) * 1)
+All CV ops supported — all assertions pass.
