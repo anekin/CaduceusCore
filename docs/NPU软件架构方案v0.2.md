@@ -4,6 +4,7 @@
 > **v0.2 重大更新**：放弃 IREE 单一路线，改为两阶段方案（llama.cpp → ExecuTorch）
 > 根因：IREE 的 Coral NPU HAL 后端未开源，原 22-33 周估算偏乐观。
 > 重新调研后，llama.cpp 和 ExecuTorch 均有可参考的开源 NPU 后端。
+> **目标硬件**：Block 64×64 NPU（28.2 mm²，~9.6 W，INT4 + LPDDR5-6400），详参 `Edge_NPU_Architecture_Proposal.md`
 
 ---
 
