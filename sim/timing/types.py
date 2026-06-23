@@ -17,6 +17,8 @@ class ModuleBreakdown:
         "dma_weight": 0,
         "dma_effective": 0,
         "kv_cache": 0,
+        "noc_latency": 0,
+        "noc_contention": 0,
     })
 
 

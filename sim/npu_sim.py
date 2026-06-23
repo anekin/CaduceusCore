@@ -26,6 +26,7 @@ from models.vector import VectorModel
 from models.dma import DMAModel
 from models.kv_cache import KVCacheModel
 from models.dram import DRAMModel
+from models.noc import NoCModel
 from engine.timeline import (
     CoreTimeline, LayerBreakdown, SimulationReport, breakdown_events,
 )
@@ -88,6 +89,7 @@ class NPUSimulator:
         self.dma = DMAModel(self.config)
         self.kv = KVCacheModel(self.config)
         self.dram = DRAMModel(self.config)
+        self.noc = NoCModel(self.config)
 
         # Configure KV cache for Qwen2.5-3B
         self.kv.configure_for_model(
@@ -151,6 +153,15 @@ class NPUSimulator:
                     layer_data[layer].dma_weight += hidden
                     layer_data[layer].dma_effective += effective
 
+                    # NoC: merged weight pair transfer over interconnect (breakdown only)
+                    noc_cycles = self.noc.estimate_transfer(
+                        mxu_result.weight_bytes, src_id=0, dst_id=0)
+                    timeline.add_noc(
+                        f"noc_weights Gate+Up {M}x{K}x{N}",
+                        noc_cycles, layer)
+                    timeline._current_cycle = mxu_end
+                    layer_data[layer].noc_latency += noc_cycles
+
                     # KV access (once for the pair)
                     kv_cycles = self.kv.estimate_per_decode(total_tokens, total_tokens)
                     timeline.add_kv("kv_access", kv_cycles, layer)
@@ -181,6 +192,15 @@ class NPUSimulator:
                 mxu_result.dma_cycles, mxu_result.compute_cycles)
             layer_data[layer].dma_weight += hidden
             layer_data[layer].dma_effective += effective
+
+            # NoC: weight transfer over interconnect (breakdown only)
+            noc_cycles = self.noc.estimate_transfer(
+                mxu_result.weight_bytes, src_id=0, dst_id=0)
+            timeline.add_noc(
+                f"noc_weights {op_name} {M}x{K}x{N}",
+                noc_cycles, layer)
+            timeline._current_cycle = mxu_end
+            layer_data[layer].noc_latency += noc_cycles
 
             # ── SFU + Vector: decomposed softmax ──
             if op_name in ("O_proj",):
@@ -363,6 +383,15 @@ class NPUSimulator:
                 mxu_result.dma_cycles, mxu_result.compute_cycles)
             layer_data[layer].dma_weight += hidden
             layer_data[layer].dma_effective += effective
+
+            # NoC: weight transfer over interconnect (breakdown only)
+            noc_cycles = self.noc.estimate_transfer(
+                mxu_result.weight_bytes, src_id=0, dst_id=0)
+            timeline.add_noc(
+                f"noc_weights {op_name} {M}x{K}x{N}",
+                noc_cycles, layer)
+            timeline._current_cycle = mxu_end
+            layer_data[layer].noc_latency += noc_cycles
 
             if op_name in ("O_proj",):
                 sfu_cycles = self.sfu.estimate("softmax", 2560 * prompt_len)

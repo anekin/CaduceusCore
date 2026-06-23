@@ -61,7 +61,8 @@ class TestModuleBreakdown:
         spec = get_spec("qwen2.5-1.5b")
         timing = engine.simulate_decode(spec)
         keys = set(timing.module_breakdown.cycles.keys())
-        expected = {"mxu", "sfu", "vector", "dma_weight", "dma_effective", "kv_cache"}
+        expected = {"mxu", "sfu", "vector", "dma_weight", "dma_effective", "kv_cache",
+                     "noc_latency", "noc_contention"}
         missing = expected - keys
         assert keys == expected, (
             f"Module breakdown keys mismatch. Missing: {missing}. "

@@ -60,7 +60,8 @@ class TestModuleBreakdown:
     def test_default_cycles(self):
         mb = ModuleBreakdown()
         assert set(mb.cycles.keys()) == {
-            "mxu", "sfu", "vector", "dma_weight", "dma_effective", "kv_cache"
+            "mxu", "sfu", "vector", "dma_weight", "dma_effective", "kv_cache",
+            "noc_latency", "noc_contention"
         }
         assert all(v == 0 for v in mb.cycles.values())
 

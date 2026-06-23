@@ -14,7 +14,7 @@ from sim.npu_sim import NPUSimulator
 from sim.timing.types import ModuleBreakdown, RequestMetrics, TokenTiming
 
 
-MODULE_KEYS = ("mxu", "sfu", "vector", "dma_weight", "dma_effective", "kv_cache")
+MODULE_KEYS = ("mxu", "sfu", "vector", "dma_weight", "dma_effective", "kv_cache", "noc_latency", "noc_contention")
 
 
 def _build_llm_trace(model_spec: ModelSpec, m: int) -> List[Tuple[int, int, int, int, str]]:
@@ -72,6 +72,11 @@ def _aggregate_events(report: SimulationReport) -> ModuleBreakdown:
                 mb.cycles["dma_effective"] += cycles
             else:
                 mb.cycles["dma_weight"] += cycles
+        elif ev.module == "noc":
+            if ev.overlapped:
+                mb.cycles["noc_latency"] += cycles
+            else:
+                mb.cycles["noc_contention"] += cycles
     return mb
 
 

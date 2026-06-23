@@ -26,6 +26,8 @@ class LayerBreakdown:
     dma_effective: int = 0
     kv_cache: int = 0
     riscv: int = 0
+    noc_latency: float = 0.0
+    noc_contention: float = 0.0
     total: int = 0
 
 
@@ -162,6 +164,17 @@ class CoreTimeline:
             self._current_cycle = end
         return ev
 
+    def add_noc(self, op: str, cycles: int, layer: int) -> TimelineEvent:
+        """NoC transfer that can overlap with MXU: starts now, may extend beyond MXU."""
+        start = self._current_cycle
+        end = start + cycles
+        overlapped = cycles <= (self._mxu_busy_until - start)
+        ev = TimelineEvent("noc", op, start, end, layer, overlapped=overlapped)
+        self.events.append(ev)
+        if end > self._current_cycle:
+            self._current_cycle = end
+        return ev
+
     def add_kv(self, op: str, cycles: int, layer: int) -> TimelineEvent:
         start = self._current_cycle
         end = start + cycles
@@ -184,6 +197,9 @@ def breakdown_events(events: List[TimelineEvent]) -> Dict[str, float]:
             key = "DMA (hidden)"
             # Hidden DMA doesn't count toward total
             modules[key] = modules.get(key, 0) + cycles
+        elif ev.module == "noc" and ev.overlapped:
+            key = "noc_latency"
+            modules[key] = modules.get(key, 0) + cycles
         else:
             key = {
                 "mxu": "MXU",
@@ -192,6 +208,8 @@ def breakdown_events(events: List[TimelineEvent]) -> Dict[str, float]:
                 "dma": "DMA (stall)",
                 "kv": "KV Cache",
                 "riscv": "RISC-V",
+                "noc": "noc_latency",
             }.get(ev.module, ev.module)
             modules[key] = modules.get(key, 0) + cycles
+    modules.setdefault("noc_contention", 0.0)
     return modules
