@@ -1,3 +1,4 @@
 channels,tps,dma_stall_pct,dma_overlap_pct,bottleneck
 1,9.55,25.42,9.06,DMA
 2,9.55,25.42,9.06,DMA
+4,9.55,25.42,9.06,DMA

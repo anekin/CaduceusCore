@@ -1,23 +1,23 @@
 # Performance Dashboard — qwen2.5-3b
 
 **Engine**: CaduceusCore TimingEngine
-**Timestamp**: 2026-06-23T08:42:40.251355+00:00
+**Timestamp**: 2026-06-23T12:58:20.041807+00:00
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Tps | 31.23 |
-| Ttft Ms | 200.91 |
-| Tpot Us | 32023.04 |
-| Prefill Ms | 168.89 |
-| Decode Per Token Us | 32023.04 |
-| Itl Us P50 | 32023.04 |
-| Itl Us P90 | 32023.04 |
-| Itl Us P99 | 32023.04 |
-| Bandwidth Utilization Pct | 0.0 |
-| Dma Overlap Ratio | 0.0 |
-| Total Cycles | 32023040 |
+| Tps | 9.55 |
+| Ttft Ms | 630.51 |
+| Tpot Us | 104720.0 |
+| Prefill Ms | 525.79 |
+| Decode Per Token Us | 104720.0 |
+| Itl Us P50 | 104720.0 |
+| Itl Us P90 | 104720.0 |
+| Itl Us P99 | 104720.0 |
+| Bandwidth Utilization Pct | 27.96 |
+| Dma Overlap Ratio | 0.1 |
+| Total Cycles | 104720000 |
 
 ## Per-Module Cycles
 
@@ -26,34 +26,47 @@
 | mxu | 31927280 |
 | sfu | 47712 |
 | vector | 1680 |
-| dma_weight | 0 |
-| dma_effective | 0 |
+| dma_weight | 26622960 |
+| dma_effective | 2652160 |
 | kv_cache | 46368 |
+| noc_latency | 43421840 |
+| noc_contention | 0 |
 
 ## Module Utilization
 
 | Module | % |
 |--------|---|
-| mxu | 99.7 |
-| sfu | 0.15 |
-| vector | 0.01 |
-| dma_weight | 0.0 |
-| dma_effective | 0.0 |
-| kv_cache | 0.14 |
+| mxu | 30.49 |
+| sfu | 0.05 |
+| vector | 0.0 |
+| dma_weight | 25.42 |
+| dma_effective | 2.53 |
+| kv_cache | 0.04 |
+| noc_latency | 41.46 |
+| noc_contention | 0.0 |
+
+## NoC
+
+| Metric | Value |
+|--------|-------|
+| Topology | crossbar |
+| Ports | 4 |
+| Latency (us) | 43421.84 |
+| Contention (%) | 0.0 |
 
 ## ITL Distribution (ASCII histogram)
 
 ```
-   32023.0 -  32024.0 us: ######################################## (127)
-   32024.0 -  32025.0 us: # (0)
-   32025.0 -  32026.0 us: # (0)
-   32026.0 -  32027.0 us: # (0)
-   32027.0 -  32028.0 us: # (0)
-   32028.0 -  32029.0 us: # (0)
-   32029.0 -  32030.0 us: # (0)
-   32030.0 -  32031.0 us: # (0)
-   32031.0 -  32032.0 us: # (0)
-   32032.0 -  32033.0 us: # (0)
+  104720.0 - 104721.0 us: ######################################## (127)
+  104721.0 - 104722.0 us: # (0)
+  104722.0 - 104723.0 us: # (0)
+  104723.0 - 104724.0 us: # (0)
+  104724.0 - 104725.0 us: # (0)
+  104725.0 - 104726.0 us: # (0)
+  104726.0 - 104727.0 us: # (0)
+  104727.0 - 104728.0 us: # (0)
+  104728.0 - 104729.0 us: # (0)
+  104729.0 - 104730.0 us: # (0)
 ```
 
 ## Configuration
@@ -122,7 +135,12 @@
     "channels": 2,
     "burst_size_bytes": 256,
     "descriptor_overhead_cycles": 5,
-    "max_pending_descriptors": 16
+    "max_pending_descriptors": 16,
+    "num_channels": 2,
+    "per_channel_fifo_depth": 64,
+    "max_burst_length": 8,
+    "multi_block_mode": "linked_list",
+    "ll_prefetch_en": true
   },
   "memory": {
     "type": "LPDDR5-6400",
@@ -135,6 +153,15 @@
   },
   "interconnect": {
     "type": "crossbar",
+    "ports": 4,
+    "bandwidth_gbps": 500,
+    "hop_latency_cycles": 3,
+    "flit_width_bits": 256,
+    "vcs": 2,
+    "buffer_depth": 4,
+    "arbitration": "round_robin",
+    "routing": "destination_tag",
+    "pipeline_stages": 3,
     "port_bandwidth_gbps": 500
   },
   "riscv": {
