@@ -64,6 +64,11 @@ dma:
   burst_size_bytes: 256
   descriptor_overhead_cycles: 5
   max_pending_descriptors: 16
+  num_channels: 2
+  per_channel_fifo_depth: 64
+  max_burst_length: 8            # AXI burst beats
+  multi_block_mode: linked_list  # contiguous | shadow | linked_list
+  ll_prefetch_en: true
 
 memory:
   type: LPDDR5-6400

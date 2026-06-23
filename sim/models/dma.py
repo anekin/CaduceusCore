@@ -18,6 +18,13 @@ class DMAModel:
         self.descriptor_overhead = int(dma["descriptor_overhead_cycles"])  # 5
         self.max_pending = int(dma.get("max_pending_descriptors", 16))
 
+        # DW_axi_dmac-spec configurable parameters (v0.4)
+        self.num_channels = int(dma.get("num_channels", 2))
+        self.fifo_depth = int(dma.get("per_channel_fifo_depth", 64))
+        self.max_burst_length = int(dma.get("max_burst_length", 8))
+        self.multi_block_mode = str(dma.get("multi_block_mode", "linked_list"))
+        self.ll_prefetch_en = bool(dma.get("ll_prefetch_en", True))
+
         mem = config["memory"]
         self.bw_bytes_per_cycle = float(mem["bandwidth_bytes_per_cycle"])  # 51.2
 
@@ -51,6 +58,16 @@ class DMAModel:
         """
         size_bytes = math.ceil(K * N * weight_bits / 8)
         return self.estimate_transfer(size_bytes, "load")
+
+    def allocate_channel(self, request_type: str) -> int:
+        """Map a DMA request type to a channel index.
+
+        request_type: 'weight_load', 'kv_access', 'output_store'
+        Returns channel index in [0, num_channels).
+        """
+        mapping = {"weight_load": 0, "kv_access": 1, "output_store": 2}
+        base = mapping.get(request_type, 0)
+        return base % self.num_channels
 
     def estimate_effective(self, transfer_cycles: int,
                            compute_cycles: int) -> Tuple[int, int]:
