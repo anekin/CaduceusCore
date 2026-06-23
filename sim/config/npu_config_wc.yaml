@@ -1,5 +1,5 @@
 # NPU 架构配置 — Qwen2.5-3B 目标, Weight Cache enabled
-# 128×128 WS + WC (PE dual weight reg for gate/up pair merge)
+# 64×64 Block + WC (PE dual weight reg for gate/up pair merge)
 
 cores: 1
 
@@ -8,8 +8,9 @@ optimizations:
   dma_bw_multiplier: 1.0
 
 mxu:
-  array_height: 128
-  array_width: 128
+  type: block
+  array_height: 64
+  array_width: 64
   frequency_mhz: 1000
   weight_precision_bits: 4
   activation_precision_bits: 8

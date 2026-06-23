@@ -4,9 +4,9 @@
 
 # ── MAC 引擎 ──
 mac_engine:
-  type: systolic          # systolic | block
-  array_height: 128       # 64, 96, 128, 192, 256
-  array_width: 128        # 64, 96, 128, 192, 256, 384
+  type: block            # systolic | block
+  array_height: 64        # 64, 96, 128, 192, 256
+  array_width: 64         # 64, 96, 128, 192, 256, 384
   frequency_mhz: 1000     # 500, 800, 1000, 1200
   weight_precision_bits: 4    # 2(INT2), 4(INT4), 8(INT8)
   activation_precision_bits: 8  # 8(INT8), 16(BF16)

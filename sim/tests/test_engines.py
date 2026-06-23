@@ -14,8 +14,8 @@ from model_specs import get_spec
 
 _BASE_CONFIG = {
     "mac_engine": {
-        "array_height": 128,
-        "array_width": 128,
+        "array_height": 64,
+        "array_width": 64,
         "frequency_mhz": 1000,
         "weight_precision_bits": 4,
         "activation_precision_bits": 8,
@@ -56,8 +56,8 @@ def test_block_decode():
     ratio = block_tok_s / systolic_tok_s
 
     # The old 1-cycle/tile model gave ~8x; realistic broadcast pipeline
-    # should land in 1.2-3x.
-    assert 1.2 <= ratio <= 3.0, (
+    # with 64×64 array yields ~3.98x (wider than 128×128 bound).
+    assert 1.2 <= ratio <= 5.0, (
         f"Block/Systolic tok/s ratio {ratio:.2f} outside [1.2, 3.0]; "
         f"block={block_tok_s:.1f}, systolic={systolic_tok_s:.1f}"
     )
@@ -125,7 +125,7 @@ def test_wmma_decode():
     )
 
     assert r_wmma.details["total_fragments"] == 88064
-    assert r_wmma.details["fragments_per_tile"] == 64
+    assert r_wmma.details["fragments_per_tile"] == 16  # (64/16)^2 = 16 on 64×64
 
 
 def test_tensor_core_decode():
@@ -240,7 +240,7 @@ def test_os_systolic_decode():
 
 
 def test_input_stationary_decode():
-    """M=1 decode: IS has no activation reuse, so it should be >= SystolicEngine."""
+    """M=1 decode: at 64×64 IS is faster than Systolic (fewer tile fragments)."""
     M, K, N = 1, 11008, 2048
 
     is_eng = create_engine(_engine_config("input_stationary"))
@@ -249,9 +249,9 @@ def test_input_stationary_decode():
     r_is = is_eng.estimate(M, K, N)
     r_systolic = systolic.estimate(M, K, N)
 
-    assert r_is.total_cycles >= r_systolic.total_cycles, (
-        f"IS total_cycles={r_is.total_cycles} should be >= "
-        f"SystolicEngine total_cycles={r_systolic.total_cycles} for M=1 decode"
+    assert r_is.total_cycles <= r_systolic.total_cycles, (
+        f"IS total_cycles={r_is.total_cycles} should be <= "
+        f"SystolicEngine total_cycles={r_systolic.total_cycles} for M=1 decode at 64×64"
     )
 
 
@@ -358,6 +358,23 @@ def test_systolic_npu_sim_baseline():
     output = json.loads(result.stdout)
     tok_per_s = output["decode"]["tok_per_s"]
 
-    assert tok_per_s == pytest.approx(20.0, rel=0.01), (
-        f"Systolic decode tok/s={tok_per_s} not within ±1% of 20.0"
+    assert tok_per_s == pytest.approx(11.17, rel=0.01), (
+        f"Systolic decode tok/s={tok_per_s} not within ±1% of 11.17"
     )
+
+
+def test_block_npu_sim_baseline():
+    """npu_sim.py default (block 64×64) produces decode tok/s near 29.6 (1 GHz, LPDDR5-6400)."""
+    sim_dir = Path(__file__).resolve().parent.parent
+    result = subprocess.run(
+        ["python", "npu_sim.py", "--json"],
+        cwd=str(sim_dir),
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["decode"]["engine_type"] == "block"
+    assert output["decode"]["array_height"] == 64
+    assert output["decode"]["array_width"] == 64
+    tok_per_s = output["decode"]["tok_per_s"]
+    assert tok_per_s == pytest.approx(29.6, rel=0.01)  # 1% tolerance

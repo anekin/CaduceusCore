@@ -210,6 +210,8 @@ class ArcModel:
         spec = model_spec
         if spec is None:
             for key, val in MODELS.items():
+                if val.model_type != "llm":
+                    continue
                 if key.replace(".", "").replace("-", "") in name.lower().replace(".", "").replace("-", ""):
                     spec = val
                     break

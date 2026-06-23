@@ -86,7 +86,7 @@ class MACEngine(ABC):
 def create_engine(config: Dict[str, Any]) -> MACEngine:
     """工厂函数：根据配置创建引擎实例"""
     mac = config.get("mac_engine", config.get("mxu", {}))
-    engine_type = mac.get("type", "systolic")
+    engine_type = mac.get("type", "block")
 
     if engine_type == "systolic":
         from engine.systolic_engine import SystolicEngine

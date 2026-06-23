@@ -1,5 +1,5 @@
 # NPU 架构配置 — Qwen2.5-3B 目标
-# 这是 spec，所有模块照此建模
+# 这是 spec，所有模块照此建模 — Block 64×64
 
 cores: 1
 
@@ -9,8 +9,9 @@ optimizations:
   dma_bw_multiplier: 1.0       # DMA 带宽倍率: 1.0=64-bit, 2.0=128-bit/4ch
 
 mxu:
-  array_height: 128
-  array_width: 128
+  type: block
+  array_height: 64
+  array_width: 64
   frequency_mhz: 1000
   weight_precision_bits: 4     # INT4
   activation_precision_bits: 8  # INT8（激活用 INT8 中间表示，BF16 转 INT8 由硬件处理）

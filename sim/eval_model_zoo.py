@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from model_specs import all_aliases
+from model_specs import all_aliases, get_spec
 
 SIM_DIR = Path(__file__).parent
 RESULTS_DIR = (SIM_DIR / ".." / "results" / "model_zoo").resolve()
@@ -41,7 +41,7 @@ def main():
     parser.add_argument("--top", type=int, default=30, help="Top N results per model")
     args = parser.parse_args()
 
-    aliases = all_aliases()
+    aliases = [a for a in all_aliases() if get_spec(a).model_type == "llm"]
     total = len(aliases) * 2
     completed = 0
 

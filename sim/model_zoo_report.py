@@ -498,7 +498,11 @@ def generate_markdown(report: dict[str, Any]) -> str:
 
 
 def build_report(pareto_suffix: str = "") -> dict[str, Any]:
-    models = [build_model_summary(alias, pareto_suffix=pareto_suffix) for alias in model_specs.all_aliases()]
+    models = [
+        build_model_summary(alias, pareto_suffix=pareto_suffix)
+        for alias in model_specs.all_aliases()
+        if model_specs.get_spec(alias).model_type == "llm"
+    ]
     cv = build_cv_summary()
 
     report = {

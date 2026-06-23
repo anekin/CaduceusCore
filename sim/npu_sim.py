@@ -481,6 +481,9 @@ def main():
     if args.json or args.output:
         output = {
             "decode": {
+                "engine_type": report.engine_type,
+                "array_height": report.array_height,
+                "array_width": report.array_width,
                 "per_token_us": round(report.decode_per_token_us, 1),
                 "tok_per_s": round(report.decode_tok_per_s, 4),
                 "breakdown": {k: round(v, 1) for k, v in report.decode_breakdown.items()},

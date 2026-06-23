@@ -272,7 +272,8 @@ def main():
     parser.add_argument("--cv-model", choices=["mobilenetv3-small"],
                         default=None,
                         help="Run CV design-space exploration")
-    parser.add_argument("--model-spec", choices=all_aliases(),
+    parser.add_argument("--model-spec",
+                        choices=[a for a in all_aliases() if get_spec(a).model_type == "llm"],
                         default=None,
                         help="LLM model spec alias for DSE")
     parser.add_argument("--batch-m", type=int, choices=[1, 2], default=None,

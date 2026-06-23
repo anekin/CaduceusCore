@@ -1,4 +1,4 @@
-"""MXU 性能模型 v2 — 128×128 Weight-Stationary + Realistic DRAM Bandwidth
+"""MXU 性能模型 (legacy systolic, v2) — 64×64 array (superseded by Block 64×64 broadcast; preserved for systolic regression)
 
 v2 changes:
 - 移除 weight_preloaded 假设（3B 模型权重 > 片上 SRAM，必须每 token 从 DRAM 流式加载）

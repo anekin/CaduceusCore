@@ -10,8 +10,8 @@ from engine.mac_engine import create_engine
 # Only the "type" field varies.
 _BASE_CONFIG = {
     "mac_engine": {
-        "array_height": 128,
-        "array_width": 128,
+        "array_height": 64,
+        "array_width": 64,
         "frequency_mhz": 1000,
         "weight_precision_bits": 4,
         "activation_precision_bits": 8,

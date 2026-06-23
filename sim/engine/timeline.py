@@ -51,6 +51,12 @@ class SimulationReport:
     # Detailed
     layer_breakdowns: List[LayerBreakdown] = field(default_factory=list)
     events: List[TimelineEvent] = field(default_factory=list)
+    ttft_ms: float = 0.0
+    decode_total_us: float = 0.0
+    module_breakdowns: dict = field(default_factory=dict)
+    tps: float = 0.0
+    tpot_us: float = 0.0
+    itl_us_list: list = field(default_factory=list)
 
     def to_text(self) -> str:
         lines = []
