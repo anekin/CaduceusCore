@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from sim.models.dma import DMAModel
+
 # ══════════════════════════════════════════════════════════════════════
 # Constants from hardware spec
 # ══════════════════════════════════════════════════════════════════════
@@ -797,30 +799,8 @@ class GoldenDMA:
     DRAM bandwidth: configurable (default 51.2 GB/s LPDDR5-64b).
     """
 
-    def __init__(self, dram_bw_bytes_per_cycle: float = 51.2,
-                 frequency_mhz: int = 1000):
-        self.effective_bw = dram_bw_bytes_per_cycle * 0.85  # 85% efficiency
-        self.frequency_mhz = frequency_mhz
+    def __init__(self):
         self.channel_active: Dict[int, bool] = {0: False, 1: False}
-
-    def estimate_descriptor(self, desc: DMADescriptor) -> int:
-        """Estimate cycles for one DMA descriptor transfer."""
-        cycles = max(1, int(desc.size / self.effective_bw))
-        desc.cycle_cost = cycles
-        return cycles
-
-    def estimate_chain(self, descriptors: List[DMADescriptor]) -> int:
-        """Estimate total cycles for a descriptor chain.
-
-        Dual-channel: weight channel (0) and data channel (1) can overlap.
-        """
-        ch_cycles = {0: 0, 1: 0}
-        for desc in descriptors:
-            cost = self.estimate_descriptor(desc)
-            ch_cycles[desc.channel] += cost
-
-        # Channels overlap: total = max(channel_cycles) + minimal overhead
-        return max(ch_cycles.values()) + len(descriptors)  # +1 cycle per descriptor overhead
 
     def execute_load(self, sram: "SRAM", desc: DMADescriptor,
                      dram_data: np.ndarray):
@@ -860,6 +840,105 @@ class GoldenDMA:
             remaining -= size
 
         return descriptors
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Phase D-3: GoldenNoC — NoC functional model
+# ══════════════════════════════════════════════════════════════════════
+
+@dataclass
+class NoCPacket:
+    """NoC packet: one unit of data transfer between NPU cores.
+
+    Fields:
+        src_id: source node ID
+        dst_id: destination node ID
+        payload: data payload as numpy array (bit-exact byte content)
+        packet_id: unique packet identifier for ordering/tracking
+        priority: packet priority (0=lowest, higher=more urgent)
+        size_bytes: size of data payload in bytes
+    """
+    src_id: int
+    dst_id: int
+    payload: np.ndarray
+    packet_id: int = 0
+    priority: int = 0
+    size_bytes: int = 0
+
+    def __post_init__(self):
+        """Auto-compute size_bytes from payload nbytes when not explicitly set."""
+        if self.size_bytes == 0 and self.payload.size > 0:
+            self.size_bytes = self.payload.nbytes
+
+
+class GoldenNoC:
+    """NoC functional model: packet routing and payload delivery.
+
+    Performs bit-exact data movement only — no cycle estimation.
+    Matches hardware NoC behavior for correctness verification.
+    """
+
+    @staticmethod
+    def route_packet(packet: NoCPacket, network_state: dict) -> bool:
+        """Check whether a NoC packet can be routed given network state.
+
+        Args:
+            packet: NoCPacket with src_id, dst_id
+            network_state: dict with optional keys:
+                - active_nodes: set of online node IDs
+                - congestion: dict mapping (src,dst) -> congestion level
+
+        Returns:
+            True if routable, False if blocked.
+        """
+        active = network_state.get("active_nodes", None)
+        if active is not None and packet.dst_id not in active:
+            return False
+
+        congestion = network_state.get("congestion", {})
+        link = (packet.src_id, packet.dst_id)
+        if link in congestion and congestion[link] > 0:
+            return False
+
+        return True
+
+    @staticmethod
+    def deliver_payload(packet: NoCPacket, sram: bytearray, addr: int) -> None:
+        """Write NoC packet payload bytes into SRAM at given address.
+
+        Bit-exact copy: payload's raw bytes are written to sram[addr:addr+size_bytes].
+        """
+        raw = packet.payload.tobytes()
+        end = addr + len(raw)
+        if end > len(sram):
+            raise ValueError(
+                f"NoC payload overflow: addr={addr:#x} + {len(raw)}B > sram {len(sram)}B"
+            )
+        sram[addr:end] = raw
+
+    @staticmethod
+    def build_transfer_packet(src: int, dst: int, data: np.ndarray,
+                              priority: int = 0) -> NoCPacket:
+        """Build a NoC transfer packet from source to destination.
+
+        Args:
+            src: source core ID
+            dst: destination core ID
+            data: payload as numpy array (any dtype)
+            priority: packet priority (default 0)
+
+        Returns:
+            NoCPacket with auto-computed size_bytes.
+        """
+        arr = np.asarray(data)
+        return NoCPacket(
+            src_id=src,
+            dst_id=dst,
+            payload=arr,
+            packet_id=0,
+            priority=priority,
+            size_bytes=arr.nbytes,
+        )
 
 
 # ── GoldenExecutor: add Vector and DMA instruction handlers ──────────
@@ -989,6 +1068,18 @@ class GoldenExecutor:
         self.sfu = GoldenSFU()
         self.vector = GoldenVector()
         self.dma = GoldenDMA()
+        self.dma_model = DMAModel({
+            "dma": {
+                "channels": 2,
+                "burst_size_bytes": 256,
+                "descriptor_overhead_cycles": 5,
+                "max_pending_descriptors": 16,
+            },
+            "memory": {
+                "bandwidth_bytes_per_cycle": 51.2,
+            },
+        })
+        self.noc = GoldenNoC()
         self.sram = SRAM()
         self.dram = np.zeros(256 * 1024 * 1024, dtype=np.uint8)  # 256 MB DRAM model
         self.state = ExecutorState()
@@ -1116,7 +1207,7 @@ class GoldenExecutor:
             sram_addr = ops.get("sram", 0)
             size = ops.get("size", 0)
             self.sram.write_bytes(sram_addr, self.dram[dram:dram + size])
-            self.state.cycle += max(1, int(size / self.dma.effective_bw))
+            self.state.cycle += self.dma_model.estimate_transfer(size, "load")
 
         elif op == OpCode.DMA_ST:
             # DMA store: SRAM → DRAM (simple mode)
@@ -1125,7 +1216,7 @@ class GoldenExecutor:
             size = ops.get("size", 0)
             data = self.sram.read_bytes(sram_addr, size)
             self.dram[dram:dram + size] = data
-            self.state.cycle += max(1, int(size / self.dma.effective_bw))
+            self.state.cycle += self.dma_model.estimate_transfer(size, "store")
 
         elif op == OpCode.DMA_LDD:
             # DMA load via descriptor chain
@@ -1137,7 +1228,7 @@ class GoldenExecutor:
                 word = int.from_bytes(raw.tobytes(), 'little')
                 desc = DMADescriptor.decode(word)
                 self.dma.execute_load(self.sram, desc, self.dram)
-                self.state.cycle += max(1, int(desc.actual_size / self.dma.effective_bw))
+                self.state.cycle += self.dma_model.estimate_transfer(desc.actual_size, "load")
                 offset += 8
                 if desc.last:
                     break
@@ -1151,7 +1242,7 @@ class GoldenExecutor:
                 word = int.from_bytes(raw.tobytes(), 'little')
                 desc = DMADescriptor.decode(word)
                 self.dma.execute_store(self.sram, desc, self.dram)
-                self.state.cycle += max(1, int(desc.actual_size / self.dma.effective_bw))
+                self.state.cycle += self.dma_model.estimate_transfer(desc.actual_size, "store")
                 offset += 8
                 if desc.last:
                     break
