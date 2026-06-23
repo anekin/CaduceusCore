@@ -80,7 +80,17 @@ memory:
 
 interconnect:
   type: crossbar
-  port_bandwidth_gbps: 500
+  # ── NoC parameters (flit-level model) ──
+  ports: 4
+  bandwidth_gbps: 500
+  hop_latency_cycles: 3
+  flit_width_bits: 256
+  vcs: 2
+  buffer_depth: 4
+  arbitration: round_robin
+  routing: destination_tag
+  pipeline_stages: 3
+  port_bandwidth_gbps: 500    # legacy
 
 riscv:
   isa: RV64IMAFD

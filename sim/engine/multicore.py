@@ -1,9 +1,9 @@
-"""多核时间轴引擎 — 核间 FIFO + Crossbar 竞争
+"""多核时间轴引擎 — 核间 FIFO + NoC Crossbar
 
 支持三种模式:
 - independent: N 核各自处理不同 token（数据并行）
 - pipeline: 核间 FIFO 流水线（层间流水线并行）
-- shared_l2: 共享 L2 SRAM，Crossbar 仲裁
+- shared_l2: 共享 L2 SRAM，Crossbar/NoC 仲裁
 """
 
 import math
@@ -24,10 +24,46 @@ class FIFOConfig:
 
 @dataclass
 class CrossbarConfig:
-    """Crossbar / NoC 配置"""
-    num_ports: int = 4
-    bandwidth_gbps: float = 500.0  # per port
-    arbitration_cycles: int = 3     # fixed arbitration overhead
+    """Crossbar / NoC configuration — flit-level NoC model.
+
+    Models a crossbar interconnect with virtual channels, pipeline
+    stages, and per-hop latency.  Supports round-robin or priority
+    arbitration with configurable routing.
+    """
+    # ── Topology ──
+    ports: int = 4
+    bandwidth_gbps: float = 500.0     # per-port link bandwidth
+
+    # ── Link / flit ──
+    hop_latency_cycles: int = 3       # wire delay per hop
+    flit_width_bits: int = 256        # flit payload width (header overhead separate)
+    vcs: int = 2                      # virtual channels per port
+
+    # ── Router microarchitecture ──
+    buffer_depth: int = 4             # flits per VC buffer
+    arbitration: str = "round_robin"  # "round_robin" | "priority" | "age_based"
+    routing: str = "destination_tag"  # "destination_tag" | "xy" | "source_routing"
+    pipeline_stages: int = 3          # RC + VA + SA + ST (simplified to one count)
+
+    # ── Backward-compat aliases (deprecated, kept for old callers) ──
+
+    @property
+    def num_ports(self) -> int:
+        """Deprecated: use ``ports`` instead."""
+        return self.ports
+
+    @num_ports.setter
+    def num_ports(self, val: int) -> None:
+        self.ports = val
+
+    @property
+    def arbitration_cycles(self) -> int:
+        """Deprecated: overhead cycles for arbitration (maps to pipeline_stages)."""
+        return self.pipeline_stages
+
+    @arbitration_cycles.setter
+    def arbitration_cycles(self, val: int) -> None:
+        self.pipeline_stages = val
 
 
 class MultiCoreTimeline:
@@ -65,22 +101,47 @@ class MultiCoreTimeline:
         transfer_cycles = math.ceil(total_bytes / bytes_per_cycle)
         return transfer_cycles + self.fifo.latency_cycles
 
-    # ── Crossbar 竞争 ────────────────────────────────────────────
+    # ── NoC Crossbar ─────────────────────────────────────────────
 
-    def xbar_access_cycles(self, core_id: int, data_bytes: int) -> int:
-        """计算 core_id 通过 Crossbar 访问共享资源的额外延迟。
+    def xbar_access_cycles(self, size_bytes: int, contention: float = 0.0) -> int:
+        """Estimate crossbar access latency using the flit-level NoC model.
 
-        简化为: 固定仲裁延迟 + 按端口带宽的传输时间。
-        多核同时访问时增加竞争延迟。
+        Args:
+            size_bytes: Total data payload in bytes.
+            contention: Fractional contention metric (0.0 = zero load,
+                        1.0 = full contention).  Scales arbitration penalty
+                        and may add buffer-backpressure cycles.
+
+        Returns:
+            Estimated access cycles as a positive integer.
         """
-        bw_bytes_per_cycle = self.xbar.bandwidth_gbps  # 500 GB/s ≡ 500 B/cycle @1GHz
-        transfer_cycles = math.ceil(data_bytes / bw_bytes_per_cycle)
+        xb = self.xbar
 
-        # 竞争: 同时访问的核数越多，仲裁延迟越大
-        active_cores = sum(1 for p in self._xbar_ports_used.values() if p > 0)
-        contention_factor = max(1, active_cores * 0.1)  # 10% per active core
+        # ── Flit serialisation ──
+        flit_bytes = xb.flit_width_bits // 8
+        num_flits = max(1, math.ceil(size_bytes / flit_bytes))
 
-        return int(transfer_cycles + self.xbar.arbitration_cycles * contention_factor)
+        # ── Zero-load latency ──
+        # Header flit traverses the pipeline: RC → VA → SA → crossbar traverse.
+        # We model this as hop_latency_cycles × pipeline_stages.
+        zero_load = xb.hop_latency_cycles * xb.pipeline_stages
+
+        # ── Serialisation tail ──
+        # After the pipeline fills, one flit per cycle exits.
+        serialization = num_flits - 1
+
+        # ── Contention ──
+        contention_cycles = 0.0
+        if contention > 0:
+            # Arbitration penalty scales with active requestors
+            active = max(1.0, contention * xb.ports)
+            contention_cycles = xb.hop_latency_cycles * active
+            # Buffer backpressure when demand exceeds buffer_depth
+            if num_flits > xb.buffer_depth:
+                excess = num_flits - xb.buffer_depth
+                contention_cycles += excess / xb.vcs
+
+        return max(1, int(zero_load + serialization + contention_cycles))
 
     # ── 工作模式 ─────────────────────────────────────────────────
 
