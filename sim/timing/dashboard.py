@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import math
 import os
 from pathlib import Path
 from statistics import mean
@@ -11,6 +12,20 @@ from typing import Any
 
 from sim.timing.metrics import MetricsCollector
 from sim.timing.types import RequestMetrics
+
+
+def _mesh_dims(ports: int) -> tuple[int, int]:
+    """Return (rows, cols) for a closest-to-square 2-D mesh of *ports* nodes.
+
+    Mirrors :meth:`sim.models.noc.NoCModel._compute_dims` to avoid a
+    cross-package import.
+    """
+    limit = int(math.ceil(math.sqrt(ports)))
+    for c in range(limit, 0, -1):
+        if ports % c == 0:
+            r = ports // c
+            return (min(r, c), max(r, c))
+    return (limit, int(math.ceil(ports / limit)))
 
 
 def _percentile(sorted_data: list[float], p: float) -> float:
@@ -118,6 +133,27 @@ class Dashboard:
             dma_effective / dma_weight if dma_weight > 0 else 0.0, 2
         )
 
+        # --- NoC metrics ---
+        noc_latency_cycles = module_breakdown.get("noc_latency", 0) if module_breakdown else 0
+        noc_contention_cycles = module_breakdown.get("noc_contention", 0) if module_breakdown else 0
+        noc_latency_us = round(
+            noc_latency_cycles / freq_mhz if freq_mhz else 0.0, 2
+        )
+        noc_contention_pct = round(
+            noc_contention_cycles / total_cycles * 100.0
+            if total_cycles else 0.0, 2
+        )
+        noc_topology = "unknown"
+        noc_ports = 0
+        noc_mesh_rows: int | None = None
+        noc_mesh_cols: int | None = None
+        if engine_config and "interconnect" in engine_config:
+            ic = engine_config["interconnect"]
+            noc_topology = ic.get("type", "unknown")
+            noc_ports = int(ic.get("ports", 0))
+            if noc_topology == "mesh" and noc_ports > 0:
+                noc_mesh_rows, noc_mesh_cols = _mesh_dims(noc_ports)
+
         # --- ITL percentiles ---
         itl_list = request_metrics.itl_us_list
         itl_sorted = sorted(itl_list)
@@ -139,6 +175,12 @@ class Dashboard:
             "itl_us_p99": itl_p99,
             "module_breakdown": module_breakdown,
             "module_utilization_pct": _round_dict_values(module_utilization_pct),
+            "noc_topology": noc_topology,
+            "noc_ports": noc_ports,
+            "noc_latency_us": noc_latency_us,
+            "noc_contention_pct": noc_contention_pct,
+            "noc_mesh_rows": noc_mesh_rows,
+            "noc_mesh_cols": noc_mesh_cols,
             "bandwidth_utilization_pct": bandwidth_pct,
             "dma_overlap_ratio": dma_overlap,
             "total_cycles": total_cycles,
@@ -227,6 +269,32 @@ class Dashboard:
             lines.append("|--------|---|")
             for mod, pct in mu.items():
                 lines.append(f"| {mod} | {round(float(pct), 2)} |")
+            lines.append("")
+
+        # --- NoC section ---
+        noc_topology = json_data.get("noc_topology", "unknown")
+        if noc_topology != "unknown":
+            lines.append("## NoC\n")
+            lines.append("| Metric | Value |")
+            lines.append("|--------|-------|")
+            lines.append(f"| Topology | {noc_topology} |")
+            noc_ports = json_data.get("noc_ports", 0)
+            if noc_ports:
+                lines.append(f"| Ports | {noc_ports} |")
+            noc_lat = json_data.get("noc_latency_us", 0.0)
+            lines.append(f"| Latency (us) | {noc_lat} |")
+            noc_cont = json_data.get("noc_contention_pct", 0.0)
+            lines.append(f"| Contention (%) | {noc_cont} |")
+
+            if noc_topology == "mesh":
+                mesh_rows = json_data.get("noc_mesh_rows")
+                mesh_cols = json_data.get("noc_mesh_cols")
+                if mesh_rows is not None and mesh_cols is not None:
+                    max_hops = (mesh_rows - 1) + (mesh_cols - 1)
+                    lines.append("")
+                    lines.append("**Mesh Geometry**")
+                    lines.append(f"- Dimensions: {mesh_rows}×{mesh_cols}")
+                    lines.append(f"- Max XY hop count: {max_hops}")
             lines.append("")
 
         # --- ITL histogram ---

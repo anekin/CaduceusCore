@@ -153,6 +153,22 @@ def _build_parser() -> argparse.ArgumentParser:
              "Overrides dma.num_channels and dma.channels in config for each value. "
              "Outputs results/dma_sweep.csv.",
     )
+    parser.add_argument(
+        "--sweep-noc-topology",
+        type=str,
+        default=None,
+        help="Comma-separated NoC topologies to sweep (e.g., crossbar,mesh). "
+             "Overrides interconnect.type in config for each value. "
+             "Outputs results/noc_sweep.csv.",
+    )
+    parser.add_argument(
+        "--sweep-noc-ports",
+        type=str,
+        default=None,
+        help="Comma-separated port counts to sweep (e.g., 2,4,8). "
+             "Overrides interconnect.ports in config for each value. "
+             "Default: 4 when not specified.",
+    )
     return parser
 
 
@@ -288,6 +304,149 @@ def _run_dma_sweep(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_noc_sweep(args: argparse.Namespace) -> int:
+    """Run the NoC topology × ports sweep and write results/noc_sweep.csv.
+
+    For each (topology, ports) combination, overrides ``interconnect.type``
+    and ``interconnect.ports`` in the base config, creates a fresh
+    TimingEngine, runs decode simulation, and records per-combination
+    metrics.
+
+    Returns exit code (0 on success, 1 on failure).
+    """
+    topologies = [t.strip() for t in args.sweep_noc_topology.split(",") if t.strip()]
+    if not topologies:
+        print("Error: --sweep-noc-topology provided but no valid topologies",
+              file=sys.stderr)
+        return 1
+
+    port_strs = args.sweep_noc_ports.split(",") if args.sweep_noc_ports else ["4"]
+    ports_list: list[int] = []
+    for s in port_strs:
+        s = s.strip()
+        if not s:
+            continue
+        try:
+            ports_list.append(int(s))
+        except ValueError:
+            print(f"Error: invalid port count '{s}'", file=sys.stderr)
+            return 1
+
+    if not ports_list:
+        ports_list = [4]
+
+    model_alias = args.model or "qwen2.5-3b"
+    spec = get_spec(model_alias)
+    if spec.model_type != "llm":
+        print(
+            f"Error: NoC sweep only supports LLM models, got '{model_alias}' "
+            f"({spec.model_type})",
+            file=sys.stderr,
+        )
+        return 1
+
+    config_path = _resolve_config(args.config)
+    if not config_path.exists():
+        print(f"Error: config not found: {config_path}", file=sys.stderr)
+        return 1
+
+    with open(config_path) as f:
+        base_config = yaml.safe_load(f)
+
+    try:
+        base_engine = TimingEngine(str(config_path))
+    except Exception as exc:
+        print(f"Error: failed to load TimingEngine: {exc}", file=sys.stderr)
+        return 1
+
+    freq_mhz = args.freq if args.freq is not None else base_engine.freq_mhz
+
+    rows: list[dict] = []
+
+    for topology in topologies:
+        for ports in ports_list:
+            sweep_config = copy.deepcopy(base_config)
+            sweep_config.setdefault("interconnect", {})
+            sweep_config["interconnect"]["type"] = topology
+            sweep_config["interconnect"]["ports"] = ports
+
+            temp_path: str | None = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".yaml", delete=False
+                ) as tf:
+                    yaml.dump(sweep_config, tf)
+                    tf.flush()
+                    temp_path = tf.name
+                sweep_engine = TimingEngine(temp_path)
+            except Exception as exc:
+                print(
+                    f"Error: failed to create engine for "
+                    f"{topology}x{ports}: {exc}",
+                    file=sys.stderr,
+                )
+                return 1
+            finally:
+                if temp_path is not None:
+                    try:
+                        Path(temp_path).unlink(missing_ok=True)
+                    except Exception:
+                        pass
+
+            try:
+                decode_timing = sweep_engine.simulate_decode(spec)
+            except Exception as exc:
+                print(
+                    f"Error: decode simulation failed for "
+                    f"{topology}x{ports}: {exc}",
+                    file=sys.stderr,
+                )
+                return 1
+
+            mb = decode_timing.module_breakdown.cycles
+            total_cycles = decode_timing.total_cycles
+
+            noc_latency_cycles = mb.get("noc_latency", 0)
+            noc_contention_cycles = mb.get("noc_contention", 0)
+
+            tps = freq_mhz * 1e6 / total_cycles if total_cycles > 0 else 0.0
+            noc_latency_us = noc_latency_cycles / freq_mhz if freq_mhz > 0 else 0.0
+            noc_contention_pct = (
+                noc_contention_cycles / total_cycles * 100
+                if total_cycles > 0
+                else 0.0
+            )
+
+            rows.append({
+                "topology": topology,
+                "ports": ports,
+                "tps": round(tps, 2),
+                "noc_latency_us": round(noc_latency_us, 2),
+                "noc_contention_pct": round(noc_contention_pct, 2),
+            })
+
+            print(
+                f"  {topology}x{ports}: tps={tps:.2f}, "
+                f"noc_latency={noc_latency_us:.2f}us, "
+                f"noc_contention={noc_contention_pct:.1f}%"
+            )
+
+    results_dir = REPO_ROOT / "results"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = results_dir / "noc_sweep.csv"
+
+    fieldnames = [
+        "topology", "ports", "tps", "noc_latency_us", "noc_contention_pct",
+    ]
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print(f"\nNoC sweep results written to {csv_path}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -296,12 +455,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.sweep_dma_channels is not None:
         return _run_dma_sweep(args)
 
+    # ── NoC sweep path (mutually exclusive with normal benchmark) ──
+    if args.sweep_noc_topology is not None:
+        return _run_noc_sweep(args)
+
     if args.all:
         aliases = all_aliases()
     elif args.model:
         aliases = [args.model]
     else:
-        parser.error("Specify --model, --all, or --sweep-dma-channels")
+        parser.error(
+            "Specify --model, --all, --sweep-dma-channels, "
+            "or --sweep-noc-topology"
+        )
         return 1
 
     config_path = _resolve_config(args.config)
