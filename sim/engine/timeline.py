@@ -126,6 +126,11 @@ class CoreTimeline:
         self._dma_busy_until: int = 0
 
     def add_mxu(self, op: str, cycles: int, layer: int) -> TimelineEvent:
+        """Schedule a matrix multiply operation on the MXU.
+
+        MXU events advance the timeline and set the ``_mxu_busy_until``
+        watermark that DMA/NoC events use for overlap detection.
+        """
         start = self._current_cycle
         end = start + cycles
         self._mxu_busy_until = max(self._mxu_busy_until, end)
@@ -135,6 +140,11 @@ class CoreTimeline:
         return ev
 
     def add_sfu(self, op: str, cycles: int, layer: int) -> TimelineEvent:
+        """Schedule a scalar function unit operation.
+
+        SFU runs after MXU for the current layer (data dependency:
+        softmax/activation requires MXU output).
+        """
         # SFU runs after MXU for current layer (data dependency)
         start = self._current_cycle
         end = start + cycles
@@ -176,6 +186,11 @@ class CoreTimeline:
         return ev
 
     def add_kv(self, op: str, cycles: int, layer: int) -> TimelineEvent:
+        """Schedule a KV cache access operation.
+
+        KV cache accesses (layer switches, context reads) advance the
+        timeline and are serialised with compute (no overlap).
+        """
         start = self._current_cycle
         end = start + cycles
         self._current_cycle = end

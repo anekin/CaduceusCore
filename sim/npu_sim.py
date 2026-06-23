@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NPU System Simulator — Phase 2: MXU + SFU + DMA + KV Cache + DRAM
+"""NPU System Simulator — Phase 3: MXU + SFU + DMA + KV Cache + DRAM + NoC
 
 Usage:
     python3 npu_sim.py                          # default settings
@@ -107,7 +107,7 @@ class NPUSimulator:
         """
         timeline = CoreTimeline(core_id=0)
         layer_data: Dict[int, LayerBreakdown] = {}
-        total_tokens = 128
+        total_tokens = 128  # KV cache tracked context depth (baseline for Qwen2.5-3B)
         total_weight_bytes = 0
 
         # Check optimizations

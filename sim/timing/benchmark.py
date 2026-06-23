@@ -212,13 +212,11 @@ def _run_dma_sweep(args: argparse.Namespace) -> int:
     with open(config_path) as f:
         base_config = yaml.safe_load(f)
 
-    try:
-        base_engine = TimingEngine(str(config_path))
-    except Exception as exc:
-        print(f"Error: failed to load TimingEngine: {exc}", file=sys.stderr)
-        return 1
-
-    freq_mhz = args.freq if args.freq is not None else base_engine.freq_mhz
+    freq_mhz = (
+        args.freq
+        if args.freq is not None
+        else int(base_config.get("mxu", {}).get("frequency_mhz", 1000))
+    )
 
     rows: list[dict] = []
 
@@ -353,13 +351,11 @@ def _run_noc_sweep(args: argparse.Namespace) -> int:
     with open(config_path) as f:
         base_config = yaml.safe_load(f)
 
-    try:
-        base_engine = TimingEngine(str(config_path))
-    except Exception as exc:
-        print(f"Error: failed to load TimingEngine: {exc}", file=sys.stderr)
-        return 1
-
-    freq_mhz = args.freq if args.freq is not None else base_engine.freq_mhz
+    freq_mhz = (
+        args.freq
+        if args.freq is not None
+        else int(base_config.get("mxu", {}).get("frequency_mhz", 1000))
+    )
 
     rows: list[dict] = []
 

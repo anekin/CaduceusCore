@@ -49,6 +49,7 @@ dma:
   max_burst_length: 8            # AXI burst beats, sweep: 1-256
   multi_block_mode: linked_list  # contiguous | shadow | linked_list
   ll_prefetch_en: true
+  arbitration: round_robin       # round_robin | fixed_priority
 
 sfu:
   width: 128

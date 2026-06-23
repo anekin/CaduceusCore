@@ -42,3 +42,4 @@ class RequestMetrics:
     tps: float = 0.0
     tpot_us: float = 0.0
     itl_us_list: List[float] = field(default_factory=list)
+    module_breakdown: Dict[str, int] = field(default_factory=dict)

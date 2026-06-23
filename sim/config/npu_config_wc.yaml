@@ -68,6 +68,7 @@ dma:
   max_burst_length: 8            # AXI burst beats
   multi_block_mode: linked_list  # contiguous | shadow | linked_list
   ll_prefetch_en: true
+  arbitration: round_robin       # round_robin | fixed_priority
 
 memory:
   type: LPDDR5-6400

@@ -1,8 +1,15 @@
-"""DMA 带宽模型 — dual-channel descriptor-based DMA engine"""
+"""DMA bandwidth model — multi-channel descriptor-based DMA engine"""
 
 import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
+
+# Priority lookup for fixed_priority arbitration: higher value = higher priority.
+_REQUEST_TYPE_PRIORITY: Dict[str, int] = {
+    "weight_load": 2,
+    "kv_access": 1,
+    "output_store": 0,
+}
 
 
 @dataclass
@@ -24,15 +31,19 @@ class DMARequest:
 
 
 class DMAModel:
-    """DMA engine with two channels, burst transfers, descriptor chains.
+    """DMA engine with configurable channels, arbitration, and burst transfers.
 
     Models: LPDDR5 ↔ L2 SRAM data movement.
     Key insight: DMA loads next layer's weights while MXU computes current layer.
+
+    Arbitration modes:
+        round_robin (default) — FIFO order on each channel.
+        fixed_priority — sort requests by type priority:
+            weight_load (2) > kv_access (1) > output_store (0).
     """
 
     def __init__(self, config: Dict[str, Any]):
         dma = config["dma"]
-        self.channels = int(dma["channels"])
         self.burst_size = int(dma["burst_size_bytes"])          # 256
         self.descriptor_overhead = int(dma["descriptor_overhead_cycles"])  # 5
         self.max_pending = int(dma.get("max_pending_descriptors", 16))
@@ -43,6 +54,9 @@ class DMAModel:
         self.max_burst_length = int(dma.get("max_burst_length", 8))
         self.multi_block_mode = str(dma.get("multi_block_mode", "linked_list"))
         self.ll_prefetch_en = bool(dma.get("ll_prefetch_en", True))
+
+        # Arbitration policy (v0.5)
+        self.arbitration = str(dma.get("arbitration", "round_robin"))
 
         # Per-channel request queues for FIFO backpressure modelling
         self.channel_queues: List[List[DMARequest]] = [
@@ -107,14 +121,33 @@ class DMAModel:
     def enqueue(self, request: DMARequest) -> int:
         """Enqueue a DMA request onto the appropriate channel queue.
 
+        In round_robin mode, appends to the channel FIFO.
+        In fixed_priority mode, inserts in priority order (highest first).
+
         Returns the channel index assigned via allocate_channel().
         """
         ch = self.allocate_channel(request.request_type)
-        self.channel_queues[ch].append(request)
+        if self.arbitration == "fixed_priority":
+            # Insert at correct priority position (highest first)
+            queue = self.channel_queues[ch]
+            req_prio = _REQUEST_TYPE_PRIORITY.get(request.request_type, 0)
+            insert_at = 0
+            for i, existing in enumerate(queue):
+                existing_prio = _REQUEST_TYPE_PRIORITY.get(existing.request_type, 0)
+                if req_prio > existing_prio:
+                    insert_at = i
+                    break
+                insert_at = i + 1
+            queue.insert(insert_at, request)
+        else:
+            self.channel_queues[ch].append(request)
         return ch
 
     def estimate_channel_cycles(self, channel_idx: int) -> int:
         """Estimate total cycles for all queued requests on one channel.
+
+        Order follows the configured arbitration policy set during enqueue:
+        round_robin → FIFO, fixed_priority → sorted by request-type priority.
 
         Components:
         - Per-transfer estimate_transfer() cycles for each request.

@@ -104,12 +104,16 @@ class NoCModel:
     def _arbitration_cycles(self) -> int:
         """Return arbitration overhead for a single transfer.
 
-        Round-robin: simplified to 3 fixed cycles (like ``CrossbarConfig.arbitration_cycles``).
-        Fixed-priority: constant 1 cycle.
+        Aligns with ``CrossbarConfig.arbitration`` accepted values:
+        - round_robin: 3 fixed cycles (default).
+        - priority / fixed_priority: 1 cycle (constant grant to highest-priority port).
+        - age_based: 3 cycles (oldest-wins has comparable microarchitecture cost).
         """
-        if self.arbitration == "fixed_priority":
+        arb = self.arbitration.lower()
+        if arb in ("fixed_priority", "priority"):
             return 1
-        return 3  # round_robin (default)
+        # round_robin (default) or age_based
+        return 3
 
     # ── public API ─────────────────────────────────────────────
 

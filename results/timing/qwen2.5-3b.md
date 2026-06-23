@@ -1,7 +1,7 @@
 # Performance Dashboard — qwen2.5-3b
 
 **Engine**: CaduceusCore TimingEngine
-**Timestamp**: 2026-06-23T12:58:20.041807+00:00
+**Timestamp**: 2026-06-23T13:03:28.801773+00:00
 
 ## Summary
 

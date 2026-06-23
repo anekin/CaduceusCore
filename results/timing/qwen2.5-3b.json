@@ -263,7 +263,7 @@
   "noc_ports": 4,
   "noc_topology": "crossbar",
   "prefill_ms": 525.79,
-  "timestamp": "2026-06-23T12:58:20.041807+00:00",
+  "timestamp": "2026-06-23T13:03:28.801773+00:00",
   "total_cycles": 104720000,
   "tpot_us": 104720.0,
   "tps": 9.55,

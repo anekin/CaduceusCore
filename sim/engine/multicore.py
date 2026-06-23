@@ -81,11 +81,6 @@ class MultiCoreTimeline:
         self.fifo = fifo or FIFOConfig()
         self.xbar = crossbar or CrossbarConfig()
 
-        # Crossbar port allocation tracking
-        self._xbar_ports_used: Dict[int, int] = {}  # core_id → ports used
-        for i in range(num_cores):
-            self._xbar_ports_used[i] = 0
-
     # ── FIFO 延迟计算 ───────────────────────────────────────────
 
     def fifo_transfer_cycles(self, num_elements: int, element_bytes: int = 2) -> int:
@@ -181,8 +176,8 @@ class MultiCoreTimeline:
 
         # Total = max(core_progress) + fifo overhead (partial overlap)
         max_core = max(core_progress) if core_progress else 0
-        # FIFO overhead is partially hidden behind compute
-        effective_fifo = int(fifo_overhead * 0.3)  # 70% hidden
+        # FIFO overhead: ~70% hidden behind compute in pipeline (empirical estimate)
+        effective_fifo = int(fifo_overhead * 0.3)  # 0.3 = 30% exposed / 70% hidden
         total_cycles = max_core + effective_fifo
 
         return {
@@ -194,7 +189,7 @@ class MultiCoreTimeline:
         }
 
     def simulate_data_parallel(self, per_token_cycles: int,
-                               num_tokens: int) -> Dict:
+                                num_tokens: int) -> Dict:
         """数据并行: 每核处理不同 token，吞吐 ×N。
 
         Since each core works independently, total tokens processed
@@ -203,13 +198,13 @@ class MultiCoreTimeline:
         """
         base_tok_per_s = 1e6 / per_token_cycles if per_token_cycles > 0 else 0
 
-        # Crossbar contention: shared LPDDR5 bandwidth split
-        # N cores sharing one memory channel reduces effective BW per core
+        # Crossbar contention: shared LPDDR5 bandwidth split.
+        # Baseline DRAM bw = 51.2 GB/s (LPDDR5-6400, 64-bit, 6400 Mbps/pin).
         bw_per_core = 51.2 / self.num_cores  # GB/s per core
 
-        # Efficiency loss from contention
-        contention_penalty = 1.0 - (self.num_cores - 1) * 0.05  # -5% per extra core
-        contention_penalty = max(0.5, contention_penalty)  # floor at 50%
+        # Efficiency loss from contention: -5% per extra core (empirical estimate)
+        contention_penalty = 1.0 - (self.num_cores - 1) * 0.05
+        contention_penalty = max(0.5, contention_penalty)  # floor at 50% efficiency
 
         effective_tok_per_s = base_tok_per_s * self.num_cores * contention_penalty
 
