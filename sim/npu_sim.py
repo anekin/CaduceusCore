@@ -139,6 +139,18 @@ class NPUSimulator:
                     layer_data[layer].mxu += mxu_cycles
                     total_weight_bytes += mxu_result.weight_bytes
 
+                    # DMA: merged weight pair event for breakdown tracking
+                    mxu_end = timeline._current_cycle
+                    timeline.add_dma_parallel(
+                        f"dma_weights Gate+Up {M}x{K}x{N}",
+                        mxu_result.dma_cycles, layer)
+                    timeline._current_cycle = mxu_end
+
+                    hidden, effective = self.dma.estimate_effective(
+                        mxu_result.dma_cycles, mxu_result.compute_cycles)
+                    layer_data[layer].dma_weight += hidden
+                    layer_data[layer].dma_effective += effective
+
                     # KV access (once for the pair)
                     kv_cycles = self.kv.estimate_per_decode(total_tokens, total_tokens)
                     timeline.add_kv("kv_access", kv_cycles, layer)
@@ -155,6 +167,20 @@ class NPUSimulator:
                 mxu_cycles, layer)
             layer_data[layer].mxu += mxu_cycles
             total_weight_bytes += mxu_result.weight_bytes
+
+            # DMA: weight streaming event for breakdown tracking.
+            # Engine total_cycles already accounts for DMA stall, so we
+            # add the DMA event and then restore the MXU-end position.
+            mxu_end = timeline._current_cycle
+            timeline.add_dma_parallel(
+                f"dma_weights {op_name} {M}x{K}x{N}",
+                mxu_result.dma_cycles, layer)
+            timeline._current_cycle = mxu_end
+
+            hidden, effective = self.dma.estimate_effective(
+                mxu_result.dma_cycles, mxu_result.compute_cycles)
+            layer_data[layer].dma_weight += hidden
+            layer_data[layer].dma_effective += effective
 
             # ── SFU + Vector: decomposed softmax ──
             if op_name in ("O_proj",):
@@ -192,7 +218,8 @@ class NPUSimulator:
 
             # Update layer total
             layer_data[layer].total = (layer_data[layer].mxu + layer_data[layer].sfu
-                                        + layer_data[layer].vector + layer_data[layer].kv_cache)
+                                        + layer_data[layer].vector + layer_data[layer].kv_cache
+                                        + layer_data[layer].dma_effective)
 
             i += 1
 
@@ -314,24 +341,49 @@ class NPUSimulator:
         """
         trace = generate_qwen3b_trace(prompt_len=prompt_len)
         timeline = CoreTimeline(core_id=0)
+        layer_data: Dict[int, LayerBreakdown] = {}
 
         for (M, K, N, layer, op_name) in trace:
+            if layer not in layer_data:
+                layer_data[layer] = LayerBreakdown(layer=layer)
+
             mxu_result = self.mxu.estimate(M, K, N)
             mxu_cycles = mxu_result.total_cycles
             timeline.add_mxu(f"{op_name} ({M}×{K}×{N})", mxu_cycles, layer)
+            layer_data[layer].mxu += mxu_cycles
+
+            # DMA: weight streaming event for breakdown tracking
+            mxu_end = timeline._current_cycle
+            timeline.add_dma_parallel(
+                f"dma_weights {op_name} {M}x{K}x{N}",
+                mxu_result.dma_cycles, layer)
+            timeline._current_cycle = mxu_end
+
+            hidden, effective = self.dma.estimate_effective(
+                mxu_result.dma_cycles, mxu_result.compute_cycles)
+            layer_data[layer].dma_weight += hidden
+            layer_data[layer].dma_effective += effective
 
             if op_name in ("O_proj",):
                 sfu_cycles = self.sfu.estimate("softmax", 2560 * prompt_len)
                 sfu_cycles += self.sfu.estimate("layernorm", 2560 * prompt_len)
                 sfu_cycles += self.sfu.estimate("rope", 2560 * 2 * prompt_len)
                 timeline.add_sfu("attn_sfu", sfu_cycles, layer)
+                layer_data[layer].sfu += sfu_cycles
             elif op_name in ("FFN_down",):
                 sfu_cycles = self.sfu.estimate("gelu", 9728 * prompt_len)
                 sfu_cycles += self.sfu.estimate("layernorm", 2560 * prompt_len)
                 timeline.add_sfu("ffn_sfu", sfu_cycles, layer)
+                layer_data[layer].sfu += sfu_cycles
 
             kv_cycles = self.kv.estimate_per_decode(prompt_len, prompt_len)
             timeline.add_kv("kv_access", kv_cycles, layer)
+            layer_data[layer].kv_cache += kv_cycles
+
+            # Update layer total
+            layer_data[layer].total = (layer_data[layer].mxu + layer_data[layer].sfu
+                                        + layer_data[layer].kv_cache
+                                        + layer_data[layer].dma_effective)
 
         # DRAM refresh overhead
         total_before = timeline.total_cycles
@@ -351,6 +403,7 @@ class NPUSimulator:
             prefill_breakdown={k: v / self.f_mhz / 1000 for k, v in breakdown.items()},
             decode_per_token_us=0,
             decode_tok_per_s=0,
+            layer_breakdowns=sorted(layer_data.values(), key=lambda lb: lb.layer),
             events=timeline.events,
         )
         return report
