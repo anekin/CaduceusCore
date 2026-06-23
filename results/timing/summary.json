@@ -1,0 +1,87 @@
+[
+  {
+    "model": "gemma-4-12b",
+    "type": "llm",
+    "total_cycles": 118439920,
+    "ttft_ms": 287.33,
+    "tps": 8.44,
+    "tpot_us": 118439.92,
+    "prefill_ms": 168.89,
+    "decode_per_token_us": 118439.92
+  },
+  {
+    "model": "mobilenetv3",
+    "type": "cv",
+    "total_cycles": 781103,
+    "fps": 1280.24,
+    "inference_latency_us": 781.1
+  },
+  {
+    "model": "qwen2.5-1.5b",
+    "type": "llm",
+    "total_cycles": 15481256,
+    "ttft_ms": 184.37,
+    "tps": 64.59,
+    "tpot_us": 15481.26,
+    "prefill_ms": 168.89,
+    "decode_per_token_us": 15481.26
+  },
+  {
+    "model": "qwen2.5-3b",
+    "type": "llm",
+    "total_cycles": 32023040,
+    "ttft_ms": 200.91,
+    "tps": 31.23,
+    "tpot_us": 32023.04,
+    "prefill_ms": 168.89,
+    "decode_per_token_us": 32023.04
+  },
+  {
+    "model": "qwen2.5-7b",
+    "type": "llm",
+    "total_cycles": 76725572,
+    "ttft_ms": 245.61,
+    "tps": 13.03,
+    "tpot_us": 76725.57,
+    "prefill_ms": 168.89,
+    "decode_per_token_us": 76725.57
+  },
+  {
+    "model": "qwen3-8b",
+    "type": "llm",
+    "total_cycles": 71091552,
+    "ttft_ms": 239.98,
+    "tps": 14.07,
+    "tpot_us": 71091.55,
+    "prefill_ms": 168.89,
+    "decode_per_token_us": 71091.55
+  },
+  {
+    "model": "resnet18",
+    "type": "cv",
+    "total_cycles": 831387,
+    "fps": 1202.81,
+    "inference_latency_us": 831.39
+  },
+  {
+    "model": "resnet50",
+    "type": "cv",
+    "total_cycles": 1858949,
+    "fps": 537.94,
+    "inference_latency_us": 1858.95
+  },
+  {
+    "model": "vit-b16",
+    "type": "cv",
+    "total_cycles": 7156175,
+    "fps": 139.74,
+    "inference_latency_us": 7156.18
+  },
+  {
+    "model": "yolov8n",
+    "type": "cv",
+    "total_cycles": 2578453,
+    "fps": 387.83,
+    "inference_latency_us": 2578.45
+  }
+]

@@ -1,0 +1,151 @@
+# Performance Dashboard — qwen2.5-1.5b
+
+**Engine**: CaduceusCore TimingEngine
+**Timestamp**: 2026-06-23T08:42:39.970999+00:00
+
+## Summary
+
+| Metric | Value |
+|--------|-------|
+| Tps | 64.59 |
+| Ttft Ms | 184.37 |
+| Tpot Us | 15481.26 |
+| Prefill Ms | 168.89 |
+| Decode Per Token Us | 15481.26 |
+| Itl Us P50 | 15481.26 |
+| Itl Us P90 | 15481.26 |
+| Itl Us P99 | 15481.26 |
+| Bandwidth Utilization Pct | 0.0 |
+| Dma Overlap Ratio | 0.0 |
+| Total Cycles | 15481256 |
+
+## Per-Module Cycles
+
+| Module | Cycles |
+|--------|--------|
+| mxu | 15385496 |
+| sfu | 47712 |
+| vector | 1680 |
+| dma_weight | 0 |
+| dma_effective | 0 |
+| kv_cache | 46368 |
+
+## Module Utilization
+
+| Module | % |
+|--------|---|
+| mxu | 99.38 |
+| sfu | 0.31 |
+| vector | 0.01 |
+| dma_weight | 0.0 |
+| dma_effective | 0.0 |
+| kv_cache | 0.3 |
+
+## ITL Distribution (ASCII histogram)
+
+```
+   15481.3 -  15482.3 us: ######################################## (127)
+   15482.3 -  15483.3 us: # (0)
+   15483.3 -  15484.3 us: # (0)
+   15484.3 -  15485.3 us: # (0)
+   15485.3 -  15486.3 us: # (0)
+   15486.3 -  15487.3 us: # (0)
+   15487.3 -  15488.3 us: # (0)
+   15488.3 -  15489.3 us: # (0)
+   15489.3 -  15490.3 us: # (0)
+   15490.3 -  15491.3 us: # (0)
+```
+
+## Configuration
+
+```json
+{
+  "cores": 1,
+  "optimizations": {
+    "weight_cache": true,
+    "dma_bw_multiplier": 1.0
+  },
+  "mxu": {
+    "type": "block",
+    "array_height": 64,
+    "array_width": 64,
+    "frequency_mhz": 1000,
+    "weight_precision_bits": 4,
+    "activation_precision_bits": 8,
+    "accumulate_precision_bits": 32,
+    "dataflow": "weight_stationary",
+    "double_buffer": true,
+    "ops_per_mac": 2
+  },
+  "sram": {
+    "l1_per_core_kb": 512,
+    "l2_shared_kb": 2048,
+    "banks": 16,
+    "read_width_bits": 256,
+    "write_width_bits": 256
+  },
+  "sfu": {
+    "width": 128,
+    "pipeline_cycles": {
+      "softmax": 8,
+      "exp": 12,
+      "div": 16,
+      "sqrt": 20,
+      "log": 18,
+      "tanh": 14,
+      "layernorm": 6,
+      "gelu": 4,
+      "relu": 1,
+      "silu": 4,
+      "rope": 12,
+      "maxpool": 3,
+      "avgpool": 3
+    }
+  },
+  "vector": {
+    "width": 128,
+    "ops": {
+      "add": 1,
+      "mul": 1,
+      "scale": 1,
+      "bias": 1,
+      "relu": 1,
+      "mask": 1
+    }
+  },
+  "kv_cache": {
+    "sram_kb": 256,
+    "dram_region_mb": 96,
+    "precision_bits": 8
+  },
+  "dma": {
+    "channels": 2,
+    "burst_size_bytes": 256,
+    "descriptor_overhead_cycles": 5,
+    "max_pending_descriptors": 16
+  },
+  "memory": {
+    "type": "LPDDR5-6400",
+    "bandwidth_gbps": 51.2,
+    "bandwidth_bytes_per_cycle": 51.2,
+    "dram_efficiency": 0.85,
+    "tRC_cycles": 48,
+    "tRAS_cycles": 42,
+    "refresh_overhead_percent": 3.0
+  },
+  "interconnect": {
+    "type": "crossbar",
+    "port_bandwidth_gbps": 500
+  },
+  "riscv": {
+    "isa": "RV64IMAFD",
+    "pipeline_stages": 4,
+    "fetch_cycles": 4,
+    "decode_cycles": 1,
+    "dispatch_cycles": 2
+  }
+}
+```
+
+---
+*TTFT (Time-To-First-Token) is engine-only latency (prefill + first decode), excluding queue/network overhead.*
