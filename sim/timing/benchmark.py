@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import copy
+import csv
 import importlib
 import inspect
 import sys
+import tempfile
 from pathlib import Path
+
+import yaml
 
 from sim.model_specs import ModelSpec, all_aliases, get_spec
 from sim.timing.dashboard import Dashboard
@@ -140,19 +145,163 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Benchmark all registered model aliases",
     )
+    parser.add_argument(
+        "--sweep-dma-channels",
+        type=str,
+        default=None,
+        help="Comma-separated DMA channel counts to sweep (e.g., 1,2,4,8). "
+             "Overrides dma.num_channels and dma.channels in config for each value. "
+             "Outputs results/dma_sweep.csv.",
+    )
     return parser
+
+
+def _run_dma_sweep(args: argparse.Namespace) -> int:
+    """Run the DMA channel sweep and write results/dma_sweep.csv.
+
+    For each channel count, overrides ``dma.num_channels`` and ``dma.channels``
+    in the base config, creates a fresh TimingEngine, runs decode simulation,
+    and records per-channel metrics.
+
+    Returns exit code (0 on success, 1 on failure).
+    """
+    channel_strs = args.sweep_dma_channels.split(",")
+    channel_counts: list[int] = []
+    for s in channel_strs:
+        s = s.strip()
+        if not s:
+            continue
+        try:
+            channel_counts.append(int(s))
+        except ValueError:
+            print(f"Error: invalid channel count '{s}'", file=sys.stderr)
+            return 1
+
+    if not channel_counts:
+        print("Error: --sweep-dma-channels provided but no valid values", file=sys.stderr)
+        return 1
+
+    model_alias = args.model or "qwen2.5-3b"
+    spec = get_spec(model_alias)
+    if spec.model_type != "llm":
+        print(f"Error: DMA sweep only supports LLM models, got '{model_alias}' ({spec.model_type})",
+              file=sys.stderr)
+        return 1
+
+    config_path = _resolve_config(args.config)
+    if not config_path.exists():
+        print(f"Error: config not found: {config_path}", file=sys.stderr)
+        return 1
+
+    with open(config_path) as f:
+        base_config = yaml.safe_load(f)
+
+    try:
+        base_engine = TimingEngine(str(config_path))
+    except Exception as exc:
+        print(f"Error: failed to load TimingEngine: {exc}", file=sys.stderr)
+        return 1
+
+    freq_mhz = args.freq if args.freq is not None else base_engine.freq_mhz
+
+    rows: list[dict] = []
+
+    for channels in channel_counts:
+        sweep_config = copy.deepcopy(base_config)
+        sweep_config.setdefault("dma", {})
+        sweep_config["dma"]["num_channels"] = channels
+        sweep_config["dma"]["channels"] = channels
+
+        temp_path: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".yaml", delete=False
+            ) as tf:
+                yaml.dump(sweep_config, tf)
+                tf.flush()
+                temp_path = tf.name
+            sweep_engine = TimingEngine(temp_path)
+        except Exception as exc:
+            print(f"Error: failed to create engine for channels={channels}: {exc}",
+                  file=sys.stderr)
+            return 1
+        finally:
+            if temp_path is not None:
+                try:
+                    Path(temp_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+        try:
+            decode_timing = sweep_engine.simulate_decode(spec)
+        except Exception as exc:
+            print(f"Error: decode simulation failed for channels={channels}: {exc}",
+                  file=sys.stderr)
+            return 1
+
+        mb = decode_timing.module_breakdown.cycles
+        total_cycles = decode_timing.total_cycles
+
+        dma_weight = mb.get("dma_weight", 0)
+        dma_effective = mb.get("dma_effective", 0)
+        mxu_cycles = mb.get("mxu", 0)
+
+        tps = freq_mhz * 1e6 / total_cycles if total_cycles > 0 else 0.0
+        dma_stall_pct = dma_weight / total_cycles * 100 if total_cycles > 0 else 0.0
+        dma_sum = dma_weight + dma_effective
+        dma_overlap_pct = dma_effective / dma_sum * 100 if dma_sum > 0 else 0.0
+        mxu_pct = mxu_cycles / total_cycles * 100 if total_cycles > 0 else 0.0
+
+        if mxu_pct > 60:
+            bottleneck = "MXU"
+        elif dma_stall_pct > 15:
+            bottleneck = "DMA"
+        else:
+            bottleneck = "balanced"
+
+        rows.append({
+            "channels": channels,
+            "tps": round(tps, 2),
+            "dma_stall_pct": round(dma_stall_pct, 2),
+            "dma_overlap_pct": round(dma_overlap_pct, 2),
+            "bottleneck": bottleneck,
+        })
+
+        print(
+            f"  channels={channels}: tps={tps:.2f}, "
+            f"dma_stall={dma_stall_pct:.1f}%, "
+            f"dma_overlap={dma_overlap_pct:.1f}%, "
+            f"bottleneck={bottleneck}"
+        )
+
+    results_dir = REPO_ROOT / "results"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = results_dir / "dma_sweep.csv"
+
+    fieldnames = ["channels", "tps", "dma_stall_pct", "dma_overlap_pct", "bottleneck"]
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print(f"\nDMA sweep results written to {csv_path}")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    # ── DMA sweep path (mutually exclusive with normal benchmark) ──
+    if args.sweep_dma_channels is not None:
+        return _run_dma_sweep(args)
+
     if args.all:
         aliases = all_aliases()
     elif args.model:
         aliases = [args.model]
     else:
-        parser.error("Specify --model or --all")
+        parser.error("Specify --model, --all, or --sweep-dma-channels")
         return 1
 
     config_path = _resolve_config(args.config)
