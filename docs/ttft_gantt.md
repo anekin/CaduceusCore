@@ -2,6 +2,48 @@
 
 **TTFT = 202.63 ms** | **28 layers, 7 GEMMs/layer** | **Block Engine 64×64, INT4 @ 1GHz** | **LPDDR5-6400**
 
+三张 Mermaid 图与 [`ttft_gantt.png`](ttft_gantt.png) 的三面板一一对应:
+- **Chart 0** = PNG Panel 1 (宏观 TTFT, 0 → 203ms, 多模块)
+- **Chart A1** = PNG Panel 2 (Prefill Layer 0 微观, 0 → 6000μs)
+- **Chart A2** = PNG Panel 3 (Decode Layer 0 微观, 0 → 1200μs)
+
+---
+
+## Chart 0: Full TTFT — Multi-Module Macro (ms)
+
+从 RISC-V 固件开始到首 Token 输出的完整 TTFT 时间线。
+Prefill (M=128) 28 层, 每层 ~6ms; Decode (M=1) 28 层, 每层 ~1.2ms。
+
+```mermaid
+gantt
+    title TTFT — Qwen2.5-3B, Block 64x64, INT4 @ 1GHz (ms)
+    dateFormat x
+    axisFormat %S
+
+    section RISC-V/DMA
+    PF L0-L27 dispatch+preload   :active, 0, 169
+    DC L0 dispatch+preload       :active, 169, 170
+    DC L1-L27 dispatch+preload   :active, 170, 203
+
+    section MXU Compute
+    Prefill (28 layers)           :crit, 0, 169
+    First Decode (28 layers)      :crit, 169, 203
+
+    section SFU
+    PF O_proj+FFN_down (56x)     :done, 1, 169
+    DC O_proj+FFN_down (56x)     :done, 170, 203
+
+    section KV Cache
+    PF layer switch+access        :milestone, 0, 169
+    DC layer switch+access        :milestone, 169, 203
+
+    section Result
+    Prefill End                  :milestone, 169, 169
+    First Token Ready            :milestone, 203, 203
+```
+
+> **模块级宏观视图**: RISC-V+DMA 在每层开始触发, MXU 占据绝对主导(关键路径), SFU 在 O_proj 和 FFN_down 后脉冲式触发, KV Cache 贯穿全层。Prefill→Decode 边界清晰标记在 169ms。
+
 ---
 
 ## Chart A1: Microscopic — Prefill Layer 0 (μs)
@@ -104,7 +146,7 @@ gantt
 
 ---
 
-## Chart B: Macroscopic — Full TTFT 28 Layers (ms)
+## Chart B: Per-Layer Waterfall — Full TTFT 28 Layers (ms)
 
 Total: 202.63 ms (Prefill 168.89 ms + First Decode 33.75 ms)
 
@@ -180,6 +222,8 @@ gantt
     section Result
     First Token Ready :milestone, 203, 203
 ```
+
+> **Chart 0 vs Chart B**: Chart 0 shows per-module rows (RISC-V/DMA / MXU / SFU / KV Cache) across the full timeline. Chart B shows individual layer bars, useful for seeing the uniform ~6ms/layer prefill rhythm and the ~1.2ms/layer decode rhythm.
 
 > **Timing**: Prefill ~6.03 ms/layer, Decode ~1.21 ms/layer. Decode is ~5× faster per layer because the KV-cache is pre-computed and only 1 query token is processed.
 
