@@ -1,0 +1,15 @@
+{
+  "name": "layernorm_smoke",
+  "description": "4096-element FP16 LayerNorm smoke test",
+  "sfu_op": "layernorm",
+  "sfu_len": 4096,
+  "seed": 303,
+  "files": {
+    "input": "input.hex",
+    "golden": "golden.hex"
+  },
+  "format": {
+    "input": "float16 (FP16), 4 hex digits per value, little-endian",
+    "golden": "float16 (FP16), 4 hex digits per value, little-endian"
+  }
+}
