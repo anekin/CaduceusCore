@@ -34,7 +34,7 @@ from sim.spike_mmio_server import DEFAULT_SOCK_PATH, serve
 # ── Paths ──────────────────────────────────────────────────────────
 
 PROJECT = _HERE.parent
-SPIKE_BIN = Path("/home/prj/zhengs/caduceuscore/spike_src/build/spike")
+SPIKE_BIN = Path(__file__).resolve().parent.parent / "spike_src" / "build" / "spike"
 FIRMWARE_ELF = PROJECT / "firmware" / "build" / "npu_firmware.elf"
 PLUGIN_SO = PROJECT / "spike_src" / "plugins" / "npu_mmio_plugin.so"
 
@@ -816,7 +816,7 @@ def _launch_spike(model: FuncModel):
     )
 
     env = os.environ.copy()
-    env["PATH"] = "/home/prj/zhengs/caduceuscore/dtc_src:" + env.get("PATH", "")
+    env["PATH"] = str(Path(__file__).resolve().parent.parent.parent / "dtc_src") + ":" + env.get("PATH", "")
 
     cmd = [
         str(SPIKE_BIN),
