@@ -1,3 +1,5 @@
-gguf
-huggingface_hub
-pytest
+numpy>=2.2.0
+onnx>=1.22.0
+onnxruntime>=1.23.0
+pytest>=9.0.0
+pyyaml>=5.4.0

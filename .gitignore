@@ -9,3 +9,5 @@ sim/test_vectors/
 spike_src/build/
 ddr.bin
 logs/
+rtl/results/
+rtl/test_vectors/
