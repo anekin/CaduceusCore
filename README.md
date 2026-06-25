@@ -8,6 +8,31 @@ CaduceusCore 是一颗 **通用 NPU 协处理器**，同时面向 **CV（YOLOv8/
 
 详见 `ENGINES.md` 和 `docs/NPU_Engines_Architecture_Guide.md` 的七引擎 PPA 对比。
 
+## Quick Start
+
+**Prerequisites:** Python 3.10+, pip, git. For full pytest: `dtc_src/` at REPO_ROOT parent (see docs/spike-integration.md), built Spike binary and firmware ELF. Core sim/model tests work with just Python deps.
+
+**Setup:**
+```bash
+git clone git@github.com:anekin/CaduceusCore.git
+cd CaduceusCore
+pip install -r requirements.txt
+```
+
+**Functional verification:**
+```bash
+PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q
+```
+Expect 210 passed (fewer without dtc/spike/firmware; sim/timing tests are self-contained).
+
+**Performance benchmark:**
+```bash
+PYTHONPATH=sim python sim/timing/benchmark.py --alias qwen25-3b
+PYTHONPATH=sim python sim/timing/benchmark.py --alias mobilenetv3
+```
+
+**RTL verification (optional, requires Synopsys VCS):** See `rtl/mxu/README.md`.
+
 ## 架构概览
 
 - **128×128 Weight-Stationary Systolic Array + WeightCache**（参考 TPUv1/OpenTPU）
@@ -318,6 +343,7 @@ CaduceusCore/
 │   ├── ttft_gantt.md             #   TTFT Mermaid 甘特图 + 事件表 (NEW)
 │   ├── ttft_gantt.png            #   TTFT 三面板 Matplotlib 图 (NEW)
 │   └── func_model_performance_analysis.md  # 性能分析方法论 (NEW)
+├── requirements.txt              # Python 依赖包
 ├── firmware/                     # C 固件 (npu_firmware.c, npu-regmap.h)
 ├── patches/                      # Spike RISC-V 集成 patch
 ├── spike_src/                    # Spike 集成 (当前为空)
