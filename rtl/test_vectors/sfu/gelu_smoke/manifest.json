@@ -1,0 +1,17 @@
+{
+  "name": "gelu_smoke",
+  "description": "GELU smoke test: corners (-10/0/10) + [-4,4] interpolation",
+  "sfu_op": "gelu",
+  "sfu_len": 35,
+  "files": {
+    "input": "input.hex",
+    "golden": "golden.hex"
+  },
+  "results": {
+    "golden_dtype": "float16"
+  },
+  "format": {
+    "input": "float16, 4 hex digits per value",
+    "golden": "float16, 4 hex digits per value"
+  }
+}
