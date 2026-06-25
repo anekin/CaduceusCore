@@ -119,6 +119,18 @@ module tb_mxu;
     always #CLK_HALF clk = ~clk;
 
     //=========================================================================
+    // Cycle Counter (for performance reporting)
+    //=========================================================================
+    reg [31:0] cycle_cnt;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            cycle_cnt <= 32'd0;
+        end else begin
+            cycle_cnt <= cycle_cnt + 32'd1;
+        end
+    end
+
+    //=========================================================================
     // Test Scenario Parameters (parsed from +testdir+/params.txt)
     //=========================================================================
     reg [1023:0]  test_dir;           // from +testdir+ plusarg
@@ -134,6 +146,10 @@ module tb_mxu;
     reg [31:0]    act_words;          // ceil(K*N/4)
     reg [31:0]    result_words;       // M * N
     reg [15:0]    k_tiles, n_tiles, m_tiles; // ceil(dim/TILE_SIZE)
+
+    // Performance timing
+    time          start_time;
+    time          irq_time;
 
     //=========================================================================
     // Internal Memories (loaded via $readmemh)
@@ -490,6 +506,7 @@ module tb_mxu;
 
         // CMD = 1 (START)
         mmio_write(12'h04, 32'd1);
+        start_time = $time * 1000;
         $display("[TB] Wrote CMD=START at %0t", $time);
 
         // ── Step 5: Wait for STATUS.DONE or IRQ ──────────────────────────
@@ -511,7 +528,10 @@ module tb_mxu;
             begin
                 // Wait for IRQ
                 @(posedge irq);
+                irq_time = $time * 1000;
                 $display("[TB] IRQ asserted at %0t", $time);
+                $display("[TB] *** PERF: total_cycles=%0d, M=%0d, K=%0d, N=%0d, tiles_K=%0d, tiles_N=%0d, tiles_M=%0d",
+                         cycle_cnt, M, K, N, k_tiles, n_tiles, m_tiles);
                 disable wait_done;
             end
         join
@@ -611,6 +631,7 @@ module tb_mxu;
             end
         end
 
+        $display("[TB] *** PERF: elapsed_start_to_irq_cycles=%0d", (irq_time - start_time) / 1000);
         $finish;
     end
 
