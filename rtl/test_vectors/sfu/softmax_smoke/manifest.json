@@ -1,0 +1,12 @@
+{
+  "name": "softmax_smoke",
+  "sfu_op": "softmax",
+  "files": {
+    "golden": "golden_output.hex"
+  },
+  "results": {
+    "golden_shape": [
+      4
+    ]
+  }
+}
