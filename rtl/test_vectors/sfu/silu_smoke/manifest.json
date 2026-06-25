@@ -1,0 +1,12 @@
+{
+  "name": "silu_smoke",
+  "sfu_op": "silu",
+  "files": {
+    "golden": "golden.hex"
+  },
+  "results": {
+    "golden_shape": [
+      1007
+    ]
+  }
+}
