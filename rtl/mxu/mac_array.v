@@ -7,8 +7,8 @@
 // internally for external accumulator load/store across tile boundaries.
 //
 // Broadcast scheme:
-//   Weight broadcast: weight_bus entry [r] (INT4) broadcast to all PEs in row r.
-//   Activation broadcast: activation_bus entry [c] (INT8) broadcast to all PEs in column c.
+//   Weight broadcast: weight_bus entry [c] (INT4) broadcast to all PEs in column c.
+//   Activation broadcast: activation_bus entry [r] (INT8) broadcast to all PEs in row r.
 //
 // Accumulation timing (handles PE 1-cycle pipeline):
 //   Each PE computes pe_mac = weight * activation (registered, 1 cycle latency).
@@ -18,7 +18,7 @@
 //
 // Compute a single 64×64×64 tile:
 //   For K=0..63: broadcast weight[K] and activation[K].
-//   PE(r,c) computes: weight[K][r] * activation[K][c].
+//   PE(r,c) computes: activation[K][r] * weight[K][c].
 //   After 66 compute_en cycles: local_acc[r][c] = sum_{K=0}^{63} product.
 //
 // Does NOT implement N/M/K tile iteration controller (Task 6).
@@ -30,11 +30,11 @@ module mac_array (
 
     // ── Weight/Activation broadcast buses ────────────────────────────
     // weight_bus: 64 × INT4, flattened to [255:0]
-    //   weight_bus[4*r +: 4] → weight for row r
+    //   weight_bus[4*c +: 4] → weight for column c
     input  wire      [255:0]   weight_bus,
 
     // activation_bus: 64 × INT8, flattened to [511:0]
-    //   activation_bus[8*c +: 8] → activation for column c
+    //   activation_bus[8*r +: 8] → activation for row r
     input  wire      [511:0]   activation_bus,
 
     // ── Control ──────────────────────────────────────────────────────
@@ -70,19 +70,21 @@ module mac_array (
     localparam signed [32:0] THRESH_NEG = -33'sd2147483648;
 
     //=========================================================================
-    // Unpack weight and activation buses into per-row / per-column wires
+    // Unpack weight and activation buses into per-column / per-row wires
     //=========================================================================
-    wire signed [3:0]  w_row [0:ROWS-1];   // weight for each row
-    wire signed [7:0]  a_col [0:COLS-1];   // activation for each column
+    wire signed [3:0]  w_col [0:COLS-1];   // weight for each column
+    wire signed [7:0]  a_row [0:ROWS-1];   // activation for each row
     wire signed [31:0] acc_load_val [0:COLS-1];  // per-column acc_in values
 
     genvar r, c;
     generate
-        for (r = 0; r < ROWS; r = r + 1) begin : gen_unpack_w
-            assign w_row[r] = weight_bus[4*r +: 4];
+        for (c = 0; c < COLS; c = c + 1) begin : gen_unpack_w
+            assign w_col[c] = weight_bus[4*c +: 4];
         end
-        for (c = 0; c < COLS; c = c + 1) begin : gen_unpack_a
-            assign a_col[c] = activation_bus[8*c +: 8];
+        for (r = 0; r < ROWS; r = r + 1) begin : gen_unpack_a
+            assign a_row[r] = activation_bus[8*r +: 8];
+        end
+        for (c = 0; c < COLS; c = c + 1) begin : gen_unpack_acc
             assign acc_load_val[c] = acc_in_bus[32*c +: 32];
         end
     endgenerate
@@ -91,14 +93,14 @@ module mac_array (
     // 64×64 PE grid with per-PE accumulator registers
     //=========================================================================
     // Each PE(r,c):
-    //   - Receives w_row[r] (broadcast along row) and a_col[c] (broadcast along column)
+    //   - Receives a_row[r] (broadcast along row) and w_col[c] (broadcast along column)
     //   - acc_in is tied to 0 (PE computes product only; external accumulation)
     //   - pe_mac: registered product output (1 cycle latency)
     //   - pe_d1: 1-cycle delayed pe_mac (for feedback timing)
     //   - local_acc: per-PE accumulator register
     //
     // Timing:
-    //   Cycle N:   PE samples w_row, a_col, acc_in=0
+    //   Cycle N:   PE samples a_row, w_col, acc_in=0
     //   Cycle N+1: pe_mac <= product (registered)
     //              pe_d1  <= pe_mac (old value: previous cycle's product)
     //   Cycle N+2: local_acc <= saturate(local_acc + pe_d1) ← previous product added
@@ -131,8 +133,8 @@ module mac_array (
                 pe u_pe (
                     .clk        (clk),
                     .rst_n      (rst_n),
-                    .activation (a_col[c]),      // column-broadcast activation
-                    .weight     (w_row[r]),      // row-broadcast weight
+                    .activation (a_row[r]),      // row-broadcast activation
+                    .weight     (w_col[c]),      // column-broadcast weight
                     .acc_in     (32'd0),         // external accumulation
                     .mac_out    (pe_mac[r][c])
                 );

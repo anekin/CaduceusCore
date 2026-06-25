@@ -87,7 +87,9 @@ module mxu_top #(
     output wire         weight_load_en_o,
     output wire         activation_load_en_o,
     output wire         store_out_o,
-    output wire [5:0]   store_row_o
+    output wire [5:0]   store_row_o,
+    output wire [5:0]   compute_k_o,        // controller K-tile size debug (0 = full tile)
+    output wire [15:0]  tiles_completed_o   // controller tile completion counter debug
 );
 
     //=========================================================================
@@ -116,11 +118,11 @@ module mxu_top #(
     wire        weight_load_en;
     wire        activation_load_en;
     wire        compute_en;
-    wire [5:0]  compute_k;        // controller output, mac_array doesn't consume
+    wire [5:0]  compute_k;        // controller K-tile size, exported as debug port
     wire        mac_reset_acc;
     wire        store_out;
     wire [5:0]  store_row;
-    wire [15:0] tiles_completed;  // debug
+    wire [15:0] tiles_completed;  // tile completion counter, exported as debug port
 
     //=========================================================================
     // Buffer SRAM address wires (shared write/read address per buffer)
@@ -310,5 +312,7 @@ module mxu_top #(
     assign activation_load_en_o = activation_load_en;
     assign store_out_o          = store_out;
     assign store_row_o          = store_row;
+    assign compute_k_o          = compute_k;
+    assign tiles_completed_o    = tiles_completed;
 
 endmodule

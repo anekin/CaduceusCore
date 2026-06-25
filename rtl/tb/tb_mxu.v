@@ -21,9 +21,11 @@ module tb_mxu;
     // Parameters
     //=========================================================================
     localparam CLK_HALF  = 5;                 // 5ns half-period → 100 MHz
-    localparam MAX_W_WORDS  = 8192;           // ceil(256*256/8) INT4 packed
-    localparam MAX_A_WORDS  = 16384;          // ceil(256*256/4) INT8 packed
-    localparam MAX_R_WORDS  = 65536;          // 256×256 INT32 results
+    localparam MAX_DIM      = 2048;           // max supported dimension (M/K/N)
+    localparam MAX_W_WORDS  = ((MAX_DIM * MAX_DIM) + 7) / 8; // ceil(MAX_DIM^2/8) INT4 packed
+    localparam MAX_A_WORDS  = ((MAX_DIM * MAX_DIM) + 3) / 4; // ceil(MAX_DIM^2/4) INT8 packed
+    localparam MAX_R_WORDS  = MAX_DIM * MAX_DIM;             // MAX_DIM×MAX_DIM INT32 results
+    localparam TILE_SIZE    = 64;             // fixed hardware tile dimension
 
     //=========================================================================
     // DUT Signals
@@ -68,6 +70,8 @@ module tb_mxu;
     wire        activation_load_en_o;
     wire        store_out_o;
     wire [5:0]  store_row_o;
+    wire [5:0]  compute_k_o;
+    wire [15:0] tiles_completed_o;
 
     //=========================================================================
     // DUT Instantiation
@@ -95,12 +99,14 @@ module tb_mxu;
         .weight_bus_i       (weight_bus),
         .activation_bus_i   (activation_bus),
         .acc_out_bus_o      (acc_out_bus_o),
-        .state              (state),
-        .compute_en_o       (compute_en_o),
-        .weight_load_en_o   (weight_load_en_o),
+        .state                (state),
+        .compute_en_o         (compute_en_o),
+        .weight_load_en_o     (weight_load_en_o),
         .activation_load_en_o (activation_load_en_o),
-        .store_out_o        (store_out_o),
-        .store_row_o        (store_row_o)
+        .store_out_o          (store_out_o),
+        .store_row_o          (store_row_o),
+        .compute_k_o          (compute_k_o),
+        .tiles_completed_o    (tiles_completed_o)
     );
 
     // Tie off unused SRAM inputs
@@ -127,7 +133,7 @@ module tb_mxu;
     reg [31:0]    weight_words;       // ceil(M*K/8)
     reg [31:0]    act_words;          // ceil(K*N/4)
     reg [31:0]    result_words;       // M * N
-    reg [15:0]    k_tiles, n_tiles, m_tiles; // ceil(dim/64)
+    reg [15:0]    k_tiles, n_tiles, m_tiles; // ceil(dim/TILE_SIZE)
 
     //=========================================================================
     // Internal Memories (loaded via $readmemh)
@@ -142,18 +148,15 @@ module tb_mxu;
     //=========================================================================
     reg [15:0]  global_k_off;         // accumulated K-offset from completed tiles
     reg [6:0]   comp_cycle;           // 0..k_cur+1 within current compute phase (7-bit)
-    reg         in_compute;           // flag: compute phase active
 
     wire [16:0] k_rem_w = {1'b0, K} - {1'b0, global_k_off};
-    wire [6:0]  k_cur_w = (k_rem_w >= 17'd64) ? 7'd64 : k_rem_w[6:0];
+    wire [6:0]  k_cur_w = (k_rem_w >= TILE_SIZE) ? TILE_SIZE : k_rem_w[6:0];
 
     //=========================================================================
     // Tile Tracker (tracks controller tile progression)
     //=========================================================================
     reg [15:0]  tb_k_tile, tb_n_tile, tb_m_tile;
-    reg [6:0]   tile_m_cur;
-    reg [6:0]   tile_n_cur;           // valid columns in current N-tile: min(64, N - n_tile*64)
-    reg [16:0]  dim_rem_m, dim_rem_n; // intermediate for part-select avoidance
+    reg [15:0]  cap_m_tile, cap_n_tile; // latched tile indices for the current store phase
     reg         start_trackers;       // pulse: reset tile trackers to initial state
 
     // Falling-edge detector for compute_en → tile transitions
@@ -176,6 +179,7 @@ module tb_mxu;
     reg [5:0]   prev_store_row;       // dedup: last captured store_row
     reg         cap_first;            // first capture in store phase
     integer     cap_c;
+    integer     cap_flat;             // row-major flat index into result_mem
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -184,13 +188,30 @@ module tb_mxu;
             cap_first       <= 1'b1;
         end else if (store_out_o) begin
             if (cap_first || (store_row_o != prev_store_row)) begin
+                integer    dim_rem_n_cap;
+                reg [6:0]  cap_tile_n_cur;
+
                 cap_first       <= 1'b0;
                 prev_store_row  <= store_row_o;
-                // Capture only valid columns for this N-tile
-                for (cap_c = 0; cap_c < tile_n_cur && cap_c < 64; cap_c = cap_c + 1) begin
-                    result_mem[result_count + cap_c] <= acc_out_bus_o[32*cap_c +: 32];
+
+                // Compute valid columns for this capture tile from the latched
+                // N-tile index. Doing it here avoids the one-cycle lag from
+                // computing it in the negedge block.
+                dim_rem_n_cap  = {1'b0, N} - {1'b0, (cap_n_tile * TILE_SIZE)};
+                cap_tile_n_cur = (dim_rem_n_cap >= TILE_SIZE) ? TILE_SIZE : dim_rem_n_cap[6:0];
+
+                // Capture valid columns for this N-tile into row-major slots.
+                // Use latched cap_m_tile/cap_n_tile so the index remains stable
+                // for the entire store_out phase even though tb_m/tb_n advance
+                // at compute_en falling edge.
+                // Absolute row = cap_m_tile*TILE_SIZE + store_row_o,
+                // absolute col = cap_n_tile*TILE_SIZE + cap_c.
+                for (cap_c = 0; cap_c < cap_tile_n_cur && cap_c < TILE_SIZE; cap_c = cap_c + 1) begin
+                    cap_flat = (cap_m_tile * TILE_SIZE + {10'd0, store_row_o}) * N
+                             + (cap_n_tile * TILE_SIZE + cap_c);
+                    result_mem[cap_flat] <= acc_out_bus_o[32*cap_c +: 32];
                 end
-                result_count <= result_count + {26'd0, tile_n_cur};
+                result_count <= result_count + {26'd0, cap_tile_n_cur};
             end
         end else begin
             cap_first <= 1'b1;
@@ -205,55 +226,59 @@ module tb_mxu;
         reg [31:0] drv_w_word, drv_a_word;
         integer    drv_nibble_idx;  // integer: avoid 3-bit truncation on << 2
         integer    drv_byte_idx;    // integer: avoid 2-bit truncation on << 3
+        integer    w_flat, a_flat;  // flat byte/nibble indices into packed hex arrays
         reg [15:0] drv_k_idx;
 
         if (!rst_n) begin
             weight_bus      <= 256'd0;
             activation_bus  <= 512'd0;
             comp_cycle      <= 7'd0;
-            in_compute      <= 1'b0;
             global_k_off    <= 16'd0;
             tb_k_tile       <= 16'd0;
             tb_n_tile       <= 16'd0;
             tb_m_tile       <= 16'd0;
-            tile_m_cur      <= 7'd0;
-            tile_n_cur      <= 7'd0;
         end else if (start_trackers) begin
             // Initial block requests tracker reset (before CMD=START)
             global_k_off    <= 16'd0;
             tb_k_tile       <= 16'd0;
             tb_n_tile       <= 16'd0;
             tb_m_tile       <= 16'd0;
-            tile_m_cur      <= ((M >= 16'd64) ? 7'd64 : M[6:0]);
-            tile_n_cur      <= ((N >= 16'd64) ? 7'd64 : N[6:0]);
+            cap_m_tile      <= 16'd0;
+            cap_n_tile      <= 16'd0;
             comp_cycle      <= 7'd0;
-            in_compute      <= 1'b0;
             weight_bus      <= 256'd0;
             activation_bus  <= 512'd0;
         end else if (compute_en_o) begin
-            in_compute <= 1'b1;
             if (comp_cycle < k_cur_w) begin
                 // Drive real data for K-index = global_k_off + comp_cycle
                 drv_k_idx = global_k_off + {9'd0, comp_cycle};
 
-                // ── Weight broadcast bus ──────────────────────────────
-                // weights.hex stores K×N INT4 (K rows, N cols).
-                // PE(r,c) at K-cycle k needs weight[r][k] = weight at
-                // output row r for K-index k.
-                // weight_mem layout: 8*row + col_group, nibble col%8 = weight[r][k]
+                // ── Weight broadcast bus (column broadcast) ───────────
+                // weights.hex stores K×N INT4 row-major (K rows, N cols), packed
+                // 8 weights per 32-bit word. PE(r,c) at K-cycle k needs weight[k][c].
+                // Absolute column = tb_n_tile*TILE_SIZE + c.
+                // Flat index = k*N + abs_col; word_idx = flat_idx / 8;
+                // nibble = flat_idx % 8.
                 weight_bus = 256'd0;
-                for (drv_r = 0; drv_r < 64; drv_r = drv_r + 1) begin
-                    drv_w_word     = weight_mem[8*drv_r + (drv_k_idx >> 3)];
-                    drv_nibble_idx = drv_k_idx[2:0];  // K-index within group of 8
-                    weight_bus[4*drv_r +: 4] = drv_w_word[(drv_nibble_idx << 2) +: 4];
+                for (drv_c = 0; drv_c < TILE_SIZE; drv_c = drv_c + 1) begin
+                    w_flat         = drv_k_idx * N + (tb_n_tile * TILE_SIZE + drv_c);
+                    drv_nibble_idx = w_flat & 32'd7;
+                    drv_w_word     = weight_mem[w_flat >> 3];
+                    weight_bus[4*drv_c +: 4] = (drv_w_word >> (drv_nibble_idx * 4)) & 4'hF;
                 end
 
-                // ── Activation broadcast bus ──────────────────────────
+                // ── Activation broadcast bus (row broadcast) ──────────
+                // activations.hex stores M×K INT8 row-major (M rows, K cols), packed
+                // 4 activations per 32-bit word. PE(r,c) at K-cycle k needs act[r][k].
+                // Absolute row = tb_m_tile*TILE_SIZE + r.
+                // Flat index = abs_row*K + k; word_idx = flat_idx / 4;
+                // byte = flat_idx % 4.
                 activation_bus = 512'd0;
-                for (drv_c = 0; drv_c < 64; drv_c = drv_c + 1) begin
-                    drv_a_word  = act_mem[16*drv_k_idx + (drv_c >> 2)];
-                    drv_byte_idx = drv_c[1:0];
-                    activation_bus[8*drv_c +: 8] = drv_a_word[(drv_byte_idx << 3) +: 8];
+                for (drv_r = 0; drv_r < TILE_SIZE; drv_r = drv_r + 1) begin
+                    a_flat       = (tb_m_tile * TILE_SIZE + drv_r) * K + drv_k_idx;
+                    drv_byte_idx = a_flat & 32'd3;
+                    drv_a_word   = act_mem[a_flat >> 2];
+                    activation_bus[8*drv_r +: 8] = (drv_a_word >> (drv_byte_idx * 8)) & 8'hFF;
                 end
 
             end else begin
@@ -263,35 +288,38 @@ module tb_mxu;
             end
             comp_cycle <= comp_cycle + 7'd1;
         end else begin
-            in_compute <= 1'b0;
             comp_cycle <= 7'd0;
             weight_bus      <= 256'd0;
             activation_bus  <= 512'd0;
 
-            // On compute_en falling edge, advance tile counters
+            // On compute_en falling edge, latch the tile indices for the
+            // upcoming store_out phase, then advance the live trackers.
             if (compute_fell) begin
-                // Advance global K offset
-                global_k_off <= global_k_off + {9'd0, k_cur_w};
+                cap_m_tile <= tb_m_tile;
+                cap_n_tile <= tb_n_tile;
 
-                // Advance K-tile; check for N/M tile wrap
+                // Advance K-tile; check for N/M tile wrap. Use strict `<`
+                // so live tile indices stay within the current group during
+                // the final store_out phase.
                 tb_k_tile <= tb_k_tile + 16'd1;
-                if ((tb_k_tile + 16'd1) >= k_tiles) begin
-                    tb_k_tile  <= 16'd0;
-                    tb_n_tile  <= tb_n_tile + 16'd1;
-                    if ((tb_n_tile + 16'd1) >= n_tiles) begin
+                if ((tb_k_tile + 16'd1) < k_tiles) begin
+                    // More K-tiles in this (M,N) group: accumulate K offset
+                    global_k_off <= global_k_off + {9'd0, k_cur_w};
+                end else begin
+                    // Last K-tile of this group: reset K offset and move to
+                    // the next N-tile (or M-tile) only if one exists.
+                    tb_k_tile    <= 16'd0;
+                    global_k_off <= 16'd0;
+                    if ((tb_n_tile + 16'd1) < n_tiles) begin
+                        tb_n_tile <= tb_n_tile + 16'd1;
+                    end else begin
                         tb_n_tile <= 16'd0;
-                        tb_m_tile <= tb_m_tile + 16'd1;
+                        if ((tb_m_tile + 16'd1) < m_tiles) begin
+                            tb_m_tile <= tb_m_tile + 16'd1;
+                        end
+                        // else: last M-tile; leave tb_m_tile at final value
                     end
                 end
-            end
-
-            // Track m_cur/n_cur for current tile (see LOAD_W computation)
-            if (store_out_o) begin
-                // Compute remainder via intermediate regs (part-select on expr is illegal)
-                dim_rem_m = {1'b0, M} - {1'b0, (tb_m_tile * 16'd64)};
-                dim_rem_n = {1'b0, N} - {1'b0, (tb_n_tile * 16'd64)};
-                tile_m_cur <= (dim_rem_m >= 17'd64) ? 7'd64 : dim_rem_m[6:0];
-                tile_n_cur <= (dim_rem_n >= 17'd64) ? 7'd64 : dim_rem_n[6:0];
             end
         end
     end
@@ -410,9 +438,9 @@ module tb_mxu;
         result_words = M * N;
         total_expected = result_words;
 
-        k_tiles = (K + 16'd63) / 16'd64;
-        n_tiles = (N + 16'd63) / 16'd64;
-        m_tiles = (M + 16'd63) / 16'd64;
+        k_tiles = (K + (TILE_SIZE - 1)) / TILE_SIZE;
+        n_tiles = (N + (TILE_SIZE - 1)) / TILE_SIZE;
+        m_tiles = (M + (TILE_SIZE - 1)) / TILE_SIZE;
 
         $display("[TB] weight_words=%0d, act_words=%0d, result_words=%0d, tiles: K=%0d N=%0d M=%0d",
                  weight_words, act_words, result_words, k_tiles, n_tiles, m_tiles);
@@ -530,7 +558,14 @@ module tb_mxu;
         $sformat(result_path, "CaduceusCore/rtl/results/mxu_%0s.hex", scenario_name);
         $display("[TB] Writing result to %0s", result_path);
 
-        $writememh(result_path, result_mem, 0, result_count - 1);
+        if (result_count == 0) begin
+            // Zero-dimension case: $writememh with end=-1 is illegal; create
+            // an empty result file explicitly.
+            fd = $fopen(result_path, "w");
+            $fclose(fd);
+        end else begin
+            $writememh(result_path, result_mem, 0, result_count - 1);
+        end
 
         // ── Step 7: Compare with golden_output.hex ────────────────────────
         mismatch_count = 32'd0;

@@ -4,13 +4,15 @@
 //=============================================================================
 // Tests:
 //   T1: Single-cycle accumulation — weight=1, act=2 → all PEs = 2
-//   T2: Full tile (constant) — weight=2, act=3, 66 cycles → all PEs = 384
-//   T3: All-ones weight + all-twos activation, 66 cycles → all PEs = 128
-//   T4: Varying activation — weight=1, act[c]=c+1, 66 cycles → PE(r,c)=64*(c+1)
-//   T5: Row-varying weight — weight[r]=(r+1)&7, act=1, 66 cycles → PE(r,c)=64*((r+1)&7)
-//   T6: Reset accumulator — accumulate then reset, verify cleared
-//   T7: Accumulator load — write via acc_load, read back, verify
-//   T8: External accumulator module — write/read via ext_acc_* ports
+//   T2: Reset accumulator — accumulate then reset, verify cleared
+//   T3: Full tile (constant) — weight=2, act=3, 66 cycles → all PEs = 384
+//   T4: All-ones weight + all-twos activation, 66 cycles → all PEs = 128
+//   T5: Varying activation per row — weight=1, act[r]=r+1, 66 cycles → PE(r,c)=64*(r+1)
+//   T6: Column-varying weight — weight[c]=(c+1)&7, act=1, 66 cycles → PE(r,c)=64*((c+1)&7)
+//   T7: Negative weight (all -1, act=1) — 66 cycles → all PEs = -64
+//   T8: Accumulator load — write via acc_load, read back, verify
+//   T9: External accumulator module — write/read via ext_acc_* ports
+//  T10: Full-row read — constant tile, verify all 64x64 cells
 //=============================================================================
 
 module tb_mac_array;
@@ -84,12 +86,12 @@ module tb_mac_array;
     end
     endtask
 
-    // ── Helper: set weight for a specific row ─────────────────────────
-    task set_weight_row;
-        input [5:0] row;
+    // ── Helper: set weight for a specific column ───────────────────────
+    task set_weight_col;
+        input [5:0] col;
         input [3:0] val;
     begin
-        weight_bus[4*row +: 4] = val;
+        weight_bus[4*col +: 4] = val;
     end
     endtask
 
@@ -104,12 +106,12 @@ module tb_mac_array;
     end
     endtask
 
-    // ── Helper: set activation for a specific column ──────────────────
-    task set_act_col;
-        input [5:0] col;
+    // ── Helper: set activation for a specific row ──────────────────────
+    task set_act_row;
+        input [5:0] row;
         input [7:0] val;
     begin
-        activation_bus[8*col +: 8] = val;
+        activation_bus[8*row +: 8] = val;
     end
     endtask
 
@@ -294,7 +296,7 @@ module tb_mac_array;
 
         //===============================================================
         // T1: Single-cycle accumulation
-        //     weight=1 for all rows, activation=2 for all columns
+        //     weight=1 for all columns, activation=2 for all rows
         //     After 1 weight input + 2 flush cycles: each PE = 1*2 = 2
         //===============================================================
         $display("─── T1: Single-cycle accumulation (1×2=2) ───");
@@ -359,55 +361,72 @@ module tb_mac_array;
         clean_state();
 
         //===============================================================
-        // T5: Varying activation per column
-        //     weight=1 for all rows, activation[c]=c+1 (varying per col)
+        // T5: Varying activation per row
+        //     weight=1 for all columns, activation[r]=r+1 (varying per row)
         //     64 K-cycles (same weight/act each cycle)
-        //     PE(r,c) = 64 * 1 * (c+1) = 64*(c+1)
+        //     PE(r,c) = 64 * 1 * (r+1) = 64*(r+1)
         //===============================================================
-        $display("─── T5: Varying activation (result[r][c] = 64*(c+1)) ───");
+        $display("─── T5: Varying activation per row (result[r][c] = 64*(r+1)) ───");
 
         set_all_weights(4'd1);
-        for (c = 0; c < 64; c = c + 1) begin
-            // activation[c] = c + 1, but must fit in INT8 [-128, 127]
-            // c+1 for c=0..63 → 1..64, fits in INT8
-            set_act_col(c[5:0], c[5:0] + 8'd1);
+        for (r = 0; r < 64; r = r + 1) begin
+            // activation[r] = r + 1, but must fit in INT8 [-128, 127]
+            // r+1 for r=0..63 → 1..64, fits in INT8
+            set_act_row(r[5:0], r[5:0] + 8'd1);
         end
         run_compute_cycles(64);
 
-        // Check several cells across rows
+        // Check several rows across columns to verify row-broadcast:
+        // all columns in a row must have the same value.
         for (c = 0; c < 64; c = c + 1) begin
-            exp_val = 64 * (c + 1);   // 64*(c+1), max = 64*64 = 4096 (< INT32_MAX)
-            check_cell(6'd0, c[5:0], exp_val, "T5 varying act");
+            exp_val = 64 * 1;      // 64 * (0+1) = 64
+            check_cell(6'd0, c[5:0], exp_val, "T5 row0 all cols");
+        end
+        for (c = 0; c < 64; c = c + 1) begin
+            exp_val = 64 * 32;     // 64 * (31+1) = 2048
+            check_cell(6'd31, c[5:0], exp_val, "T5 row31 all cols");
+        end
+        for (c = 0; c < 64; c = c + 1) begin
+            exp_val = 64 * 64;     // 64 * (63+1) = 4096
+            check_cell(6'd63, c[5:0], exp_val, "T5 row63 all cols");
         end
 
         clean_state();
 
-        clean_state();
-
         //===============================================================
-        // T6: Row-varying weight
-        //     weight[r]=(r+1)&7, activation[c]=1
+        // T6: Column-varying weight
+        //     weight[c]=(c+1)&7, activation[r]=1
         //     64 K-cycles (same weight/act each cycle)
-        //     PE(r,c) = 64 * ((r+1)&7) * 1 = 64*((r+1)&7)
+        //     PE(r,c) = 64 * ((c+1)&7) * 1 = 64*((c+1)&7)
         //===============================================================
-        $display("─── T6: Row-varying weight (result = 64*((r+1)&7)) ───");
+        $display("─── T6: Column-varying weight (result = 64*((c+1)&7)) ───");
 
-        for (r = 0; r < 64; r = r + 1) begin
-            set_weight_row(r[5:0], (r + 1) & 4'd7);
+        for (c = 0; c < 64; c = c + 1) begin
+            set_weight_col(c[5:0], (c + 1) & 4'd7);
         end
         set_all_activations(8'd1);
         run_compute_cycles(64);
 
+        // Check several columns across rows to verify column-broadcast:
+        // all rows in a column must have the same value.
         for (r = 0; r < 64; r = r + 1) begin
-            exp_val = 64 * ((r + 1) & 7);
-            check_cell(r[5:0], 6'd0, exp_val, "T6 varying weight");
+            exp_val = 64 * 1;       // 64 * ((0+1)&7) = 64
+            check_cell(r[5:0], 6'd0, exp_val, "T6 col0 all rows");
+        end
+        for (r = 0; r < 64; r = r + 1) begin
+            exp_val = 64 * ((31 + 1) & 7);  // 64 * (32&7) = 0
+            check_cell(r[5:0], 6'd31, exp_val, "T6 col31 all rows");
+        end
+        for (r = 0; r < 64; r = r + 1) begin
+            exp_val = 64 * ((63 + 1) & 7);  // 64 * (64&7) = 0
+            check_cell(r[5:0], 6'd63, exp_val, "T6 col63 all rows");
         end
 
         clean_state();
 
         //===============================================================
         // T7: Mixed sign weight pattern
-        //     weight[r] = -1 (0xF in INT4, which is -1), activation[c]=1
+        //     weight[c] = -1 (0xF in INT4, which is -1), activation[r]=1
         //     64 K-cycles → result = 64 * (-1) * 1 = -64 per PE
         //===============================================================
         $display("─── T7: Negative weight (all -1, act=1) → result=-64 ───");

@@ -62,6 +62,8 @@ module tb_mxu_top;
     wire         activation_load_en;
     wire         store_out;
     wire [5:0]   store_row;
+    wire [5:0]   compute_k_o;
+    wire [15:0]  tiles_completed_o;
 
     //=========================================================================
     // DUT instantiation
@@ -96,7 +98,9 @@ module tb_mxu_top;
         .weight_load_en_o    (weight_load_en),
         .activation_load_en_o(activation_load_en),
         .store_out_o         (store_out),
-        .store_row_o         (store_row)
+        .store_row_o         (store_row),
+        .compute_k_o         (compute_k_o),
+        .tiles_completed_o   (tiles_completed_o)
     );
 
     //=========================================================================

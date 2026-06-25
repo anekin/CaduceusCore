@@ -56,7 +56,7 @@ module controller (
     output reg  [5:0]  store_row,
 
     // ── Debug / verification outputs ──────────────────────────────────
-    output reg  [3:0]  state,            // current FSM state (S_IDLE=0, etc.)
+    output reg  [3:0]  state,            // current FSM state, registered (no lag)
     output reg  [15:0] tiles_completed   // number of tiles processed
 );
 
@@ -77,8 +77,6 @@ module controller (
     //=========================================================================
     // Internal registers
     //=========================================================================
-    reg [3:0]  state_r;
-
     // Captured dimensions & tile counts
     reg [15:0] M, K, N;
     reg [15:0] m_tiles, k_tiles, n_tiles;
@@ -107,7 +105,7 @@ module controller (
     //=========================================================================
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            state_r           <= S_IDLE;
+            state             <= S_IDLE;
             status_busy       <= 1'b0;
             status_done       <= 1'b0;
             status_error      <= 1'b0;
@@ -119,7 +117,6 @@ module controller (
             mac_reset_acc     <= 1'b0;
             store_out         <= 1'b0;
             store_row         <= 6'd0;
-            state             <= S_IDLE;
             tiles_completed   <= 16'd0;
             done_cnt          <= 16'd0;
             M                 <= 16'd0;
@@ -148,7 +145,7 @@ module controller (
             irq               <= 1'b0;
             compute_en        <= 1'b0;
 
-            case (state_r)
+            case (state)
 
                 //=============================================================
                 // IDLE — wait for cmd_start
@@ -158,7 +155,7 @@ module controller (
                     if (cmd_start) begin
                         done_cnt        <= 16'd0;
                         tiles_completed <= 16'd0;
-                        state_r         <= S_READ_DIMS;
+                        state         <= S_READ_DIMS;
                     end
                 end
 
@@ -182,13 +179,13 @@ module controller (
                     n_tile <= 16'd0;
 
                     if (cmd_abort) begin
-                        state_r       <= S_IDLE;
+                        state       <= S_IDLE;
                         status_busy   <= 1'b0;
                         status_error  <= 1'b1;
                     end else if (dim0_m == 16'd0 || dim0_k == 16'd0 || dim1_n == 16'd0) begin
-                        state_r <= S_DONE;
+                        state <= S_DONE;
                     end else begin
-                        state_r <= S_LOAD_W;
+                        state <= S_LOAD_W;
                     end
                 end
 
@@ -210,11 +207,11 @@ module controller (
                     m_cur <= (dim_rem >= 17'd64) ? 7'd64 : dim_rem[6:0];
 
                     if (cmd_abort) begin
-                        state_r       <= S_IDLE;
+                        state       <= S_IDLE;
                         status_busy   <= 1'b0;
                         status_error  <= 1'b1;
                     end else begin
-                        state_r <= S_LOAD_A;
+                        state <= S_LOAD_A;
                     end
                 end
 
@@ -229,11 +226,11 @@ module controller (
                     compute_timer <= k_cur + 7'd1;
 
                     if (cmd_abort) begin
-                        state_r       <= S_IDLE;
+                        state       <= S_IDLE;
                         status_busy   <= 1'b0;
                         status_error  <= 1'b1;
                     end else begin
-                        state_r <= S_COMPUTE;
+                        state <= S_COMPUTE;
                     end
                 end
 
@@ -246,12 +243,19 @@ module controller (
                     compute_k   <= k_cur[5:0];   // 0 = full tile of 64
 
                     if (cmd_abort) begin
-                        state_r       <= S_IDLE;
+                        state       <= S_IDLE;
                         status_busy   <= 1'b0;
                         status_error  <= 1'b1;
                     end else if (compute_timer == 7'd0) begin
-                        state_r       <= S_STORE_OUT;
-                        store_counter <= 7'd0;
+                        // Accumulate across K-tiles: only store after the last
+                        // K-tile of this (M,N) tile group.
+                        if (k_tile + 16'd1 < k_tiles) begin
+                            k_tile  <= k_tile + 16'd1;
+                            state <= S_LOAD_W;
+                        end else begin
+                            state       <= S_STORE_OUT;
+                            store_counter <= 7'd0;
+                        end
                     end else begin
                         compute_timer <= compute_timer - 7'd1;
                     end
@@ -260,12 +264,14 @@ module controller (
                 //=============================================================
                 // STORE_OUT — route row addresses 0..m_cur-1
                 //=============================================================
+                // Entered only after the final K-tile of an (M,N) group, so
+                // k_tile is always the last K-tile here.
                 S_STORE_OUT: begin
                     status_busy <= 1'b1;
                     store_out   <= 1'b1;
 
                     if (cmd_abort) begin
-                        state_r       <= S_IDLE;
+                        state       <= S_IDLE;
                         status_busy   <= 1'b0;
                         status_error  <= 1'b1;
                     end else if (store_counter == m_cur) begin
@@ -273,22 +279,18 @@ module controller (
                         tiles_completed <= done_cnt + 16'd1;
 
                         // ── Tile iteration ──────────────────────────
-                        k_tile <= k_tile + 16'd1;
-                        if (k_tile + 16'd1 < k_tiles) begin
-                            state_r <= S_LOAD_W;
+                        k_tile <= 16'd0;
+                        n_tile <= n_tile + 16'd1;
+                        if (n_tile + 16'd1 < n_tiles) begin
+                            state <= S_LOAD_W;
                         end else begin
-                            k_tile <= 16'd0;
-                            n_tile <= n_tile + 16'd1;
-                            if (n_tile + 16'd1 < n_tiles) begin
-                                state_r <= S_LOAD_W;
+                            n_tile <= 16'd0;
+                            m_tile <= m_tile + 16'd1;
+                            if (m_tile + 16'd1 < m_tiles) begin
+                                // Next M-tile: dimensions unchanged, skip READ_DIMS
+                                state <= S_LOAD_W;
                             end else begin
-                                n_tile <= 16'd0;
-                                m_tile <= m_tile + 16'd1;
-                                if (m_tile + 16'd1 < m_tiles) begin
-                                    state_r <= S_READ_DIMS;
-                                end else begin
-                                    state_r <= S_DONE;
-                                end
+                                state <= S_DONE;
                             end
                         end
                     end else begin
@@ -304,20 +306,19 @@ module controller (
                     status_busy  <= 1'b0;
                     status_done  <= 1'b1;
                     irq          <= irq_en;
-                    state_r      <= S_IDLE;
+                    state      <= S_IDLE;
                 end
 
                 //=============================================================
                 // Unknown state — fallback to IDLE
                 //=============================================================
                 default: begin
-                    state_r     <= S_IDLE;
+                    state     <= S_IDLE;
                     status_busy <= 1'b0;
                 end
 
             endcase
 
-            state <= state_r;
         end
     end
 
