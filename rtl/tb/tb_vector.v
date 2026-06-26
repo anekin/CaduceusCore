@@ -10,6 +10,7 @@
 //       CaduceusCore/rtl/tb/tb_vector.v CaduceusCore/rtl/vector/*.v \
 //       -o /tmp/simv_tb_vector -l /tmp/tb_vector_compile.log
 //   /tmp/simv_tb_vector +testdir=<scenario_dir> +scenario=<name> -l /tmp/tb_vector_sim.log
+//   /tmp/simv_tb_vector +batchfile=/tmp/vector_batch.txt
 //
 // Scenario directory layout:
 //   params.txt          OP=ADD,DIM=128   (op symbols: ADD,MUL,MAX,SUM,CONV,RESID)
@@ -120,9 +121,8 @@ module tb_vector;
     // Address stride: 512 bytes per INT32 chunk, 256 bytes per FP16 chunk.
     // We keep a flat byte-addressable memory using 32-bit words.
     //=========================================================================
-    reg [31:0] sram_mem [0:(MAX_ELEMENTS*2)-1]; // enough for A/B/O INT32/FP16
+    reg [31:0] sram_mem [0:(MAX_ELEMENTS*2)-1];
 
-    // Combinational read with one-cycle latch handled by DUT ST_LATCH state
     always @(*) begin
         integer rd_i;
         sram_a_rdata = {VECTOR_W{1'b0}};
@@ -139,12 +139,10 @@ module tb_vector;
         end
     end
 
-    // Write port: capture on posedge clk when sram_o_wen is high
     always @(posedge clk) begin
         integer wr_i;
         if (sram_o_wen) begin
             for (wr_i = 0; wr_i < NUM_LANES; wr_i = wr_i + 1) begin
-                // For INT32 ops: 4 bytes per lane
                 if (sram_o_wstrb[wr_i*4]) begin
                     sram_mem[(sram_o_addr >> 2) + wr_i] <= sram_o_wdata[wr_i*DATA_W +: DATA_W];
                 end
@@ -155,8 +153,8 @@ module tb_vector;
     //=========================================================================
     // Scenario parameters
     //=========================================================================
-    reg [1023:0] test_dir;       // from +testdir+
-    reg [1023:0] scenario_name;  // from +scenario+ or last component of test_dir
+    string       test_dir;
+    string       scenario_name;
     reg [1023:0] params_path;
     reg [1023:0] a_hex_path;
     reg [1023:0] b_hex_path;
@@ -164,11 +162,11 @@ module tb_vector;
     reg [1023:0] g_hex_path;
     reg [1023:0] result_path;
 
-    reg [31:0]   op_code;        // 0=ADD,1=MUL,2=MAX,3=SUM,4=CONV,5=RESID
-    reg [1023:0] op_name;        // "ADD" etc.
+    reg [31:0]   op_code;
+    reg [1023:0] op_name;
     reg [15:0]   dim;
-    reg [31:0]   result_words;   // number of 32-bit result words expected
-    reg [31:0]   o_addr_cfg;     // configured O_ADDR for result capture
+    reg [31:0]   result_words;
+    reg [31:0]   o_addr_cfg;
 
     time         start_time;
     time         done_time;
@@ -185,10 +183,29 @@ module tb_vector;
     //=========================================================================
     // Result capture counters
     //=========================================================================
-    reg [31:0]  capture_count;
     reg [31:0]  write_count;
     reg         is_conv;
     reg         is_reduce;
+
+    // Batch-mode state
+    reg [1023:0] batchfile_path;
+    integer      batch_fd;
+    integer      scenarios;
+    integer      failures;
+    reg          scenario_pass;
+
+    // Shared loop/scenario variables (used by tasks below)
+    integer      i;
+    integer      fd, code, scans;
+    integer      cmp_i;
+    integer      chunk_idx, lane_idx;
+    integer      write_idx;
+    reg [31:0]   stat_val;
+    reg [31:0]   val_int;
+    reg [31:0]   word_val;
+    reg [15:0]   fp16_val;
+    reg [31:0]   exp_word;
+    reg [4095:0] line_buf;
 
     //=========================================================================
     // MMIO Helpers
@@ -245,21 +262,61 @@ module tb_vector;
         end
     endfunction
 
+    function automatic string derive_scenario;
+        input string path;
+        integer si, last_slash;
+        begin
+            last_slash = -1;
+            for (si = path.len() - 1; si >= 0; si = si - 1) begin
+                if (path.getc(si) == "/") begin
+                    last_slash = si;
+                    break;
+                end
+            end
+            if (last_slash >= 0 && last_slash + 1 < path.len())
+                derive_scenario = path.substr(last_slash + 1, path.len() - 1);
+            else if (path.len() > 0)
+                derive_scenario = path;
+            else
+                derive_scenario = "unknown";
+        end
+    endfunction
+
+    //=========================================================================
+    // Reset DUT and clear SRAM/state before the next scenario
+    //=========================================================================
+    task reset_dut_and_state;
+    begin
+        rst_n = 1'b0;
+        mmio_cs    = 1'b0;
+        mmio_we    = 1'b0;
+        mmio_addr  = 12'd0;
+        mmio_wdata = 32'd0;
+        write_count   = 32'd0;
+        is_conv       = 1'b0;
+        is_reduce     = 1'b0;
+        for (i = 0; i < MAX_ELEMENTS * 2; i = i + 1)
+            sram_mem[i] = 32'd0;
+        for (i = 0; i < MAX_ELEMENTS; i = i + 1) begin
+            a_mem[i]      = 32'd0;
+            b_mem[i]      = 32'd0;
+            x_mem[i]      = 32'd0;
+            golden_mem[i] = 32'd0;
+            result_mem[i] = 32'd0;
+        end
+        repeat(10) @(posedge clk);
+        rst_n = 1'b1;
+        @(posedge clk);
+        $display("[TB] Reset released at %0t", $time);
+    end
+    endtask
+
     //=========================================================================
     // Main Test Sequence
     //=========================================================================
-    reg [31:0] stat_val;
     reg [31:0] total_expected;
     reg [31:0] mismatch_count;
     reg [31:0] first_mismatch;
-    integer    cmp_i;
-    integer    fd, code, scans;
-    reg [31:0] val_int;
-    integer    chunk_idx, lane_idx;
-    integer    write_idx;
-    reg [31:0] word_val;
-    reg [15:0] fp16_val;
-    reg [31:0] exp_word;
 
     initial begin
         // ── Initialize signals ────────────────────────────────────────────
@@ -267,7 +324,6 @@ module tb_vector;
         mmio_we    = 1'b0;
         mmio_addr  = 12'd0;
         mmio_wdata = 32'd0;
-        capture_count = 32'd0;
         write_count   = 32'd0;
         is_conv       = 1'b0;
         is_reduce     = 1'b0;
@@ -279,27 +335,91 @@ module tb_vector;
         @(posedge clk);
         $display("[TB] Reset released at %0t", $time);
 
-        // ── Step 1: Read +testdir+ plusarg ────────────────────────────────
-        if (!$value$plusargs("testdir=%s", test_dir)) begin
-            $display("[TB] ERROR: +testdir+ plusarg not provided");
-            $display("[TB] Usage: /tmp/simv_tb_vector +testdir=<path_to_scenario_dir> +scenario=<name>");
+        // ── Batch mode or single scenario ─────────────────────────────────
+        if ($value$plusargs("batchfile=%s", batchfile_path)) begin
+            batch_fd = $fopen(batchfile_path, "r");
+            if (!batch_fd) begin
+                $display("[TB] ERROR: Cannot open batchfile %0s", batchfile_path);
+                $display("FAIL");
+                $finish;
+            end
+
+            scenarios = 0;
+            failures  = 0;
+            while (!$feof(batch_fd)) begin
+                code = $fgets(line_buf, batch_fd);
+                if (code == 0) break;
+                // Parse first whitespace-delimited token; blank lines are ignored
+                code = $sscanf(line_buf, "%s", test_dir);
+                if (code != 1) continue;
+
+                scenarios = scenarios + 1;
+                scenario_name = derive_scenario(test_dir);
+                $display("[BATCH] Running scenario %0s (testdir=%0s)", scenario_name, test_dir);
+
+                if (scenarios > 1)
+                    reset_dut_and_state();
+
+                run_one_scenario(scenario_pass);
+                if (scenario_pass) begin
+                    $display("[BATCH] %0s PASS", scenario_name);
+                end else begin
+                    $display("[BATCH] %0s FAIL", scenario_name);
+                    failures = failures + 1;
+                end
+            end
+            $fclose(batch_fd);
+
+            $display("[BATCH] Summary: %0d passed, %0d failed out of %0d",
+                     scenarios - failures, failures, scenarios);
+            if (failures == 0) $display("PASS");
+            else               $display("FAIL");
+            $finish;
+        end else begin
+            // ── Step 1: Read +testdir+ plusarg ─────────────────────────────
+            if (!$value$plusargs("testdir=%s", test_dir)) begin
+                $display("[TB] ERROR: +testdir+ plusarg not provided");
+                $display("[TB] Usage: /tmp/simv_tb_vector +testdir=<path_to_scenario_dir> +scenario=<name>");
+                $display("FAIL");
+                $finish;
+            end
+            $display("[TB] testdir = %0s", test_dir);
+
+            if (!$value$plusargs("scenario=%s", scenario_name))
+                scenario_name = derive_scenario(test_dir);
+
+            run_one_scenario(scenario_pass);
+            if (scenario_pass) $display("PASS");
+            else               $display("FAIL");
             $finish;
         end
-        $display("[TB] testdir = %0s", test_dir);
+    end
+
+    //=========================================================================
+    // Run one scenario (used by both single and batch modes)
+    //=========================================================================
+    task run_one_scenario;
+        output reg pass;
+        reg timed_out;
+    begin
+        timed_out = 1'b0;
+
+        // Ensure scenario_name is set (batch mode already sets it)
+        if (scenario_name.len() == 0)
+            scenario_name = derive_scenario(test_dir);
 
         // ── Step 2: Parse params.txt ──────────────────────────────────────
         $sformat(params_path, "%0s/params.txt", test_dir);
         fd = $fopen(params_path, "r");
         if (!fd) begin
             $display("[TB] ERROR: Cannot open %0s", params_path);
-            $finish;
+            pass = 1'b0;
+            return;
         end
 
         op_code = 32'hFFFFFFFF;
         dim     = 16'd0;
 
-        // Parse params.txt: read the whole file content into a byte buffer,
-        // then scan for KEY=VALUE pairs separated by commas or newlines.
         begin
             reg [7:0] pbuf [0:4095];
             integer   pbuf_len;
@@ -324,7 +444,6 @@ module tb_vector;
 
             pos = 0;
             while (pos < pbuf_len) begin
-                // skip separators and whitespace
                 while (pos < pbuf_len) begin
                     ch = pbuf[pos];
                     if (ch == 8'h2C || ch == 8'h0A || ch == 8'h0D || ch == 8'h20 || ch == 8'h09) pos = pos + 1;
@@ -332,11 +451,10 @@ module tb_vector;
                 end
                 if (pos >= pbuf_len) break;
 
-                // read key
                 key_len = 0;
                 while (pos < pbuf_len) begin
                     ch = pbuf[pos];
-                    if (ch == 8'h3D) begin // '='
+                    if (ch == 8'h3D) begin
                         pos = pos + 1;
                         break;
                     end
@@ -351,7 +469,6 @@ module tb_vector;
                 end
                 if (key_len == 0) continue;
 
-                // read value
                 val_len = 0;
                 while (pos < pbuf_len) begin
                     ch = pbuf[pos];
@@ -366,7 +483,6 @@ module tb_vector;
                 end
                 if (val_len == 0) continue;
 
-                // dispatch on key
                 if (key_len == 2 && key_buf[0] == "O" && key_buf[1] == "P") begin
                     if (val_len == 3 && val_buf[0] == "A" && val_buf[1] == "D" && val_buf[2] == "D") begin
                         op_code = 32'd0; op_name = "ADD";
@@ -385,7 +501,8 @@ module tb_vector;
                         for (vi = 0; vi < val_len; vi = vi + 1)
                             $write("%0s", val_buf[vi]);
                         $display("");
-                        $finish;
+                        pass = 1'b0;
+                        return;
                     end
                 end else if (key_len == 3 && key_buf[0] == "D" && key_buf[1] == "I" && key_buf[2] == "M") begin
                     tmp_val = 32'd0;
@@ -401,7 +518,8 @@ module tb_vector;
         if (op_code == 32'hFFFFFFFF || dim == 16'd0) begin
             $display("[TB] ERROR: params.txt must specify OP=<NAME> and DIM=<N>");
             $display("[TB] Parsed OP=%0s (code=%0d), DIM=%0d", op_name, op_code, dim);
-            $finish;
+            pass = 1'b0;
+            return;
         end
 
         is_conv   = (op_code == 32'd4);
@@ -428,7 +546,6 @@ module tb_vector;
             $readmemh(a_hex_path, a_mem);
             $readmemh(b_hex_path, b_mem);
 
-            // Pre-load A and B into SRAM model at byte addresses 0x0000_0000 and 0x0001_0000
             for (chunk_idx = 0; chunk_idx * NUM_LANES < dim; chunk_idx = chunk_idx + 1) begin
                 for (lane_idx = 0; lane_idx < NUM_LANES; lane_idx = lane_idx + 1) begin
                     if (chunk_idx * NUM_LANES + lane_idx < dim) begin
@@ -442,7 +559,6 @@ module tb_vector;
             $display("[TB] Loading x.hex");
             $readmemh(x_hex_path, x_mem);
 
-            // Pre-load X into SRAM model at byte address 0x0000_0000
             for (chunk_idx = 0; chunk_idx * NUM_LANES < dim; chunk_idx = chunk_idx + 1) begin
                 for (lane_idx = 0; lane_idx < NUM_LANES; lane_idx = lane_idx + 1) begin
                     if (chunk_idx * NUM_LANES + lane_idx < dim) begin
@@ -453,29 +569,25 @@ module tb_vector;
         end
 
         // ── Step 4: Configure MMIO registers ──────────────────────────────
-        mmio_write(12'h00, op_code);              // CTRL
+        mmio_write(12'h00, op_code);
         $display("[TB] Wrote CTRL=%0d (%0s)", op_code, op_name);
 
-        mmio_write(12'h0C, 32'd0);                // A_ADDR
-        mmio_write(12'h014, 32'd0);               // O_ADDR
+        mmio_write(12'h0C, 32'd0);
+        mmio_write(12'h014, 32'd0);
         if (op_code == 32'd0 || op_code == 32'd1 || op_code == 32'd5) begin
-            mmio_write(12'h10, 32'h0001_0000);    // B_ADDR
+            mmio_write(12'h10, 32'h0001_0000);
         end else begin
-            mmio_write(12'h10, 32'd0);            // B_ADDR unused
+            mmio_write(12'h10, 32'd0);
         end
-        mmio_write(12'h18, {16'd0, dim});         // DIM
-        mmio_write(12'h1C, 32'd1);                // IRQ_EN
+        mmio_write(12'h18, {16'd0, dim});
+        mmio_write(12'h1C, 32'd1);
 
-        // For CONV, output address can overlap input region safely because DUT reads
-        // chunks before writing converted chunks. For other ops, separate regions
-        // are preferable; reuse A region only for unary ops (no write conflict).
         if (op_code == 32'd0 || op_code == 32'd1 || op_code == 32'd5) begin
             o_addr_cfg = 32'h0002_0000;
         end else begin
-            // Unary ops: put output at 0x0000_8000 to avoid aliasing input at 0x0000_0000
             o_addr_cfg = 32'h0000_8000;
         end
-        mmio_write(12'h014, o_addr_cfg);   // O_ADDR
+        mmio_write(12'h014, o_addr_cfg);
 
         $display("[TB] Wrote A_ADDR=0x00000000, B_ADDR=0x%08h, O_ADDR=0x%08h, DIM=%0d",
                  (op_code == 32'd0 || op_code == 32'd1 || op_code == 32'd5) ? 32'h0001_0000 : 32'd0,
@@ -484,7 +596,8 @@ module tb_vector;
 
         // ── Step 5: Start operation ───────────────────────────────────────
         start_time = $time;
-        mmio_write(12'h04, 32'd1);                // CMD.START
+        write_count   = 32'd0;
+        mmio_write(12'h04, 32'd1);
         $display("[TB] Wrote CMD=START at %0t", $time);
 
         // ── Step 6: Wait for STATUS.DONE or IRQ ──────────────────────────
@@ -500,7 +613,8 @@ module tb_vector;
                     @(posedge clk);
                 end
                 $display("[TB] ERROR: Timeout waiting for STATUS.DONE");
-                $finish;
+                timed_out = 1'b1;
+                disable wait_done;
             end
             begin
                 @(posedge irq);
@@ -509,27 +623,26 @@ module tb_vector;
             end
         join
 
+        if (timed_out) begin
+            pass = 1'b0;
+            return;
+        end
+
         done_time = $time;
         $display("[TB] Operation complete. Cycles=%0d", cycle_cnt);
 
-        // Wait a few cycles for any trailing writes
         repeat(5) @(posedge clk);
 
         // ── Step 7: Capture result from SRAM model ────────────────────────
-        // The DUT writes to O_ADDR; our SRAM model already reflects those writes.
         if (is_reduce) begin
             result_mem[0] = sram_mem[(o_addr_cfg >> 2)];
             write_count = 32'd1;
         end else if (is_conv) begin
-            // FP16 output: packed as two FP16 values per 32-bit lane.
-            // conv_out_vector[i] is at sram_o_wdata[i*16 +: 16].
-            // Within lane j (32-bit word), lower 16 bits = element 2*j, upper 16 bits = element 2*j+1.
             write_count = {16'd0, dim};
             for (chunk_idx = 0; chunk_idx * NUM_LANES < dim; chunk_idx = chunk_idx + 1) begin
                 for (lane_idx = 0; lane_idx < NUM_LANES; lane_idx = lane_idx + 1) begin
                     if (chunk_idx * NUM_LANES + lane_idx < dim) begin
                         write_idx = chunk_idx * NUM_LANES + lane_idx;
-                        // Two FP16 values per 32-bit SRAM word
                         result_mem[write_idx*2]     = {16'd0, sram_mem[(o_addr_cfg >> 2) + write_idx][15:0]};
                         if (write_idx*2 + 1 < dim)
                             result_mem[write_idx*2 + 1] = {16'd0, sram_mem[(o_addr_cfg >> 2) + write_idx][31:16]};
@@ -537,7 +650,6 @@ module tb_vector;
                 end
             end
         end else begin
-            // INT32 binary ops
             write_count = {16'd0, dim};
             for (chunk_idx = 0; chunk_idx * NUM_LANES < dim; chunk_idx = chunk_idx + 1) begin
                 for (lane_idx = 0; lane_idx < NUM_LANES; lane_idx = lane_idx + 1) begin
@@ -550,35 +662,14 @@ module tb_vector;
         end
 
         // ── Step 8: Write result hex file ─────────────────────────────────
-        if (!$value$plusargs("scenario=%s", scenario_name)) begin
-            begin
-                integer si, ls, sj;
-                reg [7:0] db [0:127];
-                for (si = 0; si < 128; si = si + 1) begin
-                    db[si] = test_dir[si*8 +: 8];
-                end
-                ls = 0;
-                for (si = 0; si < 128; si = si + 1) begin
-                    if (db[si] == 8'h2F) ls = si + 1;
-                    if (db[si] == 8'h00) break;
-                end
-                sj = 0;
-                for (si = ls; si < 128; si = si + 1) begin
-                    if (db[si] == 8'h00) break;
-                    scenario_name[sj*8 +: 8] = db[si];
-                    sj = sj + 1;
-                end
-                if (sj == 0) scenario_name = "unknown";
-            end
-        end
-
         $sformat(result_path, "/home/prj/zhengs/caduceuscore/CaduceusCore/rtl/results/vector_%0s.hex", scenario_name);
         $display("[TB] Writing result to %0s", result_path);
 
         fd = $fopen(result_path, "w");
         if (!fd) begin
             $display("[TB] ERROR: Cannot open %0s for writing", result_path);
-            $finish;
+            pass = 1'b0;
+            return;
         end
 
         if (is_conv) begin
@@ -599,11 +690,8 @@ module tb_vector;
         first_mismatch = 32'hFFFFFFFF;
 
         if (is_conv) begin
-            // FP16 comparison with tolerance (abs <= 1e-3 or rel <= 1e-2)
-            // Golden file has one FP16 per line (4 hex digits) stored in golden_mem lower 16 bits
             for (cmp_i = 0; cmp_i < total_expected; cmp_i = cmp_i + 1) begin
                 if (result_mem[cmp_i][15:0] !== golden_mem[cmp_i][15:0]) begin
-                    // Tolerance check requires floating-point; do a raw mismatch warning
                     if (mismatch_count == 0) first_mismatch = cmp_i[31:0];
                     mismatch_count = mismatch_count + 32'd1;
                     if (mismatch_count <= 5) begin
@@ -628,13 +716,15 @@ module tb_vector;
         if (mismatch_count == 0) begin
             $display("[TB] PASS: All %0d values match golden_output.hex", total_expected);
             $display("PASS");
+            pass = 1'b1;
         end else begin
             $display("[TB] FAIL: %0d mismatches (first at index %0d)", mismatch_count, first_mismatch);
             $display("FAIL");
+            pass = 1'b0;
         end
 
         $display("[TB] *** PERF: elapsed_cycles=%0d", (done_time - start_time) / (CLK_HALF * 2));
-        $finish;
     end
+    endtask
 
 endmodule

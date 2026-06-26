@@ -22,6 +22,7 @@ module reduce_tree #(
     input  wire                        valid_i,    // input valid strobe
     input  wire [NUM_IN-1:0]           lane_mask,  // 1=lane active
     output reg  [DATA_W-1:0]           result_o,
+    output reg  [63:0]                result64_o,  // raw INT64 (SUM) or sign-ext. (MAX)
     output reg                         valid_o
 );
 
@@ -125,8 +126,9 @@ module reduce_tree #(
     wire [DATA_W-1:0] max_result = stage_data[STAGES][0 +: DATA_W];
 
     always @(*) begin
-        result_o = op_pipe[STAGES] ? sum_sat : max_result;
-        valid_o  = valid_pipe[STAGES];
+        result_o   = op_pipe[STAGES] ? sum_sat : max_result;
+        result64_o = final_acc;
+        valid_o    = valid_pipe[STAGES];
     end
 
 endmodule

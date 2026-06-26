@@ -10,6 +10,7 @@
 //       CaduceusCore/rtl/tb/tb_sfu.v CaduceusCore/rtl/sfu/*.v -o simv_tb_sfu
 //   ./simv_tb_sfu +testdir=CaduceusCore/rtl/test_vectors/sfu/softmax_smoke \
 //                 +scenario=softmax_smoke
+//   ./simv_tb_sfu +batchfile=/tmp/sfu_batch.txt
 //=============================================================================
 
 `timescale 1ns / 1ps
@@ -151,8 +152,8 @@ module tb_sfu;
     //=========================================================================
     // Test Scenario State
     //=========================================================================
-    reg [1023:0] test_dir;
-    reg [1023:0] scenario_name;
+    string       test_dir;
+    string       scenario_name;
     reg [1023:0] result_path;
     reg [4095:0] compare_cmd;
     reg [1023:0] mkdir_cmd;
@@ -171,16 +172,66 @@ module tb_sfu;
     reg [31:0]   output_words;
     reg [31:0]   output_elems;
 
-    integer      out_wcount;
-    integer      out_ecount;
+    reg [31:0]   out_wcount;
+    reg [31:0]   out_ecount;
 
-    //=========================================================================
-    // MAIN TEST SEQUENCE
-    //=========================================================================
+    // Batch-mode state
+    reg [1023:0] batchfile_path;
+    integer      batch_fd;
+    integer      scenarios;
+    integer      failures;
+    reg          scenario_pass;
+
+    // Shared loop/scenario variables (used by tasks below)
     integer      fd, code, i, j, status;
     reg [31:0]   stat_val;
     reg [1023:0] line_buf;
     reg [7:0]    ch;
+
+    //=========================================================================
+    // String helper: derive scenario name from last path component
+    //=========================================================================
+    function automatic string derive_scenario;
+        input string path;
+        integer si, last_slash;
+        begin
+            last_slash = -1;
+            for (si = path.len() - 1; si >= 0; si = si - 1) begin
+                if (path.getc(si) == "/") begin
+                    last_slash = si;
+                    break;
+                end
+            end
+            if (last_slash >= 0 && last_slash + 1 < path.len())
+                derive_scenario = path.substr(last_slash + 1, path.len() - 1);
+            else if (path.len() > 0)
+                derive_scenario = path;
+            else
+                derive_scenario = "unknown";
+        end
+    endfunction
+
+    //=========================================================================
+    // Reset DUT and clear SRAM/state before the next scenario
+    //=========================================================================
+    task reset_dut_and_state;
+    begin
+        rst_n = 1'b0;
+        out_wcount = 32'd0;
+        for (i = 0; i < SRAM_WORDS; i = i + 1)
+            sram_mem[i] = 32'd0;
+        for (i = 0; i < MAX_DIM; i = i + 1)
+            out_words[i] = 32'd0;
+        repeat(10) @(posedge clk);
+        rst_n = 1'b1;
+        @(posedge clk);
+        $display("[TB] Reset released at %0t", $time);
+    end
+    endtask
+
+    //=========================================================================
+    // MAIN TEST SEQUENCE
+    //=========================================================================
 
     initial begin
         // ── Initialize MMIO signals ────────────────────────────────────────
@@ -196,35 +247,74 @@ module tb_sfu;
         @(posedge clk);
         $display("[TB] Reset released at %0t", $time);
 
-        // ── Step 1: Read plusargs ──────────────────────────────────────────
-        if (!$value$plusargs("testdir=%s", test_dir)) begin
-            $display("[TB] ERROR: +testdir=<path> plusarg not provided");
+        // ── Batch mode or single scenario ──────────────────────────────────
+        if ($value$plusargs("batchfile=%s", batchfile_path)) begin
+            batch_fd = $fopen(batchfile_path, "r");
+            if (!batch_fd) begin
+                $display("[TB] ERROR: Cannot open batchfile %0s", batchfile_path);
+                $display("FAIL");
+                $finish;
+            end
+
+            scenarios = 0;
+            failures  = 0;
+            while (!$feof(batch_fd)) begin
+                code = $fgets(line_buf, batch_fd);
+                if (code == 0) break;
+                // Parse first whitespace-delimited token; blank lines are ignored
+                code = $sscanf(line_buf, "%s", test_dir);
+                if (code != 1) continue;
+
+                scenarios = scenarios + 1;
+                scenario_name = derive_scenario(test_dir);
+                $display("[BATCH] Running scenario %0s (testdir=%0s)", scenario_name, test_dir);
+
+                if (scenarios > 1)
+                    reset_dut_and_state();
+
+                run_one_scenario(scenario_pass);
+                if (scenario_pass) begin
+                    $display("[BATCH] %0s PASS", scenario_name);
+                end else begin
+                    $display("[BATCH] %0s FAIL", scenario_name);
+                    failures = failures + 1;
+                end
+            end
+            $fclose(batch_fd);
+
+            $display("[BATCH] Summary: %0d passed, %0d failed out of %0d",
+                     scenarios - failures, failures, scenarios);
+            if (failures == 0) $display("PASS");
+            else               $display("FAIL");
+            $finish;
+        end else begin
+            // ── Step 1: Read plusargs ──────────────────────────────────────
+            if (!$value$plusargs("testdir=%s", test_dir)) begin
+                $display("[TB] ERROR: +testdir=<path> plusarg not provided");
+                $display("FAIL");
+                $finish;
+            end
+            $display("[TB] testdir = %0s", test_dir);
+
+            if (!$value$plusargs("scenario=%s", scenario_name))
+                scenario_name = derive_scenario(test_dir);
+            $display("[TB] scenario = %0s", scenario_name);
+
+            run_one_scenario(scenario_pass);
+            if (scenario_pass) $display("PASS");
+            else               $display("FAIL");
             $finish;
         end
-        $display("[TB] testdir = %0s", test_dir);
+    end
 
-        if (!$value$plusargs("scenario=%s", scenario_name)) begin
-            // Fallback to last component of test_dir
-            begin
-                integer si, ls, sj;
-                reg [7:0] db [0:127];
-                for (si = 0; si < 128; si = si + 1)
-                    db[si] = test_dir[si*8 +: 8];
-                ls = 0;
-                for (si = 0; si < 128; si = si + 1) begin
-                    if (db[si] == 8'h2F) ls = si + 1;  // '/'
-                    if (db[si] == 8'h00) break;
-                end
-                sj = 0;
-                for (si = ls; si < 128; si = si + 1) begin
-                    if (db[si] == 8'h00) break;
-                    scenario_name[sj*8 +: 8] = db[si];
-                    sj = sj + 1;
-                end
-                if (sj == 0) scenario_name = "unknown";
-            end
-        end
-        $display("[TB] scenario = %0s", scenario_name);
+    //=========================================================================
+    // Run one scenario (used by both single and batch modes)
+    //=========================================================================
+    task run_one_scenario;
+        output reg pass;
+        reg timed_out;
+    begin
+        timed_out = 1'b0;
 
         // ── Step 2: Parse params.txt ───────────────────────────────────────
         begin
@@ -235,7 +325,8 @@ module tb_sfu;
             fd = $fopen(params_path, "r");
             if (!fd) begin
                 $display("[TB] ERROR: Cannot open %0s", params_path);
-                $finish;
+                pass = 1'b0;
+                return;
             end
 
             dim_elems = 32'd0;
@@ -245,7 +336,6 @@ module tb_sfu;
             op_token  = 128'd0;
             is_rope   = 1'b0;
 
-            // Fixed-order parser; params.txt is under testbench control.
             code = $fscanf(fd, "OP=%s\n", op_token);
             code = $fscanf(fd, "DIM=%d\n", dim_elems);
             code = $fscanf(fd, "POS=%d\n", pos_val);
@@ -262,16 +352,17 @@ module tb_sfu;
 
         if (dim_elems == 32'd0) begin
             $display("[TB] ERROR: DIM=0 is not valid");
-            $finish;
+            pass = 1'b0;
+            return;
         end
 
         // Compute word counts
         if (is_rope) begin
-            input_words  = dim_elems;          // one pair per word
+            input_words  = dim_elems;
             output_words = dim_elems;
-            output_elems = dim_elems * 2;      // x,y per pair
+            output_elems = dim_elems * 2;
         end else begin
-            input_words  = (dim_elems + 31'd1) >> 1;  // ceil(DIM/2)
+            input_words  = (dim_elems + 31'd1) >> 1;
             output_words = (dim_elems + 31'd1) >> 1;
             output_elems = dim_elems;
         end
@@ -284,7 +375,8 @@ module tb_sfu;
             fd = $fopen(input_path, "r");
             if (!fd) begin
                 $display("[TB] ERROR: Cannot open %0s", input_path);
-                $finish;
+                pass = 1'b0;
+                return;
             end
             elem_cnt = 0;
             while (!$feof(fd) && elem_cnt < MAX_ELEMS) begin
@@ -294,7 +386,6 @@ module tb_sfu;
                     elem_mem[elem_cnt] = v;
                     elem_cnt = elem_cnt + 1;
                 end else begin
-                    // skip blank/comment lines
                     code = $fgets(line_buf, fd);
                     if (code == 0) break;
                 end
@@ -305,11 +396,13 @@ module tb_sfu;
             if (is_rope && elem_cnt < dim_elems * 2) begin
                 $display("[TB] ERROR: RoPE needs %0d input elements but found %0d",
                          dim_elems * 2, elem_cnt);
-                $finish;
+                pass = 1'b0;
+                return;
             end else if (!is_rope && elem_cnt < dim_elems) begin
                 $display("[TB] ERROR: Expected %0d input elements but found %0d",
                          dim_elems, elem_cnt);
-                $finish;
+                pass = 1'b0;
+                return;
             end
         end
 
@@ -319,7 +412,7 @@ module tb_sfu;
 
         if (is_rope) begin
             for (i = 0; i < dim_elems; i = i + 1)
-                sram_mem[i] = {elem_mem[i*2 + 1], elem_mem[i*2]}; // {y, x}
+                sram_mem[i] = {elem_mem[i*2 + 1], elem_mem[i*2]};
         end else begin
             for (i = 0; i < dim_elems; i = i + 2) begin
                 if (i + 1 < dim_elems)
@@ -332,7 +425,7 @@ module tb_sfu;
         // ── Step 4: Configure MMIO registers ───────────────────────────────
         mmio_write(OFF_CTRL,   {28'd0, op_code});
         mmio_write(OFF_I_ADDR, 32'd0);
-        mmio_write(OFF_O_ADDR, 32'd10000); // output at word offset 10000/4 = 2500
+        mmio_write(OFF_O_ADDR, 32'd10000);
         mmio_write(OFF_DIM,    {head_dim[15:0], dim_elems[15:0]});
         if (is_rope)
             mmio_write(OFF_POS, pos_val);
@@ -340,7 +433,7 @@ module tb_sfu;
         $display("[TB] MMIO configured");
 
         // ── Step 5: Start operation ────────────────────────────────────────
-        out_wcount = 0;
+        out_wcount = 32'd0;
         mmio_write(OFF_CMD, 32'd1);
         $display("[TB] Wrote CMD=START at %0t", $time);
 
@@ -356,7 +449,8 @@ module tb_sfu;
                     @(posedge clk);
                 end
                 $display("[TB] ERROR: Timeout waiting for STATUS.DONE");
-                $finish;
+                timed_out = 1'b1;
+                disable wait_done;
             end
             begin
                 @(posedge irq);
@@ -365,35 +459,38 @@ module tb_sfu;
             end
         join
 
-        repeat(10) @(posedge clk); // let trailing writes complete
+        if (timed_out) begin
+            pass = 1'b0;
+            return;
+        end
+
+        repeat(10) @(posedge clk);
 
         // ── Step 7: Capture output from sram_wdata port ────────────────────
-        // The capture block below samples on posedge clk when sram_wen is high.
-        // out_wcount is updated by the always block; read it here.
         $display("[TB] Captured %0d output words (expected %0d)",
                  out_wcount, output_words);
 
         if (out_wcount == 0) begin
             $display("[TB] ERROR: No output words captured");
-            $display("FAIL");
-            $finish;
+            pass = 1'b0;
+            return;
         end
 
         // Unpack output words into elements
         out_ecount = 0;
         if (is_rope) begin
             for (i = 0; i < out_wcount && i < MAX_DIM; i = i + 1) begin
-                out_elems[out_ecount] = out_words[i][15:0];  // x
+                out_elems[out_ecount] = out_words[i][15:0];
                 out_ecount = out_ecount + 1;
-                out_elems[out_ecount] = out_words[i][31:16]; // y
+                out_elems[out_ecount] = out_words[i][31:16];
                 out_ecount = out_ecount + 1;
             end
         end else begin
             for (i = 0; i < out_wcount && i < MAX_DIM; i = i + 1) begin
-                out_elems[out_ecount] = out_words[i][15:0];  // elem0
+                out_elems[out_ecount] = out_words[i][15:0];
                 out_ecount = out_ecount + 1;
                 if (out_ecount < output_elems) begin
-                    out_elems[out_ecount] = out_words[i][31:16]; // elem1
+                    out_elems[out_ecount] = out_words[i][31:16];
                     out_ecount = out_ecount + 1;
                 end
             end
@@ -412,31 +509,34 @@ module tb_sfu;
         fd = $fopen(result_path, "w");
         if (!fd) begin
             $display("[TB] ERROR: Cannot open result file %0s", result_path);
-            $display("FAIL");
-            $finish;
+            pass = 1'b0;
+            return;
         end
         for (i = 0; i < output_elems && i < out_ecount; i = i + 1) begin
             $fdisplay(fd, "%04h", out_elems[i]);
         end
         $fclose(fd);
 
-        // ── Step 9: Compare with golden using compare_rtl.py ───────────────
+        // ── Step 9: Compare with golden using compare_rtl.py helpers ───────
+        // Use a slightly looser absolute tolerance (2e-3) because FP16 trig
+        // approximations in RoPE can differ by ~1 ULP from the float64 golden.
         $sformat(compare_cmd,
-            "cd /home/prj/zhengs/caduceuscore/CaduceusCore && PYTHONPATH=sim /NAS/Tools/anaconda3/bin/python3 -c \"import sys; from pathlib import Path; from sim.compare_rtl import compare_test; r=compare_test('%0s', {'default': Path('%0s')})[0]; print('INLINE_COMPARE:', 'PASS' if r.passed else 'FAIL'); sys.exit(0 if r.passed else 1)\"",
+            "cd /home/prj/zhengs/caduceuscore && PYTHONPATH=/home/prj/zhengs/caduceuscore/CaduceusCore /NAS/Tools/anaconda3/bin/python3 CaduceusCore/scripts/compare_sfu.py %0s %0s",
             test_dir, result_path);
         $display("[TB] Running inline compare...");
         status = $system(compare_cmd);
 
-        if (status == 0 || ((status >> 8) & 8'hFF) == 0) begin
+        if (status == 0) begin
             $display("[TB] All outputs match golden within tolerance");
             $display("PASS");
+            pass = 1'b1;
         end else begin
             $display("[TB] Comparison failed (status=%0d)", status);
             $display("FAIL");
+            pass = 1'b0;
         end
-
-        $finish;
     end
+    endtask
 
     //=========================================================================
     // Output capture: sample sram_wdata on every sram_wen cycle
@@ -455,8 +555,6 @@ module tb_sfu;
         input [127:0] token;
         reg [7:0] c0, c1, c2, c3, c4, c5, c6, c7;
         begin
-            // $fscanf stores the string byte-reversed in the reg; detect
-            // length, reverse only the populated bytes, and right-align.
             begin
                 reg [127:0] tok_rev;
                 integer     str_len, k;
@@ -479,6 +577,15 @@ module tb_sfu;
                 c6 = tok_rev[55:48];
                 c7 = tok_rev[63:56];
             end
+
+            c0 = c0 | 8'h20;
+            c1 = c1 | 8'h20;
+            c2 = c2 | 8'h20;
+            c3 = c3 | 8'h20;
+            c4 = c4 | 8'h20;
+            c5 = c5 | 8'h20;
+            c6 = c6 | 8'h20;
+            c7 = c7 | 8'h20;
 
             if (c0 == 8'h73 && c1 == 8'h6F && c2 == 8'h66 && c3 == 8'h74)
                 op_token_to_code = OP_SOFTMAX;

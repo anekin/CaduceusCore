@@ -54,9 +54,11 @@ module gelu_hw (
     // Stage 1 -> 2
     reg [15:0]        s1_x_fp16;
     reg               s1_valid;
-    reg signed [FXW-1:0] s1_delta;
     reg               s1_below;
     reg               s1_above;
+    reg [IDX_BITS-1:0] s1_idx_lo;     // pre-computed LUT index (moved from S2)
+    reg [IDX_BITS-1:0] s1_idx_hi;
+    reg signed [FRAC-1:0] s1_frac;
 
     // Stage 2 -> 3
     reg [15:0]        s2_x_fp16;
@@ -175,9 +177,11 @@ module gelu_hw (
         if (!rst_n) begin
             s1_x_fp16  <= 16'd0;
             s1_valid   <= 1'b0;
-            s1_delta   <= {FXW{1'b0}};
             s1_below   <= 1'b0;
             s1_above   <= 1'b0;
+            s1_idx_lo  <= {IDX_BITS{1'b0}};
+            s1_idx_hi  <= {IDX_BITS{1'b0}};
+            s1_frac    <= {FRAC{1'b0}};
 
             s2_x_fp16  <= 16'd0;
             s2_valid   <= 1'b0;
@@ -196,53 +200,50 @@ module gelu_hw (
             data_o     <= 16'd0;
             valid_o    <= 1'b0;
         end else begin
-            // S1: convert and classify
+            // S1: convert, classify, and pre-compute LUT index (registered for S2 ROM read)
             s1_x_fp16 <= data_i;
             s1_valid  <= valid_i;
             begin
                 reg signed [FXW-1:0] x_fx;
+                reg [31:0] scaled;
+                reg [31:0] idx_full;
+                reg [31:0] frac_rem;
+                reg [IDX_BITS-1:0] idx_lo;
+                reg [IDX_BITS-1:0] idx_hi;
+                reg signed [FRAC-1:0] frac;
+
                 x_fx = fp16_to_fixed(data_i);
-                s1_delta <= x_fx - XMIN_FX;
                 s1_below <= (x_fx < XMIN_FX);
                 s1_above <= (x_fx > XMAX_FX);
+
+                if ((x_fx < XMIN_FX) || (x_fx > XMAX_FX)) begin
+                    s1_idx_lo <= {IDX_BITS{1'b0}};
+                    s1_idx_hi <= {IDX_BITS{1'b0}};
+                    s1_frac   <= {FRAC{1'b0}};
+                end else begin
+                    scaled   = (x_fx - XMIN_FX) * (ENTRIES - 1);
+                    idx_full = scaled >> (FRAC + 3);
+                    if (idx_full >= ENTRIES - 1) begin
+                        s1_idx_lo <= ENTRIES - 1;
+                        s1_idx_hi <= ENTRIES - 1;
+                        s1_frac   <= {FRAC{1'b0}};
+                    end else begin
+                        s1_idx_lo <= idx_full[IDX_BITS-1:0];
+                        s1_idx_hi <= idx_full[IDX_BITS-1:0] + 1'b1;
+                        frac_rem  = scaled - (idx_full << (FRAC + 3));
+                        s1_frac   <= frac_rem[FRAC+2:3];
+                    end
+                end
             end
 
-            // S2: index, fraction, LUT read
+            // S2: LUT ROM read (uses registered S1 indices — no combinational address path)
             s2_x_fp16 <= s1_x_fp16;
             s2_valid  <= s1_valid;
             s2_below  <= s1_below;
             s2_above  <= s1_above;
-            begin
-                reg [IDX_BITS-1:0] idx_lo;
-                reg [IDX_BITS-1:0] idx_hi;
-                reg [31:0] scaled;
-                reg [31:0] idx_full;
-                reg [31:0] frac_rem;
-                reg signed [FRAC-1:0] frac;
-
-                if (!s1_below && !s1_above) begin
-                    scaled   = s1_delta * (ENTRIES - 1);
-                    idx_full = scaled >> (FRAC + 3);
-                    if (idx_full >= ENTRIES - 1) begin
-                        idx_lo = ENTRIES - 1;
-                        idx_hi = ENTRIES - 1;
-                        frac   = {FRAC{1'b0}};
-                    end else begin
-                        idx_lo = idx_full[IDX_BITS-1:0];
-                        idx_hi = idx_lo + 1'b1;
-                        frac_rem = scaled - (idx_full << (FRAC + 3));
-                        frac     = frac_rem[FRAC+2:3];
-                    end
-                end else begin
-                    idx_lo = {IDX_BITS{1'b0}};
-                    idx_hi = {IDX_BITS{1'b0}};
-                    frac   = {FRAC{1'b0}};
-                end
-
-                s2_lut_lo <= gelu_lut[idx_lo];
-                s2_lut_hi <= gelu_lut[idx_hi];
-                s2_frac   <= frac;
-            end
+            s2_lut_lo <= gelu_lut[s1_idx_lo];
+            s2_lut_hi <= gelu_lut[s1_idx_hi];
+            s2_frac   <= s1_frac;
 
             // S3: linear interpolation
             s3_x_fp16 <= s2_x_fp16;

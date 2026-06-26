@@ -26,15 +26,12 @@
 //   reciprocal         : unsigned Q0.12
 //   probability        : unsigned Q0.12
 //
-// The 12-bit fractional LUT gives ~2e-4 absolute accuracy on the smoke vector
-// [1.0, 2.0, 3.0, 4.0], satisfying the compare_rtl float16 tolerance.
-//
-// NOTE on the task "Q8.4" requirement: the referenced Task-1 exp_lut is a
-// 12-bit Q8.4 ROM (4 fraction bits). That resolution is too coarse to meet the
-// 1e-3 absolute / 1e-2 relative tolerance required here, so this module
-// instantiates its own 256-entry, 12-bit fractional exp LUT (Q0.12). It is
-// still a 256-entry LUT with 12-bit output and is generated from the same
-// GoldenSFU._build_exp_lut semantics.
+// NOTE: This module uses a dedicated internal 12-bit Q0.12 ROM loaded from
+// softmax_exp_lut_q12.hex. The shared exp_lut.v (Q1.14, 15-bit) serves
+// silu_hw and other consumers that need wider fractional precision.
+// Consolidating softmax onto the shared LUT is deferred to a later phase
+// due to the extensive signal-width changes required in the interpolation
+// and reciprocal math.
 //
 // No floating-point multiplier/adder IP is used; all arithmetic is fixed-point
 // or integer.

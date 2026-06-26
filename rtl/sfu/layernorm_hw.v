@@ -170,6 +170,12 @@ module layernorm_hw (
                                 exp = exp + 1;
                             end
                         end
+                        // Exact powers of two have no mantissa bits and no
+                        // round bits; the implicit leading 1 is one position
+                        // too low, so bump the exponent to normalize correctly.
+                        if ((mant == 10'd0) && (round_bits == 0)) begin
+                            exp = exp + 1;
+                        end
                     end else if (shift == 0) begin
                         mant = abs_f[9:0];
                     end else begin

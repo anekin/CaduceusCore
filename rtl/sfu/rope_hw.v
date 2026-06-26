@@ -53,16 +53,17 @@ module rope_hw (
     //-------------------------------------------------------------------------
     localparam FXW          = 32;
     localparam FRAC         = 14;
-    localparam STAGES       = 12;
+    localparam STAGES       = 16;
 
-    // CORDIC gain K for 12 iterations, scaled by 2^14
+    // CORDIC gain K for 16 iterations, scaled by 2^14
     localparam signed [FXW-1:0] CORDIC_GAIN = 32'sd9949;
 
-    // atan(2^-i) for i = 0..11, scaled by 2^14
+    // atan(2^-i) for i = 0..15, scaled by 2^14
     localparam signed [FXW-1:0] CORDIC_ANGLE [0:STAGES-1] = '{
         32'sd12868, 32'sd7596, 32'sd4014, 32'sd2037,
         32'sd1023, 32'sd512,  32'sd256,  32'sd128,
-        32'sd64,   32'sd32,   32'sd16,   32'sd8
+        32'sd64,   32'sd32,   32'sd16,   32'sd8,
+        32'sd4,    32'sd2,    32'sd1,    32'sd0
     };
 
     // Angle constants in Q18.14

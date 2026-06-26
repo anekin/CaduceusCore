@@ -211,7 +211,6 @@ module vector_top #(
     // Submodule instances
     //=========================================================================
     wire [VECTOR_W-1:0] alu_result;
-    wire                alu_valid;
 
     vector_alu #(
         .NUM_LANES(NUM_LANES)
@@ -224,12 +223,10 @@ module vector_top #(
         .lane_mask (lane_mask),
         .valid_i   ( (state == ST_BIN_EXEC) &&
                      ((op_reg == OP_ADD) || (op_reg == OP_MUL)) ),
-        .result_o  (alu_result),
-        .valid_o   (alu_valid)
+        .result_o  (alu_result)
     );
 
     wire [VECTOR_W-1:0] resid_result;
-    wire                resid_valid;
 
     resid_add #(
         .NUM_LANES(NUM_LANES)
@@ -239,25 +236,26 @@ module vector_top #(
         .orig_i   (a_chunk),
         .delta_i  (b_chunk),
         .valid_i  ( (state == ST_BIN_EXEC) && (op_reg == OP_RESID) ),
-        .result_o (resid_result),
-        .valid_o  (resid_valid)
+        .result_o (resid_result)
     );
 
     wire [DATA_W-1:0] reduce_result;
+    wire signed [63:0] reduce_result64;
     wire              reduce_valid;
 
     reduce_tree #(
         .NUM_IN(NUM_LANES),
         .DATA_W(DATA_W)
     ) u_reduce_tree (
-        .clk      (clk),
-        .rst_n    (rst_n),
-        .data_i   (a_chunk),
-        .op       ( (op_reg == OP_SUM) ? 1'b1 : 1'b0 ),  // 0=MAX,1=SUM
-        .valid_i  ( (state == ST_REDUCE_FEED) ),
-        .lane_mask(lane_mask),
-        .result_o (reduce_result),
-        .valid_o  (reduce_valid)
+        .clk       (clk),
+        .rst_n     (rst_n),
+        .data_i    (a_chunk),
+        .op        ( (op_reg == OP_SUM) ? 1'b1 : 1'b0 ),  // 0=MAX,1=SUM
+        .valid_i   ( (state == ST_REDUCE_FEED) ),
+        .lane_mask (lane_mask),
+        .result_o  (reduce_result),
+        .result64_o(reduce_result64),
+        .valid_o   (reduce_valid)
     );
 
     wire [15:0] tc_data_o;
@@ -409,7 +407,7 @@ module vector_top #(
                             if ($signed(reduce_result) > $signed(reduce_max_acc))
                                 reduce_max_acc <= reduce_result;
                         end else begin
-                            reduce_sum_acc <= reduce_sum_acc + $signed(reduce_result);
+                            reduce_sum_acc <= reduce_sum_acc + reduce_result64;
                         end
                     end
 
