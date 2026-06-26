@@ -184,7 +184,7 @@ module vector_top #(
     reg [127:0] lane_mask;
 
     reg        reduce_running_max;
-    reg [63:0] reduce_sum_acc;
+    reg signed [63:0] reduce_sum_acc;
     reg [31:0] reduce_max_acc;
     reg [3:0]  reduce_wait_cnt;
 
@@ -391,7 +391,7 @@ module vector_top #(
 
                 // ── Reduction ops (MAX/SUM) ────────────────────────────────
                 ST_REDUCE_FEED: begin
-                    reduce_wait_cnt <= 4'd6;
+                    reduce_wait_cnt <= 4'd5;
                     state           <= ST_REDUCE_WAIT;
                 end
 
