@@ -1,15 +1,13 @@
-# DSE 场景定义 — 内存类型、组件清单、对标产品
+# DSE 场景定义 — 内存类型、组件清单、对标产品、序列长度约束
 # 
-# 每个场景定义：
-#   1. 内存类型 → 自动补全/校验组件清单
-#   2. 对标产品 → 扫完后自动交叉校验
-#   3. 约束 → TTFT/TPS/面积上限
+# 每个场景定义完整需求，DSE 自动适配 sweep 空间和约束检查
 
 scenarios:
   lpddr5_3b:
     description: "LPDDR5-64b + 3B 端侧低成本"
     model: "qwen2.5-3b"
     model_params_gb: 1.5    # INT4
+    seq_len: 128             # 典型对话长度
     memory:
       type: lpddr5
       bandwidth_gbps: 51.2
@@ -19,11 +17,9 @@ scenarios:
       ttft_ms_max: 200
       tps_min: 20
       area_mm2_max: 80
-    # 组件清单：场景 A 必须有/没有哪些硬件
     components:
-      required: [dram_phy, pcie]       # 外部 DDR 需要 PHY；主机通信需 PCIe
-      excluded: [tsv]                    # 无 3D 堆叠
-    # 对标产品
+      required: [dram_phy, pcie]
+      excluded: [tsv]
     benchmarks:
       - name: "典型手机 NPU (2024)"
         process_nm: 4
@@ -32,37 +28,54 @@ scenarios:
         note: "Apple A18 ANE / Snapdragon 8 Gen3 NPU"
 
   onchip_7b:
-    description: "On-chip 3D DRAM + 7B 高端端侧"
+    description: "On-chip 3D DRAM + 7B 高端端侧 (VLM/VLA)"
     model: "qwen2.5-7b"
     model_params_gb: 3.5    # INT4
+    seq_len: 1024            # VLM/VLA 需要长上下文 prefill
     memory:
       type: on_chip_3d_dram
       bandwidth_gbps: 500
       capacity_gb: 5
-      dram_efficiency: 1.0   # 片上无刷新开销
+      dram_efficiency: 1.0
       effective_bw_gbps: 500
     constraints:
       ttft_ms_max: 200
       tps_min: 100
-      area_mm2_max: 100
+      area_mm2_max: 150      # 放宽：seq_len=1024 需要大阵列
     components:
-      required: [pcie, tsv]              # 主机通信 + 3D 堆叠
-      excluded: [dram_phy]               # 无外部 DDR
+      required: [pcie, tsv]
+      excluded: [dram_phy]
       tsv_overhead_pct: 0.10
     benchmarks:
       - name: "RK1828"
         process_nm: 22
         area_mm2: 100
         tops_int8: 20
-        tps_7b: [59, 180]               # min, max
+        tps_7b: [59, 180]
         note: "瑞芯微 22nm, 20 TOPS"
-      - name: "TPUv1 (ISCA 2017)"
-        process_nm: 28
-        area_mm2: 331
-        tops_int8: 92
-        note: "systolic — 仅作面积密度参考"
 
-# 内存类型 → 组件清单规则（所有场景共用）
+  onchip_7b_chat:
+    description: "On-chip 3D DRAM + 7B 对话场景 (短序列)"
+    model: "qwen2.5-7b"
+    model_params_gb: 3.5
+    seq_len: 128
+    memory:
+      type: on_chip_3d_dram
+      bandwidth_gbps: 500
+      capacity_gb: 5
+      dram_efficiency: 1.0
+      effective_bw_gbps: 500
+    constraints:
+      ttft_ms_max: 200
+      tps_min: 100
+      area_mm2_max: 80
+    components:
+      required: [pcie, tsv]
+      excluded: [dram_phy]
+      tsv_overhead_pct: 0.10
+    benchmarks: []
+
+# 内存类型 → 组件清单规则
 memory_component_rules:
   lpddr5:
     required: [dram_phy, pcie]
@@ -77,16 +90,15 @@ memory_component_rules:
     excluded: [dram_phy]
     tsv_overhead_pct: 0.10
   hbm2e:
-    required: [dram_phy, pcie, tsv]      # HBM uses interposer TSVs
+    required: [dram_phy, pcie, tsv]
     excluded: []
-    tsv_overhead_pct: 0.05               # less than 3D DRAM (interposer vs stacked)
+    tsv_overhead_pct: 0.05
   hbm3:
     required: [dram_phy, pcie, tsv]
     excluded: []
     tsv_overhead_pct: 0.05
 
-# 已知产品数据库（交叉校验用）
-# process → area 缩放: area_12nm = area * (12/process)^2
+# 已知产品数据库
 product_database:
   rk1828:
     process_nm: 22
@@ -100,11 +112,11 @@ product_database:
     area_mm2: 331
     tops_int8: 92
     architecture: "256×256 systolic"
-    pe_area_um2: 1212          # µm²/MAC @28nm
+    pe_area_um2: 1212
     source: "ISCA 2017 Jouppi et al."
   a18_ane:
     process_nm: 3
     area_mm2: 12
-    tops_int8: 38               # FP16 TOPS, INT8 约等效
+    tops_int8: 38
     architecture: "Apple ANE (16-core)"
     source: "die shot 分析 (TechInsights/Chipwise)"

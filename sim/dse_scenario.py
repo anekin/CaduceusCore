@@ -15,6 +15,26 @@ import yaml
 
 SIM_DIR = Path(__file__).parent
 
+def _extract_params_b(model_name: str) -> float:
+    """Extract parameter count in billions from model name."""
+    import re
+    m = re.search(r'(\d+\.?\d*)\s*b', model_name.lower())
+    if m:
+        return float(m.group(1))
+    return 3.0  # default
+
+def _estimate_min_tops(params_b: float, seq_len: int, constraints: Dict) -> float:
+    """Estimate minimum TOPS needed to meet TTFT constraint.
+    
+    Prefill FLOPs ≈ 2 × params × seq_len (per-token, per-layer is implicit).
+    TTFT = FLOPs / TOPS → TOPS_min = FLOPs / TTFT_max
+    """
+    ttft_max = constraints.get('ttft_ms_max', 200)
+    # params_b in billions, convert to trillion ops
+    flops = 2 * params_b * seq_len / 1000  # TOPS-seconds
+    min_tops = flops / (ttft_max / 1000)  # TTFT in seconds
+    return min_tops
+
 # ═══════════════════════════════════════════════════════════
 # Phase 0: Pre-sweep analysis
 # ═══════════════════════════════════════════════════════════
@@ -73,25 +93,37 @@ def predict_bottleneck(scenario: Dict) -> Dict[str, Any]:
     conclusion = []
     min_compute = min(compute_ceilings)
     max_compute = max(compute_ceilings)
+    # ── TTFT / TOPS prediction ──
+    seq_len = scenario.get('seq_len', 128)
+    params_b = _extract_params_b(scenario.get('model', ''))
+    constraints = scenario.get('constraints', {})
+    min_tops_needed = _estimate_min_tops(params_b, seq_len, constraints)
+    ttft_max = constraints.get('ttft_ms_max', 200)
     
-    if bw_tps_ceiling < min_compute:
+    # Which is lower: BW or compute?
+    conclusion = []
+    if bw_tps_ceiling < min(compute_ceilings):
         conclusion.append(f"BANDWIDTH BOTTLENECK: BW ceiling {bw_tps_ceiling:.0f} TPS "
-                         f"< compute floor {min_compute:.0f} TPS")
+                         f"< compute floor {min(compute_ceilings):.0f} TPS")
         conclusion.append("→ Engine type and TOPS are secondary; focus on maximizing BW utilization.")
-        conclusion.append("→ SRAM size matters (affects tile granularity and BW efficiency).")
-    elif bw_tps_ceiling > max_compute:
+        if bw < 200:
+            conclusion.append("→ SRAM size matters (affects tile granularity and BW efficiency).")
+    elif bw_tps_ceiling > max(compute_ceilings):
         conclusion.append(f"COMPUTE BOTTLENECK: BW ceiling {bw_tps_ceiling:.0f} TPS "
-                         f"> compute ceiling {max_compute:.0f} TPS")
+                         f"> compute ceiling {max(compute_ceilings):.0f} TPS")
         conclusion.append("→ Array dimensions (TOPS) are the primary lever; BW is not limiting.")
-        conclusion.append("→ Consider larger array or higher frequency.")
     else:
         conclusion.append(f"MIXED: BW ceiling {bw_tps_ceiling:.0f} TPS within compute range "
-                         f"[{min_compute:.0f}, {max_compute:.0f}] TPS")
+                         f"[{min(compute_ceilings):.0f}, {max(compute_ceilings):.0f}] TPS")
         conclusion.append("→ Both TOPS and BW utilization matter; sweep both dimensions.")
     
     return {
         "bw_ceiling_tps": round(bw_tps_ceiling, 1),
         "compute_ceiling_tps_range": [round(c, 1) for c in compute_ceilings],
+        "ttft_constraint_ms": ttft_max,
+        "ttft_min_tops_needed": round(min_tops_needed, 1),
+        "seq_len": seq_len,
+        "params_billion": params_b,
         "conclusion": conclusion,
         "effective_bw_gbps": bw,
         "model_size_gb": model_gb,
@@ -177,7 +209,14 @@ def preflight(scenario_name: str, config: Dict[str, Any]) -> Dict[str, Any]:
         recommendations.append("SRAM: 512KB-1MB likely sufficient. Start sweep from 512KB.")
     
     # Array dimension recommendation
-    if "BANDWIDTH BOTTLENECK" in (bottleneck.get('conclusion', [''])[0]):
+    ttft_min = bottleneck.get('ttft_min_tops_needed', 0)
+    sl = bottleneck.get('seq_len', 128)
+    if ttft_min > 16:
+        recommendations.append(
+            f"Array: TTFT requires ≥{ttft_min:.0f} TOPS (seq_len={sl}). "
+            f"Sweep from {max(4, int(ttft_min/1.5))} TOPS upward."
+        )
+    elif "BANDWIDTH BOTTLENECK" in (bottleneck.get('conclusion', [''])[0]):
         recommendations.append("Array: BW-limited → oversizing array wastes area. Prefer smaller array (≤16 TOPS).")
     elif "COMPUTE BOTTLENECK" in (bottleneck.get('conclusion', [''])[0]):
         recommendations.append("Array: compute-limited → increase array size or frequency.")
@@ -295,11 +334,15 @@ def print_preflight(preflight_result: Dict[str, Any]):
     
     # Bottleneck
     bn = preflight_result['bottleneck']
-    print(f"\n  ── Bottleneck Prediction ──")
+    print(f"\n  ── Bottleneck & TTFT Prediction ──")
+    print(f"  Seq length:    {bn['seq_len']} tokens")
     print(f"  BW ceiling:    {bn['bw_ceiling_tps']:.0f} TPS "
           f"(={bn['effective_bw_gbps']} GB/s ÷ {bn['model_size_gb']} GB)")
     print(f"  Compute range: [{bn['compute_ceiling_tps_range'][0]:.0f}, "
           f"{bn['compute_ceiling_tps_range'][-1]:.0f}] TPS (6-131 TOPS)")
+    print(f"  TTFT constraint: <{bn['ttft_constraint_ms']}ms")
+    print(f"  → Min TOPS needed: ~{bn['ttft_min_tops_needed']:.1f} TOPS "
+          f"(={2*bn['params_billion']:.0f}B × {bn['seq_len']}tok × 2ops ÷ {bn['ttft_constraint_ms']}ms)")
     for line in bn['conclusion']:
         print(f"  → {line}")
     
