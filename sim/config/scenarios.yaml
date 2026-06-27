@@ -6,8 +6,11 @@ scenarios:
   lpddr5_3b:
     description: "LPDDR5-64b + 3B 端侧低成本"
     model: "qwen2.5-3b"
-    model_params_gb: 1.5    # INT4
-    seq_len: 128             # 典型对话长度
+    model_params_gb: 1.5
+    seq_len: 128
+    ttft_ms_max: 200
+    tps_min: 20
+    process_nm: 12
     memory:
       type: lpddr5
       bandwidth_gbps: 51.2
@@ -30,8 +33,11 @@ scenarios:
   onchip_7b:
     description: "On-chip 3D DRAM + 7B 高端端侧 (VLM/VLA)"
     model: "qwen2.5-7b"
-    model_params_gb: 3.5    # INT4
-    seq_len: 1024            # VLM/VLA 需要长上下文 prefill
+    model_params_gb: 3.5
+    seq_len: 1024            # VLM/VLA 长上下文
+    ttft_ms_max: 200
+    tps_min: 100
+    process_nm: 12
     memory:
       type: on_chip_3d_dram
       bandwidth_gbps: 500

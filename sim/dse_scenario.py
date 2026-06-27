@@ -1,19 +1,246 @@
-"""DSE 场景建模 — Phase 0 预分析 + Phase 2 交叉校验
+"""DSE 场景建模 — Phase -1 需求澄清 + Phase 0 预分析 + Phase 2 交叉校验
+
+Phase -1 (requirements gathering):
+  1. 加载场景定义，检查关键字段是否显式提供
+  2. 对信息缺口列出问题，要求用户明确
 
 Phase 0 (pre-sweep):
-  1. 瓶颈预测 — BW 天花板 vs 算力天花板
-  2. 组件清单校验 — 确保配置包含/排除了正确的硬件
+  3. 瓶颈预测 — BW 天花板 vs 算力天花板 + TTFT 驱动 TOPS 需求
+  4. 组件清单校验
+
 Phase 2 (post-sweep):
-  3. 交叉校验 — 最优配置 vs 已知产品对比
+  5. 交叉校验 — 最优配置 vs 已知产品对比
 """
 
 import math
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
+from enum import Enum
 
 import yaml
 
 SIM_DIR = Path(__file__).parent
+
+
+class Confidence(Enum):
+    EXPLICIT = "explicit"       # 用户显式提供
+    INFERRED = "inferred"       # 从场景名/模型名推导
+    DEFAULTED = "defaulted"     # 用了默认值
+    MISSING = "missing"         # 完全缺失
+
+
+# ═══════════════════════════════════════════════════════════
+# Phase -1: Requirements Clarification
+# ═══════════════════════════════════════════════════════════
+
+# Critical fields that MUST be explicitly specified (no defaults accepted silently)
+CRITICAL_FIELDS = {
+    "seq_len": {
+        "question": "What is the expected input sequence length?",
+        "why": "TTFT/TOPS requirements scale linearly with seq_len. Chat ~128, RAG ~512, VLM/VLA ~1024-2048.",
+        "impact": "High — changes minimum TOPS by 8× between seq_len=128 and 1024.",
+        "default": 128,
+        "validate": lambda v: isinstance(v, (int, float)) and v > 0,
+    },
+    "ttft_ms_max": {
+        "question": "What is the maximum acceptable TTFT (time-to-first-token)?",
+        "why": "Drives minimum TOPS requirement. 200ms is typical for interactive use.",
+        "impact": "High — tighter TTFT = more TOPS = larger die.",
+        "default": 200,
+        "validate": lambda v: isinstance(v, (int, float)) and 0 < v < 5000,
+    },
+    "tps_min": {
+        "question": "What is the minimum acceptable decode throughput (tok/s)?",
+        "why": "Reading speed ~15-20 tok/s for humans. 100+ for real-time VLM.",
+        "impact": "Medium — drives bandwidth requirements.",
+        "default": 20,
+        "validate": lambda v: isinstance(v, (int, float)) and v > 0,
+    },
+    "model": {
+        "question": "Which model family and size? (e.g., qwen2.5-3b, qwen2.5-7b)",
+        "why": "Determines parameter count, layer structure, KV dimensions.",
+        "impact": "High — model size scales memory BW and TOPS linearly.",
+        "default": None,
+        "validate": lambda v: isinstance(v, str) and len(v) > 3,
+    },
+    "memory.type": {
+        "question": "What memory architecture? (lpddr5 / on_chip_3d_dram / hbm2e / hbm3)",
+        "why": "Determines component checklist (PHY/PCIe/TSV), bandwidth, and area model.",
+        "impact": "High — different memory types have different component costs and BW ceilings.",
+        "default": "lpddr5",
+        "validate": lambda v: v in ("lpddr5", "lpddr5x", "on_chip_3d_dram", "hbm2e", "hbm3"),
+    },
+    "process_nm": {
+        "question": "Target process node in nm? (e.g., 12, 7, 5, 3)",
+        "why": "Area scales with (process/7)^2. Critically affects cost.",
+        "impact": "High — 7nm is ~3× smaller than 12nm.",
+        "default": 12,
+        "validate": lambda v: isinstance(v, (int, float)) and 1 < v < 100,
+    },
+}
+
+
+def check_requirements(scenario_name: str, config: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Phase -1: Check what information is available vs what needs clarification.
+
+    Args:
+        scenario_name: Name of the scenario in scenarios.yaml
+        config: Optional DSE config dict (for checking process_node etc.)
+
+    Returns:
+        {
+            'ready': bool,                # True if all critical fields resolved
+            'fields': {                   # Per-field status
+                'seq_len': {'confidence': Confidence, 'value': any, 'question': str, ...}
+            },
+            'questions': [str],           # Human-readable questions to ask user
+            'warnings': [str],            # Non-blocking concerns
+        }
+    """
+    scenario = load_scenario(scenario_name)
+    if not scenario:
+        return {
+            "ready": False,
+            "error": f"Scenario '{scenario_name}' not found. Available: {list_scenarios()}",
+        }
+
+    fields = {}
+    questions = []
+    warnings = []
+
+    for field_name, spec in CRITICAL_FIELDS.items():
+        # Resolve value from scenario or config
+        value = None
+        confidence = Confidence.MISSING
+        source = ""
+
+        # Check scenario first (explicit user input)
+        if "." in field_name:
+            # Nested field like "memory.type"
+            parts = field_name.split(".")
+            val = scenario
+            for p in parts:
+                val = val.get(p, {}) if isinstance(val, dict) else None
+            if val is not None:
+                value = val
+                confidence = Confidence.EXPLICIT
+                source = f"scenario.{field_name}"
+        else:
+            if field_name in scenario:
+                value = scenario[field_name]
+                confidence = Confidence.EXPLICIT
+                source = f"scenario.{field_name}"
+
+        # Check config for process_nm
+        if field_name == "process_nm":
+            # Prefer scenario value, fall back to config
+            if "process_nm" in scenario:
+                value = int(scenario["process_nm"])
+                confidence = Confidence.EXPLICIT
+                source = "scenario.process_nm"
+            elif config:
+                pn = config.get("area_model", {}).get("process_node")
+                if pn is not None:
+                    value = int(pn)
+                    confidence = Confidence.EXPLICIT
+                    source = "config.area_model.process_node"
+
+        # Infer from model name
+        if field_name == "model" and value and confidence == Confidence.EXPLICIT:
+            # Model was explicitly set — infer params_b
+            pass
+
+        # Apply default as fallback
+        if value is None and spec.get("default") is not None:
+            value = spec["default"]
+            confidence = Confidence.DEFAULTED
+            source = "default"
+
+        # Validate
+        validator = spec.get("validate")
+        valid = True
+        if validator and value is not None:
+            try:
+                valid = validator(value)
+            except Exception:
+                valid = False
+
+        fields[field_name] = {
+            "value": value,
+            "confidence": confidence,
+            "source": source,
+            "valid": valid,
+            "question": spec["question"],
+            "why": spec["why"],
+            "impact": spec["impact"],
+        }
+
+        # Generate questions for DEFAULTED or MISSING fields
+        if confidence in (Confidence.DEFAULTED, Confidence.MISSING):
+            q = f"❓ {spec['question']}"
+            q += f"\n   Why it matters: {spec['why']}"
+            q += f"\n   Impact: {spec['impact']}"
+            q += f"\n   Current: {value} (default)" if confidence == Confidence.DEFAULTED else ""
+            questions.append(q)
+
+        # Warnings for DEFAULTED high-impact fields
+        if confidence == Confidence.DEFAULTED and spec.get("impact", "").startswith("High"):
+            warnings.append(
+                f"⚠ {field_name}={value} (DEFAULTED, may not match your use case). "
+                f"{spec['why']}"
+            )
+
+        if not valid:
+            warnings.append(f"⚠ {field_name}={value} (INVALID value — check scenario config)")
+
+    ready = len(questions) == 0
+
+    return {
+        "ready": ready,
+        "fields": fields,
+        "questions": questions,
+        "warnings": warnings,
+        "scenario_name": scenario_name,
+    }
+
+
+def print_requirements_check(rc: Dict[str, Any]):
+    """Print a human-readable Phase -1 requirements report."""
+    if "error" in rc:
+        print(f"  ✗ {rc['error']}")
+        return
+
+    print(f"\n{'='*65}")
+    print(f"  Phase -1 — Requirements Clarification: {rc['scenario_name']}")
+    print(f"{'='*65}")
+
+    # Critical fields table
+    print(f"  {'Field':<16s} {'Value':<12s} {'Confidence':<12s} {'Source'}")
+    print(f"  {'-'*55}")
+    for name, f in rc["fields"].items():
+        val_str = str(f["value"]) if f["value"] is not None else "—"
+        conf_icon = {
+            Confidence.EXPLICIT: "✓ EXPLICIT",
+            Confidence.INFERRED: "~ INFERRED",
+            Confidence.DEFAULTED: "⚠ DEFAULTED",
+            Confidence.MISSING: "✗ MISSING",
+        }.get(f["confidence"], "?")
+        print(f"  {name:<16s} {val_str:<12s} {conf_icon:<12s} {f['source']}")
+
+    if rc["questions"]:
+        print(f"\n  ══ Questions to Resolve ══")
+        for i, q in enumerate(rc["questions"], 1):
+            print(f"\n  [{i}] {q}")
+
+    if rc["warnings"]:
+        print(f"\n  ══ Warnings ══")
+        for w in rc["warnings"]:
+            print(f"  {w}")
+
+    if rc["ready"]:
+        print(f"\n  ✓ All critical fields resolved. Ready for Phase 0.")
+    else:
+        print(f"\n  ⚠ {len(rc['questions'])} question(s) need resolution before proceeding.")
 
 def _extract_params_b(model_name: str) -> float:
     """Extract parameter count in billions from model name."""
