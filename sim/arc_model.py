@@ -27,6 +27,11 @@ from q4_dequant import load_weights_from_gguf
 from golden_executor import GoldenMXU
 from quantize import quantize_int4_per_block
 from model_specs import MODELS, get_spec
+from fsa_ref import (
+    compare_architectures, print_comparison,
+    FSAConfig, FSAHardwareModel,
+    CaduceusHardwareModel, ArchComparisonReport,
+)
 
 
 @dataclass
@@ -109,6 +114,10 @@ class ArcModel:
       - per-channel: one scale per output channel
       - per-block:   group_size=128 along K (TensorRT/GPTQ standard)
       - both:        compare both schemes with per-layer breakdown
+
+    Architecture comparison (v2.0):
+      - run_arch_comparison(): compare CaduceusCore vs FSA inline-softmax
+      - Head-to-head: area, latency, MAC utilization, flexibility
     """
 
     COS_THRESHOLD = 0.96   # per-layer vector cosine minimum (INT4: ~0.97 expected)
@@ -330,6 +339,49 @@ class ArcModel:
 
         return report
 
+    def run_arch_comparison(
+        self, model_name: str, spec: tuple,
+        seq_q: int = 1, seq_kv: int = 1024,
+    ) -> ArchComparisonReport:
+        """Run architecture comparison: CaduceusCore vs FSA.
+
+        Args:
+            model_name: e.g. 'Qwen2.5-3B'
+            spec: (QKV, H, I, L, NH, KVH) tuple
+            seq_q: query sequence length (1 = decode, 128 = prefill)
+            seq_kv: KV cache length
+        """
+        qkv, hidden, intermediate, layers = spec[0], spec[1], spec[2], spec[3]
+        num_heads = spec[4]
+        kv_heads = spec[5]
+        head_dim = qkv // num_heads
+
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Arc Model — Architecture Comparison")
+        logger.info(f"{'='*60}")
+        logger.info(f"  Model: {model_name} ({hidden}h, {layers}L, {num_heads}NH, {kv_heads}KVH)")
+
+        report = compare_architectures(
+            model_name=model_name,
+            seq_q=seq_q, seq_kv=seq_kv, head_dim=head_dim,
+            num_heads=num_heads, num_kv_heads=kv_heads, num_layers=layers,
+        )
+        print_comparison(report)
+        return report
+
+    def run_arch_comparison_table(
+        self, model_specs: dict, seq_q: int = 1, seq_kv: int = 1024,
+    ) -> list[ArchComparisonReport]:
+        """Run architecture comparison across multiple models.
+
+        Args:
+            model_specs: {name: (QKV, H, I, L, NH, KVH), ...}
+        """
+        reports = []
+        for name, spec in model_specs.items():
+            reports.append(self.run_arch_comparison(name, spec, seq_q, seq_kv))
+        return reports
+
     def print_table(self, report: ArcReport):
         """Print final summary table."""
         logger.info(f"\n{'='*80}")
@@ -368,17 +420,43 @@ class ArcModel:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Arc Model evaluation")
-    parser.add_argument("--model", required=True, help="Path to GGUF model")
-    parser.add_argument("--scheme", default="per-block",
+    sub = parser.add_subparsers(dest="mode", required=True)
+
+    # Precision + performance evaluation
+    p_eval = sub.add_parser("evaluate", help="Precision gate → performance model")
+    p_eval.add_argument("--model", required=True, help="Path to GGUF model")
+    p_eval.add_argument("--scheme", default="per-block",
                         choices=["per-channel", "per-block", "both"],
                         help="INT4 quantization scheme (default: per-block)")
-    parser.add_argument("--spec", help="Model spec: QKV,H,I,L,NH,KV (e.g., 4096,2560,9728,28,32,2)")
+    p_eval.add_argument("--spec", help="Model spec: QKV,H,I,L,NH,KV")
+
+    # Architecture comparison
+    p_arch = sub.add_parser("compare", help="Architecture comparison: CaduceusCore vs FSA")
+    p_arch.add_argument("--model", default="Qwen2.5-3B", help="Model name")
+    p_arch.add_argument("--spec", default="2048,2560,9728,28,32,8",
+                        help="Model spec: QKV,H,I,L,NH,KVH")
+    p_arch.add_argument("--seq-q", type=int, default=1, help="Query seq length (1=decode)")
+    p_arch.add_argument("--seq-kv", type=int, default=1024, help="KV cache length")
+    p_arch.add_argument("--all", action="store_true", help="Compare all known models")
+
     args = parser.parse_args()
 
-    spec = None
-    if args.spec:
-        spec = tuple(int(x) for x in args.spec.split(","))
+    if args.mode == "evaluate":
+        spec = None
+        if args.spec:
+            spec = tuple(int(x) for x in args.spec.split(","))
+        arc = ArcModel()
+        report = arc.evaluate(args.model, scheme=args.scheme, model_spec=spec)
+        arc.print_table(report)
 
-    arc = ArcModel()
-    report = arc.evaluate(args.model, scheme=args.scheme, model_spec=spec)
-    arc.print_table(report)
+    elif args.mode == "compare":
+        arc = ArcModel()
+        if args.all:
+            llm_specs = {
+                name: val for name, val in MODELS.items()
+                if val.model_type == "llm" and len(val) >= 6
+            }
+            arc.run_arch_comparison_table(llm_specs, seq_q=args.seq_q, seq_kv=args.seq_kv)
+        else:
+            spec = tuple(int(x) for x in args.spec.split(","))
+            arc.run_arch_comparison(args.model, spec, args.seq_q, args.seq_kv)
