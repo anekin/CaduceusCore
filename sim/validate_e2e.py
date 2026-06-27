@@ -14,12 +14,18 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import yaml
 import numpy as np
-from models.golden import GoldenMXU, GoldenSFU
 from models.mxu import MXUModel
 from engine.isa import NPUInstruction, OpCode, parse_isa_program, NPUEncoder
 from engine.compiler import NPUCompiler
 from engine.multicore import MultiCoreTimeline, FIFOConfig
 from npu_sim import NPUSimulator, generate_qwen3b_trace
+
+
+def _effective_dram_bw_gbps(config: dict) -> float:
+    mem = config.get("memory", {})
+    raw_bw = float(mem.get("bandwidth_gbps", 51.2))
+    eff = float(mem.get("dram_efficiency", 0.85))
+    return raw_bw * eff
 
 
 def demo_end_to_end():
@@ -79,35 +85,21 @@ def demo_end_to_end():
 
     # ── Step 4: Golden Model functional verification ────────────
     print("\n[4] Golden Model: 功能验证 (Functional Mode)")
-    golden = GoldenMXU()
-    np.random.seed(42)
-    w = np.random.randint(0, 16, size=1280, dtype=np.uint8)
-    a = np.random.randn(1, 2560).astype(np.float32)
-    result = golden.matmul(a, w, 1, 1280, 256)
-    result_hash = golden.hash_output(result)
-
-    print(f"    Input:  activation (1,2560) × weight INT4")
-    print(f"    Output: ({result.shape[0]},{result.shape[1]}) INT32")
-    print(f"    Hash:   {result_hash}")
-    print(f"    → 此 hash 用于 RTL 验证时逐 bit 比对")
-
-    sfu = GoldenSFU()
-    x = np.random.randn(2560).astype(np.float32)
-    for fn in ["softmax", "layernorm", "gelu", "silu"]:
-        y = getattr(sfu, fn)(x)
-        h = golden.hash_output(y.flatten())
-        print(f"    {fn:12s}: sum={y.sum():.4f}, hash={h}")
+    print("    使用 golden_executor.py 进行 INT32 bit-accurate 验证（RTL sign-off）")
+    print("    详见 tests/test_golden_*.py 与 golden_executor 自测")
 
     # ── Step 5: Performance simulation (v2) ────────────────────
-    print("\n[5] 性能模拟器 (v2 tiling-aware, 1GHz, 128×128, 51.2GB/s)")
-    sim = NPUSimulator(str(Path(__file__).parent / "config" / "npu_config.yaml"))
+    config_path = Path(__file__).parent / "config" / "npu_config.yaml"
+    config = yaml.safe_load(open(config_path))
+    eff_bw_gbps = _effective_dram_bw_gbps(config)
+    print("\n[5] 性能模拟器 (v2 tiling-aware)")
+    sim = NPUSimulator(str(config_path))
     decode_trace = generate_qwen3b_trace(prompt_len=1)
     report = sim.simulate_decode(decode_trace)
 
     print(f"    Decode (M=1): {report.decode_tok_per_s:.0f} tok/s ({report.decode_per_token_us:.0f} μs/token)")
 
     # Batch projections
-    config = yaml.safe_load(open(Path(__file__).parent / "config" / "npu_config.yaml"))
     mxu = MXUModel(config)
 
     total_weight_gb = 0
@@ -117,7 +109,7 @@ def demo_end_to_end():
 
     print(f"    Weights/token: {total_weight_gb:.2f} GB (INT4)")
     print(f"    DRAM BW needed: {total_weight_gb / (report.decode_per_token_us / 1e6):.1f} GB/s")
-    print(f"    DRAM BW available: {51.2 * 0.85:.1f} GB/s (eff)")
+    print(f"    DRAM BW available: {eff_bw_gbps:.1f} GB/s (eff)")
 
     # Batch M projection
     for M in [2, 4, 8]:
@@ -150,7 +142,7 @@ def demo_end_to_end():
     print("=" * 70)
     print(f"  ✅ 模型规格 → NPU ISA 编译: {len(program)} 条指令/层")
     print(f"  ✅ ISA 编码: 32-bit 定长指令字")
-    print(f"  ✅ Golden Model: MXU + SFU 数值功能验证通过")
+    print(f"  ✅ Golden Model: 功能验证由 golden_executor/tests 覆盖")
     print(f"  ✅ 多核流水线: 2核加速 {single_core / pipe_result['total_cycles']:.1f}×")
     print(f"  {'✅' if report.decode_tok_per_s >= 25 else '❌'} 单 token 性能: {report.decode_tok_per_s:.0f} tok/s (目标 25)")
     print(f"  ✅ Batch M=2: 31 tok/s (达标)")
@@ -159,7 +151,7 @@ def demo_end_to_end():
     print(f"  关键发现:")
     print(f"  - M=1 decode: systolic array 利用率低 (tiling 开销占主导)")
     print(f"  - Continuous batching (M≥2): 同一硬件达标 (31 tok/s @ 27mm²)")
-    print(f"  - 带宽不是瓶颈: DRAM BW 需求 {total_weight_gb / (report.decode_per_token_us / 1e6):.1f} < 可用 {51.2 * 0.85:.1f} GB/s")
+    print(f"  - 带宽不是瓶颈: DRAM BW 需求 {total_weight_gb / (report.decode_per_token_us / 1e6):.1f} < 可用 {eff_bw_gbps:.1f} GB/s")
 
     print(f"\n  下一阶段:")
     print(f"  - IREE HAL 后端: C API 实现 (~iree/hal/drivers/npu/)")

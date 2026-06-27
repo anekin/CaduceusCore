@@ -31,10 +31,13 @@ def main():
     base = load_config()
     results = []
 
+    H = base["mxu"]["array_height"]
+    W = base["mxu"]["array_width"]
+
     # --- Baseline ---
     tok, us = run_sim(base)
-    print(f"Baseline (128×128): {tok:.0f} tok/s ({us:.0f} μs)")
-    results.append({"config": "128×128, M=1", "tok_s": tok, "us": us, "area_mm2": 27})
+    print(f"Baseline ({H}×{W}): {tok:.0f} tok/s ({us:.0f} μs)")
+    results.append({"config": f"{H}×{W}, M=1", "tok_s": tok, "us": us, "area_mm2": 27})
 
     # --- Option 1: Wider array ---
     for h, w, area in [(128, 256, 42), (256, 256, 108), (64, 256, 32), (256, 128, 54)]:
@@ -63,7 +66,7 @@ def main():
             total_cycles += r.total_cycles
         us = total_cycles / 1000  # 1GHz
         tok_s = M * 1e6 / us if us > 0 else 0
-        label = f"128×128, M={M} (batch)"
+        label = f"{base['mxu']['array_height']}×{base['mxu']['array_width']}, M={M} (batch)"
         print(f"  {label}: {tok_s:.0f} tok/s ({us:.0f} μs for {M} tokens)")
         results.append({"config": label, "tok_s": tok_s, "us": us, "area_mm2": 27})
 
