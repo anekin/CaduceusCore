@@ -656,6 +656,25 @@ def main():
     sa = analyze_sensitivity(results)
     print_sensitivity_report(sa)
 
+    # ── Cross-Validation (compare best config against known products) ──
+    if not _CV_MODEL and reasonable:
+        from dse_scenario import cross_validate as cv_func, print_cross_validate as print_cv
+        best = reasonable[0]
+        # Auto-detect scenario: on-chip if any config has on_chip_memory
+        has_onchip = any(
+            float(configs[i].get('on_chip_memory', {}).get('capacity_gb', 0)) > 0
+            for i in range(min(len(configs), len(results)))
+            if results[i].config_label == best.config_label
+        )
+        scenario = 'onchip_7b' if has_onchip else 'lpddr5_3b'
+        cv = cv_func({
+            'process_nm': int(base_cfg.get('area_model', {}).get('process_node', 12)),
+            'area_mm2': best.area_mm2,
+            'tops_int8': 6.1 if has_onchip else 16.4,  # scenario-dependent typical values
+            'tok_s': best.tok_s,
+        }, scenario)
+        print_cv(cv)
+
     # ── Save ──
     if args.output:
         def _result_dict(p, on_pareto=False):
