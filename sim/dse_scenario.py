@@ -159,9 +159,20 @@ def preflight(scenario_name: str, config: Dict[str, Any]) -> Dict[str, Any]:
     
     recommendations = []
     
-    # SRAM recommendation based on bottleneck
-    if "BANDWIDTH BOTTLENECK" in bottleneck['conclusion'][0] if bottleneck.get('conclusion') else False:
-        recommendations.append("SRAM: sweep L2 from 1MB to 8MB — larger SRAM reduces DRAM tile reads")
+    # SRAM recommendation based on bottleneck + bandwidth regime
+    if "BANDWIDTH BOTTLENECK" in (bottleneck.get('conclusion', [''])[0]):
+        bw_actual = bottleneck.get('effective_bw_gbps', 0)
+        if bw_actual >= 200:
+            recommendations.append(
+                f"SRAM: sweep from 512KB. BW={bw_actual:.0f}GB/s is high — "
+                "SRAM may have low impact (tile streaming cost negligible). "
+                "Sensitivity analysis will confirm."
+            )
+        else:
+            recommendations.append(
+                f"SRAM: sweep L2 from 1MB to 8MB — larger SRAM reduces DRAM tile reads. "
+                f"BW={bw_actual:.0f}GB/s is constrained."
+            )
     else:
         recommendations.append("SRAM: 512KB-1MB likely sufficient. Start sweep from 512KB.")
     

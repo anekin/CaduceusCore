@@ -361,8 +361,14 @@ def _parse_label(label: str) -> Dict[str, Any]:
     # Weight cache
     params['weight_cache'] = 'WC' in label
     
+    # SRAM size — handles "SRAM  8MB", "SRAM512KB", "SRAM 1MB"
+    m = re.search(r'SRAM\s*(\d+)\s*(MB|KB)', label)
+    if m:
+        val = int(m.group(1))
+        params['sram_mb'] = val if m.group(2) == 'MB' else val / 1024
+    
     # DRAM label
-    m = re.search(r'(LPDDR\S+|HBM\S+|DDR\S+)', label)
+    m = re.search(r'(LPDDR\S+|HBM\S+|DDR\S+|on-chip)', label)
     if m:
         params['dram'] = m.group(1)
     
@@ -404,7 +410,7 @@ def analyze_sensitivity(results: List[PPA],
     parsed = [_parse_label(r.config_label) for r in results]
     
     # Parameters to analyze (only those that vary across the result set)
-    param_keys = ['engine', 'H', 'W', 'MACs', 'w_bits', 'freq_mhz', 'weight_cache', 'dram']
+    param_keys = ['engine', 'H', 'W', 'MACs', 'w_bits', 'freq_mhz', 'weight_cache', 'dram', 'sram_mb']
     varying_params = {}
     for key in param_keys:
         values = set()
