@@ -361,7 +361,7 @@ def main():
 
     # ── Best per engine type ──
     print(f"\n  Best per engine type (area ≤ 80mm², DRAM ≤ 102.4 GB/s):")
-    for eng in ["systolic", "os_systolic", "block", "tensor_core", "wmma", "gmma"]:
+    for eng in ["systolic", "os_systolic", "block", "tensor_core", "wmma", "gmma", "fsa"]:
         eng_results = [r for r in results
                        if eng in r.config_label and r.area_mm2 <= 80]
         if eng_results:
@@ -386,6 +386,7 @@ def main():
                     "wmma": "wmma",
                     "gmma": "gmma",
                     "inpu": "input_stationary",
+                    "fsa ": "fsa",
                 }
                 d["engine_type"] = engine_map.get(prefix, prefix)
                 d["pareto"] = on_pareto
