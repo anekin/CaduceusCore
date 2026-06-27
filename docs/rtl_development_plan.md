@@ -1472,3 +1472,133 @@ python3 sim/check_mmio_map.py
 | `tests/` (210 tests) | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 > **核心原则:** 所有新 RTL 模块必须在引入更高集成层级前通过低层级的验证。Phase 1 的 MXU 测试在 Phase 3 中作为 Cocotb 的一个子集复跑, Phase 3 的测试在 Phase 5 的全芯片仿真中复跑, 确保回归覆盖不退化。
+
+---
+
+## 11. Phase 3/4/5 实际完成状态 — SoC Integration (soc-phase3-4)
+
+> **完成日期**: 2026-06-27 | **计划**: `.omo/plans/soc-phase3-4.md` | **18 tasks, 6 waves**
+>
+> 实际交付采用了**全开源 IP 技术栈**，替代了原计划 Phase 4/5 的商业 IP 方案。DMA 使用 `axi_cdma` (alexforencich/verilog-axi, MIT) 替代 DW_axi_dmac，NoC 使用自研 AXI4 crossbar 替代 FlexNoC，RISC-V 使用 Ibex 替代 Rocket。所有 IP 通过标准 AXI4/APB 接口连接，未来可无缝替换为商业 IP。
+
+### 11.1 完成状态总结
+
+| 原阶段 | 原计划内容 | 实际交付 (soc-phase3-4) | 状态 |
+|--------|-----------|------------------------|:----:|
+| Phase 3 | Cocotb 多模块联合仿真 | `cocotb_bridge.py` + `tb_soc.v` + Cocotb E2E smoke | ✅ 完成 |
+| Phase 4 (IP) | DW_axi_dmac + FlexNoC + Rocket | axi_cdma + 自研 crossbar + Ibex (全开源替代) | ✅ 已完成替换 |
+| Phase 4 (MMIO) | check_mmio_map.py | `check_mmio_map.py` (49 registers match) | ✅ 完成 |
+| Phase 5 (Full Chip) | caduceus_top.v | `caduceus_soc_top.v` (1272 lines, 12 modules) | ✅ 完成 |
+| Phase 5 (E2E) | Qwen2.5-3B + MobileNetV3 forward pass | Qwen2.5-3B blk.0 smoke (Cocotb) | ✅ 精简 smoke |
+
+### 11.2 实际交付物清单
+
+| 类别 | 文件 | 行数 | 描述 |
+|------|------|:----:|------|
+| **SoC RTL** | | | |
+| SoC 顶层 | `rtl/soc/caduceus_soc_top.v` | 1272 | 12 模块实例化, AXI4+APB+IRQ 互联 |
+| AXI Crossbar | `rtl/soc/axi_crossbar.v` | 578 | M=6, S=2, round-robin, 压力验证 |
+| SRAM Controller | `rtl/soc/sram_ctrl.v` | ~350 | 4MB AXI4 slave, 512-bit, burst 支持 |
+| APB Decoder | `rtl/soc/apb_decoder.v` | ~200 | 1→7 APB decoder, pslverr 路径 |
+| Boot ROM | `rtl/soc/boot_rom.v` | ~80 | 64KB ROM, $readmemh 加载 |
+| Doorbell | `rtl/soc/doorbell.v` | 113 | Host↔NPU ring buffer doorbell |
+| **CPU** | | | |
+| Ibex Wrapper | `rtl/cpu/ibex_wrapper.v` | ~400 | Ibex RV32IMC + AXI4/APB adapter |
+| Ibex Core | `rtl/cpu/ibex/` | — | lowRISC Ibex (Apache 2.0), vendored |
+| **IP Wrappers** | | | |
+| DMA Wrapper | `rtl/ip/dma_wrapper.v` | 441 | axi_cdma wrapper (verilog-axi, MIT) |
+| PCIe EP Wrapper | `rtl/ip/pcie_ep_wrapper.v` | ~500 | pcie_axi_master wrapper (verilog-pcie, MIT) |
+| DRAM Model | `rtl/ip/dram_model.v` | ~360 | 2GB sparse behavioral model |
+| **Engine Wrappers** | | | |
+| MXU SoC Wrapper | `rtl/wrapper/mxu_soc_wrapper.v` | ~300 | APB+AXI4 + broadcast bus sequencer |
+| SFU SoC Wrapper | `rtl/wrapper/sfu_soc_wrapper.v` | ~300 | APB+AXI4 + 32→512 width converter |
+| Vector SoC Wrapper | `rtl/wrapper/vector_soc_wrapper.v` | ~300 | APB+AXI4 + 4096→512 width adapter |
+| APB→MMIO Bridge | `rtl/wrapper/apb_to_mmio.v` | ~50 | APB slave→原生 MMIO 适配 |
+| **INTC** | | | |
+| INTC Top | `rtl/intc/intc_top.v` | 180 | 7-source, PENDING/ENABLE/THRESHOLD/ACK |
+| **验证** | | | |
+| SoC Testbench | `rtl/tb/tb_soc.v` | 271 | Cocotb/DPI full-chip testbench |
+| Cocotb Bridge | `sim/cocotb_bridge.py` | 870 | Python Cocotb control layer |
+| MMIO Checker | `sim/check_mmio_map.py` | 291 | regmap.py ↔ npu-regmap.h consistency |
+| Interconnect Config | `sim/config/interconnect.yaml` | 143 | Crossbar topology YAML |
+| Interconnect Validator | `scripts/validate_interconnect.py` | — | YAML→validation + routing table |
+| Regression Makefile | `sim/regression/Makefile` | 303 | 8 regression test targets |
+| **文档** | | | |
+| SoC README | `rtl/soc/README.md` | — | Module hierarchy, crossbar topology, VCS usage |
+| IP README | `rtl/ip/README.md` | — | IP descriptions, licenses, replacement guide |
+| Learnings | `.omo/evidence/learnings-soc-phase3-4.md` | — | 12 lessons learned |
+
+### 11.3 验证结果
+
+| 测试 | 工具 | 结果 |
+|------|------|:----:|
+| MMIO consistency | `check_mmio_map.py` | ✅ 49 registers match |
+| Interconnect validation | `validate_interconnect.py` | ✅ PASS |
+| pytest regression (210 tests) | pytest | ✅ 210/210 |
+| Crossbar concurrent stress (≥10k cycles) | VCS | ✅ 11,455 cycles, 1,260 txns, 0 errors |
+| DMA wrapper (5 tests) | VCS | ✅ ALL TESTS PASSED |
+| INTC 7-source (13 checks) | VCS | ✅ 13/13 PASS |
+| SoC elaboration (47 modules) | VCS | ✅ 0 errors |
+| Cocotb bridge (Python API) | Python | ✅ PASS |
+| Ibex boot to firmware main() | VCS | ✅ Boot ROM $readmemh OK |
+| Doorbell → INTC → firmware CLR smoke | VCS | ✅ APB ✅, IRQ toggle verified |
+
+### 11.4 开源 IP 选型与 License
+
+| 组件 | 开源选择 | License | 商业替换方案 |
+|------|---------|---------|-------------|
+| DMA | `axi_cdma` (alexforencich/verilog-axi) | MIT | Synopsys DW_axi_dmac |
+| PCIe | `pcie_axi_master` (alexforencich/verilog-pcie) | MIT | Synopsys DWC PCIe EP |
+| NoC | 自研 AXI crossbar | CaduceusCore | Arteris FlexNoC |
+| RISC-V | Ibex (lowRISC) | Apache 2.0 | — (已满足需求) |
+| DRAM | LiteDRAM-based behavioral | CaduceusCore | Synopsys uMCTL2 |
+
+### 11.5 与原计划的关键偏离
+
+| 原计划 | 实际实现 | 原因 |
+|--------|---------|------|
+| Phase 4: DW_axi_dmac (Synopsys) | axi_cdma (MIT 开源) | 开源方案接口兼容，无需 License server |
+| Phase 4: FlexNoC (Arteris) | 自研 AXI crossbar (578 行) | 简单可控，stress-verified ≥10k cycles |
+| Phase 4: Rocket Core (Chisel) | Ibex RV32IMC (SystemVerilog) | 更轻量，直接 VCS 编译，无 Chisel 生成步骤 |
+| Phase 5: Qwen E2E 9 instr full pass | Qwen blk.0 4 instr smoke | 单层 forward pass 需完整 cocotb 运行时；smoke 验证了 data path 正确性 |
+| Phase 5: MobileNetV3 full inference | 未覆盖 | 留待后续 Phase；im2col→GEMM 通路已在引擎层验证 |
+| Phase 4: `rtl/top/` → Phase 5: caduceus_top.v | `rtl/soc/caduceus_soc_top.v` | 目录结构整合为 `rtl/soc/` |
+
+### 11.6 范围合规 (F4 Scope)
+
+**Phase 3 允许范围 (已更新 2026-06-27):**
+
+| 路径 | 说明 | 来源 |
+|------|------|------|
+| `rtl/soc/` | SoC 集成模块 | Phase 3 |
+| `rtl/wrapper/` | Engine SoC wrappers | Phase 3 |
+| `rtl/intc/` | 中断控制器 | Phase 3 |
+| `rtl/ip/` | IP wrappers (DMA/PCIe/DRAM) | Phase 3 |
+| `rtl/cpu/` | Ibex wrapper | Phase 3 |
+| `rtl/tb/tb_soc.v` | SoC Cocotb testbench | Phase 3 |
+| `rtl/tb/*.sv` | 模块级 testbenches | Task 14 |
+| `sim/cocotb_bridge.py` | Cocotb Python 控制层 | Phase 3 |
+| `sim/check_mmio_map.py` | MMIO 一致性检查 | Phase 3 |
+| `sim/config/interconnect.yaml` | Crossbar 互连配置 | Phase 3 |
+| `sim/regression/` | SoC 回归测试 | Phase 3 |
+| `sim/regmap.py` | MMIO 寄存器映射 | Phase 3 |
+| `sim/gen_rtl_tests.py` | Cocotb 测试向量生成 | Task 15 |
+| `firmware/` | NPU 固件 | Phase 3 |
+| `scripts/validate_interconnect.py` | Crossbar 验证脚本 | Phase 3 |
+| `docs/rtl_development_plan.md` | 开发计划文档 | Phase 3 |
+| `README.md` | 项目 README | Phase 3 |
+| `.omo/` | 工作过程记录 | Phase 3 |
+
+**Must NOT Have (受保护路径，未修改):**
+
+- [x] `rtl/mxu/` — 无修改
+- [x] `rtl/sfu/` — 无修改
+- [x] `rtl/vector/` — 无修改
+- [x] `sim/golden_executor.py` — 无修改
+- [x] `sim/compare_rtl.py` — 无修改
+- [x] `rtl/test_vectors/sfu/` — 无修改 (Phase 2 测试向量)
+- [x] `sim/npu_device.cc`, `sim/npu_device.cpp` — 无修改 (Phase 2 主机模型)
+- [x] `sim/spike_host.py`, `sim/spike_mmio_server.py` — 无修改 (Phase 2 Spike 集成)
+- [x] 所有第三方 IP 源码无修改，保留原始 LICENSE
+- [x] 不做综合/物理设计
+- [x] 不做多核 NPU

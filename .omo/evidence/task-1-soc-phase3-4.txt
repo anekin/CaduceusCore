@@ -1,0 +1,82 @@
+# Task 1 — Boot ROM + Unified Address Space — Evidence Report
+
+## Acceptance Criteria
+
+### 1. boot_rom.v created
+- File: rtl/soc/boot_rom.v
+- 64KB ROM (16384 × 32-bit), $readmemh from firmware/build/npu_firmware.hex
+- Single-cycle synchronous read, 32-bit instruction output
+- Reset: nop (0x00000013)
+
+### 2. Makefile hex pipeline changed
+- Uses od -t x4 for little-endian 32-bit word output (one word per line)
+- Excludes .data_dram from boot ROM hex (-R .data_dram)
+- Separate dram_init.hex target for .data_dram section
+- Output format: one 8-char hex word per line → $readmemh compatible
+
+### 3. regmap.py addresses updated
+- INTC_BASE: 0x4001_1000 → 0x4000_6000
+- DOORBELL:  0x4001_0000 → 0x4000_5000
+- SRAM_BASE: 0x0000_0000 → 0x2000_0000 (matches firmware)
+
+### 4. npu-regmap.h addresses updated
+- NPU_INTC_BASE:      0x40011000 → 0x40006000
+- NPU_DOORBELL_BASE:  0x40010000 → 0x40005000
+- NPU_SRAM_BASE:      already 0x20000000 (unchanged)
+- Added NPU_PCIE_BASE: 0x40004000
+
+### 5. link.ld rewritten for unified address space
+- MEMORY regions: ROM (0x00000000, 64K), IBEX_DMEM (0x00010000, 64K), DRAM (0x80000000, 256M)
+- .text + .rodata → ROM
+- .data VMA → IBEX_DMEM, LMA follows .rodata in ROM (AT)
+- .bss → IBEX_DMEM
+- Stack at IBEX_DMEM top (_stack_top = 0x00014010)
+- Exported symbols: _data_start, _data_end, _data_lma
+- .data_dram → DRAM (excluded from boot hex)
+
+### 6. startup.S updated
+- Step 1: Copy .data from ROM LMA (_data_lma) to IBEX_DMEM VMA (_data_start)
+- Step 2: Zero BSS
+- Step 3: Set sp = _stack_top
+- Step 4: Set mtvec → trap_handler
+- Step 5: Enable global interrupts (MIE)
+- Step 6: Jump to firmware_main()
+
+### 7. npu_firmware.c DRAM_BASE
+- DRAM_BASE: 0x80100000 → 0x80000000
+- RING_BUF_ADDR = DRAM_BASE = 0x80000000
+
+### 8. soc.flist created
+- Initial SOC filelist at rtl/soc/soc.flist
+- Contains rtl/soc/boot_rom.v
+
+### 9. Downstream sim files updated
+- sim/npu_device.cc:  DOORBELL→0x40005000, INTC→0x40006000
+- sim/npu_device.cpp: DOORBELL→0x40005000, INTC→0x40006000, debug trace thresholds
+- sim/spike_host.py:   FIRMWARE_RING_BASE→0x80000000, Spike -m map updated
+- sim/spike_mmio_server.py: comment updated
+- sim/regmap.py, sim/axi_tracer.py: auto-updated via regmap imports
+
+## Build Verification
+- make -C firmware: SUCCESS (warnings: unused g_npu_tail, g_npu_head — pre-existing)
+- firmware.hex: 264 words (1056 bytes) ≤ 64KB ✓
+- Hex format: one 8-char word per line, $readmemh compatible ✓
+- dram_init.hex: generated from .data_dram section ✓
+
+## Address Map Summary
+| Region    | Base        | Size  | Description          |
+|-----------|-------------|-------|----------------------|
+| ROM       | 0x0000_0000 | 64KB  | Boot ROM (instr)     |
+| IBEX_DMEM | 0x0001_0000 | 64KB  | Data/BSS/Stack       |
+| SRAM      | 0x2000_0000 | 4MB   | NPU data SRAM        |
+| MXU       | 0x4000_0000 | 4KB   | Matrix multiply      |
+| SFU       | 0x4000_1000 | 4KB   | Special function     |
+| VECTOR    | 0x4000_2000 | 4KB   | Vector engine        |
+| DMA       | 0x4000_3000 | 4KB   | DMA controller       |
+| PCIe      | 0x4000_4000 | 4KB   | PCIe (placeholder)   |
+| DOORBELL  | 0x4000_5000 | 4KB   | Host↔NPU doorbell    |
+| INTC      | 0x4000_6000 | 4KB   | Interrupt controller |
+| DRAM      | 0x8000_0000 | 256MB+ | Host DDR            |
+
+## Dispatch Logic
+NOT modified — firmware dispatch logic unchanged per requirement.

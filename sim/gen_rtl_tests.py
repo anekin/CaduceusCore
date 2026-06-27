@@ -89,6 +89,7 @@ class TestCase:
     sfu_op: str = ""        # "softmax", "gelu", "silu", "layernorm"
     sfu_len: int = 0
     is_chain: bool = False   # multi-instruction chain
+    is_qwen_smoke: bool = False  # qwen-smoke multi-instruction test
 
     @property
     def dir_name(self) -> str:
@@ -172,6 +173,21 @@ def chain_tests() -> List[TestCase]:
     ]
 
 
+def qwen_smoke_tests() -> List[TestCase]:
+    """Qwen2.5-3B single-layer smoke tests with small tensors (M≤64, K≤64, N≤64).
+
+    Exercises the full compute pipeline: MMUL → SFU → Vector, simulating
+    a transformer layer's ops (projections, activations, residuals).
+    Only MMUL/SFU/Vector opcodes; excludes DMA_LD/KV_LOAD/BARRIER.
+    """
+    return [
+        TestCase("qwen_smoke_blk0", M=1, K=64, N=64, seed=500,
+                 description="Qwen2.5-3B blk.0 smoke: 10 instructions (MMUL×4, SFU×3, Vector×3)",
+                 use_sfu=False, sfu_op="", sfu_len=0,
+                 is_chain=False, is_qwen_smoke=True),
+    ]
+
+
 # ══════════════════════════════════════════════════════════════════════
 # Test vector generator
 # ══════════════════════════════════════════════════════════════════════
@@ -201,6 +217,8 @@ class TestVectorGen:
 
         if tc.use_sfu:
             self._gen_sfu_test(test_dir, tc, rng, manifest)
+        elif tc.is_qwen_smoke:
+            self._gen_qwen_smoke(test_dir, tc, rng, manifest)
         elif tc.is_chain:
             self._gen_chain_test(test_dir, tc, rng, manifest)
         else:
@@ -390,6 +408,230 @@ class TestVectorGen:
             "isa": "32-bit instruction words",
         }
 
+    def _gen_qwen_smoke(self, test_dir: Path, tc: TestCase,
+                        rng: np.random.RandomState, manifest: dict):
+        """Generate Qwen2.5-3B single-layer smoke test with 10 instructions.
+
+        Covers MMUL (4 projections), SFU (softmax/gelu/layernorm),
+        Vector (vadd/vmul/vresid). All tensors <= 64. Excludes
+        DMA_LD/KV_LOAD/BARRIER. Each instruction has independent preloaded
+        inputs so SFU/Vector get valid float16 data.
+        """
+        M, K, N = 1, 64, 64
+
+        def pad_to_even(arr):
+            if len(arr) % 2 != 0:
+                return np.append(arr, 0)
+            return arr
+
+        # ── Instruction sequence (10 ops, N=10) ──────────────────
+        instructions: List[NPUInstruction] = [
+            NPUInstruction(OpCode.MMUL, {
+                "wa": 0x000000, "ia": 0x200000, "oa": 0x280000,
+                "M": M, "K": K, "N": N,
+            }, comment=f"qwen_smoke: Q_proj M={M} K={K} N={N}"),
+            NPUInstruction(OpCode.SOFTMAX, {
+                "sa": 0x2C0000, "da": 0x2C0100, "len": N,
+            }, comment=f"qwen_smoke: Softmax len={N}"),
+            NPUInstruction(OpCode.MMUL, {
+                "wa": 0x001000, "ia": 0x200000, "oa": 0x281000,
+                "M": M, "K": K, "N": N,
+            }, comment=f"qwen_smoke: K_proj M={M} K={K} N={N}"),
+            NPUInstruction(OpCode.GELU, {
+                "sa": 0x2C0200, "da": 0x2C0300, "len": N,
+            }, comment=f"qwen_smoke: GELU len={N}"),
+            NPUInstruction(OpCode.MMUL, {
+                "wa": 0x002000, "ia": 0x200000, "oa": 0x282000,
+                "M": M, "K": K, "N": N,
+            }, comment=f"qwen_smoke: V_proj M={M} K={K} N={N}"),
+            NPUInstruction(OpCode.LAYERNORM, {
+                "sa": 0x2C0400, "da": 0x2C0500, "len": N,
+            }, comment=f"qwen_smoke: LayerNorm len={N}"),
+            NPUInstruction(OpCode.MMUL, {
+                "wa": 0x003000, "ia": 0x200000, "oa": 0x283000,
+                "M": M, "K": K, "N": N,
+            }, comment=f"qwen_smoke: O_proj M={M} K={K} N={N}"),
+            NPUInstruction(OpCode.VADD, {
+                "sa": 0x2C0100, "da": 0x300000, "len": N,
+            }, comment=f"qwen_smoke: VADD len={N}"),
+            NPUInstruction(OpCode.VMUL, {
+                "sa": 0x2C0300, "da": 0x301000, "len": N,
+            }, comment=f"qwen_smoke: VMUL len={N}"),
+            NPUInstruction(OpCode.VRESID, {
+                "sa": 0x300000, "sb": 0x282000, "da": 0x302000, "len": N,
+            }, comment=f"qwen_smoke: VRESID len={N}"),
+        ]
+
+        num_instr = len(instructions)
+
+        # ── Generate MMUL weight data ─────────────────────────────
+        weight_addrs = [0x000000, 0x001000, 0x002000, 0x003000]
+        w_names = ["weight_q", "weight_k", "weight_v", "weight_o"]
+        packed_weights = {}
+        for addr, wname in zip(weight_addrs, w_names):
+            w_int4 = rng.randint(-8, 8, size=K * N, dtype=np.int8)
+            packed_weights[wname] = GoldenMXU.pack_int4(w_int4)
+
+        activation = rng.randint(-128, 128, size=M * K, dtype=np.int8)
+
+        # ── Generate SFU float16 input data ───────────────────────
+        sfu_rng = np.random.RandomState(tc.seed + 1)
+        sfu_inputs = {
+            0x2C0000: sfu_rng.randn(N).astype(np.float32) * 2.0,       # softmax input
+            0x2C0200: np.clip(sfu_rng.randn(N).astype(np.float32) * 2.0, -4.0, 4.0),  # gelu input
+            0x2C0400: sfu_rng.randn(N).astype(np.float32) * 2.0,       # layernorm input
+        }
+
+        # ── Preload all data into executor SRAM ───────────────────
+        executor = GoldenExecutor()
+        for wname, addr in zip(w_names, weight_addrs):
+            executor.sram.write_bytes(addr,
+                np.asarray(packed_weights[wname], dtype=np.uint8))
+        executor.sram.write_bytes(0x200000,
+            np.asarray(activation.flatten(), dtype=np.uint8))
+        for addr, data in sfu_inputs.items():
+            executor.sram.write_float16(addr,
+                data.astype(np.float16))
+
+        # ── Execute program, record per-instruction trace ─────────
+        per_instr_results = []
+        for idx, instr in enumerate(instructions):
+            op = instr.opcode
+            ops = instr.operands
+
+            if op == OpCode.MMUL:
+                result = executor.mxu.matmul_from_sram(
+                    ops.get("M", 1), ops.get("K", 64), ops.get("N", 64),
+                    ops["ia"], ops["wa"], executor.sram.data)
+                executor.sram.write_int32(ops["oa"], result)
+                expected = result.flatten()
+                per_instr_results.append({
+                    "idx": idx, "inst_name": instr.mnemonic,
+                    "dims": f"M={ops.get('M',1)},K={ops.get('K',64)},N={ops.get('N',64)}",
+                    "expected_first": [int(expected[0])],
+                    "dtype": "int32", "tolerance": "bit-exact",
+                })
+
+            elif op in (OpCode.SOFTMAX, OpCode.GELU, OpCode.LAYERNORM):
+                inp = executor.sram.read_float16(ops["sa"], ops["len"]).astype(np.float32)
+                if op == OpCode.SOFTMAX:
+                    out = executor.sfu.softmax_hw(inp)
+                elif op == OpCode.GELU:
+                    out = executor.sfu.gelu_hw(inp)
+                elif op == OpCode.LAYERNORM:
+                    out = executor.sfu.layernorm_hw(inp)
+                executor.sram.write_float16(ops["da"], out.astype(np.float16))
+                expected = out.flatten()[:1]
+                per_instr_results.append({
+                    "idx": idx, "inst_name": instr.mnemonic,
+                    "dims": f"len={ops['len']}",
+                    "expected_first": [float(expected[0])],
+                    "dtype": "float16", "tolerance": "abs=2e-3,rel=1e-2",
+                })
+
+            elif op == OpCode.VADD:
+                length = ops["len"]
+                a = executor.sram.read_float16(ops["sa"], length).astype(np.float32)
+                b = executor.sram.read_float16(ops["sa"] + length * 4, length).astype(np.float32)
+                out = executor.vector.add(a, b)
+                executor.sram.write_float16(ops["da"], out.astype(np.float16))
+                expected = out.flatten()[:1]
+                per_instr_results.append({
+                    "idx": idx, "inst_name": instr.mnemonic,
+                    "dims": f"len={length}",
+                    "expected_first": [float(expected[0])],
+                    "dtype": "float16", "tolerance": "abs=2e-3,rel=1e-2",
+                })
+
+            elif op == OpCode.VMUL:
+                length = ops["len"]
+                a = executor.sram.read_float16(ops["sa"], length).astype(np.float32)
+                b = executor.sram.read_float16(ops["sa"] + length * 4, length).astype(np.float32)
+                out = executor.vector.mul(a, b)
+                executor.sram.write_float16(ops["da"], out.astype(np.float16))
+                expected = out.flatten()[:1]
+                per_instr_results.append({
+                    "idx": idx, "inst_name": instr.mnemonic,
+                    "dims": f"len={length}",
+                    "expected_first": [float(expected[0])],
+                    "dtype": "float16", "tolerance": "abs=2e-3,rel=1e-2",
+                })
+
+            elif op == OpCode.VRESID:
+                length = ops["len"]
+                a = executor.sram.read_float16(ops["sa"], length).astype(np.float32)
+                b = executor.sram.read_int32(ops["sb"], length)
+                out = executor.vector.residual_add(a, b.astype(np.float32))
+                executor.sram.write_float16(ops["da"], out.astype(np.float16))
+                expected = out.flatten()[:1]
+                per_instr_results.append({
+                    "idx": idx, "inst_name": instr.mnemonic,
+                    "dims": f"len={length}",
+                    "expected_first": [float(expected[0])],
+                    "dtype": "float16", "tolerance": "abs=2e-3,rel=1e-2",
+                })
+
+        # ── Write hex files ──────────────────────────────────────
+        write_hex_int8(test_dir / "activation.hex", activation)
+        for wname in w_names:
+            write_hex_int4(test_dir / f"{wname}.hex", packed_weights[wname])
+        for addr in sfu_inputs:
+            tag = f"sfu_in_{addr:06x}"
+            write_hex_float16(test_dir / f"{tag}.hex",
+                              sfu_inputs[addr].astype(np.float16))
+
+        # Per-instruction golden outputs
+        for idx, instr in enumerate(instructions):
+            op = instr.opcode
+            if op == OpCode.MMUL:
+                golden = executor.sram.read_int32(instr.operands["oa"], M * N)
+                write_hex_int32(test_dir / f"golden_instr{idx}.hex", golden)
+            elif op in (OpCode.SOFTMAX, OpCode.GELU, OpCode.LAYERNORM,
+                        OpCode.VADD, OpCode.VMUL, OpCode.VRESID):
+                golden = executor.sram.read_float16(instr.operands["da"],
+                                                     instr.operands["len"])
+                write_hex_float16(test_dir / f"golden_instr{idx}.hex", golden)
+
+        # ── Write ISA ─────────────────────────────────────────────
+        write_isa_text(test_dir / "program.isa", instructions)
+        write_isa_binary(test_dir / "program.bin", instructions)
+
+        # ── Manifest ─────────────────────────────────────────────
+        manifest["qwen_smoke"] = True
+        manifest["num_instructions"] = num_instr
+        manifest["files"] = {"activation": "activation.hex"}
+        for wname in w_names:
+            manifest["files"][wname] = f"{wname}.hex"
+        for addr in sfu_inputs:
+            tag = f"sfu_in_{addr:06x}"
+            manifest["files"][tag] = f"{tag}.hex"
+        for idx in range(num_instr):
+            manifest["files"][f"golden_instr{idx}"] = f"golden_instr{idx}.hex"
+        manifest["files"]["isa_text"] = "program.isa"
+        manifest["files"]["isa_binary"] = "program.bin"
+
+        manifest["instructions"] = [
+            {
+                "idx": ir["idx"], "name": ir["inst_name"],
+                "dims": ir["dims"], "dtype": ir["dtype"],
+                "tolerance": ir["tolerance"],
+                "expected_first": ir["expected_first"],
+            }
+            for ir in per_instr_results
+        ]
+        manifest["results"] = {
+            "num_instructions": num_instr,
+            "per_instruction": per_instr_results,
+        }
+        manifest["format"] = {
+            "activation": "INT8",
+            "weight": "INT4 packed, 2 per uint8",
+            "golden_mmul": "INT32, $readmemh compatible",
+            "golden_sfu": "float16, 4 hex digits per value",
+            "golden_vector": "float16, 4 hex digits per value",
+            "isa": "32-bit fixed-length instruction words",
+        }
+
 
 # ══════════════════════════════════════════════════════════════════════
 # CLI
@@ -403,7 +645,7 @@ def main():
     parser.add_argument("-o", "--output", default="test_vectors",
                         help="Output root directory")
     parser.add_argument("--category", nargs="+",
-                        choices=["random", "corner", "sfu", "chain", "all"],
+                        choices=["random", "corner", "sfu", "chain", "qwen-smoke", "all"],
                         default=["all"],
                         help="Test categories to generate")
     args = parser.parse_args()
@@ -424,6 +666,8 @@ def main():
         all_tests.extend(sfu_tests())
     if "chain" in categories:
         all_tests.extend(chain_tests())
+    if "qwen-smoke" in categories:
+        all_tests.extend(qwen_smoke_tests())
 
     print(f"Generating {len(all_tests)} test vectors...")
     print(f"Output: {output_root.absolute()}")

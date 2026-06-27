@@ -1,0 +1,32 @@
+Task 12: Create interconnect config documentation + AXI crossbar validation
+==========================================================================
+Date: 2026-06-27
+Plan: soc-phase3-4.md
+Status: COMPLETE
+
+Deliverables:
+  - CaduceusCore/sim/config/interconnect.yaml      — Crossbar M×S topology config
+  - CaduceusCore/scripts/validate_interconnect.py   — Validation script
+
+Validation results:
+  Masters: 6 (Ibex, MXU, SFU, Vector, DMA, PCIe)
+  Slaves:  2 (SRAM, DRAM)
+  Routes:  4 (SRAM, DRAM, DECERR×2)
+  ID width: 6 bits (per master), 9 bits (slave-side)
+
+  All checks PASSED:
+    ✓ No address overlap between slaves
+    ✓ AXI ID width consistent across all masters
+    ✓ All masters cover intended slaves
+    ✓ Address routes are well-formed
+
+  Exit code: 0 (PASS)
+
+Address routing table (from crossbar decode_slave()):
+  SRAM:  0x2000_0000 – 0x203F_FFFF  (4 MB)  → slave 0
+  DRAM:  0x8000_0000 – 0xFFFF_FFFF  (2 GB)  → slave 1
+  Other: DECERR
+
+Generated human-readable routing table in Markdown during validation.
+
+Commit: Y | feat(soc): add interconnect.yaml + crossbar validation script

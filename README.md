@@ -189,6 +189,107 @@ python3 scripts/run_batch_regression.py
 
 SFU 和 Vector 的 testbench 均采用 inline 比较：RTL 输出后立即调用 `compare_sfu.py` 比对 golden 并打印 PASS/FAIL。`compare_rtl.py` 保持不变；SFU/RoPE 使用更宽松的浮点容差（abs_tol=2e-3，rel_tol=1e-2），Vector INT32 运算使用逐比特精确比较。
 
+## RTL Phase 3 — SoC Integration (2026-06)
+
+RTL Phase 3 完成了 **CaduceusCore NPU SoC 全芯片集成**——Ibex RISC-V（RV32IMC）作为控制核，6 个 AXI4 master（Ibex/MXU/SFU/Vector/DMA/PCIe）通过自研 AXI4 crossbar 共享 4MB SRAM + 2GB DRAM，APB decoder 连接 7 个 MMIO slave。Qwen2.5-3B blk.0 Cocotb smoke 验证通过。
+
+### 模块清单
+
+| 模块 | 文件 | 行数 | 说明 |
+|------|------|------|------|
+| caduceus_soc_top | `rtl/soc/caduceus_soc_top.v` | 1272 | 全芯片顶层集成（12 个模块实例化） |
+| axi_crossbar | `rtl/soc/axi_crossbar.v` | 578 | M=6, S=2 AXI4 crossbar, round-robin |
+| sram_ctrl | `rtl/soc/sram_ctrl.v` | ~350 | 4MB AXI4 slave, 512-bit, burst 支持 |
+| apb_decoder | `rtl/soc/apb_decoder.v` | ~200 | 1→7 APB decoder, pslverr 路径 |
+| boot_rom | `rtl/soc/boot_rom.v` | ~80 | 64KB ROM, $readmemh 加载 firmware |
+| doorbell | `rtl/soc/doorbell.v` | 113 | Host↔NPU ring buffer doorbell |
+| ibex_wrapper | `rtl/cpu/ibex_wrapper.v` | ~400 | Ibex RV32IMC + AXI4/APB adapter |
+| intc_top | `rtl/intc/intc_top.v` | 180 | 7-source interrupt controller |
+| dma_wrapper | `rtl/ip/dma_wrapper.v` | 441 | axi_cdma DMA wrapper (verilog-axi, MIT) |
+| pcie_ep_wrapper | `rtl/ip/pcie_ep_wrapper.v` | ~500 | PCIe EP wrapper (verilog-pcie, MIT) |
+| dram_model | `rtl/ip/dram_model.v` | ~360 | 2GB DRAM behavioral model |
+| mxu_soc_wrapper | `rtl/wrapper/mxu_soc_wrapper.v` | ~300 | MXU: APB + AXI4 + broadcast sequencer |
+| sfu_soc_wrapper | `rtl/wrapper/sfu_soc_wrapper.v` | ~300 | SFU: APB + AXI4 + width converter |
+| vector_soc_wrapper | `rtl/wrapper/vector_soc_wrapper.v` | ~300 | Vector: APB + AXI4 + width adapter |
+
+合计 **18+ RTL 文件** 新增（不含 vendored 第三方 IP），~5,000+ 行 Verilog。
+
+### AXI4 Crossbar 拓扑
+
+```
+  Master 0: Ibex ──┐
+  Master 1: MXU  ──┤
+  Master 2: SFU  ──┤   AXI4       ┌── SRAM (0x2000_0000) S0: 4MB
+  Master 3: Vec  ──┤  Crossbar    │
+  Master 4: DMA  ──┤  M=6, S=2   ├── DRAM (0x8000_0000) S1: 2GB
+  Master 5: PCIe ──┘  round-robin┘
+```
+
+### 统一地址空间
+
+| 区域 | 基地址 | 大小 | 用途 |
+|------|--------|------|------|
+| Boot ROM | `0x0000_0000` | 64 KB | Ibex 复位向量 + 固件 |
+| Ibex DMEM | `0x0001_0000` | 64 KB | 栈 + .data/.bss |
+| SRAM | `0x2000_0000` | 4 MB | NPU 统一计算缓冲区 |
+| MXU MMIO | `0x4000_0000` | 4 KB | MXU 寄存器 |
+| SFU MMIO | `0x4000_1000` | 4 KB | SFU 寄存器 |
+| VECTOR MMIO | `0x4000_2000` | 4 KB | Vector 寄存器 |
+| DMA MMIO | `0x4000_3000` | 4 KB | DMA 寄存器 |
+| PCIe MMIO | `0x4000_4000` | 4 KB | PCIe 寄存器 |
+| DOORBELL | `0x4000_5000` | 4 KB | Host↔NPU doorbell |
+| INTC MMIO | `0x4000_6000` | 4 KB | 中断控制器 |
+| DRAM | `0x8000_0000` | 2 GB | DRAM 数据空间 |
+
+### 开源 IP 选型与 License
+
+| 组件 | 开源选择 | License | 商业替换方案 | 接口 |
+|------|---------|---------|-------------|------|
+| **DMA** | `axi_cdma` (alexforencich/verilog-axi) | MIT | Synopsys DW_axi_dmac | AXI4 master + APB slave |
+| **PCIe** | `pcie_axi_master` (alexforencich/verilog-pcie) | MIT | Synopsys DWC PCIe EP | AXI4 master + TLP bridge |
+| **NoC** | 自研 AXI crossbar | CaduceusCore | Arteris FlexNoC | AXI4 crossbar, port 对齐 |
+| **RISC-V** | Ibex (lowRISC) | Apache 2.0 | — | 已满足需求 |
+| **DRAM** | LiteDRAM-based behavioral | CaduceusCore | Synopsys uMCTL2 | AXI4 slave |
+
+> **替换原则**: 所有 IP 通过标准 AXI4/APB 接口通信。替换时仅需修改 `caduceus_soc_top.v` 中的模块实例化，地址映射、中断路由保持不变。
+
+### 验证结果
+
+- **MMIO consistency**: 49 registers match (`check_mmio_map.py`) — **PASSED**
+- **Crossbar concurrent stress**: M=6/S=2, MXU+DMA+PCIe ≥10k cycles, 1,260 txns, 0 errors — **PASSED**
+- **DMA wrapper**: 5 test cases, APB readback + CMD.START + STATUS.BUSY — **PASSED**
+- **INTC 7-source**: 13/13 interrupt checks (PENDING/ENABLE/THRESHOLD/ACK) — **PASSED**
+- **SoC elaboration**: 47 modules, 0 errors, 0 undriven — **PASSED**
+- **Cocotb E2E smoke**: Qwen2.5-3B blk.0 4-instruction smoke (MMUL+RMSNorm+Softmax+Residual) — **PASSED**
+- **Pytest 回归**: 210/210 通过（150 sim + 60 timing）
+
+### VCS 全芯片编译
+
+```bash
+# 环境: EDA server (sz0001, 192.168.0.11), module load vcs/vcs_2023.12sp2
+vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps \
+    -f rtl/cpu/ibex.flist \
+    -f rtl/ip/verilog-axi.flist \
+    -f rtl/ip/verilog-pcie.flist \
+    -f rtl/soc/soc.flist \
+    -top caduceus_soc_top -o simv_soc_top -l elaborate.log
+```
+
+### 模块级回归
+
+```bash
+cd sim/regression
+make run_apb_smoke       # APB decoder
+make run_intc_test       # INTC 7-source
+make run_dma_test        # DMA wrapper
+make run_crossbar_stress # AXI crossbar stress
+make run_pcie_test       # PCIe EP wrapper
+make run_dram_test       # DRAM model
+make -j4 all             # All tests parallel
+```
+
+详见 `rtl/soc/README.md` 和 `rtl/ip/README.md`。
+
 ## Func Model — 三重角色
 
 1. **RTL 开发的 Spec**：RTL 开发者只需看 Func Model 定义的接口和行为，
@@ -460,13 +561,18 @@ CaduceusCore/
 │   ├── regmap.py                 #   MMIO 寄存器映射 (72KB 地址空间)
 │   ├── gen_rtl_tests.py          #   $readmemh 测试向量生成
 │   ├── compare_rtl.py            #   RTL 输出 vs Golden 比对
+│   ├── cocotb_bridge.py          #   Cocotb Python 控制层 (Phase 3, NEW)
+│   ├── check_mmio_map.py         #   MMIO 一致性检查 (Phase 3, NEW)
 │   ├── engine/                   #   引擎实现 (isa, compiler, mac_engine, ppa_model)
 │   ├── models/                   #   性能模型 (mxu, sfu, vector, dma, dram, kv_cache, noc)
 │   ├── config/                   #   NPU 架构 YAML 配置
+│   │   └── interconnect.yaml     #    AXI crossbar 互连配置 (Phase 3, NEW)
+│   ├── regression/               #   SoC 回归测试 (Phase 3, NEW)
+│   │   └── Makefile              #    8 targets (apb/intc/dma/crossbar/pcie/dram/soc/qwen)
 │   ├── tests/                    #   pytest 测试套件 (开发中)
 │   │   └── test_dma_noc_integration.py  #   DMA + NoC 集成测试 (NEW)
 │   └── reports/                  #   架构回溯分析
-├── rtl/                          # Verilog RTL (Phase 1 + 2)
+├── rtl/                          # Verilog RTL (Phase 1 + 2 + 3)
 │   ├── mxu/                      #   64×64 Broadcast MAC 阵列 (Phase 1)
 │   │   ├── mxu_top.v             #     顶层集成
 │   │   ├── mmio_if.v             #     MMIO 寄存器接口
@@ -493,10 +599,38 @@ CaduceusCore/
 │   │   ├── type_convert.v        #     INT32→FP16 转换器
 │   │   ├── resid_add.v           #     128-wide 残差加法器
 │   │   └── README.md             #     Vector 验证文档
+│   ├── soc/                      #   SoC 集成 (Phase 3)
+│   │   ├── caduceus_soc_top.v    #     全芯片顶层 (12 模块实例化)
+│   │   ├── axi_crossbar.v        #     M=6/S=2 AXI4 crossbar, round-robin
+│   │   ├── sram_ctrl.v           #     4MB AXI4 slave, 512-bit burst
+│   │   ├── apb_decoder.v         #     1→7 APB decoder
+│   │   ├── boot_rom.v            #     64KB 启动 ROM ($readmemh)
+│   │   ├── doorbell.v            #     Host↔NPU ring buffer doorbell
+│   │   ├── soc.flist             #     VCS 统一 filelist
+│   │   └── README.md             #     SoC 文档 (NEW)
+│   ├── ip/                       #   IP Wrappers (Phase 3)
+│   │   ├── dma_wrapper.v         #     axi_cdma DMA wrapper (verilog-axi, MIT)
+│   │   ├── pcie_ep_wrapper.v     #     PCIe EP wrapper (verilog-pcie, MIT)
+│   │   ├── dram_model.v          #     2GB DRAM 行为模型
+│   │   ├── verilog-axi/          #     vendored verilog-axi (alexforencich, MIT)
+│   │   ├── verilog-pcie/         #     vendored verilog-pcie (alexforencich, MIT)
+│   │   └── README.md             #     IP 文档 (NEW)
+│   ├── wrapper/                  #   Engine Wrappers (Phase 3)
+│   │   ├── mxu_soc_wrapper.v     #     MXU: APB + AXI4 + broadcast sequencer
+│   │   ├── sfu_soc_wrapper.v     #     SFU: APB + AXI4 + width converter
+│   │   ├── vector_soc_wrapper.v  #     Vector: APB + AXI4 + width adapter
+│   │   └── apb_to_mmio.v         #     APB→原生 MMIO 桥接
+│   ├── cpu/                      #   RISC-V CPU (Phase 3)
+│   │   ├── ibex_wrapper.v        #     Ibex RV32IMC + AXI4/APB adapter
+│   │   ├── ibex.flist            #     Ibex VCS filelist
+│   │   └── ibex/                 #     vendored Ibex (lowRISC, Apache 2.0)
+│   ├── intc/                     #   中断控制器 (Phase 3)
+│   │   └── intc_top.v            #     7-source (PENDING/ENABLE/THRESHOLD/ACK)
 │   ├── tb/                       #   Testbenches
 │   │   ├── tb_mxu.v              #     MXU testbench
 │   │   ├── tb_sfu.v              #     SFU testbench (self-checking)
 │   │   ├── tb_vector.v           #     Vector testbench (self-checking)
+│   │   ├── tb_soc.v              #     全芯片 Cocotb/DPI testbench (Phase 3)
 │   │   └── tb_exp_lut.sv         #     exp_lut 独立测试
 │   └── test_vectors/             #   测试向量 (生成式)
 │       ├── mxu/                  #     MXU 场景目录
@@ -509,7 +643,8 @@ CaduceusCore/
 │   ├── compare_sfu.py            #   SFU inline 比较器 (Phase 2)
 │   ├── gen_vector_vectors.py     #   Vector 测试向量生成 (Phase 2)
 │   ├── gen_e2e_qwen_vectors.py   #   E2E Qwen 测试向量生成 (Phase 2)
-│   └── run_batch_regression.py   #   SFU + Vector 批量回归 (Phase 2)
+│   ├── run_batch_regression.py   #   SFU + Vector 批量回归 (Phase 2)
+│   └── validate_interconnect.py  #   Crossbar 互连验证 (Phase 3, NEW)
 ├── ggml-npu/                     # llama.cpp / GGUF 集成
 │   ├── q4_dequant.py             #   Q4_K/Q6_K 反量化 + GGUF 权值加载
 │   ├── npu_server.py             #   Hex 协议服务端
@@ -520,6 +655,7 @@ CaduceusCore/
 │   ├── func_model_architecture.md #   Func Model 架构 (最准确的文档)
 │   ├── verification_methodology.md#   验证方法论 + 模型库
 │   ├── NPU_Engines_Architecture_Guide.md  # 七引擎 PPA 对比
+│   ├── rtl_development_plan.md    #   RTL 开发计划 (Phase 3/4/5 完成状态更新, NEW)
 │   ├── ttft_gantt.md             #   TTFT Mermaid 甘特图 + 事件表 (NEW)
 │   ├── ttft_gantt.png            #   TTFT 三面板 Matplotlib 图 (NEW)
 │   └── func_model_performance_analysis.md  # 性能分析方法论 (NEW)

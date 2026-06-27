@@ -1,0 +1,143 @@
+#==============================================================================
+# interconnect.yaml — AXI4 Crossbar Interconnect Configuration
+# CaduceusCore SoC Phase 3-4
+#
+# This YAML describes the M×S crossbar topology, port parameters, and
+# address routing table. It mirrors the implementation in
+# rtl/soc/axi_crossbar.v and serves as the single source of truth for
+# interconnect topology documentation and future NoC replacement (FlexNoC
+# or other).
+#
+# Port numbering matches the crossbar instantiation order:
+#   Masters: Ibex(0) / MXU(1) / SFU(2) / Vector(3) / DMA(4) / PCIe(5)
+#   Slaves:  SRAM(0) / DRAM(1)
+#
+# Address space (unified, from SoC plan):
+#   SRAM:  0x2000_0000 – 0x203F_FFFF   (4 MB)
+#   DRAM:  0x8000_0000 – 0xFFFF_FFFF   (2 GB)
+#
+# References:
+#   - CaduceusCore/rtl/soc/axi_crossbar.v
+#   - CaduceusCore/docs/rtl_development_plan.md:830-873
+#   - CaduceusCore/.omo/plans/soc-phase3-4.md
+#==============================================================================
+
+interconnect:
+  # ── Topology ───────────────────────────────────────────────────────────────
+  name: "CaduceusCore AXI4 Crossbar"
+  topology: crossbar
+  protocol: AXI4
+  clock_mhz: 1000
+
+  # ── Global bus parameters ──────────────────────────────────────────────────
+  data_width: 512            # Data bus width in bits (all ports)
+  addr_width: 32             # Address bus width in bits
+  m_id_width: 6              # Per-master AXI ID width (bits)
+  msel_width: 3              # Master-select field width (ceil(log2(NUM_M)))
+  num_masters: 6             # Number of AXI4 master ports
+  num_slaves: 2              # Number of AXI4 slave ports
+
+  # ── Slave ports ────────────────────────────────────────────────────────────
+  slaves:
+    - id: 0
+      name: SRAM
+      description: "On-chip SRAM (NPU compute buffer)"
+      base_addr: 0x2000_0000
+      size: 0x0040_0000      # 4 MB
+      data_width: 512
+      support_burst: true
+      support_wrap: true
+    - id: 1
+      name: DRAM
+      description: "External DRAM (behavioral model)"
+      base_addr: 0x8000_0000
+      size: 0x8000_0000      # 2 GB
+      data_width: 512
+      support_burst: true
+      support_wrap: true
+
+  # ── Master ports ───────────────────────────────────────────────────────────
+  masters:
+    - id: 0
+      name: Ibex
+      description: "Ibex RISC-V core (RV32IMC, AXI4 data master)"
+      data_width: 512
+      axi_id_width: 6
+      priority: 0
+      intended_slaves: [SRAM, DRAM]
+
+    - id: 1
+      name: MXU
+      description: "Matrix Multiplication Unit (64x64 broadcast MAC)"
+      data_width: 512
+      axi_id_width: 6
+      priority: 2
+      intended_slaves: [SRAM, DRAM]
+
+    - id: 2
+      name: SFU
+      description: "Special Function Unit (softmax/layernorm/ etc.)"
+      data_width: 512
+      axi_id_width: 6
+      priority: 1
+      intended_slaves: [SRAM, DRAM]
+
+    - id: 3
+      name: Vector
+      description: "Vector Engine (SIMD ALU + reduce)"
+      data_width: 512
+      axi_id_width: 6
+      priority: 1
+      intended_slaves: [SRAM, DRAM]
+
+    - id: 4
+      name: DMA
+      description: "Central DMA engine (axi_cdma, descriptor-based)"
+      data_width: 512
+      axi_id_width: 6
+      priority: 3
+      intended_slaves: [SRAM, DRAM]
+
+    - id: 5
+      name: PCIe
+      description: "PCIe endpoint (pcie_axi_master bridge)"
+      data_width: 512
+      axi_id_width: 6
+      priority: 1
+      intended_slaves: [SRAM, DRAM]
+
+  # ── Address routing table ──────────────────────────────────────────────────
+  # Each entry defines a contiguous address window routed to a slave port.
+  # The decode logic matches the crossbar's decode_slave() function.
+  address_routes:
+    - name: SRAM
+      base_addr: 0x2000_0000
+      end_addr: 0x203F_FFFF
+      size: 0x0040_0000     # 4 MB
+      slave_id: 0
+      decode: "addr[31:22] == 10'b0010000000 && addr[21:0] <= 22'h3F_FFFF"
+    - name: DRAM
+      base_addr: 0x8000_0000
+      end_addr: 0xFFFF_FFFF
+      size: 0x8000_0000     # 2 GB
+      slave_id: 1
+      decode: "addr[31] == 1'b1"
+    - name: DECERR (unmapped)
+      base_addr: 0x0000_0000
+      end_addr: 0x1FFF_FFFF
+      size: 0x2000_0000
+      slave_id: null
+      decode: "catch-all → DECERR"
+    - name: DECERR (SRAM shadow)
+      base_addr: 0x2040_0000
+      end_addr: 0x7FFF_FFFF
+      size: 0x5FC0_0000
+      slave_id: null
+      decode: "catch-all → DECERR"
+
+  # ── Arbitration ────────────────────────────────────────────────────────────
+  arbitration:
+    policy: round_robin
+    description: "Round-robin per slave port; AW and W/B arbitrated independently from AR/R"
+    independent_aw_ar: true   # AW and AR channels arbitrate independently
+    single_outstanding: true   # Single outstanding transaction per master per direction

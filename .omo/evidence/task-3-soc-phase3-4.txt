@@ -1,0 +1,109 @@
+# Task 3 — Evidence: APB Decoder + apb_to_mmio Bridge
+
+## Date: 2026-06-27
+
+## Deliverables Created
+
+### 1. `CaduceusCore/rtl/soc/apb_decoder.v` (150 lines)
+Single APB master → 7 slave decoder. Address routing:
+- slave0 = MXU      @ 0x4000_0000 ~ 0x4000_0FFF  (psel_o[0])
+- slave1 = SFU      @ 0x4000_1000 ~ 0x4000_1FFF  (psel_o[1])
+- slave2 = VECTOR   @ 0x4000_2000 ~ 0x4000_2FFF  (psel_o[2])
+- slave3 = DMA      @ 0x4000_3000 ~ 0x4000_3FFF  (psel_o[3])
+- slave4 = PCIe     @ 0x4000_4000 ~ 0x4000_4FFF  (psel_o[4])
+- slave5 = DOORBELL @ 0x4000_5000 ~ 0x4000_5FFF  (psel_o[5])
+- slave6 = INTC     @ 0x4000_6000 ~ 0x4000_6FFF  (psel_o[6])
+
+Decode logic: upper 16 bits == 0x4000 for region match; paddr[15:12] selects slave.
+Out-of-range → pslverr=1, prdata=0.  Response mux: pready, pslverr, prdata from
+selected slave.
+
+### 2. `CaduceusCore/rtl/wrapper/apb_to_mmio.v` (75 lines)
+APB slave → native MMIO adapter bridge. Converts:
+- psel → cs
+- pwrite → we
+- paddr[11:0] → addr
+- pwdata → wdata
+- rdata → prdata (combinational, gated by psel & !pwrite)
+- pready = 1'b1 (zero-wait-state)
+- pslverr = 1'b0
+
+### 3. `CaduceusCore/rtl/tb/apb_decoder_tb.sv` (515 lines)
+Self-checking testbench with 38 tests across 9 phases.
+
+## VCS Verification Results
+
+**Simulator**: Synopsys VCS W-2024.09-SP2 on sz0001 (192.168.0.11)
+**Compile**: PASS (0 errors, 0 warnings)
+**Simulation**: PASS — ALL 38 TESTS PASSED
+
+### Phase 1: Slave select verification (7/7 PASSED)
+```
+[PASS] Test  1: MXU      @ 0x4000_0000 → psel_o[0]=1
+[PASS] Test  2: SFU      @ 0x4000_1000 → psel_o[1]=1
+[PASS] Test  3: VECTOR   @ 0x4000_2000 → psel_o[2]=1
+[PASS] Test  4: DMA      @ 0x4000_3000 → psel_o[3]=1
+[PASS] Test  5: PCIe     @ 0x4000_4000 → psel_o[4]=1
+[PASS] Test  6: DOORBELL @ 0x4000_5000 → psel_o[5]=1
+[PASS] Test  7: INTC     @ 0x4000_6000 → psel_o[6]=1
+```
+
+### Phase 2: Intra-slab offset tests (3/3 PASSED)
+- psel stays stable for offsets within the 4KB window (e.g., +0x004, +0xFFC).
+
+### Phase 3: Out-of-range → pslverr (7/7 PASSED)
+```
+[PASS] 0x4000_7000 (beyond INTC) → pslverr=1
+[PASS] 0x4000_7FFC (gap region)  → pslverr=1
+[PASS] 0x5000_0000 (wrong region) → pslverr=1
+[PASS] 0x0000_0000 (boot ROM)    → pslverr=1
+[PASS] 0x2000_0000 (SRAM)        → pslverr=1
+[PASS] 0x8000_0000 (DRAM)        → pslverr=1
+[PASS] 0xFFFF_FFFF (max addr)    → pslverr=1
+```
+
+### Phase 4: Valid slaves → pslverr=0 (3/3 PASSED)
+MXU/SFU/INTC all return pslverr=0.
+
+### Phase 5: Readback prdata mux (7/7 PASSED)
+Each slave returns its unique signature (0xAAAA_AAA0 through 0xAAAA_AAA6),
+confirming correct prdata mux routing.
+
+### Phase 6: Out-of-range read → prdata=0 (1/1 PASSED)
+Read from 0x4000_7000 returns 0x0000_0000.
+
+### Phase 7: Write+readback round-trip (7/7 PASSED)
+APB write → readback to each slave's offset address (sel routing verified).
+
+### Phase 8: Random APB smoke (1/1 PASSED)
+100 random transactions across valid and invalid addresses — all psel_o and
+pslverr correct.
+
+### Phase 9: Protocol timing (2/2 PASSED)
+- Idle bus → psel_o = 7'h00
+- Access phase (penable=1) → psel_o[0] still asserted
+
+## Acceptance Criteria (from plan)
+
+| Criterion | Status |
+|-----------|--------|
+| APB write 0x4000_0000 → psel[0]=1 | ✅ PASS |
+| APB write 0x4000_6000 → psel[6]=1 | ✅ PASS |
+| APB write 0x4000_7000 → pslverr | ✅ PASS |
+| 100 random APB txns hit correct slave | ✅ PASS |
+| apb_to_mmio.v VCS compile | ✅ PASS (parsing OK) |
+
+## Files Changed/Created
+
+| File | Status | Lines |
+|------|--------|-------|
+| CaduceusCore/rtl/soc/apb_decoder.v | NEW | 150 |
+| CaduceusCore/rtl/wrapper/apb_to_mmio.v | NEW | 75 |
+| CaduceusCore/rtl/tb/apb_decoder_tb.sv | NEW | 515 |
+
+## Summary
+
+Task 3 complete. The APB decoder correctly routes transactions to all 7 slaves
+based on address, generates pslverr for unmapped regions, and muxes prdata
+from the selected slave. The apb_to_mmio bridge converts APB protocol to the
+native MMIO interface used by engine wrappers. All 38 verification tests pass.

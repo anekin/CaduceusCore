@@ -1,0 +1,67 @@
+# CaduceusCore SoC — Unified VCS filelist
+# SoC Phase 3-4 / Task 13
+#
+# Task 1: Boot ROM       Task 2: SRAM Controller   Task 3: APB Decoder
+# Task 5: Engine Wrappers   Task 6: INTC             Task 7: AXI Crossbar
+# Task 8: PCIe EP Wrapper   Task 9: DRAM Model       T-D: Doorbell
+# Task 11: DMA Wrapper      Task 13: SoC Top
+#
+# Usage: vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps
+#            -f rtl/cpu/ibex.flist -f rtl/ip/verilog-axi.flist
+#            -f rtl/ip/verilog-pcie.flist -f rtl/soc/soc.flist
+#            -top caduceus_soc_top -o simv_soc_top -l elaborate.log
+# NOTE: ibex.flist must come FIRST (contains ibex_pkg.sv used by ibex_wrapper)
+
+# ── SoC Top-Level ───────────────────────────────────────────────────
+rtl/soc/caduceus_soc_top.v
+
+# ── SoC Infrastructure ────────────────────────────────────────────
+rtl/soc/boot_rom.v
+rtl/soc/sram_ctrl.v
+rtl/soc/apb_decoder.v
+rtl/soc/axi_crossbar.v
+rtl/soc/doorbell.v
+
+# ── Interrupt Controller ───────────────────────────────────────────
+rtl/intc/intc_top.v
+
+# ── IP Wrappers ───────────────────────────────────────────────────
+rtl/ip/pcie_ep_wrapper.v
+rtl/ip/dram_model.v
+rtl/ip/dma_wrapper.v
+
+# ── CPU — Ibex wrapper ────────────────────────────────────────────
+rtl/cpu/ibex_wrapper.v
+
+# ── Engine SoC Wrappers + APB bridge ──────────────────────────────
+rtl/wrapper/apb_to_mmio.v
+rtl/wrapper/mxu_soc_wrapper.v
+rtl/wrapper/sfu_soc_wrapper.v
+rtl/wrapper/vector_soc_wrapper.v
+
+# ── MXU Engine Core (64×64 Broadcast MAC Array) ──────────────────
+rtl/mxu/mxu_top.v
+rtl/mxu/mmio_if.v
+rtl/mxu/controller.v
+rtl/mxu/mac_array.v
+rtl/mxu/pe.v
+rtl/mxu/accumulator.v
+rtl/mxu/weight_buffer.v
+rtl/mxu/activation_buffer.v
+
+# ── SFU Engine Core (7 FP16 Special Function Pipelines) ──────────
+rtl/sfu/sfu_top.v
+rtl/sfu/softmax_hw.v
+rtl/sfu/layernorm_hw.v
+rtl/sfu/rmsnorm_hw.v
+rtl/sfu/rope_hw.v
+rtl/sfu/gelu_hw.v
+rtl/sfu/silu_hw.v
+rtl/sfu/exp_lut.v
+
+# ── Vector Engine Core (5 INT32 Vector Modules) ─────────────────
+rtl/vector/vector_top.v
+rtl/vector/vector_alu.v
+rtl/vector/reduce_tree.v
+rtl/vector/type_convert.v
+rtl/vector/resid_add.v

@@ -19,10 +19,11 @@ class Addr:
     SFU_BASE     = 0x4000_1000
     VECTOR_BASE  = 0x4000_2000
     DMA_BASE     = 0x4000_3000
-    DOORBELL     = 0x4001_0000
-    INTC_BASE    = 0x4001_1000
+    PCIE_BASE    = 0x4000_4000
+    DOORBELL     = 0x4000_5000
+    INTC_BASE    = 0x4000_6000
     DRAM_BASE    = 0x8000_0000   # DDR start
-    SRAM_BASE    = 0x0000_0000   # Local SRAM start
+    SRAM_BASE    = 0x2000_0000   # Local SRAM start (4 MB)
     SRAM_SIZE    = 4 * 1024 * 1024  # 4 MB
 
 
@@ -112,7 +113,7 @@ class DMA:
 
 
 # ══════════════════════════════════════════════════════════════════════
-# DOORBELL — Host↔NPU 通知  (0x4001_0000)
+# DOORBELL — Host↔NPU 通知  (0x4000_5000)
 # ══════════════════════════════════════════════════════════════════════
 
 class DOORBELL:

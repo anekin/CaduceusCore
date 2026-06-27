@@ -12,7 +12,7 @@
 
 /* ── 内存布局 ───────────────────────────────────────────────────── */
 
-#define DRAM_BASE  0x80100000UL   // DRAM data (firmware at 0x80000000)
+#define DRAM_BASE  0x80000000UL   // DRAM data (Host DDR)
 #define DRAM_SIZE  0x0FF00000UL   // ~255 MB
 #define SRAM_BASE  0x20000000UL
 #define SRAM_SIZE  0x00400000UL   // 4 MB

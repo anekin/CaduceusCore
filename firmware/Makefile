@@ -1,4 +1,4 @@
-# NPU Firmware Makefile
+# NPU Firmware Makefile — unified address space (boot ROM + IBEX DMEM)
 # 使用系统 riscv64-unknown-elf-gcc 交叉编译
 
 TOOLCHAIN_DIR ?= /usr
@@ -11,7 +11,7 @@ SIZE          = $(TOOLCHAIN_DIR)/bin/$(PREFIX)size
 BUILD_DIR     = build
 TARGET        = $(BUILD_DIR)/npu_firmware
 
-# RV32IM: Integer + Multiply (no _zicsrf — system GCC 10.2.0 rejects it)
+# RV32IM: Integer + Multiply
 ARCH          = rv32im
 ABI           = ilp32
 
@@ -31,7 +31,7 @@ OBJS           = $(patsubst %.S,$(BUILD_DIR)/%.o,$(patsubst %.c,$(BUILD_DIR)/%.o
 
 .PHONY: all clean disasm hex
 
-all: $(TARGET).elf $(TARGET).bin $(TARGET).hex
+all: $(TARGET).elf $(TARGET).hex $(BUILD_DIR)/dram_init.hex
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -46,11 +46,19 @@ $(TARGET).elf: $(OBJS) link.ld
 	$(CC) $(OBJS) $(LDFLAGS) -o $@
 	$(SIZE) $@
 
-$(TARGET).bin: $(TARGET).elf
-	$(OBJCOPY) -O binary $< $@
+# ── Boot ROM hex: .text + .rodata + .data (≤64KB) ─────────────────
+# od -t x4 produces 32-bit hex words (little-endian). awk splits into
+# one word per line, compatible with Verilog $readmemh (32-bit wide).
+$(TARGET).hex: $(TARGET).elf
+	$(OBJCOPY) -O binary -R .data_dram $< $(TARGET).tmp.bin
+	od -A n -t x4 -v $(TARGET).tmp.bin | awk '{for(i=1;i<=NF;i++) print $$i}' > $@
+	rm -f $(TARGET).tmp.bin
 
-$(TARGET).hex: $(TARGET).bin
-	xxd -g 1 $< | cut -d' ' -f2-17 | tr -d ' \n' > $@
+# ── DRAM init hex: .data_dram section (loaded by host at runtime) ──
+$(BUILD_DIR)/dram_init.hex: $(TARGET).elf
+	$(OBJCOPY) -O binary -j .data_dram $< $(TARGET).dram.bin
+	od -A n -t x4 -v $(TARGET).dram.bin | awk '{for(i=1;i<=NF;i++) print $$i}' > $@
+	rm -f $(TARGET).dram.bin
 
 disasm: $(TARGET).elf
 	$(OBJDUMP) -d -S $< | less

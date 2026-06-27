@@ -1,0 +1,76 @@
+===============================================================================
+Task D — DOORBELL RTL (ring buffer pointer doorbell)
+Evidence file: task-D-soc-phase3-4.txt
+Date: 2026-06-27
+===============================================================================
+
+ARTIFACTS CREATED:
+  1. CaduceusCore/rtl/soc/doorbell.v           — 107 lines, APB slave doorbell
+  2. CaduceusCore/rtl/tb/tb_doorbell.v          — 478 lines, self-checking TB
+  3. CaduceusCore/rtl/soc/soc.flist             — updated (added doorbell.v)
+
+DESIGN SUMMARY:
+  - Module: doorbell
+  - Interface: AMBA APB v2.0 slave at base 0x4000_5000 (decoded by apb_decoder)
+  - Registers (4 × 32-bit, offset within 4 KB window):
+      0x00  HOST_TAIL  (RW)  Host writes after enqueuing commands
+      0x04  NPU_HEAD   (RW)  NPU firmware writes after consuming commands
+      0x08  HOST_HEAD  (RW)  Host completion ring head pointer
+      0x0C  NPU_TAIL   (RW)  NPU completion ring tail pointer
+  - Interrupt:  doorbell_irq = (HOST_TAIL != NPU_HEAD)  (combinational)
+  - Address validation: only 0x00~0x0F are valid; writes outside this range
+    are silently ignored, reads return 0 (prevents aliasing).
+
+FIRMWARE COMPATIBILITY:
+  - npu_firmware.c main loop (lines 294-324):
+      Reads  HOST_TAIL, NPU_HEAD → checks (host_tail == npu_head) for WFI
+      Writes NPU_HEAD after consuming commands
+      doorbell_irq auto-clears when HOST_TAIL == NPU_HEAD
+  - npu-regmap.h struct npu_doorbell_t (lines 99-106): register layout matches.
+
+KEY DESIGN DECISIONS:
+  1. All 4 registers are RW at RTL level. The npu_firmware.c writes NPU_HEAD
+     (line 323: NPU_DB->NPU_HEAD = npu_head), so NPU_HEAD must be writable.
+     Access control (who writes what) is at the protocol/firmware level.
+  2. doorbell_irq is purely combinational from the two registers — no pipeline
+     delay, no edge detection. Firmware polling loop reads registers directly
+     for the WFI condition; the IRQ is a wake-up signal.
+  3. Undefined addresses (paddr[11:4] != 0) return 0 and ignore writes.
+  4. pready = psel && penable (zero wait states). pslverr = 0 always.
+
+VCS VERIFICATION:
+  Compiler: Synopsys VCS V-2023.12-SP2_Full64
+  Server:   192.168.0.11 (sz0001)
+  Command:  vcs -full64 -sverilog -timescale=1ns/1ps -top tb_doorbell
+            rtl/tb/tb_doorbell.v rtl/soc/doorbell.v -o .omo/simv_doorbell +v2k
+
+  Compile:  PASS (CPU time: .946s compile + .665s elab + .387s link)
+  Simulate: PASS — 42/42 tests passed
+
+  Test coverage — all acceptance criteria verified:
+    [x] APB write HOST_TAIL=42 → readback=42 → doorbell_irq=1 (TAIL != HEAD)
+    [x] Firmware write NPU_HEAD=42 → NPU_HEAD=42 → doorbell_irq=0
+    [x] Reset state: all registers 0, doorbell_irq=0
+    [x] Independent register access (no cross-interference)
+    [x] Asymmetric values: HOST_TAIL=100, NPU_HEAD=50 → irq=1
+    [x] Partial consumption: NPU_HEAD=75 → still irq=1; NPU_HEAD=100 → irq=0
+    [x] 32-bit full-range values (0xFFFFFFFF)
+    [x] APB handshake: pready=0 during setup, pready=1 during access
+    [x] pslverr always 0
+    [x] prdata=0 when psel=0
+    [x] Firmware main loop simulation (npu_firmware.c lines 294-324)
+    [x] Combinational IRQ (no pipeline delay)
+    [x] Undefined addresses return 0, writes ignored
+
+PYTEST REGRESSION:
+  210/210 passed (sim/tests/ + sim/timing/tests/)
+
+FILES MODIFIED:
+  - Created: rtl/soc/doorbell.v
+  - Created: rtl/tb/tb_doorbell.v
+  - Updated: rtl/soc/soc.flist (added doorbell.v line)
+
+NO FILES OUTSIDE SCOPE WERE MODIFIED.
+Must NOT Have compliance: rtl/mxu/, rtl/sfu/, rtl/vector/, golden_executor.py,
+compare_rtl.py — all unchanged.
+===============================================================================

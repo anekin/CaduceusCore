@@ -13,8 +13,9 @@
 #define NPU_SFU_BASE       0x40001000UL
 #define NPU_VECTOR_BASE    0x40002000UL
 #define NPU_DMA_BASE       0x40003000UL
-#define NPU_DOORBELL_BASE  0x40010000UL
-#define NPU_INTC_BASE      0x40011000UL
+#define NPU_PCIE_BASE      0x40004000UL
+#define NPU_DOORBELL_BASE  0x40005000UL
+#define NPU_INTC_BASE      0x40006000UL
 #define NPU_SRAM_BASE      0x20000000UL
 #define NPU_SRAM_SIZE      (4 * 1024 * 1024)
 
@@ -117,7 +118,9 @@ typedef struct {
 #define INTC_SFU     (1 << 1)
 #define INTC_VECTOR  (1 << 2)
 #define INTC_DMA     (1 << 3)
-#define INTC_HOST    (1 << 8)
+#define INTC_PCIE    (1 << 4)
+#define INTC_HOST    (1 << 5)
+#define INTC_TIMER   (1 << 6)
 
 /* ── Module instance pointers ────────────────────────────────────── */
 

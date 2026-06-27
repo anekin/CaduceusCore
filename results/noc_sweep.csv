@@ -1,3 +1,0 @@
-topology,ports,tps,noc_latency_us,noc_contention_pct
-crossbar,4,9.55,43421.84,0.0
-mesh,4,9.55,43420.16,0.0

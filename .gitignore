@@ -11,3 +11,24 @@ ddr.bin
 logs/
 rtl/results/
 rtl/test_vectors/
+
+# VCS build artifacts
+csrc/
+simv
+simv_*
+*.daidir/
+*.daidir
+*.vcd
+*.log
+AN.DB/
+ucli.key
+vc_hdrs.h
+
+# OMO build artifacts
+.omo/*.log
+.omo/simv_*
+
+# Generated firmware binaries
+firmware/build/*.bin
+firmware/build/*.tmp
+firmware/build/*.host.elf
