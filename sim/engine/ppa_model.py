@@ -30,23 +30,26 @@ class AreaModel:
 
     def __init__(self, config: Dict[str, Any]):
         am = config.get("area_model", {})
-        self.systolic_pe_baseline = float(am.get("systolic_pe_area_mm2", 8.0))
-        self.block_pe_baseline = float(am.get("block_pe_area_mm2", 32.0))
-        self.os_pe_baseline = float(am.get("os_pe_area_mm2", 32.0))
-        self.input_stationary_pe_baseline = float(am.get("is_pe_area_mm2", 24.0))
-        self.tensor_core_pe_baseline = float(am.get("tc_pe_area_mm2", 32.0))
-        self.wmma_pe_baseline = float(am.get("wmma_pe_area_mm2", 36.8))   # 32×1.15
-        self.gmma_pe_baseline = float(am.get("gmma_pe_area_mm2", 40.0))   # 32+2+6
-        self.fsa_pe_baseline = float(am.get("fsa_pe_area_mm2", 8.96))     # systolic 8.0 × 1.12 (CMP+Split)
-        self.sfu = float(am.get("sfu_area_mm2", 2.0))
-        self.l1_per_kb = float(am.get("l1_sram_per_kb_mm2", 0.002))
-        self.l2_per_kb = float(am.get("l2_sram_per_kb_mm2", 0.0015))
-        self.dma = float(am.get("dma_area_mm2", 1.0))
-        self.riscv = float(am.get("riscv_area_mm2", 1.0))
-        self.pcie = float(am.get("pcie_area_mm2", 3.5))
-        self.dram_phy = float(am.get("dram_phy_area_mm2", 7.0))
-        self.crossbar = float(am.get("crossbar_area_mm2", 1.5))
-        self.dma_per_ch = float(am.get("dma_channels_area_per_channel_mm2", 0.5))
+        node = float(am.get("process_node_nm", am.get("process_node", 7.0)))
+        self.node_scale = (node / 7.0) ** 2  # area scales with node^2
+
+        self.systolic_pe_baseline = float(am.get("systolic_pe_area_mm2", 8.0)) * self.node_scale
+        self.block_pe_baseline = float(am.get("block_pe_area_mm2", 24.0)) * self.node_scale
+        self.os_pe_baseline = float(am.get("os_pe_area_mm2", 24.0)) * self.node_scale
+        self.input_stationary_pe_baseline = float(am.get("is_pe_area_mm2", 24.0)) * self.node_scale
+        self.tensor_core_pe_baseline = float(am.get("tc_pe_area_mm2", 24.0)) * self.node_scale
+        self.wmma_pe_baseline = float(am.get("wmma_pe_area_mm2", 28.0)) * self.node_scale
+        self.gmma_pe_baseline = float(am.get("gmma_pe_area_mm2", 32.0)) * self.node_scale
+        self.fsa_pe_baseline = float(am.get("fsa_pe_area_mm2", 8.96)) * self.node_scale
+        self.sfu = float(am.get("sfu_area_mm2", 1.5)) * self.node_scale
+        self.l1_per_kb = float(am.get("l1_sram_per_kb_mm2", 0.002)) * self.node_scale
+        self.l2_per_kb = float(am.get("l2_sram_per_kb_mm2", 0.0015)) * self.node_scale
+        self.dma = float(am.get("dma_area_mm2", 1.0)) * self.node_scale
+        self.riscv = float(am.get("riscv_area_mm2", 1.0)) * self.node_scale
+        self.pcie = float(am.get("pcie_area_mm2", 2.0)) * self.node_scale
+        self.dram_phy = float(am.get("dram_phy_area_mm2", 5.0)) * self.node_scale
+        self.crossbar = float(am.get("crossbar_area_mm2", 1.0)) * self.node_scale
+        self.dma_per_ch = float(am.get("dma_channels_area_per_channel_mm2", 0.5)) * self.node_scale
 
         # CV-specific hardware units
         self.im2col_feeder = float(am.get("im2col_feeder_mm2", 0.002))   # scales with array
@@ -89,17 +92,23 @@ class AreaModel:
 
         dma_area = self.dma + (dma_channels - 2) * self.dma_per_ch
 
-        # DRAM PHY: wider bus = larger PHY
-        mem = config.get("memory", {})
-        dram_width = int(mem.get("dram_width_bits", 64))
-        dram_phy_area = self.dram_phy * (dram_width / 64)
+        # DRAM PHY: skip if on-chip memory used (no external interface needed)
+        onchip = config.get("on_chip_memory", {})
+        if float(onchip.get("capacity_gb", 0)) > 0:
+            dram_phy_area = 0  # on-chip 3D DRAM doesn't need DDR PHY
+            pcie_area = 0      # no PCIe needed for on-chip memory
+        else:
+            mem = config.get("memory", {})
+            dram_width = int(mem.get("dram_width_bits", 64))
+            dram_phy_area = self.dram_phy * (dram_width / 64)
+            pcie_area = self.pcie
 
         # CV hardware units
         im2col_feeder_area = self.im2col_feeder * scale     # scales with array size
         pool2d_area = self.pool2d
         conv_sfu_area = self.conv_sfu
 
-        total = (pe_area + self.sfu + self.riscv + self.pcie +
+        total = (pe_area + self.sfu + self.riscv + pcie_area +
                  self.crossbar + l1 + l2 + dma_area + dram_phy_area +
                  im2col_feeder_area + pool2d_area + conv_sfu_area)
 
