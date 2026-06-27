@@ -138,4 +138,5 @@
 
 *工具: `sim/design_space_explorer.py` + `sim/engine/fsa_engine.py` + `sim/engine/block_engine.py` + `sim/engine/gmma_engine.py`*  
 *模型: Qwen2.5-3B INT4, seq_kv=2048, prompt_len=128*  
-*修正: v2 — 统一 SRAM 效率模型, 动态 KV cache, 权重不跨层缓存*
+*修正: v2 — 统一 SRAM 效率模型, 动态 KV cache, 权重不跨层缓存*  
+*设计约束: TTFT < 200ms ✓ (端侧 3B=60ms, 7B≈120ms), 所有推荐配置满足*
