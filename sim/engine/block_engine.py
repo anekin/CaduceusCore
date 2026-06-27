@@ -62,17 +62,21 @@ class BlockEngine(MACEngine):
 
         if self.weight_resident:
             # ── On-chip 3D DRAM: weights resident, no K-tiling ──
-            # Each N-tile: full K reduction across all PEs
+            # H handles batch (M) dimension. Each PE does K MACs for reduction.
+            M_tiles = math.ceil(M / self.H)
+            N_tiles = math.ceil(N / self.W)
+            total_tiles = M_tiles * N_tiles
+
+            # Per tile: K reduction cycles (one MAC/cycle/PE) + overhead
             per_tile_compute = K + BROADCAST_SYNC_CYCLES + \
                 _accumulate_cycles(self.w_bits, self.a_bits)
-            total_compute = per_tile_compute * N_tiles
+            total_compute = per_tile_compute * total_tiles
 
-            # Weight streaming from on-chip memory
+            # Weight streaming from on-chip memory (once per token)
             act_bytes = M * K * self.a_bits // 8
             weight_stream_cycles = (total_weight_bytes + act_bytes) / self.on_chip_bw
 
             total_cycles = max(total_compute, weight_stream_cycles)
-            dma_label = "on_chip"
 
             return EngineResult(
                 compute_cycles=int(total_compute),
@@ -80,10 +84,11 @@ class BlockEngine(MACEngine):
                 total_cycles=int(total_cycles),
                 utilization=total_macs / (self.peak_macs_per_cycle * total_cycles) if total_cycles > 0 else 0,
                 ops=total_macs,
-                num_tiles=N_tiles,
+                num_tiles=total_tiles,
                 weight_bytes=int(total_weight_bytes),
                 bottleneck="compute" if total_compute >= weight_stream_cycles else "on_chip_bw",
                 details={
+                    "M_tiles": M_tiles,
                     "N_tiles": N_tiles,
                     "per_tile_compute": per_tile_compute,
                     "on_chip_mode": True,
