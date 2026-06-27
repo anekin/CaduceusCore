@@ -1201,6 +1201,21 @@ class GoldenExecutor:
             ).hexdigest()[:16]
             self.state.cycle += length // 128 + 12
 
+        elif op == OpCode.RMSNORM:
+            sa = ops.get("sa", 0)
+            da = ops.get("da", 0)
+            elements = ops.get("elements", 0)
+            if elements <= 0:
+                raise ValueError(f"RMSNORM requires elements > 0, got {elements}")
+
+            inp = self.sram.read_float16(sa, elements).astype(np.float32)
+            out = self.sfu.rmsnorm_hw(inp)
+            self.sram.write_float16(da, out.astype(np.float16))
+            self.state.sfu_output_hash = hashlib.md5(
+                out.astype(np.float16).tobytes()
+            ).hexdigest()[:16]
+            self.state.cycle += elements // 128 * 2 + 10  # two-pass: square-sum + normalize
+
         elif op == OpCode.DMA_LD:
             # DMA load: DRAM → SRAM (simple mode)
             dram = ops.get("dram", 0)

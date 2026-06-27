@@ -36,6 +36,8 @@ class OpCode(IntEnum):
     # ── DMA descriptor instructions (v2) ─────────────────────────
     DMA_LDD  = 0x15   # DMA 加载（描述符链模式）
     DMA_STD  = 0x16   # DMA 存储（描述符链模式）
+    RMSNORM  = 0x17   # RMS Normalization (two-pass FPU)
+    # ── Future extension ────────────────────────────────────────────
 
     @classmethod
     def from_mnemonic(cls, mnemonic: str) -> "OpCode":
@@ -53,6 +55,8 @@ class OpCode(IntEnum):
             "vconv": cls.VCONV, "vresid": cls.VRESID,
             # v2: DMA descriptor
             "dma_ldd": cls.DMA_LDD, "dma_std": cls.DMA_STD,
+            # v3: RMSNorm
+            "rmsnorm": cls.RMSNORM,
         }
         return mn_map[mnemonic.lower()]
 
@@ -132,6 +136,13 @@ class NPUEncoder:
             tid = ops.get("token_id", 0) & 0xFFF
             w0 = (op << 27) | (tid & 0xFFF)
             words = [w0]
+        elif op == OpCode.RMSNORM:
+            # RMSNORM sa, da, elements (two-pass, FPU datapath)
+            sa = ops.get("sa", 0)
+            da = ops.get("da", 0)
+            elements = ops.get("elements", 0) & 0xFFF
+            w0 = (op << 27) | ((sa & 0xFFF) << 15) | ((da & 0xFFF) << 3) | (elements & 0x7)
+            words = [w0]
         elif op in (OpCode.BARRIER, OpCode.NOP,):
             words = [op << 27]
         elif op in (OpCode.VADD, OpCode.VMUL, OpCode.VRED_MAX,
@@ -186,7 +197,7 @@ class NPUDecoder:
                 "H": ((w0 >> 1) & 0x3) + 1,
                 "W": (w0 & 0x1) + 1,
             }
-        elif op in (OpCode.ROPE):
+        elif op == OpCode.ROPE:
             operands = {
                 "sa": (w0 >> 15) & 0xFFF,
                 "da": (w0 >> 3) & 0xFFF,
@@ -194,6 +205,12 @@ class NPUDecoder:
             }
         elif op in (OpCode.BARRIER, OpCode.NOP):
             pass
+        elif op == OpCode.RMSNORM:
+            operands = {
+                "sa": (w0 >> 15) & 0xFFF,
+                "da": (w0 >> 3) & 0xFFF,
+                "elements": w0 & 0x7,
+            }
         elif op in (OpCode.VADD, OpCode.VMUL, OpCode.VRED_MAX,
                     OpCode.VRED_SUM, OpCode.VCONV, OpCode.VRESID,
                     OpCode.DMA_LDD, OpCode.DMA_STD,):
