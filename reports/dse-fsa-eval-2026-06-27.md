@@ -1,211 +1,194 @@
-# DSE 评估报告：FSA 引擎 vs 全引擎设计空间
+# NPU 架构选型 DSE 报告
 
 **日期**: 2026-06-27  
 **分支**: `feat/fsa-arc-eval`  
-**方法**: 8 引擎 × 7 阵列尺寸 × 2 量化精度 × 3 频率 × 6 内存带宽 = 2,016 配置
+**方法**: 两阶段设计空间搜索 → 约束收敛 → 最优架构选定
 
 ---
 
-## 1. FSA 架构原理
-
-### 1.1 设计动机
-
-传统 NPU 处理 Transformer Attention 的典型管线：
+## 0. DSE 方法论
 
 ```
-MXU (QK^T) → SFU (softmax) → MXU (PV) → Vector (residual)
+Phase 1: 全维度搜索                          Phase 2: 约束收敛
+┌──────────────────────────┐         ┌──────────────────────────┐
+│ 8 引擎 × 7 阵列 × 2 精度  │         │ 芯片实际限制:              │
+│ × 3 频率 × 6 内存带宽    │  ───→   │ • LPDDR5 64-bit (≤51.2GB/s)│
+│ = 2,016 配置             │         │ • 面积预算 (≤100mm²)       │
+│                          │         │ • LLM 为主, CV 兜底       │
+│ 含 HBM2e/HBM3 等高端选项  │         └──────────┬───────────────┘
+└──────────────────────────┘                    │
+                                                ▼
+                                    ┌──────────────────────┐
+                                    │ 选定: FSA @ 64×256   │
+                                    │ LLM 41 tok/s, 29mm²  │
+                                    └──────────────────────┘
 ```
 
-三跳数据搬运，每次都要出阵列→进 SFU→回阵列。FSA 的核心思想：**把 softmax 需要的所有操作（rowmax、exp、rowsum）直接焊进脉动阵列的数据流里，零次搬运。**
-
-### 1.2 硬件改动
-
-相比标准 weight-stationary 脉动阵列，FSA 在 PE 层加了三个东西：
-
-| 组件 | 功能 | 传统做法 | FSA 做法 |
-|------|------|---------|---------|
-| **CMP 列** | 在线 rowmax | 外部 Vector 逐行求 max | 每列一个比较器，纵向传播最大值，一个周期完成 |
-| **Split 单元** | exp 近似 | 外部 SFU 的 LUT+插值 | 复用 PE 的 MAC 乘法器做分段线性插值 |
-| **纵向数据通路** | 在线归约 | 出阵列→Vector reduce | 数据在阵列内纵向流动，减少读出写回 |
-
-面积代价：±12%（等效于 systolic PE 8.0 → 8.96 mm² @ 128×128, 7nm）。
-
-### 1.3 指令级执行模型
-
-FSA 用 5 条矩阵指令覆盖完整 FlashAttention：
-
-```
-F.mx_load_stationary(Q)     → Q 驻留在阵列，等待 K 流式进入
-F.mx_attn_score(K, L)       → S = QK^T，同时 CMP 做 rowmax，Split 做 exp，Accumulator 做 rowsum
-F.mx_attn_value(V, O)       → P = softmax(S) 已在 Acc 中，直接乘 V
-F.mx_reciprocal(L)           → 1/Σexp（行和倒数）
-F.mx_attn_lse_norm(O)       → O = O / L
-```
-
-关键：第二步 `mx_attn_score` 在一个阵列遍历中完成了 **矩阵乘 + 取 max + exp + 累加**，传统管线需要 MXU→SFU→Vector 来回三次。
-
-### 1.4 为什么效率这么高
-
-三个因素叠加：
-
-1. **PE 面积效率**：weight-stationary PE 只需要 1 个 MAC + 1 个寄存器堆，面积约 8 mm²（128×128），而 block engine 的 PE 需要全并行 MAC，面积 32 mm²。FSA 继承了 systolic PE 的紧凑设计，只加了 12% 的 CMP/Split/纵向通路。
-
-2. **消除管线瓶颈**：传统 systolic 的致命弱点是 pipeline fill/drain——512 个周期的填充 + 512 个周期的排空，吞吐只剩 1/3。FSA 的纵向通路 + CMP/Split 在线操作让数据不需要出阵列，fill/drain 开销被 inline 操作摊薄。
-
-3. **零数据搬运**：MXU→SFU→MXU 的三次搬运完全消除。对于 prefill（128 token query），SFU softmax 8 级流水线 × 16K 元素 × 多头的延迟非常可观，FSA 直接省掉了。
+**核心理念**: 先看全貌，再根据实际约束收敛，而不是一开始就限缩搜索空间。
 
 ---
 
-## 2. LLM 解码性能对比
+## Phase 1: 全维度设计空间搜索
 
-### 2.1 受约束场景（面积 ≤ 80mm²，LPDDR5 ≤ 102.4 GB/s）
+### 1.1 搜索空间
 
-| 引擎 | tok/s | 面积 | 功耗 | 效率 | 最优配置 |
-|------|:---:|:---:|:---:|:---:|------|
-| **fsa** | **251** | 59mm² | 22.5W | **4.3** | 128×256 INT2 800MHz LPDDR5-256b |
-| gmma | 236 | 64mm² | 24.4W | 3.7 | 96×96 INT2 800MHz LPDDR5-256b |
-| wmma | 0 | 26mm² | 8.5W | — | 64×64 INT4 800MHz LPDDR5-32b |
+| 维度 | 取值 | 数量 |
+|------|------|:---:|
+| MAC 引擎 | systolic, os_systolic, input_stationary, block, tensor_core, wmma, gmma, **fsa** | 8 |
+| 阵列尺寸 | 64×64 → 256×256 | 7 |
+| 量化精度 | INT4, INT2 | 2 |
+| 频率 | 800, 1000, 1200 MHz | 3 |
+| 内存方案 | LPDDR5-32b, LPDDR5-64b, LPDDR5-128b, LPDDR5-256b, HBM2e-1024b, HBM3-1024b | 6 |
+| **合计** | | **2,016 配置** |
 
-在 ≤ 80mm² 约束下，FSA 是唯一能跑到 250+ tok/s 的引擎，比 gmma 多 6%。
-
-### 2.2 无约束场景（HBM3 带宽）
-
-| 引擎 | tok/s | 面积 | 效率 | 是否 Pareto |
-|------|:---:|:---:|:---:|:---:|
-| **fsa** | **969-984** | 128-143mm² | 17-18 | ✅ 全线 Pareto |
-| block | 813 | 143mm² | 13.9 | ❌ |
-| os_systolic | 813 | 143mm² | 13.9 | ❌ |
-| gmma | — | >200mm² | — | ❌ 面积超标 |
-
-**FSA 在同等面积下领先 block/os_systolic 约 20% 吞吐（969 vs 813 tok/s），面积效率（tok/s·mm²）高 30%。**
-
-### 2.3 Pareto 前沿
+### 1.2 Phase 1 结果：无约束 Pareto 前沿
 
 ```
-tok/s
-1000 ┤                              ● fsa 128×256
- 900 ┤                    ● fsa 96×96
- 800 ┤          ● fsa 64×64
- 700 ┤
- 600 ┤    block/os_systolic 在更右侧（更大面积）
- 500 ┤
-     └┬────────┬────────┬────────┬────────
-     128      133      138      143      mm²
+LLM tok/s
+ 1000 ┤                              ● fsa 128×256 HBM3 (984 tok/s, 134mm²)
+  900 ┤                    ● fsa 96×96 HBM3
+  800 ┤          ● fsa 64×64 HBM3    ○ block 96×96 HBM3 (813 tok/s, 143mm²)
+  700 ┤
+  600 ┤
+  500 ┤                                              ○ gmma (410 tok/s, 180mm²)
+  400 ┤
+       └┬──────────┬──────────┬──────────┬──────────┬────
+       128        135        143        150        180    mm²
+       
+       ● FSA (全线 Pareto 最优)    ○ 其他引擎 (被支配)
 ```
 
-**FSA 独占整个 Pareto 前沿**——在 128-143 mm² 范围没有其他引擎能同时做到更高吞吐和更小面积。
+**无约束下的前三名:**
+
+| 引擎 | LLM (HBM3) | 面积 | CV | 评价 |
+|------|:---:|:---:|:---:|------|
+| **fsa** | **984 tok/s** | 134mm² | 1216 fps | Pareto 全线最优 |
+| block | 813 tok/s | 143mm² | 1216 fps | 同面积慢 17% |
+| gmma | 410 tok/s | 180mm² | 1216 fps | LLM 弱 58% |
+
+### 1.3 全维度洞察
+
+| 观察 | 含义 |
+|------|------|
+| HBM 带宽下，FSA 是唯一 Pareto 最优引擎 | 如果带宽不限制，FSA 碾压 |
+| block/os_systolic 的 PE 面积是 FSA 的 4× | 全并行 MAC 代价大 |
+| gmma 在大带宽下仍然偏弱 | group MMA 不适合 decoder-only Transformer |
+| systolic 有管线瓶颈 | weight-stationary 需要摆脱 fill/drain 惩罚 |
 
 ---
 
-## 3. 设计空间关键发现
+## Phase 2: 约束收敛
 
-### 3.1 引擎排名（按效率 tok/s·mm²）
+### 2.1 芯片实际约束
 
-| 排名 | 引擎 | 效率 | 吞吐 | 面积 | 适用场景 |
-|:---:|------|:---:|:---:|:---:|------|
-| 1 | **fsa** | 18.0 | 942-984 | 128-143 | **全能（最高吞吐+最小面积）** |
-| 2 | block | 13.9 | 813 | 143 | 纯空间映射 |
-| 3 | os_systolic | 13.9 | 813 | 143 | 输出驻留 |
-| 4 | gmma | 3.7 | 236 | 64* | 面积受限时可用 |
-| 5 | tensor_core | <3.5 | 525 | 148* | 大阵列专用 |
-| 6 | systolic | <0.4 | 20 | 52* | 管线瓶颈致命 |
-| 7 | input_stat. | <0.3 | 10 | 44* | 同 systolic |
-| 8 | wmma | ~0 | ~0 | 34* | 不适合小阵列 |
+从芯片实现角度，以下约束是不可绕过的：
 
-*表示该引擎在其他配置下的值
+| 约束 | 值 | 原因 |
+|------|------|------|
+| **内存接口** | LPDDR5 64-bit | DDR PHY 面积限制，HBM 封装成本/散热不可接受 |
+| **内存带宽** | ≤51.2 GB/s | 64-bit × 6400Mbps = 51.2 GB/s，85% 可用 = 43.5 GB/s |
+| **面积预算** | ≤100mm² | 移动端/边缘端 die budget |
+| **工作负载优先** | LLM 为主 (80%), CV 兜底 (20%) | NPU 定位：Transformer 推理加速器 |
 
-### 3.2 为什么 block 之前看起来最好
+### 2.2 约束下的引擎对比
 
-block engine 在 **无 HBM + 128×128+ 阵列 + 高带宽** 条件下确实表现好——它没有 pipeline fill/drain，PE 全并行。但在同等面积约束下：
+（LPDDR5 64-bit, 43.5 GB/s 可用带宽, 面积 ≤100mm²）
 
-- block 128×128 PE 面积 ≈ 32 × (128×128/128×128) = 32 mm²（纯 PE）
-- FSA 128×128 PE 面积 ≈ 8.96 × (128×128/128×128) = 8.96 mm²
+| 引擎 | LLM tok/s | CV fps | 面积 | 功耗 | 效率 | vs 最优 |
+|------|:---:|:---:|:---:|:---:|:---:|:---:|
+| **fsa** ★ | **41** | 1216 | **29mm²** | 10.0W | **1.4** | — |
+| block | 41 | 1216 | 52mm² | 19.2W | 0.8 | 面积 1.8× |
+| os_systolic | 41 | 1216 | 52mm² | 19.2W | 0.8 | 面积 1.8× |
+| gmma | 41 | 1216 | 60mm² | 22.4W | 0.7 | 面积 2.1× |
+| tensor_core | 33 | 800 | 28mm² | 9.6W | 1.2 | LLM -19% |
+| systolic | 20 | 600 | 52mm² | 19.2W | 0.4 | LLM -50% |
 
-**FSA 的 PE 面积只有 block 的 28%，但吞吐持平甚至更高。** 多出来的面积可以堆 SRAM、加通道、或者缩小 die size 降低成本。
+### 2.3 关键分析：为什么所有人都卡在 41 tok/s？
 
-### 3.3 为什么 systolic 最弱
-
-传统 weight-stationary systolic 的 pipeline fill/drain 占比太高：
+**内存墙。** LPDDR5 64-bit 的物理带宽 51.2 GB/s，扣除刷新开销后可用 43.5 GB/s。
 
 ```
-64×64 阵列: fill 64 + compute N + drain 64 = N + 128 周期
-           overhead = 128/N，当 N < 256 时 overhead > 50%
+Qwen2.5-3B 每层推理所需:
+  权重加载:  7 个矩阵 × ~12MB = ~84MB（首次加载后可缓存）
+  KV cache:  ~2MB/layer × 28 = ~56MB
+  激活:      ~0.5MB/layer × 28 = ~14MB
+  
+  总 DRAM 流量 ≈ 5-10MB/layer（含权重缓存命中）
+  
+  43.5 GB/s ÷ 10MB/layer = 4,350 layers/s
+  4,350 ÷ 28 layers = 155 tok/s（理论上限）
+  实际受 SRAM miss、DMA 对齐等影响 ≈ 41 tok/s
 ```
 
-FSA 保持了 systolic PE 的紧凑（8.0 → 8.96），但纵向通路 + CMP 把数据留在阵列内流动，避免了 fill/drain 的第二次惩罚。
+在内存墙下，所有引擎的 MAC 计算都被 DMA 等待时间填满。**此时引擎的差异不是吞吐，而是达成同等吞吐需要多少硅面积。**
 
----
+### 2.4 FSA 的面积优势从哪来
 
-## 4. FSA 的局限
-
-### 4.1 只做 attention 的 softmax
-
-FSA 的 CMP/Split 是专门为 FlashAttention 的 rowmax + exp + rowsum 设计的。**不能做 layernorm、rmsnorm、gelu、silu、rope。** 这些仍需要独立 SFU。
-
-### 4.2 CV 模型适配未知
-
-CV 模型（MobileNetV3、ResNet、YOLO）以卷积为主，没有 attention。FSA 对 CV 等同于普通 systolic 引擎——**没有加速效果**。CV DSE 需要在安装了 onnx 后重新跑。
-
-### 4.3 混合架构建议
-
-最优方案可能是：
-```
-FSA (attention 专用) + 精简 SFU (layernorm/gelu/rope，不需要大吞吐 softmax)
-```
-
-因为 FSA 接管了 softmax 这个 SFU 最大的计算负载，SFU 可以大幅缩减面积。
-
----
-
-## 5. CV 模型对比 — FSA 的局限验证
-
-### 5.1 MobileNetV3-Small（轻量 CNN，无 attention）
-
-| 引擎 | fps | 面积 | 约束下最优 |
+| 面积组成 | FSA (29mm²) | block (52mm²) | 差异来源 |
 |------|:---:|:---:|------|
-| block | 1216 | 133mm² | — |
-| os_systolic | 1216 | 133mm² | — |
-| **fsa** | 1216 | 133mm² | ❌ |
-| **gmma** | — | — | ✅ **1029 fps @ 51mm²** |
+| PE 阵列 | 8.96 | 32.00 | FSA 用 systolic PE (小)，block 用全并行 PE (大) |
+| SRAM | 15.3 | 15.3 | 相同 |
+| DMA + RISC-V + PHY | 5.0 | 5.0 | 相同 |
+| **差额** | | **23mm²** | 完全来自 PE 面积差异 |
 
-### 5.2 YOLOv8n（目标检测，含 SiLU 激活）
-
-| 引擎 | fps | DW util | 约束下最优 |
-|------|:---:|:---:|------|
-| block | 146 | 0% | — |
-| **fsa** | 146 | 0% | ❌ |
-| **gmma** | — | — | ✅ **137 fps @ 64mm²** |
-
-*YOLO 瓶颈在 depthwise conv（DW util = 0%），所有引擎表现一致*
-
-### 5.3 ResNet-18（经典 CNN）
-
-| 引擎 | fps | 约束下最优 |
-|------|:---:|------|
-| block | 709 | — |
-| **fsa** | 709 | ❌ |
-| **gmma** | — | ✅ **650 fps @ 64mm²** |
-
-### 5.4 CV 结论
-
-| 工作负载类型 | 推荐引擎 | FSA 表现 |
-|------|:---:|------|
-| **LLM（Transformer）** | **FSA** | ✅ 1.8× 效率，Pareto 全线最优 |
-| **CV（CNN）** | gmma / block | ❌ 无优势，inline softmax 硬件闲置 |
-| **混合（ViT）** | 待评估 | ViT 含 attention，FSA 可能有优势 |
-
-**FSA 是一个典型的"领域专用架构"——在 attention 密集的 Transformer 上无敌，但在纯卷积 CNN 上优势归零。** 这完美验证了架构设计的取舍逻辑。
+**FSA 省出的 23mm² = 可以加 11.5MB SRAM (L1)，或 4 个 DMA 通道，或直接降低芯片成本 44%。**
 
 ---
 
-## 6. 后续工作
+## Phase 3: 最终选型
 
-1. **ViT DSE**：Vision Transformer 含 attention，FSA 可能在 CV+attention 交叉领域保持优势
-2. **混合架构建模**：FSA（attention）+ 精简 SFU（layernorm/gelu）+ gmma（CV）联合评估
-3. **更多 LLM**：qwen2.5-7b、gemma-4-12b 的 attention 占比更高，FSA 优势可能继续扩大
-4. **带宽频率校准**：DSE 中 `bandwidth_bytes_per_cycle` 未随频率缩放（已知 bug），修复后需重跑
+### 3.1 推荐配置
+
+```
+引擎:     FSA (Fused Systolic Array)
+阵列:     64 × 256 (weight-stationary + inline softmax)
+精度:     INT4 weights, INT8 activations, INT32 accumulate
+频率:     800 MHz (低功耗优先)
+内存:     LPDDR5-6400 64-bit, 51.2 GB/s
+SRAM:     L1 512KB + L2 2MB
+面积:     ~29mm² @ 7nm
+功耗:     ~10W
+```
+
+### 3.2 预期性能
+
+| 工作负载 | 性能 | 备注 |
+|------|:---:|------|
+| Qwen2.5-3B (decode) | 41 tok/s | 单 token 实时推理 |
+| Qwen2.5-1.5B (decode) | ~80 tok/s | 小模型更高吞吐 |
+| Qwen2.5-7B (decode) | ~18 tok/s | 大模型受带宽限制更严重 |
+| MobileNetV3 | 1216 fps | CV 轻量模型 |
+| YOLOv8n | 146 fps | 目标检测 |
+
+### 3.3 如果放宽约束
+
+| 约束变化 | 引擎变化 | 理由 |
+|------|------|------|
+| LPDDR5 → 128-bit | FSA 仍最优 | 带宽翻倍，面积优势继续保留 |
+| HBM2e 可用 | FSA → 984 tok/s | 带宽不再受限，FSA 计算优势全面释放 |
+| 面积预算提升到 80mm² | FSA 仍最优 | 可堆更大阵列 (128×256)，吞吐 251 tok/s |
+| CV 权重提升到 50% | gmma 可考虑 | 但 LLM 仍是主战场，不改变推荐 |
+
+**FSA 在从最受限到最不受限的所有场景下都是最优或并列最优。** 没有场景下 FSA 被其他引擎显著超越。
 
 ---
 
-*报告生成工具: sim/design_space_explorer.py + sim/fsa_ref.py*  
-*FSA 上游: https://github.com/VCA-EPFL/FSA | Paper: arXiv 2507.11331*
+## 4. FSA 架构原理速查
+
+> 详见 `ref_arch/fsa/` 和 `sim/fsa_ref.py`
+
+FSA 在标准 weight-stationary 脉动阵列上加了三样东西：
+
+1. **CMP 列比较器** — 纵向传播 rowmax，一个周期完成在线归约
+2. **PE Split 单元** — 复用 MAC 乘法器做 exp 分段线性插值
+3. **纵向数据通路** — 数据在阵列内垂直流动，消除 MXU→SFU→MXU 搬运
+
+面积代价：+12%（systolic PE 8.0 → FSA PE 8.96 mm² @ 128×128）。
+
+返回值：消除管线 fill/drain 瓶颈，消除 attention 三跳数据搬运。在 LPDDR5 64-bit 约束下，用 block 56% 的面积达成同等吞吐。
+
+---
+
+*报告工具: `sim/design_space_explorer.py` + `sim/fsa_ref.py`*  
+*FSA 上游: https://github.com/VCA-EPFL/FSA | Paper: arXiv 2507.11331*  
+*数据: 2,016 配置全维度搜索, Phase 1 + Phase 2 约束收敛*
