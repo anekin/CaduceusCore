@@ -56,6 +56,9 @@ class AreaModel:
         self.dram_phy = float(am.get("dram_phy_area_mm2", 5.0)) * self.node_scale
         self.crossbar = float(am.get("crossbar_area_mm2", 1.0)) * self.node_scale
         self.dma_per_ch = float(am.get("dma_channels_area_per_channel_mm2", 0.5)) * self.node_scale
+        # TSV area overhead for 3D-stacked DRAM (keep-out zones + SerDes + redundancy)
+        # ~10% of total die for HBM2/3-class stacking at 500 GB/s, per industry rule-of-thumb
+        self.tsv_overhead_pct = float(am.get("tsv_overhead_pct", 0.10))
 
         # CV-specific hardware units
         self.im2col_feeder = float(am.get("im2col_feeder_mm2", 0.002))   # scales with array
@@ -98,11 +101,12 @@ class AreaModel:
 
         dma_area = self.dma + (dma_channels - 2) * self.dma_per_ch
 
-        # DRAM PHY: skip if on-chip memory used (no external interface needed)
+        # DRAM PHY: skip if on-chip memory used (no external DDR interface)
+        # PCIe: still needed even with on-chip memory (host communication)
         onchip = config.get("on_chip_memory", {})
         if float(onchip.get("capacity_gb", 0)) > 0:
             dram_phy_area = 0  # on-chip 3D DRAM doesn't need DDR PHY
-            pcie_area = 0      # no PCIe needed for on-chip memory
+            pcie_area = self.pcie  # host interface still required
         else:
             mem = config.get("memory", {})
             dram_width = int(mem.get("dram_width_bits", 64))
@@ -117,6 +121,10 @@ class AreaModel:
         total = (pe_area + self.sfu + self.riscv + pcie_area +
                  self.crossbar + l1 + l2 + dma_area + dram_phy_area +
                  im2col_feeder_area + pool2d_area + conv_sfu_area)
+
+        # TSV overhead for 3D-stacked memory
+        if float(onchip.get("capacity_gb", 0)) > 0:
+            total *= (1.0 + self.tsv_overhead_pct)
 
         return {
             "total_mm2": round(total, 1),
