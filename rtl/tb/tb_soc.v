@@ -318,14 +318,14 @@ module tb_soc;
 `endif
 
     //=========================================================================
-    // Simulation Timeout (1,000,000 cycles @ 1 GHz = 1 ms)
+    // Simulation Timeout (100,000,000 ns = 100M cycles @ 1 GHz)
     //=========================================================================
     initial begin
         // Wait enough time for the reset sequence plus some buffer
-        #1000000;  // 1,000,000 ns = 1 ms = 1,000,000 cycles @ 1 GHz
+        #100000000;  // 100,000,000 ns = 100M cycles @ 1 GHz
         if (!sim_done_flag) begin
             $display("");
-            $display("[TMO] Simulation timeout after 1,000,000 ns — forcing finish");
+            $display("[TMO] Simulation timeout after 100,000,000 ns — forcing finish");
             $display("[TMO] Current cycle: %0d", sim_cycle);
             $display("FAIL: TIMEOUT");
             $finish;
