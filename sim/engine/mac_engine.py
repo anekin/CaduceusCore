@@ -106,6 +106,9 @@ def create_engine(config: Dict[str, Any]) -> MACEngine:
     elif engine_type == "gmma":
         from engine.gmma_engine import GMMAEngine
         return GMMAEngine(config)
+    elif engine_type == "fsa":
+        from engine.fsa_engine import FSAEngine
+        return FSAEngine(config)
     elif engine_type == "block":
         from engine.block_engine import BlockEngine
         return BlockEngine(config)

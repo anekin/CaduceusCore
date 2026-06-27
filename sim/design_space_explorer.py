@@ -122,7 +122,7 @@ def generate_configs(quick: bool = False) -> List[Dict[str, Any]]:
         engines = ["systolic", "block", "gmma"]
     else:
         engines = ["systolic", "os_systolic", "block",
-                   "tensor_core", "wmma", "gmma", "input_stationary"]
+                   "tensor_core", "wmma", "gmma", "input_stationary", "fsa"]
 
     # Array dimensions (constrained by area)
     if quick:
