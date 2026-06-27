@@ -54,14 +54,45 @@ class BlockEngine(MACEngine):
 
     def estimate(self, M: int, K: int, N: int,
                  weight_preloaded: bool = False) -> EngineResult:
-        """Block GEMM estimate with K-tiling + correct activation DMA.
-
-        For each (K,N)-tile:
-          - DMA: load K_tile×W weights + M×K_tile activations (shared across N-tiles)
-          - Compute: broadcast_sync + accumulate/reduction cycles
-        """
-        K_tiles = math.ceil(K / self.H)
+        """Block GEMM estimate. Supports on-chip 3D DRAM (weight resident) mode."""
         N_tiles = math.ceil(N / self.W)
+
+        total_macs = M * K * N
+        total_weight_bytes = K * N * self.w_bits // 8
+
+        if self.weight_resident:
+            # ── On-chip 3D DRAM: weights resident, no K-tiling ──
+            # Each N-tile: full K reduction across all PEs
+            per_tile_compute = K + BROADCAST_SYNC_CYCLES + \
+                _accumulate_cycles(self.w_bits, self.a_bits)
+            total_compute = per_tile_compute * N_tiles
+
+            # Weight streaming from on-chip memory
+            act_bytes = M * K * self.a_bits // 8
+            weight_stream_cycles = (total_weight_bytes + act_bytes) / self.on_chip_bw
+
+            total_cycles = max(total_compute, weight_stream_cycles)
+            dma_label = "on_chip"
+
+            return EngineResult(
+                compute_cycles=int(total_compute),
+                dma_cycles=int(weight_stream_cycles),
+                total_cycles=int(total_cycles),
+                utilization=total_macs / (self.peak_macs_per_cycle * total_cycles) if total_cycles > 0 else 0,
+                ops=total_macs,
+                num_tiles=N_tiles,
+                weight_bytes=int(total_weight_bytes),
+                bottleneck="compute" if total_compute >= weight_stream_cycles else "on_chip_bw",
+                details={
+                    "N_tiles": N_tiles,
+                    "per_tile_compute": per_tile_compute,
+                    "on_chip_mode": True,
+                    "on_chip_bw": self.on_chip_bw,
+                },
+            )
+
+        # ── External DRAM: K-tiling required ──
+        K_tiles = math.ceil(K / self.H)
         total_tiles = K_tiles * N_tiles
 
         # Per-tile data

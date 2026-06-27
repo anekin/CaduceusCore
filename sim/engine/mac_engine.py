@@ -65,6 +65,16 @@ class MACEngine(ABC):
         self.wbuf_kb = int(self.l2_sram_kb * 0.6)
         self.kvbuf_kb = int(self.l2_sram_kb * 0.4)
 
+        # On-chip 3D DRAM (RK1828-style): weights resident on-die
+        onchip = config.get("on_chip_memory", {})
+        self.on_chip_capacity_gb = float(onchip.get("capacity_gb", 0))
+        self.on_chip_bw = float(onchip.get("bandwidth_gbps", 0))  # GB/s
+
+    @property
+    def weight_resident(self) -> bool:
+        """True if all model weights fit in on-chip memory."""
+        return self.on_chip_capacity_gb > 0 and self.on_chip_bw > 0
+
     def _dram_eff_for_bytes(self, transfer_bytes: int) -> float:
         """DRAM utilization factor for a given transfer size.
 

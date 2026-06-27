@@ -64,19 +64,26 @@ SFU_CYCLES_PER_LAYER = {
 def _compute_kv_cycles(config: Dict[str, Any], batch_m: int = 1) -> int:
     """Dynamic KV cache DRAM read cycles per layer.
 
-    - For decode (batch_m=1): K,V read from DRAM, 40% of L2 SRAM as tile buffer
+    - For decode (batch_m=1): K,V read from memory
     - For prefill (batch_m>1): KV written (not read), negligible cost
-    - Scales with seq_kv, SRAM size, and effective bandwidth
+    - On-chip mode: KV also on-chip, uses on_chip_bw
     """
     if batch_m > 1:
         return 0  # Prefill: KV is being written, not a read bottleneck
 
+    # K + V: 2 × seq_kv × kv_heads × head_dim × 1 byte (INT8)
+    kv_bytes = 2 * _SEQ_KV * _KV_HEADS * _HEAD_DIM * 1
+
+    onchip = config.get("on_chip_memory", {})
+    onchip_bw = float(onchip.get("bandwidth_gbps", 0))
+
+    if onchip_bw > 0:
+        # On-chip mode: KV cache also on-chip
+        return int(kv_bytes / onchip_bw) if onchip_bw > 0 else 0
+
     sram = config.get("sram", {})
     l2_kb = int(sram.get("l2_shared_kb", 2048))
     kvbuf_kb = int(l2_kb * 0.4)
-
-    # K + V: 2 × seq_kv × kv_heads × head_dim × 1 byte (INT8)
-    kv_bytes = 2 * _SEQ_KV * _KV_HEADS * _HEAD_DIM * 1
 
     mem = config.get("memory", {})
     bw_raw = float(mem.get("bandwidth_bytes_per_cycle", 51.2))
@@ -91,7 +98,6 @@ def _compute_kv_cycles(config: Dict[str, Any], batch_m: int = 1) -> int:
     if eff_bw <= 0 or kv_dram_eff <= 0:
         return 0
 
-    # cycles = bytes / (effective GB/s) — BW values are in GB/s units
     return int(kv_bytes / (eff_bw * kv_dram_eff))
 
 
