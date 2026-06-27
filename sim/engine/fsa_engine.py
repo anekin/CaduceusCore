@@ -40,35 +40,53 @@ class FSAEngine(MACEngine):
 
     def estimate(self, M: int, K: int, N: int,
                  weight_preloaded: bool = False) -> EngineResult:
-        """Estimate plain matmul on FSA (same as weight-stationary systolic)."""
+        """Estimate matmul with K-dimension tiling (weight-stationary systolic).
+
+        Tiling:
+          - K-tiles: ceil(K/H) — reduction dimension split across array rows
+          - M-tiles: ceil(M/H) — batch dimension (usually 1 for decode)
+          - N-tiles: ceil(N/W) — output dimension
+
+        Pipeline per (K,N)-tile: H (weight load) + M (act stream) + W (drain)
+        Activations broadcast across N-tiles, read once per K-tile.
+        """
         H, W = self.H, self.W
         macs = M * K * N * self.ops_per_mac
 
-        # Tiling
-        tiles_m = (M + H - 1) // H
-        tiles_n = (N + W - 1) // W
+        # K-dimension tiling (critical for large models)
+        tiles_k = max(1, (K + H - 1) // H)
+        tiles_m = max(1, (M + H - 1) // H)
+        tiles_n = max(1, (N + W - 1) // W)
+        total_tiles = tiles_k * tiles_m * tiles_n
 
-        # Pipeline: H fill + (tiles-1) steady state + H drain
-        total_tiles = tiles_m * tiles_n
-        compute_cycles = H + (total_tiles - 1) + H if total_tiles > 0 else 0
+        # Pipeline depth per K-tile: weight load + act stream + propagate
+        pipe_depth = H + M + W
 
-        # DMA: load weights into array, stream activations
+        # Compute: tiles_k × tiles_m × tiles_n × pipe_depth
+        # N-tiles and M-tiles are sequential within each K-tile
+        compute_cycles = total_tiles * pipe_depth
+
+        # DMA: weights (K×N, loaded once per K-tile → K×N total, same as no tiling)
         weight_bytes = K * N * self.w_bits // 8
+        # Activations: M×K total, broadcast across N-tiles (read once)
         act_bytes = M * K * self.a_bits // 8
 
-        # For weight-stationary, load weights once, stream activations
-        dma_weight_bytes = weight_bytes
-        dma_act_bytes = act_bytes * tiles_m * tiles_n
-        dma_total_bytes = dma_weight_bytes + dma_act_bytes
+        # SRAM-aware DRAM efficiency
+        dram_eff = self._dram_eff_for_bytes(weight_bytes)
+        if dram_eff <= 0:
+            effective_weight_bytes = 0
+        else:
+            effective_weight_bytes = weight_bytes
 
+        dma_total_bytes = effective_weight_bytes + act_bytes
         dma_cycles = max(
-            dma_total_bytes / self.eff_bw,
-            compute_cycles * 0.1  # at least 10% of compute
+            dma_total_bytes / (self.eff_bw * max(dram_eff, 0.01)),
+            compute_cycles * 0.05
         )
 
         total_cycles = max(compute_cycles, dma_cycles)
         peak = self.peak_macs_per_cycle
-        utilization = macs / (peak * total_cycles * 1.0) if total_cycles > 0 else 0
+        utilization = macs / (peak * total_cycles) if total_cycles > 0 else 0
 
         return EngineResult(
             compute_cycles=int(compute_cycles),
@@ -77,13 +95,16 @@ class FSAEngine(MACEngine):
             utilization=min(utilization, 1.0),
             ops=macs,
             num_tiles=total_tiles,
-            weight_bytes=dma_weight_bytes,
+            weight_bytes=int(effective_weight_bytes),
             bottleneck="compute" if compute_cycles >= dma_cycles else "dma",
             details={
+                "tiles_k": tiles_k,
                 "tiles_m": tiles_m,
                 "tiles_n": tiles_n,
+                "pipe_depth": pipe_depth,
                 "engine": "fsa",
                 "inline_softmax": True,
+                "dram_eff": round(dram_eff, 3),
             },
         )
 

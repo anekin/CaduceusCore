@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from sim.models.dma import DMAModel
+from models.dma import DMAModel
 
 # ══════════════════════════════════════════════════════════════════════
 # Constants from hardware spec

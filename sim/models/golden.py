@@ -8,19 +8,27 @@ Functional mode: 真实计算 MXU 矩阵乘法 + SFU 激活函数 + KV Cache 地
 - Functional: numpy 逐 bit 计算，输出 hash/checksum 用于比对
 """
 
-import warnings
 import hashlib
 import math
+import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
-
 warnings.warn(
-    "models.golden is deprecated, use golden_executor instead",
+    "models.golden is deprecated; use golden_executor for RTL sign-off",
     DeprecationWarning,
     stacklevel=2,
 )
+
+# ═══════════════════════════════════════════════════════════════════════
+# Verification tiers:
+#   models/golden → float32 reference (human-readable hashes, quick checks)
+#   golden_executor → INT32 bit-accurate (RTL verification, hw-identical)
+# These are complementary, NOT deprecated. Use golden_executor for
+# RTL sign-off; use models.golden for interactive functional tests.
+# ═══════════════════════════════════════════════════════════════════════
+
+import numpy as np
 
 
 @dataclass

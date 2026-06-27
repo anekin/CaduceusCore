@@ -11,7 +11,7 @@ import struct
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
-from sim.engine.isa import OpCode
+from engine.isa import OpCode
 
 
 @dataclass

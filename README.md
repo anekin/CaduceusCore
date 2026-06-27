@@ -1,11 +1,14 @@
 # CaduceusCore — 通用 NPU 协处理器（CV + LLM）
 
-CaduceusCore 是一颗 **通用 NPU 协处理器**，同时面向 **CV（YOLOv8/ResNet）**和 **LLM（Qwen/Gemma 3B+）** 推理。
+CaduceusCore 是一颗 **通用 NPU 协处理器**，同时面向 **CV（YOLOv8/ViT/ResNet）**和 **LLM（Qwen 3B/7B）** 推理。
 核心设计约束：**性能瓶颈在 DRAM 带宽，不在算力**。
 
-> **DSE 与 RTL 状态说明**：架构设计空间探索（DSE）显示 **128×128+WC** 是面向后续 Phase 的面积/功耗最优目标配置——在 75% LPDDR5 实际效率下可达 21 tok/s @ 28mm²，更大的阵列（128×256/Block/GMMA）的算力优势会被 DRAM 带宽吃掉。当前 **RTL Phase 1** 已实现 **64×64 广播 MAC 阵列（INT4×INT8→INT32）** 作为第一步硬件验证，后续 Phase 将向 128×128+WC 扩展。
+> **Arc Model DSE 最新结论（2026-07）**：完整三场景架构选型已完成，详见 [三场景 DSE 报告](reports/arch-dse-three-scenarios.md)。
+> - **S1 低成本端侧**: FSA 128×256, 33 TOPS, 68mm² — LPDDR5 BW 瓶颈
+> - **S2 高性能端侧**: block 80×1536, 123 TOPS, 124mm² — 3D DRAM + 7B LLM
+> - **S3 具身智能**: block 80×1536, 123 TOPS, 124mm² — VLM/VLA >10 FPS（同 S2 芯片）
 >
-> 详见 `ENGINES.md`、`docs/NPU_Engines_Architecture_Guide.md` 的七引擎 PPA 对比，以及 `rtl/mxu/README.md`。
+> S2 和 S3 共享同一颗 die。两颗芯片覆盖三个产品线。面积模型经 TPUv1 ISCA 2017 die-shot 校准，BW 采用 area×7.5 GB/s/mm² 耦合模型。
 
 ## Quick Start
 
@@ -34,29 +37,117 @@ PYTHONPATH=sim python sim/timing/benchmark.py --alias mobilenetv3
 
 ## 架构概览
 
+- **Arc Model DSE 推荐**：三场景两芯片方案 — S1 (FSA 128×256, 33 TOPS) + S2/S3 共用 (block 80×1536, 123 TOPS)
 - **当前 RTL Phase 1：64×64 Broadcast MAC Array**（INT4×INT8→INT32，MMIO 控制）
-- **当前 RTL Phase 2：SFU + Vector Engine**（7 个 FP16 特殊函数管道 + 5 个 INT32 向量引擎模块，MMIO 控制）
-- **Arc Model 目标：128×128 Weight-Stationary Systolic Array + WeightCache**（参考 TPUv1/OpenTPU）
+- **当前 RTL Phase 2：SFU + Vector Engine**（7 个 FP16 特殊函数管道 + 5 个 INT32 向量引擎模块）
 - **INT4 权重 + INT8 激活**（当前 RTL）；BF16 激活为后续扩展方向
-- **七引擎设计空间搜索**：WS-Systolic / OS-Systolic (Gemmini) / Block (TPUv4) / TensorCore / WMMA / GMMA (H100) / Input-Stationary
+- **八引擎设计空间搜索**：FSA / Systolic / OS-Systolic / Block / TensorCore / WMMA / GMMA / Input-Stationary
 - **RISC-V RV64 + 专用 NPU ISA** 主控
-- **LPDDR5-6400** 64-bit + **PCIe Gen4 x4**
+- **双内存方案**：LPDDR5-6400 64-bit（S1）/ On-chip 3D DRAM 5GB（S2/S3）
+- **PCIe Gen4 x4** — 主机通信
 - **TSMC 12nm** 目标工艺
 
-## 设计空间探索结论（v0.5 — 75% LPDDR5 实际效率）
+## Arc Model DSE — 方法论与流程
 
-> 以下为 Arc Model 的分析结果（架构选型阶段）。当前 RTL Phase 1 实现了 **64×64 MAC 阵列**作为第一步验证；**128×128+WC** 是后续 Phase 的面积/功耗最优扩展方向。
+Arc Model 是 CaduceusCore 的架构沙盘。输入场景需求，输出最优硬件配置。
 
-| 引擎 | tok/s | 面积 | DRAM利用率(75%) | 判定 |
-|------|:---:|:---:|:---:|------|
-| **WS-Systolic 128×128+WC** ✅ | **21** | **28mm²** | **74%** | 推荐 |
-| WS-Systolic 128×128 | 16 | 28mm² | 57% | 保守 |
-| WS-Systolic 128×256+WC | 23* | 36mm² | 95% | DRAM临界 |
-| OS-Systolic / Block / GMMA / IS | 28* | 48-60mm² | 110%+ | DRAM不可达 |
+### DSE Pipeline（四阶段）
 
-> *标星号为 75% DRAM 效率下实际可达值，名义模型预测更高但受带宽限制。
+```
+Phase -1 ──→ Phase 0 ──→ Phase 1 ──→ Phase 2
+需求澄清     预分析      扫描+敏感性   交叉校验
+```
 
-**核心结论**：LPDDR5 实际效率 75-80%（含刷新/行冲突/bank竞争），有效带宽 38.4 GB/s。在此约束下，128×128+WC 是唯一诚实的配置——21 tok/s @ 28mm²，DRAM 余量充裕。大引擎（128×256+WC/Block/GMMA）的算力优势被 DRAM 带宽全部吃掉，多花的面积得不到回报。详见 `docs/NPU硬件详细架构设计v0.1.md`。
+**Phase -1 — 需求澄清** (`dse_scenario.check_requirements()`)
+
+在运行任何计算之前，检查所有关键输入是否显式提供：
+
+| 关键输入 | 影响 | 示例 |
+|------|------|------|
+| `seq_len` | TTFT/TOPS 线性缩放 | 对话 128, VLM 1024 |
+| `ttft_ms_max` | 最小 TOPS 需求 | 200ms (交互) |
+| `tps_min` | BW 需求 | 20 (阅读), 100+ (实时) |
+| `model` | 参数量 → BW + 算力 | qwen2.5-3b / 7b |
+| `memory.type` | 组件清单 (PHY/PCIe/TSV) | lpddr5 / on_chip_3d_dram |
+| `process_nm` | 面积缩放 (nm/7)² | 12nm |
+
+每个字段标注置信度：✓ EXPLICIT / ⚠ DEFAULTED / ✗ MISSING。有缺口就停下来提问。
+
+**Phase 0 — 预分析** (`dse_scenario.preflight()`)
+
+- **瓶颈预测**: BW 天花板 (BW÷model_size) vs 算力天花板 (TOPS÷(2×params))
+- **TTFT 驱动 TOPS**: 2×params×seq_len÷TTFT_target → 最小 TOPS 需求
+- **组件清单校验**: 自动检查内存类型对应的硬件（PHY/PCIe/TSV）是否正确配置
+- **扫前建议**: SRAM 范围、阵列规模下限
+
+**Phase 1 — 设计空间扫描 + 通用参数敏感性**
+
+- 受控变量法扫参：引擎类型 × H×W × SRAM × BW × 精度 × 频率
+- **通用参数敏感性** (`design_space_explorer.analyze_sensitivity()`): 
+  对每个变化参数计算 ΔTPS% 和 ΔArea%，自动排名
+- 零敏感参数自动 flag（如 on-chip 场景 SRAM ΔTPS=0% → 设最小值）
+- 支持 LLM trace + CV trace (ViT/YOLO/ResNet/Diffusion) 及 VLM pipeline 联合评估
+
+**Phase 2 — 交叉校验** (`dse_scenario.cross_validate()`)
+
+- 最优配置 vs 已知产品数据库（RK1828, TPUv1, A18 ANE）
+- BW 瓶颈场景自动切换为 mm²/TPS（而非 mm²/TOPS）
+- 偏离 >2× 自动产生 AREA ANOMALY 警告
+
+### 关键模型
+
+| 模型 | 说明 |
+|------|------|
+| **面积模型** | TPUv1 ISCA 2017 die-shot 校准 + TSV 10% overhead |
+| **BW-面积耦合** | on-chip 3D DRAM BW = 面积 × 7.5 GB/s/mm² |
+| **8 引擎库** | FSA / Systolic / OS-Systolic / Block / TensorCore / WMMA / GMMA / Input-Stationary |
+| **CV trace** | ViT-B/16, Qwen-VL ViT (675M, 4-crop), SD 1.5 UNet |
+| **模型规格库** | LLM 10 (Qwen, Llama, Gemma, Mistral, DeepSeek, Phi) + CV 5 (ViT, YOLO, ResNet, MobileNet) |
+
+### 配置与运行
+
+```bash
+# 单场景完整 DSE（Phase -1 → Phase 2）
+cd sim && PYTHONPATH=. python design_space_explorer.py --quick
+
+# 场景预检（Phase -1 + 0）
+PYTHONPATH=. python -c "
+from dse_scenario import check_requirements, print_requirements_check, preflight, print_preflight
+print_requirements_check(check_requirements('onchip_7b'))
+print_preflight(preflight('onchip_7b', config))
+"
+```
+
+场景定义: `sim/config/scenarios.yaml`  
+面积数据来源: `references/area_sources.md`  
+三场景完整报告: `reports/arch-dse-three-scenarios.md`
+
+## 设计空间探索结论（Arc Model v4 — TPUv1 校准 + 三场景）
+
+> 以下为 Arc Model 的 DSE 分析结果。完整报告见 [reports/arch-dse-three-scenarios.md](reports/arch-dse-three-scenarios.md)。当前 RTL Phase 1 实现了 **64×64 MAC 阵列**作为第一步验证。
+
+### 三场景推荐
+
+| | S1 低成本端侧 | S2 高性能端侧 | S3 具身智能 |
+|------|:---:|:---:|:---:|
+| 引擎 | FSA 128×256 | block 80×1536 | block 80×1536 |
+| TOPS INT8 | 33 | 123 | 123 |
+| 面积 @ 12nm | **68mm²** | **124mm²** | **124mm²** |
+| 内存 | LPDDR5 64-bit | 3D DRAM 5GB | 3D DRAM 5GB |
+| BW | 43.5 GB/s | ~930 GB/s | ~930 GB/s |
+| TPS (decode) | 23 | 197 | 197 |
+| TTFT | 88ms (seq=128) | 65ms (seq=1024) | 65ms (seq=1024) |
+| Vision | — | — | ViT 675M 4-crop |
+| VLA 10 FPS | — | — | ✓ (11.0) |
+
+### 关键发现
+
+- **S2 和 S3 共用同一颗 die**（block 80×1536, 124mm²）。两颗芯片覆盖三个产品线。
+- LPDDR5 场景 BW 瓶颈：所有引擎 TPS 集中在 21-23，选 FSA 面积最优
+- On-chip 3D DRAM BW 随面积线性增长（7.5 GB/s/mm²），大芯片 = 多 TOPS + 多 BW
+- seq_len 对 TTFT 影响巨大：1024 需要 ≥72 TOPS，128 只需 4 TOPS
+- SRAM 在 on-chip 场景零敏感（512KB 足够），在 LPDDR5 场景有意义（4MB 最优）
+- 面积模型经 TPUv1 ISCA 2017 die-shot 数据校准，不再偏高
 
 ## 开发工作流
 
@@ -292,6 +383,12 @@ make -j4 all             # All tests parallel
 
 ## Func Model — 三重角色
 
+> **当前定位**：Arc Model DSE 覆盖了完整设计空间，产出三场景两芯片方案（S1 FSA 128×256 / S2+S3 block 80×1536）。  
+> **Func Model 目前只细化了其中一个起点** — 64×64 Broadcast MAC 阵列 + SFU + Vector Engine。  
+> 这是项目的 bootstrap 配置，用于建立 RTL 开发流程、验证工具链、和 bit-exact 对比方法论。  
+> 它**不是** Arc DSE 推荐架构（FSA 或 block）的直接实现，而是先跑通全流程的最小可行硬件。  
+> 后续 Func Model 会按 DSE 结论切换到推荐引擎（FSA / block），届时重新生成 golden reference。
+
 1. **RTL 开发的 Spec**：RTL 开发者只需看 Func Model 定义的接口和行为，
    不需要了解 Arc Model 的几百种配置。模块划分、寄存器布局、ISA 指令集
    均以 Func Model 为准。
@@ -314,13 +411,16 @@ make -j4 all             # All tests parallel
 
 | | Arc Model | Func Model | RTL (Phase 1+2) |
 |------|------|------|------|
-| 用途 | 架构选型（扫参） | 精确实现 + 性能验证 | 硬件实现 |
-| 速度 | 秒级 | 分钟级 | cycle 级 |
-| 精度 | 近似（解析公式） | 精确（逐 cycle） | 门级/bit-exact |
-| 测 TPS | ✅ 公式估算 | ✅ 真实流程 | — |
-| 测 TTFT | ❌ 不模拟 prefill | ✅ 202.63ms（Qwen2.5-3B）| — |
-| 输出 | PPA 报告 | Golden Ref + 性能报告 | MXU 64×64 MAC + SFU 7-op + Vector 6-op Verilog |
-| 阵列配置 | 128×128 WS-Systolic + WC | 128×128 WS-Systolic + WC | 64×64 Broadcast MAC |
+| 用途 | 架构选型（扫参，>100 配置/秒） | 精确实现 + 性能验证 | 硬件实现 |
+| 速度 | 毫秒-秒级 | 分钟级 | cycle 级 |
+| 精度 | 解析公式 + 面积模型（TPUv1 校准） | 逐 cycle bit-exact | 门级/bit-exact |
+| LLM 测 TPS | ✅ | ✅ | — |
+| LLM 测 TTFT | ✅ | ✅ | — |
+| CV 测 FPS | ✅ (ViT/YOLO/ResNet/Diffusion) | ❌ | — |
+| VLM 端到端 FPS | ✅ (pipeline 模型) | ❌ | — |
+| 阵列配置 | 可扫 8 引擎 × 多 H×W × SRAM × BW | 固定为选定配置 | 64×64 Broadcast MAC |
+| 输出 | DSE 报告 + PPA + 敏感性分析 | Golden Ref + 性能报告 | MXU + SFU + Vector Verilog |
+| 新能力 | Phase -1 需求澄清, Phase 2 交叉校验, 通用参数敏感性, CV trace 生成 | — | — |
 
 详见 [`docs/arc_vs_func.md`](docs/arc_vs_func.md)。
 
@@ -549,7 +649,12 @@ CaduceusCore/
 │   │   ├── types.py              #     TokenTiming / RequestMetrics
 │   │   └── tests/                #     64 tests
 │   ├── arc_model.py              #   架构模型 — 设计空间搜索 + 量化精度评估
-│   ├── func_model.py             #   Func Model 顶层 — 固件 + MMIO + Golden Executor
+│   ├── design_space_explorer.py  #   八引擎 DSE + 敏感性分析 + 交叉校验
+│   ├── dse_scenario.py           #   Phase -1 需求澄清 + Phase 0 预分析 + Phase 2 交叉校验
+│   ├── model_specs.py            #   模型规格库（LLM 10 + CV 5）
+│   ├── config/
+│   │   ├── design_space.yaml     #     设计空间基线配置
+│   │   └── scenarios.yaml        #     三场景定义（S1 LPDDR5 / S2 3D-DRAM / S3 VLM）
 │   ├── golden_executor.py        #   Golden Reference — MXU/SFU/Vector/DMA bit-exact
 │   ├── npu_sim.py                #   性能模拟器主入口
 │   ├── design_space_explorer.py  #   七引擎设计空间搜索
@@ -563,15 +668,18 @@ CaduceusCore/
 │   ├── compare_rtl.py            #   RTL 输出 vs Golden 比对
 │   ├── cocotb_bridge.py          #   Cocotb Python 控制层 (Phase 3, NEW)
 │   ├── check_mmio_map.py         #   MMIO 一致性检查 (Phase 3, NEW)
-│   ├── engine/                   #   引擎实现 (isa, compiler, mac_engine, ppa_model)
+│   ├── engine/                   #   引擎实现 (isa, compiler, mac_engine, ppa_model, 8 engine types)
 │   ├── models/                   #   性能模型 (mxu, sfu, vector, dma, dram, kv_cache, noc)
-│   ├── config/                   #   NPU 架构 YAML 配置
+│   ├── cv/                       #   CV 模拟器 + trace 生成
+│   │   ├── cv_sim.py             #     CV GEMM 调度器
+│   │   └── traces/               #     ViT-B/16, Qwen-VL ViT, SD 1.5 UNet
+│   ├── config/                   #   NPU 架构 + DSE 场景 YAML 配置
 │   │   └── interconnect.yaml     #    AXI crossbar 互连配置 (Phase 3, NEW)
 │   ├── regression/               #   SoC 回归测试 (Phase 3, NEW)
 │   │   └── Makefile              #    8 targets (apb/intc/dma/crossbar/pcie/dram/soc/qwen)
-│   ├── tests/                    #   pytest 测试套件 (开发中)
+│   ├── tests/                    #   pytest 测试套件
 │   │   └── test_dma_noc_integration.py  #   DMA + NoC 集成测试 (NEW)
-│   └── reports/                  #   架构回溯分析
+│   └── reports/                  #   架构 DSE 报告
 ├── rtl/                          # Verilog RTL (Phase 1 + 2 + 3)
 │   ├── mxu/                      #   64×64 Broadcast MAC 阵列 (Phase 1)
 │   │   ├── mxu_top.v             #     顶层集成
@@ -652,13 +760,17 @@ CaduceusCore/
 ├── docs/                         # 设计文档
 │   ├── NPU硬件详细架构设计v0.1.md  #   硬件架构
 │   ├── NPU软件架构方案v0.2.md      #   两阶段软件方案
-│   ├── func_model_architecture.md #   Func Model 架构 (最准确的文档)
+│   ├── func_model_architecture.md #   Func Model 架构
 │   ├── verification_methodology.md#   验证方法论 + 模型库
-│   ├── NPU_Engines_Architecture_Guide.md  # 七引擎 PPA 对比
+│   ├── NPU_Engines_Architecture_Guide.md  # 八引擎 PPA 对比
 │   ├── rtl_development_plan.md    #   RTL 开发计划 (Phase 3/4/5 完成状态更新, NEW)
 │   ├── ttft_gantt.md             #   TTFT Mermaid 甘特图 + 事件表 (NEW)
 │   ├── ttft_gantt.png            #   TTFT 三面板 Matplotlib 图 (NEW)
 │   └── func_model_performance_analysis.md  # 性能分析方法论 (NEW)
+├── reports/                      # DSE 架构报告
+│   └── arch-dse-three-scenarios.md  # 三场景 DSE 推荐
+├── references/                   # 面积模型数据来源
+│   └── area_sources.md           #   PE/SRAM/PHY/TSV 出处
 ├── requirements.txt              # Python 依赖包
 ├── firmware/                     # C 固件 (npu_firmware.c, npu-regmap.h)
 ├── patches/                      # Spike RISC-V 集成 patch

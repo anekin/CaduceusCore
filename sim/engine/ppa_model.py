@@ -26,26 +26,39 @@ class PPA:
 
 
 class AreaModel:
-    """面积估算模型 — 基于配置参数"""
+    """面积估算模型 — 基于配置参数。
+
+    PE 面积基线来自公开论文/产品数据，详见 references/area_sources.md。
+    所有基线以 7nm 为参考节点，运行时按 (process/7nm)^2 缩放。
+    """
 
     def __init__(self, config: Dict[str, Any]):
         am = config.get("area_model", {})
-        self.systolic_pe_baseline = float(am.get("systolic_pe_area_mm2", 8.0))
-        self.block_pe_baseline = float(am.get("block_pe_area_mm2", 32.0))
-        self.os_pe_baseline = float(am.get("os_pe_area_mm2", 32.0))
-        self.input_stationary_pe_baseline = float(am.get("is_pe_area_mm2", 24.0))
-        self.tensor_core_pe_baseline = float(am.get("tc_pe_area_mm2", 32.0))
-        self.wmma_pe_baseline = float(am.get("wmma_pe_area_mm2", 36.8))   # 32×1.15
-        self.gmma_pe_baseline = float(am.get("gmma_pe_area_mm2", 40.0))   # 32+2+6
-        self.sfu = float(am.get("sfu_area_mm2", 2.0))
-        self.l1_per_kb = float(am.get("l1_sram_per_kb_mm2", 0.002))
-        self.l2_per_kb = float(am.get("l2_sram_per_kb_mm2", 0.0015))
-        self.dma = float(am.get("dma_area_mm2", 1.0))
-        self.riscv = float(am.get("riscv_area_mm2", 1.0))
-        self.pcie = float(am.get("pcie_area_mm2", 3.5))
-        self.dram_phy = float(am.get("dram_phy_area_mm2", 7.0))
-        self.crossbar = float(am.get("crossbar_area_mm2", 1.5))
-        self.dma_per_ch = float(am.get("dma_channels_area_per_channel_mm2", 0.5))
+        node = float(am.get("process_node_nm", am.get("process_node", 7.0)))
+        self.node_scale = (node / 7.0) ** 2  # area scales with node^2
+
+        # ── PE 面积基线 @7nm (128×128 array) ──
+        # 来源: TPUv1 ISCA 2017 die-shot 反推，见 references/area_sources.md
+        self.systolic_pe_baseline = float(am.get("systolic_pe_area_mm2", 2.0)) * self.node_scale
+        self.block_pe_baseline       = float(am.get("block_pe_area_mm2", 4.0)) * self.node_scale       # 2× systolic (local acc + broadcast)
+        self.os_pe_baseline          = float(am.get("os_pe_area_mm2", 4.0)) * self.node_scale          # output stationary ≈ block
+        self.input_stationary_pe_baseline = float(am.get("is_pe_area_mm2", 4.0)) * self.node_scale     # input stationary ≈ block
+        self.tensor_core_pe_baseline = float(am.get("tc_pe_area_mm2", 4.0)) * self.node_scale          # TC ≈ block
+        self.wmma_pe_baseline        = float(am.get("wmma_pe_area_mm2", 6.0)) * self.node_scale        # ~1.5× block (warp-level control)
+        self.gmma_pe_baseline        = float(am.get("gmma_pe_area_mm2", 7.0)) * self.node_scale        # ~1.75× block (async copy + TMA)
+        self.fsa_pe_baseline         = float(am.get("fsa_pe_area_mm2", 2.2)) * self.node_scale         # 1.1× systolic (CMP + Split overhead)
+        self.sfu = float(am.get("sfu_area_mm2", 1.5)) * self.node_scale
+        self.l1_per_kb = float(am.get("l1_sram_per_kb_mm2", 0.002)) * self.node_scale
+        self.l2_per_kb = float(am.get("l2_sram_per_kb_mm2", 0.0015)) * self.node_scale
+        self.dma = float(am.get("dma_area_mm2", 1.0)) * self.node_scale
+        self.riscv = float(am.get("riscv_area_mm2", 1.0)) * self.node_scale
+        self.pcie = float(am.get("pcie_area_mm2", 2.0)) * self.node_scale
+        self.dram_phy = float(am.get("dram_phy_area_mm2", 5.0)) * self.node_scale
+        self.crossbar = float(am.get("crossbar_area_mm2", 1.0)) * self.node_scale
+        self.dma_per_ch = float(am.get("dma_channels_area_per_channel_mm2", 0.5)) * self.node_scale
+        # TSV area overhead for 3D-stacked DRAM (keep-out zones + SerDes + redundancy)
+        # ~10% of total die for HBM2/3-class stacking at 500 GB/s, per industry rule-of-thumb
+        self.tsv_overhead_pct = float(am.get("tsv_overhead_pct", 0.10))
 
         # CV-specific hardware units
         self.im2col_feeder = float(am.get("im2col_feeder_mm2", 0.002))   # scales with array
@@ -68,6 +81,7 @@ class AreaModel:
             "wmma": self.wmma_pe_baseline,
             "gmma": self.gmma_pe_baseline,
             "input_stationary": self.input_stationary_pe_baseline,
+            "fsa": self.fsa_pe_baseline,
         }
         pe_base = engine_area_map.get(engine_type, self.block_pe_baseline)
         pe_area = pe_base * scale
@@ -87,19 +101,30 @@ class AreaModel:
 
         dma_area = self.dma + (dma_channels - 2) * self.dma_per_ch
 
-        # DRAM PHY: wider bus = larger PHY
-        mem = config.get("memory", {})
-        dram_width = int(mem.get("dram_width_bits", 64))
-        dram_phy_area = self.dram_phy * (dram_width / 64)
+        # DRAM PHY: skip if on-chip memory used (no external DDR interface)
+        # PCIe: still needed even with on-chip memory (host communication)
+        onchip = config.get("on_chip_memory", {})
+        if float(onchip.get("capacity_gb", 0)) > 0:
+            dram_phy_area = 0  # on-chip 3D DRAM doesn't need DDR PHY
+            pcie_area = self.pcie  # host interface still required
+        else:
+            mem = config.get("memory", {})
+            dram_width = int(mem.get("dram_width_bits", 64))
+            dram_phy_area = self.dram_phy * (dram_width / 64)
+            pcie_area = self.pcie
 
         # CV hardware units
         im2col_feeder_area = self.im2col_feeder * scale     # scales with array size
         pool2d_area = self.pool2d
         conv_sfu_area = self.conv_sfu
 
-        total = (pe_area + self.sfu + self.riscv + self.pcie +
+        total = (pe_area + self.sfu + self.riscv + pcie_area +
                  self.crossbar + l1 + l2 + dma_area + dram_phy_area +
                  im2col_feeder_area + pool2d_area + conv_sfu_area)
+
+        # TSV overhead for 3D-stacked memory
+        if float(onchip.get("capacity_gb", 0)) > 0:
+            total *= (1.0 + self.tsv_overhead_pct)
 
         return {
             "total_mm2": round(total, 1),
@@ -136,6 +161,7 @@ class PowerModel:
             "wmma": area_model.wmma_pe_baseline,
             "gmma": area_model.gmma_pe_baseline,
             "input_stationary": area_model.input_stationary_pe_baseline,
+            "fsa": area_model.fsa_pe_baseline,
         }
         pe_base = engine_area_map.get(engine_type, area_model.block_pe_baseline)
         logic_mm2 = pe_base * scale + area_model.sfu

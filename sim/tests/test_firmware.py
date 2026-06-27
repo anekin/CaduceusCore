@@ -14,7 +14,7 @@ import struct
 
 import pytest
 
-from sim.engine.isa import OpCode, NPUInstruction, NPUEncoder
+from engine.isa import OpCode, NPUInstruction, NPUEncoder
 from sim.miniv import NPUFirmware
 
 # ── Helpers ────────────────────────────────────────────────────────────

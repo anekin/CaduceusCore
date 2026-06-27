@@ -1,7 +1,7 @@
 """MXU 性能模型 (legacy systolic, v2) — 64×64 array (superseded by Block 64×64 broadcast; preserved for systolic regression)
 
 v2 changes:
-- 移除 weight_preloaded 假设（3B 模型权重 > 片上 SRAM，必须每 token 从 DRAM 流式加载）
+- 使用 weight streaming 假设（3B 模型权重 > 片上 SRAM，必须每 token 从 DRAM 流式加载）
 - 加入 128×128 tile 粒度建模
 - DMA/MXU double-buffer overlap
 - DRAM 有效带宽（85% 效率，含刷新 + 行冲突）
@@ -10,6 +10,9 @@ v2 changes:
 import math
 from dataclasses import dataclass
 from typing import Any, Dict
+
+# Marker consumed by overnight_loop.py consistency checks
+V2_BANDWIDTH_AWARE = True
 
 
 @dataclass
@@ -82,12 +85,10 @@ class MXUModel:
         tile_act_bytes = math.ceil(M * self.H * self.a_bits / 8)
 
         # --- Per-tile compute ---
-        # M=1: one output row through the array
-        # For weight-stationary, activations stream H cycles to fill,
-        # then each column processes. Total per tile ~ H + pipeline_overhead
-        pipeline_fill = self.H + self.W       # 256 cycles (diagonal fill)
-        pipeline_drain = M + self.H           # M+128 cycles for partial sum drain
-        per_tile_compute = pipeline_fill + pipeline_drain  # ~385 cycles
+        # V2 interleaving: each of M tokens streams through stationary weights
+        # Fill (H+W) + first drain (H) + (M-1)*H for subsequent tokens
+        # Equivalently: H*(M+1) + W
+        per_tile_compute = self.H * (M + 1) + self.W
 
         # --- Per-tile DMA ---
         per_tile_dma = (tile_weight_bytes + tile_act_bytes) / self.eff_bw
@@ -153,17 +154,20 @@ class MXUModel:
 
         # For M>1, the M dimension is tiled across the array height
         M_tiles = math.ceil(M / self.H)
-        # Each M tile processes H rows of the output
+        pipeline_fill = self.H + self.W
 
         # Per (k,n,m) tile compute:
-        # With weight-stationary, once weights are on array, stream M activations
-        # Per M-tile: H cycles (stream H activation rows) + pipeline
-        pipeline_fill = self.H + self.W
-        pipeline_drain = self.H + self.H  # M_tile_size=H
-        per_m_tile_compute = pipeline_fill + pipeline_drain
-
-        # All M_tiles for a given (K,N) tile
-        per_tile_compute = M_tiles * per_m_tile_compute
+        # With weight-stationary, weights loaded once, activations stream through
+        # For M < H: only M rows are active, partial tile — drain = M
+        # For M >= H: full tile(s) — drain = H per tile
+        if M_tiles == 1 and M < self.H:
+            # Partial tile: pipeline fill (H+W) + drain (M)
+            per_tile_compute = pipeline_fill + M
+        else:
+            # Full tile(s): each M-tile is H rows, drain = H
+            pipeline_drain = self.H
+            per_m_tile_compute = pipeline_fill + pipeline_drain
+            per_tile_compute = M_tiles * per_m_tile_compute
 
         # DMA per tile: weight + activation for all M rows
         per_tile_dma = (tile_weight_bytes + M_tiles * tile_act_bytes) / self.eff_bw
@@ -193,15 +197,17 @@ class MXUModel:
         )
 
     def estimate(
-        self, M: int, K: int, N: int, weight_preloaded: bool = False
+        self, M: int, K: int, N: int
     ) -> MXUResult:
         """Estimate cycles for GEMM: (M×K) × (K×N) → (M×N).
 
-        v2: always models weight streaming from DRAM.
-        weight_preloaded is ignored (deprecated) — 3B model weights
+        v2: always models weight streaming from DRAM. 3B model weights
         (1.5GB) cannot fit in 2.5MB on-chip SRAM.
         """
-        if M <= 2:
+        # Batch decode (M ≤ 8): tokens stream sequentially through
+        # weight-stationary array. Interleaving model: H*(M+1)+W.
+        # Actual prefill (M > 8): all tokens arrive simultaneously.
+        if M <= 8:
             return self._estimate_decode(M, K, N)
         else:
             return self._estimate_prefill(M, K, N)

@@ -8,7 +8,7 @@ from typing import Dict, List, Tuple
 
 import yaml
 
-from sim.engine.timeline import SimulationReport
+from engine.timeline import SimulationReport
 from sim.model_specs import ModelSpec
 from sim.npu_sim import NPUSimulator
 from sim.timing.types import ModuleBreakdown, RequestMetrics, TokenTiming
