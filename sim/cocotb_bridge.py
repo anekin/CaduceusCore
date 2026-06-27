@@ -642,25 +642,25 @@ class CocotbBridge:
         try:
             # Access hierarchical paths through DUT
             # ibex_wrapper → apb_master outputs
-            self.dut.u_ibex_wrapper.apb_paddr.value = addr
-            self.dut.u_ibex_wrapper.apb_pwdata.value = data
-            self.dut.u_ibex_wrapper.apb_pwrite.value = 1
-            self.dut.u_ibex_wrapper.apb_psel.value = 1
+            self.dut.u_dut.u_ibex_wrapper.apb_paddr.value = addr
+            self.dut.u_dut.u_ibex_wrapper.apb_pwdata.value = data
+            self.dut.u_dut.u_ibex_wrapper.apb_pwrite.value = 1
+            self.dut.u_dut.u_ibex_wrapper.apb_psel.value = 1
 
             await RisingEdge(self.dut.clk)
-            self.dut.u_ibex_wrapper.apb_penable.value = 1
+            self.dut.u_dut.u_ibex_wrapper.apb_penable.value = 1
 
             await RisingEdge(self.dut.clk)
             # Wait for pready
             timeout = 100
-            while self.dut.u_ibex_wrapper.apb_pready.value != 1 and timeout > 0:
+            while self.dut.u_dut.u_ibex_wrapper.apb_pready.value != 1 and timeout > 0:
                 await RisingEdge(self.dut.clk)
                 timeout -= 1
 
             # Deassert
-            self.dut.u_ibex_wrapper.apb_psel.value = 0
-            self.dut.u_ibex_wrapper.apb_penable.value = 0
-            self.dut.u_ibex_wrapper.apb_pwrite.value = 0
+            self.dut.u_dut.u_ibex_wrapper.apb_psel.value = 0
+            self.dut.u_dut.u_ibex_wrapper.apb_penable.value = 0
+            self.dut.u_dut.u_ibex_wrapper.apb_pwrite.value = 0
         except AttributeError:
             # Hierarchical path may vary; skip in non-cocotb mode
             pass
@@ -673,23 +673,23 @@ class CocotbBridge:
             return self._apb_write_cache.get(addr, 0)
 
         try:
-            self.dut.u_ibex_wrapper.apb_paddr.value = addr
-            self.dut.u_ibex_wrapper.apb_pwrite.value = 0
-            self.dut.u_ibex_wrapper.apb_psel.value = 1
+            self.dut.u_dut.u_ibex_wrapper.apb_paddr.value = addr
+            self.dut.u_dut.u_ibex_wrapper.apb_pwrite.value = 0
+            self.dut.u_dut.u_ibex_wrapper.apb_psel.value = 1
 
             await RisingEdge(self.dut.clk)
-            self.dut.u_ibex_wrapper.apb_penable.value = 1
+            self.dut.u_dut.u_ibex_wrapper.apb_penable.value = 1
 
             await RisingEdge(self.dut.clk)
             timeout = 100
-            while self.dut.u_ibex_wrapper.apb_pready.value != 1 and timeout > 0:
+            while self.dut.u_dut.u_ibex_wrapper.apb_pready.value != 1 and timeout > 0:
                 await RisingEdge(self.dut.clk)
                 timeout -= 1
 
-            value = int(self.dut.u_ibex_wrapper.apb_prdata.value)
+            value = int(self.dut.u_dut.u_ibex_wrapper.apb_prdata.value)
 
-            self.dut.u_ibex_wrapper.apb_psel.value = 0
-            self.dut.u_ibex_wrapper.apb_penable.value = 0
+            self.dut.u_dut.u_ibex_wrapper.apb_psel.value = 0
+            self.dut.u_dut.u_ibex_wrapper.apb_penable.value = 0
 
             return value
         except AttributeError:
@@ -834,6 +834,42 @@ if COCOTB_AVAILABLE:
         if summary["failed"] > 0:
             logger.error(f"FAILED: {summary['errors']}")
         assert summary["failed"] == 0, f"{summary['failed']} instructions failed"
+
+    @cocotb.test()
+    async def test_apb_roundtrip(dut):
+        """
+        APB Roundtrip Verification — T3.
+        Writes 0xDEADBEEF to MXU_BASE+0x00 via APB (using corrected hierarchy
+        self.dut.u_dut.u_ibex_wrapper.apb_*), reads back, asserts equality.
+        Logs the resolved hierarchy path used for APB access.
+        """
+        APB_HIERARCHY = "dut.u_dut.u_ibex_wrapper.apb_*"
+        logger.info(f"[APB_ROUNDTRIP] APB hierarchy: {APB_HIERARCHY}")
+        logger.info("[APB_ROUNDTRIP] Starting verification...")
+
+        bridge = CocotbBridge(dut)
+        await bridge.start_clock()
+        await bridge.reset(5)
+
+        # Write 0xDEADBEEF to MXU_BASE + 0x00
+        addr = MXU_BASE + 0x00
+        expected = 0xDEAD_BEEF
+        logger.info(f"[APB_ROUNDTRIP] Writing 0x{expected:08X} to 0x{addr:08X}...")
+        await bridge._apb_write(addr, expected)
+
+        # Read back
+        logger.info(f"[APB_ROUNDTRIP] Reading back from 0x{addr:08X}...")
+        actual = await bridge._apb_read(addr)
+
+        logger.info(f"[APB_ROUNDTRIP] Expected: 0x{expected:08X}, Actual: 0x{actual:08X}")
+        if actual == expected:
+            logger.info("[APB_ROUNDTRIP] PASS — value matches")
+        else:
+            logger.error(f"[APB_ROUNDTRIP] FAIL — mismatch: expected 0x{expected:08X}, got 0x{actual:08X}")
+            assert actual == expected, \
+                f"APB roundtrip mismatch: expected 0x{expected:08X}, got 0x{actual:08X}"
+
+        logger.info(f"[APB_ROUNDTRIP] Hierarchy path: {APB_HIERARCHY}")
 
 else:
     # Non-cocotb: provide stubs that fail gracefully
