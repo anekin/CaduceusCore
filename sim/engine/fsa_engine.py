@@ -56,13 +56,18 @@ class FSAEngine(MACEngine):
         weight_bytes = K * N * self.w_bits // 8
         act_bytes = M * K * self.a_bits // 8
 
-        # For weight-stationary, load weights once, stream activations
-        dma_weight_bytes = weight_bytes
-        dma_act_bytes = act_bytes * tiles_m * tiles_n
-        dma_total_bytes = dma_weight_bytes + dma_act_bytes
+        # SRAM-aware DRAM efficiency (base class method)
+        dram_eff = self._dram_eff_for_bytes(weight_bytes)
+        if dram_eff <= 0:
+            effective_weight_bytes = 0  # cached in SRAM
+            dram_eff = 1.0
+        else:
+            effective_weight_bytes = weight_bytes
+
+        dma_total_bytes = effective_weight_bytes + act_bytes * tiles_m * tiles_n
 
         dma_cycles = max(
-            dma_total_bytes / self.eff_bw,
+            dma_total_bytes / (self.eff_bw * max(dram_eff, 0.01)),
             compute_cycles * 0.1  # at least 10% of compute
         )
 
@@ -77,7 +82,7 @@ class FSAEngine(MACEngine):
             utilization=min(utilization, 1.0),
             ops=macs,
             num_tiles=total_tiles,
-            weight_bytes=dma_weight_bytes,
+            weight_bytes=int(effective_weight_bytes),
             bottleneck="compute" if compute_cycles >= dma_cycles else "dma",
             details={
                 "tiles_m": tiles_m,

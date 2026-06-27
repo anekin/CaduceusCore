@@ -26,14 +26,20 @@ _CV_ONNX_PATH: str = ""
 
 _NUM_LAYERS: int = 28
 _LLM_TRACE: List[Tuple] = []
+_SEQ_KV: int = 2048      # KV cache sequence length for decode
+_KV_HEADS: int = 2        # num_kv_heads from model spec
+_HEAD_DIM: int = 128      # head_dim from model spec
 
 
 def generate_trace_from_spec(alias: str, batch_m: int = 1) -> List[Tuple]:
+    global _KV_HEADS, _HEAD_DIM
     spec = get_spec(alias)
     H = spec.hidden
     I = spec.intermediate
     qkv = spec.qkv_dim
     kv = spec.kv_heads * spec.head_dim
+    _KV_HEADS = spec.kv_heads
+    _HEAD_DIM = spec.head_dim
     trace = []
     m_attn = batch_m  # attention: batch tokens can be concatenated
     m_ffn = 1         # FFN gate/up/down remain M=1 per token (per plan spec)
@@ -54,11 +60,48 @@ SFU_CYCLES_PER_LAYER = {
     "ffn": 8,     # gelu + layernorm
 }
 
-KV_CYCLES_PER_LAYER = 125  # per-layer KV access
+
+def _compute_kv_cycles(config: Dict[str, Any], batch_m: int = 1) -> int:
+    """Dynamic KV cache DRAM read cycles per layer.
+
+    - For decode (batch_m=1): K,V read from DRAM, 40% of L2 SRAM as tile buffer
+    - For prefill (batch_m>1): KV written (not read), negligible cost
+    - Scales with seq_kv, SRAM size, and effective bandwidth
+    """
+    if batch_m > 1:
+        return 0  # Prefill: KV is being written, not a read bottleneck
+
+    sram = config.get("sram", {})
+    l2_kb = int(sram.get("l2_shared_kb", 2048))
+    kvbuf_kb = int(l2_kb * 0.4)
+
+    # K + V: 2 × seq_kv × kv_heads × head_dim × 1 byte (INT8)
+    kv_bytes = 2 * _SEQ_KV * _KV_HEADS * _HEAD_DIM * 1
+
+    mem = config.get("memory", {})
+    bw_raw = float(mem.get("bandwidth_bytes_per_cycle", 51.2))
+    dram_eff = float(mem.get("dram_efficiency", 0.85))
+    eff_bw = bw_raw * dram_eff
+
+    kv_mb = kv_bytes / (1024 * 1024.0)
+    kvbuf_mb = kvbuf_kb / 1024.0
+    ratio = kvbuf_mb / max(kv_mb, 0.001)
+    kv_dram_eff = 0.55 + 0.40 * ratio / (0.3 + ratio)
+
+    if eff_bw <= 0 or kv_dram_eff <= 0:
+        return 0
+
+    # cycles = bytes / (effective GB/s) — BW values are in GB/s units
+    return int(kv_bytes / (eff_bw * kv_dram_eff))
 
 
-def simulate_layer(config: Dict[str, Any]) -> Tuple[int, int]:
-    """Simulate one transformer layer. Returns (total_cycles, weight_bytes)."""
+def simulate_layer(config: Dict[str, Any], batch_m: int = None) -> tuple:
+    """Simulate one transformer layer. Returns (total_cycles, weight_bytes).
+
+    batch_m=1 for decode, >1 for prefill. If None, inferred from trace.
+    """
+    if batch_m is None:
+        batch_m = _LLM_TRACE[0][0] if _LLM_TRACE else 1
     engine = create_engine(config)
     opts = config.get("optimizations", {})
     weight_cache = opts.get("weight_cache", False)
@@ -89,8 +132,9 @@ def simulate_layer(config: Dict[str, Any]) -> Tuple[int, int]:
         elif name == "FFN_down":
             total += SFU_CYCLES_PER_LAYER["ffn"]
 
-    # KV cache
-    total += KV_CYCLES_PER_LAYER * len(ops)
+    # KV cache: dynamic read cost based on SRAM + bandwidth
+    kv_cycles = _compute_kv_cycles(config, batch_m)
+    total += kv_cycles
 
     return total, weight_bytes
 
@@ -156,6 +200,9 @@ def generate_configs(quick: bool = False) -> List[Dict[str, Any]]:
     # Frequency
     freqs = [1000] if quick else [800, 1000, 1200]
 
+    # SRAM L2 sizes (KB) — critical for bandwidth-constrained performance
+    sram_l2_sizes = [2048] if quick else [1024, 2048, 4096, 6144, 8192]
+
     for engine_type in engines:
         for H, W in dims:
             # Area constraints
@@ -173,31 +220,33 @@ def generate_configs(quick: bool = False) -> List[Dict[str, Any]]:
             for bw_gbps, dw_bits, dram_label in dram_configs:
                 for w_bits in precisions:
                     for freq in freqs:
-                        # weight_cache only for systolic
-                        wc_options = [False]
-                        if engine_type in ("systolic", "block", "gmma"):
-                            wc_options = [False, True]
+                        for l2_kb in sram_l2_sizes:
+                            # weight_cache only for systolic
+                            wc_options = [False]
+                            if engine_type in ("systolic", "block", "gmma"):
+                                wc_options = [False, True]
 
-                        for wc in wc_options:
-                            # Block/GMMA with weight_cache skip if bandwidth too low
-                            if wc and engine_type != "systolic" and bw_gbps < 51.2:
-                                continue
+                            for wc in wc_options:
+                                # Block/GMMA with weight_cache skip if bandwidth too low
+                                if wc and engine_type != "systolic" and bw_gbps < 51.2:
+                                    continue
 
-                            cfg = copy.deepcopy(base)
-                            cfg["mac_engine"]["type"] = engine_type
-                            cfg["mac_engine"]["array_height"] = H
-                            cfg["mac_engine"]["array_width"] = W
-                            cfg["mac_engine"]["weight_precision_bits"] = w_bits
-                            cfg["mac_engine"]["frequency_mhz"] = freq
-                            cfg["memory"]["bandwidth_gbps"] = bw_gbps
-                            cfg["memory"]["bandwidth_bytes_per_cycle"] = bw_gbps
-                            cfg["memory"]["dram_width_bits"] = dw_bits
-                            cfg["memory"]["dram_efficiency"] = 0.85
-                            cfg["optimizations"]["weight_cache"] = wc
-                            cfg["optimizations"]["dma_bw_multiplier"] = 1.0
-                            cfg["_dram_label"] = dram_label
+                                cfg = copy.deepcopy(base)
+                                cfg["mac_engine"]["type"] = engine_type
+                                cfg["mac_engine"]["array_height"] = H
+                                cfg["mac_engine"]["array_width"] = W
+                                cfg["mac_engine"]["weight_precision_bits"] = w_bits
+                                cfg["mac_engine"]["frequency_mhz"] = freq
+                                cfg["memory"]["bandwidth_gbps"] = bw_gbps
+                                cfg["memory"]["bandwidth_bytes_per_cycle"] = bw_gbps
+                                cfg["memory"]["dram_width_bits"] = dw_bits
+                                cfg["memory"]["dram_efficiency"] = 0.85
+                                cfg["sram"]["l2_shared_kb"] = l2_kb
+                                cfg["optimizations"]["weight_cache"] = wc
+                                cfg["optimizations"]["dma_bw_multiplier"] = 1.0
+                                cfg["_dram_label"] = dram_label
 
-                            configs.append(cfg)
+                                configs.append(cfg)
 
     return configs
 
