@@ -157,12 +157,53 @@ FSA (attention 专用) + 精简 SFU (layernorm/gelu/rope，不需要大吞吐 so
 
 ---
 
-## 5. 后续工作
+## 5. CV 模型对比 — FSA 的局限验证
 
-1. **安装 onnx → 跑 CV DSE**：`pip install onnx` 后跑 `--cv-model mobilenetv3-small`
-2. **混合架构建模**：FSA + 精简 SFU 联合评估
-3. **更多 LLM 模型**：qwen2.5-7b、gemma-4-12b 等大模型的 attention 占比更高，FSA 优势可能更大
-4. **带宽频率校准**：DSE 中 `bandwidth_bytes_per_cycle` 当前未随频率缩放（已知 bug），修复后结果可能变化
+### 5.1 MobileNetV3-Small（轻量 CNN，无 attention）
+
+| 引擎 | fps | 面积 | 约束下最优 |
+|------|:---:|:---:|------|
+| block | 1216 | 133mm² | — |
+| os_systolic | 1216 | 133mm² | — |
+| **fsa** | 1216 | 133mm² | ❌ |
+| **gmma** | — | — | ✅ **1029 fps @ 51mm²** |
+
+### 5.2 YOLOv8n（目标检测，含 SiLU 激活）
+
+| 引擎 | fps | DW util | 约束下最优 |
+|------|:---:|:---:|------|
+| block | 146 | 0% | — |
+| **fsa** | 146 | 0% | ❌ |
+| **gmma** | — | — | ✅ **137 fps @ 64mm²** |
+
+*YOLO 瓶颈在 depthwise conv（DW util = 0%），所有引擎表现一致*
+
+### 5.3 ResNet-18（经典 CNN）
+
+| 引擎 | fps | 约束下最优 |
+|------|:---:|------|
+| block | 709 | — |
+| **fsa** | 709 | ❌ |
+| **gmma** | — | ✅ **650 fps @ 64mm²** |
+
+### 5.4 CV 结论
+
+| 工作负载类型 | 推荐引擎 | FSA 表现 |
+|------|:---:|------|
+| **LLM（Transformer）** | **FSA** | ✅ 1.8× 效率，Pareto 全线最优 |
+| **CV（CNN）** | gmma / block | ❌ 无优势，inline softmax 硬件闲置 |
+| **混合（ViT）** | 待评估 | ViT 含 attention，FSA 可能有优势 |
+
+**FSA 是一个典型的"领域专用架构"——在 attention 密集的 Transformer 上无敌，但在纯卷积 CNN 上优势归零。** 这完美验证了架构设计的取舍逻辑。
+
+---
+
+## 6. 后续工作
+
+1. **ViT DSE**：Vision Transformer 含 attention，FSA 可能在 CV+attention 交叉领域保持优势
+2. **混合架构建模**：FSA（attention）+ 精简 SFU（layernorm/gelu）+ gmma（CV）联合评估
+3. **更多 LLM**：qwen2.5-7b、gemma-4-12b 的 attention 占比更高，FSA 优势可能继续扩大
+4. **带宽频率校准**：DSE 中 `bandwidth_bytes_per_cycle` 未随频率缩放（已知 bug），修复后需重跑
 
 ---
 
