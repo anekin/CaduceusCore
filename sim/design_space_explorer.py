@@ -269,7 +269,7 @@ def main():
     parser.add_argument("--output", default=None)
     parser.add_argument("--top", type=int, default=20,
                         help="Show top N results")
-    parser.add_argument("--cv-model", choices=["mobilenetv3-small"],
+    parser.add_argument("--cv-model", choices=["mobilenetv3-small", "yolov8n", "vit-b16", "resnet18", "resnet50"],
                         default=None,
                         help="Run CV design-space exploration")
     parser.add_argument("--model-spec",
@@ -289,9 +289,22 @@ def main():
     global _CV_MODEL, _CV_TRACE, _CV_ONNX_PATH, _LLM_TRACE, _NUM_LAYERS
     _CV_MODEL = args.cv_model or ""
     if _CV_MODEL:
-        from cv.cv_trace import generate_mobilenetv3_trace
-        _CV_ONNX_PATH = str(Path(__file__).parent.parent / "assets" / "mobilenetv3_small.onnx")
-        _CV_TRACE = generate_mobilenetv3_trace(_CV_ONNX_PATH)
+        if args.cv_model == "mobilenetv3-small":
+            from cv.cv_trace import generate_mobilenetv3_trace
+            _CV_ONNX_PATH = str(Path(__file__).parent.parent / "assets" / "mobilenetv3_small.onnx")
+            _CV_TRACE = generate_mobilenetv3_trace(_CV_ONNX_PATH)
+        elif args.cv_model == "yolov8n":
+            from cv.traces.yolov8n_trace import generate_yolov8n_trace
+            _CV_TRACE = generate_yolov8n_trace()
+        elif args.cv_model == "vit-b16":
+            from cv.traces.vit_trace import generate_vit_trace
+            _CV_TRACE = generate_vit_trace()
+        elif args.cv_model == "resnet18":
+            from cv.traces.resnet18_trace import generate_resnet18_trace
+            _CV_TRACE = generate_resnet18_trace()
+        elif args.cv_model == "resnet50":
+            from cv.traces.resnet50_trace import generate_resnet50_trace
+            _CV_TRACE = generate_resnet50_trace()
     else:
         _LLM_TRACE = generate_trace_from_spec(model_spec, batch_m)
         _NUM_LAYERS = get_spec(model_spec).layers
