@@ -30,6 +30,12 @@
   --red-dim: rgba(248,81,73,0.12);
   --purple: #a371f7;
   --purple-dim: rgba(163,113,247,0.12);
+  --teal: #39d2c0;
+  --teal-dim: rgba(57,210,192,0.12);
+  --teal-border: rgba(57,210,192,0.25);
+  --pink: #f778ba;
+  --pink-dim: rgba(247,119,186,0.12);
+  --pink-border: rgba(247,119,186,0.25);
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;
@@ -359,6 +365,200 @@ pre code {
 .arch-diagram .hl-cyan { color: var(--cyan); }
 .arch-diagram .hl-green { color: var(--green); }
 .arch-diagram .hl-amber { color: var(--amber); }
+
+/* ===== SoC Block Diagram ===== */
+.soc-block-diagram {
+  margin: var(--space-lg) 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+/* Legend */
+.soc-diagram-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-lg);
+  margin-bottom: var(--space-lg);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.soc-diagram-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.soc-diagram-legend-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Layer / Group */
+.soc-diagram-layer {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.soc-diagram-layer-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: var(--space-sm);
+}
+
+/* Row of boxes */
+.soc-diagram-row {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: center;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+/* Individual box */
+.soc-diagram-box {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  min-width: 90px;
+  font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", "Cascadia Code", Consolas, "Noto Sans Mono SC", monospace;
+  font-size: 0.73rem;
+  line-height: 1.5;
+  transition: border-color 0.15s;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.soc-diagram-box .box-label {
+  font-weight: 700;
+  font-size: 0.76rem;
+}
+
+.soc-diagram-box .box-sublabel {
+  font-size: 0.66rem;
+  opacity: 0.75;
+  margin-top: 1px;
+}
+
+/* Color variants */
+.sdb-cpu {
+  background: rgba(88,166,255,0.08);
+  border: 1px solid rgba(88,166,255,0.35);
+  color: #58a6ff;
+}
+
+.sdb-compute {
+  background: rgba(63,185,80,0.08);
+  border: 1px solid rgba(63,185,80,0.35);
+  color: #3fb950;
+}
+
+.sdb-interconnect {
+  background: rgba(210,153,34,0.08);
+  border: 1px solid rgba(210,153,34,0.35);
+  color: #d29922;
+}
+
+.sdb-memory {
+  background: rgba(163,113,247,0.08);
+  border: 1px solid rgba(163,113,247,0.35);
+  color: #a371f7;
+}
+
+.sdb-io {
+  background: rgba(57,210,192,0.08);
+  border: 1px solid rgba(57,210,192,0.35);
+  color: #39d2c0;
+}
+
+.sdb-control {
+  background: rgba(247,119,186,0.08);
+  border: 1px solid rgba(247,119,186,0.35);
+  color: #f778ba;
+}
+
+/* Connector between layers */
+.soc-diagram-connector {
+  text-align: center;
+  padding: 4px 0;
+  font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  letter-spacing: 3px;
+}
+
+.soc-diagram-connector.axi { color: var(--text-muted); font-weight: 700; letter-spacing: 2px; }
+.soc-diagram-connector.apb { color: var(--amber); font-size: 0.8rem; }
+
+/* Path annotations */
+.soc-diagram-path-note {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  text-align: center;
+  font-style: italic;
+  margin: 2px 0;
+}
+
+/* Chip row for APB sub-items */
+.soc-diagram-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  justify-content: center;
+  margin: var(--space-sm) 0;
+}
+
+.soc-diagram-chip {
+  font-size: 0.63rem;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+  white-space: nowrap;
+}
+
+/* Intra-layer connector (horizontal arrow between boxes in same row) */
+.soc-diagram-arrow {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* Responsive: stack vertically */
+@media (max-width: 700px) {
+  .soc-diagram-row {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .soc-diagram-box {
+    min-width: 220px;
+  }
+
+  .soc-diagram-arrow {
+    transform: rotate(90deg);
+  }
+
+  .soc-diagram-connector {
+    letter-spacing: 0;
+  }
+}
 
 /* ===== Timeline ===== */
 .timeline {
@@ -918,6 +1118,140 @@ print_preflight(preflight('onchip_7b', config))
     <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: var(--space-md);">
       全芯片集成：Ibex RISC-V 控制核 + 6 AXI4 master + 自研 crossbar + 4MB SRAM + 2GB DRAM + APB decoder (7 slaves)。
     </p>
+
+    <h4 style="font-size: 0.88rem; margin-bottom: var(--space-sm); color: var(--text-secondary);">SoC 架构框图</h4>
+
+    <div class="soc-block-diagram">
+
+      <!-- Legend -->
+      <div class="soc-diagram-legend">
+        <div class="soc-diagram-legend-item"><span class="soc-diagram-legend-swatch" style="background:rgba(88,166,255,0.5);border:1px solid #58a6ff"></span> CPU</div>
+        <div class="soc-diagram-legend-item"><span class="soc-diagram-legend-swatch" style="background:rgba(63,185,80,0.5);border:1px solid #3fb950"></span> Compute Engine</div>
+        <div class="soc-diagram-legend-item"><span class="soc-diagram-legend-swatch" style="background:rgba(57,210,192,0.5);border:1px solid #39d2c0"></span> IO / DMA</div>
+        <div class="soc-diagram-legend-item"><span class="soc-diagram-legend-swatch" style="background:rgba(210,153,34,0.5);border:1px solid #d29922"></span> Interconnect</div>
+        <div class="soc-diagram-legend-item"><span class="soc-diagram-legend-swatch" style="background:rgba(163,113,247,0.5);border:1px solid #a371f7"></span> Memory</div>
+        <div class="soc-diagram-legend-item"><span class="soc-diagram-legend-swatch" style="background:rgba(247,119,186,0.5);border:1px solid #f778ba"></span> Control / IRQ</div>
+      </div>
+
+      <!-- Layer 1: CPU -->
+      <div class="soc-diagram-layer">
+        <div class="soc-diagram-layer-title">CPU Core</div>
+        <div class="soc-diagram-row">
+          <div class="soc-diagram-box sdb-cpu" style="min-width:240px;">
+            <span class="box-label">Ibex RISC-V (RV32IMC)</span>
+            <span class="box-sublabel">AXI4 Master &nbsp;│&nbsp; APB Master</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connector: Ibex → Compute + APB -->
+      <div class="soc-diagram-connector">│ &nbsp;AXI4 (solid)&nbsp; │</div>
+      <div class="soc-diagram-path-note">APB (dashed) ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ▶</div>
+
+      <!-- Layer 2: Compute Engines -->
+      <div class="soc-diagram-layer">
+        <div class="soc-diagram-layer-title">Compute Engines (3&times;AXI4 Master)</div>
+        <div class="soc-diagram-row">
+          <div class="soc-diagram-box sdb-compute" style="min-width:100px;">
+            <span class="box-label">MXU</span>
+            <span class="box-sublabel">AXI4 + APB</span>
+          </div>
+          <div class="soc-diagram-box sdb-compute" style="min-width:100px;">
+            <span class="box-label">SFU</span>
+            <span class="box-sublabel">AXI4 + APB</span>
+          </div>
+          <div class="soc-diagram-box sdb-compute" style="min-width:100px;">
+            <span class="box-label">Vector</span>
+            <span class="box-sublabel">AXI4 + APB</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connector: Compute → IO -->
+      <div class="soc-diagram-connector axi">│ &nbsp;AXI4&nbsp; │</div>
+
+      <!-- Layer 3: IO (DMA + PCIe) -->
+      <div class="soc-diagram-layer">
+        <div class="soc-diagram-layer-title">IO Masters</div>
+        <div class="soc-diagram-row">
+          <div class="soc-diagram-box sdb-io" style="min-width:120px;">
+            <span class="box-label">DMA</span>
+            <span class="box-sublabel">AXI4 + APB</span>
+          </div>
+          <div class="soc-diagram-box sdb-io" style="min-width:140px;">
+            <span class="box-label">PCIe EP (x4)</span>
+            <span class="box-sublabel">AXI4 + APB</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connector: IO → Crossbar -->
+      <div class="soc-diagram-connector axi">│ &nbsp;AXI4&nbsp; │</div>
+
+      <!-- Layer 4: Interconnect + Memory -->
+      <div class="soc-diagram-layer">
+        <div class="soc-diagram-layer-title">AXI4 Crossbar — Downstream</div>
+        <div class="soc-diagram-row" style="margin-bottom:var(--space-sm);">
+          <div class="soc-diagram-box sdb-interconnect" style="min-width:280px;">
+            <span class="box-label">AXI4 Crossbar</span>
+            <span class="box-sublabel">M=6, S=2, round-robin</span>
+          </div>
+        </div>
+        <div class="soc-diagram-row">
+          <div class="soc-diagram-box sdb-memory" style="min-width:120px;">
+            <span class="box-label">SRAM</span>
+            <span class="box-sublabel">4 MB &middot; S0</span>
+          </div>
+          <div class="soc-diagram-box sdb-memory" style="min-width:120px;">
+            <span class="box-label">DRAM</span>
+            <span class="box-sublabel">2 GB &middot; S1</span>
+          </div>
+        </div>
+        <div class="soc-diagram-path-note" style="margin-top:var(--space-sm);">Memory hierarchy: Boot ROM (64KB) → SRAM (4MB scratchpad) → DRAM (2GB bulk data)</div>
+      </div>
+
+      <!-- Layer 5: Peripherals (APB Decoder + Boot ROM + INTC) -->
+      <div class="soc-diagram-layer">
+        <div class="soc-diagram-layer-title">APB Peripherals</div>
+        <div class="soc-diagram-row" style="margin-bottom:var(--space-sm);">
+          <div class="soc-diagram-box sdb-interconnect" style="min-width:260px;">
+            <span class="box-label">APB Decoder (1→7)</span>
+            <span class="box-sublabel">0x4000_0000</span>
+          </div>
+        </div>
+        <div class="soc-diagram-chip-row">
+          <span class="soc-diagram-chip sdb-compute">MXU Regs</span>
+          <span class="soc-diagram-chip sdb-compute">SFU Regs</span>
+          <span class="soc-diagram-chip sdb-compute">Vec Regs</span>
+          <span class="soc-diagram-chip sdb-io">DMA Regs</span>
+          <span class="soc-diagram-chip sdb-io">PCIe Regs</span>
+          <span class="soc-diagram-chip sdb-control">Doorbell RB</span>
+        </div>
+        <div class="soc-diagram-row" style="margin-top:var(--space-sm);">
+          <div class="soc-diagram-box sdb-memory" style="min-width:110px;">
+            <span class="box-label">Boot ROM</span>
+            <span class="box-sublabel">64 KB</span>
+          </div>
+          <div class="soc-diagram-box sdb-control" style="min-width:190px;">
+            <span class="box-label">INTC</span>
+            <span class="box-sublabel">7 sources → cpu_irq → Ibex</span>
+          </div>
+        </div>
+        <div class="soc-diagram-path-note" style="margin-top:var(--space-sm);">INTC sources: MXU &middot; SFU &middot; Vector &middot; DMA &middot; PCIe &middot; Doorbell &middot; Timer —→ cpu_irq</div>
+      </div>
+
+      <!-- Layer 6: Doorbell -->
+      <div class="soc-diagram-layer">
+        <div class="soc-diagram-layer-title">Host—NPU Command Interface</div>
+        <div class="soc-diagram-row">
+          <div class="soc-diagram-box sdb-control" style="min-width:340px;">
+            <span class="box-label">DOORBELL ring buffer</span>
+            <span class="box-sublabel">Host write cmd → NPU WFI/poll/IRQ → dispatch_cmd() → write completion</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /soc-block-diagram -->
 
     <h4 style="font-size: 0.88rem; margin-bottom: var(--space-sm); color: var(--text-secondary);">AXI4 Crossbar 拓扑</h4>
     <div class="arch-diagram">
