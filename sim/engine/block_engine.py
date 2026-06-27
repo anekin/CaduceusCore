@@ -54,12 +54,11 @@ class BlockEngine(MACEngine):
 
     def estimate(self, M: int, K: int, N: int,
                  weight_preloaded: bool = False) -> EngineResult:
-        """Block GEMM estimate with SRAM-aware DRAM efficiency.
+        """Block GEMM estimate with K-tiling + correct activation DMA.
 
-        For each (H,W) tile:
-          - DMA: load weights + activations, efficiency from SRAM buffer ratio
+        For each (K,N)-tile:
+          - DMA: load K_tile×W weights + M×K_tile activations (shared across N-tiles)
           - Compute: broadcast_sync + accumulate/reduction cycles
-          - If total weight fits in wbuf → 0 weight DMA (cached)
         """
         K_tiles = math.ceil(K / self.H)
         N_tiles = math.ceil(N / self.W)
@@ -67,55 +66,45 @@ class BlockEngine(MACEngine):
 
         # Per-tile data
         tile_weight_bytes = math.ceil(self.H * self.W * self.w_bits / 8)
-        tile_act_bytes = math.ceil(M * self.H * self.a_bits / 8)
+        # Activations: M×K total, loaded once per K-tile, broadcast across N-tiles
+        act_bytes = M * K * self.a_bits // 8
 
         # Total weight for this matmul
         total_weight_bytes = K * N * self.w_bits // 8
 
-        # SRAM efficiency: check if full weight fits in buffer
+        # SRAM efficiency
         weight_dram_eff = self._dram_eff_for_bytes(total_weight_bytes)
         if weight_dram_eff <= 0:
-            # Weight fully cached — only activations need DMA
-            per_tile_dma_weight = 0
-            weight_eff_bw = self.eff_bw
+            weight_dma_cycles = 0
         else:
-            per_tile_dma_weight = tile_weight_bytes / (self.eff_bw * weight_dram_eff)
-            weight_eff_bw = self.eff_bw * weight_dram_eff
+            weight_dma_cycles = total_weight_bytes / (self.eff_bw * weight_dram_eff)
 
-        per_tile_dma = per_tile_dma_weight + tile_act_bytes / self.eff_bw
+        act_dma_cycles = act_bytes / self.eff_bw
+        total_dma_cycles = weight_dma_cycles + act_dma_cycles
 
         # Compute: realistic broadcast pipeline
         per_tile_compute = BROADCAST_SYNC_CYCLES + \
             _accumulate_cycles(self.w_bits, self.a_bits)
+        total_compute = per_tile_compute * total_tiles
 
-        # Double-buffering
-        bottleneck = max(per_tile_compute, per_tile_dma)
-        first_cold = per_tile_dma + per_tile_compute
-
-        if total_tiles > 1:
-            total = int(first_cold + (total_tiles - 1) * bottleneck)
-        else:
-            total = int(first_cold)
-
+        total_cycles = max(total_compute, total_dma_cycles)
         total_macs = M * K * N
-        total_dma_bytes = total_tiles * (tile_weight_bytes + tile_act_bytes)
+
         ideal = math.ceil(total_macs / self.peak_macs_per_cycle)
-        util = ideal / total if total > 0 else 0.0
+        util = ideal / total_cycles if total_cycles > 0 else 0.0
 
         return EngineResult(
-            compute_cycles=int(per_tile_compute * total_tiles),
-            dma_cycles=int(total - per_tile_compute * total_tiles),
-            total_cycles=total,
+            compute_cycles=int(total_compute),
+            dma_cycles=int(total_dma_cycles),
+            total_cycles=int(total_cycles),
             utilization=util,
             ops=total_macs,
             num_tiles=total_tiles,
-            weight_bytes=total_dma_bytes,
-            bottleneck="dma" if per_tile_dma > per_tile_compute else "compute",
+            weight_bytes=int(total_weight_bytes),
+            bottleneck="dma" if total_dma_cycles > total_compute else "compute",
             details={
                 "K_tiles": K_tiles, "N_tiles": N_tiles,
-                "per_tile_dma": round(per_tile_dma, 1),
                 "per_tile_compute": per_tile_compute,
-                "pipeline_overhead": per_tile_compute,
                 "weight_dram_eff": round(weight_dram_eff, 3),
             },
         )

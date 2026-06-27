@@ -41,8 +41,8 @@ def generate_trace_from_spec(alias: str, batch_m: int = 1) -> List[Tuple]:
     _KV_HEADS = spec.kv_heads
     _HEAD_DIM = spec.head_dim
     trace = []
-    m_attn = batch_m  # attention: batch tokens can be concatenated
-    m_ffn = 1         # FFN gate/up/down remain M=1 per token (per plan spec)
+    m_attn = batch_m  # attention projections batch all tokens
+    m_ffn = batch_m if batch_m > 1 else 1  # prefill: batch tokens; decode: single token
     trace.append((m_attn, H, qkv, 0, "Q_proj"))
     trace.append((m_attn, H, kv,  0, "K_proj"))
     trace.append((m_attn, H, kv,  0, "V_proj"))
