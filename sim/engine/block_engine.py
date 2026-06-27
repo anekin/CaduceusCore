@@ -82,8 +82,9 @@ class BlockEngine(MACEngine):
         act_dma_cycles = act_bytes / self.eff_bw
         total_dma_cycles = weight_dma_cycles + act_dma_cycles
 
-        # Compute: realistic broadcast pipeline
-        per_tile_compute = BROADCAST_SYNC_CYCLES + \
+        # Compute: broadcast pipeline with K-reduction depth
+        # Each PE does H MACs along K dimension (1 MAC/cycle in fully-pipelined block)
+        per_tile_compute = self.H + BROADCAST_SYNC_CYCLES + \
             _accumulate_cycles(self.w_bits, self.a_bits)
         total_compute = per_tile_compute * total_tiles
 

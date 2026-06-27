@@ -57,9 +57,8 @@ class GMMAEngine(MACEngine):
         return "gmma"
 
     def _per_tile_compute(self, M: int) -> int:
-        """Systolic-like fill/drain scaled to GMMA's async pipeline."""
-        systolic_like = (self.H + self.W) + (M + self.H)
-        return max(1, int(systolic_like * self.GMMA_PIPELINE_SCALE))
+        """Systolic pipeline depth per K-tile: H (weight load) + M (act stream) + W (drain)."""
+        return self.H + M + self.W
 
     def estimate(self, M: int, K: int, N: int,
                  weight_preloaded: bool = False) -> EngineResult:
