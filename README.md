@@ -47,6 +47,81 @@ PYTHONPATH=sim python sim/timing/benchmark.py --alias mobilenetv3
 - **PCIe Gen4 x4** — 主机通信
 - **TSMC 12nm** 目标工艺
 
+## Arc Model DSE — 方法论与流程
+
+Arc Model 是 CaduceusCore 的架构沙盘。输入场景需求，输出最优硬件配置。
+
+### DSE Pipeline（四阶段）
+
+```
+Phase -1 ──→ Phase 0 ──→ Phase 1 ──→ Phase 2
+需求澄清     预分析      扫描+敏感性   交叉校验
+```
+
+**Phase -1 — 需求澄清** (`dse_scenario.check_requirements()`)
+
+在运行任何计算之前，检查所有关键输入是否显式提供：
+
+| 关键输入 | 影响 | 示例 |
+|------|------|------|
+| `seq_len` | TTFT/TOPS 线性缩放 | 对话 128, VLM 1024 |
+| `ttft_ms_max` | 最小 TOPS 需求 | 200ms (交互) |
+| `tps_min` | BW 需求 | 20 (阅读), 100+ (实时) |
+| `model` | 参数量 → BW + 算力 | qwen2.5-3b / 7b |
+| `memory.type` | 组件清单 (PHY/PCIe/TSV) | lpddr5 / on_chip_3d_dram |
+| `process_nm` | 面积缩放 (nm/7)² | 12nm |
+
+每个字段标注置信度：✓ EXPLICIT / ⚠ DEFAULTED / ✗ MISSING。有缺口就停下来提问。
+
+**Phase 0 — 预分析** (`dse_scenario.preflight()`)
+
+- **瓶颈预测**: BW 天花板 (BW÷model_size) vs 算力天花板 (TOPS÷(2×params))
+- **TTFT 驱动 TOPS**: 2×params×seq_len÷TTFT_target → 最小 TOPS 需求
+- **组件清单校验**: 自动检查内存类型对应的硬件（PHY/PCIe/TSV）是否正确配置
+- **扫前建议**: SRAM 范围、阵列规模下限
+
+**Phase 1 — 设计空间扫描 + 通用参数敏感性**
+
+- 受控变量法扫参：引擎类型 × H×W × SRAM × BW × 精度 × 频率
+- **通用参数敏感性** (`design_space_explorer.analyze_sensitivity()`): 
+  对每个变化参数计算 ΔTPS% 和 ΔArea%，自动排名
+- 零敏感参数自动 flag（如 on-chip 场景 SRAM ΔTPS=0% → 设最小值）
+- 支持 LLM trace + CV trace (ViT/YOLO/ResNet/Diffusion) 及 VLM pipeline 联合评估
+
+**Phase 2 — 交叉校验** (`dse_scenario.cross_validate()`)
+
+- 最优配置 vs 已知产品数据库（RK1828, TPUv1, A18 ANE）
+- BW 瓶颈场景自动切换为 mm²/TPS（而非 mm²/TOPS）
+- 偏离 >2× 自动产生 AREA ANOMALY 警告
+
+### 关键模型
+
+| 模型 | 说明 |
+|------|------|
+| **面积模型** | TPUv1 ISCA 2017 die-shot 校准 + TSV 10% overhead |
+| **BW-面积耦合** | on-chip 3D DRAM BW = 面积 × 7.5 GB/s/mm² |
+| **8 引擎库** | FSA / Systolic / OS-Systolic / Block / TensorCore / WMMA / GMMA / Input-Stationary |
+| **CV trace** | ViT-B/16, Qwen-VL ViT (675M, 4-crop), SD 1.5 UNet |
+| **模型规格库** | LLM 10 (Qwen, Llama, Gemma, Mistral, DeepSeek, Phi) + CV 5 (ViT, YOLO, ResNet, MobileNet) |
+
+### 配置与运行
+
+```bash
+# 单场景完整 DSE（Phase -1 → Phase 2）
+cd sim && PYTHONPATH=. python design_space_explorer.py --quick
+
+# 场景预检（Phase -1 + 0）
+PYTHONPATH=. python -c "
+from dse_scenario import check_requirements, print_requirements_check, preflight, print_preflight
+print_requirements_check(check_requirements('onchip_7b'))
+print_preflight(preflight('onchip_7b', config))
+"
+```
+
+场景定义: `sim/config/scenarios.yaml`  
+面积数据来源: `references/area_sources.md`  
+三场景完整报告: `reports/arch-dse-three-scenarios.md`
+
 ## 设计空间探索结论（Arc Model v4 — TPUv1 校准 + 三场景）
 
 > 以下为 Arc Model 的 DSE 分析结果。完整报告见 [reports/arch-dse-three-scenarios.md](reports/arch-dse-three-scenarios.md)。当前 RTL Phase 1 实现了 **64×64 MAC 阵列**作为第一步验证。
