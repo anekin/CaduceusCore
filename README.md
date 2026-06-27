@@ -282,6 +282,12 @@ SFU 和 Vector 的 testbench 均采用 inline 比较：RTL 输出后立即调用
 
 ## Func Model — 三重角色
 
+> **当前定位**：Arc Model DSE 覆盖了完整设计空间，产出三场景两芯片方案（S1 FSA 128×256 / S2+S3 block 80×1536）。  
+> **Func Model 目前只细化了其中一个起点** — 64×64 Broadcast MAC 阵列 + SFU + Vector Engine。  
+> 这是项目的 bootstrap 配置，用于建立 RTL 开发流程、验证工具链、和 bit-exact 对比方法论。  
+> 它**不是** Arc DSE 推荐架构（FSA 或 block）的直接实现，而是先跑通全流程的最小可行硬件。  
+> 后续 Func Model 会按 DSE 结论切换到推荐引擎（FSA / block），届时重新生成 golden reference。
+
 1. **RTL 开发的 Spec**：RTL 开发者只需看 Func Model 定义的接口和行为，
    不需要了解 Arc Model 的几百种配置。模块划分、寄存器布局、ISA 指令集
    均以 Func Model 为准。
