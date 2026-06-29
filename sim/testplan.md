@@ -113,7 +113,7 @@ P4 = 最终验证（依赖单模块先稳定）
 | case_id | 优先级 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|----------|----------|------|------|
 | XL-01 | P4 | MXU→SFU 量化路径 | INT32→BF16→softmax, 与 float32 参考误差 < 1e-4 | ✅ | 5 parametrized (M,K,N) all max_abs_err < 1e-4, softmax sum-to-1 verified, 2 anti-vacuous (BF16 effect + softmax applied), 6 tests |
-| XL-02 | P4 | SFU→Vector 协作 | rope→residual_add 完整路径, bit-exact | ⬜ | |
+| XL-02 | P4 | SFU→Vector 协作 | rope→residual_add 完整路径, bit-exact | ✅ | 4 parametrized positions (0/42/1000/7777) bit-exact INT32 residual output, determinism verified, anti-vacuous rotation effect confirmed |
 | XL-03 | P4 | MXU 全量化 | INT4→INT8→INT32→BF16→FP32, 端到端精度验证 | ⬜ | |
 
 ---
