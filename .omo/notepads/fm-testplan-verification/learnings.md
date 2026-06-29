@@ -202,3 +202,41 @@
 ## T6 SF-01..SF-03 total
 
 9 tests (5 SF-01 parametrized + 2 SF-02 + 2 SF-03), 0 failures. P3 GoldenSFU gap cases fully covered, 54 SFU tests total (45 existing + 9 new).
+
+## T7 SF-04..SF-07 total (2026-06-29)
+
+6 tests (2 SF-04 + 1 SF-05 + 2 SF-06 + 1 SF-07), 0 failures. All P3 GoldenSFU gap cases now covered: 59 SFU tests total.
+
+### SF-04: _build_cordic_table (✅ PASS — 2 tests)
+
+**Result**: 12 angles match arctan(2^-i) within float32 rounding (< 1e-6), cordic_gain ≈ 0.607253 matches theory within 5e-6.
+
+**Observation**: The CORDIC table is deterministic — angles are computed once via numpy and stored. The theory check verifies no off-by-one iteration count or misordered angles.
+
+**Anti-vacuous**: Angles are strictly decreasing; first angle ≈ π/4 (0.785); gain is significantly different from both 0 and 1 (0.5 < gain < 0.7).
+
+### SF-05: softmax_hw large values (✅ PASS — 1 test)
+
+**Result**: [1000, 0, ...] → no NaN, no Inf, sum ≈ 1.0, dominant ≈ 1.0, others < 1e-3.
+
+**Observation**: With x[0]=1000 and LUT range x_min=-20, all non-dominant entries (x_sub=-1000) clamp to exp=0. The result is numerically exact [1.0, 0.0, ...] in float32. The anti-vacuous check uses a less-extreme input [10, 0, ...] to prove the test infrastructure actually runs the softmax computation.
+
+**Anti-vacuous**: [10, 0, ...] produces non-trivial results (dominant ≠ 1.0, others ≠ 0.0).
+
+### SF-06: rope_hw position boundaries (✅ PASS — 2 tests)
+
+**Result**: pos=0 CORDIC near-identity within 5e-3 abs tolerance; pos=100000 produces valid outputs with no NaN/Inf.
+
+**Observation**: Even at pos=0, the CORDIC 12-stage iterative algorithm introduces small numerical drift (pre-scale gain × iterative d=±1 loop). However, the error is bounded (<< 1%). At pos=100000, the CORDIC angle reduction (mod 2π + quadrant adjustment) handles the large angle correctly.
+
+**Anti-vacuous**: CORDIC error at pos=0 is non-zero (proves algorithm runs); pos=100000 output differs from input (rotation happened).
+
+### SF-07: gelu_hw approximate odd symmetry (✅ PASS — 1 test)
+
+**Result**: gelu_hw matches gelu_ref on [-3, 3] within 2e-3 abs tolerance. Extreme asymmetry verified at ±4.
+
+**Observation**: GELU is NOT an odd function — the x^3 term in the tanh argument creates growing asymmetry with |x|. First attempt to test |gelu(-x) + gelu(x)| < 0.02 failed because at x=2 the sum is ~1.9 (intrinsic to GELU, not an HW bug). Revised to verify HW matches the reference function (which correctly encodes the mathematical GELU shape including its asymmetry).
+
+**Tolerance note**: The 2e-3 abs tolerance used here matches the existing gelu_hw_vs_ref test in test_golden_sfu.py.
+
+**Anti-vacuous**: At ±4, gelu(4) ≈ 4.0, gelu(-4) ≈ 0.0, asymmetry > 3.0 confirms non-trivial function evaluation.
