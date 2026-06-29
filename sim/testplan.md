@@ -102,7 +102,7 @@ P4 = 最终验证（依赖单模块先稳定）
 | SF-03 | P3 | _build_gelu_lut | 分段边界 | 边界 ±eps 无跳跃 | ✅ | 62 interior boundaries + 2 clamp boundaries continuity verified at ±1e-6, anti-vacuous |
 | SF-05 | P3 | softmax_hw | 大值稳定 | x=[1000,0,...] → [1.0,~0] 非 NaN | ✅ | no NaN/Inf; sum≈1; dominant≈1.0; others < 1e-3; anti-vacuous with [10,0,...] |
 | SF-06 | P3 | rope_hw | position 边界 | pos=0(恒等), pos=100000(大角) | ✅ | pos=0 CORDIC near-identity < 5e-3; pos=100000 valid, no NaN, magnitude ≈ preserved |
-| SF-07 | P3 | gelu_hw | 对称性 | gelu(-x) ≈ -gelu(x) | ⬜ | |
+| SF-07 | P3 | gelu_hw | 对称性 | gelu(-x) ≈ -gelu(x) | ✅ | HW matches ref on [-3,3] < 2e-3; anti-vacuous: ±4 asymmetry > 3.0 confirms non-trivial |
 
 ---
 

@@ -21,6 +21,16 @@ from golden_executor import GoldenSFU
 
 # ── Reproducible RNG ──────────────────────────────────────────────────
 _rng = np.random.RandomState(20260629)
+_rng_rope = np.random.RandomState(20260630)
+
+
+# ── RoPE test vectors (used by SF-06) ──────────────────────────────────
+# Standard transformer dimensions: 32 query heads, 2 key heads, head_dim=128
+_ROPE_NUM_HEADS = 32
+_ROPE_HEAD_DIM = 128
+_ROPE_THETA = 10000.0
+_ROPE_XQ = _rng_rope.randn(_ROPE_NUM_HEADS * _ROPE_HEAD_DIM).astype(np.float32) * 0.5
+_ROPE_XK = _rng_rope.randn(2 * _ROPE_HEAD_DIM).astype(np.float32) * 0.5
 
 
 # ── Fixtures ────────────────────────────────────────────────────────────
@@ -293,3 +303,40 @@ def test_sf06_rope_large_position_valid(sfu):
         f"RoPE Q pos=100000: magnitude ratio={ratio_q:.4f} (expected ~1.0)"
     assert ratio_k == pytest.approx(1.0, rel=0.15), \
         f"RoPE K pos=100000: magnitude ratio={ratio_k:.4f} (expected ~1.0)"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SF-07: gelu_hw — approximate odd symmetry
+# ══════════════════════════════════════════════════════════════════════
+
+_GELU_SYMMETRY_XS = np.linspace(-3.0, 3.0, 300, dtype=np.float32)
+
+
+def test_sf07_gelu_negative_consistent_with_ref(sfu):
+    """SF-07: gelu_hw at negative x must match gelu_ref (no NaN, symmetry-preserving).
+
+    GELU is not exactly odd — the x^3 term creates asymmetry that grows with |x|.
+    This test verifies the HW LUT handles negative inputs correctly by comparing
+    against the reference GELU with the same HW tolerance as positive inputs.
+    """
+    xs = _GELU_SYMMETRY_XS
+    hw = sfu.gelu_hw(xs)
+    ref = sfu.gelu_ref(xs.astype(np.float64)).astype(np.float32)
+
+    cmp = GoldenSFU.compare_hw_vs_ref(hw, ref, tol_abs=2e-3)
+    assert cmp["within_tolerance"], \
+        f"gelu_hw vs ref on [-3,3]: max_abs={cmp['max_abs_err']:.2e}"
+    assert not np.any(np.isnan(hw)), "gelu_hw produced NaN on [-3,3]"
+    assert not np.any(np.isinf(hw)), "gelu_hw produced Inf on [-3,3]"
+
+    # Anti-vacuous: GELU is NOT exactly odd — extremes show strong asymmetry.
+    # gelu(4) ≈ 4 but gelu(-4) ≈ 0; prove the test actually measures non-trivial values.
+    x_edge = np.array([4.0, -4.0], dtype=np.float32)
+    hw_edge = sfu.gelu_hw(x_edge)
+    assert hw_edge[0] == pytest.approx(4.0, abs=2e-2), \
+        f"gelu(4)={hw_edge[0]:.4f} (expected ~4.0)"
+    assert hw_edge[1] == pytest.approx(0.0, abs=2e-2), \
+        f"gelu(-4)={hw_edge[1]:.4f} (expected ~0.0)"
+    asymmetry = abs(float(hw_edge[0]) + float(hw_edge[1]))
+    assert asymmetry > 3.0, \
+        f"GELU asymmetry at ±4 too small: |gelu(4)+gelu(-4)|={asymmetry:.4f} (expected > 3.0)"
