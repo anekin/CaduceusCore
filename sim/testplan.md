@@ -96,7 +96,7 @@ P4 = 最终验证（依赖单模块先稳定）
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| SF-01 | P3 | rmsnorm_hw | hw vs ref | 随机 5 组, max_error < 1e-5 | ⬜ | |
+| SF-01 | P3 | rmsnorm_hw | hw vs ref | 随机 5 组, max_error < 1e-5 | ✅ | 5 groups (3 1D + 2 2D) all max_err < 1e-5, anti-vacuous |
 | SF-04 | P3 | _build_cordic_table | **CORDIC 增益方向** | 12 级逐级验证, 与理论值一致 | ⬜ | |
 | SF-02 | P3 | _build_exp_lut | LUT 精度 | [-20,0] 采样 1000 点, max_error < 1e-5 | ⬜ | |
 | SF-03 | P3 | _build_gelu_lut | 分段边界 | 边界 ±eps 无跳跃 | ⬜ | |
