@@ -19,6 +19,15 @@ from golden_executor import GoldenSFU
 _rng = np.random.RandomState(20260629)
 
 
+# ── Fixtures ────────────────────────────────────────────────────────────
+
+@pytest.fixture(scope="module")
+def sfu():
+    """Single GoldenSFU instance shared across all tests in this module."""
+    return GoldenSFU()
+
+
+
 # ══════════════════════════════════════════════════════════════════════
 # SF-01: rmsnorm_hw vs ref — 5 random groups, max_error < 1e-5
 # ══════════════════════════════════════════════════════════════════════
@@ -50,6 +59,42 @@ def test_sf01_rmsnorm_hw_vs_ref(x, label):
 
 # ══════════════════════════════════════════════════════════════════════
 # SF-02: _build_exp_lut — [-20,0] sampled 1000 points, max_error < 1e-5
+# ══════════════════════════════════════════════════════════════════════
+
+# 1000 uniformly spaced test points across [-20, 0]
+_EXP_TEST_POINTS = np.linspace(-20.0, 0.0, 1000, dtype=np.float64)
+
+
+def test_sf02_exp_lut_1000_pts(sfu):
+    """SF-02: exp LUT accuracy at 1000 uniformly-sampled points — max_error < 1e-5 vs numpy.exp.
+
+    Verifies the entire LUT interpolation path, not just exact entry points.
+    """
+    x_test = _EXP_TEST_POINTS.astype(np.float32)
+    hw = sfu._exp_hw(x_test)
+    ref = np.exp(x_test.astype(np.float64))
+    abs_diff = np.abs(hw.astype(np.float64) - ref)
+    max_err = float(np.max(abs_diff))
+    worst_x = float(x_test[np.argmax(abs_diff)])
+    assert max_err < 1e-5, \
+        f"exp LUT: max_error={max_err:.2e} at x={worst_x:.4f} (threshold 1e-5)"
+
+
+def test_sf02_exp_lut_entry_exact(sfu):
+    """Anti-vacuous: exp LUT must be exact at its own entry points (error << 1e-5)."""
+    x_min, x_max = sfu.exp_lut_x_min, sfu.exp_lut_x_max
+    entries = sfu.exp_lut_entries
+    entry_xs = np.linspace(x_min, x_max, entries, dtype=np.float32)
+    hw = sfu._exp_hw(entry_xs)
+    ref = np.exp(entry_xs.astype(np.float64)).astype(np.float32)
+    abs_diff = np.abs(hw.astype(np.float64) - ref.astype(np.float64))
+    max_err = float(np.max(abs_diff))
+    # At LUT entry points, frac=0, so hw = exact LUT value (just float32 rounding)
+    assert max_err < 1e-6, \
+        f"exp LUT entries: max_error={max_err:.2e} (expected < 1e-6)"
+    assert max_err > 0, \
+        "exp LUT entries: error is exactly 0 — test vacuous"
+
 # ══════════════════════════════════════════════════════════════════════
 
 def test_sf02_build_exp_lut_accuracy():
