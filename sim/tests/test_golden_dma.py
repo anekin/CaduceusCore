@@ -43,8 +43,8 @@ def test_dm01_100_roundtrip():
         word = desc.encode()
         decoded = DMADescriptor.decode(word)
 
-        # Size encoding: 4096 in DMADescriptor → 0 in field → 0 in decoded.size
-        expected_size = 0 if desc.size == 4096 else desc.size
+        # _random_desc generates size in [0, 4095], so decoded.size == desc.size
+        expected_size = desc.size
 
         assert decoded.dram_addr == desc.dram_addr, (
             f"[{i}] dram_addr: {decoded.dram_addr:#x} != {desc.dram_addr:#x}"
