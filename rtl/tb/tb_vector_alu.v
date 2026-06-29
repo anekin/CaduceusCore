@@ -445,6 +445,95 @@ module tb_vector_alu;
         valid_i <= 1'b0;
 
         //=====================================================================
+        // VC-02: Lane mask — PASS_A with alternating mask (disabled→pass A)
+        //   Disabled PASS_A should still pass a_i through
+        //=====================================================================
+        $display("--- VC-02a: Lane mask PASS_A (odd disabled→pass A) ---");
+        begin
+            integer idx;
+            set_a(32'sd777);
+            set_b(32'sd999);  // B should be ignored for PASS_A
+            for (idx = 0; idx < NUM_LANES; idx = idx + 1)
+                lane_mask[idx] = (idx % 2 == 0);  // even active, odd disabled
+            op = 2'b11;  // PASS_A
+            drive_and_wait;
+            // Both enabled and disabled PASS_A lanes should output a_i (777)
+            for (idx = 0; idx < NUM_LANES; idx = idx + 1) begin
+                if (idx % 2 == 0)
+                    check_lane(idx, 32'sd777, "VC02 PASS_A even enabled→777");
+                else
+                    check_lane(idx, 32'sd777, "VC02 PASS_A odd disabled→777");
+            end
+            lane_mask = {NUM_LANES{1'b1}};
+            valid_i <= 1'b0;
+        end
+
+        //=====================================================================
+        // VC-02: Lane mask — odd lanes disabled, ADD→pass A, MUL→0, MAX→0
+        //   Per-lane: lane0=ADD, lane1=MUL, lane2=MAX, lane3=PASS_A (repeat)
+        //   a=10, b=3 for all lanes, mask=odd disabled
+        //   Expected: lane0(ADD enabled)=13,  lane1(MUL disabled)=0,
+        //             lane2(MAX disabled)=0,   lane3(PASS_A disabled)=10
+        //=====================================================================
+        $display("--- VC-02b: Per-lane mixed ops with odd-lane mask ---");
+        begin
+            integer idx;
+            // Set a=10, b=3 for all lanes
+            for (idx = 0; idx < NUM_LANES; idx = idx + 1) begin
+                a_i[idx*32 +: 32] = 32'sd10;
+                b_i[idx*32 +: 32] = 32'sd3;
+            end
+            // Odd lanes disabled
+            for (idx = 0; idx < NUM_LANES; idx = idx + 1)
+                lane_mask[idx] = (idx % 2 == 0);
+
+            // We need to test each op separately since op is shared across all lanes
+            // Test each op with the mask pattern, checking ALL lanes
+            // ADD: even=10+3=13, odd(disabled)=10 (pass A)
+            op = 2'b00;
+            drive_and_wait;
+            for (idx = 0; idx < NUM_LANES; idx = idx + 1) begin
+                if (idx % 2 == 0)
+                    check_lane(idx, 32'sd13, "VC02 ADD even→13");
+                else
+                    check_lane(idx, 32'sd10, "VC02 ADD odd→10 passA");
+            end
+            valid_i <= 1'b0;
+
+            // MUL: even=10*3=30, odd(disabled)=0
+            op = 2'b01;
+            drive_and_wait;
+            for (idx = 0; idx < NUM_LANES; idx = idx + 1) begin
+                if (idx % 2 == 0)
+                    check_lane(idx, 32'sd30, "VC02 MUL even→30");
+                else
+                    check_lane(idx, 32'sd0,  "VC02 MUL odd→0");
+            end
+            valid_i <= 1'b0;
+
+            // MAX: even=max(10,3)=10, odd(disabled)=0
+            op = 2'b10;
+            drive_and_wait;
+            for (idx = 0; idx < NUM_LANES; idx = idx + 1) begin
+                if (idx % 2 == 0)
+                    check_lane(idx, 32'sd10, "VC02 MAX even→10");
+                else
+                    check_lane(idx, 32'sd0,  "VC02 MAX odd→0");
+            end
+            valid_i <= 1'b0;
+
+            // PASS_A: even=10, odd(disabled)=10 (both pass A)
+            op = 2'b11;
+            drive_and_wait;
+            for (idx = 0; idx < NUM_LANES; idx = idx + 1) begin
+                check_lane(idx, 32'sd10, "VC02 PASS_A→10");
+            end
+            valid_i <= 1'b0;
+
+            lane_mask = {NUM_LANES{1'b1}};
+        end
+
+        //=====================================================================
         // Test 15: Random ADD regression — 50 samples, non-overflow values
         //=====================================================================
         $display("--- Test 15: Random ADD (50 pairs, non-overflow) ---");
