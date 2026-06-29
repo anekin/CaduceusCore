@@ -8,7 +8,7 @@ V-05: conv_i32_to_f16 — INT32→FP16→INT32 roundtrip = 0 LSB error
 V-06: conv_i32_to_f16 — INT32_MIN/MAX/0/±1 bit-exact
 V-07: residual_add — original=1e6, delta=1 → preserves small contribution
 V-08: softmax_max_reduce — vs np.max reference
-V-09: softmax pipeline — max→sub→exp→sum→div vs scipy.special.softmax
+V-09: softmax pipeline — max→sub→exp→sum→div vs numpy reference
 """
 
 import numpy as np
@@ -472,7 +472,7 @@ def test_v08_anti_vacuous(vec):
 
 
 # ══════════════════════════════════════════════════════════════════════
-# V-09: softmax pipeline — max→sub→exp→sum→div vs scipy
+# V-09: softmax pipeline — max→sub→exp→sum→div vs numpy reference
 # ══════════════════════════════════════════════════════════════════════
 
 
@@ -483,8 +483,8 @@ def sfu():
 
 
 @pytest.mark.parametrize("size", [4, 8, 16, 32, 128, 256])
-def test_v09_softmax_pipeline_scipy(vec, sfu, size):
-    """Full softmax pipeline: max→sub→exp→sum→div matches scipy.special.softmax.
+def test_v09_softmax_pipeline_ref(vec, sfu, size):
+    """Full softmax pipeline: max→sub→exp→sum→div matches numpy reference (GoldenSFU.softmax_ref).
 
     Pipeline composition:
       vec.softmax_max_reduce(x)   → max
@@ -493,7 +493,6 @@ def test_v09_softmax_pipeline_scipy(vec, sfu, size):
       vec.softmax_sum_reduce(e)   → sum of exp
       e / sum                     → normalize
     """
-    scipy = pytest.importorskip("scipy.special")
 
     rng = np.random.RandomState(SEED + 9 + size)
     x = rng.uniform(-10, 10, size=size).astype(np.float32)
@@ -505,8 +504,8 @@ def test_v09_softmax_pipeline_scipy(vec, sfu, size):
     s = vec.softmax_sum_reduce(exp_vals)
     hw_result = exp_vals / s
 
-    # Reference: scipy.special.softmax
-    ref = scipy.softmax(x).astype(np.float32)
+    # Reference: GoldenSFU.softmax_ref (pure-numpy float64 softmax)
+    ref = sfu.softmax_ref(x)
 
     # LUT-based exp has ~1e-3 error vs float64, but NaN structure must match
     assert not np.any(np.isnan(hw_result)), \
