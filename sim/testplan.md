@@ -52,7 +52,7 @@ P4 = 最终验证（依赖单模块先稳定）
 | V-06 | P0 | conv_i32_to_f16 | 边界枚举 | INT32_MIN/MAX/0/±1 bit-exact | ⬜ | |
 | V-01 | P0 | add / mul | FP32 运算正确性 | 随机 1000 组 vs numpy, max_error < 1e-7 | ✅ | 1000/1000 groups bit-exact, 4 tests passed |
 | V-02 | P0 | add / mul | 边界值 | NaN→NaN, Inf→Inf, ±0→±0, denorm 行为 | ✅ | ±0/INT32_MINMAX/NaN/Inf/denorm all deterministic, 7 tests passed |
-| V-03 | P0 | max_reduce | 正确性 | 随机 100 组 vs np.max, bit-exact | ⬜ | |
+| V-03 | P0 | max_reduce | 正确性 | 随机 100 组 vs np.max, bit-exact | ✅ | 100/100 groups bit-exact + anti-vacuous, 101 tests passed |
 | V-04 | P0 | sum_reduce | 累积精度 | 10000 个 1e-7 累积, vs np.sum 误差 < 1% | ⬜ | |
 | V-07 | P0 | residual_add | 精度保持 | original=1e6, delta=1e-3 → 结果 = 1e6+1e-3 (不丢失) | ⬜ | |
 | V-08 | P0 | softmax_max_reduce | 正确性 | vs np.max 参考 | ⬜ | |
