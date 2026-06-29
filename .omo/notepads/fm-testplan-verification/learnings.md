@@ -240,3 +240,41 @@
 **Tolerance note**: The 2e-3 abs tolerance used here matches the existing gelu_hw_vs_ref test in test_golden_sfu.py.
 
 **Anti-vacuous**: At ±4, gelu(4) ≈ 4.0, gelu(-4) ≈ 0.0, asymmetry > 3.0 confirms non-trivial function evaluation.
+
+## T8 P4 Cross-module integration — XL-01, XL-02, XL-03 (2026-06-29)
+
+**Result**: ✅ PASS — 18 tests (5 XL-01 parametrized + 1 XL-01 anti-vacuous + 5 XL-02 + 5 XL-03 parametrized + 2 XL-03 anti-vacuous), 0 failures.
+
+**Total golden regression**: 477 passed, 0 failures (includes all prior MXU/SFU/Vector/DMA/NOC tests).
+
+### XL-01: MXU→BF16→SFU softmax (✅ PASS — 6 tests)
+
+**Result**: 5 parametrized (M,K,N) shapes all within max_abs_err < 1e-4 vs float32 reference. Anti-vacuous confirms BF16 truncation measurably changes the floating-point values.
+
+**Observation**: The INT32 matmul → float16 (conv_i32_to_f16) → float32 → LUT-softmax path introduces ≤ 1e-4 absolute error in the softmax output probabilities compared to float32→float64 reference softmax. Float16 truncation on INT32 values in the [-57K, 57K] range causes ~few-ULP perturbations that are largely smoothed by the softmax normalization.
+
+**Threshold**: The 1e-4 threshold from the testplan acceptance criteria is achievable for moderate-sized matmul outputs (K ≤ 256) where float16 spacing per element is O(0.5-4).
+
+### XL-02: SFU→Vector rope_hw→residual_add (✅ PASS — 5 tests)
+
+**Result**: 4 parametrized positions bit-exact INT32 residual output. Determinism verified (re-run produces identical result). Anti-vacuous confirms rope rotation at position ≠ 0 changes the output.
+
+**Observation**: The CORDIC rope output (float32) combined with `residual_add` (INT32) forms a deterministic chain. `residual_add` internally does `float32→int32` truncation + `int64` addition + `int32` clamp. The chain is bit-exact by construction because the reference computation (manual int64 add + clamp) produces the same result. CORDIC rotation at position=42 produces clearly measurable output differences vs position=0.
+
+**Determinism**: Two independent runs of rope_hw with the same inputs produce identical float32 arrays → identical residual_add results. The CORDIC algorithm is deterministic (no stochastic rounding).
+
+### XL-03: INT4→INT8→INT32→BF16→FP32 e2e (✅ PASS — 7 tests)
+
+**Result**: 5 parametrized (M,K,N) shapes all within max_rel_err < 1e-3. MXU INT32 output verified bit-exact against INT64 reference. Anti-vacuous confirms BF16 (float16) truncation is lossy.
+
+**Observation**: The end-to-end chain error is dominated by float16 truncation of INT32 accumulator output. Float16 has ~11 bits of mantissa → relative precision ~5e-4. The 1e-3 threshold is a relaxed sanity bound (2× the theoretical resolution) to account for worst-case accumulation across all elements.
+
+**Threshold note**: The test code uses `max_rel < 1e-3` as the pass criterion. The testplan specifies "端到端精度验证" (end-to-end precision sanity) without a numeric threshold. This is documented in the test docstring and result column. Float16 quantization is the primary error source — the INT4×INT8 integer matmul itself is exact.
+
+### Cross-module architecture insights
+
+1. **The MXU→SFU bridge (conv_i32_to_f16) is the precision bottleneck**: INT32 values > 2048 (11-bit mantissa range) cannot be exactly represented in float16. The SFU softmax smooths these quantization errors, keeping the probability output error ≤ 1e-4 for moderate matmul sizes.
+
+2. **rope_hw → residual_add is deterministic**: The CORDIC algorithm produces identical float32 outputs on re-run, and the residual_add path is pure integer arithmetic — no floating-point nondeterminism.
+
+3. **The float16 BF16 bridge is the right design**: For typical INT4×INT8 matmul products (max ~400K per element), float16 provides adequate precision (relative error ~5e-4) with minimal silicon cost compared to a full float32 accumulator output buffer.
