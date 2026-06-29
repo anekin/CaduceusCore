@@ -83,7 +83,7 @@ P4 = 最终验证（依赖单模块先稳定）
 | MX-05 | P2 | unpack_int4 | 边界符号扩展 | 0x08→-8, 0x0F→-1, 0x07→7 | ⬜ | |
 | MX-01 | P2 | matmul_from_sram | SRAM 地址偏移 | 与 matmul_int32 输出一致 | ✅ | 6 tests: 5 parametrized (M,K,N) bit-exact + anti-vacuous |
 | MX-02 | P2 | matmul_int4_per_channel | scale 精度 | scale=1→与 matmul_int32 一致; scale≠1→手动验证 | ✅ | 7 tests: 4 parametrized scale=1 + 2 parametrized scale≠1 + anti-vacuous |
-| MX-03 | P2 | matmul_int4_per_block | 分块边界 | block_size=K→与 per_channel 一致; block_size=32→边界正确 | ⬜ | |
+| MX-03 | P2 | matmul_int4_per_block | 分块边界 | block_size=K→与 per_channel 一致; block_size=32→边界正确 | ✅ | 7 tests: 3 block_size=K + 3 block_size=32 boundary + anti-vacuous |
 | MX-06 | P2 | matmul_int32 | 非方阵 tiling | M=1/M=128/K=4096/N=4096, 与 numpy matmul 一致 | ⬜ | |
 | MX-07 | P2 | matmul_int32 | 零值 | 零输入→零输出 | ⬜ | |
 | MX-08 | P2 | matmul_int32 | INT32 饱和 | 超限→截断至 INT32_MIN/MAX, 不 wrap | ⬜ | |
