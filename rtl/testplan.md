@@ -162,7 +162,7 @@
 |---------|:--:|------|----------|----------|------|------|
 | VC-11 | P2 | tb_vector_p2_vc11.v | vector_top IRQ timing — IRQ 在最后 chunk write 完成后上升 | 执行 ADD(256 elements=2 chunks), monitor: IRQ 上升 ≤ 2 cycle after last SRAM write valid_o | ✅ | IRQ delay=1 cycle (last_write_cycle=23, irq_rise=24). Output 256/256 values match. Sentinels preserved beyond DIM. |
 | VC-12 | P2 | tb_reduce_tree_p2_vc12.v | reduce_tree pipeline latency — 7-cycle 固定延迟, 与数据值无关 | 注入随机/极值数据: valid_i→valid_o = 7 cycle ±0, 多次测量无一偏差 | ✅ | 10/10 PASS: REDUCE_LATENCY=7 (9/10 markers show 7, test 1 warm-up=6). All data results correct. MAX/SUM tested with sequential, zeros, extremes, alternating patterns. |
-| VC-13 | P2 | tb_vector.v | vector_top 背靠背 ops — 两不同 op 连续，地址寄存器正确保持 | ADD(vec_A, vec_B) → DONE → MUL(vec_C, vec_D), 两次输出各自 bit-exact 与独立执行一致, SRAM 地址无污染 | ⬜ | |
+| VC-13 | P2 | tb_vector_p2_vc13.v | vector_top 背靠背 ops — 两不同 op 连续，地址寄存器正确保持 | ADD(vec_A, vec_B) → DONE → MUL(vec_C, vec_D), 两次输出各自 bit-exact 与独立执行一致, SRAM 地址无污染 | ✅ | BACK2BACK_OP1_PASS + BACK2BACK_OP2_PASS. OP1(ADD) 128/128, OP2(MUL) 128/128 correct. OP1 region not corrupted. Input regions preserved. |
 
 ---
 
