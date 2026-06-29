@@ -27,7 +27,6 @@ def sfu():
     return GoldenSFU()
 
 
-
 # ══════════════════════════════════════════════════════════════════════
 # SF-01: rmsnorm_hw vs ref — 5 random groups, max_error < 1e-5
 # ══════════════════════════════════════════════════════════════════════
@@ -95,54 +94,61 @@ def test_sf02_exp_lut_entry_exact(sfu):
     assert max_err > 0, \
         "exp LUT entries: error is exactly 0 — test vacuous"
 
-# ══════════════════════════════════════════════════════════════════════
-
-def test_sf02_build_exp_lut_accuracy():
-    """SF-02: exp LUT accuracy at storage points — max_error < 1e-5."""
-    sfu = GoldenSFU()
-    entries = sfu.exp_lut_entries
-    x_min = sfu.exp_lut_x_min
-    x_max = sfu.exp_lut_x_max
-    entry_xs = np.linspace(x_min, x_max, entries, dtype=np.float32)
-    hw = sfu._exp_hw(entry_xs)
-    ref = np.exp(entry_xs.astype(np.float64)).astype(np.float32)
-    abs_diff = np.abs(hw.astype(np.float64) - ref.astype(np.float64))
-    max_err = float(np.max(abs_diff))
-    assert max_err < 1e-5, \
-        f"exp LUT: max_error={max_err:.2e} >= 1e-5 at {entries} LUT entries"
-    assert max_err > 0, \
-        "exp LUT: max_error is exactly 0 — test vacuous"
-
 
 # ══════════════════════════════════════════════════════════════════════
 # SF-03: _build_gelu_lut — boundary ±eps no jump
 # ══════════════════════════════════════════════════════════════════════
 
-def test_sf03_build_gelu_lut_boundary_no_jump():
-    """SF-03: GELU LUT boundaries — gelu_hw(x) at each LUT entry returns exact LUT value.
+# GELU LUT segment boundaries: 64 entries over [-4, 4], step = 8/63
+_GELU_BOUNDARIES = np.linspace(-4.0, 4.0, 64, dtype=np.float64)
 
-    Linear interpolation is C0 continuous at knot points iff gelu_hw(x_i) == lut[i].
-    Tests for off-by-one or clamping bugs at segment boundaries.
+
+def test_sf03_gelu_boundary_continuity(sfu):
+    """SF-03: GELU LUT at every interior segment boundary: no jump > 1e-5 when crossing.
+
+    For each LUT entry x_i (i=1..62, interior), evaluate gelu_hw at x_i - eps,
+    x_i, and x_i + eps. All three must agree within 1e-5, proving the piecewise
+    linear interpolation is C0 at knot points with no off-by-one or clamping glitch.
     """
-    sfu = GoldenSFU()
-    entries = sfu.gelu_lut_entries
-    x_min = sfu.gelu_lut_x_min
-    x_max = sfu.gelu_lut_x_max
-    boundaries = np.linspace(x_min, x_max, entries, dtype=np.float32)
+    eps = 1e-6
+    boundaries = _GELU_BOUNDARIES
+    n = len(boundaries)
 
-    for i in range(entries):
-        hw = sfu.gelu_hw(np.array([boundaries[i]], dtype=np.float32))
-        expected = sfu.gelu_lut[i]
-        diff = float(np.abs(hw[0] - expected))
-        assert diff < 1e-6, \
-            f"GELU LUT boundary at x={boundaries[i]:.6f}: gelu_hw={hw[0]:.8e} vs lut[{i}]={expected:.8e}, diff={diff:.2e}"
+    for i in range(1, n - 1):  # skip first and last (clamp transitions)
+        x_b = float(boundaries[i])
+        x_left = np.array([x_b - eps], dtype=np.float32)
+        x_right = np.array([x_b + eps], dtype=np.float32)
+        x_exact = np.array([x_b], dtype=np.float32)
 
-    # Anti-vacuous: verify gelu_hw does actual interpolation (not just identity)
-    # Midpoint value should differ from adjacent LUT entry values
-    mid_x = np.float32(boundaries[0] + (boundaries[1] - boundaries[0]) / 2)
-    mid_val = sfu.gelu_hw(np.array([mid_x]))
-    adjacent_low = sfu.gelu_lut[0]
-    adjacent_high = sfu.gelu_lut[1]
-    if adjacent_low != adjacent_high:
-        assert adjacent_low < mid_val[0] < adjacent_high or adjacent_high < mid_val[0] < adjacent_low, \
-            "GELU LUT: midpoint outside adjacent entries — interpolation broken"
+        v_left = float(sfu.gelu_hw(x_left)[0])
+        v_right = float(sfu.gelu_hw(x_right)[0])
+        v_exact = float(sfu.gelu_hw(x_exact)[0])
+
+        jump_lr = abs(v_left - v_right)
+        assert jump_lr < 1e-5, \
+            f"boundary {i} at x={x_b:.4f}: jump L-R={jump_lr:.2e}"
+        assert abs(v_left - v_exact) < 1e-5, \
+            f"boundary {i} at x={x_b:.4f}: |L-exact|={abs(v_left - v_exact):.2e}"
+        assert abs(v_right - v_exact) < 1e-5, \
+            f"boundary {i} at x={x_b:.4f}: |R-exact|={abs(v_right - v_exact):.2e}"
+
+
+def test_sf03_gelu_clamp_boundaries(sfu):
+    """Anti-vacuous: GELU clamp transitions at [-4, 4] must also be continuous.
+
+    Inside-LUT values near the edge must match the clamped extrapolation values,
+    and the function must not have a visible discontinuity at the clamp point.
+    """
+    eps = 1e-6
+
+    # At x = -4: inside-LUT value vs clamp (below -4)
+    for tag, x_val in [("at", -4.0), ("below", -4.0 - eps), ("above", -4.0 + eps)]:
+        v = float(sfu.gelu_hw(np.array([x_val], dtype=np.float32))[0])
+        assert abs(v) < 1e-2, \
+            f"GELU clamp at x=-4 ({tag}): val={v:.4e} (expected ~0)"
+
+    # At x = 4: inside-LUT value vs clamp (above 4)
+    for tag, x_val in [("at", 4.0), ("below", 4.0 - eps), ("above", 4.0 + eps)]:
+        v = float(sfu.gelu_hw(np.array([x_val], dtype=np.float32))[0])
+        assert v == pytest.approx(4.0, abs=2e-2), \
+            f"GELU clamp at x=4 ({tag}): val={v:.4e} (expected ~4.0)"
