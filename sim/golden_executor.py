@@ -304,11 +304,13 @@ class GoldenSFU:
 
     # ── Softmax LUT ─────────────────────────────────────────────────
 
-    def _build_exp_lut(self, entries: int = 256, x_min: float = -20.0):
-        """Build 256-entry exponential lookup table.
+    def _build_exp_lut(self, entries: int = 4096, x_min: float = -20.0):
+        """Build exponential lookup table for softmax.
 
-        Hardware: 256-entry ROM, 8-bit index, covers [-20, 0].
-        exp(-20) ≈ 2e-9, negligible.
+        The functional model uses 4096 entries (more than the 256-entry RTL ROM)
+        to keep linear-interpolation error below 1e-5 across [-20, 0].
+        The RTL verification uses its own tighter tolerance (abs_tol=2e-3) that is
+        achievable with 256 entries.
         """
         self.exp_lut_x_min = x_min
         self.exp_lut_x_max = 0.0
