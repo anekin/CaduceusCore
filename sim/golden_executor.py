@@ -761,6 +761,19 @@ class DMADescriptor:
     channel: int = 0   # 0=weight, 1=data
     cycle_cost: int = 0  # computed by DMA model
 
+    def __post_init__(self):
+        """Validate field values match hardware encoding limits."""
+        if self.direction not in (0, 1):
+            raise ValueError(f"direction must be 0 or 1, got {self.direction}")
+        if self.channel not in (0, 1, 2, 3):
+            raise ValueError(f"channel must be 0..3, got {self.channel}")
+        if not (0 <= self.size <= 4095) and self.size != 4096:
+            raise ValueError(f"size must be in [0, 4095] or 4096 (encoded as 0), got {self.size}")
+        if not (0 <= self.sram_addr < 0x10000):
+            raise ValueError(f"sram_addr must be in [0, 0xFFFF], got {self.sram_addr:#x}")
+        if not (0 <= self.dram_addr < 0x100000000):
+            raise ValueError(f"dram_addr must be in [0, 0xFFFFFFFF], got {self.dram_addr:#x}")
+
     @property
     def actual_size(self) -> int:
         """Actual transfer size (0 in field means 4096 bytes)."""
