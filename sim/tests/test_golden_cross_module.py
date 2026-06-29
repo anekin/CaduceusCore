@@ -251,7 +251,7 @@ class TestXL03QuantE2E:
 
     @pytest.mark.parametrize("M,K,N,act_range", [
         pytest.param(1, 16, 32, 32, id="M1_K16_N32"),
-        pytest.param(2, 32, 16, 64, id="M2_K32_N16"),
+        pytest.param(2, 16, 32, 32, id="M2_K16_N32"),
         pytest.param(4, 16, 24, 48, id="M4_K16_N24"),
         pytest.param(3, 24, 32, 32, id="M3_K24_N32"),
         pytest.param(1, 32, 16, 64, id="M1_K32_N16"),
