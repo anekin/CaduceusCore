@@ -49,7 +49,7 @@ P4 = 最终验证（依赖单模块先稳定）
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
 | V-05 | P0 | conv_i32_to_f16 | **BF16 转换桥** | INT32→BF16→INT32 往返误差 = 0 LSB | ✅ | 12 exact values roundtrip 0 LSB, clamp verified, 16 tests passed |
-| V-06 | P0 | conv_i32_to_f16 | 边界枚举 | INT32_MIN/MAX/0/±1 bit-exact | ⬜ | |
+| V-06 | P0 | conv_i32_to_f16 | 边界枚举 | INT32_MIN/MAX/0/±1 bit-exact | ✅ | 0/±1 bit-exact, INT32_MIN/MAX saturate to ±65504, 6 tests passed |
 | V-01 | P0 | add / mul | FP32 运算正确性 | 随机 1000 组 vs numpy, max_error < 1e-7 | ✅ | 1000/1000 groups bit-exact, 4 tests passed |
 | V-02 | P0 | add / mul | 边界值 | NaN→NaN, Inf→Inf, ±0→±0, denorm 行为 | ✅ | ±0/INT32_MINMAX/NaN/Inf/denorm all deterministic, 7 tests passed |
 | V-03 | P0 | max_reduce | 正确性 | 随机 100 组 vs np.max, bit-exact | ✅ | 100/100 groups bit-exact + anti-vacuous, 101 tests passed |
