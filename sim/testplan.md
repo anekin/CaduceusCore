@@ -79,7 +79,7 @@ P4 = 最终验证（依赖单模块先稳定）
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| MX-04 | P2 | pack_int4 ↔ unpack_int4 | **往返无损** | [-8,7] 全 16 值, 往返 = bit-exact | ⬜ | |
+| MX-04 | P2 | pack_int4 ↔ unpack_int4 | **往返无损** | [-8,7] 全 16 值, 往返 = bit-exact | ✅ | 4 tests: all 16 values roundtrip + full sequence + known packed bytes + anti-vacuous |
 | MX-05 | P2 | unpack_int4 | 边界符号扩展 | 0x08→-8, 0x0F→-1, 0x07→7 | ⬜ | |
 | MX-01 | P2 | matmul_from_sram | SRAM 地址偏移 | 与 matmul_int32 输出一致 | ✅ | 6 tests: 5 parametrized (M,K,N) bit-exact + anti-vacuous |
 | MX-02 | P2 | matmul_int4_per_channel | scale 精度 | scale=1→与 matmul_int32 一致; scale≠1→手动验证 | ✅ | 7 tests: 4 parametrized scale=1 + 2 parametrized scale≠1 + anti-vacuous |
