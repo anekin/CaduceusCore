@@ -63,7 +63,7 @@
 | MX-09 | P1 | tb_controller_p1.v | controller ABORT during COMPUTE — FSM 回到 IDLE 干净，accumulator 保持或复位 | ABORT 后 STATUS.BUSY→0, FSM=IDLE, 可重新 START 且正常完成 1 tile | ✅ | Abort in COMPUTE→FSM=IDLE, status_busy=0, clean restart with 1 tile completed — PASS |
 | MX-10 | P1 | tb_controller_p1.v | controller watchdog 超时 — STATUS.ERROR 在 N cycle 卡同一状态后置位 | 正常路径 ERROR 保持 0（已验证）；FSM 无看门狗定时器（设计缺口：仅 cmd_abort 可置 ERROR）| ✅ | Normal path ERROR=0 verified; watchdog NOT implemented in RTL (design gap — only cmd_abort sets ERROR) |
 | MX-11 | P1 | tb_controller_p1.v | controller IRQ 生成 — DONE 后 IRQ 上升，IRQ_EN=0 抑制 IRQ | IRQ_EN=1: DONE→IRQ 上升 ≤ 2 cycle；IRQ_EN=0: DONE 不触发 IRQ。$monitor: IRQ_RISE_AFTER_DONE=1, IRQ_SUPPRESS_EN0=1 | ✅ | IRQ_EN=1→IRQ pulsed after DONE; IRQ_EN=0→IRQ suppressed; both $monitor markers in log |
-| MX-12 | P1 | tb_mac_array.v | mac_array PE 流水线 K+2 compute cycle — 验证 flush 后输出正确 | 注入已知 weight/activation → 数 K+2 cycle 后 mac_array 输出与预期 INT32 参考逐比特匹配 | ⬜ | |
+| MX-12 | P1 | tb_mac_array_p1.v | mac_array PE 流水线 K+2 compute cycle — 验证 flush 后输出正确 | 注入已知 weight/activation → 数 K+2 cycle 后 mac_array 输出与预期 INT32 参考逐比特匹配 | ✅ | K=8/16/32/64 full flush, K+2 pipeline timing (8inputs+2flush=48), neg weights, varying act — 16/16 PASS |
 
 ---
 
