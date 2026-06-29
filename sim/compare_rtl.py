@@ -98,7 +98,7 @@ def compare_int32(golden: np.ndarray, result: np.ndarray,
     first = None
     detail_lines = []
     for idx in range(min(5, n_mismatch)):
-        pos = tuple(m[i][idx] for i in range(len(mismatches)))
+        pos = tuple(mismatches[i][idx] for i in range(len(mismatches)))
         if first is None:
             first = pos
         gv = golden[pos]
@@ -162,7 +162,7 @@ def compare_float16(golden: np.ndarray, result: np.ndarray,
     first = None
     detail_lines = []
     for idx in range(min(5, n_mismatch)):
-        pos = tuple(m[i][idx] for i in range(len(mismatches)))
+        pos = tuple(mismatches[i][idx] for i in range(len(mismatches)))
         if first is None:
             first = pos
         detail_lines.append(
