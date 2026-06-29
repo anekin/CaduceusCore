@@ -99,7 +99,7 @@ P4 = 最终验证（依赖单模块先稳定）
 | SF-01 | P3 | rmsnorm_hw | hw vs ref | 随机 5 组, max_error < 1e-5 | ✅ | 5 groups (3 1D + 2 2D) all max_err < 1e-5, anti-vacuous |
 | SF-04 | P3 | _build_cordic_table | **CORDIC 增益方向** | 12 级逐级验证, 与理论值一致 | ⬜ | |
 | SF-02 | P3 | _build_exp_lut | LUT 精度 | [-20,0] 采样 1000 点 (4096 LUT entries), max_error < 1e-5 | ✅ | Direct LUT entry verify: all 4096 entries match np.exp within float32 rounding (< 1e-5), anti-vacuous |
-| SF-03 | P3 | _build_gelu_lut | 分段边界 | 边界 ±eps 无跳跃 | ⬜ | |
+| SF-03 | P3 | _build_gelu_lut | 分段边界 | 边界 ±eps 无跳跃 | ✅ | 62 interior boundaries + 2 clamp boundaries continuity verified at ±1e-6, anti-vacuous |
 | SF-05 | P3 | softmax_hw | 大值稳定 | x=[1000,0,...] → [1.0,~0] 非 NaN | ⬜ | |
 | SF-06 | P3 | rope_hw | position 边界 | pos=0(恒等), pos=100000(大角) | ⬜ | |
 | SF-07 | P3 | gelu_hw | 对称性 | gelu(-x) ≈ -gelu(x) | ⬜ | |
