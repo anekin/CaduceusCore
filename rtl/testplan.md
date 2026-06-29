@@ -74,7 +74,7 @@
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
 | MX-13 | P2 | tb_mxu_p2_mx13.v | mxu_top 输出 SRAM 序列化 — 2048-bit row → 32-bit word, 验证字顺序（行主序） | 写入已知 INT32 值到 SRAM → 32-bit 逐字读出，顺序为 row[31:0], row[63:32], ..., row[2015:1984] | ✅ | 64 serialized words correct (all 128), row-major order confirmed, 0 X-prop |
-| MX-14 | P2 | tb_mxu_top.v | mxu_top 背靠背操作无插入复位 — 状态机正确重置 | op1 (M=32,K=64,N=64) → DONE → op2 (M=64,K=64,N=32) 无复位, 两次输出各自与 Golden bit-exact | ⬜ | |
+| MX-14 | P2 | tb_mxu_p2_mx14.v | mxu_top 背靠背操作无插入复位 — 状态机正确重置 | op1 (M=32,K=64,N=64) → DONE → op2 (M=64,K=64,N=32) 无复位, 两次输出各自与 Golden bit-exact | ✅ | Both ops completed, FSM→IDLE, OP1=33 rows OP2=65 rows, spot-check [0][0]=64 |
 | MX-15 | P2 | tb_mxu_top.v | mxu_top 并行 SRAM 访问 — compute 期间 weight read + activation read 无冲突 | compute 期间 monitor SRAM 仲裁: 无 deadlock, 无数据损坏, 输出与串行访问一致 | ⬜ | |
 | MX-16 | P2 | tb_mxu_top.v | mxu_top 状态寄存器 timing — BUSY 上升 ≤ 1 cycle from CMD.START, DONE ≤ 1 cycle from last STORE_OUT | 计数器验证: BUSY delay=1 cycle, DONE delay=1 cycle, 多次随机 shape 测试 | ⬜ | |
 
