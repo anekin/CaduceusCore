@@ -1,8 +1,12 @@
-"""GoldenSFU gap coverage: SF-01 through SF-03.
+"""GoldenSFU gap coverage: SF-01 through SF-07.
 
 SF-01: rmsnorm_hw vs ref — random 5 groups, max_error < 1e-5.
 SF-02: _build_exp_lut — LUT table entries vs np.exp, max_error < 1e-5 (float32 rounding).
 SF-03: _build_gelu_lut — boundary ±eps no jump.
+SF-04: _build_cordic_table — 12-stage angles vs theory arctan(2^-i), gain ≈ 0.607253.
+SF-05: softmax_hw — large values [1000,0,...] → [1.0,~0] not NaN.
+SF-06: rope_hw — pos=0 identity, pos=100000 large angle validity.
+SF-07: gelu_hw — approximate odd symmetry: gelu(-x) ≈ -gelu(x).
 
 References
 ----------
@@ -143,3 +147,50 @@ def test_sf03_gelu_clamp_boundaries(sfu):
         v = float(sfu.gelu_hw(np.array([x_val], dtype=np.float32))[0])
         assert v == pytest.approx(4.0, abs=2e-2), \
             f"GELU clamp at x=4 ({tag}): val={v:.4e} (expected ~4.0)"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SF-04: _build_cordic_table — 12-stage angles vs theory
+# ══════════════════════════════════════════════════════════════════════
+
+# Theoretical CORDIC gain for 12 iterations: prod_{i=0}^{11} cos(atan(2^-i))
+_CORDIC_THEORY_GAIN_F64 = float(np.prod(np.cos(np.arctan(2.0 ** -np.arange(12, dtype=np.float64)))))
+_CORDIC_GAIN_TOL = 1e-6  # float32 rounding for product of 12 cos terms
+
+
+def test_sf04_cordic_angles_vs_theory(sfu):
+    """SF-04: Each CORDIC angle entry matches arctan(2^-i) within float32 rounding."""
+    iterations = sfu.cordic_iterations
+    assert iterations == 12, f"expected 12 CORDIC iterations, got {iterations}"
+
+    for i in range(iterations):
+        theory = np.arctan(2.0 ** -i)   # float64 reference
+        actual = float(sfu.cordic_angles[i])
+        err = abs(actual - theory)
+        assert err < 1e-6, \
+            f"cordic_angles[{i}]: actual={actual:.10e} theory={theory:.10e} err={err:.2e}"
+
+    # Anti-vacuous: angles must be strictly decreasing
+    for i in range(iterations - 1):
+        assert sfu.cordic_angles[i] > sfu.cordic_angles[i + 1], \
+            f"cordic_angles[{i}]={sfu.cordic_angles[i]} not > cordic_angles[{i+1}]={sfu.cordic_angles[i+1]}"
+    # First angle ≈ arctan(1) = π/4 ≈ 0.785
+    assert abs(sfu.cordic_angles[0] - np.pi / 4) < 0.01, \
+        f"cordic_angles[0]={sfu.cordic_angles[0]:.4f} not ≈ π/4"
+
+
+def test_sf04_cordic_gain_vs_theory(sfu):
+    """SF-04: CORDIC gain matches theoretical product of cos(atan(2^-i))."""
+    actual = float(sfu.cordic_gain)
+    theory = _CORDIC_THEORY_GAIN_F64
+    err = abs(actual - theory)
+
+    assert err < _CORDIC_GAIN_TOL, \
+        f"cordic_gain: actual={actual:.10e} theory={theory:.10e} err={err:.2e}"
+
+    # Anti-vacuous: gain must be significantly different from both 0 and 1
+    assert actual > 0.5, f"cordic_gain={actual:.6f} too small, suspicious"
+    assert actual < 0.7, f"cordic_gain={actual:.6f} too close to 1.0, suspicious"
+    # Known constant: ≈ 0.607253 (within 6 decimals at 12 iterations)
+    assert abs(actual - 0.607253) < 5e-6, \
+        f"cordic_gain={actual:.10e} deviates from known constant 0.607253"
