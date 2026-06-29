@@ -146,11 +146,11 @@
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
 | VC-05 | P1 | tb_vector.v | vector_top SRAM width (4096-bit) write strobe — 每 byte wstrb，验证部分写屏蔽 | 写 512B block with 交替 wstrb pattern (0xAA.../0x55...): 只更新 wstrb=1 的 byte, 其他保持旧值 | ✅ | 138/138 PASS: DIM=64 partial wstrb, sentinel values preserved beyond strobed region |
-| VC-06 | P1 | tb_vector.v | vector_top 非对齐 SRAM 地址 — byte address 非 512 倍数 | 地址 0x100 读/写 (512B block): 行为定义（截断低 9 bit 或返回 error），无 X 态 | ⬜ | |
-| VC-07 | P1 | tb_vector.v | vector_top 零元素计数 (DIM=0) — STATUS.DONE 立即, 无 SRAM 访问 | START→BUSY→DONE < 10 cycle, SRAM 端口无 transaction, 输出 buffer 内容不变 | ⬜ | |
-| VC-08 | P1 | tb_vector.v | vector_top 元素数非 128 倍数 — 最后 chunk lane_mask 正确的剩余元素 | DIM=200: chunk 0=128 elements full, chunk 1=72 elements (lane 0-71 enable, 72-127 disable via mask=0) | ⬜ | |
-| VC-09 | P1 | tb_reduce_tree.v | reduce_tree SUM INT64 累加 — 每 chunk INT64 sum 后 final INT32 saturate | 输入 128 个 INT32_MAX 值 → chunk sum = 128×INT32_MAX (需 INT64)，final → clip to INT32_MAX | ⬜ | |
-| VC-10 | P1 | tb_resid_add.v | resid_add 溢出路径 — original=INT32_MAX, delta=1 → output=INT32_MAX (saturated, not wrapped) | original=2^31-1, delta=1 → output=2^31-1；original=-2^31, delta=-1 → output=-2^31 | ⬜ | |
+| VC-06 | P1 | tb_vector.v | vector_top 非对齐 SRAM 地址 — byte address 非 512 倍数 | 地址 0x100 读/写 (512B block): 行为定义（截断低 9 bit 或返回 error），无 X 态 | ✅ | 160/160 PASS: unaligned A/B/O at 0x100/0x110 all handled correctly, no X-state |
+| VC-07 | P1 | tb_vector.v | vector_top 零元素计数 (DIM=0) — STATUS.DONE 立即, 无 SRAM 访问 | START→BUSY→DONE < 10 cycle, SRAM 端口无 transaction, 输出 buffer 内容不变 | ✅ | 3/3 PASS: DIM0_DONE_CYCLES=4 (ADD/SUM/RESID), no SRAM access |
+| VC-08 | P1 | tb_vector.v | vector_top 元素数非 128 倍数 — 最后 chunk lane_mask 正确的剩余元素 | DIM=200: chunk 0=128 elements full, chunk 1=72 elements (lane 0-71 enable, 72-127 disable via mask=0) | ✅ | 220/220 PASS: DIM=200 chunks verified, sentinels beyond DIM preserved (wstrb masking correct) |
+| VC-09 | P1 | tb_reduce_tree.v | reduce_tree SUM INT64 累加 — 每 chunk INT64 sum 后 final INT32 saturate | 输入 128 个 INT32_MAX 值 → chunk sum = 128×INT32_MAX (需 INT64)，final → clip to INT32_MAX | ✅ | 5/5 PASS: INT64 sum=274877906816 correct, INT32 saturated, partial mask verified |
+| VC-10 | P1 | tb_resid_add.v | resid_add 溢出路径 — original=INT32_MAX, delta=1 → output=INT32_MAX (saturated, not wrapped) | original=2^31-1, delta=1 → output=2^31-1；original=-2^31, delta=-1 → output=-2^31 | ✅ | 11 tests PASS: overflow saturated, anti-wrap confirmed (MAX+1≠MIN), mixed lanes correct |
 
 ---
 
