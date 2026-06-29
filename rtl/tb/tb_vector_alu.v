@@ -309,6 +309,54 @@ module tb_vector_alu;
         valid_i <= 1'b0;
 
         //=====================================================================
+        // VC-01: Saturation — ADD overflow → INT32_MAX
+        //   ADD(2^31-1, 100) → 2^31-1
+        //=====================================================================
+        $display("--- VC-01a: ADD(INT32_MAX, 100) → INT32_MAX (saturate) ---");
+        set_a(32'h7FFFFFFF);
+        set_b(32'sd100);
+        op = 2'b00;  // ADD
+        drive_and_wait;
+        check_all_lanes(32'h7FFFFFFF, "VC01 ADD pos sat=INT32_MAX");
+        valid_i <= 1'b0;
+
+        //=====================================================================
+        // VC-01: Saturation — ADD underflow → INT32_MIN
+        //   ADD(-2^31, -100) → -2^31
+        //=====================================================================
+        $display("--- VC-01b: ADD(INT32_MIN, -100) → INT32_MIN (saturate) ---");
+        set_a(32'h80000000);
+        set_b(-32'sd100);
+        op = 2'b00;  // ADD
+        drive_and_wait;
+        check_all_lanes(32'h80000000, "VC01 ADD neg sat=INT32_MIN");
+        valid_i <= 1'b0;
+
+        //=====================================================================
+        // VC-01: Saturation — MUL overflow → INT32_MAX
+        //   MUL(2^16, 2^16) → 2^31-1
+        //=====================================================================
+        $display("--- VC-01c: MUL(2^16, 2^16) → INT32_MAX (saturate) ---");
+        set_a(32'sd65536);   // 2^16
+        set_b(32'sd65536);   // 2^16, product = 2^32 → overflow
+        op = 2'b01;  // MUL
+        drive_and_wait;
+        check_all_lanes(32'h7FFFFFFF, "VC01 MUL pos sat=INT32_MAX");
+        valid_i <= 1'b0;
+
+        //=====================================================================
+        // VC-01: Saturation — MUL underflow → INT32_MIN
+        //   MUL(-2^16, 2^16) → -2^31
+        //=====================================================================
+        $display("--- VC-01d: MUL(-2^16, 2^16) → INT32_MIN (saturate) ---");
+        set_a(-32'sd65536);
+        set_b(32'sd65536);
+        op = 2'b01;  // MUL
+        drive_and_wait;
+        check_all_lanes(32'h80000000, "VC01 MUL neg sat=INT32_MIN");
+        valid_i <= 1'b0;
+
+        //=====================================================================
         // Test 11: Lane mask — alternating pattern
         //   Even lanes (mask=1): ADD a+b,  Odd lanes (mask=0): feed-through a
         //   a=100, b=200 → even=300, odd=100
