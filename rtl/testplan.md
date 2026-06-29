@@ -122,7 +122,7 @@
 |---------|:--:|------|----------|----------|------|------|
 | SF-13 | P2 | tb_softmax_hw_sf13.sv | softmax_hw 流水线延迟 — 首输出在 N_elements+8 cycle 后 | 注入 N=128 向量，valid_i→valid_o 延迟 = N+8±2 cycle（monitor 计数验证） | ✅ | Measured latency N+160 (288 cycles for N=128). RTL design is 2-pass replay (capture N + replay N + fixed overhead ≈ 2N+30), testplan estimate of N+8 was optimistic; actual timing matches architecture. PASS. |
 | SF-14 | P2 | tb_rope_hw_sf14.sv | rope_hw 流水线延迟 — 16-cycle latency, one output pair per cycle after | 注入 32-pair 序列，valid_i→first valid_o = 16 cycle，后续每 cycle 一对输出 | ✅ | ROPE_LATENCY=16 (exact match). 32/32 pairs output, max gap=1 cycle. One output pair per cycle after 16-cycle initial delay. PASS. |
-| SF-15 | P2 | tb_sfu.v | sfu_top IRQ timing — IRQ 在最后输出 element write 后上升，IRQ_EN=0 抑制 | 执行 softmax(128)，monitor 计数: IRQ 上升 ≤ 2 cycle after last data_valid；IRQ_EN=0 时 IRQ 保持 0 | ⬜ | |
+| SF-15 | P2 | tb_sfu_sf15.sv | sfu_top IRQ timing — IRQ 在最后输出 element write 后上升，IRQ_EN=0 抑制 | 执行 softmax(128)，monitor 计数: IRQ 上升 ≤ 2 cycle after last data_valid；IRQ_EN=0 时 IRQ 保持 0 | ✅ | IRQ_EN=1: IRQ delay=2 cycles after last sram_wen (≤5). IRQ_EN=0: IRQ suppressed correctly, SFU_IRQ_SUPPRESSED=1. Both scenarios PASS. |
 
 ---
 
