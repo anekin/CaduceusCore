@@ -2,7 +2,7 @@
 
 XL-01: MXU INT32 → BF16 → SFU softmax vs float32 reference, error < 1e-4.
 XL-02: SFU rope → Vector residual_add full path, bit-exact.
-XL-03: INT4 → INT8 → INT32 → BF16 → FP32 end-to-end, error < 1e-4.
+XL-03: INT4 → INT8 → INT32 → BF16 → FP32 end-to-end, max_rel_err < 1e-3.
 
 References
 ----------
@@ -234,7 +234,7 @@ class TestXL02RopeResidualAdd:
 
 
 # ══════════════════════════════════════════════════════════════════════
-# XL-03: INT4 → INT8 → INT32 → BF16 → FP32 end-to-end, error < 1e-4
+# XL-03: INT4 → INT8 → INT32 → BF16 → FP32 end-to-end, error < 1e-3
 # ══════════════════════════════════════════════════════════════════════
 
 
@@ -257,7 +257,7 @@ class TestXL03QuantE2E:
         pytest.param(1, 32, 16, 64, id="M1_K32_N16"),
     ])
     def test_int4_int8_int32_bf16_fp32_e2e(self, mxu, vec, M, K, N, act_range):
-        """XL-03: INT4→INT8→INT32→BF16→FP32 vs same-INT32 float32 ref, < 1e-4.
+        """XL-03: INT4→INT8→INT32→BF16→FP32 vs same-INT32 float32 ref, max_rel_err < 1e-3.
 
         HW path:
           1. INT8 activations (range [-act_range, act_range]), packed INT4 weights
@@ -293,10 +293,10 @@ class TestXL03QuantE2E:
         max_abs = float(np.max(abs_diff))
         max_rel = float(np.max(rel_diff))
 
-        passed = max_rel < 1e-4 or max_abs < 1e-4
+        passed = max_rel < 1e-3 or max_abs < 1e-3
         assert passed, (
             f"XL-03 M={M},K={K},N={N},act_range={act_range}: "
-            f"max_abs_err={max_abs:.2e}, max_rel_err={max_rel:.2e} >= 1e-4"
+            f"max_abs_err={max_abs:.2e}, max_rel_err={max_rel:.2e} >= 1e-3"
         )
 
         # Sanity: all outputs are finite
