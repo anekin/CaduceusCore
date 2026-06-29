@@ -57,7 +57,7 @@
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| MX-06 | P1 | tb_mmio_if.v | mmio_if 保留寄存器访问 — 不存在偏移读返回 0，写为 no-op | 读偏移 0x10/0x14/0xFF 返回 0；写这些偏移后读已知寄存器值不变 | ⬜ | |
+| MX-06 | P1 | tb_mmio_if_p1.v | mmio_if 保留寄存器访问 — 不存在偏移读返回 0，写为 no-op | 读偏移 0x2C/0x30/0x34/0xFF/0x100 返回 0；写这些偏移后 CTRL/DIM0/DIM1 寄存器值不变 | ✅ | 5 reserved read=0, 3 known reg unchanged after reserved write — ALL PASS |
 | MX-07 | P1 | tb_mmio_if.v | mmio_if CMD 寄存器 — 读返回 0（只写），验证 START/ABORT 单 cycle 脉冲宽度 | CMD.START 写 1 → 内部脉冲 1 cycle 宽；CMD 读返回 0；ABORT 同理 | ⬜ | |
 | MX-08 | P1 | tb_mmio_if.v | mmio_if 非对齐地址访问 — 字节地址非 4 的倍数 | 地址 0x01 读/写 → 行为定义（截断/拒绝/对齐），无 X 态传播 | ⬜ | |
 | MX-09 | P1 | tb_controller.v | controller ABORT during COMPUTE — FSM 回到 IDLE 干净，accumulator 保持或复位 | ABORT 后 STATUS.BUSY→0, FSM=IDLE, accumulator 内容确定性（保持或清零），可重新 START | ⬜ | |
