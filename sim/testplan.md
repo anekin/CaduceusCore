@@ -55,7 +55,7 @@ P4 = 最终验证（依赖单模块先稳定）
 | V-03 | P0 | max_reduce | 正确性 | 随机 100 组 vs np.max, bit-exact | ✅ | 100/100 groups bit-exact + anti-vacuous, 101 tests passed |
 | V-04 | P0 | sum_reduce | 累积精度 | 10000 个 1e-7 累积, vs np.sum 误差 < 1% | ✅ | rel_err=~3e-16 (float64), anti-vacuous: float32 would fail at ~5%, 2 tests passed |
 | V-07 | P0 | residual_add | 精度保持 | original=1e6, delta=1e-3 → 结果 = 1e6+1e-3 (不丢失) | ✅ | 1e6+1 preserves contribution, INT32 clamp verified, 5 tests passed |
-| V-08 | P0 | softmax_max_reduce | 正确性 | vs np.max 参考 | ⬜ | |
+| V-08 | P0 | softmax_max_reduce | 正确性 | vs np.max 参考 | ✅ | 100 parametrized groups bit-exact with np.max, anti-vacuous, 101 tests passed |
 | V-09 | P0 | softmax_scale_sub + sum_reduce | 端到端流水线 | max→sub→exp→sum→div, 与 np 参考一致 | ⬜ | |
 
 ---
