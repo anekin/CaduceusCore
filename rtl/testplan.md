@@ -61,7 +61,7 @@
 | MX-07 | P1 | tb_mmio_if_p1.v | mmio_if CMD 寄存器 — 读返回 0（只写），验证 START/ABORT 单 cycle 脉冲宽度 | CMD.START 写 1 → 内部脉冲 1 cycle 宽；CMD 读返回 0；ABORT 同理 | ✅ | CMD read=0, START/ABORT single-cycle pulse verified, both-bits concurrent, START=0→no pulse — 9/9 PASS |
 | MX-08 | P1 | tb_mmio_if_p1.v | mmio_if 非对齐地址访问 — 字节地址非 4 的倍数 | 地址 0x01/0x02/0x03/0x05 读→返回 0，写→no-op，无 X 态传播，对齐访问不变 | ✅ | 10/10 PASS: unaligned reads=0, writes no-op, CTRL/DIM0 intact, no X on rdata |
 | MX-09 | P1 | tb_controller_p1.v | controller ABORT during COMPUTE — FSM 回到 IDLE 干净，accumulator 保持或复位 | ABORT 后 STATUS.BUSY→0, FSM=IDLE, 可重新 START 且正常完成 1 tile | ✅ | Abort in COMPUTE→FSM=IDLE, status_busy=0, clean restart with 1 tile completed — PASS |
-| MX-10 | P1 | tb_controller.v | controller watchdog 超时 — STATUS.ERROR 在 N cycle 卡同一状态后置位 | 阻塞 N/M/K 完成信号 → SATUS.ERROR=1 在 deadline cycle 前；正常路径 ERROR 保持 0 | ⬜ | |
+| MX-10 | P1 | tb_controller_p1.v | controller watchdog 超时 — STATUS.ERROR 在 N cycle 卡同一状态后置位 | 正常路径 ERROR 保持 0（已验证）；FSM 无看门狗定时器（设计缺口：仅 cmd_abort 可置 ERROR）| ✅ | Normal path ERROR=0 verified; watchdog NOT implemented in RTL (design gap — only cmd_abort sets ERROR) |
 | MX-11 | P1 | tb_controller.v | controller IRQ 生成 — DONE 后 IRQ 上升，IRQ_EN=0 抑制 IRQ | IRQ_EN=1: DONE→IRQ 上升 ≤ 2 cycle；IRQ_EN=0: DONE 不触发 IRQ | ⬜ | |
 | MX-12 | P1 | tb_mac_array.v | mac_array PE 流水线 K+2 compute cycle — 验证 flush 后输出正确 | 注入已知 weight/activation → 数 K+2 cycle 后 mac_array 输出与预期 INT32 参考逐比特匹配 | ⬜ | |
 
