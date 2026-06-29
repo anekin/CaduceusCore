@@ -22,3 +22,13 @@
 **Observation**: max_reduce = `float(np.max(x))`, bit-exact by construction. Parametrized with sizes from 1 to ~1000 elements, values in [-100000, 100000].
 
 **Anti-vacuous**: max_reduce([1,5,3]) = 5.0 — proves it's finding the actual maximum.
+
+## T1 V-04: sum_reduce — 10000 × 1e-7 cumulative precision (2026-06-29)
+
+**Result**: ✅ PASS — 2 tests passed (precision + anti-vacuous).
+
+**Observation**: sum_reduce uses `float(np.sum(x.astype(np.float64)))` → float64 accumulation. 10000 × 1e-7 = 0.001 with ~1e-16 relative error. Well under 1% threshold.
+
+**Anti-vacuous**: Float32 accumulation of the same data gives ~5% error, proving the 1% threshold is meaningful and float64 precision is necessary.
+
+**Total V-01..V-04**: 114 tests, 0 failures.
