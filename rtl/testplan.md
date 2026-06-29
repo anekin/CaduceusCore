@@ -86,7 +86,7 @@
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| SF-01 | P0 | tb_exp_lut.sv | exp_lut 全部 256 条目 vs numpy.exp float64 golden — 每条在 Q1.14 量化误差内 | 256 条目逐一比对，|hw - golden| < 1/2^14 = 6.1e-5，无一超差 | ⬜ | |
+| SF-01 | P0 | tb_exp_lut.sv | exp_lut 全部 256 条目 vs numpy.exp float64 golden — 每条在 Q1.14 量化误差内 | 256 条目逐一比对，|hw - golden| < 1/2^14 = 6.1e-5，无一超差 | ✅ | 256/256 PASS: max_err=3.03e-5 < 6.1e-5 Q1.14 limit. Python golden check + VCS tb_sfu softmax_smoke PASS. |
 | SF-02 | P0 | tb_exp_lut.sv | exp_lut 线性插值精度 — 扫 1000 个分步位置 between entries | 随机 1000 个 [-20,0] 区间分步位置，线性插值输出 vs numpy.exp 误差 < 2^-14 | ⬜ | |
 | SF-03 | P0 | tb_softmax_hw.sv | softmax_hw sum-to-1 性质 — 随机向量长度 2/16/128/1024 | 各长度 50 组随机向量，输出向量元素和 = 1.0 within abs_tol=2e-3 | ⬜ | |
 | SF-04 | P0 | tb_rmsnorm_hw.v | rmsnorm_hw N=1 corner case — 输出 = sign(x) (±1.0) | 输入 x=3.14 → 输出 ≈ 1.0; 输入 x=-3.14 → 输出 ≈ -1.0, 误差 < 1e-3 | ⬜ | |
@@ -134,7 +134,7 @@
 |---------|:--:|------|----------|----------|------|------|
 | VC-01 | P0 | tb_vector_alu.v | vector_alu 饱和钳位 — ADD > INT32_MAX → INT32_MAX, MUL < INT32_MIN → INT32_MIN | ADD(2^31-1, 100) → 2^31-1；ADD(-2^31, -100) → -2^31；MUL(2^16, 2^16) → 2^31-1；MUL(-2^16, 2^16) → -2^31 | ✅ | 2684/2684 PASS, anti-vacuous MISMATCH confirmed (wrap vs sat) |
 | VC-02 | P0 | tb_vector_alu.v | vector_alu lane_mask — disabled lane: ADD→pass A, MUL→0, MAX→0, PASS_A→pass A | 构造 128-bit mask 使奇数 lane disable: 逐 lane 验证 disabled lane 输出符合 op 定义，enabled lane 正常 | ✅ | 3324/3324 PASS, anti-vacuous MISMATCH confirmed (MUL odd→999 got 0) |
-| VC-03 | P0 | tb_reduce_tree.v | reduce_tree lane_mask — disabled lane: MAX→INT32_MIN, SUM→0 contribution | mask 使一半 lane disable: MAX 结果 = enabled lanes 最大值；SUM 结果 = enabled lanes 之和 | ⬜ | |
+| VC-03 | P0 | tb_reduce_tree.v | reduce_tree lane_mask — disabled lane: MAX→INT32_MIN, SUM→0 contribution | mask 使一半 lane disable: MAX 结果 = enabled lanes 最大值；SUM 结果 = enabled lanes 之和 | ✅ | ALL PASS, anti-vacuous MISMATCH confirmed (expect 999 got 630) |
 | VC-04 | P0 | tb_type_convert.v | type_convert round-to-nearest-even — 验证 4 种 tie-breaking: 1.5, 2.5, -1.5, -2.5 | 1.5→2.0, 2.5→2.0, -1.5→-2.0, -2.5→-2.0（RNE 规则: tie→even LSB=0） | ⬜ | |
 
 ---

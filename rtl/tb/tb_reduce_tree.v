@@ -209,6 +209,105 @@ module tb_reduce_tree;
         end
 
         //---------------------------------------------------------------------
+        // VC-03a: MAX with odd lanes disabled → only even lanes matter
+        //   Even lanes: 10, 20, 30, ... (max=10+63*10=640 for 64 evens)
+        //   Odd lanes (disabled→INT32_MIN): should not affect MAX result
+        //---------------------------------------------------------------------
+        $display("[VC-03a] MAX odd lanes disabled, enabled lanes 0,10,20,...,630");
+        lane_mask = {NUM_IN{1'b0}};
+        begin
+            integer i;
+            for (i = 0; i < NUM_IN; i = i + 1) begin
+                if (i % 2 == 0) begin
+                    data_i[i*DATA_W +: DATA_W] = $signed(i * 5);
+                    lane_mask[i] = 1'b1;
+                end else begin
+                    data_i[i*DATA_W +: DATA_W] = 32'h7FFFFFFF;  // INT32_MAX in disabled lanes (should be ignored)
+                    lane_mask[i] = 1'b0;
+                end
+            end
+        end
+        op = 1'b0;  // MAX
+        valid_i = 1'b1;
+        @(posedge clk);
+        valid_i = 1'b0;
+        wait_and_flush;
+        // Max of even lanes: 126*5 = 630
+        if (result_o !== 32'sd630) begin
+            $display("  FAIL VC03a MAX: result=%0d, expected=630", $signed(result_o));
+            errors = errors + 1;
+        end else begin
+            $display("  PASS VC03a MAX: result=%0d", $signed(result_o));
+        end
+
+        //---------------------------------------------------------------------
+        // VC-03b: SUM with odd lanes disabled → only even lanes contribute
+        //   Even lanes sum: 0+10+20+...+630 = 64 evens → sum = (0+630)*64/2 = 20160
+        //   Odd lanes (disabled→0): should not affect SUM result
+        //---------------------------------------------------------------------
+        $display("[VC-03b] SUM odd lanes disabled, INT32_MAX in disabled should be 0");
+        begin
+            integer i;
+            for (i = 0; i < NUM_IN; i = i + 1) begin
+                if (i % 2 == 0) begin
+                    data_i[i*DATA_W +: DATA_W] = $signed(i * 5);
+                    lane_mask[i] = 1'b1;
+                end else begin
+                    data_i[i*DATA_W +: DATA_W] = 32'h7FFFFFFF;  // INT32_MAX in disabled (should be 0)
+                    lane_mask[i] = 1'b0;
+                end
+            end
+        end
+        op = 1'b1;  // SUM
+        valid_i = 1'b1;
+        @(posedge clk);
+        valid_i = 1'b0;
+        wait_and_flush;
+        if (result_o !== 32'sd20160) begin
+            $display("  FAIL VC03b SUM: result=%0d, expected=20160", $signed(result_o));
+            errors = errors + 1;
+        end else begin
+            $display("  PASS VC03b SUM: result=%0d", $signed(result_o));
+        end
+
+        //---------------------------------------------------------------------
+        // VC-03c: All lanes disabled → MAX=INT32_MIN, SUM=0
+        //---------------------------------------------------------------------
+        $display("[VC-03c] All lanes disabled");
+        begin
+            integer i;
+            for (i = 0; i < NUM_IN; i = i + 1) begin
+                data_i[i*DATA_W +: DATA_W] = 32'h12345678;
+            end
+        end
+        lane_mask = {NUM_IN{1'b0}};
+
+        op = 1'b0;  // MAX
+        valid_i = 1'b1;
+        @(posedge clk);
+        valid_i = 1'b0;
+        wait_and_flush;
+        if (result_o !== 32'h80000000) begin
+            $display("  FAIL VC03c MAX all-disabled: result=0x%08h, expected=INT32_MIN", result_o);
+            errors = errors + 1;
+        end else begin
+            $display("  PASS VC03c MAX all-disabled: result=INT32_MIN");
+        end
+
+        op = 1'b1;  // SUM
+        load_const(32'h12345678);
+        valid_i = 1'b1;
+        @(posedge clk);
+        valid_i = 1'b0;
+        wait_and_flush;
+        if (result_o !== 32'sd0) begin
+            $display("  FAIL VC03c SUM all-disabled: result=%0d, expected=0", $signed(result_o));
+            errors = errors + 1;
+        end else begin
+            $display("  PASS VC03c SUM all-disabled: result=0");
+        end
+
+        //---------------------------------------------------------------------
         // Summary
         //---------------------------------------------------------------------
         if (errors == 0)
