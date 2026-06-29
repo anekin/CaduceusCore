@@ -237,3 +237,59 @@ def test_sf05_softmax_large_value_no_nan(sfu):
     assert np.max(hw2[1:]) != 0.0, \
         "non-dominant entries exactly 0 on [10,0,...] — test vacuous"
     assert float(np.sum(hw2)) == pytest.approx(1.0, rel=1e-5)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SF-06: rope_hw — pos=0 identity, pos=100000 large angle
+# ══════════════════════════════════════════════════════════════════════
+
+# Shared test data for RoPE edge cases
+_ROPE_Q = _rng.randn(4096).astype(np.float32) * 0.5   # 32 heads × 128 dim
+_ROPE_K = _rng.randn(256).astype(np.float32) * 0.5    # 2 heads × 128 dim
+
+
+def test_sf06_rope_pos0_identity(sfu):
+    """SF-06: RoPE at pos=0 must approximately preserve input (near-identity rotation)."""
+    hw_q, hw_k = sfu.rope_hw(_ROPE_Q.copy(), _ROPE_K.copy(), position=0)
+    ref_q, ref_k = sfu.rope_ref(_ROPE_Q, _ROPE_K, position=0)
+
+    # At pos=0, reference rotation is exact identity
+    assert np.allclose(ref_q, _ROPE_Q.astype(np.float64), atol=1e-12), \
+        "rope_ref pos=0 is not identity — test flawed"
+
+    # Hardware CORDIC approximation should be close to identity
+    cmp_q = GoldenSFU.compare_hw_vs_ref(hw_q, _ROPE_Q.astype(np.float32), tol_abs=5e-3)
+    cmp_k = GoldenSFU.compare_hw_vs_ref(hw_k, _ROPE_K.astype(np.float32), tol_abs=5e-3)
+    assert cmp_q["within_tolerance"], \
+        f"RoPE Q pos=0: max_abs={cmp_q['max_abs_err']:.2e} (expected < 5e-3)"
+    assert cmp_k["within_tolerance"], \
+        f"RoPE K pos=0: max_abs={cmp_k['max_abs_err']:.2e} (expected < 5e-3)"
+
+    # Anti-vacuous: CORDIC is not numerically exact — error must exist
+    assert cmp_q["max_abs_err"] > 0, "RoPE Q pos=0: error=0 — CORDIC is vacuous"
+    assert cmp_k["max_abs_err"] > 0, "RoPE K pos=0: error=0 — CORDIC is vacuous"
+
+
+def test_sf06_rope_large_position_valid(sfu):
+    """SF-06: RoPE at pos=100000 must produce valid (non-NaN, non-Inf) outputs."""
+    hw_q, hw_k = sfu.rope_hw(_ROPE_Q.copy(), _ROPE_K.copy(), position=100000)
+
+    # No NaN, no Inf
+    assert not np.any(np.isnan(hw_q)), "RoPE Q pos=100000: NaN detected"
+    assert not np.any(np.isinf(hw_q)), "RoPE Q pos=100000: Inf detected"
+    assert not np.any(np.isnan(hw_k)), "RoPE K pos=100000: NaN detected"
+    assert not np.any(np.isinf(hw_k)), "RoPE K pos=100000: Inf detected"
+
+    # Output must differ from input (rotation happened)
+    assert not np.allclose(hw_q, _ROPE_Q, atol=1e-6), \
+        "RoPE Q pos=100000: output identical to input — no rotation applied"
+    assert not np.allclose(hw_k, _ROPE_K, atol=1e-6), \
+        "RoPE K pos=100000: output identical to input — no rotation applied"
+
+    # Magnitude approximately preserved (CORDIC gain compensated)
+    ratio_q = np.linalg.norm(hw_q) / (np.linalg.norm(_ROPE_Q) + 1e-12)
+    ratio_k = np.linalg.norm(hw_k) / (np.linalg.norm(_ROPE_K) + 1e-12)
+    assert ratio_q == pytest.approx(1.0, rel=0.15), \
+        f"RoPE Q pos=100000: magnitude ratio={ratio_q:.4f} (expected ~1.0)"
+    assert ratio_k == pytest.approx(1.0, rel=0.15), \
+        f"RoPE K pos=100000: magnitude ratio={ratio_k:.4f} (expected ~1.0)"
