@@ -194,3 +194,46 @@ def test_sf04_cordic_gain_vs_theory(sfu):
     # Known constant: ≈ 0.607253 (within 6 decimals at 12 iterations)
     assert abs(actual - 0.607253) < 5e-6, \
         f"cordic_gain={actual:.10e} deviates from known constant 0.607253"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SF-05: softmax_hw — large values stability
+# ══════════════════════════════════════════════════════════════════════
+
+
+def test_sf05_softmax_large_value_no_nan(sfu):
+    """SF-05: softmax_hw on [1000, 0, ...] must not produce NaN and must sum to ~1."""
+    x = np.zeros(2560, dtype=np.float32)
+    x[0] = 1000.0
+
+    hw = sfu.softmax_hw(x)
+
+    # No NaN, no Inf
+    assert not np.any(np.isnan(hw)), "softmax_hw produced NaN on large input"
+    assert not np.any(np.isinf(hw)), "softmax_hw produced Inf on large input"
+
+    # Sum must be ~1
+    total = float(np.sum(hw))
+    assert total == pytest.approx(1.0, rel=1e-5), \
+        f"softmax sum={total:.10e} (expected ~1.0)"
+
+    # Primary element must dominate
+    assert hw[0] == pytest.approx(1.0, rel=1e-5), \
+        f"softmax[0]={hw[0]:.10e} (expected ~1.0)"
+
+    # All other entries must be near 0
+    others = np.max(hw[1:])
+    assert others < 1e-3, \
+        f"max of non-dominant entries={others:.10e} (expected < 1e-3)"
+
+    # Anti-vacuous: a less-extreme input must NOT give exact [1,0,0,...]
+    # (proves softmax_hw actually ran, not a canned return)
+    x2 = np.zeros(10, dtype=np.float32)
+    x2[0] = 10.0
+    hw2 = sfu.softmax_hw(x2)
+    assert not np.any(np.isnan(hw2)), "softmax_hw produced NaN on smaller large input"
+    assert float(hw2[0]) != 1.0, \
+        "softmax[0] == 1.0 exactly on [10,0,...] — test vacuous"
+    assert np.max(hw2[1:]) != 0.0, \
+        "non-dominant entries exactly 0 on [10,0,...] — test vacuous"
+    assert float(np.sum(hw2)) == pytest.approx(1.0, rel=1e-5)
