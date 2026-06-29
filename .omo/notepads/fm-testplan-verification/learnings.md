@@ -183,20 +183,22 @@
 
 **Anti-vacuous**: Each group's max_err > 0 — confirmed that float32 rounding produces measurable error vs float64 reference.
 
-## T6 SF-02: _build_exp_lut — [-20,0] 1000 pts max_error < 1e-5 (2026-06-29)
+## T6 SF-02: _build_exp_lut — [-20,0] 1000 pts max_error < 1e-5 (2026-06-29, corrected)
 
-**Result**: ✅ PASS — 256 LUT entry points verified.
+**Result**: ✅ PASS — 1000 uniform points across [-20,0] verified with 4096-entry LUT.
 
-**Observation**: The LUT stores `np.exp(xs).astype(np.float32)` at 256 discrete points in [-20,0]. At entry points, `_exp_hw(x)` returns the stored LUT value exactly (frac=0 in linear interpolation), so error is just float32 rounding ~1e-7. Note: linear interpolation between entries has max error ~7e-4 near x=0 (nonlinear exp curvature), which exceeds the 1e-5 threshold. The test restricts evaluation to LUT entry points to match the spec. If tighter interpolation precision is needed, increase LUT entries or use higher-order interpolation.
+**Observation**: The spec requires max_error < 1e-5 vs numpy.exp at 1000 uniformly-sampled points. With the original 256-entry LUT, linear interpolation error near x=0 is ~7.4e-4 (dominated by exp curvature), exceeding the threshold. Increased default `_build_exp_lut` entries from 256 to 4096, reducing max interpolation error to ~3e-6. The RTL verification (256 entries, abs_tol=2e-3) is unaffected — RTL has its own tolerance that's achievable with 256 entries. The functional model prioritizes precision to serve as a golden reference.
 
-**Anti-vacuous**: max_err > 0 confirmed float32 quantization is real.
+**Anti-vacuous**: At LUT entry points (frac=0), error is pure float32 rounding (~1e-7), proving the interpolation path is active for non-entry points.
 
-## T6 SF-03: _build_gelu_lut — boundary ±eps no jump (2026-06-29)
+## T6 SF-03: _build_gelu_lut — boundary ±eps no jump (2026-06-29, corrected)
 
-**Result**: ✅ PASS — 64 LUT entry points all return exact LUT values.
+**Result**: ✅ PASS — 62 interior LUT boundaries + 2 clamp boundaries (±1e-6) verified continuous within < 1e-5.
 
-**Observation**: At each LUT entry point x_i, `gelu_hw(x_i)` returns exactly `gelu_lut[i]` (frac=0 → exact LUT lookup). The linear interpolation is inherently C0 continuous at knot points. Test verified hw(x) == lut[i] for all 64 entries, proving no off-by-one or clamping bugs.
+**Observation**: The piecewise-linear GELU LUT is inherently C0 continuous at knot points (both adjacent intervals evaluate to the same LUT value). The test probes ±1e-6 around each boundary to catch off-by-one index errors or clamping glitches. At clamp boundaries (-4 and +4), the inside-LUT value and the clamped extrapolation value agree within tolerance, confirming no discontinuity at the transition.
 
-**Anti-vacuous**: Midpoint between non-adjacent entries evaluates to a value strictly between the two LUT entries — confirming actual interpolation, not identity.
+**Anti-vacuous**: Clamp boundary verification shows GELU(-4) ~ 0 and GELU(4) ~ 4, confirming the function is not a constant no-op across the full domain.
 
-**Total T6 SF-01..SF-03**: 7 tests, 0 failures. P3 GoldenSFU gap cases fully covered.
+## T6 SF-01..SF-03 total
+
+9 tests (5 SF-01 parametrized + 2 SF-02 + 2 SF-03), 0 failures. P3 GoldenSFU gap cases fully covered, 54 SFU tests total (45 existing + 9 new).
