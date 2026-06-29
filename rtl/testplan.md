@@ -47,7 +47,7 @@
 | MX-02 | P0 | tb_buffers.v | weight_buffer 多 cycle 连续写 — 背靠背写入无读插入 | 连续 128 次写入无丢失、无乱序，读出与写入顺序逐比特匹配 | ✅ | 1024 back-to-back writes (2 passes), 512/512 read-back match, compare_rtl.py bit-exact MATCH |
 | MX-03 | P0 | tb_buffers.v | activation_buffer 并发读-写双端口行为 — wr_en + rd_en 同时同地址 | 同时读写同地址: 读出旧值（写优先）或新值（读优先），行为文档化且确定性 | ✅ | 8 addr concurrent wr+rd verified: rd returns old value, next cycle new value. compare_rtl.py bit-exact MATCH |
 | MX-04 | P0 | tb_accumulator.v | accumulator 饱和钳位溢出 — acc_in + stored > INT32_MAX → clip 到 INT32_MAX | 构造 acc_in=2^31-1, stored=1 → 输出 INT32_MAX(2^31-1)；acc_in=-2^31, stored=-1 → 输出 INT32_MIN(-2^31) | ✅ | 6 tests PASSED: pos/neg overflow clamp, boundary, large overflow, normal. compare_rtl.py bit-exact MATCH |
-| MX-05 | P0 | tb_accumulator.v | accumulator 地址冲突 — accumulate + read_out 同地址同时 | 同地址同时 accumulate 和 read_out: 读回旧值（accumulate 后更新）或新值，行为确定性 | ⬜ | |
+| MX-05 | P0 | tb_accumulator.v | accumulator 地址冲突 — accumulate + read_out 同地址同时 | 同地址同时 accumulate 和 read_out: accumulate 优先写入新值, read_out 输出新值, 行为确定性 | ✅ | 5 tests PASSED: accum+read outputs new value, saturation in conflict, reset+read outputs 0. compare_rtl.py MATCH |
 
 ---
 
