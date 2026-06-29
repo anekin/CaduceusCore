@@ -1,0 +1,11 @@
+{
+  "name": "mx03",
+  "files": {
+    "golden": "golden_output.hex"
+  },
+  "results": {
+    "golden_shape": [
+      1024
+    ]
+  }
+}
