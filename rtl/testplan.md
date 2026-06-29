@@ -135,7 +135,7 @@
 | VC-01 | P0 | tb_vector_alu.v | vector_alu 饱和钳位 — ADD > INT32_MAX → INT32_MAX, MUL < INT32_MIN → INT32_MIN | ADD(2^31-1, 100) → 2^31-1；ADD(-2^31, -100) → -2^31；MUL(2^16, 2^16) → 2^31-1；MUL(-2^16, 2^16) → -2^31 | ✅ | 2684/2684 PASS, anti-vacuous MISMATCH confirmed (wrap vs sat) |
 | VC-02 | P0 | tb_vector_alu.v | vector_alu lane_mask — disabled lane: ADD→pass A, MUL→0, MAX→0, PASS_A→pass A | 构造 128-bit mask 使奇数 lane disable: 逐 lane 验证 disabled lane 输出符合 op 定义，enabled lane 正常 | ✅ | 3324/3324 PASS, anti-vacuous MISMATCH confirmed (MUL odd→999 got 0) |
 | VC-03 | P0 | tb_reduce_tree.v | reduce_tree lane_mask — disabled lane: MAX→INT32_MIN, SUM→0 contribution | mask 使一半 lane disable: MAX 结果 = enabled lanes 最大值；SUM 结果 = enabled lanes 之和 | ✅ | ALL PASS, anti-vacuous MISMATCH confirmed (expect 999 got 630) |
-| VC-04 | P0 | tb_type_convert.v | type_convert round-to-nearest-even — 验证 4 种 tie-breaking: 1.5, 2.5, -1.5, -2.5 | 1.5→2.0, 2.5→2.0, -1.5→-2.0, -2.5→-2.0（RNE 规则: tie→even LSB=0） | ⬜ | |
+| VC-04 | P0 | tb_type_convert.v | type_convert round-to-nearest-even — 验证 4 种 tie-breaking: 1.5, 2.5, -1.5, -2.5 | 1.5→2.0, 2.5→2.0, -1.5→-2.0, -2.5→-2.0（RNE 规则: tie→even LSB=0） | ✅ | 131097/131097 PASS, anti-vacuous MISMATCH confirmed (2049→2050 corrupt) |
 
 ---
 

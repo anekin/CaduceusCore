@@ -147,7 +147,23 @@ module tb_type_convert;
         check_convert( 32'd2048,        16'h6800, "2048"        );
         check_convert( 32'd1024,        16'h6400, "1024"        );
 
-        $display("Unit tests: %0d/%0d passed", passed_tests, 14);
+        //=====================================================================
+        // VC-04: RNE tie-breaking — 4 tie cases (guard=1, round=0, sticky=0)
+        //   Case a: mant_lsb=0 → round down to even  (2049 → 2048 = 0x6800)
+        //   Case b: mant_lsb=1 → round up to even    (3071 → 3072 = 0x6A00)
+        //   Case c: negative mant_lsb=0 → round down (-2049 → -2048 = 0xE800)
+        //   Case d: negative mant_lsb=1 → round up   (-3071 → -3072 = 0xEA00)
+        //=====================================================================
+        check_convert( 32'd2049,        16'h6800, "VC04a RNE dn 2049->2048"  );
+        check_convert( 32'd3071,        16'h6A00, "VC04b RNE up 3071->3072"  );
+        check_convert(-32'd2049,        16'hE800, "VC04c RNE dn -2049->-2048");
+        check_convert(-32'd3071,        16'hEA00, "VC04d RNE up -3071->-3072");
+
+        // Additional: cross-check non-tie values nearby
+        check_convert( 32'd2050,        16'h6801, "VC04 non-tie 2050"  );
+        check_convert( 32'd3072,        16'h6A00, "VC04 exact 3072"   );
+
+        $display("Unit tests: %0d/%0d passed", passed_tests, 20);
 
         //---------------------------------------------------------------------
         // valid_i → valid_o pipeline check
