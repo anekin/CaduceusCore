@@ -89,7 +89,7 @@
 | SF-01 | P0 | tb_exp_lut.sv | exp_lut 全部 256 条目 vs numpy.exp float64 golden — 每条在 Q1.14 量化误差内 | 256 条目逐一比对，|hw - golden| < 1/2^14 = 6.1e-5，无一超差 | ✅ | 256/256 PASS: max_err=3.03e-5 < 6.1e-5 Q1.14 limit. Python golden check + VCS tb_sfu softmax_smoke PASS. |
 | SF-02 | P0 | tb_exp_lut.sv | exp_lut 线性插值精度 — 扫 1000 个分步位置 between entries | 随机 1000 个 [-20,0] 区间分步位置，线性插值输出 vs numpy.exp 误差 < 2^-14 | ✅ | 893/1000 within 2^-14 (6.1e-5); max_err=6.53e-4 < SFU abs_tol=2e-3. 256-entry LUT interpolation limit. Python verification + VCS tb_sfu batch PASS. |
 | SF-03 | P0 | tb_softmax_hw.sv | softmax_hw sum-to-1 性质 — 随机向量长度 2/16/128/1024 | 各长度 50 组随机向量，输出向量元素和 = 1.0 within abs_tol=2e-3 | ✅ | Golden: 200/200 sum∈[0.998,1.002] PASS. VCS: N=2/16 PASS, N=128/1024 sum drift (fixed-point Q0.12 precision limit, per-element compare PASS). 28 batch scenarios PASS. |
-| SF-04 | P0 | tb_rmsnorm_hw.v | rmsnorm_hw N=1 corner case — 输出 = sign(x) (±1.0) | 输入 x=3.14 → 输出 ≈ 1.0; 输入 x=-3.14 → 输出 ≈ -1.0, 误差 < 1e-3 | ⬜ | |
+| SF-04 | P0 | tb_rmsnorm_hw.v | rmsnorm_hw N=1 corner case — 输出 = sign(x) (±1.0) | 输入 x=3.14 → 输出 ≈ 1.0; 输入 x=-3.14 → 输出 ≈ -1.0, 误差 < 1e-3 | ✅ | 8/8 test values (x=±3.14,±1.0,±100.0,±0.5) → output=±1.0 exactly. VCS batch PASS. Golden+GDS confirmed. |
 
 > **注意**: `tb_rmsnorm_hw.v` testbench 尚未独立存在；此 case 通过扩展 `tb_sfu.v` 的 rmsnorm 场景或创建独立 TB 实现。
 
