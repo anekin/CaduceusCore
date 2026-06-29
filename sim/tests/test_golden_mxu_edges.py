@@ -95,3 +95,84 @@ def test_mx06_anti_vacuous():
     assert result_a.shape != result_b.shape, (
         "Different M must produce different output shapes"
     )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# MX-07: zero input → zero output
+# ══════════════════════════════════════════════════════════════════════
+
+
+def test_mx07_zero_activation():
+    """Zero activation with random weights → all-zero output."""
+    M, K, N = 64, 4096, 64
+    rng = np.random.RandomState(SEED)
+
+    activation = np.zeros(M * K, dtype=np.int8)
+    w_values = rng.randint(-8, 8, size=K * N).astype(np.int8)
+    weight_packed = GoldenMXU.pack_int4(w_values)
+
+    mxu = GoldenMXU()
+    result = mxu.matmul_int32(activation, weight_packed, M, K, N)
+
+    assert result.shape == (M, N), f"Expected ({M},{N}), got {result.shape}"
+    assert np.all(result == 0), "Zero activation must produce zero output"
+    assert result.dtype == np.int32, "Output must be int32"
+
+
+def test_mx07_zero_weights():
+    """Zero weights with random activations → all-zero output."""
+    M, K, N = 32, 4096, 128
+    rng = np.random.RandomState(SEED)
+
+    activation = rng.randint(-128, 128, size=M * K).astype(np.int8)
+    weight_packed = np.zeros((K * N + 1) // 2, dtype=np.uint8)
+
+    mxu = GoldenMXU()
+    result = mxu.matmul_int32(activation, weight_packed, M, K, N)
+
+    assert np.all(result == 0), "Zero weights must produce zero output"
+
+
+def test_mx07_zero_both():
+    """Zero activation AND zero weights → all-zero output."""
+    M, K, N = 16, 256, 32
+    activation = np.zeros(M * K, dtype=np.int8)
+    weight_packed = np.zeros((K * N + 1) // 2, dtype=np.uint8)
+
+    mxu = GoldenMXU()
+    result = mxu.matmul_int32(activation, weight_packed, M, K, N)
+
+    assert np.all(result == 0), "Zero inputs must produce zero output"
+
+
+def test_mx07_zero_non_square():
+    """Zero input for non-square shape (M=1, K=4096, N=4096) → zero output."""
+    M, K, N = 1, 4096, 4096
+    activation = np.zeros(M * K, dtype=np.int8)
+    weight_packed = np.zeros((K * N + 1) // 2, dtype=np.uint8)
+
+    mxu = GoldenMXU()
+    result = mxu.matmul_int32(activation, weight_packed, M, K, N)
+
+    assert result.shape == (1, 4096), f"Expected (1,4096), got {result.shape}"
+    assert np.all(result == 0), "Zero input for non-square must produce zero output"
+
+
+def test_mx07_anti_vacuous():
+    """Anti-vacuous: non-zero weights produce non-zero output (zero-input is correct).
+
+    If matmul_int32 always returned zeros regardless of input, this test
+    would catch it. With all-positive activations and all-positive weights,
+    the output is trivially K per element (>>0).
+    """
+    mxu = GoldenMXU()
+
+    # All ones: each output element = sum over K (1 * 1) = K
+    act_ones = np.full(64 * 64, 1, dtype=np.int8)
+    w_ones_values = np.full(64 * 64, 1, dtype=np.int8)
+    w_ones_packed = GoldenMXU.pack_int4(w_ones_values)
+
+    result = mxu.matmul_int32(act_ones, w_ones_packed, 64, 64, 64)
+    assert np.all(result == 64), (
+        "All-ones input with all-ones weights must produce output = K (64)"
+    )
