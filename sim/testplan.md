@@ -69,7 +69,7 @@ P4 = 最终验证（依赖单模块先稳定）
 | DM-01 | P1 | encode/decode | 往返无损 | 随机 100 组合法 descriptor, 往返 = bit-exact | ✅ | 100/100 roundtrip bit-exact + anti-vacuous, 2 tests passed |
 | DM-02 | P1 | decode | 非法值拒绝 | 无效 src/dst/len 组合必须抛异常 | ✅ | 12 parametrized invalid combos rejected (direction/channel/size/addr) + anti-vacuous, 13 tests passed |
 | DM-03 | P1 | actual_size | 字段溢出 | size=0→0, size=4096→4096, size>4096→异常 | ✅ | size=0→4096 (hw encoding: 0=4096B), size=4096 encode→decode→4096, size>4096→exception, regular sizes verified + anti-vacuous, 5 tests passed |
-| DM-04 | P1 | GoldenDMA | 端到端传输 | 已知 pattern→DMA→读回比对, bit-exact | ⬜ | |
+| DM-04 | P1 | GoldenDMA | 端到端传输 | 已知 pattern→DMA→读回比对, bit-exact | ✅ | load/store both bit-exact with random patterns, different-DRAM-addr → different data anti-vacuous, 3 tests passed |
 
 ---
 
