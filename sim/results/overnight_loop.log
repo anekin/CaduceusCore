@@ -1320,3 +1320,56 @@
 [22:10:47] Step 4: Generating summary...
 [22:10:47]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
 [22:10:47] === Iteration 104 Complete ===
+[00:05:22] === Overnight Loop Started ===
+[00:05:22] === Iteration 105 ===
+[00:05:22] Step 1: Checking model consistency...
+[00:05:22]   All models consistent ✅
+[00:05:22] Step 2: Running parameter sweep...
+[00:05:22]   Baseline: 24 tok/s
+[00:05:22] Step 3: Running E2E validation...
+[00:05:22]   E2E: 24.0 tok/s, target: ❌
+[00:05:22] Step 4: Generating summary...
+[00:05:22]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[00:05:22] === Iteration 105 Complete ===
+[02:06:07] === Overnight Loop Started ===
+[02:06:07] === Iteration 106 ===
+[02:06:07] Step 1: Checking model consistency...
+[02:06:07]   All models consistent ✅
+[02:06:07] Step 2: Running parameter sweep...
+[02:06:07]   Baseline: 24 tok/s
+[02:06:07] Step 3: Running E2E validation...
+[02:06:07]   E2E: 24.0 tok/s, target: ❌
+[02:06:07] Step 4: Generating summary...
+[02:06:07]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[02:06:07] === Iteration 106 Complete ===
+[04:05:17] === Overnight Loop Started ===
+[04:05:17] === Iteration 107 ===
+[04:05:17] Step 1: Checking model consistency...
+[04:05:17]   All models consistent ✅
+[04:05:17] Step 2: Running parameter sweep...
+[04:05:18]   Baseline: 24 tok/s
+[04:05:18] Step 3: Running E2E validation...
+[04:05:18]   E2E: 24.0 tok/s, target: ❌
+[04:05:18] Step 4: Generating summary...
+[04:05:18]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[04:05:18] === Iteration 107 Complete ===
+[06:00:46] === Overnight Loop Started ===
+[06:00:46] === Iteration 108 ===
+[06:00:46] Step 1: Checking model consistency...
+[06:00:46]   All models consistent ✅
+[06:00:46] Step 2: Running parameter sweep...
+[06:00:47]   Baseline: 24 tok/s
+[06:00:47] Step 3: Running E2E validation...
+[06:00:47]   E2E: 24.0 tok/s, target: ❌
+[06:00:47] Step 4: Generating summary...
+[06:00:47]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[06:00:47] === Iteration 108 Complete ===
+[06:01:30] === Iteration 108 Post-Analysis ===
+[06:01:30] Stale constraint detected: user prompt claims "batch M≥2 → 31 tok/s" but actual E2E shows 12-19 tok/s for batch.
+[06:01:30] Stale constraint detected: user prompt claims "DRAM BW 需求 20.2 GB/s" but actual is 33.0 GB/s (76% utilization).
+[06:01:30] Recommendation: update cron prompt constraints to match simulator ground truth.
+[06:01:30] Latent bug: generate_summary passes pre-fix `issues` list, not post-fix remaining issues (benign now, 0 issues).
+[06:01:30] All 4 continuous checks pass: weight_preloaded clean, dram_efficiency 0.85, v2 MXU, sweep↔summary consistent.
+[06:01:30] Overnight loop code fixes since last audit: e2e-parser-last-match ✅, iter-count-post-analysis ✅, conclusion-line-parser ✅.
+[06:01:30] Remaining preflight pattern in overnight_loop.py: issues-fixed-undercount (benign, all fix branches counted).
+[06:01:30] === Iteration 108 Post-Analysis Complete ===
