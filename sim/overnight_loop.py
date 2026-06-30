@@ -42,7 +42,7 @@ def iter_count() -> int:
     if not LOG_FILE.exists():
         return 0
     with open(LOG_FILE) as f:
-        return sum(1 for l in f if "=== Iteration" in l and "Complete" not in l)
+        return sum(1 for l in f if "=== Iteration" in l and "Complete" not in l and "Post-Analysis" not in l)
 
 
 def check_model_consistency() -> List[str]:
@@ -192,22 +192,32 @@ def run_e2e() -> Dict[str, Any]:
         for line in output.split("\n"):
             if "tok/s" in line:
                 import re
-                # Match "15 tok/s" or "15.0 tok/s"
-                m = re.search(r"(\d+\.?\d*)\s*tok/s", line)
-                if m:
-                    try:
-                        tok_s = float(m.group(1))
-                    except ValueError:
-                        pass
+                # Anchor to M=1 decode line to avoid last-match-wins capturing batch values
+                # Pattern: "Decode (M=1): 24 tok/s" or "单 token 性能: 24 tok/s"
+                if "Decode (M=1)" in line or "单 token 性能" in line:
+                    m = re.search(r"(\d+\.?\d*)\s*tok/s", line)
+                    if m:
+                        try:
+                            tok_s = float(m.group(1))
+                        except ValueError:
+                            pass
             # Check target met: both English and Chinese variants
             if "目标" in line or "Target" in line:
-                if "✅" in line or "met" in line.lower() or "达标" in line:
+                # Must have a positive marker AND NOT be negated (未达标, ❌)
+                positive = ("✅" in line or "met" in line.lower())
+                negated = ("未达标" in line or "❌" in line)
+                if positive and not negated:
                     target_met = True
+            # Batch M=2 check: parse from the ACTUAL batch projection line
+            # (not the conclusion/summary line which may repeat the value)
+            # Anchor to the batch projection format: "Batch M=2: N tok/s (N μs for 2 tokens)"
             if "Batch M=2" in line and "tok/s" in line:
-                # If batch M=2 >= 25, target is met by batching strategy
-                m = re.search(r"Batch M=2.*?(\d+\.?\d*)\s*tok/s", line)
-                if m and float(m.group(1)) >= 25:
-                    target_met = True
+                # Only match lines with the μs parenthetical (batch projection format)
+                # NOT the conclusion line which says "(达标)" or "(未达标)"
+                if "μs" in line and "for 2 tokens" in line:
+                    m = re.search(r"Batch M=2.*?(\d+\.?\d*)\s*tok/s", line)
+                    if m and float(m.group(1)) >= 25:
+                        target_met = True
 
         return {
             "tok_s": tok_s,
@@ -376,10 +386,10 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
         "",
         f"> **P5 corrected**: Interleaving model `H×(M+1)+W` replaces constant-drain formula.",
         f"> Per-tile compute scales correctly: {_H}×{_W} gives {_H*2+_W}→{_H*3+_W}→{_H*5+_W}→{_H*9+_W} cycles for M=1→2→4→8.",
-        f"> **M=1 decode is DRAM-bandwidth-bound**: {dram_demand:.1f}/{dram_available} GB/s ({bw_pct:.0f}%) — explains why all 5 array sizes produce nearly identical ~30 tok/s.",
+        f"> **M=1 decode is DRAM-bandwidth-bound**: {dram_demand:.1f}/{dram_available} GB/s ({bw_pct:.0f}%) — explains why all array sizes converge to similar ~25 tok/s.",
         f"> **M≥2 batch shifts bottleneck to compute**: tiling overhead amortized, throughput scales with M.",
         f"> **Batch decode (raw)**: 12-19 tok/s on {_H}×{_W}. With inter-op parallelism projected 47-76 tok/s.",
-        f"> **Per-tile DRAM is fine**: DMA ({int((_H*_W*4/8+_H*8/8)/43.52):.0f} cycles) ≪ per-tile compute — but M=1's aggregate BW demand dominates.",
+        f"> **Per-tile DRAM is fine**: DMA ({int((_H*_W*4/8+_H*8/8)/dram_available):.0f} cycles) ≪ per-tile compute — but M=1's aggregate BW demand dominates.",
     ]
     lines += [
         "",
@@ -440,7 +450,7 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
         "",
         "## Bottleneck Analysis",
         "",
-        f"- **M=1 decode**: {sweep.get('baseline_tok_s', 15):.0f} tok/s — DRAM-bandwidth-bound: all array sizes converge to same ~30 tok/s at {bw_pct:.0f}% BW utilization",
+        f"- **M=1 decode**: {sweep.get('baseline_tok_s', 15):.0f} tok/s — DRAM-bandwidth-bound: all array sizes converge to similar ~{sweep.get('baseline_tok_s', 25):.0f} tok/s at {bw_pct:.0f}% BW utilization",
         f"- **DRAM demand**: {dram_demand:.1f} / {dram_available} GB/s ({bw_pct:.0f}%) — significant for M=1 but per-tile traffic is small",
         f"- **Tiling overhead**: per-tile compute = H×(M+1)+W, {_H*2+_W} cycles for M=1, {_H*3+_W} for M=2",
         f"- **Batch decode (raw)**: 12-19 tok/s on {_H}×{_W}. With inter-op parallelism projected 47-76 tok/s.",
@@ -465,12 +475,13 @@ def main():
     # Step 1: Check consistency
     log("Step 1: Checking model consistency...")
     issues = check_model_consistency()
+    issues_fixed = 0
     if issues:
         log(f"  Found {len(issues)} issues:")
         for i in issues:
             log(f"    - {i}")
-        fixed = fix_issues(issues)
-        log(f"  Fixed {fixed}/{len(issues)} issues")
+        issues_fixed = fix_issues(issues)
+        log(f"  Fixed {issues_fixed}/{len(issues)} issues")
     else:
         log("  All models consistent ✅")
 
@@ -495,14 +506,11 @@ def main():
 
     log(f"=== Iteration {n} Complete ===")
 
-    # Track what was actually fixed by matching issue patterns to fix_issues branches
-    fixable_patterns = ["weight_preloaded", "compiler.py", "broken import"]
-    issues_fixed_count = sum(1 for i in issues if any(p in i for p in fixable_patterns))
     return {
         "iteration": n,
         "issues_found": len(issues),
-        "issues_fixed": issues_fixed_count,
-        "issues_fixable": len([i for i in issues if any(p in i for p in fixable_patterns)]),
+        "issues_fixed": issues_fixed,
+        "issues_fixable": len([i for i in issues if any(p in i for p in ["weight_preloaded", "compiler.py", "broken import"])]),
         "baseline_tok_s": sweep.get("baseline_tok_s"),
         "e2e_tok_s": e2e.get("tok_s"),
         "target_met": e2e.get("target_met"),
