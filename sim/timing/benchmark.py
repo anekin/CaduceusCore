@@ -13,11 +13,11 @@ from pathlib import Path
 
 import yaml
 
-from sim.model_specs import ModelSpec, all_aliases, get_spec
-from sim.timing.dashboard import Dashboard
-from sim.timing.metrics import MetricsCollector
-from sim.timing.timing_engine import TimingEngine
-from sim.timing.types import RequestMetrics
+from model_specs import ModelSpec, all_aliases, get_spec
+from timing.dashboard import Dashboard
+from timing.metrics import MetricsCollector
+from timing.timing_engine import TimingEngine
+from timing.types import RequestMetrics
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_CONFIG = "sim/config/npu_config.yaml"

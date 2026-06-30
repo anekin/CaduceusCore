@@ -10,8 +10,8 @@ from typing import Any, Callable, Dict, Optional
 
 import numpy as np
 
-from sim.golden_executor import GoldenSFU, GoldenVector
-from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
+from golden_executor import GoldenSFU, GoldenVector
+from regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
 
 
 @dataclass

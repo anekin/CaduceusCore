@@ -52,7 +52,7 @@ class AXITracer:
 
     def classify_addr(self, addr: int) -> str:
         """Classify address into module name."""
-        from sim.regmap import Addr
+        from regmap import Addr
         if addr >= Addr.DRAM_BASE:
             return 'DRAM'
         if addr < 0x40000000:

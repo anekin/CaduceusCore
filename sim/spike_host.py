@@ -24,11 +24,11 @@ sys.path.insert(0, str(_HERE.parent))
 sys.path.insert(0, str(_HERE.parent / "ggml-npu"))
 
 from q4_dequant import load_weights_from_gguf
-from sim.func_model import FuncModel
-from sim.golden_executor import GoldenMXU
-from sim.quantize import quantize_int4_per_block
-from sim.regmap import Addr, DOORBELL, MXU
-from sim.spike_mmio_server import DEFAULT_SOCK_PATH, serve
+from func_model import FuncModel
+from golden_executor import GoldenMXU
+from quantize import quantize_int4_per_block
+from regmap import Addr, DOORBELL, MXU
+from spike_mmio_server import DEFAULT_SOCK_PATH, serve
 
 
 # ── Paths ──────────────────────────────────────────────────────────
@@ -580,7 +580,7 @@ def run_forward_pass(gguf_path: str, prompt: str, layers: int = 2,
                      tolerance: float = 1e-1,
                      log_fp=None) -> dict:
     """Run a complete 2-layer Qwen2.5-1.5B forward pass through Spike firmware."""
-    from sim.tokenizer import tokenize, embedding_lookup
+    from tokenizer import tokenize, embedding_lookup
 
     weights = load_weights_from_gguf(gguf_path)
     token_ids = tokenize(prompt, gguf_path)
@@ -893,7 +893,7 @@ def _prepare_mmul_op(model: FuncModel, idx: int, rng: np.random.RandomState) -> 
 
 
 def _prepare_sfu_op(model: FuncModel, idx: int, rng: np.random.RandomState) -> tuple:
-    from sim.golden_executor import GoldenSFU
+    from golden_executor import GoldenSFU
 
     dim = 8
     size = dim * 4
@@ -923,7 +923,7 @@ def _prepare_sfu_op(model: FuncModel, idx: int, rng: np.random.RandomState) -> t
 
 
 def _prepare_vector_op(model: FuncModel, idx: int, rng: np.random.RandomState) -> tuple:
-    from sim.golden_executor import GoldenVector
+    from golden_executor import GoldenVector
 
     dim = 16
     a = rng.randint(-128, 128, size=dim, dtype=np.int32)

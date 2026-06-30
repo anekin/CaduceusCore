@@ -9,9 +9,9 @@ from typing import Dict, List, Tuple
 import yaml
 
 from engine.timeline import SimulationReport
-from sim.model_specs import ModelSpec
-from sim.npu_sim import NPUSimulator
-from sim.timing.types import ModuleBreakdown, RequestMetrics, TokenTiming
+from model_specs import ModelSpec
+from npu_sim import NPUSimulator
+from timing.types import ModuleBreakdown, RequestMetrics, TokenTiming
 
 
 MODULE_KEYS = ("mxu", "sfu", "vector", "dma_weight", "dma_effective", "kv_cache", "noc_latency", "noc_contention")

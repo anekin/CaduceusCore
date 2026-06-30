@@ -1,8 +1,8 @@
 """RED TDD tests for TimingEngine (Task 4 — intentionally failing until Task 11)."""
 
-from sim.model_specs import get_spec
-from sim.timing.types import TokenTiming, RequestMetrics
-from sim.timing.timing_engine import TimingEngine
+from model_specs import get_spec
+from timing.types import TokenTiming, RequestMetrics
+from timing.timing_engine import TimingEngine
 
 
 class TestTimingEngineConstruction:

@@ -70,8 +70,8 @@ except ImportError:
 
 # Internal imports for Golden comparison
 try:
-    from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
-    from sim.golden_executor import GoldenExecutor
+    from regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
+    from golden_executor import GoldenExecutor
     REGMAP_AVAILABLE = True
 except ImportError:
     REGMAP_AVAILABLE = False

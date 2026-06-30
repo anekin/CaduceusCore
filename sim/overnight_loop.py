@@ -89,24 +89,22 @@ def check_model_consistency() -> List[str]:
     if "weight_preloaded: bool = True" in compiler_code:
         issues.append("compiler.py: weight_preloaded default is True (should be False for v2)")
 
-    # Check for broken import paths (e.g., "from sim.models" which doesn't exist)
+    # Check for broken import paths (e.g., "from sim.xxx" which doesn't exist)
     # This catches incomplete migration where old project structure imports survive
+    # GENERIC pattern: ANY "from sim.X" is broken since sim/ doesn't exist
     import subprocess as _subprocess
-    broken_import_patterns = [
-        (r"from sim\.models", "from models"),
-        (r"from sim\.engine", "from engine"),
-    ]
-    for pattern, fix in broken_import_patterns:
-        result = _subprocess.run(
-            ["grep", "-rn", pattern, "--include=*.py", str(SIM_DIR)],
-            capture_output=True, text=True
-        )
-        for line in result.stdout.strip().split("\n"):
-            if line and "__pycache__" not in line and "overnight_loop.py" not in line:
-                # exclude checker self-scanning
-                file_path = line.split(":")[0]
-                if "overnight_loop" not in file_path and "test_golden_deprecation" not in file_path:
-                    issues.append(f"broken import: {line.strip()} → should be {fix}")
+    result = _subprocess.run(
+        ["grep", "-rn", r"from sim\.", "--include=*.py", str(SIM_DIR)],
+        capture_output=True, text=True
+    )
+    for line in result.stdout.strip().split("\n"):
+        if line and "__pycache__" not in line:
+            file_path = line.split(":")[0]
+            # Exclude checker self-scanning and known excluded files
+            if ("overnight_loop" not in file_path
+                and "test_golden_deprecation" not in file_path
+                and "models/golden.py" not in file_path):
+                issues.append(f"broken import: {line.strip()} → remove 'sim.' prefix")
 
     # Check validate_e2e.py does not import deprecated models.golden
     e2e_path = SIM_DIR / "validate_e2e.py"
@@ -254,24 +252,42 @@ def fix_issues(issues: List[str]) -> int:
             log(f"    Fixed weight_preloaded default in compiler.py")
         elif "broken import" in issue:
             # Extract file path from issue and auto-fix
+            # Handle both specific (from sim.models.X import) and generic (from sim.X import) patterns
             import re as _re
-            m = _re.match(r"broken import: (.+?):(\d+):from sim\.(\w+)\.(\w+) import", issue)
+            # Pattern: "broken import: /path/to/file.py:NN:from sim.XXX import YYY"
+            # Allow leading whitespace before 'from'
+            m = _re.match(r"broken import: (.+?):\d+:\s*from sim\.([\w.]+) import", issue)
             if m:
                 filepath = m.group(1)
-                old_import = f"from sim.{m.group(3)}.{m.group(4)} import"
-                new_import = f"from {m.group(3)}.{m.group(4)} import"
+                old_prefix = f"from sim.{m.group(2)} import"
+                new_prefix = f"from {m.group(2)} import"
                 with open(filepath) as f:
                     content = f.read()
-                if old_import in content:
-                    content = content.replace(old_import, new_import)
+                if old_prefix in content:
+                    content = content.replace(old_prefix, new_prefix)
                     with open(filepath, "w") as f:
                         f.write(content)
                     fixed += 1
-                    log(f"    Fixed broken import in {filepath}: {old_import} → {new_import}")
+                    log(f"    Fixed broken import in {filepath}: {old_prefix} → {new_prefix}")
                 else:
                     log(f"    Pattern not found in {filepath} (may already be fixed)")
             else:
-                log(f"    Auto-fix not available for broken import — requires manual review")
+                # Try generic: "broken import: /path/to/file.py:NN:import sim.XXX"
+                m2 = _re.match(r"broken import: (.+?):\d+:import sim\.([\w.]+)", issue)
+                if m2:
+                    filepath = m2.group(1)
+                    old_import = f"import sim.{m2.group(2)}"
+                    new_import = f"import {m2.group(2)}"
+                    with open(filepath) as f:
+                        content = f.read()
+                    if old_import in content:
+                        content = content.replace(old_import, new_import)
+                        with open(filepath, "w") as f:
+                            f.write(content)
+                        fixed += 1
+                        log(f"    Fixed broken import in {filepath}: {old_import} → {new_import}")
+                else:
+                    log(f"    Auto-fix not available for broken import — requires manual review")
 
     return fixed
 

@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from sim.timing.dashboard import Dashboard
-from sim.timing.types import RequestMetrics
+from timing.dashboard import Dashboard
+from timing.types import RequestMetrics
 
 
 # ---------------------------------------------------------------------------

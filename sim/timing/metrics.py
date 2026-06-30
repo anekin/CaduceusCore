@@ -4,7 +4,7 @@ from dataclasses import asdict, replace
 from statistics import mean
 from typing import Any
 
-from sim.timing.types import RequestMetrics
+from timing.types import RequestMetrics
 
 
 class MetricsCollector:

@@ -272,7 +272,7 @@ class NPUFirmware:
 
     def _dram_read(self, addr: int, size: int) -> bytes:
         """Read from DRAM with address translation."""
-        from sim.regmap import Addr
+        from regmap import Addr
         off = addr - Addr.DRAM_BASE
         dram = self.mod.get('dram', bytearray())
         return bytes(dram[off:off + size])
@@ -286,15 +286,15 @@ class NPUFirmware:
 
     def _dispatch(self, cmd: dict) -> dict:
         """Dispatch command to NPU modules via MMIO."""
-        from sim.regmap import MXU, SFU, VECTOR, DMA
+        from regmap import MXU, SFU, VECTOR, DMA
 
         desc = self._read_descriptor(cmd['desc_addr'])
         result = {'opcode': cmd['opcode'], 'status': 'unknown'}
         op = cmd['opcode']
 
         if op == OpCode.MMUL:  # MMUL — tile-level scheduling
-            from sim.tile_scheduler import tile_mmul
-            from sim.regmap import DMA, MXU
+            from tile_scheduler import tile_mmul
+            from regmap import DMA, MXU
 
             def mwrite(base, off, val):
                 self._mmio_write(base + off, val)

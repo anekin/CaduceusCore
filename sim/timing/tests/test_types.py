@@ -1,7 +1,7 @@
 """Tests for sim/timing/types.py dataclasses and SimulationReport extension."""
 
 from engine.timeline import SimulationReport
-from sim.timing.types import ModuleBreakdown, TokenTiming, RequestMetrics
+from timing.types import ModuleBreakdown, TokenTiming, RequestMetrics
 
 
 class TestSimulationReportExtension:

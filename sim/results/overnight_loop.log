@@ -955,3 +955,291 @@
 [16:00:31] Step 4: Generating summary...
 [16:00:31]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
 [16:00:31] === Iteration 84 Complete ===
+[20:10:18] === Overnight Loop Started ===
+[20:10:18] === Iteration 85 ===
+[20:10:18] Step 1: Checking model consistency...
+[20:10:18]   All models consistent ✅
+[20:10:18] Step 2: Running parameter sweep...
+[20:10:19]   Baseline: 24 tok/s
+[20:10:19] Step 3: Running E2E validation...
+[20:10:19]   E2E: 31.0 tok/s, target: ✅
+[20:10:19] Step 4: Generating summary...
+[20:10:19]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[20:10:19] === Iteration 85 Complete ===
+[22:07:19] === Overnight Loop Started ===
+[22:07:19] === Iteration 86 ===
+[22:07:19] Step 1: Checking model consistency...
+[22:07:19]   All models consistent ✅
+[22:07:19] Step 2: Running parameter sweep...
+[22:07:19]   Baseline: 24 tok/s
+[22:07:19] Step 3: Running E2E validation...
+[22:07:19]   E2E: 31.0 tok/s, target: ✅
+[22:07:19] Step 4: Generating summary...
+[22:07:19]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[22:07:19] === Iteration 86 Complete ===
+[00:05:26] === Overnight Loop Started ===
+[00:05:26] === Iteration 87 ===
+[00:05:26] Step 1: Checking model consistency...
+[00:05:26]   All models consistent ✅
+[00:05:26] Step 2: Running parameter sweep...
+[00:05:26]   Baseline: 24 tok/s
+[00:05:26] Step 3: Running E2E validation...
+[00:05:26]   E2E: 31.0 tok/s, target: ✅
+[00:05:26] Step 4: Generating summary...
+[00:05:26]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[00:05:26] === Iteration 87 Complete ===
+[02:05:42] === Overnight Loop Started ===
+[02:05:42] === Iteration 88 ===
+[02:05:42] Step 1: Checking model consistency...
+[02:05:43]   All models consistent ✅
+[02:05:43] Step 2: Running parameter sweep...
+[02:05:43]   Baseline: 24 tok/s
+[02:05:43] Step 3: Running E2E validation...
+[02:05:43]   E2E: 31.0 tok/s, target: ✅
+[02:05:43] Step 4: Generating summary...
+[02:05:43]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[02:05:43] === Iteration 88 Complete ===
+[04:01:08] === Overnight Loop Started ===
+[04:01:08] === Iteration 89 ===
+[04:01:08] Step 1: Checking model consistency...
+[04:01:08]   All models consistent ✅
+[04:01:08] Step 2: Running parameter sweep...
+[04:01:09]   Baseline: 24 tok/s
+[04:01:09] Step 3: Running E2E validation...
+[04:01:09]   E2E: 31.0 tok/s, target: ✅
+[04:01:09] Step 4: Generating summary...
+[04:01:09]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[04:01:09] === Iteration 89 Complete ===
+[06:03:28] === Overnight Loop Started ===
+[06:03:28] === Iteration 90 ===
+[06:03:28] Step 1: Checking model consistency...
+[06:03:28]   All models consistent ✅
+[06:03:28] Step 2: Running parameter sweep...
+[06:03:28]   Baseline: 24 tok/s
+[06:03:28] Step 3: Running E2E validation...
+[06:03:28]   E2E: 31.0 tok/s, target: ✅
+[06:03:28] Step 4: Generating summary...
+[06:03:28]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[06:03:28] === Iteration 90 Complete ===
+[08:06:14] === Overnight Loop Started ===
+[08:06:14] === Iteration 91 ===
+[08:06:14] Step 1: Checking model consistency...
+[08:06:14]   All models consistent ✅
+[08:06:14] Step 2: Running parameter sweep...
+[08:06:14]   Baseline: 24 tok/s
+[08:06:14] Step 3: Running E2E validation...
+[08:06:14]   E2E: 31.0 tok/s, target: ✅
+[08:06:14] Step 4: Generating summary...
+[08:06:14]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[08:06:14] === Iteration 91 Complete ===
+[08:08:00] === Overnight Loop Started ===
+[08:08:00] === Iteration 92 ===
+[08:08:00] Step 1: Checking model consistency...
+[08:08:00]   Found 45 issues:
+[08:08:00]     - broken import: /Users/zheng/npu/sim/axi_tracer.py:55:        from sim.regmap import Addr → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/tests/test_firmware.py:18:from sim.miniv import NPUFirmware → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/tests/test_mmio_bridge.py:12:from sim.mmio_bridge import MMIOBridge → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/tests/test_mmio_bridge.py:13:from sim.regmap import SFU, VECTOR → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/metrics.py:7:from sim.timing.types import RequestMetrics → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/benchmark.py:16:from sim.model_specs import ModelSpec, all_aliases, get_spec → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/benchmark.py:17:from sim.timing.dashboard import Dashboard → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/benchmark.py:18:from sim.timing.metrics import MetricsCollector → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/benchmark.py:19:from sim.timing.timing_engine import TimingEngine → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/benchmark.py:20:from sim.timing.types import RequestMetrics → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/f3_crosscheck.py:8:from sim.model_specs import get_spec, llm_aliases → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/f3_crosscheck.py:9:from sim.npu_sim import NPUSimulator → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/f3_crosscheck.py:10:from sim.timing.timing_engine import _build_llm_trace  # reuse trace builder → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/tests/test_metrics.py:9:from sim.timing.metrics import MetricsCollector → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/tests/test_metrics.py:10:from sim.timing.types import RequestMetrics → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/tests/test_dashboard.py:11:from sim.timing.dashboard import Dashboard → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/tests/test_dashboard.py:12:from sim.timing.types import RequestMetrics → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/tests/test_timing_engine.py:3:from sim.model_specs import get_spec → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/tests/test_timing_engine.py:4:from sim.timing.types import TokenTiming, RequestMetrics → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/tests/test_timing_engine.py:5:from sim.timing.timing_engine import TimingEngine → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/tests/test_benchmark.py:8:from sim.model_specs import all_aliases → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/tests/test_benchmark.py:9:from sim.timing.benchmark import main → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/tests/test_benchmark.py:10:from sim.timing.types import ModuleBreakdown, RequestMetrics, TokenTiming → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/tests/test_types.py:4:from sim.timing.types import ModuleBreakdown, TokenTiming, RequestMetrics → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/dashboard.py:12:from sim.timing.metrics import MetricsCollector → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/dashboard.py:13:from sim.timing.types import RequestMetrics → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/timing_engine.py:12:from sim.model_specs import ModelSpec → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/timing_engine.py:13:from sim.npu_sim import NPUSimulator → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/timing/timing_engine.py:14:from sim.timing.types import ModuleBreakdown, RequestMetrics, TokenTiming → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/spike_mmio_server.py:33:from sim.func_model import FuncModel → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/spike_mmio_server.py:34:from sim.mmio_bridge import MMIOBridge → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/cocotb_bridge.py:73:    from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/cocotb_bridge.py:74:    from sim.golden_executor import GoldenExecutor → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/miniv.py:275:        from sim.regmap import Addr → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/miniv.py:289:        from sim.regmap import MXU, SFU, VECTOR, DMA → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/miniv.py:296:            from sim.tile_scheduler import tile_mmul → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/miniv.py:297:            from sim.regmap import DMA, MXU → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/spike_host.py:27:from sim.func_model import FuncModel → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/spike_host.py:28:from sim.golden_executor import GoldenMXU → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/spike_host.py:29:from sim.quantize import quantize_int4_per_block → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/spike_host.py:30:from sim.regmap import Addr, DOORBELL, MXU → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/spike_host.py:31:from sim.spike_mmio_server import DEFAULT_SOCK_PATH, serve → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/spike_host.py:583:    from sim.tokenizer import tokenize, embedding_lookup → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/spike_host.py:896:    from sim.golden_executor import GoldenSFU → remove 'sim.' prefix
+[08:08:00]     - broken import: /Users/zheng/npu/sim/spike_host.py:926:    from sim.golden_executor import GoldenVector → remove 'sim.' prefix
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/axi_tracer.py:55:        from sim.regmap import Addr → remove 'sim.' prefix
+[08:08:00]     Auto-fix not available for broken import — requires manual review
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/tests/test_firmware.py:18:from sim.miniv import NPUFirmware → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/tests/test_firmware.py: from sim.miniv import → from miniv import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/tests/test_mmio_bridge.py:12:from sim.mmio_bridge import MMIOBridge → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/tests/test_mmio_bridge.py: from sim.mmio_bridge import → from mmio_bridge import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/tests/test_mmio_bridge.py:13:from sim.regmap import SFU, VECTOR → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/tests/test_mmio_bridge.py: from sim.regmap import → from regmap import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/metrics.py:7:from sim.timing.types import RequestMetrics → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/metrics.py: from sim.timing.types import → from timing.types import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/benchmark.py:16:from sim.model_specs import ModelSpec, all_aliases, get_spec → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/benchmark.py: from sim.model_specs import → from model_specs import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/benchmark.py:17:from sim.timing.dashboard import Dashboard → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/benchmark.py: from sim.timing.dashboard import → from timing.dashboard import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/benchmark.py:18:from sim.timing.metrics import MetricsCollector → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/benchmark.py: from sim.timing.metrics import → from timing.metrics import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/benchmark.py:19:from sim.timing.timing_engine import TimingEngine → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/benchmark.py: from sim.timing.timing_engine import → from timing.timing_engine import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/benchmark.py:20:from sim.timing.types import RequestMetrics → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/benchmark.py: from sim.timing.types import → from timing.types import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/f3_crosscheck.py:8:from sim.model_specs import get_spec, llm_aliases → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/f3_crosscheck.py: from sim.model_specs import → from model_specs import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/f3_crosscheck.py:9:from sim.npu_sim import NPUSimulator → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/f3_crosscheck.py: from sim.npu_sim import → from npu_sim import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/f3_crosscheck.py:10:from sim.timing.timing_engine import _build_llm_trace  # reuse trace builder → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/f3_crosscheck.py: from sim.timing.timing_engine import → from timing.timing_engine import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/tests/test_metrics.py:9:from sim.timing.metrics import MetricsCollector → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/tests/test_metrics.py: from sim.timing.metrics import → from timing.metrics import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/tests/test_metrics.py:10:from sim.timing.types import RequestMetrics → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/tests/test_metrics.py: from sim.timing.types import → from timing.types import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/tests/test_dashboard.py:11:from sim.timing.dashboard import Dashboard → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/tests/test_dashboard.py: from sim.timing.dashboard import → from timing.dashboard import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/tests/test_dashboard.py:12:from sim.timing.types import RequestMetrics → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/tests/test_dashboard.py: from sim.timing.types import → from timing.types import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/tests/test_timing_engine.py:3:from sim.model_specs import get_spec → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/tests/test_timing_engine.py: from sim.model_specs import → from model_specs import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/tests/test_timing_engine.py:4:from sim.timing.types import TokenTiming, RequestMetrics → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/tests/test_timing_engine.py: from sim.timing.types import → from timing.types import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/tests/test_timing_engine.py:5:from sim.timing.timing_engine import TimingEngine → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/tests/test_timing_engine.py: from sim.timing.timing_engine import → from timing.timing_engine import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/tests/test_benchmark.py:8:from sim.model_specs import all_aliases → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/tests/test_benchmark.py: from sim.model_specs import → from model_specs import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/tests/test_benchmark.py:9:from sim.timing.benchmark import main → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/tests/test_benchmark.py: from sim.timing.benchmark import → from timing.benchmark import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/tests/test_benchmark.py:10:from sim.timing.types import ModuleBreakdown, RequestMetrics, TokenTiming → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/tests/test_benchmark.py: from sim.timing.types import → from timing.types import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/tests/test_types.py:4:from sim.timing.types import ModuleBreakdown, TokenTiming, RequestMetrics → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/tests/test_types.py: from sim.timing.types import → from timing.types import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/dashboard.py:12:from sim.timing.metrics import MetricsCollector → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/dashboard.py: from sim.timing.metrics import → from timing.metrics import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/dashboard.py:13:from sim.timing.types import RequestMetrics → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/dashboard.py: from sim.timing.types import → from timing.types import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/timing_engine.py:12:from sim.model_specs import ModelSpec → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/timing_engine.py: from sim.model_specs import → from model_specs import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/timing_engine.py:13:from sim.npu_sim import NPUSimulator → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/timing_engine.py: from sim.npu_sim import → from npu_sim import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/timing/timing_engine.py:14:from sim.timing.types import ModuleBreakdown, RequestMetrics, TokenTiming → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/timing/timing_engine.py: from sim.timing.types import → from timing.types import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/spike_mmio_server.py:33:from sim.func_model import FuncModel → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/spike_mmio_server.py: from sim.func_model import → from func_model import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/spike_mmio_server.py:34:from sim.mmio_bridge import MMIOBridge → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/spike_mmio_server.py: from sim.mmio_bridge import → from mmio_bridge import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/cocotb_bridge.py:73:    from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC → remove 'sim.' prefix
+[08:08:00]     Auto-fix not available for broken import — requires manual review
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/cocotb_bridge.py:74:    from sim.golden_executor import GoldenExecutor → remove 'sim.' prefix
+[08:08:00]     Auto-fix not available for broken import — requires manual review
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/miniv.py:275:        from sim.regmap import Addr → remove 'sim.' prefix
+[08:08:00]     Auto-fix not available for broken import — requires manual review
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/miniv.py:289:        from sim.regmap import MXU, SFU, VECTOR, DMA → remove 'sim.' prefix
+[08:08:00]     Auto-fix not available for broken import — requires manual review
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/miniv.py:296:            from sim.tile_scheduler import tile_mmul → remove 'sim.' prefix
+[08:08:00]     Auto-fix not available for broken import — requires manual review
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/miniv.py:297:            from sim.regmap import DMA, MXU → remove 'sim.' prefix
+[08:08:00]     Auto-fix not available for broken import — requires manual review
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/spike_host.py:27:from sim.func_model import FuncModel → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/spike_host.py: from sim.func_model import → from func_model import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/spike_host.py:28:from sim.golden_executor import GoldenMXU → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/spike_host.py: from sim.golden_executor import → from golden_executor import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/spike_host.py:29:from sim.quantize import quantize_int4_per_block → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/spike_host.py: from sim.quantize import → from quantize import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/spike_host.py:30:from sim.regmap import Addr, DOORBELL, MXU → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/spike_host.py: from sim.regmap import → from regmap import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/spike_host.py:31:from sim.spike_mmio_server import DEFAULT_SOCK_PATH, serve → remove 'sim.' prefix
+[08:08:00]     Fixed broken import in /Users/zheng/npu/sim/spike_host.py: from sim.spike_mmio_server import → from spike_mmio_server import
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/spike_host.py:583:    from sim.tokenizer import tokenize, embedding_lookup → remove 'sim.' prefix
+[08:08:00]     Auto-fix not available for broken import — requires manual review
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/spike_host.py:896:    from sim.golden_executor import GoldenSFU → remove 'sim.' prefix
+[08:08:00]     Auto-fix not available for broken import — requires manual review
+[08:08:00]   Fixing: broken import: /Users/zheng/npu/sim/spike_host.py:926:    from sim.golden_executor import GoldenVector → remove 'sim.' prefix
+[08:08:00]     Auto-fix not available for broken import — requires manual review
+[08:08:00]   Fixed 35/45 issues
+[08:08:00] Step 2: Running parameter sweep...
+[08:08:00]   Baseline: 24 tok/s
+[08:08:00] Step 3: Running E2E validation...
+[08:08:00]   E2E: 31.0 tok/s, target: ✅
+[08:08:00] Step 4: Generating summary...
+[08:08:00]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[08:08:00] === Iteration 92 Complete ===
+[08:14:45] === Overnight Loop Started ===
+[08:14:45] === Iteration 93 ===
+[08:14:45] Step 1: Checking model consistency...
+[08:14:45]   All models consistent ✅
+[08:14:45] Step 2: Running parameter sweep...
+[08:14:45]   Baseline: 24 tok/s
+[08:14:45] Step 3: Running E2E validation...
+[08:14:45]   E2E: 31.0 tok/s, target: ✅
+[08:14:45] Step 4: Generating summary...
+[08:14:45]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[08:14:45] === Iteration 93 Complete ===
+[10:09:51] === Overnight Loop Started ===
+[10:09:51] === Iteration 94 ===
+[10:09:51] Step 1: Checking model consistency...
+[10:09:51]   All models consistent ✅
+[10:09:51] Step 2: Running parameter sweep...
+[10:09:51]   Baseline: 24 tok/s
+[10:09:51] Step 3: Running E2E validation...
+[10:09:51]   E2E: 31.0 tok/s, target: ✅
+[10:09:51] Step 4: Generating summary...
+[10:09:51]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[10:09:51] === Iteration 94 Complete ===
+[12:05:34] === Overnight Loop Started ===
+[12:05:34] === Iteration 95 ===
+[12:05:34] Step 1: Checking model consistency...
+[12:05:34]   All models consistent ✅
+[12:05:34] Step 2: Running parameter sweep...
+[12:05:34]   Baseline: 24 tok/s
+[12:05:34] Step 3: Running E2E validation...
+[12:05:34]   E2E: 31.0 tok/s, target: ✅
+[12:05:34] Step 4: Generating summary...
+[12:05:34]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[12:05:34] === Iteration 95 Complete ===
+[12:05:50] === Hermes Manual Inspection (Iteration 95 aftermath) ===
+[12:05:50]   Verified: zero "from sim." / "import sim." in codebase
+[12:05:50]   Verified: 95 start markers, 96 complete markers (iter_count correct)
+[12:05:50]   Verified: no Post-Analysis markers in log
+[12:05:50]   Verified: param_sweep_v2.json consistent with morning_summary.md
+[12:05:50]   Verified: all 10 previously-unfixed imports from Iteration 92 resolved
+[12:05:50]   Health: all 6 architecture checks pass. E2E 31.0 tok/s ✅
+[12:05:50]   DRAM: 33.0/43.5 GB/s (76%) — approaching but not exceeding
+[12:05:50] === Manual Inspection Complete ===
+[14:05:30] === Overnight Loop Started ===
+[14:05:30] === Iteration 96 ===
+[14:05:30] Step 1: Checking model consistency...
+[14:05:30]   All models consistent ✅
+[14:05:30] Step 2: Running parameter sweep...
+[14:05:30]   Baseline: 24 tok/s
+[14:05:30] Step 3: Running E2E validation...
+[14:05:30]   E2E: 31.0 tok/s, target: ✅
+[14:05:30] Step 4: Generating summary...
+[14:05:30]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[14:05:30] === Iteration 96 Complete ===
+[16:05:32] === Overnight Loop Started ===
+[16:05:32] === Iteration 97 ===
+[16:05:32] Step 1: Checking model consistency...
+[16:05:32]   All models consistent ✅
+[16:05:32] Step 2: Running parameter sweep...
+[16:05:32]   Baseline: 24 tok/s
+[16:05:32] Step 3: Running E2E validation...
+[16:05:32]   E2E: 31.0 tok/s, target: ✅
+[16:05:32] Step 4: Generating summary...
+[16:05:32]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[16:05:32] === Iteration 97 Complete ===

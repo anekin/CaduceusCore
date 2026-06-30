@@ -30,8 +30,8 @@ _PACKAGE_ROOT = os.path.dirname(_SCRIPT_DIR)
 if _PACKAGE_ROOT not in sys.path:
     sys.path.insert(0, _PACKAGE_ROOT)
 
-from sim.func_model import FuncModel
-from sim.mmio_bridge import MMIOBridge
+from func_model import FuncModel
+from mmio_bridge import MMIOBridge
 
 
 DEFAULT_SOCK_PATH = "/tmp/npu_mmio.sock"
