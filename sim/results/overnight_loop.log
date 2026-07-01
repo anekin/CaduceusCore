@@ -1373,3 +1373,21 @@
 [06:01:30] Overnight loop code fixes since last audit: e2e-parser-last-match ✅, iter-count-post-analysis ✅, conclusion-line-parser ✅.
 [06:01:30] Remaining preflight pattern in overnight_loop.py: issues-fixed-undercount (benign, all fix branches counted).
 [06:01:30] === Iteration 108 Post-Analysis Complete ===
+[08:10:26] === Overnight Loop Started ===
+[08:10:26] === Iteration 109 ===
+[08:10:26] Step 1: Checking model consistency...
+[08:10:26]   All models consistent ✅
+[08:10:26] Step 2: Running parameter sweep...
+[08:10:26]   Baseline: 24 tok/s
+[08:10:26] Step 3: Running E2E validation...
+[08:10:26]   E2E: 24.0 tok/s, target: ❌
+[08:10:26] Step 4: Generating summary...
+[08:10:26]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[08:10:26] === Iteration 109 Complete ===
+[08:10:42] === Iteration 109 Post-Analysis ===
+[08:10:42] Stale constraint RECONFIRMED: prompt claims "batch M>=2 -> 31 tok/s" (actual 12-19, 2.6x gap). DRAM "20.2 GB/s" (actual 33.0, 1.6x gap).
+[08:10:42] Error pattern "stale-cron-user-constraints" (error_id=31) created in error_db.
+[08:10:42] All 6 health checks pass: weight_preloaded clean, dram_efficiency 0.85, v2 MXU, validate_e2e v2, DRAM BW OK, engines v2-compliant.
+[08:10:42] E2E target 25 tok/s: NOT MET (24.0 tok/s). Root cause unchanged: M=1 DRAM-bandwidth-bound at 76% utilization.
+[08:10:42] No code issues detected. 109 iterations of clean health checks.
+[08:10:42] === Iteration 109 Post-Analysis Complete ===
