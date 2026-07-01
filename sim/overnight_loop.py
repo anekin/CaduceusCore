@@ -327,6 +327,16 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
     dram_available = 43.5  # GB/s effective
     bw_pct = (dram_demand / dram_available) * 100 if dram_available > 0 else 0
 
+    # Compute batch range for dynamic summary (not hardcoded)
+    _batch_toks_list = [r.get("tok_s", 0) for r in sweep.get("all_results", [])
+                        if "batch" in r.get("config", "").lower() and r.get("tok_s", 0) > 0]
+    _batch_min = min(_batch_toks_list) if _batch_toks_list else 0
+    _batch_max = max(_batch_toks_list) if _batch_toks_list else 0
+    _batch_range = f"{_batch_min:.0f}-{_batch_max:.0f}" if _batch_toks_list else "N/A"
+    _proj_min = _batch_min * 4 if _batch_min > 0 else 0  # inter-op parallelism 4×
+    _proj_max = _batch_max * 4 if _batch_max > 0 else 0
+    _proj_range = f"{_proj_min:.0f}-{_proj_max:.0f}" if _batch_toks_list else "N/A"
+
     lines = [
         f"# CaduceusCore Overnight Loop — {datetime.now().strftime('%Y-%m-%d %H:%M')}",
         f"",
@@ -388,7 +398,7 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
         f"> Per-tile compute scales correctly: {_H}×{_W} gives {_H*2+_W}→{_H*3+_W}→{_H*5+_W}→{_H*9+_W} cycles for M=1→2→4→8.",
         f"> **M=1 decode is DRAM-bandwidth-bound**: {dram_demand:.1f}/{dram_available} GB/s ({bw_pct:.0f}%) — explains why all array sizes converge to similar ~25 tok/s.",
         f"> **M≥2 batch shifts bottleneck to compute**: tiling overhead amortized, throughput scales with M.",
-        f"> **Batch decode (raw)**: 12-19 tok/s on {_H}×{_W}. With inter-op parallelism projected 47-76 tok/s.",
+        f"> **Batch decode (raw)**: {_batch_range} tok/s on {_H}×{_W}. With inter-op parallelism projected {_proj_range} tok/s.",
         f"> **Per-tile DRAM is fine**: DMA ({int((_H*_W*4/8+_H*8/8)/dram_available):.0f} cycles) ≪ per-tile compute — but M=1's aggregate BW demand dominates.",
     ]
     lines += [
@@ -453,7 +463,7 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
         f"- **M=1 decode**: {sweep.get('baseline_tok_s', 15):.1f} tok/s — DRAM-bandwidth-bound: all array sizes converge to similar ~{sweep.get('baseline_tok_s', 25):.1f} tok/s at {bw_pct:.0f}% BW utilization",
         f"- **DRAM demand**: {dram_demand:.1f} / {dram_available} GB/s ({bw_pct:.0f}%) — significant for M=1 but per-tile traffic is small",
         f"- **Tiling overhead**: per-tile compute = H×(M+1)+W, {_H*2+_W} cycles for M=1, {_H*3+_W} for M=2",
-        f"- **Batch decode (raw)**: 12-19 tok/s on {_H}×{_W}. With inter-op parallelism projected 47-76 tok/s.",
+        f"- **Batch decode (raw)**: {_batch_range} tok/s on {_H}×{_W}. With inter-op parallelism projected {_proj_range} tok/s.",
         f"- **Real bottleneck hierarchy**: M=1 → DRAM BW; M≥2 → pipeline fill+drain (systolic array fundamental limit)",
         "",
         "---",
