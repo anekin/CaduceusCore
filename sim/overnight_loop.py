@@ -344,7 +344,7 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
                 t = r.get("tok_s", 0)
                 a = r.get("area_mm2", 0)
                 flag = "✅ target" if t >= 25 else "❌"
-                lines.append(f"| {r['config']} | {t:.0f} | {a}mm² | {flag} |")
+                lines.append(f"| {r['config']} | {t:.1f} | {a}mm² | {flag} |")
     else:
         lines.append("| — | — | — | No sweep data |")
 
@@ -450,7 +450,7 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
         "",
         "## Bottleneck Analysis",
         "",
-        f"- **M=1 decode**: {sweep.get('baseline_tok_s', 15):.0f} tok/s — DRAM-bandwidth-bound: all array sizes converge to similar ~{sweep.get('baseline_tok_s', 25):.0f} tok/s at {bw_pct:.0f}% BW utilization",
+        f"- **M=1 decode**: {sweep.get('baseline_tok_s', 15):.1f} tok/s — DRAM-bandwidth-bound: all array sizes converge to similar ~{sweep.get('baseline_tok_s', 25):.1f} tok/s at {bw_pct:.0f}% BW utilization",
         f"- **DRAM demand**: {dram_demand:.1f} / {dram_available} GB/s ({bw_pct:.0f}%) — significant for M=1 but per-tile traffic is small",
         f"- **Tiling overhead**: per-tile compute = H×(M+1)+W, {_H*2+_W} cycles for M=1, {_H*3+_W} for M=2",
         f"- **Batch decode (raw)**: 12-19 tok/s on {_H}×{_W}. With inter-op parallelism projected 47-76 tok/s.",
@@ -518,4 +518,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    result = main()
+    import json as _json
+    print(f"\n=== RESULT: {_json.dumps(result, default=str)} ===")

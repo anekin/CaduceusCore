@@ -1,5 +1,31 @@
 # Architectural Observations Log
 
+## 2026-07-01 14:10 — Iteration 112 — Stable, No Code Issues
+
+### Run Summary
+- **Iteration**: 112 (stable since iter 104, 9+ consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 6 health checks**: ✅ PASS
+- **Tooling reflexivity audit**: ✅ PASS (overnight_loop.py defended against all known patterns)
+
+### Preflight Hits and Actions
+Preflight warned about `stale-cron-user-constraints` [high] — confirmed in user prompt:
+- Prompt claim "batch M≥2 → 31 tok/s" vs actual 12 tok/s (2.6× gap)
+- Prompt claim "DRAM 20.2 GB/s" vs actual 33.0 GB/s (1.6× gap)
+Both stale claims are already corrected in auto-generated morning_summary.md (fixed in iter 109).
+
+### Bottleneck Status (Unchanged)
+M=1 decode (64×64) remains DRAM-bandwidth-bound at 76% utilization. Several configs hit target:
+- 64×256: 25 tok/s @ 32mm² — pragmatic target
+- 128×256: 25 tok/s @ 42mm²
+- 256×256: 25 tok/s @ 108mm² — expensive
+
+### Architecture Q
+Should we switch default config to 64×256 (hits 25 tok/s target at 32mm²) or stay at 64×64 (misses by 4% but smaller area)?
+
+---
+
 ## 2026-06-29 10:06 — Stable Confirmed (iter 109)
 
 Stable for 6 iterations (104-109). No code issues. All 6 health checks pass.
