@@ -47,12 +47,24 @@ SFU_DIR      := $(RTL_DIR)/sfu
 VECTOR_DIR   := $(RTL_DIR)/vector
 
 SIM_DIR      := ..
+REPO_ROOT    := $(abspath $(SIM_DIR)/..)
 
 # ── VCS settings ───────────────────────────────────────────────────────────
 VCS          := vcs
 VCS_OPTS     := -full64 -sverilog -debug_access+all -timescale=1ns/1ps
 VCS_COMMON   := $(VCS_OPTS) +v2k +lint=all +warn=all
 SIMV_OPTS    :=
+
+# ── Cocotb environment (EDA server has Python 2.7 as system python) ────────
+# Use the pre-installed Anaconda Python 3.11 env that has cocotb/cocotbext-*.
+COCOTB_PY_ENV ?= /NAS/Tools/anaconda3/envs/py3.11
+export PATH   := $(COCOTB_PY_ENV)/bin:$(PATH)
+PYTHON        := $(COCOTB_PY_ENV)/bin/python
+COCOTB_VPI_LIB := $(shell $(COCOTB_PY_ENV)/bin/cocotb-config --lib-name-path vpi vcs 2>/dev/null)
+COCOTB_LIB_DIR := $(COCOTB_PY_ENV)/lib/python3.11/site-packages/cocotb/libs
+
+# VPI PLI table required by VCS to grant cocotb read/write access
+PLI_TAB       := $(REPO_ROOT)/sim/regression/pli.tab
 
 # Detect if VCS is available (vs running on a machine without EDA tools)
 VCS_AVAILABLE := $(shell which vcs 2>/dev/null)
@@ -70,6 +82,31 @@ GREEN  := \033[0;32m
 RED    := \033[0;31m
 YELLOW := \033[0;33m
 NC     := \033[0m
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Cocotb VPI support
+# ═══════════════════════════════════════════════════════════════════════════
+
+$(PLI_TAB):
+	@echo "acc+=rw,wn:*" > $@
+
+SOC_SIMV_COCOTB := simv_soc_cocotb
+
+$(SOC_SIMV_COCOTB): $(SOC_SRC) $(SOC_FLIST) $(PLI_TAB)
+	@echo "$(YELLOW)[SOC_COCOTB] Compiling tb_soc + cocotb VPI...$(NC)"
+	cd $(REPO_ROOT) && $(VCS) $(VCS_COMMON) \
+		+define+COCOTB_SIM=1 +vpi -P $(PLI_TAB) \
+		-load $(COCOTB_VPI_LIB) \
+		-f rtl/cpu/ibex.flist \
+		-f rtl/ip/verilog-axi.flist \
+		-f rtl/ip/verilog-pcie.flist \
+		-f rtl/soc/soc.flist \
+		-top tb_soc \
+		rtl/tb/tb_soc.v \
+		-o sim/regression/$(SOC_SIMV_COCOTB) \
+		-l sim/regression/qwen_blk0_elab.log
+	@echo "$(GREEN)[SOC_COCOTB] Compilation finished$(NC)"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -220,16 +257,16 @@ $(SOC_SIMV): $(SOC_SRC) $(SOC_FLIST)
 	@echo "$(YELLOW)[SOC_ELAB] Compiling tb_soc + caduceus_soc_top...$(NC)"
 	@echo "$(YELLOW)[SOC_ELAB] This includes ibex, verilog-axi, verilog-pcie filelists$(NC)"
 	@echo "$(YELLOW)[SOC_ELAB] NOTE: ibex.flist FIRST (ibex_pkg.sv needed before ibex_wrapper)$(NC)"
-	$(VCS) $(VCS_COMMON) \
-		-f $(IBEX_FLIST) \
-		-f $(AXI_FLIST) \
-		-f $(PCIE_FLIST) \
-		-f $(SOC_FLIST) \
+	cd $(REPO_ROOT) && $(VCS) $(VCS_COMMON) \
+		-f rtl/cpu/ibex.flist \
+		-f rtl/ip/verilog-axi.flist \
+		-f rtl/ip/verilog-pcie.flist \
+		-f rtl/soc/soc.flist \
 		-top tb_soc \
-		$(SOC_SRC) \
-		-o $(SOC_SIMV) \
-		-l soc_elab.log
-	@echo "$(GREEN)[SOC_ELAB] SoC compilation finished — see soc_elab.log$(NC)"
+		rtl/tb/tb_soc.v \
+		-o sim/regression/$(SOC_SIMV) \
+		-l sim/regression/soc_elab.log
+	@echo "$(GREEN)[SOC_ELAB] SoC compilation finished — see sim/regression/soc_elab.log$(NC)"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -237,25 +274,277 @@ $(SOC_SIMV): $(SOC_SRC) $(SOC_FLIST)
 # ═══════════════════════════════════════════════════════════════════════════
 
 .PHONY: run_qwen_e2e
-run_qwen_e2e:
+run_qwen_e2e: $(SOC_SIMV_COCOTB)
 	@echo "$(YELLOW)[QWEN_E2E] Running cocotb Qwen2.5-3B smoke test...$(NC)"
-	@echo "$(YELLOW)[QWEN_E2E] Requires: pip install cocotb cocotbext-axi cocotbext-pcie$(NC)"
-	$(VCS) $(VCS_COMMON) \
-		-f $(IBEX_FLIST) \
-		-f $(AXI_FLIST) \
-		-f $(PCIE_FLIST) \
-		-f $(SOC_FLIST) \
-		-top tb_soc \
-		$(TB_DIR)/tb_soc.v \
-		-o $(SOC_SIMV) \
-		-l qwen_e2e_elab.log
-	@echo "$(YELLOW)[QWEN_E2E] Starting cocotb simulation...$(NC)"
-	cd ../.. && PYTHONPATH=sim MODULE=cocotb_bridge.test_qwen_smoke \
+	@echo "$(YELLOW)[QWEN_E2E] Using cocotb env: $(COCOTB_PY_ENV)$(NC)"
+	cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_qwen_smoke \
 		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
-		python -m cocotb_test.simulator run 2>&1 | tee sim/regression/qwen_e2e.log
-	@grep -q "E2E.*PASS\|Qwen E2E.*passed" sim/regression/qwen_e2e.log && \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_results.xml \
+		./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e.log
+	@grep -q "E2E.*PASS\|Qwen E2E.*passed\|test_qwen_smoke passed" $(REPO_ROOT)/sim/regression/qwen_e2e.log && \
 		echo "$(GREEN)QWEN_E2E: PASS$(NC)" || \
 		(echo "$(RED)QWEN_E2E: FAIL$(NC)" && exit 1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# run_e2e_blk0 — Cocotb Qwen2.5-3B blk.0 all 17 ops
+# ═══════════════════════════════════════════════════════════════════════════
+
+.PHONY: run_e2e_blk0
+run_e2e_blk0: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_BLK0] Running cocotb blk.0 17-op chain...$(NC)"
+	@echo "$(YELLOW)[E2E_BLK0] Using cocotb env: $(COCOTB_PY_ENV)$(NC)"
+	cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_qwen_blk0 \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_blk0_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_blk0.log
+	@grep -q "BLK0.*PASS\|blk0.*passed\|all 17 ops" $(REPO_ROOT)/sim/regression/qwen_blk0.log && \
+		echo "$(GREEN)E2E_BLK0: PASS$(NC)" || \
+		(echo "$(RED)E2E_BLK0: FAIL$(NC)" && exit 1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Per-op e2e targets for isolated P0 debugging
+# ═══════════════════════════════════════════════════════════════════════════
+
+.PHONY: run_e2e_rmsnorm run_e2e_softmax run_e2e_rope run_e2e_silu \
+        run_e2e_mxu_single run_e2e_mxu_multi run_e2e_attn_score \
+        run_e2e_mxu_op05 run_e2e_mxu_op07 \
+        run_e2e_vresid run_e2e_vmul run_e2e_sfu_rmsnorm_post \
+        run_e2e_intc_irq run_e2e_status_prop run_e2e_abort run_e2e_multi_irq
+
+run_e2e_rmsnorm: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_RMSNORM] Running single-op cocotb test test_e2e_sfu_rmsnorm...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_sfu_rmsnorm \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_rmsnorm_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_rmsnorm.log
+	@grep -q "test_e2e_sfu_rmsnorm.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_rmsnorm.log && \
+		echo "$(GREEN)E2E_RMSNORM: PASS$(NC)" || \
+		(echo "$(RED)E2E_RMSNORM: FAIL$(NC)" && exit 1)
+
+run_e2e_softmax: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_SOFTMAX] Running single-op cocotb test test_e2e_sfu_softmax...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_sfu_softmax \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_softmax_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_softmax.log
+	@grep -q "test_e2e_sfu_softmax.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_softmax.log && \
+		echo "$(GREEN)E2E_SOFTMAX: PASS$(NC)" || \
+		(echo "$(RED)E2E_SOFTMAX: FAIL$(NC)" && exit 1)
+
+run_e2e_rope: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_ROPE] Running single-op cocotb test test_e2e_sfu_rope...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_sfu_rope \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_rope_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_rope.log
+	@grep -q "test_e2e_sfu_rope.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_rope.log && \
+		echo "$(GREEN)E2E_ROPE: PASS$(NC)" || \
+		(echo "$(RED)E2E_ROPE: FAIL$(NC)" && exit 1)
+
+run_e2e_silu: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_SILU] Running single-op cocotb test test_e2e_sfu_silu...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_sfu_silu \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_silu_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_silu.log
+	@grep -q "test_e2e_sfu_silu.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_silu.log && \
+		echo "$(GREEN)E2E_SILU: PASS$(NC)" || \
+		(echo "$(RED)E2E_SILU: FAIL$(NC)" && exit 1)
+
+run_e2e_mxu_single: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_MXU_SINGLE] Running single-op cocotb test test_e2e_mxu_single_tile...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_mxu_single_tile \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_mxu_single_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_mxu_single.log
+	@grep -q "test_e2e_mxu_single_tile.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_mxu_single.log && \
+		echo "$(GREEN)E2E_MXU_SINGLE: PASS$(NC)" || \
+		(echo "$(RED)E2E_MXU_SINGLE: FAIL$(NC)" && exit 1)
+
+run_e2e_mxu_multi: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_MXU_MULTI] Running single-op cocotb test test_e2e_mxu_multi_tile...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_mxu_multi_tile \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_mxu_multi_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_mxu_multi.log
+	@grep -q "test_e2e_mxu_multi_tile.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_mxu_multi.log && \
+		echo "$(GREEN)E2E_MXU_MULTI: PASS$(NC)" || \
+		(echo "$(RED)E2E_MXU_MULTI: FAIL$(NC)" && exit 1)
+
+run_e2e_attn_score: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_ATTN_SCORE] Running single-op cocotb test test_e2e_attn_score...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_attn_score \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_attn_score_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_attn_score.log
+	@grep -q "test_e2e_attn_score.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_attn_score.log && \
+		echo "$(GREEN)E2E_ATTN_SCORE: PASS$(NC)" || \
+		(echo "$(RED)E2E_ATTN_SCORE: FAIL$(NC)" && exit 1)
+
+run_e2e_mxu_op05: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_MXU_OP05] Running single-op cocotb test test_e2e_mxu_op05...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_mxu_op05 \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_mxu_op05_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_mxu_op05.log
+	@grep -q "test_e2e_mxu_op05.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_mxu_op05.log && \
+		echo "$(GREEN)E2E_MXU_OP05: PASS$(NC)" || \
+		(echo "$(RED)E2E_MXU_OP05: FAIL$(NC)" && exit 1)
+
+run_e2e_mxu_op07: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_MXU_OP07] Running single-op cocotb test test_e2e_mxu_op07...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_mxu_op07 \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_mxu_op07_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_mxu_op07.log
+	@grep -q "test_e2e_mxu_op07.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_mxu_op07.log && \
+		echo "$(GREEN)E2E_MXU_OP07: PASS$(NC)" || \
+		(echo "$(RED)E2E_MXU_OP07: FAIL$(NC)" && exit 1)
+
+run_e2e_vresid: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_VRESID] Running single-op cocotb test test_e2e_vector_vresid...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_vector_vresid \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_vresid_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_vresid.log
+	@grep -q "test_e2e_vector_vresid.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_vresid.log && \
+		echo "$(GREEN)E2E_VRESID: PASS$(NC)" || \
+		(echo "$(RED)E2E_VRESID: FAIL$(NC)" && exit 1)
+
+run_e2e_vmul: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_VMUL] Running single-op cocotb test test_e2e_vector_vmul...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_vector_vmul \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_vmul_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_vmul.log
+	@grep -q "test_e2e_vector_vmul.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_vmul.log && \
+		echo "$(GREEN)E2E_VMUL: PASS$(NC)" || \
+		(echo "$(RED)E2E_VMUL: FAIL$(NC)" && exit 1)
+
+run_e2e_sfu_rmsnorm_post: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_RMSNORM_POST] Running single-op cocotb test test_e2e_sfu_rmsnorm_post...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_sfu_rmsnorm_post \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_rmsnorm_post_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_rmsnorm_post.log
+	@grep -q "test_e2e_sfu_rmsnorm_post.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_rmsnorm_post.log && \
+		echo "$(GREEN)E2E_RMSNORM_POST: PASS$(NC)" || \
+		(echo "$(RED)E2E_RMSNORM_POST: FAIL$(NC)" && exit 1)
+
+
+run_e2e_intc_irq: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_INTC_IRQ] Running cocotb test test_e2e_intc_irq...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_intc_irq \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_intc_irq_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_intc_irq.log
+	@grep -q "test_e2e_intc_irq.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_intc_irq.log && \
+		echo "$(GREEN)E2E_INTC_IRQ: PASS$(NC)" || \
+		(echo "$(RED)E2E_INTC_IRQ: FAIL$(NC)" && exit 1)
+
+run_e2e_status_prop: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_STATUS_PROP] Running cocotb test test_e2e_status_propagation...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_status_propagation \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_status_prop_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_status_prop.log
+	@grep -q "test_e2e_status_propagation.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_status_prop.log && \
+		echo "$(GREEN)E2E_STATUS_PROP: PASS$(NC)" || \
+		(echo "$(RED)E2E_STATUS_PROP: FAIL$(NC)" && exit 1)
+
+run_e2e_abort: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_ABORT] Running cocotb test test_e2e_abort...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_abort \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_abort_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_abort.log
+	@grep -q "test_e2e_abort.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_abort.log && \
+		echo "$(GREEN)E2E_ABORT: PASS$(NC)" || \
+		(echo "$(RED)E2E_ABORT: FAIL$(NC)" && exit 1)
+
+run_e2e_multi_irq: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_MULTI_IRQ] Running cocotb test test_e2e_multi_irq...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_multi_irq \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_multi_irq_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_multi_irq.log
+	@grep -q "test_e2e_multi_irq.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_multi_irq.log && \
+		echo "$(GREEN)E2E_MULTI_IRQ: PASS$(NC)" || \
+		(echo "$(RED)E2E_MULTI_IRQ: FAIL$(NC)" && exit 1)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -268,6 +557,9 @@ clean:
 	@rm -f apb_smoke.log intc_test.log dma_test.log
 	@rm -f crossbar_stress.log pcie_test.log dram_test.log
 	@rm -f soc_elab.log qwen_e2e_elab.log qwen_e2e.log
+	@rm -f qwen_blk0_elab.log qwen_blk0.log pli.tab
+	@rm -f qwen_e2e_results.xml qwen_blk0_results.xml
+	@rm -f qwen_e2e_*.log qwen_e2e_*_results.xml
 	@rm -rf simv_*.daidir
 	@echo "Regression artifacts cleaned"
 
@@ -295,6 +587,7 @@ help:
 	@echo "  run_dram_test       — DRAM model (100 random txns)"
 	@echo "  run_soc_elab        — SoC top-level elaboration only"
 	@echo "  run_qwen_e2e        — Cocotb Qwen2.5-3B smoke test"
+	@echo "  run_e2e_blk0        — Cocotb E2E Qwen2.5-3B blk.0 all 17 ops"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  clean               — Remove simulation artifacts"
