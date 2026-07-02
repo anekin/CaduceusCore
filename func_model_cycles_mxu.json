@@ -1,0 +1,192 @@
+{
+  "_generated_by": "func_model_cycles_mxu.json",
+  "_description": "Per-case measured cycles for all 18 MXU performance cases (MX-P01..MX-P18)",
+  "_generated_from": ".omo/evidence/mxu-perf/MX-P*.txt evidence files",
+  "_generated_at": "2026-07-03",
+  "_formula": "per-tile summation: total = 1 + sum(M_tiles,N_tiles,K_tiles)[LOAD_W(1)+LOAD_A(1)+COMPUTE(k_cur+2)+(last_ktile?STORE_OUT(m_cur+1):0)]",
+  "MX-P01": {
+    "M": 64, "N": 64, "K": 64,
+    "expected_cycles": 134,
+    "measured_cycles": 134,
+    "delta": 0,
+    "status": "PASS",
+    "category": "P0-single-tile-baseline"
+  },
+  "MX-P02": {
+    "M": 1, "N": 64, "K": 64,
+    "expected_cycles": 71,
+    "measured_cycles": 71,
+    "delta": 0,
+    "status": "PASS",
+    "category": "P0-single-tile-baseline"
+  },
+  "MX-P03": {
+    "M": 64, "N": 1, "K": 64,
+    "expected_cycles": 134,
+    "measured_cycles": 134,
+    "delta": 0,
+    "status": "PASS",
+    "category": "P0-single-tile-baseline"
+  },
+  "MX-P04": {
+    "M": 64, "N": 64, "K": 128,
+    "expected_cycles": 202,
+    "measured_cycles": 202,
+    "delta": 0,
+    "status": "PASS",
+    "category": "P1-tile-transition"
+  },
+  "MX-P05": {
+    "M": 64, "N": 128, "K": 64,
+    "expected_cycles": 267,
+    "measured_cycles": 267,
+    "delta": 0,
+    "status": "PASS",
+    "category": "P1-tile-transition"
+  },
+  "MX-P06": {
+    "M": 128, "N": 64, "K": 64,
+    "expected_cycles": 267,
+    "measured_cycles": 267,
+    "delta": 0,
+    "status": "PASS",
+    "category": "P1-tile-transition"
+  },
+  "MX-P07": {
+    "M": 64, "N": 128, "K": 128,
+    "expected_cycles": 403,
+    "measured_cycles": 403,
+    "delta": 0,
+    "status": "PASS",
+    "category": "P1-tile-transition"
+  },
+  "MX-P08": {
+    "M": 64, "N": 64,
+    "category": "P2-parameter-sweep-K",
+    "description": "K-sweep [64,128,256,512,1024] with M=64,N=64",
+    "overall_status": "PASS",
+    "sub_shapes": [
+      {"M": 64, "N": 64, "K": 64,   "expected_cycles": 134,  "measured_cycles": 134,  "delta": 0, "status": "PASS"},
+      {"M": 64, "N": 64, "K": 128,  "expected_cycles": 202,  "measured_cycles": 202,  "delta": 0, "status": "PASS"},
+      {"M": 64, "N": 64, "K": 256,  "expected_cycles": 338,  "measured_cycles": 338,  "delta": 0, "status": "PASS"},
+      {"M": 64, "N": 64, "K": 512,  "expected_cycles": 610,  "measured_cycles": 610,  "delta": 0, "status": "PASS"},
+      {"M": 64, "N": 64, "K": 1024, "expected_cycles": 1154, "measured_cycles": 1154, "delta": 0, "status": "PASS"}
+    ]
+  },
+  "MX-P09": {
+    "M": 64, "K": 64,
+    "category": "P2-parameter-sweep-N",
+    "description": "N-sweep [64,128,256,512] with M=64,K=64",
+    "overall_status": "PASS",
+    "sub_shapes": [
+      {"M": 64, "N": 64,  "K": 64, "expected_cycles": 134,  "measured_cycles": 134,  "delta": 0, "status": "PASS"},
+      {"M": 64, "N": 128, "K": 64, "expected_cycles": 267,  "measured_cycles": 267,  "delta": 0, "status": "PASS"},
+      {"M": 64, "N": 256, "K": 64, "expected_cycles": 533,  "measured_cycles": 533,  "delta": 0, "status": "PASS"},
+      {"M": 64, "N": 512, "K": 64, "expected_cycles": 1065, "measured_cycles": 1065, "delta": 0, "status": "PASS"}
+    ]
+  },
+  "MX-P10": {
+    "M": 64, "N": 64, "K": 80,
+    "expected_cycles": 154,
+    "measured_cycles": 154,
+    "delta": 0,
+    "status": "PASS",
+    "category": "P2-parameter-sweep-partial"
+  },
+  "MX-P11": {
+    "M": 64, "N": 33, "K": 64,
+    "expected_cycles": 134,
+    "measured_cycles": 134,
+    "delta": 0,
+    "status": "PASS",
+    "category": "P2-parameter-sweep-partial"
+  },
+  "MX-P12": {
+    "M": null, "N": 64, "K": 64,
+    "category": "P3-throughput-M-sweep",
+    "description": "M-sweep [1,4,16,32,64] with K=64,N=64 — STORE_OUT linearity verification",
+    "overall_status": "PASS",
+    "sub_shapes": [
+      {"M": 1,  "N": 64, "K": 64, "expected_cycles": 71,  "measured_cycles": 71,  "delta": 0, "status": "PASS"},
+      {"M": 4,  "N": 64, "K": 64, "expected_cycles": 74,  "measured_cycles": 74,  "delta": 0, "status": "PASS"},
+      {"M": 16, "N": 64, "K": 64, "expected_cycles": 86,  "measured_cycles": 86,  "delta": 0, "status": "PASS"},
+      {"M": 32, "N": 64, "K": 64, "expected_cycles": 102, "measured_cycles": 102, "delta": 0, "status": "PASS"},
+      {"M": 64, "N": 64, "K": 64, "expected_cycles": 134, "measured_cycles": 134, "delta": 0, "status": "PASS"}
+    ]
+  },
+  "MX-P13": {
+    "M": 64, "N": 64, "K": 64,
+    "category": "P3-throughput-back-to-back",
+    "description": "Back-to-back 10x single-tile (64,64,64)",
+    "repeat": 10,
+    "gap_cycles": 4,
+    "per_op_cycles": 134,
+    "total_cycles": 1340,
+    "std_dev": 0,
+    "expected_cycles": 134,
+    "measured_cycles": 134,
+    "delta": 0,
+    "status": "PASS"
+  },
+  "MX-P14": {
+    "M": 64, "N": 64, "K": 256,
+    "category": "P3-throughput-back-to-back",
+    "description": "Back-to-back 10x multi-tile (64,64,256 — 4 K-tiles)",
+    "repeat": 10,
+    "gap_cycles": 4,
+    "per_op_cycles": 338,
+    "total_cycles": 3380,
+    "std_dev": 0,
+    "expected_cycles": 338,
+    "measured_cycles": 338,
+    "delta": 0,
+    "status": "PASS"
+  },
+  "MX-P15": {
+    "category": "P3-calibration",
+    "description": "MXUModel (64x64) vs RTL calibration — see CaduceusCore/docs/mxu-perf-calibration.md",
+    "status": "PASS",
+    "calibration_report": "CaduceusCore/docs/mxu-perf-calibration.md"
+  },
+  "MX-P16": {
+    "M": 1, "N": 1, "K": 1,
+    "expected_cycles": 8,
+    "measured_cycles": 8,
+    "delta": 0,
+    "status": "PASS",
+    "category": "P4-edge-case-minimum"
+  },
+  "MX-P17": {
+    "M": 64, "N": 64, "K": 64,
+    "expected_cycles": 134,
+    "measured_cycles": 134,
+    "delta": 0,
+    "status": "PASS",
+    "category": "P4-edge-case-cube",
+    "compute_pct": 49.3,
+    "store_out_pct": 48.5,
+    "overhead_pct": 2.2
+  },
+  "MX-P18": {
+    "M": null, "N": 64, "K": 64,
+    "category": "P4-edge-case-M-sweep-store-out-ratio",
+    "description": "M-sweep [1,2,4,8,16,32,64] store-out ratio analysis with K=64,N=64",
+    "overall_status": "PASS",
+    "sub_shapes": [
+      {"M": 1,  "N": 64, "K": 64, "expected_cycles": 71,  "measured_cycles": 71,  "delta": 0, "status": "PASS", "store_out_cycles": 2,  "store_out_ratio_pct": 2.82},
+      {"M": 2,  "N": 64, "K": 64, "expected_cycles": 72,  "measured_cycles": 72,  "delta": 0, "status": "PASS", "store_out_cycles": 3,  "store_out_ratio_pct": 4.17},
+      {"M": 4,  "N": 64, "K": 64, "expected_cycles": 74,  "measured_cycles": 74,  "delta": 0, "status": "PASS", "store_out_cycles": 5,  "store_out_ratio_pct": 6.76},
+      {"M": 8,  "N": 64, "K": 64, "expected_cycles": 78,  "measured_cycles": 78,  "delta": 0, "status": "PASS", "store_out_cycles": 9,  "store_out_ratio_pct": 11.54},
+      {"M": 16, "N": 64, "K": 64, "expected_cycles": 86,  "measured_cycles": 86,  "delta": 0, "status": "PASS", "store_out_cycles": 17, "store_out_ratio_pct": 19.77},
+      {"M": 32, "N": 64, "K": 64, "expected_cycles": 102, "measured_cycles": 102, "delta": 0, "status": "PASS", "store_out_cycles": 33, "store_out_ratio_pct": 32.35},
+      {"M": 64, "N": 64, "K": 64, "expected_cycles": 134, "measured_cycles": 134, "delta": 0, "status": "PASS", "store_out_cycles": 65, "store_out_ratio_pct": 48.51}
+    ]
+  },
+  "_summary": {
+    "total_cases": 18,
+    "total_pass": 18,
+    "total_fail": 0,
+    "all_delta_zero": true,
+    "note": "All 18 cases PASS with delta=0. Formula and RTL are in perfect agreement for all measured configurations."
+  }
+}
