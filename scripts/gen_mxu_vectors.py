@@ -9,6 +9,7 @@ Generates $readmemh-format test vectors for RTL MXU verification.
 Usage:
     python3 CaduceusCore/scripts/gen_mxu_vectors.py --scenario single_tile --out-dir CaduceusCore/rtl/test_vectors/mxu
     python3 CaduceusCore/scripts/gen_mxu_vectors.py --scenario all --out-dir CaduceusCore/rtl/test_vectors/mxu
+    python3 CaduceusCore/scripts/gen_mxu_vectors.py --shape 64,80,64 --out-dir /tmp/mxu_perf
 """
 
 import argparse
@@ -18,10 +19,13 @@ from pathlib import Path
 
 import numpy as np
 
-# Ensure CaduceusCore/ is on path so 'sim' is importable as a package
+# Ensure both CaduceusCore/ and CaduceusCore/sim/ are on sys.path
+# so 'sim' is importable as a package and 'sim.golden_executor' can
+# resolve 'from models.dma import DMAModel'.
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _CADUCEUS_CORE = _SCRIPT_DIR.parent
 sys.path.insert(0, str(_CADUCEUS_CORE))
+sys.path.insert(0, str(_CADUCEUS_CORE / "sim"))
 
 from sim.golden_executor import GoldenMXU  # noqa: E402
 
@@ -274,6 +278,12 @@ def main() -> None:
         default=None,
         help="Output base directory (default: CaduceusCore/rtl/test_vectors/mxu)",
     )
+    parser.add_argument(
+        "--shape",
+        type=str,
+        default=None,
+        help="Generate a single scenario for arbitrary (M,N,K). Format: M,N,K (e.g. --shape 64,80,64)",
+    )
     args = parser.parse_args()
 
     # Determine output directory
@@ -282,6 +292,22 @@ def main() -> None:
     else:
         out_dir = _SCRIPT_DIR.parent / "rtl" / "test_vectors" / "mxu"
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # --shape mode: arbitrary (M,N,K), bypasses scenario registry
+    if args.shape is not None:
+        parts = args.shape.split(",")
+        if len(parts) != 3:
+            print(
+                f"ERROR: --shape must be M,N,K (e.g. --shape 64,80,64), "
+                f"got '{args.shape}'"
+            )
+            sys.exit(1)
+        M, N, K = int(parts[0]), int(parts[1]), int(parts[2])
+        scenario_name = f"shape_{M}_{N}_{K}"
+        print(f"Generating --shape: M={M}, N={N}, K={K} → {scenario_name}")
+        generate_scenario(out_dir, scenario_name, M, K, N)
+        print("Done.")
+        return
 
     scenario = args.scenario
 
