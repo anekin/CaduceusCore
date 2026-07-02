@@ -51,6 +51,32 @@ PERF_PATTERN = re.compile(
     r"expected=\d+\s+measured=(?P<measured>\d+)"
 )
 
+# MX-P01..MX-P18 configurations: 15 plan points + 3 extras for completeness.
+SHAPES: list[tuple[int, int, int]] = [
+    (64, 64, 64),
+    (64, 64, 128),
+    (64, 64, 256),
+    (64, 64, 512),
+    (64, 64, 1024),
+    (64, 128, 64),
+    (64, 256, 64),
+    (64, 512, 64),
+    (1, 64, 64),
+    (4, 64, 64),
+    (16, 64, 64),
+    (32, 64, 64),
+    (128, 64, 64),
+    (64, 64, 80),
+    (1, 1, 1),
+    (64, 1, 64),
+    (64, 128, 128),
+    (64, 33, 64),
+]
+
+RATIO_CLOSE = 1.5
+RATIO_MODERATE = 3.0
+RATIO_LARGE = 5.0
+
 
 def collect_rtl_cycles() -> dict[tuple[int, int, int], int]:
     """Parse all MX-P evidence files and return dict of (M,N,K) -> measured cycles."""
@@ -72,28 +98,11 @@ def collect_rtl_cycles() -> dict[tuple[int, int, int], int]:
     return results
 
 
-def collect_expected_cycles() -> dict[tuple[int, int, int], int]:
-    """Return dict of (M,N,K) -> expected cycles for all configurations from the plan's MX-P15 point list."""
+def compute_expected_cycles() -> dict[tuple[int, int, int], int]:
+    """Return dict of (M,N,K) -> expected cycles computed from the per-tile formula."""
     from analyze_perf import expected_cycles
 
-    shapes = [
-        (64, 64, 64),
-        (64, 64, 128),
-        (64, 64, 256),
-        (64, 64, 512),
-        (64, 64, 1024),
-        (64, 128, 64),
-        (64, 256, 64),
-        (64, 512, 64),
-        (1, 64, 64),
-        (4, 64, 64),
-        (16, 64, 64),
-        (32, 64, 64),
-        (128, 64, 64),
-        (64, 64, 80),
-        (1, 1, 1),
-    ]
-    return {(M, N, K): expected_cycles(M, K, N) for M, N, K in shapes}
+    return {(M, N, K): expected_cycles(M, K, N) for M, N, K in SHAPES}
 
 
 def analyze(row: dict[str, object]) -> str:
@@ -110,11 +119,11 @@ def analyze(row: dict[str, object]) -> str:
     delta_pct = abs(rtl - model) / max(rtl, 1) * 100
 
     max_ratio = max(rtl / max(model, 1), model / max(rtl, 1))
-    if max_ratio <= 1.5:
+    if max_ratio <= RATIO_CLOSE:
         category = "close match"
-    elif max_ratio <= 3.0:
+    elif max_ratio <= RATIO_MODERATE:
         category = "moderate deviation"
-    elif max_ratio <= 5.0:
+    elif max_ratio <= RATIO_LARGE:
         category = "large deviation"
     else:
         category = "extreme deviation"
@@ -129,35 +138,14 @@ def analyze(row: dict[str, object]) -> str:
 
 def main() -> int:
     rtl_cycles = collect_rtl_cycles()
-    expected_cycles = collect_expected_cycles()
+    expected_cycles = compute_expected_cycles()
     model = MXUModel(MODEL_CONFIG)
 
     print(f"Collected {len(rtl_cycles)} unique RTL measurements from evidence files")
 
     rows: list[dict[str, object]] = []
 
-    shapes = [
-        (64, 64, 64),
-        (64, 64, 128),
-        (64, 64, 256),
-        (64, 64, 512),
-        (64, 64, 1024),
-        (64, 128, 64),
-        (64, 256, 64),
-        (64, 512, 64),
-        (1, 64, 64),
-        (4, 64, 64),
-        (16, 64, 64),
-        (32, 64, 64),
-        (128, 64, 64),
-        (64, 64, 80),
-        (1, 1, 1),
-        (64, 1, 64),
-        (64, 128, 128),
-        (64, 33, 64),
-    ]
-
-    for M, N, K in shapes:
+    for M, N, K in SHAPES:
         key = (M, N, K)
         rtl_cyc = rtl_cycles.get(key, expected_cycles.get(key, "N/A"))
 
