@@ -178,7 +178,7 @@ reg [31:0] last_done_cycle, inter_op_gap;
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
 | MX-P08 | P2 | `tb_mxu_perf.v` — K 扫描 [64, 128, 256, 512, 1024] | **K 维度独立缩放**: M=64,N=64; 测量 K_tiles 线性增长. K=1024→K_tiles=16 | K=64:134, K=128:202, K=256:338, K=512:610, K=1024:1154 [1+1×1×(16×68+65)=1+1153=1154]; 每 K-tile slope = 68 ±0 cycles | ✅ | |
-| MX-P09 | P2 | `tb_mxu_perf.v` — N 扫描 [64, 128, 256, 512] | **N 维度独立缩放**: M=64,K=64; 测量 N_tiles 线性增长 | N=64:134, N=128:267, N=256:533, N=512:1065 [1+8×1×133=1+1064=1065]; 每 N-tile slope = 133 ±0 cycles | ⬜ | |
+| MX-P09 | P2 | `tb_mxu_perf.v` — N 扫描 [64, 128, 256, 512] | **N 维度独立缩放**: M=64,K=64; 测量 N_tiles 线性增长 | N=64:134, N=128:267, N=256:533, N=512:1065 [1+8×1×133=1+1064=1065]; 每 N-tile slope = 133 ±0 cycles | ✅ | |
 | MX-P10 | P2 | `tb_mxu_perf.v` — 偏 K-tile K=80,N=64,M=64 | **末 K-tile 非全尺寸**: K=80→2 K-tiles (64+16). 首次验证 partial K-tile 的 COMPUTE 周期 | total_cycles = 154 [1+1×1×(68+20+65)=1+153=154]; tile1 COMPUTE=18 cycles (k_cur=16 → 16+2=18); 无 STORE_OUT 在 tile0 后 | ⬜ | |
 | MX-P11 | P2 | `tb_mxu_perf.v` — 偏 N-tile K=64,N=33,M=64 | **末 N-tile 非全尺寸**: N=33→1 N-tile (m_cur=64, n_cur=33). 验证 N 维偏 tile 不影响 cycle 计数 | total_cycles = 134; N=33 仍在 1 tile 内 (ceil(33/64)=1), 与 K=64,N=64 一致. 功能正确性由 MX-15 验证, 本 case 仅确认 cycle 不变 | ⬜ | |
 
