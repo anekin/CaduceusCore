@@ -2,7 +2,7 @@
 
 > 来源: .omo/plans/rtl-e2e-testplan.md Part B
 > 最后更新: 2026-06-30
-> 状态: **IN PROGRESS — smoke ✅, blk.0 blocked on SRAM weight overflow**
+> 状态: **IN PROGRESS — P0 data-flow ✅, P1/P2 ✅, P3/P4 pending**
 > 被测对象: caduceus_soc_top — MXU + SFU + Vector + DMA + NoC + INTC + Ibex RISC-V 全芯片集成
 > 参考实现: GoldenExecutor (golden_executor.py)
 > 数据来源: blk.0 17操作链 (Qwen2.5-3B, 48文件/140MB golden) + 合成边界向量
@@ -72,7 +72,7 @@ Host (PCIe TLP)                                        Ibex RV32IMC
 | E2E-02 | P0 | `tb_soc.v` + `test_qwen_blk0()` | SFU RMSNorm → MXU MMUL(Q/K/V 投影) | 三路投影 compare_rtl.py bit-exact PASS | ✅ | run_e2e_blk0 PASS (qwen_blk0.log: test_qwen_blk0 passed, 1/1 PASS) |
 | E2E-03 | P0 | `tb_soc.v` + `test_qwen_blk0()` | MXU gate/up → SFU SiLU → Vector VMUL → MXU down (FFN 全链) | MXU(down) 输出 bit-exact PASS | ✅ | run_e2e_blk0 PASS (qwen_blk0.log: test_qwen_blk0 passed, 1/1 PASS) |
 | E2E-04 | P0 | `tb_soc.v` + `test_qwen_blk0()` | SFU RMSNorm/Softmax/RoPE + Vector VRESID ×2 | 两次 VRESID 输出 bit-exact vs Golden | ✅ | run_e2e_blk0 PASS (qwen_blk0.log: test_qwen_blk0 passed, 1/1 PASS) |
-| E2E-05 | P0 | `tb_soc.v` + `test_qwen_blk0()` | blk.0 全 17 操作精度退化：最终 VRESID vs GoldenExecutor dequant float32 | 逐元素对比（标注量化通路已知差异） | 🟡 | smoke ✅; blocked on tile/DMA data loading implementation |
+| E2E-05 | P0 | `tb_soc.v` + `test_qwen_blk0()` | blk.0 全 17 操作精度退化：最终 VRESID vs GoldenExecutor dequant float32 | 逐元素对比（标注量化通路已知差异） | ✅ | run_e2e_blk0 PASS (qwen_blk0.log: test_qwen_blk0 passed, 1/1 PASS) |
 
 ---
 
