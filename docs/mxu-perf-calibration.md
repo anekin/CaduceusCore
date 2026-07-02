@@ -5,7 +5,7 @@
 >
 > **Generated from**: `.omo/evidence/mxu-perf/MX-P15_calibration.md`
 > **Generator script**: `CaduceusCore/scripts/calibrate_mxu_model.py`
-> **How to regenerate**: `python3 CaduceusCore/scripts/calibrate_mxu_model.py --evidence-dir .omo/evidence/mxu-perf/`
+> **How to regenerate**: `python3 CaduceusCore/scripts/calibrate_mxu_model.py`
 >
 > **Model**: MXUModel(H=64, W=64, f=1000MHz, INT4, double_buffer=True)
 > **RTL**: 64x64 broadcast MAC array (module-level, no DMA/NoC overhead)
@@ -41,6 +41,12 @@
 - Max |delta%|: 2900.0%
 - Min |delta%|: 57.5%
 
+## Interpretation
+
+The MXUModel includes DMA and DRAM bandwidth overhead (tile weight/activation streaming) that the module-level RTL does not have. At the module level, weights and activations are loaded in a single cycle via direct bus drive. The model's DMA overhead dominates for small tiles (M=1, K=1), producing large deltas. For compute-bound prefill configurations (M≥64), the model approaches the RTL cycle counts more closely.
+
+For accurate calibration, use the per-tile cycle formula in `analyze_perf.py` (which matches RTL exactly) rather than the DMA-aware MXUModel for module-level cycle prediction.
+
 ## Module-Level Back-to-Back Behavior (MX-P13 / MX-P14)
 
 The back-to-back cases MX-P13 and MX-P14 are executed with `+repeat=10` in `tb_mxu_perf.v`.  The testbench inserts a deterministic **4-cycle GAP** between consecutive operations:
@@ -57,12 +63,6 @@ throughput_cycles_per_op = per_op_total + 4
 ```
 
 The per-op total itself (134 for MX-P13, 338 for MX-P14) matches the deterministic Controller FSM formula with delta = 0.
-
-## Interpretation
-
-The MXUModel includes DMA and DRAM bandwidth overhead (tile weight/activation streaming) that the module-level RTL does not have. At the module level, weights and activations are loaded in a single cycle via direct bus drive. The model's DMA overhead dominates for small tiles (M=1, K=1), producing large deltas. For compute-bound prefill configurations (M≥64), the model approaches the RTL cycle counts more closely.
-
-For accurate calibration, use the per-tile cycle formula in `analyze_perf.py` (which matches RTL exactly) rather than the DMA-aware MXUModel for module-level cycle prediction.
 
 ---
 
