@@ -1,5 +1,105 @@
 # Architectural Observations Log
 
+## 2026-07-02 22:07 — Iteration 131 — Stable, No Code Issues (27th Clean Run)
+
+### Run Summary
+- **Iteration**: 131 (stable since iter 104, 27 consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 6 health checks**: ✅ PASS
+- **No changes**: identical to iter 129, converged steady state
+
+### Status
+Unchanged. M=1 decode at 64×64 remains DRAM-BW-bound (33.0/43.5 GB/s = 76%).
+64×256 hits 25.0 tok/s @ 32mm² (+5mm²). All larger arrays hit target.
+
+### Cron Constraint Staleness (ongoing — 24 iterations uncorrected)
+Same 3 stale constraints flagged since iter 107:
+1. "DRAM BW 不是瓶颈：需求 20.2 < 可用 43.5 GB/s" — 33.0 GB/s actual
+2. "batch M≥2 → 31 tok/s" — 12 tok/s raw (inter-op parallelism not implemented)
+3. "真正的瓶颈：M=1 decode 的 tiling overhead" — DRAM BW is primary, not tiling
+
+---
+
+## 2026-07-02 18:00 — Iteration 129 — Stable, No Code Issues (26th Clean Run)
+
+### Run Summary
+- **Iteration**: 129 (stable since iter 104, 26 consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 6 health checks**: ✅ PASS
+- **No changes**: identical to iter 128, converged steady state
+
+### Status
+Unchanged. M=1 decode at 64×64 remains DRAM-BW-bound (33.0/43.5 GB/s = 76%).
+64×256 hits 25.0 tok/s @ 32mm² (+5mm²). All larger arrays hit target.
+
+### Cron Constraint Staleness (ongoing — 22 iterations uncorrected)
+Same 3 stale constraints flagged since iter 107:
+1. "DRAM BW 不是瓶颈：需求 20.2 < 可用 43.5 GB/s" — 33.0 GB/s actual
+2. "batch M≥2 → 31 tok/s" — 12 tok/s raw (inter-op parallelism not implemented)
+3. "真正的瓶颈：M=1 decode 的 tiling overhead" — DRAM BW is primary, not tiling
+
+---
+
+## 2026-07-02 14:05 — Iteration 127 — Stable, No Code Issues (24th Clean Run)
+
+### Run Summary
+- **Iteration**: 127 (stable since iter 104, 24 consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 6 health checks**: ✅ PASS
+- **No changes**: identical to iter 126, converged steady state
+
+### Status
+Unchanged from iter 126. M=1 decode at 64×64 remains DRAM-BW-bound (33.0/43.5 GB/s = 76%).
+64×256 hits 25.0 tok/s @ 32mm² (+5mm²). No new architecture issues.
+
+### Cron Constraint Staleness (ongoing — uncorrected since iter 107)
+All 3 stale constraints persist in the cron prompt:
+1. "DRAM BW 不是瓶颈：需求 20.2 < 可用 43.5 GB/s" — **Wrong**: 33.0 GB/s actual
+2. "batch M≥2 → 31 tok/s" — **Wrong**: 12 tok/s raw (31 requires unimplemented inter-op parallelism)
+3. "真正的瓶颈：M=1 decode 的 tiling overhead" — **Misleading**: Primary bottleneck is DRAM BW
+
+---
+
+## 2026-07-02 12:05 — Iteration 126 — Stable, No Code Issues (23rd Clean Run)
+
+### Run Summary
+- **Iteration**: 126 (stable since iter 104, 23 consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 6 health checks**: ✅ PASS
+- **No changes**: identical to iter 123, system converged to steady state
+
+### Status
+Unchanged from iter 123. The 4% gap on 64×64 M=1 decode is a DRAM BW ceiling (33.0/43.5 GB/s = 76%), not a code defect. Several alternative configs hit target at modest area cost (64×256 @ 32mm², +5mm²).
+
+---
+
+## 2026-07-02 06:01 — Iteration 123 — Stable, No Code Issues
+
+### Run Summary
+- **Iteration**: 123 (stable since iter 104, 20+ consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 6 health checks**: ✅ PASS
+- **weight_preloaded**: zero residual `=True` in production code (all engines use `=False`)
+
+### Stale Cron Constraints (uncorrected, same as iter 107)
+The cron prompt has 3 systematically wrong claims that persist:
+1. "DRAM BW 不是瓶颈" — Wrong. 33.0 GB/s demand = 76% of 43.5 GB/s. M=1 IS DRAM-BW-bound.
+2. "batch M≥2 → 31 tok/s" — Wrong. Raw M=2 = 12 tok/s. 31 requires unimplemented inter-op parallelism.
+3. "真正的瓶颈：M=1 decode 的 tiling overhead" — Misleading. Primary bottleneck is DRAM BW, not tiling.
+
+### Bottleneck Status (Unchanged)
+M=1 decode (64×64) remains DRAM-bandwidth-bound at 76% utilization.
+- 64×256: 25.0 tok/s @ 32mm² — pragmatic target
+- 128×256: 25.0 tok/s @ 42mm²
+- 256×256: 25.0 tok/s @ 108mm² — expensive
+
+---
+
 ## 2026-07-01 14:10 — Iteration 112 — Stable, No Code Issues
 
 ### Run Summary

@@ -456,6 +456,34 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
     health.append(f"| Engine weight_preloaded=False | {'✅' if engines_ok else '❌'} | {'All engines v2-compliant' if engines_ok else 'Found True default'} |")
 
     lines += health
+
+    # ── Stale-Constraint Cross-Validation (added iter 122) ──
+    # Compare measured ground truth against user-provided constraints
+    # from the cron prompt. Flags drift so it's immediately visible.
+    _m1_tok = sweep.get("baseline_tok_s", 0) or e2e.get("tok_s", 0)
+    _b2_tok = 0.0
+    for r in sweep.get("all_results", []):
+        if "M=2" in r.get("config", "") and "batch" in r.get("config", "").lower():
+            _b2_tok = r.get("tok_s", 0)
+            break
+    _b2_delta = f"{((_b2_tok / 31) - 1) * 100:+.0f}%" if _b2_tok > 0 else "N/A"
+    _dram_delta = f"{((dram_demand / 20.2) - 1) * 100:+.0f}%"
+    _bw_implied = (20.2 / dram_available * 100) if dram_available > 0 else 0
+    lines += [
+        "",
+        "## ⚠️ Stale-Constraint Cross-Validation",
+        "",
+        "| Metric | Measured | Cron Prompt Claim | Delta | Status |",
+        "|--------|----------|-------------------|-------|--------|",
+        f"| M=1 tok/s ({_H}×{_W}) | {_m1_tok:.1f} | 25 target | {((_m1_tok/25)-1)*100:+.0f}% | {'✅' if _m1_tok >= 25 else '❌'} |",
+        f"| DRAM demand | {dram_demand:.1f} GB/s | 20.2 GB/s | {_dram_delta} | ⚠️ stale |",
+        f"| Batch M=2 raw | {_b2_tok:.0f} tok/s | 31 tok/s | {_b2_delta} | ⚠️ stale |",
+        f"| BW utilization | {bw_pct:.0f}% | ~{_bw_implied:.0f}% (implied) | +{bw_pct - _bw_implied:.0f}pp | ⚠️ stale |",
+        "",
+        "> **Note**: Constraints marked \"stale\" drifted from simulator ground truth.",
+        "> Cron prompt needs updating. See `results/arch_observations.md` for details.",
+    ]
+
     lines += [
         "",
         "## Bottleneck Analysis",
