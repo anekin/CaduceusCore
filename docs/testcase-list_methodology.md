@@ -175,7 +175,66 @@ a1b2c3d [V-01] ⬜ → ✅ | FP32 add/mul 1000 组随机, max 0.7 ULP
 量化精度	INT4/INT8/BF16 量化路径端到端
 性能模型	理论峰值 vs 实测，瓶颈定位
 协议实现	状态机覆盖，边界条件枚举
-九、从零启动清单
+
+九、性能验证方法论：两层验收
+
+> 核心原则: Func Model 是架构 Spec，RTL FSM 是实现。两者分开验证，分层不混淆。
+> 适用: 所有模块级 RTL 性能验证（SFU, Vector, MXU, DMA, NoC 等）
+
+9.1 问题
+
+直接从 RTL 源码推导周期公式 → 用于 RTL 仿真验收 → 这是"先打枪再画靶子"的循环自证。
+RTL 的 FSM 可能本身就设计错了，但仍能与"从自己推导的公式"保持一致。
+Func Model 中的性能模型通常是 batch 级抽象（如 `cycles = ceil(N/width) × pipeline_depth`），
+不是 cycle-accurate 的，两者天然存在差异（可达 4x-48x）。
+
+9.2 两个 Spec 来源
+
+| 来源 | 是什么 | 精度 | 用于验证什么 |
+|------|------|:---:|------|
+| **Func Model** (`sim/models/*.py` + `sim/config/*.yaml`) | 架构意图：批量吞吐模型 | batch 级（粗） | **架构一致性**：RTL 有没有偏离架构设计目标？差距多大？ |
+| **RTL FSM 设计**（源码中 state machine + pipeline 结构） | 实现意图：逐 cycle 精确的 FSM 行为公式 | cycle 级（精） | **实现正确性**：RTL FSM 是否符合自身设计？有没有 dead state/bug？ |
+
+9.3 两层验收
+
+| 层级 | 验收标准来源 | 容差 | 用途 | 对应 case |
+|------|------------|:---:|------|------|
+| **Tier 1 — 实现一致性** | RTL FSM 设计意图公式 | `|delta| ≤ 1-5`（紧） | 防 RTL bug：FSM 死锁、pipeline 挂起、状态机跳变错误 | 主体 case（P0-P1-P3） |
+| **Tier 2 — 架构校准** | Func Model 预测值 | 记录差距，**不设硬性 PASS/FAIL** | 防架构漂移：RTL 实现是否偏离架构意图太远？差距是否可解释？ | 校准 case（P2, per-module） |
+
+9.4 执行规则
+
+1. **Tier 1 是主体验收**：每个操作至少一个基线 case，验证 cycle 公式正确
+2. **Tier 2 是校准 reference**：每个模块至少一个校准 case（如 MX-P15、SFV-P25_calib），对比 Func Model 预测并记录差距
+3. **Calibration case 不判 PASS/FAIL**：差距大 ≠ 失败。差距必须有合理解释
+4. **差距记录到 testcase-list 本身**：让后续 reviewer 一眼看到架构 vs 实现的差距
+5. **Testcase list 必须标注验收标准来源**：每个 case 明确标注是 Tier 1 (FSM) 还是 Tier 2 (Func Model)
+
+9.5 反例
+
+| ❌ 错误做法 | ✅ 正确做法 |
+|------------|------|
+| 测试通过 = "RTL 验证通过 Func Model" | "RTL FSM 行为一致（Tier 1 ✅）+ RTL 与 Func Model 差距已记录（Tier 2 记录完毕）" |
+| 从 RTL 推导公式并声称是"Spec 验证" | 明确标注每个 case 的验收标准来源（FSM 推导 / Func Model 预测） |
+| 只做 Tier 1，不做 Tier 2 | Tier 1 + Tier 2 都要做 |
+| Calibration gap 过大即判 FAIL | 记录差距 + 原因说明；不判 PASS/FAIL |
+
+9.6 适用性
+
+此方法论适用于所有 CaduceusCore 模块级 RTL 性能验证：
+- MXU ✅（MX-P15 已实现 Func Model 校准 case）
+- SFU ✅（SFV-P25_calib）
+- Vector ✅（SFV-P28_calib）
+- DMA, NoC 等后续模块同理
+
+9.7 参考案例
+
+- MXU: `CaduceusCore/rtl/testcase-list-mxu-perf.md` — MX-P15 为 MXUModel.estimate() vs RTL 校准
+- SFU + Vector: `CaduceusCore/rtl/testcase-list-sfu-vector-perf.md`（待创建）— SFV-P25_calib, SFV-P28_calib
+- Func Model: `CaduceusCore/sim/models/sfu.py:50-54`, `sim/models/vector.py:41-48`
+- Config: `CaduceusCore/sim/config/npu_config.yaml:30-45`
+
+十、从零启动清单
  创建 testplan.md（用本模板）
  填写验收标准（每个模块定阈值）
  列出所有模块 → 标记已有测试覆盖 → 识别缺口
