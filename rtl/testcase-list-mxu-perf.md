@@ -204,7 +204,7 @@ reg [31:0] last_done_cycle, inter_op_gap;
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
 | MX-P16 | P4 | `tb_mxu_perf.v` — 最小 tile K=1,N=1,M=1 | **最小 tile**: k_cur=1, m_cur=1. COMPUTE=3, STORE_OUT=2 | total_cycles = 8 (1+1+1+3+2); compute_en 仅 3 cycles | ✅ | |
-| MX-P17 | P4 | `tb_mxu_perf.v` — 最大 per-CMD K=64,N=64,M=64 (cube) | **Cube 满配置**: 4096 个 PE 在 64×64×64 上全利用. 验证 store_out=65 cycles 与 compute=66 cycles 的比例 | total = 134; compute = 49.3% (66/134), store-out = 48.5% (65/134), overhead = 2.2% (3/134). 注: 大 M 时 store-out 占比 > compute | ⬜ | |
+| MX-P17 | P4 | `tb_mxu_perf.v` — 最大 per-CMD K=64,N=64,M=64 (cube) | **Cube 满配置**: 4096 个 PE 在 64×64×64 上全利用. 验证 store_out=65 cycles 与 compute=66 cycles 的比例 | total = 134; compute = 49.3% (66/134), store-out = 48.5% (65/134), overhead = 2.2% (3/134). 注: 大 M 时 store-out 占比 > compute | ✅ | |
 | MX-P18 | P4 | `tb_mxu_perf.v` — M 扫描 [1, 2, 4, 8, 16, 32, 64] 的 store-out 占比分析 | **Store-out drain 占比分析**: 测量 store_out_active / total_cycles 比率随 M 变化 | M=1: 2/71=2.8%; M=4: 5/74=6.7%; M=16: 17/86=19.8%; M=32: 33/102=32.4%; M=64: 65/134=48.5%. 输出折线趋势, 确认 STORE_OUT 行数正比于 M | ⬜ | |
 
 ---
