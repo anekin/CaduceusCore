@@ -164,7 +164,7 @@ reg [31:0] last_done_cycle, inter_op_gap;
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| MX-P04 | P1 | `tb_mxu_perf.v` — multi-K-tile K=128,N=64,M=64 | **K-tile 过渡开销**: 2 K-tiles; tile 0→tile 1 过渡不经过 STORE_OUT, 验证 K-accum bubble | total_cycles = 202; per-tile breakdown: tile0=69(1+68), tile1=68(1+1+66), store=65; K-tile 过渡 gap = 2 cycles (LOAD_W+LOAD_A) | ⬜ | |
+| MX-P04 | P1 | `tb_mxu_perf.v` — multi-K-tile K=128,N=64,M=64 | **K-tile 过渡开销**: 2 K-tiles; tile 0→tile 1 过渡不经过 STORE_OUT, 验证 K-accum bubble | total_cycles = 202; per-tile breakdown: tile0=69(1+68), tile1=68(1+1+66), store=65; K-tile 过渡 gap = 2 cycles (LOAD_W+LOAD_A) | ✅ | |
 | MX-P05 | P1 | `tb_mxu_perf.v` — multi-N-tile K=64,N=128,M=64 | **N-tile 过渡开销**: 2 N-tiles; STORE_OUT→LOAD_W→LOAD_A→COMPUTE 过渡 | total_cycles = 267; tile0=134, tile1=133; N-tile 过渡 gap = 2 cycles (STORE_OUT 末 cycle 同步切换 + LOAD_W+LOAD_A) | ⬜ | |
 | MX-P06 | P1 | `tb_mxu_perf.v` — multi-M-tile K=64,N=64,M=128 | **M-tile 过渡开销**: 2 M-tiles; 过渡包括 accumulator reset (mac_reset_acc=1) | total_cycles = 267; tile0=134, tile1=133; M-tile 过渡额外包括 reset_acc (应不影响 cycle 计数, 与 LOAD_W 同 cycle) | ⬜ | |
 | MX-P07 | P1 | `tb_mxu_perf.v` — K=128,N=128,M=64 全 4-tile | **复合过渡**: 4 tiles (K=2,N=2), 同时包含 K-tile 积累和 N-tile 过渡 | total_cycles = 403 [1+2×(2×68+65)=1+2×201=403]; per-tile cycle 记录 4 个值: 69, 68, 201, 200; tile0 > tile2 因 READ_DIMS | ⬜ | |
