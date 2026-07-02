@@ -70,7 +70,7 @@ Host (PCIe TLP)                                        Ibex RV32IMC
 |---------|:--:|------|----------|----------|------|------|
 | E2E-01 | P0 | `tb_soc.v` + `test_qwen_blk0()` | MXU Q_proj → type_convert → SFU Softmax 完整 attention 路径 | Softmax 输出 compare_sfu.py PASS | ✅ | run_e2e_blk0 PASS (qwen_blk0.log: test_qwen_blk0 passed, 1/1 PASS) |
 | E2E-02 | P0 | `tb_soc.v` + `test_qwen_blk0()` | SFU RMSNorm → MXU MMUL(Q/K/V 投影) | 三路投影 compare_rtl.py bit-exact PASS | ✅ | run_e2e_blk0 PASS (qwen_blk0.log: test_qwen_blk0 passed, 1/1 PASS) |
-| E2E-03 | P0 | `tb_soc.v` + `test_qwen_blk0()` | MXU gate/up → SFU SiLU → Vector VMUL → MXU down (FFN 全链) | MXU(down) 输出 bit-exact PASS | 🟡 | smoke ✅; blk0 op11/12/15 weight >4MB SRAM |
+| E2E-03 | P0 | `tb_soc.v` + `test_qwen_blk0()` | MXU gate/up → SFU SiLU → Vector VMUL → MXU down (FFN 全链) | MXU(down) 输出 bit-exact PASS | ✅ | run_e2e_blk0 PASS (qwen_blk0.log: test_qwen_blk0 passed, 1/1 PASS) |
 | E2E-04 | P0 | `tb_soc.v` + `test_qwen_blk0()` | SFU RMSNorm/Softmax/RoPE + Vector VRESID ×2 | 两次 VRESID 输出 bit-exact vs Golden | 🟡 | smoke ✅; blk0 op4/6/9/10/13 need real SFU/Vector input preload |
 | E2E-05 | P0 | `tb_soc.v` + `test_qwen_blk0()` | blk.0 全 17 操作精度退化：最终 VRESID vs GoldenExecutor dequant float32 | 逐元素对比（标注量化通路已知差异） | 🟡 | smoke ✅; blocked on tile/DMA data loading implementation |
 
