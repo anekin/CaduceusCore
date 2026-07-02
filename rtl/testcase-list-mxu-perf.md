@@ -152,7 +152,7 @@ reg [31:0] last_done_cycle, inter_op_gap;
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| MX-P01 | P0 | `tb_mxu_perf.v` — single tile K=64,N=64,M=64 | **单全 tile baseline 周期分解**: 测量 total cycles 和各 FSM state 驻留 cycle (READ_DIMS/LOAD_W/LOAD_A/COMPUTE/STORE_OUT) | total_cycles = 134 (≤1 cycle err); per-state: RD=1, LW=1, LA=1, COMP=66, SO=65; cnt_compute_en=66, cnt_store_out_active=65 | ⬜ | |
+| MX-P01 | P0 | `tb_mxu_perf.v` — single tile K=64,N=64,M=64 | **单全 tile baseline 周期分解**: 测量 total cycles 和各 FSM state 驻留 cycle (READ_DIMS/LOAD_W/LOAD_A/COMPUTE/STORE_OUT) | total_cycles = 134 (≤1 cycle err); per-state: RD=1, LW=1, LA=1, COMP=66, SO=65; cnt_compute_en=66, cnt_store_out_active=65 | ✅ | |
 | MX-P02 | P0 | `tb_mxu_perf.v` — single tile K=64,N=64,M=1 | **M=1 最小存出开销**: 测量 M=1 时的 store_out drain cycle, 验证 STORE_OUT=m_cur+1=2 | total_cycles = 71; cnt_store_out_active = 2; cnt_compute_en = 66 | ⬜ | |
 | MX-P03 | P0 | `tb_mxu_perf.v` — single tile K=64,N=1,M=64 | **最小 N 维度**: N=1 下的单 tile 行为, 验证 N-tile=1 always 且公式 | total_cycles = 134 (与 MX-P01 一致, N 不改变 tile 大小); cnt_load_w=1, cnt_load_a=1 | ⬜ | |
 
