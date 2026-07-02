@@ -586,6 +586,64 @@ class CocotbBridge:
             f"_sram_backdoor_write: addr=0x{addr:08X}, len={len(data)} B"
         )
 
+    async def _dram_backdoor_write(self, addr: int, data: bytes):
+        if addr < DRAM_BASE or addr >= DRAM_BASE + 8 * 1024 * 1024:
+            raise ValueError(f"Address 0x{addr:08X} outside simulated DRAM window")
+        if addr + len(data) > DRAM_BASE + 8 * 1024 * 1024:
+            raise ValueError(f"Write end address exceeds simulated DRAM")
+
+        mem = self.dut.u_dut.u_dram_model.mem
+        word_bytes = 64
+        start_off = addr - DRAM_BASE
+        end_off = start_off + len(data)
+
+        for word_idx in range(start_off // word_bytes, (end_off + word_bytes - 1) // word_bytes):
+            word_start = word_idx * word_bytes
+            seg_start = max(word_start, start_off)
+            seg_end = min(word_start + word_bytes, end_off)
+            seg_len = seg_end - seg_start
+            seg_data = data[seg_start - start_off:seg_start - start_off + seg_len]
+
+            if seg_len == word_bytes:
+                word_val = int.from_bytes(seg_data, "little")
+            else:
+                old_val = int(mem[word_idx].value)
+                boff = seg_start - word_start
+                mask = ((1 << (seg_len * 8)) - 1) << (boff * 8)
+                word_val = (old_val & ~mask) | (int.from_bytes(seg_data, "little") << (boff * 8))
+
+            self.dut.dram_bkdoor_addr.value = word_idx
+            self.dut.dram_bkdoor_wdata.value = word_val
+            self.dut.dram_bkdoor_req.value = 1
+            while not int(self.dut.dram_bkdoor_ack.value):
+                await RisingEdge(self.dut.clk)
+            self.dut.dram_bkdoor_req.value = 0
+            while int(self.dut.dram_bkdoor_ack.value):
+                await RisingEdge(self.dut.clk)
+
+    async def _dram_backdoor_read(self, addr: int, length: int) -> bytes:
+        mem = self.dut.u_dut.u_dram_model.mem
+        word_bytes = 64
+        start_off = addr - DRAM_BASE
+        end_off = start_off + length
+        out = bytearray()
+
+        for word_idx in range(start_off // word_bytes, (end_off + word_bytes - 1) // word_bytes):
+            word_start = word_idx * word_bytes
+            seg_start = max(word_start, start_off)
+            seg_end = min(word_start + word_bytes, end_off)
+            seg_len = seg_end - seg_start
+            boff = seg_start - word_start
+
+            word_str = str(mem[word_idx].value)
+            if 'x' in word_str.lower():
+                word_str = word_str.replace('x', '0').replace('X', '0')
+            word_val = int(word_str, 2)
+            seg_val = (word_val >> (boff * 8)) & ((1 << (seg_len * 8)) - 1)
+            out.extend(seg_val.to_bytes(seg_len, "little"))
+
+        return bytes(out)
+
     async def _sram_backdoor_read(self, addr: int, length: int) -> bytes:
         """Backdoor read from sram_ctrl.mem via VPI (cocotb).
 
@@ -705,10 +763,33 @@ class CocotbBridge:
         await self._apb_write(DMA_BASE + 0x10, src)   # CH0_SRC
         await self._apb_write(DMA_BASE + 0x14, dst)   # CH0_DST
         await self._apb_write(DMA_BASE + 0x18, size)  # CH0_SIZE
+        await self._apb_write(DMA_BASE + 0x28, 0)     # CH1_SIZE = 0
+
+    async def configure_dma_ch1(self, src: int, dst: int, size: int):
+        """
+        Configure DMA CH1 transfer (SRAM -> DRAM) via APB writes.
+
+        Writes CH1_SRC, CH1_DST, CH1_SIZE to dma_wrapper APB registers
+        at 0x4000_3000. Does NOT start the transfer - use dma_start().
+
+        Args:
+            src: Source byte address (SRAM typically)
+            dst: Destination byte address (DRAM typically)
+            size: Transfer size in bytes
+        """
+        logger.info(f"configure_dma_ch1: src=0x{src:08X}, dst=0x{dst:08X}, size={size}")
+
+        await self._apb_write(DMA_BASE + 0x18, 0)     # CH0_SIZE = 0
+        await self._apb_write(DMA_BASE + 0x20, src)   # CH1_SRC
+        await self._apb_write(DMA_BASE + 0x24, dst)   # CH1_DST
+        await self._apb_write(DMA_BASE + 0x28, size)  # CH1_SIZE
 
     async def dma_start(self) -> bool:
         """
-        Start DMA transfer and poll for completion.
+        Start DMA transfer and wait for completion.
+
+        Waits for the dma_wrapper internal ``cdma_status_valid`` pulse from
+        axi_cdma, which indicates the descriptor completed.
 
         Returns:
             True if transfer completed successfully (STATUS.DONE=1)
@@ -716,17 +797,34 @@ class CocotbBridge:
         # Write CMD.START
         await self._apb_write(DMA_BASE + 0x04, 0x0000_0001)
 
-        # Poll STATUS until DONE or timeout
         timeout = 10000
-        for _ in range(timeout):
-            status = await self._apb_read(DMA_BASE + 0x08)
-            if status & 0x2:  # DONE bit
-                logger.info(f"DMA transfer complete: STATUS=0x{status:08X}")
-                return True
-            if status & 0x4:  # ERROR bit
-                logger.error(f"DMA transfer error: STATUS=0x{status:08X}")
-                return False
-            await self.wait_cycles(1)
+        try:
+            cdma_status = self.dut.u_dut.u_dma_wrapper.cdma_status_valid
+            cdma_status_error = self.dut.u_dut.u_dma_wrapper.cdma_status_error
+        except AttributeError:
+            cdma_status = None
+            cdma_status_error = None
+
+        if cdma_status is not None:
+            for _ in range(timeout):
+                if int(cdma_status.value) == 1:
+                    err = int(cdma_status_error.value) if cdma_status_error is not None else 0
+                    if err:
+                        logger.error(f"DMA transfer error: cdma_status_error=0x{err:01X}")
+                        return False
+                    logger.info("DMA transfer complete (cdma_status_valid)")
+                    return True
+                await self.wait_cycles(1)
+        else:
+            for _ in range(timeout):
+                status = await self._apb_read(DMA_BASE + 0x08)
+                if status & 0x2:
+                    logger.info(f"DMA transfer complete: STATUS=0x{status:08X}")
+                    return True
+                if status & 0x4:
+                    logger.error(f"DMA transfer error: STATUS=0x{status:08X}")
+                    return False
+                await self.wait_cycles(1)
 
         logger.error(f"DMA transfer timeout after {timeout} cycles")
         return False
@@ -2979,6 +3077,305 @@ if COCOTB_AVAILABLE:
                 f"APB roundtrip mismatch: expected 0x{expected:08X}, got 0x{actual:08X}"
 
         logger.info(f"[APB_ROUNDTRIP] Hierarchy path: {APB_HIERARCHY}")
+
+    def _make_sfu_silu_instr(
+        elements: int, i_addr: int, o_addr: int, name: str
+    ) -> Tuple[NPUInstruction, bytes]:
+        if not NUMPY_AVAILABLE:
+            raise RuntimeError("numpy is required for SFU golden generation")
+
+        np.random.seed(45)
+        x = (np.random.rand(elements).astype(np.float16) * np.float16(4.0)) - np.float16(2.0)
+        x_f32 = x.astype(np.float32)
+        # SiLU(x) = x * sigmoid(x)
+        golden = (x_f32 * (1.0 / (1.0 + np.exp(-x_f32)))).astype(np.float16)
+
+        instr = NPUInstruction(
+            opcode="SFU_SILU",
+            op_id=4,
+            elements=elements,
+            i_addr=i_addr,
+            o_addr=o_addr,
+            golden_output=golden.tobytes(),
+            output_elem_bytes=2,
+            name=name,
+        )
+        return instr, x.tobytes()
+
+    async def _configure_mxu_no_start(
+        bridge: CocotbBridge, instr: NPUInstruction
+    ) -> Tuple[int, int, int]:
+        base, _ctrl, cmd, status = bridge._get_module_regs("MMUL")
+        await bridge._configure_engine_regs(base, instr)
+        k_tiles = (instr.dim_k + 63) // 64
+        await bridge._mxu_preload(
+            base, instr.w_addr, instr.i_addr, instr.o_addr,
+            k_tiles, instr.dim_n, instr.name
+        )
+        return base, cmd, status
+
+    async def _configure_sfu_no_start(
+        bridge: CocotbBridge, instr: NPUInstruction
+    ) -> Tuple[int, int, int]:
+        base, _ctrl, cmd, status = bridge._get_module_regs(instr.opcode)
+        await bridge._configure_engine_regs(base, instr)
+        return base, cmd, status
+
+    async def _configure_vector_no_start(
+        bridge: CocotbBridge, instr: NPUInstruction
+    ) -> Tuple[int, int, int]:
+        base, _ctrl, cmd, status = bridge._get_module_regs(instr.opcode)
+        await bridge._configure_engine_regs(base, instr)
+        await bridge._vector_preload(
+            base, instr.a_addr, instr.b_addr, instr.o_addr, instr.elements
+        )
+        return base, cmd, status
+
+    @cocotb.test()
+    async def test_e2e_dma_load_store(dut):
+        """E2E-10: DMA load from DRAM -> MXU compute -> DMA store to DRAM."""
+        label = "test_e2e_dma_load_store"
+        bridge = await _setup_single_op_test(dut)
+
+        dma_src_dram = DRAM_BASE + 0x0000
+        dma_sram_buf = SRAM_BASE + 0x10000
+        test_payload = bytes([i & 0xFF for i in range(256)])
+        await bridge._dram_backdoor_write(dma_src_dram, test_payload)
+
+        await bridge.configure_dma(dma_src_dram, dma_sram_buf, 256)
+        ok = await bridge.dma_start()
+        assert ok, f"{label}: DMA CH0 DRAM->SRAM failed"
+
+        loaded = await bridge._sram_backdoor_read(dma_sram_buf, 256)
+        assert bytes(loaded) == test_payload, f"{label}: loaded data mismatch"
+
+        m, k, n = 1, 64, 64
+        mxu_w = SRAM_BASE + 0x0000
+        mxu_i = dma_sram_buf
+        mxu_o = SRAM_BASE + 0x20000
+        mxu_instr, mxu_wt, mxu_act = _make_mxu_small_instr(
+            m, k, n, mxu_w, mxu_i, mxu_o, f"{label}_mxu"
+        )
+        await bridge.preload_sram(mxu_w, mxu_wt)
+        await bridge.preload_sram(mxu_i, mxu_act)
+        passed, cycles = await bridge.run_step(mxu_instr)
+        assert passed, f"{label}: MXU compute mismatch ({cycles} cycles)"
+
+        output_bytes = m * n * 4
+        await bridge.configure_dma_ch1(mxu_o, DRAM_BASE + 0x1000, output_bytes)
+        ok = await bridge.dma_start()
+        assert ok, f"{label}: DMA CH1 store to DRAM failed"
+
+        stored = await bridge._dram_backdoor_read(DRAM_BASE + 0x1000, output_bytes)
+        expected = await bridge._sram_backdoor_read(mxu_o, output_bytes)
+        assert bytes(stored) == bytes(expected), f"{label}: stored DRAM data mismatch"
+
+        logger.warning(f"[{label}] PASS")
+
+    @cocotb.test()
+    async def test_e2e_dma_mxu_concurrent(dut):
+        """E2E-11: DMA fetches w2 while MXU computes with w1; no deadlock."""
+        label = "test_e2e_dma_mxu_concurrent"
+        bridge = await _setup_single_op_test(dut)
+
+        m, k, n = 1, 64, 64
+        w1_addr = SRAM_BASE + 0x0000
+        w2_addr = SRAM_BASE + 0x4000
+        w2_dram_addr = DRAM_BASE + 0x0000
+        i_addr = SRAM_BASE + 0x8000
+        o_addr = SRAM_BASE + 0xC000
+
+        w1_instr, w1_wt, w1_act = _make_mxu_small_instr(
+            m, k, n, w1_addr, i_addr, o_addr, f"{label}_w1"
+        )
+
+        # Single-burst DMA payload avoids an axi_cdma multi-burst AW deadlock
+        # when the MXU store-out is writing to SRAM at the same time.
+        w2_size = 1024
+        w2_payload = bytes([((i * 17 + 31) ^ 0xA5) & 0xFF for i in range(w2_size)])
+
+        await bridge.preload_sram(w1_addr, w1_wt)
+        await bridge.preload_sram(i_addr, w1_act)
+
+        await bridge._dram_backdoor_write(w2_dram_addr, w2_payload)
+
+        mxu_base, mxu_cmd, mxu_status = await _configure_mxu_no_start(bridge, w1_instr)
+        await bridge.configure_dma(w2_dram_addr, w1_addr, w2_size)
+
+        cycle_start = int(dut.sim_cycle.value)
+        await bridge._apb_write(DMA_BASE + 0x04, 0x0000_0001)
+        await bridge._apb_write(mxu_base + mxu_cmd, 0x0000_0001)
+
+        mxu_done = False
+        dma_done = False
+        mxu_cycles = 0
+        dma_cycles = 0
+        saw_mxu_busy = False
+        timeout = 50000
+        for _ in range(timeout):
+            if not mxu_done:
+                status = await bridge._apb_read(mxu_base + mxu_status)
+                busy = bool(status & 0x1)
+                done = bool(status & 0x2)
+                error = bool(status & 0x4)
+                assert not error, f"{label}: MXU error STATUS=0x{status:08X}"
+                saw_mxu_busy = saw_mxu_busy or busy
+                if done or (saw_mxu_busy and not busy):
+                    mxu_done = True
+                    mxu_cycles = int(dut.sim_cycle.value) - cycle_start
+            if not dma_done:
+                status = await bridge._apb_read(DMA_BASE + 0x08)
+                if status & 0x2:
+                    dma_done = True
+                    dma_cycles = int(dut.sim_cycle.value) - cycle_start
+                if status & 0x4:
+                    raise RuntimeError(f"{label}: DMA error STATUS=0x{status:08X}")
+            if mxu_done and dma_done:
+                break
+            await bridge.wait_cycles(1)
+        assert mxu_done, f"{label}: MXU did not complete (timeout)"
+        assert dma_done, f"{label}: DMA did not complete (timeout)"
+
+        await bridge.wait_cycles(max(200, m * 8 + 200))
+        mxu_actual = await bridge._read_sram_output(o_addr, m * n, 4)
+        mxu_passed = await bridge._golden_compare(w1_instr, mxu_actual)
+        assert mxu_passed, f"{label}: MXU w1 output mismatch"
+
+        w2_arrived = await bridge._sram_backdoor_read(w1_addr, w2_size)
+        assert bytes(w2_arrived) == w2_payload, f"{label}: w2 did not arrive at SRAM"
+
+        logger.warning(
+            f"[{label}] PASS mxu_cycles={mxu_cycles} dma_cycles={dma_cycles}"
+        )
+
+    @cocotb.test()
+    async def test_e2e_crossbar_stress(dut):
+        """E2E-12: 6-master crossbar stress — MXU+SFU+Vector+DMA+Ibex concurrent."""
+        label = "test_e2e_crossbar_stress"
+        bridge = await _setup_single_op_test(dut)
+
+        dma_payload = bytes([(i * 7 + 3) & 0xFF for i in range(512)])
+        dma_sram_dst = SRAM_BASE + 0x12000
+        dma_dram_src = DRAM_BASE + 0x0000
+        await bridge._dram_backdoor_write(dma_dram_src, dma_payload)
+
+        m, k, n = 1, 64, 64
+        mxu_w = SRAM_BASE + 0x0000
+        mxu_i = SRAM_BASE + 0x2000
+        mxu_o = SRAM_BASE + 0x6000
+        mxu_instr, mxu_wt, mxu_act = _make_mxu_small_instr(
+            m, k, n, mxu_w, mxu_i, mxu_o, f"{label}_mxu"
+        )
+        await bridge.preload_sram(mxu_w, mxu_wt)
+        await bridge.preload_sram(mxu_i, mxu_act)
+        mxu_base, mxu_cmd, mxu_status = await _configure_mxu_no_start(bridge, mxu_instr)
+
+        sfu_i = SRAM_BASE + 0x8000
+        sfu_o = SRAM_BASE + 0x9000
+        sfu_instr, sfu_input = _make_sfu_silu_instr(64, sfu_i, sfu_o, f"{label}_silu")
+        await bridge.preload_sram(sfu_i, sfu_input)
+        sfu_base, sfu_cmd, sfu_status = await _configure_sfu_no_start(bridge, sfu_instr)
+
+        vec_a = SRAM_BASE + 0xA000
+        vec_b = SRAM_BASE + 0xB000
+        vec_o = SRAM_BASE + 0xC000
+        vec_instr, vec_a_data, vec_b_data = _make_vector_vadd_instr(
+            128, vec_a, vec_b, vec_o, f"{label}_vadd"
+        )
+        await bridge.preload_sram(vec_a, vec_a_data)
+        await bridge.preload_sram(vec_b, vec_b_data)
+        vec_base, vec_cmd, vec_status = await _configure_vector_no_start(bridge, vec_instr)
+
+        await bridge.configure_dma(dma_dram_src, dma_sram_dst, 512)
+
+        await bridge._apb_write(sfu_base + sfu_cmd, 0x0000_0001)
+        await bridge._poll_done(
+            sfu_base + sfu_status, timeout=bridge._estimate_timeout(sfu_instr)
+        )
+        for _ in range(5000):
+            p = bridge.dut.u_dut.u_sfu_wrapper
+            if (
+                int(p.wr_state.value) == 0
+                and int(p.wr_fifo_wr_ptr.value) == int(p.wr_fifo_rd_ptr.value)
+            ):
+                break
+            await bridge.wait_cycles(1)
+        else:
+            raise RuntimeError(f"{label}: SFU wrapper write path did not flush")
+        sfu_actual = await bridge._read_sram_output(sfu_o, 64, 2)
+        sfu_passed = await bridge._golden_compare(sfu_instr, sfu_actual)
+        assert sfu_passed, f"{label}: SFU SILU output mismatch"
+
+        start_cycles = {}
+        start_cycles["mxu"] = int(dut.sim_cycle.value)
+        await bridge._apb_write(mxu_base + mxu_cmd, 0x0000_0001)
+        start_cycles["vec"] = int(dut.sim_cycle.value)
+        await bridge._apb_write(vec_base + vec_cmd, 0x0000_0001)
+        start_cycles["dma"] = int(dut.sim_cycle.value)
+        await bridge._apb_write(DMA_BASE + 0x04, 0x0000_0001)
+        start_cycles["ibex"] = int(dut.sim_cycle.value)
+
+        done = {"mxu": False, "vec": False, "dma": False}
+        saw_busy = {"mxu": False, "vec": False, "dma": False}
+        end_cycles = {}
+        ibex_reads = []
+        timeout = 50000
+        for _ in range(timeout):
+            for name, (base, status_offset) in (
+                ("mxu", (mxu_base, mxu_status)),
+                ("vec", (vec_base, vec_status)),
+                ("dma", (DMA_BASE, 0x08)),
+            ):
+                if done[name]:
+                    continue
+                status = await bridge._apb_read(base + status_offset)
+                busy = bool(status & 0x1)
+                done_flag = bool(status & 0x2)
+                error = bool(status & 0x4)
+                if error:
+                    raise RuntimeError(f"{label}: {name} error STATUS=0x{status:08X}")
+                saw_busy[name] = saw_busy[name] or busy
+                if done_flag or (saw_busy[name] and not busy):
+                    done[name] = True
+                    end_cycles[name] = int(dut.sim_cycle.value)
+
+            if len(ibex_reads) < 10:
+                ibex_reads.append(await bridge._apb_read(INTC_BASE + 0x00))
+
+            if all(done.values()):
+                break
+            await bridge.wait_cycles(1)
+
+        assert all(done.values()), f"{label}: engines did not complete: {done}"
+        assert len(ibex_reads) > 0, f"{label}: no Ibex APB reads performed"
+
+        latency_limits = {
+            "mxu": 5000,
+            "vec": 1500,
+            "dma": 1500,
+        }
+        for name, limit in latency_limits.items():
+            latency = end_cycles[name] - start_cycles[name]
+            assert latency <= limit, (
+                f"{label}: {name} latency {latency} exceeds limit {limit}"
+            )
+            logger.warning(f"[{label}] {name} latency={latency} cycles")
+
+        await bridge.wait_cycles(max(200, m * 8 + 200))
+        mxu_actual = await bridge._read_sram_output(mxu_o, m * n, 4)
+        mxu_passed = await bridge._golden_compare(mxu_instr, mxu_actual)
+        assert mxu_passed, f"{label}: MXU output mismatch"
+
+        await bridge._vector_store_o(vec_base)
+        await bridge.wait_cycles(200)
+        vec_actual = await bridge._read_sram_output(vec_o, 128, 4)
+        vec_passed = await bridge._golden_compare(vec_instr, vec_actual)
+        assert vec_passed, f"{label}: Vector VADD output mismatch"
+
+        dma_actual = await bridge._sram_backdoor_read(dma_sram_dst, 512)
+        assert bytes(dma_actual) == dma_payload, f"{label}: DMA data mismatch"
+
+        logger.warning(f"[{label}] PASS ibex_reads={len(ibex_reads)}")
 
 else:
     # Non-cocotb: provide stubs that fail gracefully

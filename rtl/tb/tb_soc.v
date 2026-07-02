@@ -77,6 +77,57 @@ module tb_soc;
     reg          sim_done_flag;
 
     //=========================================================================
+    // Cocotb SRAM backdoor write interface
+    // VPI writes to sram_ctrl.mem do not persist under VCS, so expose a
+    // clocked port that the Python bridge can drive to update the SRAM array.
+    //=========================================================================
+    reg          sram_bkdoor_req;
+    reg          sram_bkdoor_ack;
+    reg  [15:0]  sram_bkdoor_addr;
+    reg  [511:0] sram_bkdoor_wdata;
+
+    initial begin
+        sram_bkdoor_req   = 1'b0;
+        sram_bkdoor_ack   = 1'b0;
+        sram_bkdoor_addr  = 16'd0;
+        sram_bkdoor_wdata = 512'd0;
+    end
+
+    always @(posedge clk) begin
+        if (sram_bkdoor_req && !sram_bkdoor_ack) begin
+            u_dut.u_sram_ctrl.mem[sram_bkdoor_addr] <= sram_bkdoor_wdata;
+            sram_bkdoor_ack <= 1'b1;
+        end else if (!sram_bkdoor_req) begin
+            sram_bkdoor_ack <= 1'b0;
+        end
+    end
+
+    //=========================================================================
+    // Cocotb DRAM backdoor write interface
+    // Same clocked-backdoor approach as SRAM for initializing DRAM test data.
+    //=========================================================================
+    reg          dram_bkdoor_req;
+    reg          dram_bkdoor_ack;
+    reg  [16:0]  dram_bkdoor_addr;
+    reg  [511:0] dram_bkdoor_wdata;
+
+    initial begin
+        dram_bkdoor_req   = 1'b0;
+        dram_bkdoor_ack   = 1'b0;
+        dram_bkdoor_addr  = 17'd0;
+        dram_bkdoor_wdata = 512'd0;
+    end
+
+    always @(posedge clk) begin
+        if (dram_bkdoor_req && !dram_bkdoor_ack) begin
+            u_dut.u_dram_model.mem[dram_bkdoor_addr] <= dram_bkdoor_wdata;
+            dram_bkdoor_ack <= 1'b1;
+        end else if (!dram_bkdoor_req) begin
+            dram_bkdoor_ack <= 1'b0;
+        end
+    end
+
+    //=========================================================================
     // DUT: caduceus_soc_top
     //=========================================================================
     caduceus_soc_top #(
@@ -122,6 +173,29 @@ module tb_soc;
             sim_cycle <= sim_cycle;
         else
             sim_cycle <= sim_cycle + 1;
+    end
+
+    //=========================================================================
+    // Debug: trace Ibex data/instr interface for first 120 cycles
+    //=========================================================================
+    integer dbg_cycle;
+    initial dbg_cycle = 0;
+    always @(posedge clk) begin
+        if (!sim_done_flag && dbg_cycle < 120) begin
+            $display("[DBG %0t cy=%0d] instr_req=%b instr_rdata=%h data_req=%b data_we=%b data_addr=%h data_rdata=%h data_rvalid=%b state=%h apb_prdata=%h apb_pready=%b",
+                $time, sim_cycle,
+                u_dut.u_ibex_wrapper.instr_req,
+                u_dut.u_ibex_wrapper.instr_rdata,
+                u_dut.u_ibex_wrapper.data_req,
+                u_dut.u_ibex_wrapper.data_we,
+                u_dut.u_ibex_wrapper.data_addr,
+                u_dut.u_ibex_wrapper.data_rdata,
+                u_dut.u_ibex_wrapper.data_rvalid,
+                u_dut.u_ibex_wrapper.state,
+                u_dut.u_ibex_wrapper.apb_prdata,
+                u_dut.u_ibex_wrapper.apb_pready);
+            dbg_cycle = dbg_cycle + 1;
+        end
     end
 
     //=========================================================================
@@ -202,6 +276,34 @@ module tb_soc;
         // PCIe TLP TX — always ready to accept completions
         pcie_tx_cpl_tlp_ready = 1'b1;
 
+        // ── Zero-initialize Ibex DMEM so data reads are never X ───────────
+        // The ibex_wrapper data RAM has no $readmemh; uninitialized reads
+        // would propagate X into Ibex and trip IbexDataRPayloadX assertions.
+        begin
+            integer dmem_i;
+            for (dmem_i = 0; dmem_i < 16384; dmem_i = dmem_i + 1)
+                u_dut.u_ibex_wrapper.dmem[dmem_i] = 32'h0;
+        end
+
+        // NOTE: sram_ctrl.v now zero-initializes its own mem array inside
+        // `ifdef SIMULATION, so the hierarchical write from the testbench is
+        // no longer required (and avoids any multi-driver ambiguity).
+
+        // ── Zero-initialize engine wrapper internal buffers so compute starts
+        // from known data when the cocotb test does not explicitly preload.
+        begin
+            integer buf_i;
+            for (buf_i = 0; buf_i < 32; buf_i = buf_i + 1)
+                u_dut.u_mxu_wrapper.weight_buf[buf_i] = 512'h0;
+            for (buf_i = 0; buf_i < 64; buf_i = buf_i + 1)
+                u_dut.u_mxu_wrapper.activation_buf[buf_i] = 512'h0;
+            u_dut.u_sfu_wrapper.rd_line_buf = 512'h0;
+            u_dut.u_sfu_wrapper.wr_line_buf = 512'h0;
+            u_dut.u_vector_wrapper.buf_a[0] = 4096'h0;
+            u_dut.u_vector_wrapper.buf_b[0] = 4096'h0;
+            u_dut.u_vector_wrapper.buf_o[0] = 4096'h0;
+        end
+
         // ── Apply reset sequence ──────────────────────────────────────────
         apply_reset();
 
@@ -219,7 +321,7 @@ module tb_soc;
         // ── Bootstrap check: verify clock is running ─────────────────────
         @(posedge clk);
         @(negedge clk);
-        if (clk === 1'b1) begin
+        if (clk === 1'b0) begin
             $display("[PASS] Clock running at 1 GHz (t=%0t)", $time);
             pass_cnt = pass_cnt + 1;
         end else begin
@@ -318,6 +420,27 @@ module tb_soc;
 `endif
 
     //=========================================================================
+    // Debug: trace MXU controller state/status
+    //=========================================================================
+    reg [3:0] mxu_state_d1;
+    reg       mxu_status_d1;
+    initial begin
+        mxu_state_d1  = 4'd0;
+        mxu_status_d1 = 1'b0;
+    end
+    always @(posedge clk) begin
+        if (u_dut.u_mxu_wrapper.dbg_state != mxu_state_d1) begin
+            $display("[MXU_FSM] state=%0d busy=%b done=%b error=%b t=%0t",
+                     u_dut.u_mxu_wrapper.dbg_state,
+                     u_dut.u_mxu_wrapper.dbg_compute_en,
+                     u_dut.u_mxu_wrapper.dbg_store_out,
+                     u_dut.u_mxu_wrapper.dbg_weight_load,
+                     $time);
+            mxu_state_d1 <= u_dut.u_mxu_wrapper.dbg_state;
+        end
+    end
+
+    //=========================================================================
     // Simulation Timeout (100,000,000 ns = 100M cycles @ 1 GHz)
     //=========================================================================
     initial begin
@@ -338,7 +461,13 @@ module tb_soc;
 `ifdef VCD
     initial begin
         $dumpfile("tb_soc.vcd");
-        $dumpvars(0, tb_soc);
+        // Focus on the data path most likely to explain BLK0 failures:
+        // engine wrappers, crossbar, and SRAM controller.
+        $dumpvars(0, tb_soc.u_dut.u_mxu_wrapper);
+        $dumpvars(0, tb_soc.u_dut.u_sfu_wrapper);
+        $dumpvars(0, tb_soc.u_dut.u_vector_wrapper);
+        $dumpvars(0, tb_soc.u_dut.u_axi_crossbar);
+        $dumpvars(0, tb_soc.u_dut.u_sram_ctrl);
     end
 `endif
 

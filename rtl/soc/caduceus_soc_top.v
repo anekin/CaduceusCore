@@ -765,12 +765,12 @@ module caduceus_soc_top #(
     sram_ctrl #(
         .DATA_WIDTH (512),
         .ADDR_WIDTH (32),
-        .ID_WIDTH   (8)
+        .ID_WIDTH   (CB_S_ID_WIDTH)   // match crossbar 9-bit slave ID
     ) u_sram_ctrl (
         .clk          (clk),
         .rst_n        (rst_n),
 
-        .s_axi_awid   (cb_s_awid[0][7:0]),
+        .s_axi_awid   (cb_s_awid[0]),
         .s_axi_awaddr (cb_s_awaddr[0]),
         .s_axi_awlen  (cb_s_awlen[0]),
         .s_axi_awsize (cb_s_awsize[0]),
@@ -784,12 +784,12 @@ module caduceus_soc_top #(
         .s_axi_wvalid (cb_s_wvalid[0]),
         .s_axi_wready (cb_s_wready[0]),
 
-        .s_axi_bid    (cb_s_bid[0][7:0]),
+        .s_axi_bid    (cb_s_bid[0]),
         .s_axi_bresp  (cb_s_bresp[0]),
         .s_axi_bvalid (cb_s_bvalid[0]),
         .s_axi_bready (cb_s_bready[0]),
 
-        .s_axi_arid   (cb_s_arid[0][7:0]),
+        .s_axi_arid   (cb_s_arid[0]),
         .s_axi_araddr (cb_s_araddr[0]),
         .s_axi_arlen  (cb_s_arlen[0]),
         .s_axi_arsize (cb_s_arsize[0]),
@@ -797,7 +797,7 @@ module caduceus_soc_top #(
         .s_axi_arvalid(cb_s_arvalid[0]),
         .s_axi_arready(cb_s_arready[0]),
 
-        .s_axi_rid    (cb_s_rid[0][7:0]),
+        .s_axi_rid    (cb_s_rid[0]),
         .s_axi_rdata  (cb_s_rdata[0]),
         .s_axi_rresp  (cb_s_rresp[0]),
         .s_axi_rlast  (cb_s_rlast[0]),
@@ -811,12 +811,12 @@ module caduceus_soc_top #(
     dram_model #(
         .DATA_WIDTH (512),
         .ADDR_WIDTH (32),
-        .ID_WIDTH   (8)
+        .ID_WIDTH   (CB_S_ID_WIDTH)   // match crossbar 9-bit slave ID
     ) u_dram_model (
         .clk          (clk),
         .rst_n        (rst_n),
 
-        .s_axi_awid   (cb_s_awid[1][7:0]),
+        .s_axi_awid   (cb_s_awid[1]),
         .s_axi_awaddr (cb_s_awaddr[1]),
         .s_axi_awlen  (cb_s_awlen[1]),
         .s_axi_awsize (cb_s_awsize[1]),
@@ -830,12 +830,12 @@ module caduceus_soc_top #(
         .s_axi_wvalid (cb_s_wvalid[1]),
         .s_axi_wready (cb_s_wready[1]),
 
-        .s_axi_bid    (cb_s_bid[1][7:0]),
+        .s_axi_bid    (cb_s_bid[1]),
         .s_axi_bresp  (cb_s_bresp[1]),
         .s_axi_bvalid (cb_s_bvalid[1]),
         .s_axi_bready (cb_s_bready[1]),
 
-        .s_axi_arid   (cb_s_arid[1][7:0]),
+        .s_axi_arid   (cb_s_arid[1]),
         .s_axi_araddr (cb_s_araddr[1]),
         .s_axi_arlen  (cb_s_arlen[1]),
         .s_axi_arsize (cb_s_arsize[1]),
@@ -843,7 +843,7 @@ module caduceus_soc_top #(
         .s_axi_arvalid(cb_s_arvalid[1]),
         .s_axi_arready(cb_s_arready[1]),
 
-        .s_axi_rid    (cb_s_rid[1][7:0]),
+        .s_axi_rid    (cb_s_rid[1]),
         .s_axi_rdata  (cb_s_rdata[1]),
         .s_axi_rresp  (cb_s_rresp[1]),
         .s_axi_rlast  (cb_s_rlast[1]),
@@ -886,7 +886,10 @@ module caduceus_soc_top #(
     //─────────────────────────────────────────────────────────────────────────
     // MXU SoC Wrapper (APB slave 0 at 0x4000_0000, AXI4 master 1)
     //─────────────────────────────────────────────────────────────────────────
-    mxu_soc_wrapper u_mxu_wrapper (
+    mxu_soc_wrapper #(
+        .W_BUF_DEPTH      (5120),
+        .A_BUF_DEPTH      (10240)
+    ) u_mxu_wrapper (
         .clk              (clk),
         .rst_n            (rst_n),
 
@@ -993,7 +996,9 @@ module caduceus_soc_top #(
     //─────────────────────────────────────────────────────────────────────────
     // Vector SoC Wrapper (APB slave 2 at 0x4000_2000, AXI4 master 3)
     //─────────────────────────────────────────────────────────────────────────
-    vector_soc_wrapper u_vector_wrapper (
+    vector_soc_wrapper #(
+        .CHUNKS_MAX    (80)
+    ) u_vector_wrapper (
         .clk           (clk),
         .rst_n         (rst_n),
 

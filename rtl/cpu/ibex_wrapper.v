@@ -203,15 +203,16 @@ module ibex_wrapper #(
     // logic (dmem_waddr, rom_data_addr).  They are driven by the sequential
     // state machine below.
 
-    typedef enum logic [2:0] {
-        ST_IDLE     = 3'd0,
-        ST_AXI_RD   = 3'd1,
-        ST_AXI_WR   = 3'd2,
-        ST_APB_RD   = 3'd3,
-        ST_APB_WR   = 3'd4,
-        ST_DMEM_ACC = 3'd5,
-        ST_BOOT_RD  = 3'd6,
-        ST_ERROR    = 3'd7
+    typedef enum logic [3:0] {
+        ST_IDLE     = 4'd0,
+        ST_AXI_RD   = 4'd1,
+        ST_AXI_WR   = 4'd2,
+        ST_APB_RD   = 4'd3,
+        ST_APB_WR   = 4'd4,
+        ST_DMEM_ACC = 4'd5,
+        ST_BOOT_RD1 = 4'd6,
+        ST_BOOT_RD2 = 4'd7,
+        ST_ERROR    = 4'd8
     } state_t;
 
     state_t state, state_next;
@@ -283,22 +284,26 @@ module ibex_wrapper #(
                     resp_valid <= 1'b1;
                 end
 
-                ST_BOOT_RD: begin
+                ST_BOOT_RD1: begin
                     // Boot ROM read has 1-cycle latency:
                     //   Cycle 1 (enter): rom_data_addr set, ROM reads internally
-                    //   Cycle 2: data ready, capture and respond
+                    //   Cycle 2 (ST_BOOT_RD2): registered ROM data is stable, respond
                     if (req_we) begin
                         // Write to boot_rom → bus error
                         resp_rdata <= 32'h0;
                         resp_err   <= 1'b1;
                         resp_valid <= 1'b1;
                     end else begin
-                        // Capture data that arrived this cycle
-                        rom_data_rdata <= rom_data_out;
-                        resp_rdata <= rom_data_out;
-                        resp_err   <= 1'b0;
-                        resp_valid <= 1'b1;
+                        // Wait one cycle for the registered ROM data to update
+                        resp_valid <= 1'b0;
                     end
+                end
+
+                ST_BOOT_RD2: begin
+                    // ROM data is now stable; drive response and return to IDLE
+                    resp_rdata <= rom_data_out;
+                    resp_err   <= 1'b0;
+                    resp_valid <= 1'b1;
                 end
 
                 ST_ERROR: begin
@@ -369,7 +374,7 @@ module ibex_wrapper #(
                     if (is_undefined)
                         state_next = ST_ERROR;
                     else if (is_boot_rom)
-                        state_next = ST_BOOT_RD;
+                        state_next = ST_BOOT_RD1;
                     else if (dmem_hit)
                         state_next = ST_DMEM_ACC;
                     else if (is_axi4)
@@ -382,7 +387,8 @@ module ibex_wrapper #(
             end
 
             ST_DMEM_ACC: state_next = ST_IDLE;
-            ST_BOOT_RD:  state_next = ST_IDLE;
+            ST_BOOT_RD1: state_next = req_we ? ST_IDLE : ST_BOOT_RD2;
+            ST_BOOT_RD2: state_next = ST_IDLE;
             ST_ERROR:    state_next = ST_IDLE;
 
             ST_AXI_RD: begin

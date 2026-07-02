@@ -262,8 +262,13 @@ module axi_crossbar #(
     // Slave BID = {master_sel, axi_id}. Crossbar strips master_sel on return.
     generate
         for (gsi = 0; gsi < NUM_S; gsi = gsi + 1) begin : gen_b_slvready
-            wire [MSEL_WIDTH-1:0] b_m = s_bid_i[gsi][S_ID_WIDTH-1 : M_ID_WIDTH];
-            assign s_bready_o[gsi] = aw_busy[gsi] && m_bready_i[b_m];
+            // Only decode BID when a valid response is present; otherwise the
+            // RID field may be X and indexing m_bready_i with X propagates X
+            // onto the slave-ready signal, stalling the slave.
+            wire [MSEL_WIDTH-1:0] b_m = s_bvalid_i[gsi] ?
+                s_bid_i[gsi][S_ID_WIDTH-1 : M_ID_WIDTH] : '0;
+            assign s_bready_o[gsi] = s_bvalid_i[gsi] && aw_busy[gsi] &&
+                                     m_bready_i[b_m];
         end
     endgenerate
 
@@ -334,8 +339,12 @@ module axi_crossbar #(
     // =========================================================================
     generate
         for (gsi = 0; gsi < NUM_S; gsi = gsi + 1) begin : gen_r_slvready
-            wire [MSEL_WIDTH-1:0] r_m = s_rid_i[gsi][S_ID_WIDTH-1 : M_ID_WIDTH];
-            assign s_rready_o[gsi] = ar_busy[gsi] && m_rready_i[r_m];
+            // Only decode RID when a valid response is present; otherwise the
+            // RID field may be X and indexing m_rready_i with X propagates X
+            // onto the slave-ready signal, stalling the slave.
+            wire [MSEL_WIDTH-1:0] r_m = s_rvalid_i[gsi] ?
+                s_rid_i[gsi][S_ID_WIDTH-1 : M_ID_WIDTH] : '0;
+            assign s_rready_o[gsi] = s_rvalid_i[gsi] && m_rready_i[r_m];
         end
     endgenerate
 
@@ -515,7 +524,7 @@ module axi_crossbar #(
                     end
                 end
 
-                // Release AW grant on B handshake
+                // Release AW grant on B handshake.
                 if (aw_busy[si_s]) begin
                     if (m_bvalid_o[aw_granted[si_s]] && m_bready_i[aw_granted[si_s]])
                         aw_busy[si_s] <= 1'b0;
@@ -565,10 +574,10 @@ module axi_crossbar #(
                     end
                 end
 
-                // Release AR grant on R completion
+                // Release AR grant on R completion.
                 if (ar_busy[si_s]) begin
-                    if (m_rvalid_o[ar_granted[si_s]] && m_rready_i[ar_granted[si_s]] &&
-                        m_rlast_o[ar_granted[si_s]])
+                    if (m_rvalid_o[ar_granted[si_s]] && m_rlast_o[ar_granted[si_s]] &&
+                        m_rready_i[ar_granted[si_s]])
                         ar_busy[si_s] <= 1'b0;
                 end
             end

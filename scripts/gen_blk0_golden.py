@@ -155,6 +155,11 @@ class Blk0GoldenGen:
         self.exec = GoldenExecutor(ARRAY_H, ARRAY_W)
         self.mxu = self.exec.mxu
         self.sfu = self.exec.sfu
+        # RTL rope_hw uses 16-stage CORDIC (not the model-default 12), so the
+        # blk.0 RoPE golden must be generated with the same iteration count.
+        self.sfu.cordic_iterations = 16
+        self.sfu.cordic_angles = np.arctan(2.0 ** -np.arange(16)).astype(np.float32)
+        self.sfu.cordic_gain = float(np.prod(np.cos(self.sfu.cordic_angles)))
         self.sram = self.exec.sram
 
         # Manifest entries
@@ -342,14 +347,15 @@ class Blk0GoldenGen:
         # ─────────────────────────────────────────────────────────────
         self._log(10, "VRESID pre-attn residual")
         vresid1_in_addr = SFU_SCRATCH
+        vresid1_b_addr = SFU_SCRATCH + 0x2000  # keep B clear of A (2560 FP16 = 5120 B)
         vresid1_out_addr = OUT_BUF
         # VRESID: da = sa (FP16) + sb (INT32)
         # sa = original act (FP16), sb = O_proj output (INT32)
         self.sram.write_float16(vresid1_in_addr, act_fp16)
-        self.sram.write_int32(vresid1_in_addr + 0x1000, o_out)
+        self.sram.write_int32(vresid1_b_addr, o_out)
 
         instr_vr1 = NPUInstruction(OpCode.VRESID, {
-            "sa": vresid1_in_addr, "sb": vresid1_in_addr + 0x1000,
+            "sa": vresid1_in_addr, "sb": vresid1_b_addr,
             "da": vresid1_out_addr, "len": HIDDEN,
         }, comment="VRESID pre-attn residual, len=2560")
         self.exec.step(instr_vr1)
@@ -472,12 +478,13 @@ class Blk0GoldenGen:
         # ─────────────────────────────────────────────────────────────
         self._log(17, "VRESID post-attn residual")
         vresid2_in_addr = SFU_SCRATCH
+        vresid2_b_addr = SFU_SCRATCH + 0x2000  # keep B clear of A
         vresid2_out_addr = OUT_BUF
         self.sram.write_float16(vresid2_in_addr, resid1_fp16)
-        self.sram.write_int32(vresid2_in_addr + 0x1000, down_out)
+        self.sram.write_int32(vresid2_b_addr, down_out)
 
         instr_vr2 = NPUInstruction(OpCode.VRESID, {
-            "sa": vresid2_in_addr, "sb": vresid2_in_addr + 0x1000,
+            "sa": vresid2_in_addr, "sb": vresid2_b_addr,
             "da": vresid2_out_addr, "len": HIDDEN,
         }, comment="VRESID post-attn residual, len=2560")
         self.exec.step(instr_vr2)

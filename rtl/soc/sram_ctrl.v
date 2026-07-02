@@ -202,6 +202,19 @@ module sram_ctrl #(
         (w_burst == 2'b10) ? w_beat_addr_wrap : w_beat_addr_raw;
     wire                  w_beat_valid = addr_in_range(w_beat_addr);
 
+    // Merge write data with existing memory word using WSTRB.
+    // This allows sub-beat (narrow) AXI writes to update only valid bytes.
+    wire [DATA_WIDTH-1:0] w_mem_old = mem[addr_to_idx(w_beat_addr)];
+    wire [DATA_WIDTH-1:0] w_mem_new;
+    genvar wstrb_gi;
+    generate
+        for (wstrb_gi = 0; wstrb_gi < DATA_WIDTH/8; wstrb_gi = wstrb_gi + 1) begin : g_wstrb_merge
+            assign w_mem_new[wstrb_gi*8 +: 8] = s_axi_wstrb[wstrb_gi] ?
+                                                s_axi_wdata[wstrb_gi*8 +: 8] :
+                                                w_mem_old[wstrb_gi*8 +: 8];
+        end
+    endgenerate
+
     // =========================================================================
     // Read path FSM (AR → R) — independent from write path
     // =========================================================================
@@ -270,9 +283,11 @@ module sram_ctrl #(
 
             // ── Accept write data beats (W channel) ─────────────────────────
             if (w_active && w_w_accepted) begin
-                // Write data to memory if within range
+                $display("[SRAM_WR] awid=%0d addr=0x%08X beat=%0d wlast=%b wstrb=0x%016X data=0x%016X",
+                         w_id, w_beat_addr, w_beat, s_axi_wlast, s_axi_wstrb, s_axi_wdata[63:0]);
+                // Write merged data to memory if within range
                 if (addr_in_range(w_beat_addr))
-                    mem[addr_to_idx(w_beat_addr)] <= s_axi_wdata;
+                    mem[addr_to_idx(w_beat_addr)] <= w_mem_new;
                 // Track if any beat goes out of range
                 if (!addr_in_range(w_beat_addr))
                     w_all_in_range <= 1'b0;
@@ -333,15 +348,18 @@ module sram_ctrl #(
     end
 
     // =========================================================================
-    // Simulation initialization via $readmemh
+    // Simulation initialization
     // =========================================================================
-    // Usage in testbench:
-    //   initial $readmemh("sram_init.hex", tb_sram_ctrl.u_dut.mem);
-    // Or can be invoked directly in this module for standalone init:
-    //   initial $readmemh("sram_init.hex", mem);
+    // Zero-initialize memory so backdoor reads never return X, then optionally
+    // load sram_init.hex if it exists.  Keeping the init inside the SRAM
+    // controller (instead of relying on a hierarchical reference from the
+    // testbench) guarantees the memory is valid before any engine reads it.
 
-`ifdef SIMULATION
+`ifndef SYNTHESIS
+    integer init_i;
     initial begin
+        for (init_i = 0; init_i < MEM_DEPTH; init_i = init_i + 1)
+            mem[init_i] = {DATA_WIDTH{1'b0}};
         // Load init file if present; $readmemh silently ignores missing files
         $readmemh("sram_init.hex", mem);
     end

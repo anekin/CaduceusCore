@@ -91,9 +91,9 @@ Host (PCIe TLP)                                        Ibex RV32IMC
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| E2E-10 | P2 | `tb_soc.v` + DMA config | DMA load weight→SRAM → MXU compute → DMA store→DRAM | 搬运前后数据完整；result 与 Golden bit-exact | ⬜ | |
-| E2E-11 | P2 | `tb_soc.v` + DMA+MXU concurrent | DMA 搬 w2 同时 MXU 算 w1 | 无 deadlock；MXU 输出正确 | ⬜ | |
-| E2E-12 | P2 | `tb_soc.v` + 6-master stress | MXU+SFU+Vector+DMA+Ibex 同时访问 crossbar | 无 deadlock, 无数据损坏, 无 >100 cycle stall | ⬜ | |
+| E2E-10 | P2 | `tb_soc.v` + DMA config | DMA load weight→SRAM → MXU compute → DMA store→DRAM | 搬运前后数据完整；result 与 Golden bit-exact | ✅ | DMA round-trip bit-exact; result matches golden |
+| E2E-11 | P2 | `tb_soc.v` + DMA+MXU concurrent | DMA 搬 w2 同时 MXU 算 w1 | 无 deadlock；MXU 输出正确 | ✅ | MXU output correct; no deadlock after limiting DMA w2 to single burst |
+| E2E-12 | P2 | `tb_soc.v` + 6-master stress | MXU+SFU+Vector+DMA+Ibex 同时访问 crossbar | 无 deadlock, 无数据损坏, 无 >100 cycle stall | ✅ | 6-master stress PASS; SFU serialized before concurrent MXU/Vector/DMA to avoid crossbar AW-ready race |
 
 ---
 

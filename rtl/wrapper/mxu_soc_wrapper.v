@@ -41,11 +41,13 @@ module mxu_soc_wrapper #(
     parameter integer AXI_DATA_WIDTH = 512,
     // Max K-tile elements (0 = full 64 means 64 compute cycles)
     parameter integer K_TILE_MAX     = 64,
-    // Weight buffer depth (K_TILE_MAX / 2 words of 512-bit)
-    // Each 512-bit word = 2 weight_bus cycles (2 × 256-bit = 512-bit)
-    parameter integer W_BUF_DEPTH    = 32,   // K_TILE_MAX/2
-    // Activation buffer depth (K_TILE_MAX words of 512-bit)
-    parameter integer A_BUF_DEPTH    = 64    // K_TILE_MAX
+    // Weight buffer depth: must hold (n_tiles * k_tiles * K_TILE_MAX/2) entries.
+    // Each 512-bit word = 2 weight_bus cycles (2 × 256-bit = 512-bit).
+    // Depth 64 covers n_tiles=2, k_tiles=2 small MMULs (op05/op07).
+    parameter integer W_BUF_DEPTH    = 64,
+    // Activation buffer depth: must hold (k_tiles * K_TILE_MAX) entries.
+    // Depth 128 covers k_tiles=2 small MMULs (op05).
+    parameter integer A_BUF_DEPTH    = 128
 ) (
     input  wire        clk,
     input  wire        rst_n,
@@ -157,13 +159,17 @@ module mxu_soc_wrapper #(
     localparam [11:0] OFF_WRP_OUT_BASE    = 12'h038;
     localparam [11:0] OFF_WRP_CMD         = 12'h03C;
     localparam [11:0] OFF_WRP_STATUS      = 12'h040;
+    localparam [11:0] OFF_WRP_K_TILES     = 12'h044;
+    localparam [11:0] OFF_WRP_DIM_N       = 12'h048;
 
     reg [31:0] wrp_weight_base;
     reg [31:0] wrp_act_base;
     reg [31:0] wrp_out_base;
+    reg [15:0] wrp_k_tiles;        // number of K-tiles to preload (>=1)
+    reg [15:0] wrp_n;              // output N dimension (columns) per logical row
     reg        wrp_load_done;      // WRP_STATUS[0]
 
-    wire       wrp_cs     = psel && (paddr >= 12'h030) && (paddr <= 12'h040);
+    wire       wrp_cs     = psel && (paddr >= 12'h030) && (paddr <= 12'h048);
     wire       wrp_trigger = wrp_cs && pwrite && penable && (paddr == OFF_WRP_CMD) && pwdata[0];
 
     // Wrapper register writes
@@ -172,11 +178,15 @@ module mxu_soc_wrapper #(
             wrp_weight_base <= 32'h2000_0000;
             wrp_act_base    <= 32'h2000_1000;
             wrp_out_base    <= 32'h2000_2000;
+            wrp_k_tiles     <= 16'd1;
+            wrp_n           <= 16'd64;
         end else if (wrp_cs && pwrite) begin
             case (paddr)
                 OFF_WRP_WEIGHT_BASE: wrp_weight_base <= pwdata;
                 OFF_WRP_ACT_BASE:    wrp_act_base    <= pwdata;
                 OFF_WRP_OUT_BASE:    wrp_out_base    <= pwdata;
+                OFF_WRP_K_TILES:     wrp_k_tiles     <= pwdata[15:0];
+                OFF_WRP_DIM_N:       wrp_n           <= pwdata[15:0];
                 OFF_WRP_CMD:         ; // handled by wrp_trigger
                 default: ;
             endcase
@@ -188,6 +198,8 @@ module mxu_soc_wrapper #(
     assign wrp_prdata = (paddr == OFF_WRP_WEIGHT_BASE) ? wrp_weight_base :
                         (paddr == OFF_WRP_ACT_BASE)    ? wrp_act_base    :
                         (paddr == OFF_WRP_OUT_BASE)    ? wrp_out_base    :
+                        (paddr == OFF_WRP_K_TILES)     ? {16'd0, wrp_k_tiles} :
+                        (paddr == OFF_WRP_DIM_N)       ? {16'd0, wrp_n} :
                         (paddr == OFF_WRP_CMD)         ? 32'd0           :
                         (paddr == OFF_WRP_STATUS)      ? {31'd0, wrp_load_done} : 32'd0;
 
@@ -275,25 +287,21 @@ module mxu_soc_wrapper #(
     localparam [3:0] PL_READY      = 4'd5;   // pre-load complete
 
     reg [3:0]  pl_state;
-    reg [7:0]  pl_beat_cnt;       // beat counter within burst
-    reg [7:0]  pl_total_beats;    // total beats for current burst
+    reg [7:0]  pl_beat_cnt;       // beat counter within current K-tile burst
+    reg [15:0] pl_k_tile_cnt;     // current K-tile index during preload
     reg [31:0] pl_cur_addr;       // current burst start address
 
     // Compute beat counts from K-tile size
     // weight: K_TILE × 64 int4 / 2 (packed) / 64 bytes_per_beat = K_TILE / 2 beats
     // activation: K_TILE × 64 int8 / 64 bytes_per_beat = K_TILE beats
-    wire [7:0] weight_beats;
-    wire [7:0] act_beats;
-
-    // Use MAX_K for full-tile pre-load; partial tiles handled by compute_k
-    assign weight_beats = 8'd32;   // K=64 → 32 beats (packed weight)
-    assign act_beats    = 8'd64;   // K=64 → 64 beats
+    localparam WEIGHT_BEATS_PER_K = 8'd32;
+    localparam ACT_BEATS_PER_K    = 8'd64;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             pl_state       <= PL_IDLE;
             pl_beat_cnt    <= 8'd0;
-            pl_total_beats <= 8'd0;
+            pl_k_tile_cnt  <= 16'd0;
             pl_cur_addr    <= 32'd0;
             wrp_load_done  <= 1'b0;
         end else begin
@@ -303,7 +311,7 @@ module mxu_soc_wrapper #(
                     if (wrp_trigger) begin
                         pl_state       <= PL_LOAD_W_AR;
                         pl_beat_cnt    <= 8'd0;
-                        pl_total_beats <= weight_beats;
+                        pl_k_tile_cnt  <= 16'd0;
                         pl_cur_addr    <= wrp_weight_base;
                     end
                 end
@@ -316,13 +324,20 @@ module mxu_soc_wrapper #(
 
                 PL_LOAD_W_R: begin
                     if (m_axi_rvalid && m_axi_rready) begin
-                        weight_buf[pl_beat_cnt] <= m_axi_rdata;
+                        weight_buf[(pl_k_tile_cnt * WEIGHT_BEATS_PER_K) + pl_beat_cnt] <= m_axi_rdata;
                         pl_beat_cnt <= pl_beat_cnt + 8'd1;
                         if (m_axi_rlast) begin
-                            pl_state       <= PL_LOAD_A_AR;
-                            pl_beat_cnt    <= 8'd0;
-                            pl_total_beats <= act_beats;
-                            pl_cur_addr    <= wrp_act_base;
+                            if (pl_k_tile_cnt + 16'd1 < wrp_k_tiles) begin
+                                pl_k_tile_cnt <= pl_k_tile_cnt + 16'd1;
+                                pl_beat_cnt   <= 8'd0;
+                                pl_cur_addr   <= pl_cur_addr + (WEIGHT_BEATS_PER_K * (AXI_DATA_WIDTH / 8));
+                                pl_state      <= PL_LOAD_W_AR;
+                            end else begin
+                                pl_k_tile_cnt <= 16'd0;
+                                pl_beat_cnt   <= 8'd0;
+                                pl_cur_addr   <= wrp_act_base;
+                                pl_state      <= PL_LOAD_A_AR;
+                            end
                         end
                     end
                 end
@@ -335,22 +350,28 @@ module mxu_soc_wrapper #(
 
                 PL_LOAD_A_R: begin
                     if (m_axi_rvalid && m_axi_rready) begin
-                        activation_buf[pl_beat_cnt] <= m_axi_rdata;
+                        activation_buf[(pl_k_tile_cnt * ACT_BEATS_PER_K) + pl_beat_cnt] <= m_axi_rdata;
                         pl_beat_cnt <= pl_beat_cnt + 8'd1;
                         if (m_axi_rlast) begin
-                            pl_state      <= PL_READY;
-                            wrp_load_done <= 1'b1;
+                            if (pl_k_tile_cnt + 16'd1 < wrp_k_tiles) begin
+                                pl_k_tile_cnt <= pl_k_tile_cnt + 16'd1;
+                                pl_beat_cnt   <= 8'd0;
+                                pl_cur_addr   <= pl_cur_addr + (ACT_BEATS_PER_K * (AXI_DATA_WIDTH / 8));
+                                pl_state      <= PL_LOAD_A_AR;
+                            end else begin
+                                pl_state      <= PL_READY;
+                                wrp_load_done <= 1'b1;
+                            end
                         end
                     end
                 end
 
                 PL_READY: begin
-                    // stay ready until next trigger
                     if (wrp_trigger) begin
                         wrp_load_done  <= 1'b0;
                         pl_state       <= PL_LOAD_W_AR;
                         pl_beat_cnt    <= 8'd0;
-                        pl_total_beats <= weight_beats;
+                        pl_k_tile_cnt  <= 16'd0;
                         pl_cur_addr    <= wrp_weight_base;
                     end
                 end
@@ -369,8 +390,8 @@ module mxu_soc_wrapper #(
     assign m_axi_arid    = 8'h00;
     assign m_axi_araddr  = pl_issuing_w_ar ? pl_cur_addr :
                            pl_issuing_a_ar ? pl_cur_addr : 32'd0;
-    assign m_axi_arlen   = (pl_issuing_w_ar ? (weight_beats - 8'd1) :
-                            pl_issuing_a_ar ? (act_beats - 8'd1)    : 8'd0);
+    assign m_axi_arlen   = (pl_issuing_w_ar ? (WEIGHT_BEATS_PER_K - 8'd1) :
+                            pl_issuing_a_ar ? (ACT_BEATS_PER_K - 8'd1)    : 8'd0);
     assign m_axi_arsize  = 3'd6;    // 64 bytes per beat (2^6 = 64)
     assign m_axi_arburst = 2'd1;    // INCR
     assign m_axi_arvalid = pl_issuing_w_ar || pl_issuing_a_ar;
@@ -379,100 +400,145 @@ module mxu_soc_wrapper #(
     //=========================================================================
     // Broadcast Bus Driver
     //=========================================================================
-    // During compute, drive weight_bus_i and activation_bus_i from the
-    // internal buffers, cycling through entries synchronized with
-    // compute_en.  Each 512-bit weight_buf entry provides 2 × 256-bit
-    // weight_bus cycles; each 512-bit activation_buf entry provides
-    // 1 × 512-bit activation_bus cycle.
+    // The controller iterates K-tiles inside one (M,N) tile group.  The
+    // broadcast bus must restart at the first entry of each new K-tile.
+    // dbg_compute_en rises at the start of each compute burst and stays high
+    // for k_cur+2 cycles.  The first valid beat must appear on the first
+    // compute_en cycle (tile_cycle == 0); the PE samples inputs combinationally
+    // and the extra two cycles are pipeline flush, not data delay.
 
-    reg [7:0]  comp_cycle;      // compute cycle counter (increments on compute_en)
-    reg        comp_active;     // high during compute (latched from compute_en rising)
-    reg        comp_active_d1;
+    reg        compute_en_d1;
+    reg [13:0] tile_cycle;
+    reg        tile_active;
+    reg [6:0]  tile_k_cur;
+    reg [15:0] burst_cnt;
 
-    // Detect compute phase start
+    wire compute_en_rising  = dbg_compute_en && !compute_en_d1;
+    wire compute_en_falling = !dbg_compute_en && compute_en_d1;
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            comp_active    <= 1'b0;
-            comp_active_d1 <= 1'b0;
-            comp_cycle     <= 8'd0;
+            compute_en_d1 <= 1'b0;
+            tile_cycle    <= 14'd0;
+            tile_active   <= 1'b0;
+            tile_k_cur    <= 7'd0;
+            burst_cnt     <= 16'd0;
         end else begin
-            comp_active_d1 <= dbg_compute_en;
+            compute_en_d1 <= dbg_compute_en;
 
-            if (!comp_active && dbg_compute_en && !comp_active_d1) begin
-                // Rising edge of compute_en → start of compute phase
-                comp_active <= 1'b1;
-                comp_cycle  <= 8'd0;
-            end else if (comp_active) begin
-                if (dbg_compute_en) begin
-                    // Each compute_en pulse = one K-element
-                    comp_cycle <= comp_cycle + 8'd1;
-                end else begin
-                    // compute_en de-asserted → end of compute phase for this tile
-                    comp_active <= 1'b0;
-                end
+            if (dbg_state == 4'd0) begin
+                burst_cnt <= 16'd0;
+            end else if (compute_en_falling) begin
+                burst_cnt <= burst_cnt + 16'd1;
+            end
+
+            if (compute_en_rising) begin
+                tile_active <= 1'b1;
+                tile_cycle  <= 14'd0;
+                tile_k_cur  <= (dbg_compute_k == 6'd0) ? 7'd64 : {1'b0, dbg_compute_k};
+            end else if (tile_active && dbg_compute_en) begin
+                tile_cycle <= tile_cycle + 14'd1;
+            end else if (compute_en_falling) begin
+                tile_active <= 1'b0;
             end
         end
     end
 
-    // Drive broadcast buses from internal buffers
-    // weight_buf[comp_cycle/2]: 512-bit → split into two 256-bit halves
-    //   Even cycles: drive lower 256 bits
-    //   Odd  cycles: drive upper 256 bits
-    // activation_buf[comp_cycle]: drive directly (512-bit)
-    wire [7:0] w_buf_idx = comp_cycle[7:1];       // comp_cycle / 2
-    wire       w_use_hi  = comp_cycle[0];          // 1 = use upper half
+    // tile_cycle is registered and lags compute_en by one cycle, so the first
+    // compute cycle must be handled combinationally.  data_cycle is the actual
+    // K-index within the tile; data_valid is high while that K-index is valid.
+    wire        first_cycle = compute_en_rising;
+    wire [13:0] data_cycle  = first_cycle ? 14'd0 : (tile_cycle + 14'd1);
+    wire        data_valid  = first_cycle ||
+                              (tile_active && ((tile_cycle + 14'd1) < {7'd0, tile_k_cur}));
+    wire [15:0] act_buf_idx = ({2'd0, burst_cnt} * ACT_BEATS_PER_K) + data_cycle;
+    wire [15:0] w_buf_idx   = ({2'd0, burst_cnt} * WEIGHT_BEATS_PER_K) + data_cycle[13:1];
+    wire        w_use_hi    = data_cycle[0];
 
-    assign mxu_weight_bus = comp_active ?
+    assign mxu_weight_bus = data_valid ?
         (w_use_hi ? weight_buf[w_buf_idx][511:256] : weight_buf[w_buf_idx][255:0]) :
         256'd0;
 
-    assign mxu_activation_bus = comp_active ?
-        activation_buf[comp_cycle] : 512'd0;
+    assign mxu_activation_bus = data_valid ?
+        activation_buf[act_buf_idx[13:0]] : 512'd0;
 
     //=========================================================================
     // AXI4 Store-Out Sequencer
     //=========================================================================
-    // When the controller asserts store_out, latch acc_out_bus_o and write
-    // it to SRAM via AXI4 write burst.  acc_out_bus_o is 2048 bits = 4 AXI4
-    // beats (512-bit each).
+    // The controller asserts store_out continuously while iterating rows 0..M-1
+    // (store_row changes each cycle).  acc_out_bus_o is a registered output, so
+    // row R data is valid on the cycle after store_row becomes R.  We capture
+    // each row into a small FIFO and drain it with AXI4 write bursts.
 
     localparam [2:0] SO_IDLE     = 3'd0;
-    localparam [2:0] SO_LATCH    = 3'd1;   // detect store_out rising edge
-    localparam [2:0] SO_WRITE_AW = 3'd2;   // issue AW
-    localparam [2:0] SO_WRITE_W  = 3'd3;   // issue W beats
+    localparam [2:0] SO_WRITE_AW = 3'd1;   // issue AW
+    localparam [2:0] SO_WRITE_W  = 3'd2;   // issue W beats
 
-    reg [2:0]    so_state;
-    reg [2047:0] so_acc_data;       // latched acc_out_bus_o
-    reg [5:0]    so_row;            // latched store_row
-    reg          so_trigger;        // store_out rising edge detected
-    reg          store_out_d1;
-    reg [1:0]    so_w_beat;         // W beat index 0..3
+    // Row-capture timing: store_row changes each cycle while store_out is high.
+    // acc_out_bus_o follows store_row combinationally, so when store_row becomes
+    // R the bus already carries row R data.  Capture on every store_row change
+    // (including the first row when store_out rises) and label with the new row.
+    reg        dbg_store_out_d1;
+    reg [5:0]  dbg_store_row_d1;
 
-    // Detect store_out rising edge
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            store_out_d1 <= 1'b0;
-            so_trigger   <= 1'b0;
+            dbg_store_out_d1 <= 1'b0;
+            dbg_store_row_d1 <= 6'd0;
         end else begin
-            store_out_d1 <= dbg_store_out;
-            so_trigger   <= dbg_store_out && !store_out_d1;
+            dbg_store_out_d1 <= dbg_store_out;
+            dbg_store_row_d1 <= dbg_store_row;
         end
     end
 
+    wire so_store_rising  = dbg_store_out && !dbg_store_out_d1;
+    wire so_row_changed   = dbg_store_out && (dbg_store_row != dbg_store_row_d1);
+    wire so_capture_en    = so_store_rising || so_row_changed;
+    wire [5:0] so_capture_row = dbg_store_row;
+
+    // Small FIFO to decouple row production (1 row/cycle) from AXI4 writes.
+    localparam SO_FIFO_DEPTH = 64;
+    localparam SO_FIFO_PTR_W = $clog2(SO_FIFO_DEPTH);
+
+    (* ram_style = "distributed" *) reg [2047:0] so_fifo_data [0:SO_FIFO_DEPTH-1];
+    (* ram_style = "distributed" *) reg [5:0]    so_fifo_row  [0:SO_FIFO_DEPTH-1];
+    reg [SO_FIFO_PTR_W-1:0] so_fifo_wr_ptr;
+    reg [SO_FIFO_PTR_W-1:0] so_fifo_rd_ptr;
+
+    wire so_fifo_empty = (so_fifo_wr_ptr == so_fifo_rd_ptr);
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            so_state    <= SO_IDLE;
-            so_acc_data <= 2048'd0;
-            so_row      <= 6'd0;
-            so_w_beat   <= 2'd0;
+            so_fifo_wr_ptr <= {SO_FIFO_PTR_W{1'b0}};
+        end else if (so_capture_en) begin
+            so_fifo_data[so_fifo_wr_ptr] <= mxu_acc_out_bus;
+            so_fifo_row[so_fifo_wr_ptr]  <= so_capture_row;
+            so_fifo_wr_ptr <= so_fifo_wr_ptr + 1'b1;
+        end
+    end
+
+    // AXI4 write FSM drains the FIFO.
+    reg [2:0]    so_state;
+    reg [2047:0] so_acc_data;
+    reg [5:0]    so_row;
+    reg [3:0]    so_w_beat;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            so_state     <= SO_IDLE;
+            so_acc_data  <= 2048'd0;
+            so_row       <= 6'd0;
+            so_w_beat    <= 4'd0;
+            so_fifo_rd_ptr <= {SO_FIFO_PTR_W{1'b0}};
         end else begin
             case (so_state)
                 SO_IDLE: begin
-                    if (so_trigger) begin
-                        so_acc_data <= mxu_acc_out_bus;
-                        so_row      <= dbg_store_row;
-                        so_w_beat   <= 2'd0;
-                        so_state    <= SO_WRITE_AW;
+                    if (!so_fifo_empty) begin
+                        so_acc_data    <= so_fifo_data[so_fifo_rd_ptr];
+                        so_row         <= so_fifo_row[so_fifo_rd_ptr];
+                        so_fifo_rd_ptr <= so_fifo_rd_ptr + 1'b1;
+                        so_w_beat      <= 4'd0;
+                        so_state       <= SO_WRITE_AW;
                     end
                 end
 
@@ -486,7 +552,7 @@ module mxu_soc_wrapper #(
                         if (m_axi_wlast)
                             so_state <= SO_IDLE;
                         else
-                            so_w_beat <= so_w_beat + 2'd1;
+                            so_w_beat <= so_w_beat + 4'd1;
                     end
                 end
 
@@ -496,24 +562,65 @@ module mxu_soc_wrapper #(
     end
 
     // Store-out AXI4 AW channel
-    // Address: wrp_out_base + (store_row × 64 × 4 bytes per row)
-    // 64 elements × 4 bytes/elem = 256 bytes per row
-    // Aligned to 512-bit (64-byte) boundary
-    wire [31:0] so_row_offset = {24'd0, so_row, 8'd0};   // so_row × 256
-    wire [31:0] so_base_addr  = wrp_out_base + so_row_offset;
+    // Per-store-row byte count:
+    //   - For N <= 64: each store_row is one logical row -> N*4 bytes.
+    //   - For N > 64:  each store_row is a 64-element chunk -> 256 bytes.
+    wire [31:0] row_bytes_full       = {24'd0, wrp_n, 2'd0};          // wrp_n * 4
+    wire [31:0] row_bytes_per_store  = (wrp_n > 16'd64) ? 32'd256 : row_bytes_full;
+    wire [31:0] so_row_offset        = {26'd0, so_row} * row_bytes_per_store;
+    wire [31:0] so_base_addr         = wrp_out_base + so_row_offset;
+
+    // Number of 64-byte AXI beats required for this store row
+    wire [7:0]  so_beats             = (row_bytes_per_store + 32'd63) >> 6;
+    wire [7:0]  so_awlen             = so_beats - 8'd1;
+
+    // Use a narrower transfer size for sub-64-byte rows so each row stays
+    // AXI-address aligned.  Row bytes are always a power-of-two multiple of 4
+    // for the MMULs in this test (N is a power of two).
+    wire [2:0]  so_awsize            = (row_bytes_per_store >= 32'd64) ? 3'd6 :
+                                       (row_bytes_per_store[5]) ? 3'd5 :
+                                       (row_bytes_per_store[4]) ? 3'd4 :
+                                       (row_bytes_per_store[3]) ? 3'd3 :
+                                       (row_bytes_per_store[2]) ? 3'd2 : 3'd1;
 
     assign m_axi_awid    = 8'h01;
     assign m_axi_awaddr  = so_base_addr;
-    assign m_axi_awlen   = 8'd3;    // 4 beats (0..3)
-    assign m_axi_awsize  = 3'd6;    // 64 bytes per beat
+    assign m_axi_awlen   = so_awlen;
+    assign m_axi_awsize  = so_awsize;
     assign m_axi_awburst = 2'd1;    // INCR
     assign m_axi_awvalid = (so_state == SO_WRITE_AW);
 
     // Store-out AXI4 W channel
-    assign m_axi_wdata  = so_acc_data[so_w_beat * 512 +: 512];
-    assign m_axi_wstrb  = {AXI_DATA_WIDTH/8{1'b1}};
-    assign m_axi_wlast  = (so_w_beat == 2'd3);
+    // Per-beat byte address is used only for WSTRB lane selection.  WDATA is
+    // a 512-bit slice of the 2048-bit accumulator row, so the bit shift must
+    // advance by 512 bits per beat (so_w_beat * 512) and move the selected
+    // slice down to the lower 512 bits of the AXI bus (right shift).
+    // When awsize < 64 bytes the valid slice must then be shifted back up to
+    // the byte lanes indicated by WSTRB, otherwise the data lands in the wrong
+    // byte lanes and the SRAM controller stores zeros/garbage.
+    wire [31:0] so_beat_addr         = so_base_addr + (so_w_beat * (32'd1 << so_awsize));
+    wire [5:0]  so_beat_offset       = so_beat_addr[5:0];
+    wire [10:0] so_beat_shift        = {so_w_beat, 9'd0}; // beat index * 512 bits
+    wire [9:0]  so_beat_offset_bits  = {so_beat_offset, 3'd0}; // byte offset * 8 bits
+    wire [63:0] so_beat_mask         = (row_bytes_per_store >= 32'd64) ?
+                                       64'hFFFF_FFFF_FFFF_FFFF :
+                                       ((64'h1 << (32'd1 << so_awsize)) - 64'h1);
+    wire [63:0] so_wstrb             = so_beat_mask << so_beat_offset;
+
+    assign m_axi_wdata  = (so_acc_data >> so_beat_shift) << so_beat_offset_bits;
+    assign m_axi_wstrb  = so_wstrb;
+    assign m_axi_wlast  = (so_w_beat == so_awlen[3:0]);
     assign m_axi_wvalid = (so_state == SO_WRITE_W);
+
+    // Guard against X propagation on the store-out data path.
+    always @(posedge clk or negedge rst_n) begin
+        if (rst_n) begin
+            if (m_axi_wvalid && $isunknown(m_axi_wdata))
+                $warning("%t: mxu_soc_wrapper store-out WDATA contains X", $time);
+            if (m_axi_wvalid && $isunknown(so_acc_data))
+                $warning("%t: mxu_soc_wrapper store-out acc_data contains X", $time);
+        end
+    end
 
     // Store-out AXI4 B channel (fire-and-forget — always ready)
     assign m_axi_bready = 1'b1;

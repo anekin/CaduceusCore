@@ -49,7 +49,7 @@ module rmsnorm_hw (
     localparam MAX_LEN      = 4096;         // maximum vector length
     localparam LN           = 12;           // $clog2(MAX_LEN)
     localparam FRAC         = 18;           // fixed-point fractional bits
-    localparam FXW          = 32;           // fixed-point word width
+    localparam FXW          = 32;           // fixed-point word width (mean_sq_f uses 64-bit, see line 69)
     // eps = 1e-5 rounded to the chosen fixed-point scale.
     localparam EPS_FX       = ((1 << FRAC) + (100000 / 2)) / 100000;
     localparam SQRT_ITER    = 8;            // Newton-Raphson sqrt iterations
@@ -61,12 +61,12 @@ module rmsnorm_hw (
     // Single 4096-entry buffer stores the input vector as fixed-point x.
     reg signed [FXW-1:0] x_buf [0:MAX_LEN-1];
 
-    reg signed [63:0] sq_acc;    // pass-1 sum(x^2) accumulator
+    reg signed [127:0] sq_acc;  // pass-1 sum(x^2) accumulator (wide enough for any FP16 input)
 
     reg [LN:0]   n;              // captured vector length (needs LN+1 bits for MAX_LEN)
     reg [LN-1:0] cnt;            // shared address / element counter
 
-    reg signed [FXW-1:0] mean_sq_f; // fixed-point mean(x^2)
+    reg signed [63:0] mean_sq_f;    // fixed-point mean(x^2) (64-bit — wide enough for op10 hidden-state magnitudes)
 
     // sqrt working registers
     reg [63:0] sqrt_y;
@@ -221,10 +221,10 @@ module rmsnorm_hw (
             state      <= ST_IDLE;
             valid_o    <= 1'b0;
             data_o     <= 16'h0000;
-            sq_acc     <= 64'd0;
+            sq_acc     <= {128{1'b0}};
             n          <= {LN{1'b0}};
             cnt        <= {LN{1'b0}};
-            mean_sq_f  <= {FXW{1'b0}};
+            mean_sq_f  <= 64'd0;
             sqrt_y     <= 64'd0;
             sqrt_r     <= 64'd1;
             sqrt_iter  <= 4'd0;
@@ -276,9 +276,9 @@ module rmsnorm_hw (
                 ST_COMPUTE: begin
                     begin
                         reg signed [63:0] q;
-                        reg signed [FXW-1:0] msq_f;
+                        reg signed [63:0] msq_f;
                         reg [63:0] S;
-                        q = sq_acc / $signed({1'b0, n});
+                        q = sq_acc / {1'b0, n};
                         msq_f = (q + (1 << (FRAC - 1))) >>> FRAC;
                         S = ($signed(msq_f) + $signed(EPS_FX));
                         mean_sq_f <= msq_f;

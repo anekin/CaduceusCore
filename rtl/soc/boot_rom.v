@@ -27,8 +27,16 @@ module boot_rom (
     // The hex file path resolves relative to the simulation workdir.
     // Each line is one 8-char hex word (e.g. `ff010113`), directly
     // compatible with $readmemh for a 32-bit wide memory.
+    // A +BOOTROM_HEX plusarg overrides the default path so the testbench
+    // can run from any directory (e.g., the repo parent, required by
+    // hard-coded SFU LUT paths).
     initial begin
-        $readmemh("firmware/build/npu_firmware.hex", mem);
+        string bootrom_path;
+        if ($value$plusargs("BOOTROM_HEX=%s", bootrom_path)) begin
+            $readmemh(bootrom_path, mem);
+        end else begin
+            $readmemh("firmware/build/npu_firmware.hex", mem);
+        end
     end
 
     // ── 1-cycle synchronous read (instruction port) ────────────────

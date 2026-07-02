@@ -319,7 +319,8 @@ run_e2e_blk0: $(SOC_SIMV_COCOTB)
         run_e2e_mxu_single run_e2e_mxu_multi run_e2e_attn_score \
         run_e2e_mxu_op05 run_e2e_mxu_op07 \
         run_e2e_vresid run_e2e_vmul run_e2e_sfu_rmsnorm_post \
-        run_e2e_intc_irq run_e2e_status_prop run_e2e_abort run_e2e_multi_irq
+        run_e2e_intc_irq run_e2e_status_prop run_e2e_abort run_e2e_multi_irq \
+        run_e2e_dma_load run_e2e_dma_concurrent run_e2e_crossbar_stress
 
 run_e2e_rmsnorm: $(SOC_SIMV_COCOTB)
 	@echo "$(YELLOW)[E2E_RMSNORM] Running single-op cocotb test test_e2e_sfu_rmsnorm...$(NC)"
@@ -540,13 +541,57 @@ run_e2e_multi_irq: $(SOC_SIMV_COCOTB)
 		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
 		PYTHONIOENCODING=utf-8 \
 		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_multi_irq_results.xml \
-		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
 		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_multi_irq.log
 	@grep -q "test_e2e_multi_irq.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_multi_irq.log && \
 		echo "$(GREEN)E2E_MULTI_IRQ: PASS$(NC)" || \
 		(echo "$(RED)E2E_MULTI_IRQ: FAIL$(NC)" && exit 1)
 
+run_e2e_dma_load: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_DMA_LOAD] Running cocotb test test_e2e_dma_load_store...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_dma_load_store \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_dma_load_results.xml \
+		./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_dma_load.log
+	@grep -q "test_e2e_dma_load_store.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_dma_load.log && \
+		echo "$(GREEN)E2E_DMA_LOAD: PASS$(NC)" || \
+		(echo "$(RED)E2E_DMA_LOAD: FAIL$(NC)" && exit 1)
 
+run_e2e_dma_concurrent: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_DMA_CONCURRENT] Running cocotb test test_e2e_dma_mxu_concurrent...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_dma_mxu_concurrent \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_dma_concurrent_results.xml \
+		./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_dma_concurrent.log
+	@grep -q "test_e2e_dma_mxu_concurrent.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_dma_concurrent.log && \
+		echo "$(GREEN)E2E_DMA_CONCURRENT: PASS$(NC)" || \
+		(echo "$(RED)E2E_DMA_CONCURRENT: FAIL$(NC)" && exit 1)
+
+run_e2e_crossbar_stress: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_CROSSBAR_STRESS] Running cocotb test test_e2e_crossbar_stress...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_crossbar_stress \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_crossbar_stress_results.xml \
+		./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_crossbar_stress.log
+	@grep -q "test_e2e_crossbar_stress.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_crossbar_stress.log && \
+		echo "$(GREEN)E2E_CROSSBAR_STRESS: PASS$(NC)" || \
+		(echo "$(RED)E2E_CROSSBAR_STRESS: FAIL$(NC)" && exit 1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Clean Targets
 # ═══════════════════════════════════════════════════════════════════════════
 # Clean Targets
 # ═══════════════════════════════════════════════════════════════════════════
@@ -588,6 +633,9 @@ help:
 	@echo "  run_soc_elab        — SoC top-level elaboration only"
 	@echo "  run_qwen_e2e        — Cocotb Qwen2.5-3B smoke test"
 	@echo "  run_e2e_blk0        — Cocotb E2E Qwen2.5-3B blk.0 all 17 ops"
+	@echo "  run_e2e_dma_load    — Cocotb E2E-10 DMA load->compute->store"
+	@echo "  run_e2e_dma_concurrent — Cocotb E2E-11 DMA+MXU concurrent"
+	@echo "  run_e2e_crossbar_stress — Cocotb E2E-12 6-master crossbar stress"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  clean               — Remove simulation artifacts"

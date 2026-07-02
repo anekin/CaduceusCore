@@ -23,6 +23,7 @@
 //   0x38    WRP_O_BASE      RW      Output base addr in SRAM [31:0]
 //   0x3C    WRP_CMD         W       [0]=LOAD_A, [1]=LOAD_B, [2]=STORE_O
 //   0x40    WRP_STATUS      R       [0]=READY
+//   0x44    WRP_LEN         RW      Element count for current vector op
 //
 // Usage flow:
 //   1. Write vector_top A_ADDR, B_ADDR, O_ADDR (chunk offsets within buffer)
@@ -45,9 +46,10 @@ module vector_soc_wrapper #(
     parameter integer VECTOR_W       = 4096,  // 128 × 32-bit
     parameter integer NUM_LANES      = 128,
     parameter integer DATA_W         = 32,
-    // Maximum chunks per operand (128 elements = 1 chunk)
-    // Phase 1 default: 1 chunk = 128 elements per operand
-    parameter integer CHUNKS_MAX     = 1
+    // Maximum chunks per operand (128 elements = 1 chunk).
+    // Qwen blk.0 largest VECTOR op is VMUL with 9728 elements => 76 chunks.
+    // Round up and add margin to cover all vector ops in the manifest.
+    parameter integer CHUNKS_MAX     = 80
 ) (
     input  wire        clk,
     input  wire        rst_n,
@@ -145,20 +147,26 @@ module vector_soc_wrapper #(
     );
 
     //=========================================================================
-    // Wrapper-specific MMIO registers (offsets 0x30-0x40)
+    // Wrapper-specific MMIO registers (offsets 0x30-0x44)
     //=========================================================================
     localparam [11:0] OFF_WRP_A_BASE = 12'h030;
     localparam [11:0] OFF_WRP_B_BASE = 12'h034;
     localparam [11:0] OFF_WRP_O_BASE = 12'h038;
     localparam [11:0] OFF_WRP_CMD    = 12'h03C;
     localparam [11:0] OFF_WRP_STATUS = 12'h040;
+    localparam [11:0] OFF_WRP_LEN    = 12'h044;
+    localparam integer WRP_LEN_DEFAULT = CHUNKS_MAX * NUM_LANES;
 
     reg [ADDR_W-1:0] wrp_a_base;
     reg [ADDR_W-1:0] wrp_b_base;
     reg [ADDR_W-1:0] wrp_o_base;
+    reg [15:0]       wrp_len;           // element count for current op
     reg              wrp_ready;         // WRP_STATUS[0]
 
-    wire wrp_cs       = psel && (paddr >= 12'h030) && (paddr <= 12'h040);
+    wire [15:0] wrp_len_eff = (wrp_len == 0) ? WRP_LEN_DEFAULT[15:0] : wrp_len;
+    wire [7:0]  wrp_chunks  = (wrp_len_eff[15:0] + NUM_LANES[15:0] - 1) / NUM_LANES[15:0];
+
+    wire wrp_cs       = psel && (paddr >= 12'h030) && (paddr <= 12'h044);
     wire wrp_load_a   = wrp_cs && pwrite && penable && (paddr == OFF_WRP_CMD) && pwdata[0];
     wire wrp_load_b   = wrp_cs && pwrite && penable && (paddr == OFF_WRP_CMD) && pwdata[1];
     wire wrp_store_o  = wrp_cs && pwrite && penable && (paddr == OFF_WRP_CMD) && pwdata[2];
@@ -168,11 +176,13 @@ module vector_soc_wrapper #(
             wrp_a_base <= {ADDR_W{1'b0}};
             wrp_b_base <= {ADDR_W{1'b0}};
             wrp_o_base <= {ADDR_W{1'b0}};
+            wrp_len    <= WRP_LEN_DEFAULT[15:0];
         end else if (wrp_cs && pwrite) begin
             case (paddr)
                 OFF_WRP_A_BASE: wrp_a_base <= pwdata;
                 OFF_WRP_B_BASE: wrp_b_base <= pwdata;
                 OFF_WRP_O_BASE: wrp_o_base <= pwdata;
+                OFF_WRP_LEN:    wrp_len    <= pwdata[15:0];
                 OFF_WRP_CMD:    ;   // pulse handled above
                 default: ;
             endcase
@@ -183,6 +193,7 @@ module vector_soc_wrapper #(
     assign wrp_prdata = (paddr == OFF_WRP_A_BASE)  ? wrp_a_base :
                         (paddr == OFF_WRP_B_BASE)  ? wrp_b_base :
                         (paddr == OFF_WRP_O_BASE)  ? wrp_o_base :
+                        (paddr == OFF_WRP_LEN)     ? {16'd0, wrp_len} :
                         (paddr == OFF_WRP_CMD)     ? 32'd0     :
                         (paddr == OFF_WRP_STATUS)  ? {31'd0, wrp_ready} : 32'd0;
 
@@ -204,7 +215,9 @@ module vector_soc_wrapper #(
     // AXI4 Pre-fetch / Write-back Sequencer FSM
     //=========================================================================
     // Handles LOAD_A, LOAD_B, STORE_O commands.
-    // Each command issues CHUNKS_MAX × 8-beat AXI4 bursts.
+    // Each command issues wrp_chunks × 8-beat AXI4 bursts, where wrp_chunks is
+    // derived from the WRP_LEN MMIO register (element count) instead of the
+    // hard-coded CHUNKS_MAX parameter.
 
     localparam [3:0] SEQ_IDLE       = 4'd0;
     localparam [3:0] SEQ_LOAD_A_AR  = 4'd1;
@@ -216,7 +229,7 @@ module vector_soc_wrapper #(
     localparam [3:0] SEQ_DONE       = 4'd7;
 
     reg [3:0]  seq_state;
-    reg [7:0]  seq_chunk;       // current chunk index (0..CHUNKS_MAX-1)
+    reg [7:0]  seq_chunk;       // current chunk index (0..wrp_chunks-1)
     reg [2:0]  seq_beat;        // beat within current chunk (0..BEATS_PER_CHUNK-1)
     reg [ADDR_W-1:0] seq_base_addr; // base address for current operation
     reg        seq_load_a_pending;
@@ -280,11 +293,14 @@ module vector_soc_wrapper #(
 
                 SEQ_LOAD_A_R: begin
                     if (m_axi_rvalid && m_axi_rready) begin
-                        // Assemble 4096-bit chunk from 8 × 512-bit beats
+                        if (seq_chunk >= CHUNKS_MAX)
+                            $warning("[VEC_WRP_LOAD_A] seq_chunk %0d >= CHUNKS_MAX %0d — buffer overflow", seq_chunk, CHUNKS_MAX);
+                        // Assemble 4096-bit chunk from 8 x 512-bit beats
                         buf_a[seq_chunk][seq_beat * AXI_DATA_WIDTH +: AXI_DATA_WIDTH] <= m_axi_rdata;
                         if (m_axi_rlast) begin
+
                             // This chunk done
-                            if (seq_chunk == CHUNKS_MAX - 1) begin
+                            if (seq_chunk == wrp_chunks - 1) begin
                                 // All chunks loaded
                                 // Check for pending LOAD_B or STORE_O
                                 if (seq_load_b_pending) begin
@@ -323,9 +339,11 @@ module vector_soc_wrapper #(
 
                 SEQ_LOAD_B_R: begin
                     if (m_axi_rvalid && m_axi_rready) begin
+                        if (seq_chunk >= CHUNKS_MAX)
+                            $warning("[VEC_WRP_LOAD_B] seq_chunk %0d >= CHUNKS_MAX %0d — buffer overflow", seq_chunk, CHUNKS_MAX);
                         buf_b[seq_chunk][seq_beat * AXI_DATA_WIDTH +: AXI_DATA_WIDTH] <= m_axi_rdata;
                         if (m_axi_rlast) begin
-                            if (seq_chunk == CHUNKS_MAX - 1) begin
+                            if (seq_chunk == wrp_chunks - 1) begin
                                 if (seq_store_pending) begin
                                     seq_state     <= SEQ_STORE_AW;
                                     seq_chunk     <= 8'd0;
@@ -349,15 +367,24 @@ module vector_soc_wrapper #(
 
                 // ── STORE_O: write results to SRAM ─────────────────────
                 SEQ_STORE_AW: begin
-                    if (m_axi_awvalid && m_axi_awready)
+                    if (m_axi_awvalid && m_axi_awready) begin
                         seq_state <= SEQ_STORE_W;
+                    end
                 end
 
                 SEQ_STORE_W: begin
                     if (m_axi_wvalid && m_axi_wready) begin
+                        if (seq_chunk >= CHUNKS_MAX)
+                            $warning("[VEC_WRP_STORE] seq_chunk %0d >= CHUNKS_MAX %0d — buffer overflow", seq_chunk, CHUNKS_MAX);
+                        $display("[VEC_WRP_STORE] chunk=%0d beat=%0d wlast=%b addr=0x%08X data=0x%016X",
+                                 seq_chunk, seq_beat, m_axi_wlast, seq_beat_addr,
+                                 m_axi_wdata[63:0]);
+                        if ($isunknown(m_axi_wdata))
+                            $warning("[VEC_WRP_STORE] X/Z data driven to AXI at chunk=%0d beat=%0d addr=0x%08X",
+                                     seq_chunk, seq_beat, seq_beat_addr);
                         if (m_axi_wlast) begin
                             // Current chunk done
-                            if (seq_chunk == CHUNKS_MAX - 1) begin
+                            if (seq_chunk == wrp_chunks - 1) begin
                                 seq_state <= SEQ_IDLE;
                                 wrp_ready <= 1'b1;
                             end else begin

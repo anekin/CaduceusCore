@@ -109,7 +109,7 @@ module dma_wrapper #(
 
     // Register write: APB write in access phase (psel=1, penable=1, pwrite=1)
     wire apb_write = psel && penable && pwrite;
-    wire apb_read  = psel && !pwrite;
+    wire apb_read  = psel && penable && !pwrite;
 
     // Register storage — 15 registers max (0x00–0x38 → indices 0–14)
     reg [31:0] dma_reg [0:14];
@@ -136,6 +136,44 @@ module dma_wrapper #(
     //   2. FSM state update — manages CMD.START clear, STATUS BUSY/DONE
     //   3. STATUS read-clear — clears DONE on STATUS read
     //=========================================================================
+
+    //=========================================================================
+    // FSM declarations
+    //=========================================================================
+    localparam [2:0]
+        FSM_IDLE         = 3'd0,
+        FSM_DESC_CH0     = 3'd1,  // submit CH0 descriptor to axi_cdma
+        FSM_WAIT_CH0     = 3'd2,  // wait for CH0 transfer to complete
+        FSM_DESC_CH1     = 3'd3,  // submit CH1 descriptor
+        FSM_WAIT_CH1     = 3'd4,  // wait for CH1 transfer to complete
+        FSM_DONE_PULSE   = 3'd5;  // one-cycle DONE pulse, then back to IDLE
+
+    reg [2:0] fsm_state, fsm_next;
+
+    // CMD.START edge detection
+    reg cmd_start_d;  // delayed, for edge detection
+    wire cmd_start_rise;
+
+    // Descriptor data — latched at START edge
+    reg [AXI_ADDR_WIDTH-1:0] ch0_src_latch, ch0_dst_latch;
+    reg [LEN_WIDTH-1:0]      ch0_len_latch;
+    reg [AXI_ADDR_WIDTH-1:0] ch1_src_latch, ch1_dst_latch;
+    reg [LEN_WIDTH-1:0]      ch1_len_latch;
+    reg                       ch0_valid, ch1_valid;
+
+    // ── axi_cdma interface signals (used by FSM above) ──
+    wire [AXI_ADDR_WIDTH-1:0] cdma_desc_read_addr;
+    wire [AXI_ADDR_WIDTH-1:0] cdma_desc_write_addr;
+    wire [LEN_WIDTH-1:0]      cdma_desc_len;
+    wire [TAG_WIDTH-1:0]      cdma_desc_tag;
+    wire                      cdma_desc_valid;
+    wire                      cdma_desc_ready;
+
+    // ── axi_cdma status interface signals ──
+    wire [TAG_WIDTH-1:0]      cdma_status_tag;
+    wire [3:0]                cdma_status_error;
+    wire                      cdma_status_valid;
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             // Reset all registers
@@ -287,20 +325,7 @@ module dma_wrapper #(
     // Each descriptor is submitted via the streaming interface:
     //   s_axis_desc_valid=1 → wait for s_axis_desc_ready=1 → descriptor accepted
 
-    localparam [2:0]
-        FSM_IDLE         = 3'd0,
-        FSM_DESC_CH0     = 3'd1,  // submit CH0 descriptor to axi_cdma
-        FSM_WAIT_CH0     = 3'd2,  // wait for CH0 transfer to complete
-        FSM_DESC_CH1     = 3'd3,  // submit CH1 descriptor
-        FSM_WAIT_CH1     = 3'd4,  // wait for CH1 transfer to complete
-        FSM_DONE_PULSE   = 3'd5;  // one-cycle DONE pulse, then back to IDLE
-
-    reg [2:0] fsm_state, fsm_next;
-
     // CMD.START edge detection
-    reg cmd_start_d;  // delayed, for edge detection
-    wire cmd_start_rise;
-
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n)
             cmd_start_d <= 1'b0;
@@ -308,26 +333,6 @@ module dma_wrapper #(
             cmd_start_d <= dma_reg[1][0];  // CMD bit[0] = START
     end
     assign cmd_start_rise = dma_reg[1][0] && !cmd_start_d;
-
-    // Descriptor data — latched at START edge
-    reg [AXI_ADDR_WIDTH-1:0] ch0_src_latch, ch0_dst_latch;
-    reg [LEN_WIDTH-1:0]      ch0_len_latch;
-    reg [AXI_ADDR_WIDTH-1:0] ch1_src_latch, ch1_dst_latch;
-    reg [LEN_WIDTH-1:0]      ch1_len_latch;
-    reg                       ch0_valid, ch1_valid;
-
-    // ── axi_cdma descriptor interface signals ──
-    wire [AXI_ADDR_WIDTH-1:0] cdma_desc_read_addr;
-    wire [AXI_ADDR_WIDTH-1:0] cdma_desc_write_addr;
-    wire [LEN_WIDTH-1:0]      cdma_desc_len;
-    wire [TAG_WIDTH-1:0]      cdma_desc_tag;
-    wire                      cdma_desc_valid;
-    wire                      cdma_desc_ready;
-
-    // ── axi_cdma status interface signals ──
-    wire [TAG_WIDTH-1:0]      cdma_status_tag;
-    wire [3:0]                cdma_status_error;
-    wire                      cdma_status_valid;
 
     assign cdma_desc_read_addr  = (fsm_state == FSM_DESC_CH0) ? ch0_src_latch : ch1_src_latch;
     assign cdma_desc_write_addr = (fsm_state == FSM_DESC_CH0) ? ch0_dst_latch : ch1_dst_latch;
