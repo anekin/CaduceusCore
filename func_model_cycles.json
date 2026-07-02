@@ -1,0 +1,24 @@
+{
+  "model": "qwen2.5-3b",
+  "layer": 0,
+  "total_cycles": 99565,
+  "ops": [
+    {"idx": 0, "name": "RMSNORM pre-attn", "cycles": 10766},
+    {"idx": 1, "name": "Q_proj MMUL", "cycles": 284},
+    {"idx": 2, "name": "K_proj MMUL", "cycles": 284},
+    {"idx": 3, "name": "V_proj MMUL", "cycles": 284},
+    {"idx": 4, "name": "ROPE", "cycles": 11404},
+    {"idx": 5, "name": "attn_score MMUL", "cycles": 631},
+    {"idx": 6, "name": "attn_softmax SOFTMAX", "cycles": 860},
+    {"idx": 7, "name": "attn_weight MMUL", "cycles": 492},
+    {"idx": 8, "name": "O_proj MMUL", "cycles": 284},
+    {"idx": 9, "name": "VRESID", "cycles": 5928},
+    {"idx": 10, "name": "RMSNORM post-attn", "cycles": 10766},
+    {"idx": 11, "name": "gate MMUL", "cycles": 284},
+    {"idx": 12, "name": "up MMUL", "cycles": 284},
+    {"idx": 13, "name": "SILU", "cycles": 29698},
+    {"idx": 14, "name": "VMUL gate*up", "cycles": 21104},
+    {"idx": 15, "name": "down MMUL", "cycles": 284},
+    {"idx": 16, "name": "VRESID", "cycles": 5928}
+  ]
+}
