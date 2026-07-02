@@ -1961,6 +1961,7 @@ if COCOTB_AVAILABLE:
         total_cycles = 0
         passed_count = 0
         failed_ops = []
+        cycle_records = []
 
         for op in manifest["ops"]:
             idx = op["idx"]
@@ -2148,6 +2149,9 @@ if COCOTB_AVAILABLE:
             try:
                 ok, cycles = await bridge.run_step(instr)
                 total_cycles += cycles
+                cycle_records.append(
+                    {"idx": idx, "name": name, "cycles": int(cycles), "passed": bool(ok)}
+                )
                 if ok:
                     passed_count += 1
                     logger.info(
@@ -2175,6 +2179,34 @@ if COCOTB_AVAILABLE:
 
         summary = bridge.summary()
         logger.info(f"[BLK0] Bridge summary: {summary}")
+
+        # File-based cycle dump so WARNING-only runs still produce usable data.
+        cycle_json_path = os.environ.get(
+            "BLK0_CYCLES_JSON",
+            os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "regression",
+                "qwen_blk0_cycles.json",
+            ),
+        )
+        try:
+            with open(cycle_json_path, "w") as f:
+                json.dump(
+                    {
+                        "model": "qwen2.5-3b",
+                        "layer": 0,
+                        "total_cycles": int(total_cycles),
+                        "ops": [
+                            {"idx": r["idx"], "name": r["name"], "cycles": r["cycles"]}
+                            for r in cycle_records
+                        ],
+                    },
+                    f,
+                    indent=2,
+                )
+            logger.info(f"[BLK0] Cycle JSON written to {cycle_json_path}")
+        except Exception as e:
+            logger.error(f"[BLK0] Failed to write cycle JSON: {e}")
 
         if len(failed_ops) > 0:
             assert False, (
