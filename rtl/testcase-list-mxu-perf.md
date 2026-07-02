@@ -193,7 +193,7 @@ reg [31:0] last_done_cycle, inter_op_gap;
 | MX-P12 | P3 | `tb_mxu_perf.v` — M 扫描 [1, 4, 16, 32, 64] | **M 维度独立缩放**: K=64,N=64; 测量 STORE_OUT = m_cur+1 的线性度 | M=1:71, M=4:74, M=16:86, M=32:102, M=64:134; total 随 M 增加斜率 = 1 cycle/tile (仅 STORE_OUT 延长) | ✅ | |
 | MX-P13 | P3 | `tb_mxu_perf.v` — 背靠背 10× single-tile | **Back-to-back 吞吐**: 连续 10 次 K=64,N=64,M=64, 无复位, 测 inter-op gap | 10 ops total = 10×134 = 1340 ±0 cycles; inter-op gap = 0 (DONE 后回到 IDLE, cmd_start 再次触发 READ_DIMS); 10 次 total_cycles 完全一致 (std=0) | ✅ | |
 | MX-P14 | P3 | `tb_mxu_perf.v` — 背靠背 10× multi-tile (K=256,N=64,M=64) | **Multi-tile 背靠背**: 连续 10 次 K=256,N=64,M=64 操作; 每次 4 K-tiles | 10 ops total = 10×338 = 3380 ±0 cycles; per-op per-tile 4 值各不偏差. 验证 store_out 后状态机完全复位 | ✅ | |
-| MX-P15 | P3 | Python script: 收集所有 P0-P3 实测 cycles, 调用 MXUModel.estimate() 生成对比表 | **Func Model 交叉校准**: 对 P0-P3 每个 (M,N,K) 配置, 记录 RTL cycles 和 MXUModel cycles, 标注 delta 和根因 | 生成 15+ 行对比表, 每行包含 M,N,K,RTL_cyc,Model_cyc,Delta,分析. MXUModel 使用 `MXUModel(config)` 其中 config 调整为 64×64 array | ⬜ | |
+| MX-P15 | P3 | Python script: 收集所有 P0-P3 实测 cycles, 调用 MXUModel.estimate() 生成对比表 | **Func Model 交叉校准**: 对 P0-P3 每个 (M,N,K) 配置, 记录 RTL cycles 和 MXUModel cycles, 标注 delta 和根因 | 生成 15+ 行对比表, 每行包含 M,N,K,RTL_cyc,Model_cyc,Delta,分析. MXUModel 使用 `MXUModel(config)` 其中 config 调整为 64×64 array | ✅ | |
 
 ---
 
