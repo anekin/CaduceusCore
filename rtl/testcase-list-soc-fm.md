@@ -128,7 +128,7 @@
 
 ---
 
-## P4: Full End-to-End Chains (3 cases)
+## P4: Full End-to-End Chains (4 cases)
 
 > 理由: Complete system-level test exercising all 13 data paths simultaneously. Must pass P0-P3 before execution.
 
@@ -137,6 +137,7 @@
 | FM-SOC-021 | P4 | `FuncModel.test_conv2d_smoke()` | E2E-FLOW (path 13): full host→PCIe→firmware→MXU compute→DMA→IRQ→result readback with real INT4 quantized weights (M=1, K=256, N=256) | `np.allclose(out_fw, golden, rtol=1e-5)`; all firmware results status='done'; no unhandled exceptions | ⬜ | |
 | FM-SOC-022 | P4 | Manual test: `FuncModel` with multi-engine pipeline | Full E2E (paths 1-13): host writes 3 descriptors (MXU→SFU RMSNorm→Vector resid_add) to doorbell → firmware dispatches sequentially → engines compute via GoldenExecutor → results match direct compute | All 3 outputs match GoldenExecutor within per-engine tolerance; INTC.PENDING=0 after all completions; firmware results list length=3 | ⬜ | |
 | FM-SOC-023 | P4 | `test_golden_cross_module.py::test_rope_residual_add_deterministic` + `test_int4_int8_int32_bf16_fp32_e2e` | MULTI-ENGINE pipeline (path 12): SFU RoPE → Vector resid_add → MXU→BF16→SFU softmax chain. Verify deterministic bit-exact results across multiple invocations | 3 consecutive runs produce identical outputs (hash match); FP chain max_rel_err < 1e-3; no NaN or Inf propagation | ⬜ | |
+| FM-SOC-032 | P4 | `test_soc_fm.py::test_28block_chain` | Full 28-block transformer layer chain through FuncModel with distinct per-block INT4 weight sets derived from blk.0 baseline. Each block placed in non-overlapping DRAM/SRAM region; per-block FP16 output fingerprint tracked | 28/28 blocks complete; per-op bit-exact/tolerant match vs GoldenExecutor; output dimension 2560 FP16; guard patterns prove no DRAM/SRAM overlap; perturbing block-14 weights changes only blocks ≥14 | ✅ | 28/28 blocks PASS in 17.6s; 45/45 `test_soc_fm.py` PASS; `func_model.py` smoke PASS. Per-block FP16 fingerprints distinct; anti-vacuous gate: blocks 0-13 bit-identical after block-14 perturbation, blocks 14-27 differ. 256 MB DRAM used to avoid overlap |
 
 ---
 
@@ -171,6 +172,7 @@
 | FM-SOC-025 | | | | | | | | ✅ | | | | | |
 | FM-SOC-026 | | | ✅ | ✅ | ✅ | | | | ✅ | ✅ | ✅ | | |
 | FM-SOC-027 | ✅ | | ✅ | ✅ | ✅ | | | | | | | ✅ | |
+| FM-SOC-032 | | | ✅ | ✅ | ✅ | | | | | | | ✅ | |
 | FM-SOC-028 | | | ✅ | ✅ | ✅ | ✅ | | | | | | | |
 | FM-SOC-029 | | | ✅ | ✅ | ✅ | | | | | | | | |
 | FM-SOC-030 | | | | | ✅ | | | | | | | | |
@@ -249,12 +251,12 @@
 
 ## 统计
 
-总计:     31 cases
+总计:     32 cases
 P0:        8 cases (6 data paths + 2 anti-vacuous)
 P1:        7 cases (firmware + doorbell/IRQ + 3 compute engines + PCIe integration + crossbar stress)
 P2:        5 cases (DMA, multi-engine×2, MMIO-through-CPU, doorbell dispatch)
 P3:        8 cases (boundary — APB, DMA, Ibex, firmware, dimension, zero-vector, overflow, denorm)
-P4:        3 cases (full E2E, multi-engine pipeline)
+P4:        4 cases (full E2E, multi-engine pipeline, 28-block full-layer chain)
 ─────────────────────
 覆盖率:    0% → 目标 100%
 Data path: 13/13 covered (100% in coverage matrix)
