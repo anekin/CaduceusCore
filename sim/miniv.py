@@ -448,7 +448,7 @@ class NPUFirmware:
         self.bridge = bridge
         self.doorbell = {'host_tail': 0, 'npu_head': 0}
         self.ring_buffer_addr = 0x80000000  # Ring Buffer in DRAM
-        self.ring_size = 64  # entries
+        self.ring_size = 16  # entries
         self.irq_pending = 0
         self._irq_serviced = False
 
@@ -479,8 +479,13 @@ class NPUFirmware:
 
     def run_loop(self, max_commands: int = 10) -> List[dict]:
         """Main firmware loop: poll doorbell → dispatch → complete."""
+        from sim.regmap import DOORBELL
         results = []
         for _ in range(max_commands):
+            # Service any pending doorbell HOST interrupt first.
+            if self.riscv is not None and self.riscv.interrupt_pending:
+                self.riscv._handle_irq()
+
             # Wait for new command (WFI / poll)
             if self.doorbell['host_tail'] == self.doorbell['npu_head']:
                 break
@@ -489,11 +494,18 @@ class NPUFirmware:
             cmd_entry = self._read_cmd_entry(self.doorbell['npu_head'])
             self.doorbell['npu_head'] = (self.doorbell['npu_head'] + 1) % self.ring_size
 
+            # Mirror NPU_HEAD to doorbell MMIO.
+            if self.bridge:
+                self._mmio_write(DOORBELL.BASE + DOORBELL.NPU_HEAD, self.doorbell['npu_head'])
+
             # Dispatch
             result = self._dispatch(cmd_entry)
             results.append(result)
 
-            # Write completion (simplified: would write to Completion Ring)
+            # Signal completion to host via HOST_HEAD.
+            if self.bridge:
+                self._mmio_write(DOORBELL.BASE + DOORBELL.HOST_HEAD, self.doorbell['npu_head'])
+
         return results
 
     def dispatch_interrupt(self, source_bit: int):
@@ -518,6 +530,9 @@ class NPUFirmware:
         }
         if source_bit in engine_irq_en:
             self._mmio_write(engine_irq_en[source_bit], 0)
+            self._irq_serviced = True
+        elif source_bit == 8:
+            # Doorbell/host interrupt — just record service.
             self._irq_serviced = True
 
     def _dram_read(self, addr: int, size: int) -> bytes:
@@ -545,97 +560,100 @@ class NPUFirmware:
         result = {'opcode': cmd['opcode'], 'status': 'unknown'}
         op = cmd['opcode']
 
-        if op == OpCode.MMUL:  # MMUL — tile-level scheduling
-            from sim.tile_scheduler import tile_mmul
-            from sim.regmap import DMA, MXU
+        try:
+            if op == OpCode.MMUL:  # MMUL — tile-level scheduling
+                from sim.tile_scheduler import tile_mmul
+                from sim.regmap import DMA, MXU
 
-            def mwrite(base, off, val):
-                self._mmio_write(base + off, val)
+                def mwrite(base, off, val):
+                    if self.riscv is not None and (val & 1):
+                        if base == MXU.BASE and off == MXU.CMD:
+                            self._mmio_write(MXU.BASE + MXU.IRQ_EN, 1)
+                        elif base == DMA.BASE and off == DMA.CMD:
+                            self._mmio_write(DMA.BASE + DMA.IRQ_EN, 1)
+                    self._mmio_write(base + off, val)
 
-            def mread(base, off):
-                return self._mmio_read(base + off)
+                def mread(base, off):
+                    return self._mmio_read(base + off)
 
-            def wdone(base, status_off):
-                while True:
-                    v = mread(base, status_off)
-                    if not (v & 1):
-                        break
+                def wdone(base, status_off):
+                    self._wait_done(base + status_off)
 
-            if self.riscv is not None:
-                self._mmio_write(MXU.BASE + MXU.IRQ_EN, 1)
+                tile_mmul(
+                    desc=desc,
+                    mmio_write=mwrite,
+                    mmio_read=mread,
+                    wait_done=wdone,
+                    DMA_BASE=DMA.BASE,
+                    MXU_BASE=MXU.BASE,
+                    DMA=DMA,
+                    MXU=MXU,
+                )
 
-            tile_mmul(
-                desc=desc,
-                mmio_write=mwrite,
-                mmio_read=mread,
-                wait_done=wdone,
-                DMA_BASE=DMA.BASE,
-                MXU_BASE=MXU.BASE,
-                DMA=DMA,
-                MXU=MXU,
-            )
+                result['status'] = 'done'
 
-            result['status'] = 'done'
+                if self.riscv is not None and self.riscv.interrupt_pending:
+                    self.riscv._handle_irq()
 
-            # Service any pending engine IRQs (interrupt-driven completion)
-            if self.riscv is not None and self.riscv.interrupt_pending:
-                self.riscv._handle_irq()
+            elif op in (OpCode.SOFTMAX, OpCode.LAYERNORM, OpCode.GELU,
+                        OpCode.RELU, OpCode.SILU, OpCode.ROPE):
+                sfu_op = {
+                    OpCode.SOFTMAX: 0,
+                    OpCode.LAYERNORM: 1,
+                    OpCode.GELU: 2,
+                    OpCode.RELU: 3,
+                    OpCode.SILU: 4,
+                    OpCode.ROPE: 5,
+                }[op]
+                self._mmio_write(SFU.BASE + SFU.CTRL, sfu_op)
+                self._mmio_write(SFU.BASE + SFU.I_ADDR, desc['input_addr'])
+                self._mmio_write(SFU.BASE + SFU.O_ADDR, desc['output_addr'])
+                self._mmio_write(SFU.BASE + SFU.DIM, desc['input_size'])
+                if self.riscv is not None:
+                    self._mmio_write(SFU.BASE + SFU.IRQ_EN, 1)
+                self._mmio_write(SFU.BASE + SFU.CMD, 1)
+                self._wait_done(SFU.BASE + SFU.STATUS)
+                result['status'] = 'done'
 
-        elif op in (OpCode.SOFTMAX, OpCode.LAYERNORM, OpCode.GELU,
-                    OpCode.RELU, OpCode.SILU, OpCode.ROPE):
-            sfu_op = {
-                OpCode.SOFTMAX: 0,
-                OpCode.LAYERNORM: 1,
-                OpCode.GELU: 2,
-                OpCode.RELU: 3,
-                OpCode.SILU: 4,
-                OpCode.ROPE: 5,
-            }[op]
-            self._mmio_write(SFU.BASE + SFU.CTRL, sfu_op)
-            self._mmio_write(SFU.BASE + SFU.I_ADDR, desc['input_addr'])
-            self._mmio_write(SFU.BASE + SFU.O_ADDR, desc['output_addr'])
-            self._mmio_write(SFU.BASE + SFU.DIM, desc['input_size'])
-            if self.riscv is not None:
-                self._mmio_write(SFU.BASE + SFU.IRQ_EN, 1)
-            self._mmio_write(SFU.BASE + SFU.CMD, 1)
-            self._wait_done(SFU.BASE + SFU.STATUS)
-            result['status'] = 'done'
+            elif op in (OpCode.VADD, OpCode.VMUL, OpCode.VRED_MAX,
+                        OpCode.VRED_SUM, OpCode.VCONV, OpCode.VRESID):
+                vec_op = {
+                    OpCode.VADD: 0,
+                    OpCode.VMUL: 1,
+                    OpCode.VRED_MAX: 2,
+                    OpCode.VRED_SUM: 3,
+                    OpCode.VCONV: 4,
+                    OpCode.VRESID: 5,
+                }[op]
+                self._mmio_write(VECTOR.BASE + VECTOR.CTRL, vec_op)
+                self._mmio_write(VECTOR.BASE + VECTOR.A_ADDR, desc['input_addr'])
+                self._mmio_write(VECTOR.BASE + VECTOR.B_ADDR, desc['weight_addr'])
+                self._mmio_write(VECTOR.BASE + VECTOR.O_ADDR, desc['output_addr'])
+                self._mmio_write(VECTOR.BASE + VECTOR.DIM, desc['input_size'])
+                if self.riscv is not None:
+                    self._mmio_write(VECTOR.BASE + VECTOR.IRQ_EN, 1)
+                self._mmio_write(VECTOR.BASE + VECTOR.CMD, 1)
+                self._wait_done(VECTOR.BASE + VECTOR.STATUS)
+                result['status'] = 'done'
 
-        elif op in (OpCode.VADD, OpCode.VMUL, OpCode.VRED_MAX,
-                    OpCode.VRED_SUM, OpCode.VCONV, OpCode.VRESID):
-            vec_op = {
-                OpCode.VADD: 0,
-                OpCode.VMUL: 1,
-                OpCode.VRED_MAX: 2,
-                OpCode.VRED_SUM: 3,
-                OpCode.VCONV: 4,
-                OpCode.VRESID: 5,
-            }[op]
-            self._mmio_write(VECTOR.BASE + VECTOR.CTRL, vec_op)
-            self._mmio_write(VECTOR.BASE + VECTOR.A_ADDR, desc['input_addr'])
-            self._mmio_write(VECTOR.BASE + VECTOR.B_ADDR, desc['weight_addr'])
-            self._mmio_write(VECTOR.BASE + VECTOR.O_ADDR, desc['output_addr'])
-            self._mmio_write(VECTOR.BASE + VECTOR.DIM, desc['input_size'])
-            if self.riscv is not None:
-                self._mmio_write(VECTOR.BASE + VECTOR.IRQ_EN, 1)
-            self._mmio_write(VECTOR.BASE + VECTOR.CMD, 1)
-            self._wait_done(VECTOR.BASE + VECTOR.STATUS)
-            result['status'] = 'done'
+            elif op in (OpCode.DMA_LD, OpCode.DMA_ST, OpCode.DMA_LDD, OpCode.DMA_STD):
+                if op in (OpCode.DMA_LD, OpCode.DMA_LDD):
+                    self._mmio_write(DMA.BASE + DMA.CH0_SRC, desc['input_addr'])
+                    self._mmio_write(DMA.BASE + DMA.CH0_DST, desc['input_sram'])
+                    self._mmio_write(DMA.BASE + DMA.CH0_SIZE, desc['input_size'])
+                else:
+                    self._mmio_write(DMA.BASE + DMA.CH1_SRC, desc['weight_addr'])
+                    self._mmio_write(DMA.BASE + DMA.CH1_DST, desc['weight_sram'])
+                    self._mmio_write(DMA.BASE + DMA.CH1_SIZE, desc['weight_size'])
+                if self.riscv is not None:
+                    self._mmio_write(DMA.BASE + DMA.IRQ_EN, 1)
+                self._mmio_write(DMA.BASE + DMA.CMD, 1)
+                self._wait_done(DMA.BASE + DMA.STATUS)
+                result['status'] = 'done'
 
-        elif op in (OpCode.DMA_LD, OpCode.DMA_ST, OpCode.DMA_LDD, OpCode.DMA_STD):
-            if op in (OpCode.DMA_LD, OpCode.DMA_LDD):
-                self._mmio_write(DMA.BASE + DMA.CH0_SRC, desc['input_addr'])
-                self._mmio_write(DMA.BASE + DMA.CH0_DST, desc['input_sram'])
-                self._mmio_write(DMA.BASE + DMA.CH0_SIZE, desc['input_size'])
-            else:
-                self._mmio_write(DMA.BASE + DMA.CH1_SRC, desc['weight_addr'])
-                self._mmio_write(DMA.BASE + DMA.CH1_DST, desc['weight_sram'])
-                self._mmio_write(DMA.BASE + DMA.CH1_SIZE, desc['weight_size'])
-            if self.riscv is not None:
-                self._mmio_write(DMA.BASE + DMA.IRQ_EN, 1)
-            self._mmio_write(DMA.BASE + DMA.CMD, 1)
-            self._wait_done(DMA.BASE + DMA.STATUS)
-            result['status'] = 'done'
+        except (ValueError, KeyError) as exc:
+            result['status'] = 'error'
+            result['error'] = str(exc)
 
         return result
 
@@ -684,15 +702,12 @@ class NPUFirmware:
 
     def _wait_done(self, status_addr: int):
         """Wait for engine completion.
-        
-        When RISCVMini is bound: interrupt-driven via WFI.
+
+        When RISCVMini is bound: interrupt-driven via WFI+trap.
         Otherwise: polling loop on STATUS.BUSY.
         """
         if self.riscv is not None:
-            if self.bridge:
-                busy = self.bridge.handle('read', status_addr, 0) & 1
-                if not busy:
-                    return
+            self._irq_serviced = False
             while not self._irq_serviced:
                 if self.riscv.interrupt_pending:
                     self.riscv._handle_irq()

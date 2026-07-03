@@ -1302,3 +1302,268 @@ def test_smoke_all():
 
     # 6. Original conv2d_smoke still passes
     assert model.test_conv2d_smoke() is True
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Path #9 + #10 + #11 — Doorbell + interrupt-driven firmware (FM-SOC-026)
+# ══════════════════════════════════════════════════════════════════════
+
+
+_RNG_DB = np.random.RandomState(20260703)
+
+
+def _doorbell_write_mmul_desc(model: FuncModel, desc_addr: int,
+                               act_addr: int, wgt_addr: int, out_addr: int,
+                               scale_addr: int, M: int, K: int, N: int):
+    """Write an MMUL descriptor to DRAM."""
+    act_size = M * K
+    wgt_size = (K * N + 1) // 2
+    out_size = M * N * 4
+    scale_size = ((K + 127) // 128) * N * 4
+    model.host_write_descriptor(desc_addr,
+        input_addr=act_addr, weight_addr=wgt_addr, output_addr=out_addr,
+        scale_addr=scale_addr, scale_size=scale_size,
+        input_size=act_size, weight_size=wgt_size, output_size=out_size,
+        M=M, K=K, N=N)
+
+
+def _doorbell_setup_mmul(model: FuncModel, M: int, K: int, N: int,
+                         act_addr: int, wgt_addr: int, out_addr: int,
+                         scale_addr: int, desc_addr: int,
+                         rng: np.random.RandomState = None):
+    """Write deterministic MMUL input/weight/scale data to DRAM."""
+    from sim.golden_executor import GoldenMXU
+    if rng is None:
+        rng = _RNG_DB
+    act = rng.randint(-8, 8, size=M * K, dtype=np.int8)
+    wgt = rng.randint(-8, 8, size=K * N, dtype=np.int8)
+    wgt_packed = GoldenMXU.pack_int4(wgt)
+    num_blocks = (K + 127) // 128
+    scales = np.ones((num_blocks, N), dtype=np.float32)
+    model.host_write_data(act_addr, act)
+    model.host_write_data(wgt_addr, wgt_packed)
+    model.host_write_data(scale_addr, scales.ravel())
+    _doorbell_write_mmul_desc(model, desc_addr, act_addr, wgt_addr, out_addr,
+                              scale_addr, M, K, N)
+    return act, wgt_packed, scales
+
+
+def _doorbell_assert_mmul_result(model: FuncModel, act: np.ndarray,
+                                 wgt_packed: np.ndarray, scales: np.ndarray,
+                                 out_addr: int, M: int, K: int, N: int):
+    """Compare firmware MMUL output in DRAM against GoldenMXU."""
+    from sim.golden_executor import GoldenMXU
+    out_off = out_addr - Addr.DRAM_BASE
+    out_bytes = model.dram[out_off:out_off + M * N * 4]
+    out_fw = np.frombuffer(out_bytes, dtype=np.float32).reshape(M, N)
+    golden = GoldenMXU().matmul_int4_per_block(
+        act.reshape(M, K), wgt_packed, scales, M, K, N, group_size=128)
+    assert np.allclose(out_fw, golden, rtol=1e-5), (
+        f"MMUL output mismatch: got {out_fw.tolist()}, expected {golden.tolist()}"
+    )
+
+
+def test_doorbell_single_mmul_interrupt():
+    """Single doorbell MMUL command; completion is IRQ-driven, not STATUS poll.
+
+    Verifies:
+      - host_write_command writes at host_tail and advances it.
+      - Doorbell HOST interrupt is raised.
+      - Firmware dispatches MMUL via interrupt-driven _wait_done.
+      - Result matches GoldenMXU; INTC.PENDING cleared; doorbell heads updated.
+    """
+    from engine.isa import OpCode
+    from sim.regmap import INTC, DOORBELL
+
+    model = FuncModel()
+    assert model.firmware.ring_size == 16
+
+    M, K, N = 1, 4, 2
+    act_addr, wgt_addr, out_addr, scale_addr, desc_addr = (
+        0x8001_0000, 0x8002_0000, 0x8100_0000, 0x8011_0000, 0x8000_0080)
+
+    act, wgt_packed, scales = _doorbell_setup_mmul(
+        model, M, K, N, act_addr, wgt_addr, out_addr, scale_addr, desc_addr)
+
+    model.host_write_command(OpCode.MMUL, desc_addr)
+    assert model.firmware.doorbell['host_tail'] == 1
+
+    # Doorbell HOST IRQ should be pending.
+    pending = model.bridge.handle('read', INTC.BASE + INTC.PENDING, 0)
+    assert pending & (1 << 8), f"Expected HOST doorbell IRQ pending, got 0x{pending:08X}"
+    assert model.riscv.interrupt_pending
+
+    results = model.firmware.run_loop(max_commands=1)
+    assert len(results) == 1
+    assert results[0]['status'] == 'done'
+
+    _doorbell_assert_mmul_result(model, act, wgt_packed, scales, out_addr, M, K, N)
+
+    pending_after = model.bridge.handle('read', INTC.BASE + INTC.PENDING, 0)
+    assert pending_after == 0, (
+        f"INTC.PENDING should be 0 after IRQ-driven completion, got 0x{pending_after:08X}"
+    )
+    assert model.firmware.doorbell['npu_head'] == 1
+    assert model.bridge.handle('read', DOORBELL.BASE + DOORBELL.HOST_HEAD, 0) == 1
+
+
+def test_doorbell_three_command_queue():
+    """Queue MMUL → SFU softmax → Vector add; all complete via IRQ.
+
+    Verifies multiple outstanding commands and cross-engine interrupt-driven
+    completion. Each command uses distinct SRAM/DRAM regions.
+    """
+    from engine.isa import OpCode
+    from sim.regmap import INTC, DOORBELL
+    from sim.golden_executor import GoldenSFU, GoldenVector
+
+    model = FuncModel()
+
+    # ── MMUL command ──
+    M, K, N = 1, 4, 2
+    act_addr, wgt_addr, out_addr, scale_addr, mmul_desc = (
+        0x8001_0000, 0x8002_0000, 0x8100_0000, 0x8011_0000, 0x8000_0080)
+    act, wgt_packed, scales = _doorbell_setup_mmul(
+        model, M, K, N, act_addr, wgt_addr, out_addr, scale_addr, mmul_desc)
+    model.host_write_command(OpCode.MMUL, mmul_desc)
+
+    # ── SFU softmax command ──
+    sfu_len = 16
+    sfu_in_addr = 0x8200_0000
+    sfu_out_addr = 0x8200_1000
+    sfu_desc = 0x8000_0100
+    sfu_in = _RNG_DB.randn(sfu_len).astype(np.float32).clip(-5, 5)
+    model.host_write_data(sfu_in_addr, sfu_in.astype(np.float16))
+    model.host_write_descriptor(sfu_desc,
+        input_addr=sfu_in_addr, output_addr=sfu_out_addr,
+        input_size=sfu_len, output_size=sfu_len,
+        M=1, K=sfu_len, N=1)
+    model.host_write_command(OpCode.SOFTMAX, sfu_desc)
+
+    # ── Vector add command ──
+    vec_len = 8
+    vec_a_addr = 0x8200_2000
+    vec_b_addr = 0x8200_3000
+    vec_out_addr = 0x8200_4000
+    vec_desc = 0x8000_0200
+    vec_a = _RNG_DB.randint(-100, 100, size=vec_len).astype(np.int32)
+    vec_b = _RNG_DB.randint(-100, 100, size=vec_len).astype(np.int32)
+    model.host_write_data(vec_a_addr, vec_a)
+    model.host_write_data(vec_b_addr, vec_b)
+    model.host_write_descriptor(vec_desc,
+        input_addr=vec_a_addr, weight_addr=vec_b_addr, output_addr=vec_out_addr,
+        input_size=vec_len, weight_size=vec_len, output_size=vec_len,
+        M=1, K=vec_len, N=1)
+    model.host_write_command(OpCode.VADD, vec_desc)
+
+    assert model.firmware.doorbell['host_tail'] == 3
+
+    results = model.firmware.run_loop(max_commands=3)
+    assert len(results) == 3
+    for r in results:
+        assert r['status'] == 'done', f"Command failed: {r}"
+
+    # Verify MMUL
+    _doorbell_assert_mmul_result(model, act, wgt_packed, scales, out_addr, M, K, N)
+
+    # Verify SFU softmax
+    sfu_out_off = sfu_out_addr - Addr.DRAM_BASE
+    sfu_out = np.frombuffer(
+        model.dram[sfu_out_off:sfu_out_off + sfu_len * 2],
+        dtype=np.float16).astype(np.float32)
+    sfu_ref = GoldenSFU().softmax_hw(sfu_in)
+    cmp = GoldenSFU.compare_hw_vs_ref(sfu_out, sfu_ref, tol_abs=2e-3, tol_rel=1e-2)
+    assert cmp["within_tolerance"], (
+        f"Softmax mismatch: max_abs={cmp['max_abs_err']:.2e}"
+    )
+
+    # Verify Vector add
+    vec_out_off = vec_out_addr - Addr.DRAM_BASE
+    vec_out = np.frombuffer(
+        model.dram[vec_out_off:vec_out_off + vec_len * 4],
+        dtype=np.int32)
+    vec_ref = GoldenVector().add(vec_a, vec_b)
+    assert np.array_equal(vec_out, vec_ref), "Vector ADD mismatch"
+
+    assert model.firmware.doorbell['npu_head'] == 3
+    assert model.bridge.handle('read', DOORBELL.BASE + DOORBELL.HOST_HEAD, 0) == 3
+    pending = model.bridge.handle('read', INTC.BASE + INTC.PENDING, 0)
+    assert pending == 0, f"INTC.PENDING should be 0, got 0x{pending:08X}"
+
+
+def test_doorbell_ring_wrap_16():
+    """Sequential 17 commands prove ring indices wrap modulo 16."""
+    from engine.isa import OpCode
+    from sim.regmap import DOORBELL
+
+    model = FuncModel()
+    assert model.firmware.ring_size == 16
+
+    M, K, N = 1, 4, 2
+    results = []
+    for i in range(17):
+        act_addr = 0x8001_0000 + i * 0x200
+        wgt_addr = 0x8002_0000 + i * 0x200
+        out_addr = 0x8100_0000 + i * 0x200
+        scale_addr = 0x8011_0000 + i * 0x200
+        desc_addr = 0x8000_1000 + i * 0x40
+
+        _doorbell_setup_mmul(model, M, K, N, act_addr, wgt_addr, out_addr, scale_addr, desc_addr)
+        model.host_write_command(OpCode.MMUL, desc_addr)
+        tail = model.firmware.doorbell['host_tail']
+        assert tail == (i + 1) % 16, f"Iteration {i}: expected tail={(i + 1) % 16}, got {tail}"
+
+        r = model.firmware.run_loop(max_commands=1)
+        assert len(r) == 1 and r[0]['status'] == 'done'
+        results.append(r[0])
+
+    assert model.firmware.doorbell['npu_head'] == 1  # 17 commands processed, wrapped
+    assert model.bridge.handle('read', DOORBELL.BASE + DOORBELL.HOST_HEAD, 0) == 1
+
+
+def test_doorbell_corrupted_descriptor_rejected():
+    """Corrupted MMUL descriptor (M=0) is rejected without crash."""
+    from engine.isa import OpCode
+
+    model = FuncModel()
+
+    # Valid descriptor except M=0, which tile_mmul rejects.
+    desc_addr = 0x8000_2000
+    model.host_write_descriptor(desc_addr,
+        input_addr=0x8001_0000, weight_addr=0x8002_0000,
+        output_addr=0x8100_0000, scale_addr=0x8011_0000,
+        scale_size=8, input_size=4, weight_size=4, output_size=4,
+        M=0, K=4, N=2)
+    model.host_write_command(OpCode.MMUL, desc_addr)
+
+    results = model.firmware.run_loop(max_commands=1)
+    assert len(results) == 1
+    assert results[0]['status'] != 'done', (
+        f"Corrupted descriptor should not return 'done', got {results[0]}"
+    )
+
+
+def test_doorbell_ring_overflow():
+    """Writing to a full 16-entry ring buffer raises an error."""
+    from engine.isa import OpCode
+
+    model = FuncModel()
+    assert model.firmware.ring_size == 16
+
+    desc_addr = 0x8000_3000
+    model.host_write_descriptor(desc_addr,
+        input_addr=0x8001_0000, weight_addr=0x8002_0000,
+        output_addr=0x8100_0000, scale_addr=0x8011_0000,
+        scale_size=8, input_size=4, weight_size=4, output_size=4,
+        M=1, K=4, N=2)
+
+    # Fill the ring: 15 outstanding commands (size-1).
+    for i in range(15):
+        model.host_write_command(OpCode.MMUL, desc_addr)
+
+    assert model.firmware.doorbell['host_tail'] == 15
+    assert model.firmware.doorbell['npu_head'] == 0
+
+    # 16th write must fail rather than overwrite unprocessed entries.
+    with pytest.raises(RuntimeError, match="Doorbell ring buffer full"):
+        model.host_write_command(OpCode.MMUL, desc_addr)

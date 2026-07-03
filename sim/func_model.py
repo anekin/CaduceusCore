@@ -89,12 +89,31 @@ class FuncModel:
         return bytes(self.dram[off:off + size])
 
     def host_write_command(self, opcode: int, desc_addr: int, flags: int = 0):
-        """Host CPU writes a command to the Ring Buffer (via PCIe → DRAM)."""
+        """Host CPU writes a command to the Ring Buffer (via PCIe → DRAM).
+
+        Writes at the current host_tail and advances it modulo ring_size.
+        Raises RuntimeError if the ring buffer is full. Optionally raises a
+        doorbell HOST interrupt so firmware can wake from WFI.
+        """
+        tail = self.firmware.doorbell['host_tail']
         head = self.firmware.doorbell['npu_head']
-        addr = self.firmware.ring_buffer_addr + head * 32
+        ring_size = self.firmware.ring_size
+
+        # Ring-full check: next position would catch up to head.
+        if (tail + 1) % ring_size == head:
+            raise RuntimeError(f"Doorbell ring buffer full (size={ring_size})")
+
+        addr = self.firmware.ring_buffer_addr + tail * 32
         buf = struct.pack('<IQI8x', opcode, desc_addr, flags)  # 4+8+4+8pad=24
         self.pcie.tlp_write(addr, buf)
-        self.firmware.doorbell['host_tail'] = (head + 1) % self.firmware.ring_size
+        new_tail = (tail + 1) % ring_size
+        self.firmware.doorbell['host_tail'] = new_tail
+
+        # Mirror host_tail to doorbell MMIO and raise HOST doorbell interrupt.
+        if self.bridge:
+            from sim.regmap import DOORBELL, INTC
+            self.bridge.handle('write', DOORBELL.BASE + DOORBELL.HOST_TAIL, new_tail)
+            self.bridge._set_irq(8)  # HOST doorbell interrupt source
 
     def host_write_descriptor(self, desc_addr: int, **kwargs):
         """Host writes operation descriptor to DRAM.
