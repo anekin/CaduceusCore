@@ -1,6 +1,6 @@
 # SoC Func Model Test Plan — 13 Data Path Functional Verification
 
-> 最后更新: 2026-07-03
+> 最后更新: 2026-07-04
 > 被测对象: FuncModel (`sim/func_model.py`) — all 13 SoC data paths
 > 参考实现: `sim/golden_executor.py` (GoldenMXU/SFU/Vector/DMA), `sim/models/pcie.py`, `sim/models/crossbar.py`, `sim/mmio_bridge.py`, `sim/miniv.py` (RISCVMini/NPUFirmware)
 > 方法论: zartbot pattern — Agent 读源码→自主设计测试→写回状态
@@ -111,7 +111,7 @@
 
 ---
 
-## P3: Boundary + Error Handling (4 cases)
+## P3: Boundary + Error Handling (8 cases)
 
 > 理由: Corner cases must not crash the Func Model and return sensible defaults or errors.
 
@@ -121,6 +121,10 @@
 | FM-SOC-018 | P3 | `test_golden_dma.py::test_size_zero_means_4096` + `test_size_over_4096_raises` | DMA boundary (path 6): zero-size treated as 4096, over-4096 raises; invalid SRAM/DRAM addr raises; direction/channel validation | `size=0` → 4096 bytes transferred; `size=8192` → ValueError; invalid addr raises ValueError | ⬜ | |
 | FM-SOC-019 | P3 | `test_soc_fm.py::test_ibex_memory_access` (out-of-range part) + `test_riscv_dmem_isolation` | Ibex boundary (path 2): out-of-range address returns 0 without crash; DMEM isolation: DMEM write not visible through crossbar | `_mem_read(0xFFFF0000)` = 0; crossbar read of DMEM address raises ValueError; DMEM write does not corrupt SRAM | ⬜ | |
 | FM-SOC-020 | P3 | `test_soc_fm.py::test_firmware_bootflow` (bad opcode part) | Firmware bad opcode (path 11): corrupted doorbell command with unknown opcode must be rejected, return error status | `host_write_command(999, ...)` → `run_loop` returns result with status != 'done'; no crash, no engine side-effect | ⬜ | |
+| FM-SOC-028 | P3 | `test_soc_fm.py::test_boundary_zero_dimension_done` + `test_boundary_max_odd_shapes` | Dimension boundaries: zero-dim inputs return STATUS=DONE without memory access; max (M=1,K=2560,N=4096) and odd (M=33,K=65,N=129) shapes produce correct output; odd SFU/Vector lengths verified | MXU/SFU/Vector/DMA with DIM=0 → STATUS=2 and output region untouched; large MXU via DRAM matches GoldenMXU (rtol=1e-5); odd MXU/SFU/Vector match direct reference | ✅ | Zero-dim: 4/4 engines STATUS=DONE, no memory corruption. Max/odd: large MXU (M=1,K=2560,N=4096) PASS via DRAM scale path; odd MXU (M=33,K=65,N=129) INT32 PASS; odd SFU softmax N=129 PASS; odd Vector ADD dim=33 PASS |
+| FM-SOC-029 | P3 | `test_soc_fm.py::test_boundary_all_zero_vectors` | All-zero weight/activation vectors: MXU zero act/weight → zero output; Vector zero operands → zero; SFU softmax on zero → uniform sum-to-1 | MXU zero activation and zero weight both produce all-zero INT32 output; Vector ADD/MUL with zeros return zeros; SFU softmax on zeros sums to 1.0 ± 1e-3 | ✅ | MXU zero activation PASS; MXU zero weight PASS; Vector ADD/MUL zero PASS; SFU softmax zero input uniform 1/N and sum=1.000 PASS |
+| FM-SOC-030 | P3 | `test_soc_fm.py::test_boundary_int32_overflow_saturation` | INT32 overflow saturation for Vector resid_add/add/mul; saturated result differs from wrap-around | resid_add(50000, INT32_MAX) = INT32_MAX; add(INT32_MAX,1) = INT32_MAX; add(INT32_MIN,-1) = INT32_MIN; mul(2^16,2^16) = INT32_MAX; mul(2^16,-2^16) = INT32_MIN | ✅ | 5/5 overflow cases PASS with saturation; anti-vacuous assertions confirm saturated values differ from wrap-around |
+| FM-SOC-031 | P3 | `test_soc_fm.py::test_boundary_fp16_denorm_flush` | FP16 subnormal inputs flush-to-zero for SFU paths (softmax/gelu/silu/rmsnorm) without NaN/Inf | Subnormal inputs produce same output as zero input within `tol_abs=2e-3, tol_rel=1e-2`; normal input differs from zero reference; no NaN/Inf | ✅ | 4 SFU ops (softmax/gelu/silu/rmsnorm) denorm→zero flush PASS; anti-vacuous normal input differs from zero reference |
 
 ---
 
@@ -167,6 +171,10 @@
 | FM-SOC-025 | | | | | | | | ✅ | | | | | |
 | FM-SOC-026 | | | ✅ | ✅ | ✅ | | | | ✅ | ✅ | ✅ | | |
 | FM-SOC-027 | ✅ | | ✅ | ✅ | ✅ | | | | | | | ✅ | |
+| FM-SOC-028 | | | ✅ | ✅ | ✅ | ✅ | | | | | | | |
+| FM-SOC-029 | | | ✅ | ✅ | ✅ | | | | | | | | |
+| FM-SOC-030 | | | | | ✅ | | | | | | | | |
+| FM-SOC-031 | | | | ✅ | | | | | | | | | |
 
 ---
 
@@ -241,11 +249,11 @@
 
 ## 统计
 
-总计:     27 cases
+总计:     31 cases
 P0:        8 cases (6 data paths + 2 anti-vacuous)
 P1:        7 cases (firmware + doorbell/IRQ + 3 compute engines + PCIe integration + crossbar stress)
 P2:        5 cases (DMA, multi-engine×2, MMIO-through-CPU, doorbell dispatch)
-P3:        4 cases (boundary — APB, DMA, Ibex, firmware)
+P3:        8 cases (boundary — APB, DMA, Ibex, firmware, dimension, zero-vector, overflow, denorm)
 P4:        3 cases (full E2E, multi-engine pipeline)
 ─────────────────────
 覆盖率:    0% → 目标 100%
