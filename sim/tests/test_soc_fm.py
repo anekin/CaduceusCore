@@ -5,9 +5,11 @@ import struct
 import numpy as np
 import pytest
 
+import os
+
 from sim.func_model import FuncModel
-from sim.golden_executor import GoldenSFU, GoldenVector
-from sim.regmap import Addr, SFU, VECTOR, DMA
+from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector
+from sim.regmap import Addr, MXU, SFU, VECTOR, DMA
 from sim.models.crossbar import CrossbarModel
 
 
@@ -1567,3 +1569,315 @@ def test_doorbell_ring_overflow():
     # 16th write must fail rather than overwrite unprocessed entries.
     with pytest.raises(RuntimeError, match="Doorbell ring buffer full"):
         model.host_write_command(OpCode.MMUL, desc_addr)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# P2 — Full blk.0 17-op chain, single-tile MMUL workaround (FM-SOC-027)
+# ══════════════════════════════════════════════════════════════════════
+
+_BLK0_VECTOR_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "rtl", "test_vectors", "qwen_blk0"
+)
+
+_EB_BY_FMT = {"int8": 1, "fp16": 2, "int32": 4}
+
+
+def _blk0_read_hex(rel_path: str, elem_bytes: int = 1) -> bytes:
+    """Read a qwen_blk0 hex file into little-endian bytes."""
+    path = os.path.join(_BLK0_VECTOR_DIR, rel_path)
+    with open(path) as f:
+        vals = [int(line.strip(), 16) for line in f if line.strip()]
+    if not vals:
+        return b""
+    if elem_bytes == 1:
+        return bytes(vals)
+    fmt = {2: "H", 4: "I", 8: "Q"}[elem_bytes]
+    return b"".join(struct.pack(f"<{fmt}", v) for v in vals)
+
+
+def _blk0_assert_status(bridge, base: int, expected: int, label: str):
+    status = bridge.handle("read", base + 0x08)
+    assert status == expected, f"{label}: STATUS={status}, expected DONE({expected})"
+
+
+def _blk0_run_mmul(model: FuncModel, op: dict, manifest: dict) -> dict:
+    """Run one MMUL op through the MMIO bridge with the single-tile workaround."""
+    dims = op["dimensions"]
+    M = dims.get("M", 1)
+    K = dims.get("K", 0)
+    N = dims.get("N", 0)
+
+    M_eff = min(M, 64)
+    K_eff = min(K, 64)
+    N_eff = min(N, 64)
+
+    input_fmt = manifest["files"][op["input_hex"]]["format"]
+    input_eb = _EB_BY_FMT[input_fmt]
+    input_full = _blk0_read_hex(op["input_hex"], input_eb)
+    input_bytes = input_full[: M_eff * K_eff * input_eb]
+    act = np.frombuffer(input_bytes, dtype=np.int8).reshape(M_eff, K_eff)
+
+    weight_full = _blk0_read_hex(op["weight_hex"], elem_bytes=1)
+    weight_size = (K_eff * N_eff + 1) // 2
+    weight_bytes = weight_full[:weight_size]
+    if len(weight_bytes) < weight_size:
+        weight_bytes = weight_bytes + b"\x00" * (weight_size - len(weight_bytes))
+    wgt_packed = np.frombuffer(weight_bytes, dtype=np.uint8)
+
+    i_addr = int(op["sram_input_addr"], 16)
+    o_addr = int(op["sram_output_addr"], 16)
+    w_addr = 0x00000
+
+    model.sram[i_addr : i_addr + len(input_bytes)] = input_bytes
+    model.sram[w_addr : w_addr + len(weight_bytes)] = weight_bytes
+
+    bridge = model.bridge
+    bridge.handle("write", MXU.BASE + MXU.CTRL, 0)
+    bridge.handle("write", MXU.BASE + MXU.I_ADDR, i_addr)
+    bridge.handle("write", MXU.BASE + MXU.W_ADDR, w_addr)
+    bridge.handle("write", MXU.BASE + MXU.O_ADDR, o_addr)
+    bridge.handle("write", MXU.BASE + MXU.SCALE_ADDR, 0)
+    dim0 = (M_eff & 0xFFFF) | ((K_eff & 0xFFFF) << 16)
+    bridge.handle("write", MXU.BASE + MXU.DIM0, dim0)
+    bridge.handle("write", MXU.BASE + MXU.DIM1, N_eff & 0xFFFF)
+    bridge.handle("write", MXU.BASE + MXU.CMD, 1)
+
+    _blk0_assert_status(bridge, MXU.BASE, 2, f"op{op['idx']:02d} MMUL")
+
+    out_nbytes = M_eff * N_eff * 4
+    out_bytes = bytes(model.sram[o_addr : o_addr + out_nbytes])
+    out_arr = np.frombuffer(out_bytes, dtype=np.int32).reshape(M_eff, N_eff)
+
+    golden = GoldenMXU().matmul_int32(act, wgt_packed, M_eff, K_eff, N_eff)
+    return {"out": out_arr, "golden": golden, "M_eff": M_eff, "K_eff": K_eff, "N_eff": N_eff}
+
+
+def _blk0_run_sfu(model: FuncModel, op: dict, manifest: dict) -> dict:
+    """Run one SFU op through the MMIO bridge and compare to GoldenSFU."""
+    op_name = op["opcode"]
+    sfu_op_map = {"SOFTMAX": 0, "RMSNORM": 6, "ROPE": 5, "SILU": 4}
+    op_id = sfu_op_map[op_name]
+
+    i_addr = int(op["sram_input_addr"], 16)
+    o_addr = int(op["sram_output_addr"], 16)
+
+    dims = op["dimensions"]
+    if op_name == "ROPE":
+        elements = dims.get("q_len", 0) + dims.get("k_len", 0)
+        head_dim = dims.get("head_dim", 128)
+        pos = dims.get("position", 0)
+    else:
+        elements = dims.get("elements", 0)
+        head_dim = 0
+        pos = 0
+
+    input_hex = op.get("input_hex")
+    if input_hex is None:
+        prefix = f"op{op['idx']:02d}_"
+        candidates = [
+            fname for fname, finfo in manifest["files"].items()
+            if fname.startswith(prefix) and fname.endswith("_input.hex")
+        ]
+        if not candidates:
+            raise ValueError(f"op{op['idx']:02d} {op_name}: missing input_hex")
+        input_hex = candidates[0]
+    input_fmt = manifest["files"][input_hex]["format"]
+    input_eb = _EB_BY_FMT[input_fmt]
+    input_bytes = _blk0_read_hex(input_hex, input_eb)
+    if len(input_bytes) < elements * input_eb:
+        input_bytes = input_bytes + b"\x00" * (elements * input_eb - len(input_bytes))
+
+    model.sram[i_addr : i_addr + len(input_bytes)] = input_bytes
+
+    bridge = model.bridge
+    bridge.handle("write", SFU.BASE + SFU.CTRL, op_id)
+    bridge.handle("write", SFU.BASE + SFU.I_ADDR, i_addr)
+    bridge.handle("write", SFU.BASE + SFU.O_ADDR, o_addr)
+    dim = (head_dim << 16) | (elements & 0xFFFF)
+    bridge.handle("write", SFU.BASE + SFU.DIM, dim)
+    if op_name == "ROPE":
+        bridge.handle("write", SFU.BASE + SFU.POS, pos)
+    bridge.handle("write", SFU.BASE + SFU.CMD, 1)
+
+    _blk0_assert_status(bridge, SFU.BASE, 2, f"op{op['idx']:02d} {op_name}")
+
+    out_bytes = bytes(model.sram[o_addr : o_addr + elements * 2])
+    out_arr = np.frombuffer(out_bytes, dtype=np.float16).astype(np.float32)
+
+    sfu = GoldenSFU()
+    inp = np.frombuffer(input_bytes, dtype=np.float16).astype(np.float32)
+    if op_name == "SOFTMAX":
+        golden = sfu.softmax_hw(inp)
+    elif op_name == "RMSNORM":
+        golden = sfu.rmsnorm_hw(inp)
+    elif op_name == "SILU":
+        golden = sfu.silu_hw(inp)
+    elif op_name == "ROPE":
+        hd = head_dim if head_dim else max(elements // 4, 2)
+        k_len = 2 * hd
+        q_len = elements - k_len
+        if q_len <= 0:
+            q_len = elements // 2
+            k_len = elements - q_len
+        q_in = inp[:q_len]
+        k_in = inp[q_len:elements]
+        nq = max(1, q_len // hd) if hd else 1
+        q_out, k_out = sfu.rope_hw(q_in, k_in, position=pos, num_heads=nq, head_dim=hd)
+        golden = np.zeros(elements, dtype=np.float32)
+        golden[:q_len] = q_out
+        golden[q_len:elements] = k_out
+    else:
+        raise ValueError(f"Unsupported SFU op: {op_name}")
+
+    return {"out": out_arr, "golden": golden, "elements": elements}
+
+
+def _blk0_run_vector(model: FuncModel, op: dict, manifest: dict) -> dict:
+    """Run one Vector op (VRESID or VMUL) through the MMIO bridge."""
+    op_name = op["opcode"]
+    vec_op_map = {"VMUL": 1, "VRESID": 5}
+    op_id = vec_op_map[op_name]
+
+    i_addr = int(op["sram_input_addr"], 16)
+    o_addr = int(op["sram_output_addr"], 16)
+    b_addr = manifest["sram_layout"]["output_buffer"]
+    elements = op["dimensions"]["elements"]
+
+    if op_name == "VMUL":
+        a_hex = "op14_vmul_gate_input.hex"
+        b_hex = "op14_vmul_up_input.hex"
+    elif op_name == "VRESID":
+        if op["idx"] == 9:
+            a_hex = "op09_vresid_pre_input.hex"
+            b_hex = "op09_vresid_pre_o_out.hex"
+        elif op["idx"] == 16:
+            a_hex = "op16_vresid_post_input.hex"
+            b_hex = "op16_vresid_post_down.hex"
+        else:
+            raise ValueError(f"Unknown VRESID idx {op['idx']}")
+    else:
+        raise ValueError(f"Unsupported Vector op: {op_name}")
+
+    a_fmt = manifest["files"][a_hex]["format"]
+    b_fmt = manifest["files"][b_hex]["format"]
+    a_bytes = _blk0_read_hex(a_hex, _EB_BY_FMT[a_fmt])
+    b_bytes = _blk0_read_hex(b_hex, _EB_BY_FMT[b_fmt])
+
+    if len(a_bytes) < elements * _EB_BY_FMT[a_fmt]:
+        a_bytes = a_bytes + b"\x00" * (elements * _EB_BY_FMT[a_fmt] - len(a_bytes))
+    if len(b_bytes) < elements * _EB_BY_FMT[b_fmt]:
+        b_bytes = b_bytes + b"\x00" * (elements * _EB_BY_FMT[b_fmt] - len(b_bytes))
+
+    model.sram[i_addr : i_addr + len(a_bytes)] = a_bytes
+    model.sram[b_addr : b_addr + len(b_bytes)] = b_bytes
+
+    bridge = model.bridge
+    bridge.handle("write", VECTOR.BASE + VECTOR.CTRL, op_id)
+    bridge.handle("write", VECTOR.BASE + VECTOR.A_ADDR, i_addr)
+    bridge.handle("write", VECTOR.BASE + VECTOR.B_ADDR, b_addr)
+    bridge.handle("write", VECTOR.BASE + VECTOR.O_ADDR, o_addr)
+    bridge.handle("write", VECTOR.BASE + VECTOR.DIM, elements & 0xFFFF)
+    bridge.handle("write", VECTOR.BASE + VECTOR.CMD, 1)
+
+    _blk0_assert_status(bridge, VECTOR.BASE, 2, f"op{op['idx']:02d} {op_name}")
+
+    out_bytes = bytes(model.sram[o_addr : o_addr + elements * 4])
+    out_arr = np.frombuffer(out_bytes, dtype=np.int32)
+
+    vec = GoldenVector()
+    if op_name == "VMUL":
+        a = np.frombuffer(a_bytes, dtype=np.int32)
+        b = np.frombuffer(b_bytes, dtype=np.int32)
+        golden = vec.mul(a, b)
+    elif op_name == "VRESID":
+        a = np.frombuffer(a_bytes, dtype=np.float16).astype(np.float32)
+        b = np.frombuffer(b_bytes, dtype=np.int32)
+        golden = vec.residual_add(a, b)
+    else:
+        raise ValueError(f"Unsupported Vector op: {op_name}")
+
+    return {"out": out_arr, "golden": golden, "elements": elements}
+
+
+def test_blk0_full_chain_single_tile():
+    """Full blk.0 17-op chain in FuncModel with single-tile MMUL workaround.
+
+    Verifies every operation from the Qwen2.5-3B blk.0 manifest through the
+    FuncModel MMIO bridge against a direct GoldenMXU/SFU/Vector call on the
+    same truncated (single-tile) data.  The chain is exercised op-by-op;
+    large MMUL weights are truncated to the first 64x64 tile so they fit in
+    SRAM while still validating the firmware→MMIO→engine data path.
+    """
+    import json
+
+    manifest_path = os.path.join(_BLK0_VECTOR_DIR, "blk0_manifest.json")
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+
+    model = FuncModel()
+    fp16_tol = dict(tol_abs=2e-3, tol_rel=1e-2)
+    results = []
+
+    for op in manifest["ops"]:
+        idx = op["idx"]
+        name = op["name"]
+        opcode = op["opcode"]
+        label = f"op{idx:02d} {name}"
+
+        if opcode == "MMUL":
+            r = _blk0_run_mmul(model, op, manifest)
+            assert np.allclose(r["out"], r["golden"], rtol=1e-5), (
+                f"{label}: MMUL mismatch M={r['M_eff']} K={r['K_eff']} N={r['N_eff']}"
+            )
+        elif opcode in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
+            r = _blk0_run_sfu(model, op, manifest)
+            cmp = GoldenSFU.compare_hw_vs_ref(r["out"], r["golden"], **fp16_tol)
+            assert cmp["within_tolerance"], (
+                f"{label}: SFU mismatch max_abs={cmp['max_abs_err']:.2e} "
+                f"max_rel={cmp['max_rel_err']:.2e}"
+            )
+        elif opcode in ("VMUL", "VRESID"):
+            r = _blk0_run_vector(model, op, manifest)
+            assert np.array_equal(r["out"], r["golden"]), (
+                f"{label}: Vector mismatch at indices {np.where(r['out'] != r['golden'])[0]}"
+            )
+        else:
+            raise ValueError(f"{label}: unsupported opcode {opcode}")
+
+        results.append({"idx": idx, "name": name, "opcode": opcode})
+
+    assert len(results) == manifest["num_ops"], (
+        f"Expected {manifest['num_ops']} ops, ran {len(results)}"
+    )
+
+    corrupt_op = manifest["ops"][1]
+    r_clean = _blk0_run_mmul(model, corrupt_op, manifest)
+    weight_full = _blk0_read_hex(corrupt_op["weight_hex"], elem_bytes=1)
+    corrupt_weight = bytearray(weight_full[:2048])
+    corrupt_weight[0] ^= 0xFF
+    w_addr = 0x00000
+    model.sram[w_addr : w_addr + len(corrupt_weight)] = bytes(corrupt_weight)
+    bridge = model.bridge
+    i_addr = int(corrupt_op["sram_input_addr"], 16)
+    o_addr = int(corrupt_op["sram_output_addr"], 16)
+    dims = corrupt_op["dimensions"]
+    M_eff = min(dims.get("M", 1), 64)
+    K_eff = min(dims.get("K", 0), 64)
+    N_eff = min(dims.get("N", 0), 64)
+    bridge.handle("write", MXU.BASE + MXU.CTRL, 0)
+    bridge.handle("write", MXU.BASE + MXU.I_ADDR, i_addr)
+    bridge.handle("write", MXU.BASE + MXU.W_ADDR, w_addr)
+    bridge.handle("write", MXU.BASE + MXU.O_ADDR, o_addr)
+    bridge.handle("write", MXU.BASE + MXU.SCALE_ADDR, 0)
+    dim0 = (M_eff & 0xFFFF) | ((K_eff & 0xFFFF) << 16)
+    bridge.handle("write", MXU.BASE + MXU.DIM0, dim0)
+    bridge.handle("write", MXU.BASE + MXU.DIM1, N_eff & 0xFFFF)
+    bridge.handle("write", MXU.BASE + MXU.CMD, 1)
+    _blk0_assert_status(bridge, MXU.BASE, 2, "op01 Q_proj corrupted")
+    out_nbytes = M_eff * N_eff * 4
+    out_bytes = bytes(model.sram[o_addr : o_addr + out_nbytes])
+    out_corrupt = np.frombuffer(out_bytes, dtype=np.int32).reshape(M_eff, N_eff)
+    assert not np.array_equal(out_corrupt, r_clean["out"]), (
+        "Anti-vacuous: corrupted Q_proj weight still matched clean output"
+    )
