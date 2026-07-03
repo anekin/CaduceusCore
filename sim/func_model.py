@@ -62,6 +62,12 @@ class FuncModel:
         self.riscv.irq_handler = self.firmware.dispatch_interrupt
         self.bridge.irq_notify_callback = self.riscv.set_interrupt_pending
 
+        # Bind firmware to RISC-V emulator for interrupt-driven completion
+        self.firmware.bind_riscv(self.riscv)
+        self.firmware.boot(self.riscv, boot_rom_path=os.path.join(
+            os.path.dirname(__file__), "..", "firmware", "build", "npu_firmware.hex",
+        ))
+
     def load_boot_rom(self, path: str) -> int:
         """Load Intel HEX firmware into boot ROM.
 

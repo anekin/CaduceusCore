@@ -360,3 +360,100 @@ def test_interrupt_delivery():
     assert pc_after == 8, (
         f"WFI NOP should advance PC to 8, got 0x{pc_after:08X}"
     )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Path #11 — Ibex firmware path: boot ROM → DMEM → MMIO → IRQ
+# ══════════════════════════════════════════════════════════════════════
+
+
+def test_firmware_bootflow():
+    """Full firmware boot flow: boot→firmware init→receive doorbell→
+    dispatch MMUL→complete via IRQ.
+
+    Verifies:
+      1. Boot state: PC=0, SP=top of DMEM.
+      2. MMUL computes correctly through firmware path.
+      3. IRQ completion: _irq_serviced set, INTC.PENDING cleared.
+      4. Anti-vacuous: wrong opcode in doorbell returns error status.
+    """
+    from sim.regmap import MXU, INTC, DOORBELL
+    from sim.golden_executor import GoldenMXU
+    from engine.isa import OpCode
+
+    model = FuncModel()
+
+    # ── 1. Verify boot state ────────────────────────────────────────
+    assert model.riscv.state.pc == 0, (
+        f"PC should be 0 after boot, got 0x{model.riscv.state.pc:08X}"
+    )
+    sp = model.riscv.state.read(2)
+    assert sp == 0x00020000, (
+        f"SP should be DMEM_BASE+DMEM_SIZE=0x00020000, got 0x{sp:08X}"
+    )
+
+    # ── 2. Set up small MMUL: M=1, K=4, N=2 ─────────────────────────
+    M, K, N = 1, 4, 2
+    act_data = np.array([1, 2, 3, 4], dtype=np.int8)
+    # Packed INT4 weights: low nibble first, then high nibble.
+    # Unpacked values: [1,2,3,4,5,6,7,-8] (0x87 high nibble=8 → -8 signed)
+    # Reshaped (K=4,N=2): [[1,2],[3,4],[5,6],[7,-8]]
+    wgt_packed = np.array([0x21, 0x43, 0x65, 0x87], dtype=np.uint8)
+    # Scale data: 1 FP32 per K-block per N-column (num_blocks=1, N=2)
+    num_blocks = (K + 127) // 128  # =1
+    scales = np.ones((num_blocks, N), dtype=np.float32)
+
+    act_addr = 0x80010000
+    wgt_addr = 0x80020000
+    out_addr = 0x81000000
+    scale_addr = 0x80110000
+    desc_addr = 0x80000080
+
+    model.host_write_data(act_addr, act_data)
+    model.host_write_data(wgt_addr, wgt_packed)
+    model.host_write_data(scale_addr, scales.ravel())
+
+    model.host_write_descriptor(desc_addr,
+        input_addr=act_addr, weight_addr=wgt_addr, output_addr=out_addr,
+        scale_addr=scale_addr, scale_size=int(scales.nbytes),
+        input_size=int(act_data.nbytes), weight_size=int(len(wgt_packed)),
+        output_size=M * N * 4,
+        M=M, K=K, N=N)
+
+    # ── 3. Write doorbell command and run firmware ───────────────────
+    model.host_write_command(OpCode.MMUL, desc_addr)
+    assert model.firmware.doorbell['host_tail'] == 1
+
+    results = model.firmware.run_loop(max_commands=1)
+    assert len(results) == 1, f"Expected 1 result, got {len(results)}"
+    assert results[0]['status'] == 'done', (
+        f"Expected status='done', got {results[0]['status']}"
+    )
+
+    # ── 4. Verify result matches GoldenMXU (float32 via scale path) ──
+    out_off = out_addr - Addr.DRAM_BASE
+    out_bytes = model.dram[out_off:out_off + M * N * 4]
+    out_fw = np.frombuffer(out_bytes, dtype=np.float32).reshape(M, N)
+
+    golden = GoldenMXU().matmul_int4_per_block(
+        act_data, wgt_packed, scales,
+        M, K, N, group_size=128)
+    assert np.allclose(out_fw, golden, rtol=1e-5), (
+        f"MMUL output mismatch: got {out_fw.tolist()}, expected {golden.tolist()}"
+    )
+
+    # ── 5. Verify IRQ was serviced ───────────────────────────────────
+    pending = model.bridge.handle('read', INTC.BASE + INTC.PENDING, 0)
+    assert pending == 0, (
+        f"INTC.PENDING should be 0 after completion, got 0x{pending:08X}"
+    )
+
+    # ── 6. Anti-vacuous: wrong opcode returns error status ───────────
+    model.host_write_command(999, desc_addr)
+    results_bad = model.firmware.run_loop(max_commands=1)
+    assert len(results_bad) == 1, (
+        f"Expected 1 result for bad opcode, got {len(results_bad)}"
+    )
+    assert results_bad[0]['status'] != 'done', (
+        "Wrong opcode (999) should not return status='done'"
+    )

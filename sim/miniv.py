@@ -452,6 +452,31 @@ class NPUFirmware:
         self.irq_pending = 0
         self._irq_serviced = False
 
+        # RISC-V binding (injected after construction, matches FuncModel order)
+        self.riscv: Optional["RISCVMini"] = None
+        self._irq_enabled: Dict[int, bool] = {}
+
+    def bind_riscv(self, riscv: "RISCVMini"):
+        """Inject RISCVMini reference after construction.
+        
+        Called by FuncModel after both firmware and riscv are created.
+        After binding, MMIO and interrupt paths route through the emulator.
+        """
+        self.riscv = riscv
+
+    def boot(self, riscv: "RISCVMini", boot_rom_path: Optional[str] = None):
+        """Initialize RISC-V state for firmware boot.
+
+        Sets PC=0x0000_0000, stack pointer to top of DMEM, and optionally
+        loads a firmware hex file into boot ROM.
+        """
+        self.riscv = riscv
+        riscv.state.pc = 0x00000000
+        riscv.state.write(2, DMEM_BASE + DMEM_SIZE)  # x2 = sp
+
+        if boot_rom_path is not None and os.path.exists(boot_rom_path):
+            RISCVMini.load_hex(boot_rom_path, riscv._boot_rom, BOOT_ROM_BASE)
+
     def run_loop(self, max_commands: int = 10) -> List[dict]:
         """Main firmware loop: poll doorbell → dispatch → complete."""
         results = []
@@ -475,19 +500,25 @@ class NPUFirmware:
         """Called by RISCVMini trap handler when an IRQ fires.
 
         Reads INTC.PENDING to determine which engine completed,
-        then dispatches the next queued operation or updates doorbell.
+        records IRQ service for _wait_done to continue.
+        Supports all engine source bits: 0=MXU, 1=SFU, 2=VECTOR, 3=DMA.
         """
-        from sim.regmap import INTC, MXU
+        from sim.regmap import INTC, MXU, SFU, VECTOR, DMA
         pending = self.irq_pending
         if self.bridge:
             pending = self.bridge.handle('read', INTC.BASE + INTC.PENDING, 0)
         self.irq_pending = pending
 
-        if source_bit == 0 and self.bridge:
-            status = self.bridge.handle('read', MXU.BASE + MXU.STATUS, 0)
-            if status & 2:
-                self.bridge.handle('write', MXU.BASE + MXU.IRQ_EN, 0)
-                self._irq_serviced = True
+        # Map source bit to engine IRQ_EN register for cleanup
+        engine_irq_en = {
+            0: (MXU.BASE + MXU.IRQ_EN),
+            1: (SFU.BASE + SFU.IRQ_EN),
+            2: (VECTOR.BASE + VECTOR.IRQ_EN),
+            3: (DMA.BASE + DMA.IRQ_EN),
+        }
+        if source_bit in engine_irq_en:
+            self._mmio_write(engine_irq_en[source_bit], 0)
+            self._irq_serviced = True
 
     def _dram_read(self, addr: int, size: int) -> bytes:
         """Read from DRAM with address translation."""
@@ -522,16 +553,16 @@ class NPUFirmware:
                 self._mmio_write(base + off, val)
 
             def mread(base, off):
-                if not self.bridge:
-                    return 0
-                v = self.bridge.handle('read', base + off, 0)
-                return v if v is not None else 0
+                return self._mmio_read(base + off)
 
             def wdone(base, status_off):
                 while True:
                     v = mread(base, status_off)
                     if not (v & 1):
                         break
+
+            if self.riscv is not None:
+                self._mmio_write(MXU.BASE + MXU.IRQ_EN, 1)
 
             tile_mmul(
                 desc=desc,
@@ -545,6 +576,10 @@ class NPUFirmware:
             )
 
             result['status'] = 'done'
+
+            # Service any pending engine IRQs (interrupt-driven completion)
+            if self.riscv is not None and self.riscv.interrupt_pending:
+                self.riscv._handle_irq()
 
         elif op in (OpCode.SOFTMAX, OpCode.LAYERNORM, OpCode.GELU,
                     OpCode.RELU, OpCode.SILU, OpCode.ROPE):
@@ -560,6 +595,8 @@ class NPUFirmware:
             self._mmio_write(SFU.BASE + SFU.I_ADDR, desc['input_addr'])
             self._mmio_write(SFU.BASE + SFU.O_ADDR, desc['output_addr'])
             self._mmio_write(SFU.BASE + SFU.DIM, desc['input_size'])
+            if self.riscv is not None:
+                self._mmio_write(SFU.BASE + SFU.IRQ_EN, 1)
             self._mmio_write(SFU.BASE + SFU.CMD, 1)
             self._wait_done(SFU.BASE + SFU.STATUS)
             result['status'] = 'done'
@@ -579,6 +616,8 @@ class NPUFirmware:
             self._mmio_write(VECTOR.BASE + VECTOR.B_ADDR, desc['weight_addr'])
             self._mmio_write(VECTOR.BASE + VECTOR.O_ADDR, desc['output_addr'])
             self._mmio_write(VECTOR.BASE + VECTOR.DIM, desc['input_size'])
+            if self.riscv is not None:
+                self._mmio_write(VECTOR.BASE + VECTOR.IRQ_EN, 1)
             self._mmio_write(VECTOR.BASE + VECTOR.CMD, 1)
             self._wait_done(VECTOR.BASE + VECTOR.STATUS)
             result['status'] = 'done'
@@ -592,6 +631,8 @@ class NPUFirmware:
                 self._mmio_write(DMA.BASE + DMA.CH1_SRC, desc['weight_addr'])
                 self._mmio_write(DMA.BASE + DMA.CH1_DST, desc['weight_sram'])
                 self._mmio_write(DMA.BASE + DMA.CH1_SIZE, desc['weight_size'])
+            if self.riscv is not None:
+                self._mmio_write(DMA.BASE + DMA.IRQ_EN, 1)
             self._mmio_write(DMA.BASE + DMA.CMD, 1)
             self._wait_done(DMA.BASE + DMA.STATUS)
             result['status'] = 'done'
@@ -625,13 +666,38 @@ class NPUFirmware:
             'M': fields[12], 'K': fields[13], 'N': fields[14],
         }
 
-    def _mmio_write(self, addr: int, val: int):
-        """MMIO write → route through bridge."""
+    def _mmio_read(self, addr: int) -> int:
+        """MMIO read → route through RISCVMini when bound, else bridge."""
+        if self.riscv is not None:
+            return self.riscv._mem_read(addr)
         if self.bridge:
+            result = self.bridge.handle('read', addr, 0)
+            return result if result is not None else 0
+        return 0
+
+    def _mmio_write(self, addr: int, val: int):
+        """MMIO write → route through RISCVMini when bound, else bridge."""
+        if self.riscv is not None:
+            self.riscv._mem_write(addr, val)
+        elif self.bridge:
             self.bridge.handle('write', addr, val)
 
     def _wait_done(self, status_addr: int):
-        """Spin until module reports done (BUSY=0)."""
+        """Wait for engine completion.
+        
+        When RISCVMini is bound: interrupt-driven via WFI.
+        Otherwise: polling loop on STATUS.BUSY.
+        """
+        if self.riscv is not None:
+            if self.bridge:
+                busy = self.bridge.handle('read', status_addr, 0) & 1
+                if not busy:
+                    return
+            while not self._irq_serviced:
+                if self.riscv.interrupt_pending:
+                    self.riscv._handle_irq()
+            self._irq_serviced = False
+            return
         if self.bridge:
             while self.bridge.handle('read', status_addr, 0) & 1:
                 pass
