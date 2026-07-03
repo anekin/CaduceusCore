@@ -1881,3 +1881,186 @@ def test_blk0_full_chain_single_tile():
     assert not np.array_equal(out_corrupt, r_clean["out"]), (
         "Anti-vacuous: corrupted Q_proj weight still matched clean output"
     )
+
+# ══════════════════════════════════════════════════════════════════════
+# P3 — Boundary and corner cases (FM-SOC-028..031)
+# ══════════════════════════════════════════════════════════════════════
+
+
+_BOUNDARY_SRAM_IN = 0x60000
+_BOUNDARY_SRAM_OUT = 0x70000
+_BOUNDARY_DRAM = 0x8001_0000
+
+
+def _boundary_write_output_pattern(model: FuncModel, raw_off: int, size: int) -> bytes:
+    """Write a known non-zero pattern to an output region and return it."""
+    pattern = bytes((i * 7 + 0xA5) & 0xFF for i in range(size))
+    model.sram[raw_off:raw_off + size] = pattern
+    return pattern
+
+
+def _boundary_read_output(model: FuncModel, raw_off: int, size: int) -> bytes:
+    return bytes(model.sram[raw_off:raw_off + size])
+
+
+def test_boundary_zero_dimension_done():
+    """Zero-dimension inputs return STATUS=DONE without memory access or crash.
+
+    Covers MXU (M=K=N=0), SFU (length=0), Vector (dim=0), DMA (size=0).
+    Verifies the output region is untouched and STATUS=2 (DONE).
+    """
+    model = FuncModel()
+    bridge = model.bridge
+
+    # ── MXU zero dimension ──
+    mxu_out_size = 64
+    mxu_pattern = _boundary_write_output_pattern(model, _BOUNDARY_SRAM_OUT, mxu_out_size)
+    bridge.handle('write', MXU.BASE + MXU.CTRL, 0)
+    bridge.handle('write', MXU.BASE + MXU.DIM0, 0)
+    bridge.handle('write', MXU.BASE + MXU.DIM1, 0)
+    bridge.handle('write', MXU.BASE + MXU.I_ADDR, _BOUNDARY_SRAM_IN)
+    bridge.handle('write', MXU.BASE + MXU.W_ADDR, _BOUNDARY_SRAM_IN)
+    bridge.handle('write', MXU.BASE + MXU.O_ADDR, _BOUNDARY_SRAM_OUT)
+    bridge.handle('write', MXU.BASE + MXU.CMD, 1)
+    assert bridge.handle('read', MXU.BASE + MXU.STATUS) == 2, "MXU zero-dim STATUS != DONE"
+    assert _boundary_read_output(model, _BOUNDARY_SRAM_OUT, mxu_out_size) == mxu_pattern, \
+        "MXU zero-dim must not write output region"
+
+    # ── SFU zero dimension ──
+    sfu_out_size = 64
+    sfu_pattern = _boundary_write_output_pattern(model, _BOUNDARY_SRAM_OUT + 0x1000, sfu_out_size)
+    bridge.handle('write', SFU.BASE + SFU.CTRL, 0)
+    bridge.handle('write', SFU.BASE + SFU.DIM, 0)
+    bridge.handle('write', SFU.BASE + SFU.I_ADDR, _BOUNDARY_SRAM_IN)
+    bridge.handle('write', SFU.BASE + SFU.O_ADDR, _BOUNDARY_SRAM_OUT + 0x1000)
+    bridge.handle('write', SFU.BASE + SFU.CMD, 1)
+    assert bridge.handle('read', SFU.BASE + SFU.STATUS) == 2, "SFU zero-dim STATUS != DONE"
+    assert _boundary_read_output(model, _BOUNDARY_SRAM_OUT + 0x1000, sfu_out_size) == sfu_pattern, \
+        "SFU zero-dim must not write output region"
+
+    # ── Vector zero dimension ──
+    vec_out_size = 64
+    vec_pattern = _boundary_write_output_pattern(model, _BOUNDARY_SRAM_OUT + 0x2000, vec_out_size)
+    bridge.handle('write', VECTOR.BASE + VECTOR.CTRL, 0)
+    bridge.handle('write', VECTOR.BASE + VECTOR.A_ADDR, _BOUNDARY_SRAM_IN)
+    bridge.handle('write', VECTOR.BASE + VECTOR.B_ADDR, _BOUNDARY_SRAM_IN)
+    bridge.handle('write', VECTOR.BASE + VECTOR.O_ADDR, _BOUNDARY_SRAM_OUT + 0x2000)
+    bridge.handle('write', VECTOR.BASE + VECTOR.DIM, 0)
+    bridge.handle('write', VECTOR.BASE + VECTOR.CMD, 1)
+    assert bridge.handle('read', VECTOR.BASE + VECTOR.STATUS) == 2, "Vector zero-dim STATUS != DONE"
+    assert _boundary_read_output(model, _BOUNDARY_SRAM_OUT + 0x2000, vec_out_size) == vec_pattern, \
+        "Vector zero-dim must not write output region"
+
+    # ── DMA zero size ──
+    dma_src = bytes(range(64))
+    dma_dst = bytes([0xFF] * 64)
+    model.dram[_BOUNDARY_DRAM - Addr.DRAM_BASE:_BOUNDARY_DRAM - Addr.DRAM_BASE + 64] = dma_src
+    model.sram[0x6000:0x6040] = dma_dst
+    bridge.handle('write', DMA.BASE + DMA.CH0_SRC, _BOUNDARY_DRAM)
+    bridge.handle('write', DMA.BASE + DMA.CH0_DST, Addr.SRAM_BASE + 0x6000)
+    bridge.handle('write', DMA.BASE + DMA.CH0_SIZE, 0)
+    bridge.handle('write', DMA.BASE + DMA.CMD, 1)
+    assert bridge.handle('read', DMA.BASE + DMA.STATUS) == 2, "DMA zero-size STATUS != DONE"
+    assert bytes(model.sram[0x6000:0x6040]) == dma_dst, "DMA zero-size must not transfer"
+    assert bytes(model.dram[_BOUNDARY_DRAM - Addr.DRAM_BASE:_BOUNDARY_DRAM - Addr.DRAM_BASE + 64]) == dma_src, \
+        "DMA zero-size must not touch source"
+
+
+def test_boundary_max_odd_shapes():
+    """Max and odd MXU/SFU/Vector shapes produce correct results.
+
+    - Large MXU: M=1, K=2560, N=4096 via DRAM with per-block scale=1.0.
+    - Odd MXU: M=33, K=65, N=129 via SRAM with INT32 output path.
+    - Odd SFU: softmax length 129 (prime).
+    - Odd Vector: add dim 33.
+    """
+    model = FuncModel()
+    bridge = model.bridge
+    rng = np.random.RandomState(20260703)
+
+    # ── Large MXU (M=1, K=2560, N=4096) via DRAM, scale path ──
+    M_big, K_big, N_big = 1, 2560, 4096
+    act_big = rng.randint(-8, 8, size=M_big * K_big, dtype=np.int8).reshape(M_big, K_big)
+    wgt_big_unpacked = rng.randint(-8, 8, size=K_big * N_big, dtype=np.int8)
+    wgt_big_packed = GoldenMXU.pack_int4(wgt_big_unpacked)
+    num_blocks_big = (K_big + 127) // 128
+    scales_big = np.ones((num_blocks_big, N_big), dtype=np.float32)
+
+    act_addr_big = 0x8001_0000
+    wgt_addr_big = 0x8010_0000
+    scale_addr_big = 0x8060_0000
+    out_addr_big = 0x8100_0000
+
+    model.host_write_data(act_addr_big, act_big)
+    model.host_write_data(wgt_addr_big, wgt_big_packed)
+    model.host_write_data(scale_addr_big, scales_big.ravel())
+
+    bridge.handle('write', MXU.BASE + MXU.CTRL, 0)
+    bridge.handle('write', MXU.BASE + MXU.DIM0, (K_big << 16) | M_big)
+    bridge.handle('write', MXU.BASE + MXU.DIM1, N_big)
+    bridge.handle('write', MXU.BASE + MXU.I_ADDR, act_addr_big)
+    bridge.handle('write', MXU.BASE + MXU.W_ADDR, wgt_addr_big)
+    bridge.handle('write', MXU.BASE + MXU.O_ADDR, out_addr_big)
+    bridge.handle('write', MXU.BASE + MXU.SCALE_ADDR, scale_addr_big)
+    bridge.handle('write', MXU.BASE + MXU.CMD, 1)
+    assert bridge.handle('read', MXU.BASE + MXU.STATUS) == 2, "Large MXU STATUS != DONE"
+
+    out_big = np.frombuffer(
+        model.pcie.tlp_read(out_addr_big, M_big * N_big * 4),
+        dtype=np.float32).reshape(M_big, N_big)
+    golden_big = GoldenMXU().matmul_int4_per_block(
+        act_big, wgt_big_packed, scales_big, M_big, K_big, N_big, group_size=128)
+    assert np.allclose(out_big, golden_big, rtol=1e-5), "Large MXU mismatch"
+
+    # ── Odd MXU (M=33, K=65, N=129) via SRAM, INT32 path ──
+    M_odd, K_odd, N_odd = 33, 65, 129
+    act_odd = rng.randint(-8, 8, size=M_odd * K_odd, dtype=np.int8).reshape(M_odd, K_odd)
+    wgt_odd_unpacked = rng.randint(-8, 8, size=K_odd * N_odd, dtype=np.int8)
+    wgt_odd_packed = GoldenMXU.pack_int4(wgt_odd_unpacked)
+
+    act_off_odd = 0x50000
+    wgt_off_odd = 0x60000
+    out_off_odd = 0x70000
+    model.sram[act_off_odd:act_off_odd + act_odd.nbytes] = act_odd.tobytes()
+    model.sram[wgt_off_odd:wgt_off_odd + len(wgt_odd_packed)] = wgt_odd_packed.tobytes()
+
+    bridge.handle('write', MXU.BASE + MXU.CTRL, 0)
+    bridge.handle('write', MXU.BASE + MXU.DIM0, (K_odd << 16) | M_odd)
+    bridge.handle('write', MXU.BASE + MXU.DIM1, N_odd)
+    bridge.handle('write', MXU.BASE + MXU.I_ADDR, act_off_odd)
+    bridge.handle('write', MXU.BASE + MXU.W_ADDR, wgt_off_odd)
+    bridge.handle('write', MXU.BASE + MXU.O_ADDR, out_off_odd)
+    bridge.handle('write', MXU.BASE + MXU.SCALE_ADDR, 0)
+    bridge.handle('write', MXU.BASE + MXU.CMD, 1)
+    assert bridge.handle('read', MXU.BASE + MXU.STATUS) == 2, "Odd MXU STATUS != DONE"
+
+    out_odd = np.frombuffer(
+        bytes(model.sram[out_off_odd:out_off_odd + M_odd * N_odd * 4]),
+        dtype=np.int32).reshape(M_odd, N_odd)
+    golden_odd = GoldenMXU().matmul_int32(act_odd, wgt_odd_packed, M_odd, K_odd, N_odd)
+    assert np.array_equal(out_odd, golden_odd), "Odd MXU mismatch"
+
+    # ── Odd SFU softmax N=129 ──
+    sfu_len = 129
+    sfu_in = rng.randn(sfu_len).astype(np.float32).clip(-5, 5)
+    _mmio_write_sram(model, sfu_in, _MMIO_SRAM_OFF)
+    _mmio_sfu_op(model, op=0, length=sfu_len)
+    _mmio_sfu_wait_done(model)
+    sfu_out = _mmio_read_sram(model, sfu_len, _MMIO_OUT_OFF)
+    sfu_ref = GoldenSFU().softmax_hw(sfu_in)
+    cmp = GoldenSFU.compare_hw_vs_ref(sfu_out, sfu_ref, tol_abs=2e-3, tol_rel=1e-2)
+    assert cmp["within_tolerance"], f"Odd SFU softmax mismatch: max_abs={cmp['max_abs_err']:.2e}"
+    assert float(np.sum(sfu_out)) == pytest.approx(1.0, rel=1e-3), "Softmax must sum to 1"
+
+    # ── Odd Vector add dim=33 ──
+    vec_dim = 33
+    a = rng.randint(-1000, 1000, size=vec_dim).astype(np.int32)
+    b = rng.randint(-1000, 1000, size=vec_dim).astype(np.int32)
+    _vec_write_i32(model, a, _VEC_A_OFF)
+    _vec_write_i32(model, b, _VEC_B_OFF)
+    _vec_mmio_op(model, op=0, dim=vec_dim)
+    _vec_mmio_wait(model)
+    vec_out = _vec_read_i32(model, vec_dim, _VEC_O_OFF)
+    assert np.array_equal(vec_out, GoldenVector().add(a, b)), "Odd Vector ADD mismatch"
+
+
