@@ -148,9 +148,9 @@ VectorModel.estimate(op, N) = ceil(N / 128) × op_latency
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| SFV-P20 | P1 | `tb_vector_perf.v` — `--op add --dim 128,256,512,1024,2048,4096` | **ALU ops DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×4 + 2。确认块边界开销恒定 | 每个点 `|delta| ≤ 1 cycle`。每个 128 元素块的周期标准差 ≤ 1（ceil(N/128) 个块中最大 deviation ≤ 1 cycle）。 | ⬜ | |
-| SFV-P21 | P1 | `tb_vector_perf.v` — `--op sum --dim 128,256,512,1024,2048,4096` | **SUM DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×10 + 2。确认每个块 7-cycle 流水线 | 每个点 `|delta| ≤ 1 cycle`。每个 128 元素块的周期标准差 ≤ 1。 | ⬜ | |
-| SFV-P22 | P1 | `tb_vector_perf.v` — `--op conv --dim 128,256,512,1024,2048,4096` | **CONV DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×132 + 2。确认 type_convert 逐个元素处理 | 每个点 `|delta| ≤ 1 cycle`。每个 128 元素块的周期标准差 ≤ 1（期望每个块 132 cycles）。 | ⬜ | |
+| SFV-P20 | P1 | `tb_vector_perf.v` — `--op add --dim 128,256,512,1024,2048,4096` | **ALU ops DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×4 + 2。确认块边界开销恒定 | 每个点 `|delta| ≤ 1 cycle`。max |per_chunk_cycles − 4| ≤ 1（其中 per_chunk_cycles = 每个 128 元素块的总 cycles，期望 4） | ⬜ | |
+| SFV-P21 | P1 | `tb_vector_perf.v` — `--op sum --dim 128,256,512,1024,2048,4096` | **SUM DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×10 + 2。确认每个块 7-cycle 流水线 | 每个点 `|delta| ≤ 1 cycle`。max |per_chunk_cycles − 10| ≤ 1（其中 per_chunk_cycles = 每个 128 元素块的总 cycles，期望 10） | ⬜ | |
+| SFV-P22 | P1 | `tb_vector_perf.v` — `--op conv --dim 128,256,512,1024,2048,4096` | **CONV DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×132 + 2。确认 type_convert 逐个元素处理 | 每个点 `|delta| ≤ 1 cycle`。max |per_chunk_cycles − 132| ≤ 1（其中 per_chunk_cycles = 每个 128 元素块的总 cycles，期望 132） | ⬜ | |
 
 ---
 
@@ -191,10 +191,10 @@ VectorModel.estimate(op, N) = ceil(N / 128) × op_latency
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| SFV-P31 | P3 | `tb_vector_perf.v` — `--op add --dim 1` + `--op sum --dim 1` + `--op conv --dim 1` | **单元素边缘（DIM=1）**: 最小 Vector 操作。验证 lane_mask 正确处理部分 128-wide 块 | 所有操作 golden 比较 PASS。ADD/SUM/CONV 各 total_cycles ≤ 10（无块迭代循环；期望 ADD ≤ 6, SUM ≤ 12, CONV ≤ 134 但 N=1 时 overhead 可能更小）。 | ⬜ | |
+| SFV-P31 | P3 | `tb_vector_perf.v` — `--op add --dim 1` + `--op sum --dim 1` + `--op conv --dim 1` | **单元素边缘（DIM=1）**: 最小 Vector 操作。验证 lane_mask 正确处理部分 128-wide 块 | 所有操作 golden 比较 PASS。ADD `|measured − 6| ≤ 1`。SUM `|measured − 12| ≤ 1`。CONV `|measured − 134| ≤ 1`。 | ⬜ | |
 | SFV-P32 | P3 | `tb_vector_perf.v` — `--op add --dim 65535` | **最大 DIM（65,535）**: DIM 寄存器允许的最大值。确认无溢出、无超时、所有 512 个块正确累加 | golden 比较 PASS 且仿真在 10,000 cycles 内完成。`|measured − 2050|` ≤ 1。 | ⬜ | |
 | SFV-P33 | P3 | `tb_vector_perf.v` — `--op conv --dim 256` — INT32 值扫描覆盖完整 MXU 累加器范围 [-2³¹, 2³¹-1] 附近的饱和 | **CONV 饱和边缘**: 验证每个 type_convert 规格将 `|x|>65504` 的元素饱和到 ±0x7BFF | 所有元素 golden 比较 PASS。对于 x ∈ {65503, 65504, 65505, INT32_MIN, INT32_MAX}，RTL type_convert 输出与 GoldenVector 一致（FP16 容差 abs=2e-3）。 | ⬜ | |
-| SFV-P34 | P3 | `tb_sfu_perf.v` — `--op rope --pos 0,1,42,127,255,511,1023` | **RoPE 大位置值**: 测试 theta = pos × inv_freq 的角度累积。确认大位置的 CORDIC 精度 | 所有位置 golden 比较 PASS（float16 容差）。周期计数与位置无关 | ⬜ | |
+| SFV-P34 | P3 | `tb_sfu_perf.v` — `--op rope --pos 0,1,42,127,255,511,1023` | **RoPE 大位置值**: 测试 theta = pos × inv_freq 的角度累积。确认大位置的 CORDIC 精度 | 所有位置 golden 比较 PASS（float16 容差）。所有位置周期计数的标准差 = 0（pos ∈ {0,1,42,127,255,511,1023}） | ⬜ | |
 
 ---
 
