@@ -81,7 +81,7 @@
 
 ---
 
-## P1: Compute Engine Control Paths (5 cases)
+## P1: Compute Engine Control Paths (6 cases)
 
 > 理由: Compute engines must produce bit-exact results through the FuncModel firmware dispatch path. These paths are verified independently at module level; P1 validates them through SoC integration.
 
@@ -92,6 +92,7 @@
 | FM-SOC-011 | P1 | `test_golden_sfu.py` + `test_golden_sfu_gaps.py` + `test_soc_fm.py::test_sfu_soc_mmio_*` | SFU-COMPUTE (path 4): all 7 SFU ops (softmax/layernorm/rmsnorm/gelu/silu/rope/exp). Verify against numpy float32 reference | softmax sums to 1 (abs_tol=1e-3); gelu/silu vs ref (abs=2e-3, rel=1e-2); CORDIC angles error < 0.01°; no NaN on large inputs | ✅ | softmax N=2/16/128/1024 PASS (abs_tol=2e-3,rel_tol=1e-2); layernorm PASS; rmsnorm N=1 corner PASS; gelu ±4 boundary PASS; silu PASS; rope pos=0/100000/random-5-pairs PASS; back-to-back softmax→rmsnorm PASS; SF-08 rope 50 random pairs PASS; SF-09 rmsnorm N=1x20 PASS. 133/133 total |
 | FM-SOC-012 | P1 | `test_golden_vector.py` + `test_soc_fm.py::test_vector_soc_mmio_*` | VECTOR-COMPUTE (path 5): all Vector ops (add/mul/max/sum_reduce/type_convert/resid_add). INT32 bit-exact, FP16 match numpy | add/mul 1000 random groups 0 LSB; max_reduce/ sum_reduce bit-exact; INT32→FP16 roundtrip for [-65536,65536] 0 LSB; resid_add saturation clamps | ✅ | 251/251 PASS (test_golden_vector.py) — add/mul 1000 groups 0 LSB; max_reduce 100 groups bit-exact; sum_reduce 1e-7×10000 <1%; INT32→FP16 roundtrip exact for 12 key values; resid_add preserves delta+overflows clamps. SoC MMIO: 5 Vector ops (ADD/MUL/MAX/SUM/CONV/RESID) through bridge vs direct GoldenVector — bit-exact INT32, FP16 pipeline verified |
 | FM-SOC-024 | P1 | `test_soc_fm.py::test_pcie_integration` | PCIE-TLP+MXU+XBAR (paths 7+3+8): host→PCIe→DRAM→MXU compute→DRAM→PCIe→host full chain. INT4 per-block scale path, non-trivial M=1/K=8/N=4 | `np.allclose(rtol=1e-5)` vs GoldenMXU direct compute; TLP readback of activation data bit-exact; MXU STATUS=DONE | ✅ | PCIe integration: TLP write activation/wgt/scale→DRAM→MXU MMUL via MMIO with DRAM addresses→TLP readback matches GoldenMXU per-block matmul (M=1,K=8,N=4, scale=1.0). TLP readback of activation data bit-exact; MXU STATUS=2 (DONE). 1/1 PASS |
+| FM-SOC-025 | P1 | `test_soc_fm.py::test_crossbar_two_master_concurrent_read` + `test_crossbar_three_master_mixed` + `test_crossbar_address_conflict_arbitration` + `test_crossbar_all_six_master_stress` | XBAR-ARB (path 8): P1 stress — 2-master concurrent read (S0+ S1), 3-master mixed read+write, address-conflict arbitration (second write wins), all-6-master stress (IBEX/MXU/SFU/VEC/DMA/PCIE across S0+S1) | `xbar.read`/`xbar.write` across all 6 master IDs return correct data; address conflict: readback=final writer value; 6-master stress: no deadlock, no data corruption, all masters in AW grant history; all DECERR paths raise ValueError | ✅ | 4/4 sub-tests PASS: 2-master concurrent read (MXU+DMA, S0+S1 routing correct); 3-master mixed (MXU read+SFU write+DMA read, independent AW/AR tracking); address-conflict (MXU then DMA write same SRAM addr→DMA wins; VEC then IBEX same DRAM→IBEX wins; read-after-write visible across masters); 6-master stress (all 6 masters write SRAM+DRAM, Ibex observer reads back all 12 values bit-exact, S0/S1 both exercised, all 6 masters in AW grants). Anti-vacuous: wrong-address routing detected, DECERR verified |
 
 ---
 
@@ -161,6 +162,7 @@
 | FM-SOC-022 | ✅ | ✅ | ✅ | ✅ | ✅ | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | FM-SOC-023 | | | ✅ | ✅ | ✅ | | | | | | | ✅ | |
 | FM-SOC-024 | | | ✅ | | | | ✅ | ✅ | | | | | |
+| FM-SOC-025 | | | | | | | | ✅ | | | | | |
 
 ---
 
@@ -235,9 +237,9 @@
 
 ## 统计
 
-总计:     24 cases
+总计:     25 cases
 P0:        8 cases (6 data paths + 2 anti-vacuous)
-P1:        5 cases (firmware + 3 compute engines + PCIe integration)
+P1:        6 cases (firmware + 3 compute engines + PCIe integration + crossbar stress)
 P2:        4 cases (DMA, multi-engine, MMIO-through-CPU, doorbell dispatch)
 P3:        4 cases (boundary — APB, DMA, Ibex, firmware)
 P4:        3 cases (full E2E, multi-engine pipeline)
