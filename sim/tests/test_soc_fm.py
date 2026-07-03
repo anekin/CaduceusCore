@@ -1,5 +1,6 @@
 """SoC Func Model tests — PCIe TLP path and host_write compatibility."""
 
+import hashlib
 import struct
 
 import numpy as np
@@ -2265,3 +2266,361 @@ def test_boundary_fp16_denorm_flush():
     _mmio_sfu_wait_done(model)
     out_normal = _mmio_read_sram(model, 2, _MMIO_OUT_OFF)
     assert not np.allclose(out_normal, ref_gelu, atol=1e-6), "Anti-vacuous: normal input must differ from zero reference"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# P4 — 28-block full-layer chain (FM-SOC-032)
+# ══════════════════════════════════════════════════════════════════════
+
+_CHAIN_NUM_BLOCKS = 28
+_CHAIN_BLOCK_BASE = 0x8001_0000
+_CHAIN_BLOCK_STRIDE = 0x0004_0000
+_CHAIN_RESULT_BASE = 0x8080_0000
+_CHAIN_RESULT_STRIDE = 0x0001_0000
+
+
+def _chain_dram_write(model: FuncModel, addr: int, data: bytes):
+    """Write bytes directly to DRAM (bypasses PCIe model for speed)."""
+    off = addr - Addr.DRAM_BASE
+    model.dram[off:off + len(data)] = data
+
+
+def _chain_dram_read(model: FuncModel, addr: int, size: int) -> bytes:
+    """Read bytes directly from DRAM (bypasses PCIe model for speed)."""
+    off = addr - Addr.DRAM_BASE
+    return bytes(model.dram[off:off + size])
+
+
+def _chain_scale_int4_weights(weight_bytes: bytes, scale: float) -> bytes:
+    """Scale packed INT4 weights, round, clamp to [-8, 7], and repack."""
+    if scale == 1.0:
+        return weight_bytes
+    packed = np.frombuffer(weight_bytes, dtype=np.uint8).copy()
+    unpacked = GoldenMXU.unpack_int4(packed)
+    scaled = np.round(unpacked.astype(np.float32) * scale).astype(np.int32)
+    scaled = np.clip(scaled, -8, 7).astype(np.int8)
+    return bytes(GoldenMXU.pack_int4(scaled))
+
+
+def _chain_perturb_weights(weights: dict, ratio: float = 0.01) -> dict:
+    """Deterministically perturb ~ratio of packed bytes by toggling their LSB."""
+    perturbed = {}
+    for idx, w in weights.items():
+        bw = bytearray(w)
+        step = max(1, int(1.0 / ratio))
+        for i in range(0, len(bw), step):
+            bw[i] ^= 0x01
+        perturbed[idx] = bytes(bw)
+    return perturbed
+
+
+def _chain_vector_conv(model: FuncModel, src_addr: int, dst_addr: int, dim: int):
+    """Use Vector CONV (op=4) to convert INT32 -> FP16 through the MMIO bridge."""
+    bridge = model.bridge
+    bridge.handle("write", VECTOR.BASE + VECTOR.CTRL, 4)
+    bridge.handle("write", VECTOR.BASE + VECTOR.A_ADDR, src_addr)
+    bridge.handle("write", VECTOR.BASE + VECTOR.B_ADDR, src_addr)
+    bridge.handle("write", VECTOR.BASE + VECTOR.O_ADDR, dst_addr)
+    bridge.handle("write", VECTOR.BASE + VECTOR.DIM, dim & 0xFFFF)
+    bridge.handle("write", VECTOR.BASE + VECTOR.CMD, 1)
+    _blk0_assert_status(bridge, VECTOR.BASE, 2, f"conv {src_addr:08x}->{dst_addr:08x}")
+
+
+def _chain_build_cache(manifest: dict) -> dict:
+    """Pre-load all blk.0 baseline inputs/weights so the chain runs deterministically."""
+    cache = {"mmul_inputs": {}, "sfu_inputs": {}, "vector_inputs": {}}
+    for op in manifest["ops"]:
+        idx = op["idx"]
+        opcode = op["opcode"]
+        if opcode == "MMUL":
+            dims = op["dimensions"]
+            M_eff = min(dims.get("M", 1), 64)
+            K_eff = min(dims.get("K", 0), 64)
+            N_eff = min(dims.get("N", 0), 64)
+            input_fmt = manifest["files"][op["input_hex"]]["format"]
+            input_eb = _EB_BY_FMT[input_fmt]
+            input_full = _blk0_read_hex(op["input_hex"], input_eb)
+            need = M_eff * K_eff * input_eb
+            input_bytes = input_full[:need]
+            if len(input_bytes) < need:
+                input_bytes = input_bytes + b"\x00" * (need - len(input_bytes))
+            cache["mmul_inputs"][idx] = (input_bytes, M_eff, K_eff, N_eff, input_eb)
+        elif opcode in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
+            input_hex = op.get("input_hex")
+            if input_hex is None:
+                prefix = f"op{idx:02d}_"
+                candidates = [
+                    fname for fname, finfo in manifest["files"].items()
+                    if fname.startswith(prefix) and fname.endswith("_input.hex")
+                ]
+                if not candidates:
+                    raise ValueError(f"op{idx:02d} {opcode}: missing input_hex")
+                input_hex = candidates[0]
+            input_fmt = manifest["files"][input_hex]["format"]
+            input_eb = _EB_BY_FMT[input_fmt]
+            input_full = _blk0_read_hex(input_hex, input_eb)
+            if opcode == "ROPE":
+                elements = op["dimensions"].get("q_len", 0) + op["dimensions"].get("k_len", 0)
+                head_dim = op["dimensions"].get("head_dim", 128)
+            else:
+                elements = op["dimensions"].get("elements", 0)
+                head_dim = 0
+            need = elements * input_eb
+            if len(input_full) < need:
+                input_full = input_full + b"\x00" * (need - len(input_full))
+            cache["sfu_inputs"][idx] = (input_full, elements, head_dim)
+        elif opcode in ("VMUL", "VRESID"):
+            if opcode == "VMUL":
+                a_hex, b_hex = "op14_vmul_gate_input.hex", "op14_vmul_up_input.hex"
+            elif idx == 9:
+                a_hex, b_hex = "op09_vresid_pre_input.hex", "op09_vresid_pre_o_out.hex"
+            elif idx == 16:
+                a_hex, b_hex = "op16_vresid_post_input.hex", "op16_vresid_post_down.hex"
+            else:
+                raise ValueError(f"Unknown Vector op idx {idx}")
+            a_eb = _EB_BY_FMT[manifest["files"][a_hex]["format"]]
+            b_eb = _EB_BY_FMT[manifest["files"][b_hex]["format"]]
+            a_bytes = _blk0_read_hex(a_hex, a_eb)
+            b_bytes = _blk0_read_hex(b_hex, b_eb)
+            elements = op["dimensions"]["elements"]
+            need_a = elements * a_eb
+            need_b = elements * b_eb
+            if len(a_bytes) < need_a:
+                a_bytes = a_bytes + b"\x00" * (need_a - len(a_bytes))
+            if len(b_bytes) < need_b:
+                b_bytes = b_bytes + b"\x00" * (need_b - len(b_bytes))
+            cache["vector_inputs"][idx] = (a_bytes, b_bytes, elements, a_eb, b_eb)
+    return cache
+
+
+def _chain_run_block(
+    model: FuncModel,
+    block_idx: int,
+    block_base: int,
+    prev_out_i32_addr: int | None,
+    weights: dict,
+    manifest: dict,
+    cache: dict,
+) -> int:
+    """Run one scaled blk.0 block through FuncModel; return its FP16 result DRAM address."""
+    bridge = model.bridge
+    fp16_tol = dict(tol_abs=2e-3, tol_rel=1e-2)
+    output_buffer_rel = manifest["sram_layout"]["output_buffer"]
+
+    for op in manifest["ops"]:
+        idx = op["idx"]
+        opcode = op["opcode"]
+        name = op["name"]
+        label = f"blk{block_idx} op{idx:02d} {name}"
+        i_addr = block_base + int(op["sram_input_addr"], 16)
+        o_addr = block_base + int(op["sram_output_addr"], 16)
+
+        if opcode == "MMUL":
+            input_bytes, M_eff, K_eff, N_eff, _ = cache["mmul_inputs"][idx]
+            act = np.frombuffer(input_bytes, dtype=np.int8).reshape(M_eff, K_eff)
+            w_addr = block_base
+            weight_bytes = weights[idx]
+            _chain_dram_write(model, i_addr, input_bytes)
+            _chain_dram_write(model, w_addr, weight_bytes)
+            bridge.handle("write", MXU.BASE + MXU.CTRL, 0)
+            bridge.handle("write", MXU.BASE + MXU.I_ADDR, i_addr)
+            bridge.handle("write", MXU.BASE + MXU.W_ADDR, w_addr)
+            bridge.handle("write", MXU.BASE + MXU.O_ADDR, o_addr)
+            bridge.handle("write", MXU.BASE + MXU.SCALE_ADDR, 0)
+            dim0 = (M_eff & 0xFFFF) | ((K_eff & 0xFFFF) << 16)
+            bridge.handle("write", MXU.BASE + MXU.DIM0, dim0)
+            bridge.handle("write", MXU.BASE + MXU.DIM1, N_eff & 0xFFFF)
+            bridge.handle("write", MXU.BASE + MXU.CMD, 1)
+            _blk0_assert_status(bridge, MXU.BASE, 2, label)
+            out_bytes = _chain_dram_read(model, o_addr, M_eff * N_eff * 4)
+            out_arr = np.frombuffer(out_bytes, dtype=np.int32).reshape(M_eff, N_eff)
+            golden = GoldenMXU().matmul_int32(
+                act, np.frombuffer(weight_bytes, dtype=np.uint8), M_eff, K_eff, N_eff
+            )
+            assert np.allclose(out_arr, golden, rtol=1e-5), f"{label}: MMUL mismatch"
+
+        elif opcode in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
+            input_bytes, elements, head_dim = cache["sfu_inputs"][idx]
+            _chain_dram_write(model, i_addr, input_bytes)
+            sfu_op_map = {"SOFTMAX": 0, "RMSNORM": 6, "ROPE": 5, "SILU": 4}
+            op_id = sfu_op_map[opcode]
+            bridge.handle("write", SFU.BASE + SFU.CTRL, op_id)
+            bridge.handle("write", SFU.BASE + SFU.I_ADDR, i_addr)
+            bridge.handle("write", SFU.BASE + SFU.O_ADDR, o_addr)
+            bridge.handle("write", SFU.BASE + SFU.DIM, (head_dim << 16) | (elements & 0xFFFF))
+            if opcode == "ROPE":
+                bridge.handle("write", SFU.BASE + SFU.POS, op["dimensions"].get("position", 0))
+            bridge.handle("write", SFU.BASE + SFU.CMD, 1)
+            _blk0_assert_status(bridge, SFU.BASE, 2, label)
+            out_bytes = _chain_dram_read(model, o_addr, elements * 2)
+            out_arr = np.frombuffer(out_bytes, dtype=np.float16).astype(np.float32)
+            sfu = GoldenSFU()
+            inp = np.frombuffer(input_bytes, dtype=np.float16).astype(np.float32)
+            if opcode == "SOFTMAX":
+                golden = sfu.softmax_hw(inp)
+            elif opcode == "RMSNORM":
+                golden = sfu.rmsnorm_hw(inp)
+            elif opcode == "SILU":
+                golden = sfu.silu_hw(inp)
+            else:
+                hd = head_dim if head_dim else max(elements // 4, 2)
+                k_len = 2 * hd
+                q_len = elements - k_len
+                if q_len <= 0:
+                    q_len = elements // 2
+                    k_len = elements - q_len
+                q_in = inp[:q_len]
+                k_in = inp[q_len:elements]
+                nq = max(1, q_len // hd) if hd else 1
+                q_out, k_out = sfu.rope_hw(
+                    q_in, k_in, position=op["dimensions"].get("position", 0),
+                    num_heads=nq, head_dim=hd,
+                )
+                golden = np.zeros(elements, dtype=np.float32)
+                golden[:q_len] = q_out
+                golden[q_len:elements] = k_out
+            cmp = GoldenSFU.compare_hw_vs_ref(out_arr, golden, **fp16_tol)
+            assert cmp["within_tolerance"], (
+                f"{label}: SFU mismatch max_abs={cmp['max_abs_err']:.2e} "
+                f"max_rel={cmp['max_rel_err']:.2e}"
+            )
+
+        elif opcode in ("VMUL", "VRESID"):
+            vec_op_map = {"VMUL": 1, "VRESID": 5}
+            op_id = vec_op_map[opcode]
+            elements = op["dimensions"]["elements"]
+            b_addr = block_base + output_buffer_rel
+
+            if opcode == "VRESID" and idx == 16 and block_idx > 0:
+                _chain_vector_conv(model, prev_out_i32_addr, i_addr, elements)
+                a_bytes = _chain_dram_read(model, i_addr, elements * 2)
+                b_bytes = _chain_dram_read(model, b_addr, elements * 4)
+            else:
+                a_bytes, b_bytes, _, _, _ = cache["vector_inputs"][idx]
+
+            _chain_dram_write(model, i_addr, a_bytes)
+            _chain_dram_write(model, b_addr, b_bytes)
+            bridge.handle("write", VECTOR.BASE + VECTOR.CTRL, op_id)
+            bridge.handle("write", VECTOR.BASE + VECTOR.A_ADDR, i_addr)
+            bridge.handle("write", VECTOR.BASE + VECTOR.B_ADDR, b_addr)
+            bridge.handle("write", VECTOR.BASE + VECTOR.O_ADDR, o_addr)
+            bridge.handle("write", VECTOR.BASE + VECTOR.DIM, elements & 0xFFFF)
+            bridge.handle("write", VECTOR.BASE + VECTOR.CMD, 1)
+            _blk0_assert_status(bridge, VECTOR.BASE, 2, label)
+            out_bytes = _chain_dram_read(model, o_addr, elements * 4)
+            out_arr = np.frombuffer(out_bytes, dtype=np.int32)
+            vec = GoldenVector()
+            if opcode == "VMUL":
+                a = np.frombuffer(a_bytes, dtype=np.int32)
+                b = np.frombuffer(b_bytes, dtype=np.int32)
+                golden = vec.mul(a, b)
+            else:
+                a = np.frombuffer(a_bytes, dtype=np.float16).astype(np.float32)
+                b = np.frombuffer(b_bytes, dtype=np.int32)
+                golden = vec.residual_add(a, b)
+            assert np.array_equal(out_arr, golden), (
+                f"{label}: Vector mismatch at indices {np.where(out_arr != golden)[0]}"
+            )
+        else:
+            raise ValueError(f"{label}: unsupported opcode {opcode}")
+
+    result_addr = _CHAIN_RESULT_BASE + block_idx * _CHAIN_RESULT_STRIDE
+    final_out_addr = block_base + output_buffer_rel
+    _chain_vector_conv(model, final_out_addr, result_addr, 2560)
+    return result_addr
+
+
+def test_28block_chain():
+    """Chain 28 scaled blk.0 blocks through FuncModel and verify per-block isolation.
+
+    - Each block uses a distinct INT4 weight set derived from blk.0 baseline weights
+      scaled by 0.90 + i*0.01.
+    - Blocks are placed at non-overlapping DRAM regions; SRAM scratch offsets are
+      relative to each block's DRAM base so there is no cross-block memory overlap.
+    - Per-block FP16 output fingerprints are recorded.
+    - Anti-vacuous gate: perturbing only block-14 weights by 1% leaves blocks 0-13
+      bit-identical and changes blocks 14-27.
+    """
+    import json
+
+    manifest_path = os.path.join(_BLK0_VECTOR_DIR, "blk0_manifest.json")
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+
+    cache = _chain_build_cache(manifest)
+
+    baseline_weights = {}
+    for op in manifest["ops"]:
+        if op["opcode"] != "MMUL":
+            continue
+        idx = op["idx"]
+        dims = op["dimensions"]
+        K_eff = min(dims.get("K", 0), 64)
+        N_eff = min(dims.get("N", 0), 64)
+        weight_size = (K_eff * N_eff + 1) // 2
+        weight_full = _blk0_read_hex(op["weight_hex"], 1)
+        weight_bytes = weight_full[:weight_size]
+        if len(weight_bytes) < weight_size:
+            weight_bytes = weight_bytes + b"\x00" * (weight_size - len(weight_bytes))
+        baseline_weights[idx] = weight_bytes
+
+    scales = [0.90 + i * 0.01 for i in range(_CHAIN_NUM_BLOCKS)]
+    block_weights = []
+    for scale in scales:
+        block_weights.append({idx: _chain_scale_int4_weights(w, scale) for idx, w in baseline_weights.items()})
+
+    def _run(weights_list):
+        model = FuncModel(dram_mb=256)
+        hashes = []
+        prev_out_i32_addr = None
+        for b in range(_CHAIN_NUM_BLOCKS):
+            block_base = _CHAIN_BLOCK_BASE + b * _CHAIN_BLOCK_STRIDE
+            result_base = _CHAIN_RESULT_BASE + b * _CHAIN_RESULT_STRIDE
+
+            _chain_dram_write(
+                model, block_base + _CHAIN_BLOCK_STRIDE - 4,
+                struct.pack("<I", 0xDEAD0000 + b),
+            )
+            _chain_dram_write(
+                model, result_base + _CHAIN_RESULT_STRIDE - 4,
+                struct.pack("<I", 0xBEEF0000 + b),
+            )
+
+            result_addr = _chain_run_block(
+                model, b, block_base, prev_out_i32_addr,
+                weights_list[b], manifest, cache,
+            )
+
+            fp16_bytes = _chain_dram_read(model, result_addr, 2560 * 2)
+            assert len(fp16_bytes) == 2560 * 2, (
+                f"block {b}: expected 5120 FP16 bytes, got {len(fp16_bytes)}"
+            )
+            hashes.append(hashlib.md5(fp16_bytes).hexdigest())
+            prev_out_i32_addr = block_base + manifest["sram_layout"]["output_buffer"]
+
+        for b in range(_CHAIN_NUM_BLOCKS):
+            block_base = _CHAIN_BLOCK_BASE + b * _CHAIN_BLOCK_STRIDE
+            result_base = _CHAIN_RESULT_BASE + b * _CHAIN_RESULT_STRIDE
+            g1 = struct.unpack("<I", _chain_dram_read(model, block_base + _CHAIN_BLOCK_STRIDE - 4, 4))[0]
+            g2 = struct.unpack("<I", _chain_dram_read(model, result_base + _CHAIN_RESULT_STRIDE - 4, 4))[0]
+            assert g1 == 0xDEAD0000 + b, f"block {b} guard corrupted: {g1:08x}"
+            assert g2 == 0xBEEF0000 + b, f"result {b} guard corrupted: {g2:08x}"
+
+        return model, hashes
+
+    _, baseline_hashes = _run(block_weights)
+
+    perturbed_weights = [dict(w) for w in block_weights]
+    perturbed_weights[14] = _chain_perturb_weights(block_weights[14], ratio=0.01)
+    _, perturbed_hashes = _run(perturbed_weights)
+
+    for b in range(14):
+        assert baseline_hashes[b] == perturbed_hashes[b], (
+            f"Anti-vacuous fail: block {b} changed after perturbing block-14 weights"
+        )
+    for b in range(14, _CHAIN_NUM_BLOCKS):
+        assert baseline_hashes[b] != perturbed_hashes[b], (
+            f"Anti-vacuous fail: block {b} did not change after perturbing block-14 weights"
+        )
+
+    assert len(set(baseline_hashes)) > 1, "All block fingerprints are identical"
