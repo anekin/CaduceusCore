@@ -2064,3 +2064,69 @@ def test_boundary_max_odd_shapes():
     assert np.array_equal(vec_out, GoldenVector().add(a, b)), "Odd Vector ADD mismatch"
 
 
+
+def test_boundary_all_zero_vectors():
+    """All-zero weight/activation vectors produce deterministic zero output.
+
+    MXU with zero activations or weights → zero output.
+    Vector add/mul with zero operands → zero.
+    SFU softmax on all-zero input → uniform distribution summing to 1.
+    """
+    model = FuncModel()
+    bridge = model.bridge
+    M, K, N = 1, 8, 4
+
+    # MXU: zero activations
+    act_zero = np.zeros((M, K), dtype=np.int8)
+    wgt = np.array([1, 2, 3, 4, 5, 6, 7, 8] * ((K * N + 15) // 8), dtype=np.int8)[:K * N]
+    wgt_packed = GoldenMXU.pack_int4(wgt)
+    act_off = 0x50000
+    wgt_off = 0x51000
+    out_off = 0x52000
+    model.sram[act_off:act_off + act_zero.nbytes] = act_zero.tobytes()
+    model.sram[wgt_off:wgt_off + len(wgt_packed)] = wgt_packed.tobytes()
+    bridge.handle('write', MXU.BASE + MXU.CTRL, 0)
+    bridge.handle('write', MXU.BASE + MXU.DIM0, (K << 16) | M)
+    bridge.handle('write', MXU.BASE + MXU.DIM1, N)
+    bridge.handle('write', MXU.BASE + MXU.I_ADDR, act_off)
+    bridge.handle('write', MXU.BASE + MXU.W_ADDR, wgt_off)
+    bridge.handle('write', MXU.BASE + MXU.O_ADDR, out_off)
+    bridge.handle('write', MXU.BASE + MXU.SCALE_ADDR, 0)
+    bridge.handle('write', MXU.BASE + MXU.CMD, 1)
+    assert bridge.handle('read', MXU.BASE + MXU.STATUS) == 2
+    mxu_out = np.frombuffer(bytes(model.sram[out_off:out_off + M * N * 4]), dtype=np.int32).reshape(M, N)
+    assert np.array_equal(mxu_out, np.zeros((M, N), dtype=np.int32)), "MXU zero activation output must be zero"
+
+    # MXU: zero weights
+    act = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int8).reshape(M, K)
+    wgt_zero_packed = GoldenMXU.pack_int4(np.zeros(K * N, dtype=np.int8))
+    model.sram[act_off:act_off + act.nbytes] = act.tobytes()
+    model.sram[wgt_off:wgt_off + len(wgt_zero_packed)] = wgt_zero_packed.tobytes()
+    bridge.handle('write', MXU.BASE + MXU.CMD, 1)
+    mxu_out2 = np.frombuffer(bytes(model.sram[out_off:out_off + M * N * 4]), dtype=np.int32).reshape(M, N)
+    assert np.array_equal(mxu_out2, np.zeros((M, N), dtype=np.int32)), "MXU zero weight output must be zero"
+
+    # Vector: zero operands
+    dim = 16
+    _vec_write_i32(model, np.zeros(dim, dtype=np.int32), _VEC_A_OFF)
+    _vec_write_i32(model, np.zeros(dim, dtype=np.int32), _VEC_B_OFF)
+    _vec_mmio_op(model, op=0, dim=dim)
+    _vec_mmio_wait(model)
+    vec_add_out = _vec_read_i32(model, dim, _VEC_O_OFF)
+    assert np.array_equal(vec_add_out, np.zeros(dim, dtype=np.int32)), "Vector ADD zero operands must be zero"
+
+    _vec_mmio_op(model, op=1, dim=dim)
+    _vec_mmio_wait(model)
+    vec_mul_out = _vec_read_i32(model, dim, _VEC_O_OFF)
+    assert np.array_equal(vec_mul_out, np.zeros(dim, dtype=np.int32)), "Vector MUL zero operands must be zero"
+
+    # SFU softmax on all-zero input
+    sfu_len = 16
+    _mmio_write_sram(model, np.zeros(sfu_len, dtype=np.float32), _MMIO_SRAM_OFF)
+    _mmio_sfu_op(model, op=0, length=sfu_len)
+    _mmio_sfu_wait_done(model)
+    softmax_zero = _mmio_read_sram(model, sfu_len, _MMIO_OUT_OFF)
+    assert float(np.sum(softmax_zero)) == pytest.approx(1.0, rel=1e-3), "Softmax on zero input must sum to 1"
+    assert np.allclose(softmax_zero, 1.0 / sfu_len, atol=1e-6), "Softmax on zero input must be uniform"
+
+
