@@ -591,6 +591,95 @@ run_e2e_crossbar_stress: $(SOC_SIMV_COCOTB)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Func Model SoC Case Targets (Todo 3: RTL SoC e2e test execution)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Usage:
+#   make run_fm_soc_case CASE_ID=FM-SOC-001
+#   make run_fm_soc_case CASE_ID=FM-SOC-001 EXTRA_DEFINES="+define+USE_RTL_PCIE"
+#
+# For full RTL mode (default, no defines needed), reuses the existing
+# soc_cocotb simv. For mixed-mode, compiles tb_mixed.v with defines.
+#
+# The CASE_ID variable selects which cocotb test to run inside rtl_soc_runner.
+# EXTRA_DEFINES is optional and passed to VCS compilation for mixed-mode.
+
+FM_SOC_CASE_ID     ?= FM-SOC-001
+FM_SOC_EXTRA_DEFINES ?=
+MIXED_TOP           = tb_mixed
+MIXED_SIMV_COCOTB   = simv_mixed_cocotb
+
+$(MIXED_SIMV_COCOTB): $(PLI_TAB)
+	@echo "$(YELLOW)[MIXED_COMPILE] Compiling tb_mixed.v + cocotb VPI$(NC)"
+	@echo "$(YELLOW)[MIXED_COMPILE] Defines: $(FM_SOC_EXTRA_DEFINES)$(NC)"
+	cd $(REPO_ROOT) && $(VCS) $(VCS_COMMON) \
+		+define+COCOTB_SIM=1 +vpi -P $(PLI_TAB) \
+		-load $(COCOTB_VPI_LIB) \
+		$(FM_SOC_EXTRA_DEFINES) \
+		-f rtl/cpu/ibex.flist \
+		-f rtl/ip/verilog-axi.flist \
+		-f rtl/ip/verilog-pcie.flist \
+		-f rtl/soc/soc.flist \
+		-top $(MIXED_TOP) \
+		rtl/tb/tb_mixed.v \
+		-o sim/regression/$(MIXED_SIMV_COCOTB) \
+		-l sim/regression/mixed_elab.log
+	@echo "$(GREEN)[MIXED_COMPILE] Compilation finished$(NC)"
+
+.PHONY: run_fm_soc_case
+run_fm_soc_case:
+ifneq ($(strip $(FM_SOC_EXTRA_DEFINES)),)
+	@# Mixed-mode: recompile with tb_mixed.v and defines
+	@$(MAKE) $(MIXED_SIMV_COCOTB)
+	@echo "$(YELLOW)[FM_SOC_CASE] Running $(FM_SOC_CASE_ID) with mixed-mode defines...$(NC)"
+	cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=rtl_soc_runner TESTCASE=test_soc_rtl_runner_smoke \
+		FM_SOC_CASE_ID=$(FM_SOC_CASE_ID) \
+		TOPLEVEL=$(MIXED_TOP) TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/fm_soc_$(FM_SOC_CASE_ID)_results.xml \
+		./CaduceusCore/sim/regression/$(MIXED_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
+		$(FM_SOC_EXTRA_DEFINES) \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/fm_soc_$(FM_SOC_CASE_ID).log
+else
+	@# Full RTL mode: reuse existing soc_cocotb simv
+	@$(MAKE) $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[FM_SOC_CASE] Running $(FM_SOC_CASE_ID) with full RTL...$(NC)"
+	cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=rtl_soc_runner TESTCASE=test_soc_rtl_runner_smoke \
+		FM_SOC_CASE_ID=$(FM_SOC_CASE_ID) \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/fm_soc_$(FM_SOC_CASE_ID)_results.xml \
+		./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/fm_soc_$(FM_SOC_CASE_ID).log
+endif
+	@grep -q "FM-SOC.*PASS\|test_soc_rtl_runner.*PASS" $(REPO_ROOT)/sim/regression/fm_soc_$(FM_SOC_CASE_ID).log && \
+		echo "$(GREEN)FM_SOC_$(FM_SOC_CASE_ID): PASS$(NC)" || \
+		(echo "$(RED)FM_SOC_$(FM_SOC_CASE_ID): FAIL$(NC)" && exit 1)
+
+.PHONY: run_fm_soc_001 run_fm_soc_002 run_fm_soc_003 run_fm_soc_004 \
+        run_fm_soc_005 run_fm_soc_006 run_fm_soc_007 run_fm_soc_008
+run_fm_soc_001:
+	@$(MAKE) run_fm_soc_case CASE_ID=FM-SOC-001
+run_fm_soc_002:
+	@$(MAKE) run_fm_soc_case CASE_ID=FM-SOC-002
+run_fm_soc_003:
+	@$(MAKE) run_fm_soc_case CASE_ID=FM-SOC-003
+run_fm_soc_004:
+	@$(MAKE) run_fm_soc_case CASE_ID=FM-SOC-004
+run_fm_soc_005:
+	@$(MAKE) run_fm_soc_case CASE_ID=FM-SOC-005
+run_fm_soc_006:
+	@$(MAKE) run_fm_soc_case CASE_ID=FM-SOC-006
+run_fm_soc_007:
+	@$(MAKE) run_fm_soc_case CASE_ID=FM-SOC-007
+run_fm_soc_008:
+	@$(MAKE) run_fm_soc_case CASE_ID=FM-SOC-008
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Clean Targets
 # ═══════════════════════════════════════════════════════════════════════════
 # Clean Targets
@@ -606,6 +695,8 @@ clean:
 	@rm -f qwen_e2e_results.xml qwen_blk0_results.xml
 	@rm -f qwen_e2e_*.log qwen_e2e_*_results.xml
 	@rm -rf simv_*.daidir
+	@rm -f mixed_elab.log fm_soc_*.log fm_soc_*_results.xml
+	@rm -rf simv_mixed_cocotb.daidir
 	@echo "Regression artifacts cleaned"
 
 .PHONY: distclean
@@ -636,6 +727,9 @@ help:
 	@echo "  run_e2e_dma_load    — Cocotb E2E-10 DMA load->compute->store"
 	@echo "  run_e2e_dma_concurrent — Cocotb E2E-11 DMA+MXU concurrent"
 	@echo "  run_e2e_crossbar_stress — Cocotb E2E-12 6-master crossbar stress"
+	@echo "  run_fm_soc_case CASE_ID=<id> — Run one FM-SOC-NNN case (default: FM-SOC-001)"
+	@echo "  run_fm_soc_001 ... run_fm_soc_008 — P0 cases FM-SOC-001 through FM-SOC-008"
+	@echo "    EXTRA_DEFINES=+define+USE_RTL_PCIE   — optional mixed-mode defines"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  clean               — Remove simulation artifacts"
