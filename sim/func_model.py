@@ -13,6 +13,7 @@ from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector, GoldenDMA
 from sim.mmio_bridge import MMIOBridge
 from sim.miniv import RISCVMini, NPUFirmware
 from sim.axi_tracer import AXITracer
+from sim.models.pcie import PCIeModel
 
 
 class FuncModel:
@@ -22,6 +23,8 @@ class FuncModel:
         # Memories
         self.dram = bytearray(dram_mb * 1024 * 1024)
         self.sram = bytearray(sram_kb * 1024)
+
+        self.pcie = PCIeModel(sram=self.sram, dram=self.dram)
 
         # Compute modules
         self.mxu = GoldenMXU()
@@ -44,16 +47,21 @@ class FuncModel:
         }, bridge=self.bridge)
 
     def _dram_write(self, addr: int, data: bytes):
-        """Write to DRAM with address translation."""
+        """Direct write to DRAM with address translation."""
         off = addr - Addr.DRAM_BASE
         self.dram[off:off + len(data)] = data
+
+    def _dram_read(self, addr: int, size: int) -> bytes:
+        """Direct read from DRAM with address translation."""
+        off = addr - Addr.DRAM_BASE
+        return bytes(self.dram[off:off + size])
 
     def host_write_command(self, opcode: int, desc_addr: int, flags: int = 0):
         """Host CPU writes a command to the Ring Buffer (via PCIe → DRAM)."""
         head = self.firmware.doorbell['npu_head']
         addr = self.firmware.ring_buffer_addr + head * 32
         buf = struct.pack('<IQI8x', opcode, desc_addr, flags)  # 4+8+4+8pad=24
-        self._dram_write(addr, buf)
+        self.pcie.tlp_write(addr, buf)
         self.firmware.doorbell['host_tail'] = (head + 1) % self.firmware.ring_size
 
     def host_write_descriptor(self, desc_addr: int, **kwargs):
@@ -86,11 +94,11 @@ class FuncModel:
         ]
         # Pack: 15 uint32 values (M, K, N are split for alignment)
         buf = struct.pack('<15I', *fields)
-        self._dram_write(desc_addr, buf)
+        self.pcie.tlp_write(desc_addr, buf)
 
     def host_write_data(self, addr: int, data: np.ndarray):
         """Host writes tensor data to DRAM at addr."""
-        self._dram_write(addr, data.tobytes())
+        self.pcie.tlp_write(addr, data.tobytes())
 
     def run(self) -> list:
         """Run firmware dispatch loop, return results."""
