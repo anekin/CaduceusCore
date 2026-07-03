@@ -2197,3 +2197,71 @@ def test_boundary_int32_overflow_saturation():
     assert mul_out_min == INT32_MIN, f"mul underflow: got {mul_out_min}, expected INT32_MIN"
 
 
+
+def test_boundary_fp16_denorm_flush():
+    """SFU ops treat FP16 subnormal inputs as zero (flush-to-zero).
+
+    For each SFU op, verify that subnormal inputs produce the same output as
+    zero inputs (within FP16 tolerance) and that no NaN/Inf appears.
+    """
+    model = FuncModel()
+    sfu = GoldenSFU()
+    fp16_tol = dict(tol_abs=2e-3, tol_rel=1e-2)
+
+    # Build subnormal FP16 values: smallest positive subnormal and negative.
+    tiny = np.finfo(np.float16).tiny
+    denorm_pos = float(np.nextafter(np.float16(0), np.float16(1)))
+    denorm_neg = float(np.nextafter(np.float16(0), np.float16(-1)))
+    assert 0 < denorm_pos < tiny, "denorm_pos must be subnormal"
+    assert -tiny < denorm_neg < 0, "denorm_neg must be subnormal"
+
+    # ── Softmax: all-denorm input flushes to all-zero → uniform output ──
+    N = 16
+    denorm_in = np.full(N, denorm_pos, dtype=np.float32)
+    _mmio_write_sram(model, denorm_in, _MMIO_SRAM_OFF)
+    _mmio_sfu_op(model, op=0, length=N)
+    _mmio_sfu_wait_done(model)
+    out_denorm = _mmio_read_sram(model, N, _MMIO_OUT_OFF)
+    out_zero = sfu.softmax_hw(np.zeros(N, dtype=np.float32))
+    cmp_sm = GoldenSFU.compare_hw_vs_ref(out_denorm, out_zero, **fp16_tol)
+    assert cmp_sm["within_tolerance"], f"Softmax denorm flush mismatch: max_abs={cmp_sm['max_abs_err']:.2e}"
+    assert not np.any(np.isnan(out_denorm)) and not np.any(np.isinf(out_denorm)), "Softmax denorm output has NaN/Inf"
+
+    # ── GELU: denorm input flushes to zero → gelu(0) = 0 ──
+    x = np.array([denorm_pos, denorm_neg], dtype=np.float32)
+    _mmio_write_sram(model, x, _MMIO_SRAM_OFF)
+    _mmio_sfu_op(model, op=2, length=2)
+    _mmio_sfu_wait_done(model)
+    out_gelu = _mmio_read_sram(model, 2, _MMIO_OUT_OFF)
+    ref_gelu = sfu.gelu_hw(np.zeros(2, dtype=np.float32))
+    cmp_gelu = GoldenSFU.compare_hw_vs_ref(out_gelu, ref_gelu, **fp16_tol)
+    assert cmp_gelu["within_tolerance"], f"GELU denorm flush mismatch: max_abs={cmp_gelu['max_abs_err']:.2e}"
+    assert not np.any(np.isnan(out_gelu)) and not np.any(np.isinf(out_gelu)), "GELU denorm output has NaN/Inf"
+
+    # ── SiLU: denorm input flushes to zero → silu(0) = 0 ──
+    _mmio_write_sram(model, x, _MMIO_SRAM_OFF)
+    _mmio_sfu_op(model, op=4, length=2)
+    _mmio_sfu_wait_done(model)
+    out_silu = _mmio_read_sram(model, 2, _MMIO_OUT_OFF)
+    ref_silu = sfu.silu_hw(np.zeros(2, dtype=np.float32))
+    cmp_silu = GoldenSFU.compare_hw_vs_ref(out_silu, ref_silu, **fp16_tol)
+    assert cmp_silu["within_tolerance"], f"SiLU denorm flush mismatch: max_abs={cmp_silu['max_abs_err']:.2e}"
+    assert not np.any(np.isnan(out_silu)) and not np.any(np.isinf(out_silu)), "SiLU denorm output has NaN/Inf"
+
+    # ── RMSNorm: all-denorm input flushes to zero → rmsnorm(0) = 0 ──
+    _mmio_write_sram(model, denorm_in, _MMIO_SRAM_OFF)
+    _mmio_sfu_op(model, op=6, length=N)
+    _mmio_sfu_wait_done(model)
+    out_rms = _mmio_read_sram(model, N, _MMIO_OUT_OFF)
+    ref_rms = sfu.rmsnorm_hw(np.zeros(N, dtype=np.float32))
+    cmp_rms = GoldenSFU.compare_hw_vs_ref(out_rms, ref_rms, **fp16_tol)
+    assert cmp_rms["within_tolerance"], f"RMSNorm denorm flush mismatch: max_abs={cmp_rms['max_abs_err']:.2e}"
+    assert not np.any(np.isnan(out_rms)) and not np.any(np.isinf(out_rms)), "RMSNorm denorm output has NaN/Inf"
+
+    # ── Anti-vacuous: a normal input must differ from zero reference ──
+    normal_in = np.array([1.0, -1.0], dtype=np.float32)
+    _mmio_write_sram(model, normal_in, _MMIO_SRAM_OFF)
+    _mmio_sfu_op(model, op=2, length=2)
+    _mmio_sfu_wait_done(model)
+    out_normal = _mmio_read_sram(model, 2, _MMIO_OUT_OFF)
+    assert not np.allclose(out_normal, ref_gelu, atol=1e-6), "Anti-vacuous: normal input must differ from zero reference"

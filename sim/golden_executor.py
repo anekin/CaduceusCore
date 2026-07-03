@@ -302,6 +302,14 @@ class GoldenSFU:
         self._build_gelu_lut()
         self._build_cordic_table()
 
+    @staticmethod
+    def _flush_f16_subnormals(x: np.ndarray) -> np.ndarray:
+        """Flush FP16 subnormal values to zero (matches hardware SFU input path)."""
+        tiny = np.finfo(np.float16).tiny
+        x = np.asarray(x, dtype=np.float32)
+        x[np.abs(x) < tiny] = 0.0
+        return x
+
     # ── Softmax LUT ─────────────────────────────────────────────────
 
     def _build_exp_lut(self, entries: int = 4096, x_min: float = -20.0):
@@ -358,7 +366,7 @@ class GoldenSFU:
         Matches 8-stage pipeline: max_reduce → sub → LUT exp → sum_reduce → div.
         Uses BF16-equivalent precision throughout.
         """
-        x = np.asarray(x, dtype=np.float32)
+        x = self._flush_f16_subnormals(x)
         x_max = np.max(x)
         x_sub = x - x_max  # ≤ 0, in LUT range
 
@@ -398,7 +406,7 @@ class GoldenSFU:
 
     def gelu_hw(self, x: np.ndarray) -> np.ndarray:
         """Hardware-equivalent GELU: 64-entry LUT with linear interpolation."""
-        x = np.asarray(x, dtype=np.float32)
+        x = self._flush_f16_subnormals(x)
         result = np.zeros_like(x, dtype=np.float32)
 
         # Clamp to LUT range
@@ -442,7 +450,7 @@ class GoldenSFU:
 
     def silu_hw(self, x: np.ndarray) -> np.ndarray:
         """Hardware-equivalent SiLU: using sigmoid LUT (reuses exp LUT)."""
-        x = np.asarray(x, dtype=np.float32)
+        x = self._flush_f16_subnormals(x)
         # sigmoid(x) = 1 / (1 + exp(-x))
         # For x >= 0: exp(-x) is in [0, 1]
         # For x < 0: exp(-x) > 1, sigmoid ≈ exp(x) / (1 + exp(x))
@@ -465,7 +473,7 @@ class GoldenSFU:
         - Variance: sum((x-mean)^2)/N
         - Output: (x - mean) / sqrt(var + eps)
         """
-        x = np.asarray(x, dtype=np.float32)
+        x = GoldenSFU._flush_f16_subnormals(x)
         N = x.shape[-1]
         mean = np.mean(x, axis=-1, keepdims=True)
         var = np.var(x, axis=-1, keepdims=True)
@@ -496,7 +504,7 @@ class GoldenSFU:
         precision — unlike Softmax/LayerNorm which use fixed-point LUTs.
         Reference uses float64 for verification.
         """
-        x = np.asarray(x, dtype=np.float32)
+        x = GoldenSFU._flush_f16_subnormals(x)
         if x.ndim == 1:
             mean_xsq = np.mean(x ** 2)
         else:
@@ -573,8 +581,8 @@ class GoldenSFU:
 
         Hardware uses 12-stage CORDIC, producing precision equivalent to ~11-bit angle.
         """
-        x_q = np.asarray(x_q, dtype=np.float32)
-        x_k = np.asarray(x_k, dtype=np.float32)
+        x_q = self._flush_f16_subnormals(x_q)
+        x_k = self._flush_f16_subnormals(x_k)
 
         # Frequency bands (RoPE uses pairs of dimensions)
         freqs = 1.0 / (theta ** (np.arange(0, head_dim, 2, dtype=np.float64) / head_dim))
