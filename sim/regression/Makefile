@@ -636,6 +636,7 @@ ifneq ($(strip $(FM_SOC_EXTRA_DEFINES)),)
 		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
 		PYTHONPATH=$(REPO_ROOT)/sim MODULE=rtl_soc_runner TESTCASE=test_soc_rtl_runner_smoke \
 		FM_SOC_CASE_ID=$(FM_SOC_CASE_ID) \
+		FM_SOC_RTL_MODULE=$(FM_SOC_RTL_MODULE) \
 		TOPLEVEL=$(MIXED_TOP) TOPLEVEL_LANG=verilog \
 		PYTHONIOENCODING=utf-8 \
 		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/fm_soc_$(FM_SOC_CASE_ID)_results.xml \

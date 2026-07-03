@@ -42,14 +42,14 @@
 `default_nettype none
 
 //=============================================================================
-// Reduced PCIe-only mixed-mode DUT
+// Reduced mixed-mode DUT
 //=============================================================================
-// Instantiated inside tb_mixed when +define+USE_RTL_PCIE is present.
-// Contains only the PCIe EP wrapper in RTL plus the minimal infrastructure
-// (crossbar, SRAM, DRAM, APB decoder, INTC, doorbell) and behavioral stubs
-// for the engine APB slaves (MXU/SFU/Vector/DMA).  A minimal APB master stub
-// named u_ibex_wrapper preserves the hierarchical signal paths used by
-// CocotbBridge's _apb_write/_apb_read helpers.
+// Instantiated inside tb_mixed when any USE_RTL_* mixed-mode define is present.
+// Conditionally instantiates the requested RTL sub-modules (PCIe/DMA/MXU/SFU/
+// Vector) while keeping the remaining engine APB slaves as behavioral stubs.
+// The minimal infrastructure (crossbar, SRAM, DRAM, APB decoder, INTC,
+// doorbell) and an APB master stub named u_ibex_wrapper are always present so
+// CocotbBridge's _apb_write/_apb_read helpers keep working.
 //=============================================================================
 `ifdef USE_RTL_PCIE
 module caduceus_pcie_mixed_dut #(
@@ -198,6 +198,54 @@ module caduceus_pcie_mixed_dut #(
     wire         pcie_rready;
 
     //=========================================================================
+    // Engine / DMA AXI4 master wires (declared unconditionally; used when the
+    // corresponding USE_RTL_* define is present)
+    //=========================================================================
+    wire [7:0]   mxu_awid_8;    wire [31:0] mxu_awaddr;   wire [7:0]  mxu_awlen;
+    wire [2:0]   mxu_awsize;    wire [1:0]  mxu_awburst;  wire        mxu_awvalid;
+    wire         mxu_awready;   wire [511:0]mxu_wdata;    wire [63:0] mxu_wstrb;
+    wire         mxu_wlast;     wire        mxu_wvalid;   wire        mxu_wready;
+    wire [7:0]   mxu_bid_8;     wire [1:0]  mxu_bresp;    wire        mxu_bvalid;
+    wire         mxu_bready;    wire [7:0]  mxu_arid_8;   wire [31:0] mxu_araddr;
+    wire [7:0]   mxu_arlen;     wire [2:0]  mxu_arsize;   wire [1:0]  mxu_arburst;
+    wire         mxu_arvalid;   wire        mxu_arready;  wire [7:0]  mxu_rid_8;
+    wire [511:0] mxu_rdata;     wire [1:0]  mxu_rresp;    wire        mxu_rlast;
+    wire         mxu_rvalid;    wire        mxu_rready;
+
+    wire [7:0]   sfu_awid_8;    wire [31:0] sfu_awaddr;   wire [7:0]  sfu_awlen;
+    wire [2:0]   sfu_awsize;    wire [1:0]  sfu_awburst;  wire        sfu_awvalid;
+    wire         sfu_awready;   wire [511:0]sfu_wdata;    wire [63:0] sfu_wstrb;
+    wire         sfu_wlast;     wire        sfu_wvalid;   wire        sfu_wready;
+    wire [7:0]   sfu_bid_8;     wire [1:0]  sfu_bresp;    wire        sfu_bvalid;
+    wire         sfu_bready;    wire [7:0]  sfu_arid_8;   wire [31:0] sfu_araddr;
+    wire [7:0]   sfu_arlen;     wire [2:0]  sfu_arsize;   wire [1:0]  sfu_arburst;
+    wire         sfu_arvalid;   wire        sfu_arready;  wire [7:0]  sfu_rid_8;
+    wire [511:0] sfu_rdata;     wire [1:0]  sfu_rresp;    wire        sfu_rlast;
+    wire         sfu_rvalid;    wire        sfu_rready;
+
+    wire [7:0]   vec_awid_8;    wire [31:0] vec_awaddr;   wire [7:0]  vec_awlen;
+    wire [2:0]   vec_awsize;    wire [1:0]  vec_awburst;  wire        vec_awvalid;
+    wire         vec_awready;   wire [511:0]vec_wdata;    wire [63:0] vec_wstrb;
+    wire         vec_wlast;     wire        vec_wvalid;   wire        vec_wready;
+    wire [7:0]   vec_bid_8;     wire [1:0]  vec_bresp;    wire        vec_bvalid;
+    wire         vec_bready;    wire [7:0]  vec_arid_8;   wire [31:0] vec_araddr;
+    wire [7:0]   vec_arlen;     wire [2:0]  vec_arsize;   wire [1:0]  vec_arburst;
+    wire         vec_arvalid;   wire        vec_arready;  wire [7:0]  vec_rid_8;
+    wire [511:0] vec_rdata;     wire [1:0]  vec_rresp;    wire        vec_rlast;
+    wire         vec_rvalid;    wire        vec_rready;
+
+    wire [7:0]   dma_awid_8;    wire [31:0] dma_awaddr;   wire [7:0]  dma_awlen;
+    wire [2:0]   dma_awsize;    wire [1:0]  dma_awburst;  wire        dma_awvalid;
+    wire         dma_awready;   wire [511:0]dma_wdata;    wire [63:0] dma_wstrb;
+    wire         dma_wlast;     wire        dma_wvalid;   wire        dma_wready;
+    wire [7:0]   dma_bid_8;     wire [1:0]  dma_bresp;    wire        dma_bvalid;
+    wire         dma_bready;    wire [7:0]  dma_arid_8;   wire [31:0] dma_araddr;
+    wire [7:0]   dma_arlen;     wire [2:0]  dma_arsize;   wire [1:0]  dma_arburst;
+    wire         dma_arvalid;   wire        dma_arready;  wire [7:0]  dma_rid_8;
+    wire [511:0] dma_rdata;     wire [1:0]  dma_rresp;    wire        dma_rlast;
+    wire         dma_rvalid;    wire        dma_rready;
+
+    //=========================================================================
     // APB bus
     //=========================================================================
     wire [31:0]  apb_m_paddr;
@@ -227,8 +275,9 @@ module caduceus_pcie_mixed_dut #(
     wire cpu_irq;
 
     //=========================================================================
-    // Tie off unused crossbar masters 0..4
+    // Crossbar master tie-offs / connections
     //=========================================================================
+    // Master 0 is not used in this reduced DUT (no Ibex AXI4 path).
     assign cb_m_awid[0]     = 6'd0;
     assign cb_m_awaddr[0]   = 32'd0;
     assign cb_m_awlen[0]    = 8'd0;
@@ -248,29 +297,213 @@ module caduceus_pcie_mixed_dut #(
     assign cb_m_arvalid[0]  = 1'b0;
     assign cb_m_rready[0]   = 1'b1;
 
-    genvar ti;
-    generate
-        for (ti = 1; ti < 5; ti = ti + 1) begin : gen_tieoff_unused_masters
-            assign cb_m_awid[ti]     = 6'd0;
-            assign cb_m_awaddr[ti]   = 32'd0;
-            assign cb_m_awlen[ti]    = 8'd0;
-            assign cb_m_awsize[ti]   = 3'd0;
-            assign cb_m_awburst[ti]  = 2'd0;
-            assign cb_m_awvalid[ti]  = 1'b0;
-            assign cb_m_wdata[ti]    = 512'd0;
-            assign cb_m_wstrb[ti]    = 64'd0;
-            assign cb_m_wlast[ti]    = 1'b0;
-            assign cb_m_wvalid[ti]   = 1'b0;
-            assign cb_m_bready[ti]   = 1'b1;
-            assign cb_m_arid[ti]     = 6'd0;
-            assign cb_m_araddr[ti]   = 32'd0;
-            assign cb_m_arlen[ti]    = 8'd0;
-            assign cb_m_arsize[ti]   = 3'd0;
-            assign cb_m_arburst[ti]  = 2'd0;
-            assign cb_m_arvalid[ti]  = 1'b0;
-            assign cb_m_rready[ti]   = 1'b1;
-        end
-    endgenerate
+    // Master 1: MXU wrapper when USE_RTL_MXU, otherwise tied off
+`ifdef USE_RTL_MXU
+    assign cb_m_awid[1]    = mxu_awid_8[5:0];
+    assign cb_m_awaddr[1]  = mxu_awaddr;
+    assign cb_m_awlen[1]   = mxu_awlen;
+    assign cb_m_awsize[1]  = mxu_awsize;
+    assign cb_m_awburst[1] = mxu_awburst;
+    assign cb_m_awvalid[1] = mxu_awvalid;
+    assign mxu_awready     = cb_m_awready[1];
+    assign cb_m_wdata[1]   = mxu_wdata;
+    assign cb_m_wstrb[1]   = mxu_wstrb;
+    assign cb_m_wlast[1]   = mxu_wlast;
+    assign cb_m_wvalid[1]  = mxu_wvalid;
+    assign mxu_wready      = cb_m_wready[1];
+    assign mxu_bid_8       = {2'b0, cb_m_bid[1]};
+    assign mxu_bresp       = cb_m_bresp[1];
+    assign mxu_bvalid      = cb_m_bvalid[1];
+    assign cb_m_bready[1]  = mxu_bready;
+    assign cb_m_arid[1]    = mxu_arid_8[5:0];
+    assign cb_m_araddr[1]  = mxu_araddr;
+    assign cb_m_arlen[1]   = mxu_arlen;
+    assign cb_m_arsize[1]  = mxu_arsize;
+    assign cb_m_arburst[1] = mxu_arburst;
+    assign cb_m_arvalid[1] = mxu_arvalid;
+    assign mxu_arready     = cb_m_arready[1];
+    assign mxu_rid_8       = {2'b0, cb_m_rid[1]};
+    assign mxu_rdata       = cb_m_rdata[1];
+    assign mxu_rresp       = cb_m_rresp[1];
+    assign mxu_rlast       = cb_m_rlast[1];
+    assign mxu_rvalid      = cb_m_rvalid[1];
+    assign cb_m_rready[1]  = mxu_rready;
+`else
+    assign cb_m_awid[1]     = 6'd0;
+    assign cb_m_awaddr[1]   = 32'd0;
+    assign cb_m_awlen[1]    = 8'd0;
+    assign cb_m_awsize[1]   = 3'd0;
+    assign cb_m_awburst[1]  = 2'd0;
+    assign cb_m_awvalid[1]  = 1'b0;
+    assign cb_m_wdata[1]    = 512'd0;
+    assign cb_m_wstrb[1]    = 64'd0;
+    assign cb_m_wlast[1]    = 1'b0;
+    assign cb_m_wvalid[1]   = 1'b0;
+    assign cb_m_bready[1]   = 1'b1;
+    assign cb_m_arid[1]     = 6'd0;
+    assign cb_m_araddr[1]   = 32'd0;
+    assign cb_m_arlen[1]    = 8'd0;
+    assign cb_m_arsize[1]   = 3'd0;
+    assign cb_m_arburst[1]  = 2'd0;
+    assign cb_m_arvalid[1]  = 1'b0;
+    assign cb_m_rready[1]   = 1'b1;
+`endif
+
+    // Master 2: SFU wrapper when USE_RTL_SFU, otherwise tied off
+`ifdef USE_RTL_SFU
+    assign cb_m_awid[2]    = sfu_awid_8[5:0];
+    assign cb_m_awaddr[2]  = sfu_awaddr;
+    assign cb_m_awlen[2]   = sfu_awlen;
+    assign cb_m_awsize[2]  = sfu_awsize;
+    assign cb_m_awburst[2] = sfu_awburst;
+    assign cb_m_awvalid[2] = sfu_awvalid;
+    assign sfu_awready     = cb_m_awready[2];
+    assign cb_m_wdata[2]   = sfu_wdata;
+    assign cb_m_wstrb[2]   = sfu_wstrb;
+    assign cb_m_wlast[2]   = sfu_wlast;
+    assign cb_m_wvalid[2]  = sfu_wvalid;
+    assign sfu_wready      = cb_m_wready[2];
+    assign sfu_bid_8       = {2'b0, cb_m_bid[2]};
+    assign sfu_bresp       = cb_m_bresp[2];
+    assign sfu_bvalid      = cb_m_bvalid[2];
+    assign cb_m_bready[2]  = sfu_bready;
+    assign cb_m_arid[2]    = sfu_arid_8[5:0];
+    assign cb_m_araddr[2]  = sfu_araddr;
+    assign cb_m_arlen[2]   = sfu_arlen;
+    assign cb_m_arsize[2]  = sfu_arsize;
+    assign cb_m_arburst[2] = sfu_arburst;
+    assign cb_m_arvalid[2] = sfu_arvalid;
+    assign sfu_arready     = cb_m_arready[2];
+    assign sfu_rid_8       = {2'b0, cb_m_rid[2]};
+    assign sfu_rdata       = cb_m_rdata[2];
+    assign sfu_rresp       = cb_m_rresp[2];
+    assign sfu_rlast       = cb_m_rlast[2];
+    assign sfu_rvalid      = cb_m_rvalid[2];
+    assign cb_m_rready[2]  = sfu_rready;
+`else
+    assign cb_m_awid[2]     = 6'd0;
+    assign cb_m_awaddr[2]   = 32'd0;
+    assign cb_m_awlen[2]    = 8'd0;
+    assign cb_m_awsize[2]   = 3'd0;
+    assign cb_m_awburst[2]  = 2'd0;
+    assign cb_m_awvalid[2]  = 1'b0;
+    assign cb_m_wdata[2]    = 512'd0;
+    assign cb_m_wstrb[2]    = 64'd0;
+    assign cb_m_wlast[2]    = 1'b0;
+    assign cb_m_wvalid[2]   = 1'b0;
+    assign cb_m_bready[2]   = 1'b1;
+    assign cb_m_arid[2]     = 6'd0;
+    assign cb_m_araddr[2]   = 32'd0;
+    assign cb_m_arlen[2]    = 8'd0;
+    assign cb_m_arsize[2]   = 3'd0;
+    assign cb_m_arburst[2]  = 2'd0;
+    assign cb_m_arvalid[2]  = 1'b0;
+    assign cb_m_rready[2]   = 1'b1;
+`endif
+
+    // Master 3: Vector wrapper when USE_RTL_VECTOR, otherwise tied off
+`ifdef USE_RTL_VECTOR
+    assign cb_m_awid[3]    = vec_awid_8[5:0];
+    assign cb_m_awaddr[3]  = vec_awaddr;
+    assign cb_m_awlen[3]   = vec_awlen;
+    assign cb_m_awsize[3]  = vec_awsize;
+    assign cb_m_awburst[3] = vec_awburst;
+    assign cb_m_awvalid[3] = vec_awvalid;
+    assign vec_awready     = cb_m_awready[3];
+    assign cb_m_wdata[3]   = vec_wdata;
+    assign cb_m_wstrb[3]   = vec_wstrb;
+    assign cb_m_wlast[3]   = vec_wlast;
+    assign cb_m_wvalid[3]  = vec_wvalid;
+    assign vec_wready      = cb_m_wready[3];
+    assign vec_bid_8       = {2'b0, cb_m_bid[3]};
+    assign vec_bresp       = cb_m_bresp[3];
+    assign vec_bvalid      = cb_m_bvalid[3];
+    assign cb_m_bready[3]  = vec_bready;
+    assign cb_m_arid[3]    = vec_arid_8[5:0];
+    assign cb_m_araddr[3]  = vec_araddr;
+    assign cb_m_arlen[3]   = vec_arlen;
+    assign cb_m_arsize[3]  = vec_arsize;
+    assign cb_m_arburst[3] = vec_arburst;
+    assign cb_m_arvalid[3] = vec_arvalid;
+    assign vec_arready     = cb_m_arready[3];
+    assign vec_rid_8       = {2'b0, cb_m_rid[3]};
+    assign vec_rdata       = cb_m_rdata[3];
+    assign vec_rresp       = cb_m_rresp[3];
+    assign vec_rlast       = cb_m_rlast[3];
+    assign vec_rvalid      = cb_m_rvalid[3];
+    assign cb_m_rready[3]  = vec_rready;
+`else
+    assign cb_m_awid[3]     = 6'd0;
+    assign cb_m_awaddr[3]   = 32'd0;
+    assign cb_m_awlen[3]    = 8'd0;
+    assign cb_m_awsize[3]   = 3'd0;
+    assign cb_m_awburst[3]  = 2'd0;
+    assign cb_m_awvalid[3]  = 1'b0;
+    assign cb_m_wdata[3]    = 512'd0;
+    assign cb_m_wstrb[3]    = 64'd0;
+    assign cb_m_wlast[3]    = 1'b0;
+    assign cb_m_wvalid[3]   = 1'b0;
+    assign cb_m_bready[3]   = 1'b1;
+    assign cb_m_arid[3]     = 6'd0;
+    assign cb_m_araddr[3]   = 32'd0;
+    assign cb_m_arlen[3]    = 8'd0;
+    assign cb_m_arsize[3]   = 3'd0;
+    assign cb_m_arburst[3]  = 2'd0;
+    assign cb_m_arvalid[3]  = 1'b0;
+    assign cb_m_rready[3]   = 1'b1;
+`endif
+
+    // Master 4: DMA wrapper when USE_RTL_DMA, otherwise tied off
+`ifdef USE_RTL_DMA
+    assign cb_m_awid[4]    = dma_awid_8[5:0];
+    assign cb_m_awaddr[4]  = dma_awaddr;
+    assign cb_m_awlen[4]   = dma_awlen;
+    assign cb_m_awsize[4]  = dma_awsize;
+    assign cb_m_awburst[4] = dma_awburst;
+    assign cb_m_awvalid[4] = dma_awvalid;
+    assign dma_awready     = cb_m_awready[4];
+    assign cb_m_wdata[4]   = dma_wdata;
+    assign cb_m_wstrb[4]   = dma_wstrb;
+    assign cb_m_wlast[4]   = dma_wlast;
+    assign cb_m_wvalid[4]  = dma_wvalid;
+    assign dma_wready      = cb_m_wready[4];
+    assign dma_bid_8       = {2'b0, cb_m_bid[4]};
+    assign dma_bresp       = cb_m_bresp[4];
+    assign dma_bvalid      = cb_m_bvalid[4];
+    assign cb_m_bready[4]  = dma_bready;
+    assign cb_m_arid[4]    = dma_arid_8[5:0];
+    assign cb_m_araddr[4]  = dma_araddr;
+    assign cb_m_arlen[4]   = dma_arlen;
+    assign cb_m_arsize[4]  = dma_arsize;
+    assign cb_m_arburst[4] = dma_arburst;
+    assign cb_m_arvalid[4] = dma_arvalid;
+    assign dma_arready     = cb_m_arready[4];
+    assign dma_rid_8       = {2'b0, cb_m_rid[4]};
+    assign dma_rdata       = cb_m_rdata[4];
+    assign dma_rresp       = cb_m_rresp[4];
+    assign dma_rlast       = cb_m_rlast[4];
+    assign dma_rvalid      = cb_m_rvalid[4];
+    assign cb_m_rready[4]  = dma_rready;
+`else
+    assign cb_m_awid[4]     = 6'd0;
+    assign cb_m_awaddr[4]   = 32'd0;
+    assign cb_m_awlen[4]    = 8'd0;
+    assign cb_m_awsize[4]   = 3'd0;
+    assign cb_m_awburst[4]  = 2'd0;
+    assign cb_m_awvalid[4]  = 1'b0;
+    assign cb_m_wdata[4]    = 512'd0;
+    assign cb_m_wstrb[4]    = 64'd0;
+    assign cb_m_wlast[4]    = 1'b0;
+    assign cb_m_wvalid[4]   = 1'b0;
+    assign cb_m_bready[4]   = 1'b1;
+    assign cb_m_arid[4]     = 6'd0;
+    assign cb_m_araddr[4]   = 32'd0;
+    assign cb_m_arlen[4]    = 8'd0;
+    assign cb_m_arsize[4]   = 3'd0;
+    assign cb_m_arburst[4]  = 2'd0;
+    assign cb_m_arvalid[4]  = 1'b0;
+    assign cb_m_rready[4]   = 1'b1;
+`endif
 
     //=========================================================================
     // PCIe → crossbar master 5
@@ -512,8 +745,64 @@ module caduceus_pcie_mixed_dut #(
     );
 
     //=========================================================================
-    // Behavioral APB slave stubs for MXU/SFU/Vector/DMA (Func Model)
+    // APB slave 0: MXU wrapper (RTL) or stub (Func Model)
     //=========================================================================
+    wire mxu_irq;
+`ifdef USE_RTL_MXU
+    mxu_soc_wrapper #(
+        .W_BUF_DEPTH(5120),
+        .A_BUF_DEPTH(10240)
+    ) u_mxu_wrapper (
+        .clk                 (clk),
+        .rst_n               (rst_n),
+        .psel                (apb_psel_o[0]),
+        .penable             (apb_penable_o[0]),
+        .pwrite              (apb_pwrite_o),
+        .paddr               (apb_paddr_o[11:0]),
+        .pwdata              (apb_pwdata_o),
+        .prdata              (apb_prdata[0]),
+        .pready              (apb_pready_i[0]),
+        .pslverr             (apb_pslverr_i[0]),
+        .m_axi_awid          (mxu_awid_8),
+        .m_axi_awaddr        (mxu_awaddr),
+        .m_axi_awlen         (mxu_awlen),
+        .m_axi_awsize        (mxu_awsize),
+        .m_axi_awburst       (mxu_awburst),
+        .m_axi_awvalid       (mxu_awvalid),
+        .m_axi_awready       (mxu_awready),
+        .m_axi_wdata         (mxu_wdata),
+        .m_axi_wstrb         (mxu_wstrb),
+        .m_axi_wlast         (mxu_wlast),
+        .m_axi_wvalid        (mxu_wvalid),
+        .m_axi_wready        (mxu_wready),
+        .m_axi_bid           (mxu_bid_8),
+        .m_axi_bresp         (mxu_bresp),
+        .m_axi_bvalid        (mxu_bvalid),
+        .m_axi_bready        (mxu_bready),
+        .m_axi_arid          (mxu_arid_8),
+        .m_axi_araddr        (mxu_araddr),
+        .m_axi_arlen         (mxu_arlen),
+        .m_axi_arsize        (mxu_arsize),
+        .m_axi_arburst       (mxu_arburst),
+        .m_axi_arvalid       (mxu_arvalid),
+        .m_axi_arready       (mxu_arready),
+        .m_axi_rid           (mxu_rid_8),
+        .m_axi_rdata         (mxu_rdata),
+        .m_axi_rresp         (mxu_rresp),
+        .m_axi_rlast         (mxu_rlast),
+        .m_axi_rvalid        (mxu_rvalid),
+        .m_axi_rready        (mxu_rready),
+        .irq                 (mxu_irq),
+        .dbg_state           (),
+        .dbg_compute_en      (),
+        .dbg_weight_load     (),
+        .dbg_activation_load (),
+        .dbg_store_out       (),
+        .dbg_store_row       (),
+        .dbg_compute_k       (),
+        .dbg_tiles_completed ()
+    );
+`else
     apb_slave_stub u_mxu_stub (
         .clk     (clk),
         .rst_n   (rst_n),
@@ -526,7 +815,57 @@ module caduceus_pcie_mixed_dut #(
         .pready  (apb_pready_i[0]),
         .pslverr (apb_pslverr_i[0])
     );
+    assign mxu_irq = 1'b0;
+`endif
 
+    //=========================================================================
+    // APB slave 1: SFU wrapper (RTL) or stub (Func Model)
+    //=========================================================================
+    wire sfu_irq;
+`ifdef USE_RTL_SFU
+    sfu_soc_wrapper u_sfu_wrapper (
+        .clk           (clk),
+        .rst_n         (rst_n),
+        .psel          (apb_psel_o[1]),
+        .penable       (apb_penable_o[1]),
+        .pwrite        (apb_pwrite_o),
+        .paddr         (apb_paddr_o[11:0]),
+        .pwdata        (apb_pwdata_o),
+        .prdata        (apb_prdata[1]),
+        .pready        (apb_pready_i[1]),
+        .pslverr       (apb_pslverr_i[1]),
+        .m_axi_awid    (sfu_awid_8),
+        .m_axi_awaddr  (sfu_awaddr),
+        .m_axi_awlen   (sfu_awlen),
+        .m_axi_awsize  (sfu_awsize),
+        .m_axi_awburst (sfu_awburst),
+        .m_axi_awvalid (sfu_awvalid),
+        .m_axi_awready (sfu_awready),
+        .m_axi_wdata   (sfu_wdata),
+        .m_axi_wstrb   (sfu_wstrb),
+        .m_axi_wlast   (sfu_wlast),
+        .m_axi_wvalid  (sfu_wvalid),
+        .m_axi_wready  (sfu_wready),
+        .m_axi_bid     (sfu_bid_8),
+        .m_axi_bresp   (sfu_bresp),
+        .m_axi_bvalid  (sfu_bvalid),
+        .m_axi_bready  (sfu_bready),
+        .m_axi_arid    (sfu_arid_8),
+        .m_axi_araddr  (sfu_araddr),
+        .m_axi_arlen   (sfu_arlen),
+        .m_axi_arsize  (sfu_arsize),
+        .m_axi_arburst (sfu_arburst),
+        .m_axi_arvalid (sfu_arvalid),
+        .m_axi_arready (sfu_arready),
+        .m_axi_rid     (sfu_rid_8),
+        .m_axi_rdata   (sfu_rdata),
+        .m_axi_rresp   (sfu_rresp),
+        .m_axi_rlast   (sfu_rlast),
+        .m_axi_rvalid  (sfu_rvalid),
+        .m_axi_rready  (sfu_rready),
+        .irq           (sfu_irq)
+    );
+`else
     apb_slave_stub u_sfu_stub (
         .clk     (clk),
         .rst_n   (rst_n),
@@ -539,7 +878,59 @@ module caduceus_pcie_mixed_dut #(
         .pready  (apb_pready_i[1]),
         .pslverr (apb_pslverr_i[1])
     );
+    assign sfu_irq = 1'b0;
+`endif
 
+    //=========================================================================
+    // APB slave 2: Vector wrapper (RTL) or stub (Func Model)
+    //=========================================================================
+    wire vec_irq;
+`ifdef USE_RTL_VECTOR
+    vector_soc_wrapper #(
+        .CHUNKS_MAX(80)
+    ) u_vector_wrapper (
+        .clk           (clk),
+        .rst_n         (rst_n),
+        .psel          (apb_psel_o[2]),
+        .penable       (apb_penable_o[2]),
+        .pwrite        (apb_pwrite_o),
+        .paddr         (apb_paddr_o[11:0]),
+        .pwdata        (apb_pwdata_o),
+        .prdata        (apb_prdata[2]),
+        .pready        (apb_pready_i[2]),
+        .pslverr       (apb_pslverr_i[2]),
+        .m_axi_awid    (vec_awid_8),
+        .m_axi_awaddr  (vec_awaddr),
+        .m_axi_awlen   (vec_awlen),
+        .m_axi_awsize  (vec_awsize),
+        .m_axi_awburst (vec_awburst),
+        .m_axi_awvalid (vec_awvalid),
+        .m_axi_awready (vec_awready),
+        .m_axi_wdata   (vec_wdata),
+        .m_axi_wstrb   (vec_wstrb),
+        .m_axi_wlast   (vec_wlast),
+        .m_axi_wvalid  (vec_wvalid),
+        .m_axi_wready  (vec_wready),
+        .m_axi_bid     (vec_bid_8),
+        .m_axi_bresp   (vec_bresp),
+        .m_axi_bvalid  (vec_bvalid),
+        .m_axi_bready  (vec_bready),
+        .m_axi_arid    (vec_arid_8),
+        .m_axi_araddr  (vec_araddr),
+        .m_axi_arlen   (vec_arlen),
+        .m_axi_arsize  (vec_arsize),
+        .m_axi_arburst (vec_arburst),
+        .m_axi_arvalid (vec_arvalid),
+        .m_axi_arready (vec_arready),
+        .m_axi_rid     (vec_rid_8),
+        .m_axi_rdata   (vec_rdata),
+        .m_axi_rresp   (vec_rresp),
+        .m_axi_rlast   (vec_rlast),
+        .m_axi_rvalid  (vec_rvalid),
+        .m_axi_rready  (vec_rready),
+        .irq           (vec_irq)
+    );
+`else
     apb_slave_stub u_vector_stub (
         .clk     (clk),
         .rst_n   (rst_n),
@@ -552,7 +943,57 @@ module caduceus_pcie_mixed_dut #(
         .pready  (apb_pready_i[2]),
         .pslverr (apb_pslverr_i[2])
     );
+    assign vec_irq = 1'b0;
+`endif
 
+    //=========================================================================
+    // APB slave 3: DMA wrapper (RTL) or stub (Func Model)
+    //=========================================================================
+    wire dma_irq;
+`ifdef USE_RTL_DMA
+    dma_wrapper u_dma_wrapper (
+        .clk           (clk),
+        .rst_n         (rst_n),
+        .psel          (apb_psel_o[3]),
+        .penable       (apb_penable_o[3]),
+        .pwrite        (apb_pwrite_o),
+        .paddr         (apb_paddr_o[11:0]),
+        .pwdata        (apb_pwdata_o),
+        .prdata        (apb_prdata[3]),
+        .pready        (apb_pready_i[3]),
+        .pslverr       (apb_pslverr_i[3]),
+        .m_axi_awid    (dma_awid_8),
+        .m_axi_awaddr  (dma_awaddr),
+        .m_axi_awlen   (dma_awlen),
+        .m_axi_awsize  (dma_awsize),
+        .m_axi_awburst (dma_awburst),
+        .m_axi_awvalid (dma_awvalid),
+        .m_axi_awready (dma_awready),
+        .m_axi_wdata   (dma_wdata),
+        .m_axi_wstrb   (dma_wstrb),
+        .m_axi_wlast   (dma_wlast),
+        .m_axi_wvalid  (dma_wvalid),
+        .m_axi_wready  (dma_wready),
+        .m_axi_bid     (dma_bid_8),
+        .m_axi_bresp   (dma_bresp),
+        .m_axi_bvalid  (dma_bvalid),
+        .m_axi_bready  (dma_bready),
+        .m_axi_arid    (dma_arid_8),
+        .m_axi_araddr  (dma_araddr),
+        .m_axi_arlen   (dma_arlen),
+        .m_axi_arsize  (dma_arsize),
+        .m_axi_arburst (dma_arburst),
+        .m_axi_arvalid (dma_arvalid),
+        .m_axi_arready (dma_arready),
+        .m_axi_rid     (dma_rid_8),
+        .m_axi_rdata   (dma_rdata),
+        .m_axi_rresp   (dma_rresp),
+        .m_axi_rlast   (dma_rlast),
+        .m_axi_rvalid  (dma_rvalid),
+        .m_axi_rready  (dma_rready),
+        .dma_irq       (dma_irq)
+    );
+`else
     apb_slave_stub u_dma_stub (
         .clk     (clk),
         .rst_n   (rst_n),
@@ -565,6 +1006,8 @@ module caduceus_pcie_mixed_dut #(
         .pready  (apb_pready_i[3]),
         .pslverr (apb_pslverr_i[3])
     );
+    assign dma_irq = 1'b0;
+`endif
 
     //=========================================================================
     // PCIe EP Wrapper (RTL)
@@ -657,10 +1100,10 @@ module caduceus_pcie_mixed_dut #(
     intc_top u_intc (
         .clk        (clk),
         .rst_n      (rst_n),
-        .mxu_irq    (1'b0),
-        .sfu_irq    (1'b0),
-        .vector_irq (1'b0),
-        .dma_irq    (1'b0),
+        .mxu_irq    (mxu_irq),
+        .sfu_irq    (sfu_irq),
+        .vector_irq (vec_irq),
+        .dma_irq    (dma_irq),
         .pcie_irq   (pcie_irq),
         .host_irq   (doorbell_irq),
         .timer_irq  (timer_irq_i),
