@@ -14,6 +14,7 @@ from sim.mmio_bridge import MMIOBridge
 from sim.miniv import RISCVMini, NPUFirmware
 from sim.axi_tracer import AXITracer
 from sim.models.pcie import PCIeModel
+from sim.models.crossbar import CrossbarModel
 
 
 class FuncModel:
@@ -24,7 +25,8 @@ class FuncModel:
         self.dram = bytearray(dram_mb * 1024 * 1024)
         self.sram = bytearray(sram_kb * 1024)
 
-        self.pcie = PCIeModel(sram=self.sram, dram=self.dram)
+        self.crossbar = CrossbarModel(sram=self.sram, dram=self.dram)
+        self.pcie = PCIeModel(crossbar=self.crossbar)
 
         # Compute modules
         self.mxu = GoldenMXU()
@@ -32,10 +34,10 @@ class FuncModel:
         self.vector = GoldenVector()
         self.dma_engine = GoldenDMA()
 
-        # MMIO Bridge
         self.bridge = MMIOBridge(modules={
             'mxu': self.mxu, 'sfu': self.sfu,
             'vector': self.vector, 'dma': self.dma_engine,
+            'crossbar': self.crossbar,
             'dram': self.dram, 'sram': self.sram,
         })
 
@@ -43,6 +45,7 @@ class FuncModel:
         self.firmware = NPUFirmware(sim_modules={
             'mxu': self.mxu, 'sfu': self.sfu,
             'vector': self.vector, 'dma': self.dma_engine,
+            'crossbar': self.crossbar,
             'dram': self.dram, 'sram': self.sram,
         }, bridge=self.bridge)
 

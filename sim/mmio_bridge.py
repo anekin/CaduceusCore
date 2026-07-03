@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, Optional
 import numpy as np
 
 from sim.golden_executor import GoldenSFU, GoldenVector
+from sim.models.crossbar import CrossbarModel
 from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
 
 
@@ -22,9 +23,29 @@ class MMIOBridge:
     # modules['mxu'], ['sfu'], ['vector'], ['dma'], ['dram'], ['sram']
 
     def __post_init__(self):
-        self._status: Dict[int, int] = {}   # addr → value for status registers
-        self._trace: list = []               # MMIO access trace
-        self.tracer = None                   # AXITracer, set externally
+        self._status: Dict[int, int] = {}
+        self._trace: list = []
+        self.tracer = None
+
+    @property
+    def _crossbar(self) -> Optional[CrossbarModel]:
+        return self.modules.get('crossbar')
+
+    def _sram_size(self) -> int:
+        xbar = self._crossbar
+        if xbar is not None:
+            return len(xbar.sram)
+        return len(self.modules.get('sram', bytearray()))
+
+    def _to_crossbar_addr(self, addr: int) -> int:
+        if addr >= Addr.DRAM_BASE:
+            return addr
+        sram_size = self._sram_size()
+        if Addr.SRAM_BASE <= addr < Addr.SRAM_BASE + sram_size:
+            return addr
+        if 0 <= addr < sram_size:
+            return Addr.SRAM_BASE + addr
+        return addr
 
     def handle(self, rw: str, addr: int, value: int = 0) -> int:
         """Handle MMIO access. 'read' → returns value. 'write' → updates state."""
@@ -68,42 +89,15 @@ class MMIOBridge:
                 M = (self._status.get(MXU.BASE + MXU.DIM0, 0)) & 0xFFFF
                 K = (self._status.get(MXU.BASE + MXU.DIM0, 0) >> 16) & 0xFFFF
                 N = self._status.get(MXU.BASE + MXU.DIM1, 0) & 0xFFFF
-                i_addr = self._translate_addr(self._status.get(MXU.BASE + MXU.I_ADDR, 0))
-                w_addr = self._translate_addr(self._status.get(MXU.BASE + MXU.W_ADDR, 0))
-                o_addr = self._translate_addr(self._status.get(MXU.BASE + MXU.O_ADDR, 0))
-                s_addr = self._translate_addr(self._status.get(MXU.BASE + MXU.SCALE_ADDR, 0))
-                sram = self.modules.get('sram', bytearray())
+                raw_i = self._status.get(MXU.BASE + MXU.I_ADDR, 0)
+                raw_w = self._status.get(MXU.BASE + MXU.W_ADDR, 0)
+                raw_o = self._status.get(MXU.BASE + MXU.O_ADDR, 0)
+                raw_s = self._status.get(MXU.BASE + MXU.SCALE_ADDR, 0)
 
-                if sram and M > 0 and K > 0 and N > 0:
-                    act_bytes = M * K
-                    act = np.frombuffer(sram[i_addr:i_addr + act_bytes], dtype=np.int8).reshape(M, K)
-                    wgt_packed_bytes = (K * N + 1) // 2
-                    wgt_packed = np.frombuffer(sram[w_addr:w_addr + wgt_packed_bytes], dtype=np.uint8)
+                if M > 0 and K > 0 and N > 0:
+                    self._run_mxu_compute(mxu, M, K, N, raw_i, raw_w, raw_o, raw_s, accumulate)
 
-                    if s_addr > 0:
-                        num_blocks = (K + 127) // 128
-                        scale_bytes = num_blocks * N * 4
-                        scales = np.frombuffer(sram[s_addr:s_addr + scale_bytes],
-                                               dtype=np.float32).reshape(num_blocks, N)
-                        result = mxu.matmul_int4_per_block(act, wgt_packed, scales,
-                                                           M, K, N, group_size=128)
-                        result_bytes = result.astype(np.float32).tobytes()
-                        dtype_out = np.float32
-                    else:
-                        result = mxu.matmul_int32(act, wgt_packed, M, K, N)
-                        result_bytes = result.astype(np.int32).tobytes()
-                        dtype_out = np.int32
-
-                    # Accumulate mode: add to existing output
-                    if accumulate:
-                        existing = np.frombuffer(sram[o_addr:o_addr + len(result_bytes)],
-                                                 dtype=dtype_out).reshape(M, N)
-                        result = existing + result
-                        result_bytes = result.astype(dtype_out).tobytes()
-
-                    sram[o_addr:o_addr + len(result_bytes)] = result_bytes
-
-                self._status[MXU.BASE + MXU.STATUS] = 2  # DONE
+                self._status[MXU.BASE + MXU.STATUS] = 2
                 if self._status.get(MXU.BASE + MXU.IRQ_EN, 0) & 1:
                     self._set_irq(0)
 
@@ -113,6 +107,82 @@ class MMIOBridge:
         elif rw == 'read':
             return self._status.get(addr & 0xFFFFFFFC, 0)
         return 0
+
+    def _run_mxu_compute(self, mxu, M, K, N, raw_i, raw_w, raw_o, raw_s, accumulate):
+        act_bytes = M * K
+        wgt_packed_bytes = (K * N + 1) // 2
+        xbar = self._crossbar
+
+        if xbar is not None:
+            i_abs = self._to_crossbar_addr(raw_i)
+            w_abs = self._to_crossbar_addr(raw_w)
+            o_abs = self._to_crossbar_addr(raw_o)
+            s_abs = self._to_crossbar_addr(raw_s)
+
+            act = np.frombuffer(
+                xbar.read(CrossbarModel.MASTER_MXU, i_abs, act_bytes),
+                dtype=np.int8).reshape(M, K)
+            wgt_packed = np.frombuffer(
+                xbar.read(CrossbarModel.MASTER_MXU, w_abs, wgt_packed_bytes),
+                dtype=np.uint8)
+
+            if raw_s > 0:
+                num_blocks = (K + 127) // 128
+                scale_bytes = num_blocks * N * 4
+                scales = np.frombuffer(
+                    xbar.read(CrossbarModel.MASTER_MXU, s_abs, scale_bytes),
+                    dtype=np.float32).reshape(num_blocks, N)
+                result = mxu.matmul_int4_per_block(act, wgt_packed, scales,
+                                                   M, K, N, group_size=128)
+                result_bytes = result.astype(np.float32).tobytes()
+                dtype_out = np.float32
+            else:
+                result = mxu.matmul_int32(act, wgt_packed, M, K, N)
+                result_bytes = result.astype(np.int32).tobytes()
+                dtype_out = np.int32
+
+            if accumulate:
+                existing = np.frombuffer(
+                    xbar.read(CrossbarModel.MASTER_MXU, o_abs, len(result_bytes)),
+                    dtype=dtype_out).reshape(M, N)
+                result = existing + result
+                result_bytes = result.astype(dtype_out).tobytes()
+
+            xbar.write(CrossbarModel.MASTER_MXU, o_abs, result_bytes)
+            return
+
+        i_off = self._translate_addr(raw_i)
+        w_off = self._translate_addr(raw_w)
+        o_off = self._translate_addr(raw_o)
+        s_off = self._translate_addr(raw_s)
+        sram = self.modules.get('sram', bytearray())
+        if not sram:
+            return
+
+        act = np.frombuffer(sram[i_off:i_off + act_bytes], dtype=np.int8).reshape(M, K)
+        wgt_packed = np.frombuffer(sram[w_off:w_off + wgt_packed_bytes], dtype=np.uint8)
+
+        if s_off > 0:
+            num_blocks = (K + 127) // 128
+            scale_bytes = num_blocks * N * 4
+            scales = np.frombuffer(sram[s_off:s_off + scale_bytes],
+                                   dtype=np.float32).reshape(num_blocks, N)
+            result = mxu.matmul_int4_per_block(act, wgt_packed, scales,
+                                               M, K, N, group_size=128)
+            result_bytes = result.astype(np.float32).tobytes()
+            dtype_out = np.float32
+        else:
+            result = mxu.matmul_int32(act, wgt_packed, M, K, N)
+            result_bytes = result.astype(np.int32).tobytes()
+            dtype_out = np.int32
+
+        if accumulate:
+            existing = np.frombuffer(sram[o_off:o_off + len(result_bytes)],
+                                     dtype=dtype_out).reshape(M, N)
+            result = existing + result
+            result_bytes = result.astype(dtype_out).tobytes()
+
+        sram[o_off:o_off + len(result_bytes)] = result_bytes
 
     # ── SFU ─────────────────────────────────────────────────────────
 
@@ -125,51 +195,20 @@ class MMIOBridge:
 
         if rw == 'write':
             if off == SFU.CMD and (value & 1):
-                self._status[SFU.BASE + SFU.STATUS] = 1  # BUSY
+                self._status[SFU.BASE + SFU.STATUS] = 1
 
-                sram = self.modules.get('sram')
-                i_addr = self._translate_addr(self._status.get(SFU.BASE + SFU.I_ADDR, 0))
-                o_addr = self._translate_addr(self._status.get(SFU.BASE + SFU.O_ADDR, 0))
+                raw_i = self._status.get(SFU.BASE + SFU.I_ADDR, 0)
+                raw_o = self._status.get(SFU.BASE + SFU.O_ADDR, 0)
                 dim = self._status.get(SFU.BASE + SFU.DIM, 0)
                 length = dim & 0xFFFF
                 head_dim = (dim >> 16) & 0xFFFF
                 pos = self._status.get(SFU.BASE + SFU.POS, 0)
                 op = self._status.get(SFU.BASE + SFU.CTRL, 0) & 0xF
 
-                if sram is not None and length > 0:
-                    inp = np.frombuffer(
-                        sram[i_addr:i_addr + length * 2], dtype=np.float16
-                    ).astype(np.float32)
+                if length > 0:
+                    self._run_sfu_compute(sfu, raw_i, raw_o, length, head_dim, pos, op)
 
-                    if op == 0:       # SOFTMAX
-                        out = sfu.softmax_hw(inp)
-                    elif op == 1:     # LAYERNORM
-                        out = sfu.layernorm_hw(inp)
-                    elif op == 2:     # GELU
-                        out = sfu.gelu_hw(inp)
-                    elif op in (3, 4): # SiLU / (RELU slot fallback)
-                        out = sfu.silu_hw(inp)
-                    elif op == 6:     # RMSNORM
-                        out = sfu.rmsnorm_hw(inp)
-                    elif op == 5:     # ROPE
-                        half = length // 2
-                        q_in = inp[:half]
-                        k_in = inp[half:half + half] if length > half else q_in
-                        hd = head_dim if head_dim else (half if half % 2 == 0 else max(half, 2))
-                        nq = max(1, half // hd) if hd else 1
-                        nk = max(1, len(k_in) // hd) if hd else 1
-                        q_out, k_out = sfu.rope_hw(
-                            q_in, k_in, position=pos,
-                            num_heads=nq, head_dim=hd
-                        )
-                        out = np.concatenate([q_out, k_out])
-                    else:
-                        out = inp
-
-                    out_bytes = out.astype(np.float16).tobytes()
-                    sram[o_addr:o_addr + len(out_bytes)] = out_bytes
-
-                self._status[SFU.BASE + SFU.STATUS] = 2  # DONE
+                self._status[SFU.BASE + SFU.STATUS] = 2
                 if self._status.get(SFU.BASE + SFU.IRQ_EN, 0) & 1:
                     self._set_irq(1)  # SFU IRQ
             else:
@@ -177,6 +216,57 @@ class MMIOBridge:
         elif rw == 'read':
             return self._status.get(addr & 0xFFFFFFFC, 0)
         return 0
+
+    def _run_sfu_compute(self, sfu, raw_i, raw_o, length, head_dim, pos, op):
+        xbar = self._crossbar
+        if xbar is not None:
+            i_abs = self._to_crossbar_addr(raw_i)
+            o_abs = self._to_crossbar_addr(raw_o)
+            inp = np.frombuffer(
+                xbar.read(CrossbarModel.MASTER_SFU, i_abs, length * 2),
+                dtype=np.float16).astype(np.float32)
+            out = self._sfu_op(sfu, inp, length, head_dim, pos, op)
+            out_bytes = out.astype(np.float16).tobytes()
+            xbar.write(CrossbarModel.MASTER_SFU, o_abs, out_bytes)
+            return
+
+        sram = self.modules.get('sram', bytearray())
+        if not sram:
+            return
+        i_off = self._translate_addr(raw_i)
+        o_off = self._translate_addr(raw_o)
+        inp = np.frombuffer(
+            sram[i_off:i_off + length * 2], dtype=np.float16
+        ).astype(np.float32)
+        out = self._sfu_op(sfu, inp, length, head_dim, pos, op)
+        out_bytes = out.astype(np.float16).tobytes()
+        sram[o_off:o_off + len(out_bytes)] = out_bytes
+
+    @staticmethod
+    def _sfu_op(sfu, inp, length, head_dim, pos, op):
+        if op == 0:
+            return sfu.softmax_hw(inp)
+        if op == 1:
+            return sfu.layernorm_hw(inp)
+        if op == 2:
+            return sfu.gelu_hw(inp)
+        if op in (3, 4):
+            return sfu.silu_hw(inp)
+        if op == 6:
+            return sfu.rmsnorm_hw(inp)
+        if op == 5:
+            half = length // 2
+            q_in = inp[:half]
+            k_in = inp[half:half + half] if length > half else q_in
+            hd = head_dim if head_dim else (half if half % 2 == 0 else max(half, 2))
+            nq = max(1, half // hd) if hd else 1
+            nk = max(1, len(k_in) // hd) if hd else 1
+            q_out, k_out = sfu.rope_hw(
+                q_in, k_in, position=pos,
+                num_heads=nq, head_dim=hd
+            )
+            return np.concatenate([q_out, k_out])
+        return inp
 
     # ── VECTOR ──────────────────────────────────────────────────────
 
@@ -189,56 +279,97 @@ class MMIOBridge:
 
         if rw == 'write':
             if off == VECTOR.CMD and (value & 1):
-                self._status[VECTOR.BASE + VECTOR.STATUS] = 1  # BUSY
+                self._status[VECTOR.BASE + VECTOR.STATUS] = 1
 
-                sram = self.modules.get('sram')
-                a_addr = self._translate_addr(self._status.get(VECTOR.BASE + VECTOR.A_ADDR, 0))
-                b_addr = self._translate_addr(self._status.get(VECTOR.BASE + VECTOR.B_ADDR, 0))
-                o_addr = self._translate_addr(self._status.get(VECTOR.BASE + VECTOR.O_ADDR, 0))
+                raw_a = self._status.get(VECTOR.BASE + VECTOR.A_ADDR, 0)
+                raw_b = self._status.get(VECTOR.BASE + VECTOR.B_ADDR, 0)
+                raw_o = self._status.get(VECTOR.BASE + VECTOR.O_ADDR, 0)
                 dim = self._status.get(VECTOR.BASE + VECTOR.DIM, 0) & 0xFFFF
                 op = self._status.get(VECTOR.BASE + VECTOR.CTRL, 0) & 0xF
 
-                if sram is not None and dim > 0:
-                    if op == 0:       # ADD
-                        a = np.frombuffer(sram[a_addr:a_addr + dim * 4], dtype=np.int32)
-                        b = np.frombuffer(sram[b_addr:b_addr + dim * 4], dtype=np.int32)
-                        out = vector.add(a, b).astype(np.int32)
-                        out_bytes = out.tobytes()
-                    elif op == 1:     # MUL
-                        a = np.frombuffer(sram[a_addr:a_addr + dim * 4], dtype=np.int32)
-                        b = np.frombuffer(sram[b_addr:b_addr + dim * 4], dtype=np.int32)
-                        out = vector.mul(a, b).astype(np.int32)
-                        out_bytes = out.tobytes()
-                    elif op == 2:     # RED_MAX
-                        a = np.frombuffer(sram[a_addr:a_addr + dim * 2], dtype=np.float16).astype(np.float32)
-                        out = np.array([vector.max_reduce(a)], dtype=np.float16)
-                        out_bytes = out.tobytes()
-                    elif op == 3:     # RED_SUM
-                        a = np.frombuffer(sram[a_addr:a_addr + dim * 2], dtype=np.float16).astype(np.float32)
-                        out = np.array([vector.sum_reduce(a)], dtype=np.float16)
-                        out_bytes = out.tobytes()
-                    elif op == 4:     # CONV (INT32 -> BF16)
-                        a = np.frombuffer(sram[a_addr:a_addr + dim * 4], dtype=np.int32)
-                        out = vector.conv_i32_to_f16(a)
-                        out_bytes = out.tobytes()
-                    elif op == 5:     # RESID
-                        a = np.frombuffer(sram[a_addr:a_addr + dim * 2], dtype=np.float16).astype(np.float32)
-                        b = np.frombuffer(sram[b_addr:b_addr + dim * 4], dtype=np.int32)
-                        out = vector.residual_add(a, b).astype(np.int32)
-                        out_bytes = out.tobytes()
-                    else:
-                        out_bytes = b''
+                if dim > 0:
+                    self._run_vector_compute(vector, raw_a, raw_b, raw_o, dim, op)
 
-                    sram[o_addr:o_addr + len(out_bytes)] = out_bytes
-
-                self._status[VECTOR.BASE + VECTOR.STATUS] = 2  # DONE
+                self._status[VECTOR.BASE + VECTOR.STATUS] = 2
                 if self._status.get(VECTOR.BASE + VECTOR.IRQ_EN, 0) & 1:
-                    self._set_irq(2)  # VECTOR IRQ
+                    self._set_irq(2)
             else:
                 self._status[addr & 0xFFFFFFFC] = value
         elif rw == 'read':
             return self._status.get(addr & 0xFFFFFFFC, 0)
         return 0
+
+    def _run_vector_compute(self, vector, raw_a, raw_b, raw_o, dim, op):
+        xbar = self._crossbar
+        if xbar is not None:
+            a_abs = self._to_crossbar_addr(raw_a)
+            b_abs = self._to_crossbar_addr(raw_b)
+            o_abs = self._to_crossbar_addr(raw_o)
+            out_bytes = self._vector_op_bytes(
+                vector, xbar, CrossbarModel.MASTER_VEC,
+                a_abs, b_abs, dim, op
+            )
+            if out_bytes:
+                xbar.write(CrossbarModel.MASTER_VEC, o_abs, out_bytes)
+            return
+
+        sram = self.modules.get('sram', bytearray())
+        if not sram:
+            return
+        a_off = self._translate_addr(raw_a)
+        b_off = self._translate_addr(raw_b)
+        o_off = self._translate_addr(raw_o)
+        out_bytes = self._vector_op_bytes_direct(vector, sram, a_off, b_off, dim, op)
+        if out_bytes:
+            sram[o_off:o_off + len(out_bytes)] = out_bytes
+
+    def _vector_op_bytes(self, vector, xbar, master_id, a_abs, b_abs, dim, op):
+        if op == 0:
+            a = np.frombuffer(xbar.read(master_id, a_abs, dim * 4), dtype=np.int32)
+            b = np.frombuffer(xbar.read(master_id, b_abs, dim * 4), dtype=np.int32)
+            return vector.add(a, b).astype(np.int32).tobytes()
+        if op == 1:
+            a = np.frombuffer(xbar.read(master_id, a_abs, dim * 4), dtype=np.int32)
+            b = np.frombuffer(xbar.read(master_id, b_abs, dim * 4), dtype=np.int32)
+            return vector.mul(a, b).astype(np.int32).tobytes()
+        if op == 2:
+            a = np.frombuffer(xbar.read(master_id, a_abs, dim * 2), dtype=np.float16).astype(np.float32)
+            return np.array([vector.max_reduce(a)], dtype=np.float16).tobytes()
+        if op == 3:
+            a = np.frombuffer(xbar.read(master_id, a_abs, dim * 2), dtype=np.float16).astype(np.float32)
+            return np.array([vector.sum_reduce(a)], dtype=np.float16).tobytes()
+        if op == 4:
+            a = np.frombuffer(xbar.read(master_id, a_abs, dim * 4), dtype=np.int32)
+            return vector.conv_i32_to_f16(a).tobytes()
+        if op == 5:
+            a = np.frombuffer(xbar.read(master_id, a_abs, dim * 2), dtype=np.float16).astype(np.float32)
+            b = np.frombuffer(xbar.read(master_id, b_abs, dim * 4), dtype=np.int32)
+            return vector.residual_add(a, b).astype(np.int32).tobytes()
+        return b''
+
+    def _vector_op_bytes_direct(self, vector, sram, a_off, b_off, dim, op):
+        if op == 0:
+            a = np.frombuffer(sram[a_off:a_off + dim * 4], dtype=np.int32)
+            b = np.frombuffer(sram[b_off:b_off + dim * 4], dtype=np.int32)
+            return vector.add(a, b).astype(np.int32).tobytes()
+        if op == 1:
+            a = np.frombuffer(sram[a_off:a_off + dim * 4], dtype=np.int32)
+            b = np.frombuffer(sram[b_off:b_off + dim * 4], dtype=np.int32)
+            return vector.mul(a, b).astype(np.int32).tobytes()
+        if op == 2:
+            a = np.frombuffer(sram[a_off:a_off + dim * 2], dtype=np.float16).astype(np.float32)
+            return np.array([vector.max_reduce(a)], dtype=np.float16).tobytes()
+        if op == 3:
+            a = np.frombuffer(sram[a_off:a_off + dim * 2], dtype=np.float16).astype(np.float32)
+            return np.array([vector.sum_reduce(a)], dtype=np.float16).tobytes()
+        if op == 4:
+            a = np.frombuffer(sram[a_off:a_off + dim * 4], dtype=np.int32)
+            return vector.conv_i32_to_f16(a).tobytes()
+        if op == 5:
+            a = np.frombuffer(sram[a_off:a_off + dim * 2], dtype=np.float16).astype(np.float32)
+            b = np.frombuffer(sram[b_off:b_off + dim * 4], dtype=np.int32)
+            return vector.residual_add(a, b).astype(np.int32).tobytes()
+        return b''
 
     # ── DMA ─────────────────────────────────────────────────────────
 
@@ -249,43 +380,44 @@ class MMIOBridge:
             if off == DMA.CMD and (value & 1):
                 self._status[DMA.BASE + DMA.STATUS] = 1
 
-                # Channel 0: DRAM → SRAM
                 ch0_src = self._status.get(DMA.BASE + DMA.CH0_SRC, 0)
                 ch0_dst = self._status.get(DMA.BASE + DMA.CH0_DST, 0)
                 ch0_size = self._status.get(DMA.BASE + DMA.CH0_SIZE, 0)
                 if ch0_size > 0:
-                    src_mem = self._get_mem(ch0_src)
-                    dst_mem = self._get_mem(ch0_dst)
-                    src_off = self._translate_addr(ch0_src)
-                    dst_off = self._translate_addr(ch0_dst)
-                    if src_mem is not None and dst_mem is not None:
-                        dst_mem[dst_off:dst_off + ch0_size] = \
-                            src_mem[src_off:src_off + ch0_size]
+                    self._run_dma_transfer(ch0_src, ch0_dst, ch0_size)
 
-                # Channel 1: SRAM → DRAM
                 ch1_src = self._status.get(DMA.BASE + DMA.CH1_SRC, 0)
                 ch1_dst = self._status.get(DMA.BASE + DMA.CH1_DST, 0)
                 ch1_size = self._status.get(DMA.BASE + DMA.CH1_SIZE, 0)
                 if ch1_size > 0:
-                    src_mem = self._get_mem(ch1_src)
-                    dst_mem = self._get_mem(ch1_dst)
-                    src_off = self._translate_addr(ch1_src)
-                    dst_off = self._translate_addr(ch1_dst)
-                    if src_mem is not None and dst_mem is not None:
-                        dst_mem[dst_off:dst_off + ch1_size] = \
-                            src_mem[src_off:src_off + ch1_size]
+                    self._run_dma_transfer(ch1_src, ch1_dst, ch1_size)
 
-                self._status[DMA.BASE + DMA.STATUS] = 2  # DONE
-                # Clear sizes to prevent stale re-trigger on next CMD
+                self._status[DMA.BASE + DMA.STATUS] = 2
                 self._status[DMA.BASE + DMA.CH0_SIZE] = 0
                 self._status[DMA.BASE + DMA.CH1_SIZE] = 0
                 if self._status.get(DMA.BASE + DMA.IRQ_EN, 0) & 1:
-                    self._set_irq(3)  # DMA IRQ
+                    self._set_irq(3)
             else:
                 self._status[addr & 0xFFFFFFFC] = value
         elif rw == 'read':
             return self._status.get(addr & 0xFFFFFFFC, 0)
         return 0
+
+    def _run_dma_transfer(self, src_addr: int, dst_addr: int, size: int):
+        xbar = self._crossbar
+        if xbar is not None:
+            src_abs = self._to_crossbar_addr(src_addr)
+            dst_abs = self._to_crossbar_addr(dst_addr)
+            data = xbar.read(CrossbarModel.MASTER_DMA, src_abs, size)
+            xbar.write(CrossbarModel.MASTER_DMA, dst_abs, data)
+            return
+
+        src_mem = self._get_mem(src_addr)
+        dst_mem = self._get_mem(dst_addr)
+        src_off = self._translate_addr(src_addr)
+        dst_off = self._translate_addr(dst_addr)
+        if src_mem is not None and dst_mem is not None:
+            dst_mem[dst_off:dst_off + size] = src_mem[src_off:src_off + size]
 
     # ── Doorbell ────────────────────────────────────────────────────
 

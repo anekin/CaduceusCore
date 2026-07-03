@@ -89,3 +89,49 @@ def test_pcie_corrupted():
     readback = model.pcie.tlp_read(addr, len(payload))
     corrupted = payload[:-1] + bytes([payload[-1] ^ 0xFF])
     assert readback != corrupted
+
+
+def test_crossbar_concurrent():
+    """3 masters (MXU read + DMA read + PCIe write) concurrently, different addresses."""
+    from sim.models.crossbar import CrossbarModel
+
+    model = FuncModel()
+    xbar = model.crossbar
+
+    mxu_payload = b"mxu_reads_this"
+    dma_payload = b"dma_reads_this"
+    pcie_payload = b"pcie_writes_01"
+
+    mxu_addr = 0x2000_2000
+    dma_addr = 0x8000_3000
+    pcie_addr = 0x2000_1000
+
+    model.sram[mxu_addr - Addr.SRAM_BASE:mxu_addr - Addr.SRAM_BASE + len(mxu_payload)] = mxu_payload
+    model.dram[dma_addr - Addr.DRAM_BASE:dma_addr - Addr.DRAM_BASE + len(dma_payload)] = dma_payload
+
+    mxu_data = xbar.read(CrossbarModel.MASTER_MXU, mxu_addr, len(mxu_payload))
+    dma_data = xbar.read(CrossbarModel.MASTER_DMA, dma_addr, len(dma_payload))
+    xbar.write(CrossbarModel.MASTER_PCIE, pcie_addr, pcie_payload)
+
+    assert mxu_data == mxu_payload
+    assert dma_data == dma_payload
+    sram_off = pcie_addr - Addr.SRAM_BASE
+    assert bytes(model.sram[sram_off:sram_off + len(pcie_payload)]) == pcie_payload
+
+    assert xbar._txn_ids[CrossbarModel.MASTER_MXU] == 1
+    assert xbar._txn_ids[CrossbarModel.MASTER_DMA] == 1
+    assert xbar._txn_ids[CrossbarModel.MASTER_PCIE] == 1
+
+    aw_grants = [g for g in xbar._aw_grants if g[1] == CrossbarModel.MASTER_PCIE]
+    ar_grants = [g for g in xbar._ar_grants if g[1] in (
+        CrossbarModel.MASTER_MXU, CrossbarModel.MASTER_DMA)]
+    assert len(aw_grants) >= 1
+    assert len(ar_grants) >= 2
+
+    dram_off = pcie_addr - Addr.SRAM_BASE
+    assert bytes(model.dram[dram_off:dram_off + len(pcie_payload)]) != pcie_payload
+
+    with pytest.raises(ValueError):
+        xbar.read(7, mxu_addr, 4)
+    with pytest.raises(ValueError):
+        xbar.write(CrossbarModel.MASTER_PCIE, 0x5000_0000, b"decerr")

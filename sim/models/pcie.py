@@ -4,6 +4,8 @@ import struct
 from dataclasses import dataclass
 from typing import Tuple
 
+from sim.models.crossbar import CrossbarModel
+
 
 @dataclass
 class PCIeState:
@@ -22,7 +24,10 @@ class PCIeState:
 
 
 class PCIeModel:
-    """PCIe EP functional model: TLP parser/builder + BAR routing.
+    """PCIe EP functional model: TLP parser/builder + crossbar routing.
+
+    Host-facing TLP read/write requests are routed through the shared
+    CrossbarModel using master ID MASTER_PCIE (5).
 
     References:
         rtl/ip/pcie_ep_wrapper.v — TLP port mapping, BAR layout, APB registers
@@ -31,13 +36,11 @@ class PCIeModel:
 
     def __init__(
         self,
-        sram: bytearray,
-        dram: bytearray,
+        crossbar: CrossbarModel,
         bar0_base: int = 0x2000_0000,
         bar1_base: int = 0x8000_0000,
     ):
-        self.sram = sram
-        self.dram = dram
+        self.crossbar = crossbar
         self.bar0_base = bar0_base
         self.bar1_base = bar1_base
         self.state = PCIeState(bar0_base=bar0_base, bar1_base=bar1_base)
@@ -55,13 +58,16 @@ class PCIeModel:
     def _resolve_bar(self, addr: int) -> Tuple[bytearray, int]:
         """Map SoC physical address to (memory, offset) via BAR.
 
+        Keeps the legacy BAR-base validation; actual access goes through
+        the crossbar so decode is centralized.
+
         addr < bar1_base -> BAR0/SRAM
         addr >= bar1_base -> BAR1/DRAM
         """
-        if self.bar0_base <= addr < self.bar0_base + len(self.sram):
-            return self.sram, addr - self.bar0_base
-        if self.bar1_base <= addr < self.bar1_base + len(self.dram):
-            return self.dram, addr - self.bar1_base
+        if self.bar0_base <= addr < self.bar0_base + len(self.crossbar.sram):
+            return self.crossbar.sram, addr - self.bar0_base
+        if self.bar1_base <= addr < self.bar1_base + len(self.crossbar.dram):
+            return self.crossbar.dram, addr - self.bar1_base
         raise ValueError(f"Address 0x{addr:08x} out of BAR range")
 
     def _build_memwr_header(self, addr: int, length: int) -> bytes:
@@ -108,17 +114,18 @@ class PCIeModel:
         """Host issues PCIe Memory Write TLP(s) to NPU address space."""
         if not isinstance(data, (bytes, bytearray)):
             raise TypeError("data must be bytes")
-        mem, off = self._resolve_bar(addr)
+        # Validate BAR range; crossbar will re-validate address decode.
+        self._resolve_bar(addr)
         chunks = self._split_payload(data, self.max_payload_bytes)
         self.last_tx_headers = []
+        cur_addr = addr
         for chunk in chunks:
             length_dw = (len(chunk) + 3) // 4
-            header = self._build_memwr_header(addr, length_dw)
+            header = self._build_memwr_header(cur_addr, length_dw)
             self.last_tx_headers.append(header)
             padded = chunk + b"\x00" * (length_dw * 4 - len(chunk))
-            mem[off:off + len(padded)] = padded
-            off += len(padded)
-            addr += len(padded)
+            self.crossbar.write(CrossbarModel.MASTER_PCIE, cur_addr, padded)
+            cur_addr += len(padded)
 
     def tlp_read(self, addr: int, size: int) -> bytes:
         """Host issues PCIe Memory Read TLP(s) and returns read data."""
@@ -126,21 +133,24 @@ class PCIeModel:
             raise ValueError("size must be non-negative")
         if size == 0:
             return b""
-        mem, off = self._resolve_bar(addr)
+        self._resolve_bar(addr)
         result = bytearray()
         self.last_rx_headers = []
-        while size > 0:
-            chunk_size = min(size, self.max_payload_bytes)
+        cur_addr = addr
+        remaining = size
+        while remaining > 0:
+            chunk_size = min(remaining, self.max_payload_bytes)
             length_dw = (chunk_size + 3) // 4
-            header = self._build_memrd_header(addr, length_dw)
+            header = self._build_memrd_header(cur_addr, length_dw)
             self.last_rx_headers.append(header)
-            padded = bytes(mem[off:off + length_dw * 4])
             cpl_header = self._build_completion_header(length_dw)
             self._parse_completion_header(cpl_header)
-            result.extend(padded[:chunk_size])
-            off += length_dw * 4
-            addr += length_dw * 4
-            size -= chunk_size
+            data = self.crossbar.read(
+                CrossbarModel.MASTER_PCIE, cur_addr, length_dw * 4
+            )
+            result.extend(data[:chunk_size])
+            cur_addr += length_dw * 4
+            remaining -= chunk_size
         return bytes(result)
 
     def _build_completion_header(self, length_dw: int) -> bytes:

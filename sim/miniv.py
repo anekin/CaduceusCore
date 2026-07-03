@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
 from engine.isa import OpCode
+from sim.models.crossbar import CrossbarModel
 
 
 @dataclass
@@ -272,6 +273,9 @@ class NPUFirmware:
 
     def _dram_read(self, addr: int, size: int) -> bytes:
         """Read from DRAM with address translation."""
+        xbar = self.mod.get('crossbar')
+        if xbar is not None:
+            return xbar.read(CrossbarModel.MASTER_IBEX, addr, size)
         from sim.regmap import Addr
         off = addr - Addr.DRAM_BASE
         dram = self.mod.get('dram', bytearray())

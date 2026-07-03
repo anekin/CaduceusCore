@@ -723,6 +723,9 @@ def run_forward_pass(gguf_path: str, prompt: str, layers: int = 2,
     consumed = 0
     for layer, ops in enumerate(ops_per_layer):
         model.bridge.modules['sram'] = bytearray(len(model.sram))
+        model.sram[:] = bytearray(len(model.sram))
+        if hasattr(model, 'crossbar'):
+            model.crossbar.sram[:] = bytearray(len(model.sram))
         model.bridge.handle('write', DOORBELL.BASE + DOORBELL.NPU_HEAD, 0)
         model.bridge.handle('write', DOORBELL.BASE + DOORBELL.HOST_TAIL, 0)
         schedule_chain(model, ops)
