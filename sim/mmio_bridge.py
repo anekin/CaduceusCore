@@ -283,17 +283,23 @@ class MMIOBridge:
         if op == 6:
             return sfu.rmsnorm_hw(inp)
         if op == 5:
-            half = length // 2
-            q_in = inp[:half]
-            k_in = inp[half:half + half] if length > half else q_in
-            hd = head_dim if head_dim else (half if half % 2 == 0 else max(half, 2))
-            nq = max(1, half // hd) if hd else 1
-            nk = max(1, len(k_in) // hd) if hd else 1
+            hd = head_dim if head_dim else max(length // 4, 2)
+            k_len = 2 * hd
+            q_len = length - k_len
+            if q_len <= 0:
+                q_len = length // 2
+                k_len = length - q_len
+            q_in = inp[:q_len]
+            k_in = inp[q_len:length]
+            nq = max(1, q_len // hd) if hd else 1
             q_out, k_out = sfu.rope_hw(
                 q_in, k_in, position=pos,
                 num_heads=nq, head_dim=hd
             )
-            return np.concatenate([q_out, k_out])
+            out = np.zeros(length, dtype=np.float32)
+            out[:q_len] = q_out
+            out[q_len:length] = k_out
+            return out
         return inp
 
     # ── VECTOR ──────────────────────────────────────────────────────
