@@ -32,6 +32,7 @@
 | **Environment** | VCS 编译、EDA server、module 加载等问题 |
 | **Formula** | 预期 cycle 公式推导错误 |
 | **Tooling** | 分析工具、diff 脚本、CI 等问题 |
+| **Func Model** | Python golden reference 行为模型错误 — 与 RTL 规范不一致 |
 
 ## Bug 条目模板
 
@@ -126,17 +127,138 @@ N/A — Testbench 类型不需要此章节。
 
 ---
 
+### BUG-SOC-FM-001 — GoldenVector.add/mul INT32 overflow wrap-around
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-04 |
+| **Case** | FM-SOC-030 (Boundary INT32 overflow saturation), Task 17 |
+| **Severity** | Major |
+| **Type** | Func Model reference bug |
+| **Status** | Fixed |
+| **Found by** | Agent |
+
+#### Symptom (症状)
+
+`GoldenVector.add(INT32_MAX, 1)` returned `INT32_MIN` (wrap-around) instead of `INT32_MAX`. `GoldenVector.mul(2^16, 2^16)` returned `0` instead of `INT32_MAX`. The Vector Engine RTL (`vector_alu.v`) specifies saturated INT32 SIMD add/mul, so the Golden Reference must match.
+
+#### Root Cause (根因)
+
+`GoldenVector.add` and `GoldenVector.mul` performed arithmetic in `np.int32` and cast back to `np.int32`, which wraps modulo 2^32 on overflow instead of saturating to `[INT32_MIN, INT32_MAX]`. The RTL Vector ALU uses saturated arithmetic with `$signed()` saturation logic, so the Func Model reference was incorrect.
+
+#### Fix (修复)
+
+Changed both methods in `sim/golden_executor.py` to compute in `np.int64` and apply `np.clip(result, INT32_MIN, INT32_MAX)` before casting back to `np.int32`.
+
+#### Verification (验证)
+
+- `test_boundary_int32_overflow_saturation` (FM-SOC-030) PASS — saturated values match INT32_MAX/MIN, not wrap-around.
+- `test_golden_vector.py` 251/251 PASS — no regression (V-01 random range [-10000,10000] avoids overflow).
+- `test_soc_fm.py` 44/44 PASS — no regression.
+
+#### RTL Impact / Phase 2 Note
+
+RTL `vector_alu.v` already implements saturated INT32 add/mul correctly (lines ~98-112). This bug was in the Func Model reference only. During RTL Phase 2 cross-validation, confirm that `vector_alu.v` saturation bounds match `np.clip(INT32_MIN, INT32_MAX)` exactly for all corner cases (INT32_MAX+1, INT32_MIN-1, 0+0, INT32_MAX+INT32_MAX).
+
+#### References (参考)
+
+- Fix applied in Task 17 (Boundary and Corner Cases, 2026-07-04)
+- See learnings.md 2026-07-04 Task 17
+
+---
+
+### BUG-SOC-FM-002 — GoldenSFU missing FP16 subnormal flush-to-zero
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-04 |
+| **Case** | FM-SOC-031 (FP16 denorm flush boundary), Task 17 |
+| **Severity** | Major |
+| **Type** | Func Model reference bug |
+| **Status** | Fixed |
+| **Found by** | Agent |
+
+#### Symptom (症状)
+
+SFU ops (softmax, gelu, silu, rmsnorm) with subnormal FP16 inputs produced different results than the same ops with zero inputs. The RTL SFU README explicitly states "FP16 subnormals flushed to zero."
+
+#### Root Cause (根因)
+
+`GoldenSFU` hardware methods (`softmax_hw`, `gelu_hw`, `silu_hw`, `layernorm_hw`, `rmsnorm_hw`, `rope_hw`) operated on `float32` values without flushing inputs that are subnormal in `float16`. The MMIO bridge only converted FP16 to FP32, preserving subnormals. The RTL SFU flushes subnormals at the input stage before any computation.
+
+#### Fix (修复)
+
+Added `GoldenSFU._flush_f16_subnormals()` helper in `sim/golden_executor.py` that replaces `abs(x) < np.finfo(np.float16).tiny` values with `0.0`, and applied it at the start of every SFU hardware method.
+
+#### Verification (验证)
+
+- `test_boundary_fp16_denorm_flush` (FM-SOC-031) PASS for softmax, gelu, silu, rmsnorm.
+- `test_sfu_soc_mmio_back_to_back` PASS after fix.
+- `test_golden_sfu.py` + `test_golden_sfu_gaps.py` 110/110 PASS — no regression.
+- `test_soc_fm.py` 44/44 PASS — no regression.
+
+#### RTL Impact / Phase 2 Note
+
+The RTL SFU already flushes FP16 subnormals at the input boundary (verified in `rtl/sfu/README.md`). This bug was in the Func Model reference only. During RTL Phase 2 cross-validation, verify the flush threshold (`abs(x) < 2^-24` for FP16) matches between RTL and Func Model, and confirm no SFU pipeline stage operates on subnormal values before the flush.
+
+#### References (参考)
+
+- Fix applied in Task 17 (Boundary and Corner Cases, 2026-07-04)
+- See learnings.md 2026-07-04 Task 17
+
+---
+
+### BUG-SOC-FM-003 — NPUFirmware._dispatch missing OpCode.RMSNORM
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-04 |
+| **Case** | FM-SOC-10X (P4 E2E host→PCIe→doorbell→firmware→IRQ→17-op blk.0 chain), Task 19 |
+| **Severity** | Major |
+| **Type** | Func Model reference bug |
+| **Status** | Fixed |
+| **Found by** | Agent |
+
+#### Symptom (症状)
+
+Doorbell-queued RMSNorm commands returned `status='unknown'` instead of `'done'`, causing the 17-op blk.0 chain to stall when dispatched through `NPUFirmware.run_loop()`. RMSNorm is used for ops 00 and 10 of the blk.0 manifest.
+
+#### Root Cause (根因)
+
+`NPUFirmware._dispatch()` in `sim/miniv.py` checked `op in (OpCode.SOFTMAX, OpCode.LAYERNORM, OpCode.GELU, OpCode.RELU, OpCode.SILU, OpCode.ROPE)` for the SFU branch. `OpCode.RMSNORM` (value `0x17`) was omitted, even though the MMIO bridge `_handle_sfu()` already supports `sfu_op=6` for RMSNorm and the manifest explicitly uses RMSNorm in the blk.0 chain.
+
+#### Fix (修复)
+
+Added `OpCode.RMSNORM` to the SFU dispatch branch in `sim/miniv.py` and mapped it to `sfu_op=6` in the local `sfu_op` dictionary.
+
+#### Verification (验证)
+
+- `test_e2e_host_pcie_doorbell_firmware_compute` (FM-SOC-10X) PASS — all 17 ops including two RMSNorm ops complete with `status='done'`.
+- `test_soc_fm.py` 46/46 PASS — no regression.
+- `FuncModel.test_conv2d_smoke()` still PASS.
+
+#### RTL Impact / Phase 2 Note
+
+The firmware opcode decode table in the RTL firmware (`firmware/npu_firmware.c` or equivalent) must include `RMSNORM = 0x17` in its dispatch logic. While the MMIO bridge covers the direct-write path, any firmware-driven dispatch that uses an opcode-to-SFU-op mapping table must handle RMSNORM. Verify that the RTL firmware's main dispatch loop covers all 7 SFU opcodes (softmax=1, layernorm=2, gelu=3, silu=4, rope=5, rmsnorm=6) without omission.
+
+#### References (参考)
+
+- Fix applied in Task 19 (P4 E2E, 2026-07-04)
+- See learnings.md 2026-07-04 Task 19
+
+---
+
 ## 统计
 
 | 指标 | 值 |
 |------|:---:|
-| Bug 总数 | 0 |
+| Bug 总数 | 3 |
 | Open | 0 |
-| Fixed | 0 |
+| Fixed | 3 |
 | Won't Fix | 0 |
 | Duplicate | 0 |
 | Critical | 0 |
-| Major | 0 |
+| Major | 3 |
 | Minor | 0 |
 | Trivial | 0 |
 | RTL | 0 |
@@ -145,3 +267,4 @@ N/A — Testbench 类型不需要此章节。
 | Environment | 0 |
 | Formula | 0 |
 | Tooling | 0 |
+| Func Model | 3 |
