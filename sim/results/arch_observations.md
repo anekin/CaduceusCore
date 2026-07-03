@@ -1,5 +1,99 @@
 # Architectural Observations Log
 
+## 2026-07-03 20:08 — Iteration 142 — Stable, No Code Issues (50th Clean Run since iter 92)
+
+### Run Summary
+- **Iteration**: 142 (stable since iter 92, 50 consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 9 health checks**: ✅ PASS
+- **No changes**: identical to prior iterations, converged steady state
+
+### Status
+Unchanged. M=1 decode at 64×64 remains DRAM-BW-bound (33.0/43.5 GB/s = 76%).
+64×256 hits 25.0 tok/s @ 32mm² (+5mm²). All larger arrays hit target.
+
+### Cron Constraint Staleness (ongoing — 35 iterations uncorrected since iter 107)
+Same 3 stale constraints — all auto-flagged by stale-constraint table:
+1. "DRAM BW 不是瓶颈：需求 20.2 < 可用 43.5 GB/s" → actual 33.0 GB/s (+63%)
+2. "batch M≥2 → 31 tok/s" → actual 12 tok/s raw (−62%)
+3. "真正的瓶颈：M=1 decode 的 tiling overhead" → primary bottleneck is DRAM BW
+
+Self-verification correctly flags all 3. No impact on decisions.
+
+---
+
+## 2026-07-03 14:05 — Iteration 139 — Stable, No Code Issues (47th Clean Run since iter 92)
+
+### Run Summary
+- **Iteration**: 139 (stable since iter 92, 47 consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 9 health checks**: ✅ PASS
+- **No changes**: identical to prior iterations, converged steady state
+
+### Status
+Unchanged. M=1 decode at 64×64 remains DRAM-BW-bound (33.0/43.5 GB/s = 76%).
+64×256 hits 25.0 tok/s @ 32mm² (+5mm²). All larger arrays hit target.
+
+### Cron Constraint Staleness (ongoing — 32 iterations uncorrected since iter 107)
+Same 3 stale constraints in cron prompt — all 3 auto-flagged by stale-constraint table:
+1. "DRAM BW 不是瓶颈：需求 20.2 < 可用 43.5 GB/s" → actual 33.0 GB/s
+2. "batch M≥2 → 31 tok/s" → actual 12 tok/s raw (inter-op parallelism not implemented)
+3. "真正的瓶颈：M=1 decode 的 tiling overhead" → primary bottleneck is DRAM BW, not tiling
+
+### Meta-Issue: Cron Prompt Staleness
+The loop's self-verification correctly catches stale constraints every iteration, but the cron prompt (set by user) hasn't been updated in 32+ iterations. This is not a code bug — it's a workflow gap: the cron prompt text is hand-maintained outside the simulator's auto-fix loop. The stale numbers don't affect simulator decisions (all decisions use ground-truth measurements), only the human-readable prompt text.
+
+---
+
+## 2026-07-03 10:10 — Iteration 137 — Stable, No Code Issues (45th Clean Run since iter 92)
+
+### Run Summary
+- **Iteration**: 137 (stable since iter 92, 45 consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 9 health checks**: ✅ PASS
+- **No changes**: identical to prior iterations, converged steady state
+
+### Status
+Unchanged. M=1 decode at 64×64 remains DRAM-BW-bound (33.0/43.5 GB/s = 76%).
+64×256 hits 25.0 tok/s @ 32mm² (+5mm²). All larger arrays hit target.
+
+### Cron Constraint Staleness (ongoing — uncorrected since iter 107)
+Same 3 stale constraints in cron prompt — all 3 auto-flagged by stale-constraint table:
+1. "DRAM BW 不是瓶颈：需求 20.2 < 可用 43.5 GB/s" → actual 33.0 GB/s
+2. "batch M≥2 → 31 tok/s" → actual 12 tok/s raw
+3. "真正的瓶颈：M=1 decode 的 tiling overhead" → primary bottleneck is DRAM BW
+
+Self-verification correctly flags all 3. No impact on decisions.
+
+---
+
+## 2026-07-03 02:01 — Iteration 133 — Stable, No Code Issues (29th Clean Run)
+
+### Run Summary
+- **Iteration**: 133 (stable since iter 104, 29 consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 6 health checks**: ✅ PASS
+- **No changes**: identical to iter 131, converged steady state
+
+### Status
+Unchanged. M=1 decode at 64×64 remains DRAM-BW-bound (33.0/43.5 GB/s = 76%).
+64×256 hits 25.0 tok/s @ 32mm² (+5mm²). All larger arrays hit target.
+
+### Cron Constraint Staleness (ongoing — 26 iterations uncorrected since iter 107)
+Same 3 stale constraints in cron prompt:
+1. "DRAM BW 不是瓶颈：需求 20.2 < 可用 43.5 GB/s" — **Wrong**: 33.0 GB/s actual
+2. "batch M≥2 → 31 tok/s" — **Wrong**: 12 tok/s raw (31 requires unimplemented inter-op parallelism)
+3. "真正的瓶颈：M=1 decode 的 tiling overhead" — **Misleading**: Primary bottleneck is DRAM BW, not tiling
+
+Self-verification (stale-constraint table auto-generated in summary) correctly flags all 3.
+Code is self-healing — the stale numbers don't affect decisions, only the cron prompt text.
+
+---
+
 ## 2026-07-02 22:07 — Iteration 131 — Stable, No Code Issues (27th Clean Run)
 
 ### Run Summary
