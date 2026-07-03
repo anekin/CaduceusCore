@@ -81,7 +81,7 @@
 
 ---
 
-## P1: Compute Engine Control Paths (4 cases)
+## P1: Compute Engine Control Paths (5 cases)
 
 > 理由: Compute engines must produce bit-exact results through the FuncModel firmware dispatch path. These paths are verified independently at module level; P1 validates them through SoC integration.
 
@@ -91,6 +91,7 @@
 | FM-SOC-010 | P1 | `test_golden_mxu_quant.py` + `test_golden_mxu_edges.py` | MXU-COMPUTE (path 3): INT4 per-block quantize, matmul_int4_per_block, overflow clamping, zero-dim, edge cases. Verify through single-tile and multi-tile scenarios | All `matmul_int4` results bit-exact vs INT64 reference ref; max M*N up to 128×4096; zero activations/weights produce zero output | ✅ | 42/42 PASS: pack/unpack roundtrip + sign extension bit-exact; single/multi-tile MMUL (M1..16 × K32..256 × N16..128) per-block/ per-channel bit-exact vs INT64 ref; non-square M=1/N=4096, M=128/N=4096 PASS; zero in→zero out; INT32 saturation in-range; anti-vacuous (10 tests) mismatch detected |
 | FM-SOC-011 | P1 | `test_golden_sfu.py` + `test_golden_sfu_gaps.py` + `test_soc_fm.py::test_sfu_soc_mmio_*` | SFU-COMPUTE (path 4): all 7 SFU ops (softmax/layernorm/rmsnorm/gelu/silu/rope/exp). Verify against numpy float32 reference | softmax sums to 1 (abs_tol=1e-3); gelu/silu vs ref (abs=2e-3, rel=1e-2); CORDIC angles error < 0.01°; no NaN on large inputs | ✅ | softmax N=2/16/128/1024 PASS (abs_tol=2e-3,rel_tol=1e-2); layernorm PASS; rmsnorm N=1 corner PASS; gelu ±4 boundary PASS; silu PASS; rope pos=0/100000/random-5-pairs PASS; back-to-back softmax→rmsnorm PASS; SF-08 rope 50 random pairs PASS; SF-09 rmsnorm N=1x20 PASS. 133/133 total |
 | FM-SOC-012 | P1 | `test_golden_vector.py` + `test_soc_fm.py::test_vector_soc_mmio_*` | VECTOR-COMPUTE (path 5): all Vector ops (add/mul/max/sum_reduce/type_convert/resid_add). INT32 bit-exact, FP16 match numpy | add/mul 1000 random groups 0 LSB; max_reduce/ sum_reduce bit-exact; INT32→FP16 roundtrip for [-65536,65536] 0 LSB; resid_add saturation clamps | ✅ | 251/251 PASS (test_golden_vector.py) — add/mul 1000 groups 0 LSB; max_reduce 100 groups bit-exact; sum_reduce 1e-7×10000 <1%; INT32→FP16 roundtrip exact for 12 key values; resid_add preserves delta+overflows clamps. SoC MMIO: 5 Vector ops (ADD/MUL/MAX/SUM/CONV/RESID) through bridge vs direct GoldenVector — bit-exact INT32, FP16 pipeline verified |
+| FM-SOC-024 | P1 | `test_soc_fm.py::test_pcie_integration` | PCIE-TLP+MXU+XBAR (paths 7+3+8): host→PCIe→DRAM→MXU compute→DRAM→PCIe→host full chain. INT4 per-block scale path, non-trivial M=1/K=8/N=4 | `np.allclose(rtol=1e-5)` vs GoldenMXU direct compute; TLP readback of activation data bit-exact; MXU STATUS=DONE | ✅ | PCIe integration: TLP write activation/wgt/scale→DRAM→MXU MMUL via MMIO with DRAM addresses→TLP readback matches GoldenMXU per-block matmul (M=1,K=8,N=4, scale=1.0). TLP readback of activation data bit-exact; MXU STATUS=2 (DONE). 1/1 PASS |
 
 ---
 
@@ -159,6 +160,7 @@
 | FM-SOC-021 | ✅ | ✅ | ✅ | | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | | ✅ |
 | FM-SOC-022 | ✅ | ✅ | ✅ | ✅ | ✅ | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | FM-SOC-023 | | | ✅ | ✅ | ✅ | | | | | | | ✅ | |
+| FM-SOC-024 | | | ✅ | | | | ✅ | ✅ | | | | | |
 
 ---
 
@@ -233,9 +235,9 @@
 
 ## 统计
 
-总计:     23 cases
+总计:     24 cases
 P0:        8 cases (6 data paths + 2 anti-vacuous)
-P1:        4 cases (firmware + 3 compute engines)
+P1:        5 cases (firmware + 3 compute engines + PCIe integration)
 P2:        4 cases (DMA, multi-engine, MMIO-through-CPU, doorbell dispatch)
 P3:        4 cases (boundary — APB, DMA, Ibex, firmware)
 P4:        3 cases (full E2E, multi-engine pipeline)

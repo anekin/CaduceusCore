@@ -95,6 +95,87 @@ def test_pcie_corrupted():
     assert readback != corrupted
 
 
+# ══════════════════════════════════════════════════════════════════════
+# Path #7 + #3 + #8 integration — PCIe→DRAM→MXU→DRAM→PCIe (FM-SOC-024)
+# ══════════════════════════════════════════════════════════════════════
+
+
+def test_pcie_integration():
+    """Full host→PCIe→DRAM→MXU compute→DRAM→PCIe→host integration.
+
+    Exercises paths 7 (PCIE), 3 (MXU), and 8 (XBAR):
+      1. Host writes activation, packed INT4 weights, and scale data to DRAM
+         via PCIe TLP (path 7: PCIE-TLP).
+      2. Host dispatches MXU MMUL via MMIO bridge with DRAM addresses for
+         I_ADDR/W_ADDR/O_ADDR/SCALE_ADDR. MXU reads inputs and writes output
+         through crossbar (paths 3+8: MXU-COMPUTE + XBAR-ARB).
+      3. Host reads result from DRAM via PCIe TLP (path 7: PCIE-TLP).
+      4. Result compared against GoldenMXU.matmul_int4_per_block().
+    """
+    from sim.regmap import MXU
+    from sim.golden_executor import GoldenMXU
+
+    model = FuncModel()
+
+    M, K, N = 1, 8, 4
+    group_size = 128
+
+    act = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int8).reshape(M, K)
+
+    wgt_unpacked = np.array([
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+    ], dtype=np.int8)
+
+    wgt_packed = GoldenMXU.pack_int4(wgt_unpacked.flatten())
+
+    num_blocks = (K + group_size - 1) // group_size
+    scales = np.ones((num_blocks, N), dtype=np.float32)
+
+    act_addr = 0x8001_0000
+    wgt_addr = 0x8002_0000
+    out_addr = 0x8100_0000
+    scale_addr = 0x8011_0000
+
+    model.pcie.tlp_write(act_addr, act.tobytes())
+    model.pcie.tlp_write(wgt_addr, wgt_packed.tobytes())
+    model.pcie.tlp_write(scale_addr, scales.tobytes())
+
+    verify_act = model.pcie.tlp_read(act_addr, act.nbytes)
+    assert verify_act == act.tobytes(), "TLP readback of activation data mismatch"
+
+    bridge = model.bridge
+    bridge.handle('write', MXU.BASE + MXU.CTRL, 0)
+    bridge.handle('write', MXU.BASE + MXU.DIM0, (K << 16) | M)
+    bridge.handle('write', MXU.BASE + MXU.DIM1, N)
+    bridge.handle('write', MXU.BASE + MXU.I_ADDR, act_addr)
+    bridge.handle('write', MXU.BASE + MXU.W_ADDR, wgt_addr)
+    bridge.handle('write', MXU.BASE + MXU.O_ADDR, out_addr)
+    bridge.handle('write', MXU.BASE + MXU.SCALE_ADDR, scale_addr)
+
+    bridge.handle('write', MXU.BASE + MXU.CMD, 1)
+
+    status = bridge.handle('read', MXU.BASE + MXU.STATUS)
+    assert status == 2, f"MXU STATUS={status}, expected DONE(2)"
+
+    result_bytes = model.pcie.tlp_read(out_addr, M * N * 4)
+    result = np.frombuffer(result_bytes, dtype=np.float32).reshape(M, N)
+
+    golden = model.mxu.matmul_int4_per_block(
+        act, wgt_packed, scales, M, K, N, group_size=128)
+
+    assert np.allclose(result, golden, rtol=1e-5), (
+        f"PCIe integration mismatch: "
+        f"got {result.tolist()}, expected {golden.tolist()}"
+    )
+
+
 def test_crossbar_concurrent():
     """3 masters (MXU read + DMA read + PCIe write) concurrently, different addresses."""
     from sim.models.crossbar import CrossbarModel
