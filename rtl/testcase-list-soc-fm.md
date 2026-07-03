@@ -97,7 +97,7 @@
 
 ---
 
-## P2: Integration — Cross-Module Data Paths (4 cases)
+## P2: Integration — Cross-Module Data Paths (5 cases)
 
 > 理由: Individual engine correctness is necessary but not sufficient — cross-module data format conversion and shared memory consistency must be verified.
 
@@ -107,6 +107,7 @@
 | FM-SOC-014 | P2 | `test_golden_cross_module.py::test_int4_int8_int32_bf16_fp32_e2e` + `test_mxu_bf16_softmax_vs_float32_ref` | MULTI-ENGINE (path 12): MXU INT4×INT8→INT32 → BF16 type-convert → SFU softmax → Vector resid_add. Full in-chip data pipeline | max_rel_err < 1e-3 for INT32→BF16→FP32 chain; softmax vs float32 ref abs_tol=1e-4; resid_add roundtrip bit-exact | ⬜ | |
 | FM-SOC-015 | P2 | `test_soc_fm.py::test_riscv_mmio_routing` + `test_apb_handshake_basics` | MMIO via Ibex CPU (path 1+2 integration): Ibex issues store to MMIO address (MXU CTRL), value arrives via APB decoder. Verify MMIO readback through Ibex load | `_mem_write(MXU_BASE, 0x3)` → `_mem_read(MXU_BASE)` = 0x3; value consistent with direct `bridge.apb_read(MXU_BASE)` | ⬜ | |
 | FM-SOC-016 | P2 | `test_soc_fm.py::test_firmware_bootflow` (MMUL dispatch) + `test_firmware.py::test_dispatch_mmul` | Ibex firmware dispatches engine commands via doorbell (path 10+11): host writes descriptor → firmware reads → programs MMIO registers → starts engine → waits for completion | `host_write_descriptor` → firmware dispatches → engine produces result → result in DRAM matches GoldenExecutor direct call | ⬜ | |
+| FM-SOC-027 | P2 | `test_soc_fm.py::test_blk0_full_chain_single_tile` | MULTI-ENGINE (path 12): Full Qwen2.5-3B blk.0 17-op chain through FuncModel MMIO bridge. Exercises MXU×9, SFU×5, Vector×3 with real weights/vectors and single-tile MMUL workaround | 17/17 ops complete without crash; MMUL bit-exact vs GoldenMXU; SFU within `tol_abs=2e-3, tol_rel=1e-2`; Vector bit-exact; anti-vacuous corruption detected | ✅ | 17/17 ops PASS: 9 MMUL (single-tile M/K/N clamped to ≤64) bit-exact vs GoldenMXU; 5 SFU (RMSNorm×2, Softmax, RoPE, SiLU) within FP16 tolerance vs GoldenSFU; 3 Vector (VMUL, VRESID×2) bit-exact vs GoldenVector. Anti-vacuous: corrupted Q_proj weight produces mismatch. Full `test_soc_fm.py` 39/39 PASS; `func_model.py` smoke still PASS |
 
 ---
 
@@ -165,6 +166,7 @@
 | FM-SOC-024 | | | ✅ | | | | ✅ | ✅ | | | | | |
 | FM-SOC-025 | | | | | | | | ✅ | | | | | |
 | FM-SOC-026 | | | ✅ | ✅ | ✅ | | | | ✅ | ✅ | ✅ | | |
+| FM-SOC-027 | ✅ | | ✅ | ✅ | ✅ | | | | | | | ✅ | |
 
 ---
 
@@ -239,10 +241,10 @@
 
 ## 统计
 
-总计:     26 cases
+总计:     27 cases
 P0:        8 cases (6 data paths + 2 anti-vacuous)
 P1:        7 cases (firmware + doorbell/IRQ + 3 compute engines + PCIe integration + crossbar stress)
-P2:        4 cases (DMA, multi-engine, MMIO-through-CPU, doorbell dispatch)
+P2:        5 cases (DMA, multi-engine×2, MMIO-through-CPU, doorbell dispatch)
 P3:        4 cases (boundary — APB, DMA, Ibex, firmware)
 P4:        3 cases (full E2E, multi-engine pipeline)
 ─────────────────────
