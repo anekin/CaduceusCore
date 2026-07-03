@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 from sim.func_model import FuncModel
-from sim.golden_executor import GoldenSFU
-from sim.regmap import Addr, SFU
+from sim.golden_executor import GoldenSFU, GoldenVector
+from sim.regmap import Addr, SFU, VECTOR, DMA
 from sim.models.crossbar import CrossbarModel
 
 
@@ -736,6 +736,226 @@ def test_sfu_soc_mmio_back_to_back():
     assert not np.allclose(cascade_out, softmax_out, atol=1e-6), (
         "Back-to-back: rmsnorm(softmax(x)) == softmax(x) — vacuous"
     )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Path #5 — Vector compute through MMIO bridge (FM-SOC-012)
+# ══════════════════════════════════════════════════════════════════════
+
+_VEC_A_OFF = 0x30000   # Vector A input (raw SRAM offset)
+_VEC_B_OFF = 0x31000   # Vector B input
+_VEC_O_OFF = 0x40000   # Vector output
+
+_RNG_VEC = np.random.RandomState(20260704)
+
+
+def _vec_write_i32(model, data: np.ndarray, raw_offset: int):
+    """Write INT32 data to SRAM at raw offset."""
+    model.sram[raw_offset:raw_offset + data.nbytes] = data.tobytes()
+
+
+def _vec_write_f16(model, data: np.ndarray, raw_offset: int):
+    """Write float32 data as FP16 bytes to SRAM."""
+    fp16_bytes = data.astype(np.float16).tobytes()
+    model.sram[raw_offset:raw_offset + len(fp16_bytes)] = fp16_bytes
+
+
+def _vec_read_i32(model, n: int, raw_offset: int) -> np.ndarray:
+    """Read N INT32 elements from SRAM at raw offset."""
+    nb = n * 4
+    return np.frombuffer(bytes(model.sram[raw_offset:raw_offset + nb]), dtype=np.int32)
+
+
+def _vec_read_f16(model, n: int, raw_offset: int) -> np.ndarray:
+    """Read N FP16 elements as float32 from SRAM at raw offset."""
+    nb = n * 2
+    return np.frombuffer(bytes(model.sram[raw_offset:raw_offset + nb]), dtype=np.float16).astype(np.float32)
+
+
+def _vec_mmio_op(model, op: int, dim: int):
+    """Run one Vector op through the MMIO bridge."""
+    bridge = model.bridge
+    bridge.handle('write', VECTOR.BASE + VECTOR.CTRL, op)
+    bridge.handle('write', VECTOR.BASE + VECTOR.A_ADDR, _VEC_A_OFF)
+    bridge.handle('write', VECTOR.BASE + VECTOR.B_ADDR, _VEC_B_OFF)
+    bridge.handle('write', VECTOR.BASE + VECTOR.O_ADDR, _VEC_O_OFF)
+    bridge.handle('write', VECTOR.BASE + VECTOR.DIM, dim)
+    bridge.handle('write', VECTOR.BASE + VECTOR.CMD, 1)
+
+
+def _vec_mmio_wait(model):
+    """Poll Vector STATUS until DONE."""
+    status = model.bridge.handle('read', VECTOR.BASE + VECTOR.STATUS)
+    assert status == 2, f"Vector STATUS={status}, expected DONE(2)"
+
+
+def test_vector_soc_mmio_add_mul():
+    """Vector ADD and MUL through MMIO bridge: INT32 elements vs GoldenVector."""
+    model = FuncModel()
+    vec = GoldenVector()
+    dim = 32
+
+    a = _RNG_VEC.randint(-10000, 10000, size=dim).astype(np.int32)
+    b = _RNG_VEC.randint(-10000, 10000, size=dim).astype(np.int32)
+    _vec_write_i32(model, a, _VEC_A_OFF)
+    _vec_write_i32(model, b, _VEC_B_OFF)
+
+    _vec_mmio_op(model, op=0, dim=dim)
+    _vec_mmio_wait(model)
+    add_out = _vec_read_i32(model, dim, _VEC_O_OFF)
+    ref_add = vec.add(a, b)
+    assert np.array_equal(add_out, ref_add), "Vector ADD: MMIO vs direct mismatch"
+
+    _vec_mmio_op(model, op=1, dim=dim)
+    _vec_mmio_wait(model)
+    mul_out = _vec_read_i32(model, dim, _VEC_O_OFF)
+    ref_mul = vec.mul(a, b)
+    assert np.array_equal(mul_out, ref_mul), "Vector MUL: MMIO vs direct mismatch"
+
+    # Anti-vacuous: ADD != MUL for non-trivial input
+    assert not np.array_equal(add_out, mul_out), "ADD and MUL must differ (anti-vacuous)"
+
+
+def test_vector_soc_mmio_reduce():
+    """Vector MAX and SUM reduce through MMIO bridge (FP16 pipeline)."""
+    model = FuncModel()
+    dim = 16
+
+    inp = _RNG_VEC.randn(dim).astype(np.float32)
+    _vec_write_f16(model, inp, _VEC_A_OFF)
+
+    # MAX reduce (op=2): reads FP16, outputs single FP16
+    _vec_mmio_op(model, op=2, dim=dim)
+    _vec_mmio_wait(model)
+    max_out = _vec_read_f16(model, 1, _VEC_O_OFF)[0]
+    assert max_out == pytest.approx(float(np.max(inp)), rel=1e-3), \
+        f"MAX reduce: {max_out} vs {float(np.max(inp))}"
+
+    # SUM reduce (op=3): reads FP16, outputs single FP16
+    _vec_write_f16(model, inp, _VEC_A_OFF)
+    _vec_mmio_op(model, op=3, dim=dim)
+    _vec_mmio_wait(model)
+    sum_out = _vec_read_f16(model, 1, _VEC_O_OFF)[0]
+    assert sum_out == pytest.approx(float(np.sum(inp)), rel=1e-3), \
+        f"SUM reduce: {sum_out} vs {float(np.sum(inp))}"
+
+    # Anti-vacuous: MAX != SUM for non-uniform input
+    assert max_out != sum_out, "MAX and SUM reduce must differ (anti-vacuous)"
+
+
+def test_vector_soc_mmio_type_convert():
+    """Vector INT32→FP16 type conversion through MMIO bridge."""
+    model = FuncModel()
+    vec = GoldenVector()
+    dim = 32
+
+    inp = _RNG_VEC.randint(-2048, 2048, size=dim).astype(np.int32)
+    _vec_write_i32(model, inp, _VEC_A_OFF)
+
+    # CONV (op=4): INT32→FP16, dim*4 bytes input → dim*2 bytes output
+    _vec_mmio_op(model, op=4, dim=dim)
+    _vec_mmio_wait(model)
+    conv_out = _vec_read_f16(model, dim, _VEC_O_OFF)
+
+    ref = vec.conv_i32_to_f16(inp).astype(np.float32)
+    assert np.allclose(conv_out, ref, atol=1e-4), \
+        f"CONV: max_abs={float(np.max(np.abs(conv_out - ref))):.2e}"
+
+    # Anti-vacuous: saturated values differ from original
+    large = np.array([np.iinfo(np.int32).max], dtype=np.int32)
+    _vec_write_i32(model, large, _VEC_A_OFF)
+    _vec_mmio_op(model, op=4, dim=1)
+    _vec_mmio_wait(model)
+    sat_out = _vec_read_f16(model, 1, _VEC_O_OFF)[0]
+    assert sat_out < np.iinfo(np.int32).max, "INT32_MAX must saturate in CONV"
+
+
+def test_vector_soc_mmio_resid_add():
+    """Vector residual_add through MMIO bridge: FP16 exact original + INT32 delta, with saturation.
+
+    The MMIO path stores the original as FP16 in SRAM, so values must be
+    FP16-exact (integers in [-2048, 2048]) to avoid FP16→FP32 precision loss.
+    """
+    model = FuncModel()
+    vec = GoldenVector()
+    dim = 16
+
+    # Use FP16-exact integer values to avoid FP16→FP32 precision loss
+    original = _RNG_VEC.randint(-2000, 2000, size=dim).astype(np.float32)
+    delta = _RNG_VEC.randint(-500, 500, size=dim).astype(np.int32)
+    _vec_write_f16(model, original, _VEC_A_OFF)
+    _vec_write_i32(model, delta, _VEC_B_OFF)
+
+    _vec_mmio_op(model, op=5, dim=dim)
+    _vec_mmio_wait(model)
+    resid_out = _vec_read_i32(model, dim, _VEC_O_OFF)
+
+    ref = vec.residual_add(original, delta)
+    assert np.array_equal(resid_out, ref), \
+        f"RESID: MMIO vs direct mismatch at index {np.where(resid_out != ref)[0]}"
+
+    # Saturation: FP16-exact original + INT32_MAX delta overflows INT32
+    # FP16 exact 50000 + INT32_MAX 2147483647 = 2147533647 > INT32_MAX → clip
+    sat_orig = np.array([50000.0], dtype=np.float32)
+    sat_delta = np.array([np.iinfo(np.int32).max], dtype=np.int32)
+    _vec_write_f16(model, sat_orig, _VEC_A_OFF)
+    _vec_write_i32(model, sat_delta, _VEC_B_OFF)
+    _vec_mmio_op(model, op=5, dim=1)
+    _vec_mmio_wait(model)
+    sat_out = _vec_read_i32(model, 1, _VEC_O_OFF)
+    assert sat_out[0] == np.iinfo(np.int32).max, \
+        f"RESID overflow: got {sat_out[0]}, expected INT32_MAX"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Path #6 — DMA transfer through MMIO bridge (FM-SOC-013)
+# ══════════════════════════════════════════════════════════════════════
+
+_DMA_SRAM_OFF = 0x50000   # SRAM raw offset for DMA test data
+_DMA_DRAM_ADDR = 0x8001_0000  # DRAM address for DMA test
+
+
+def test_dma_soc_mmio_load_store():
+    """DMA load (CH0 DRAM→SRAM) and store (CH1 SRAM→DRAM) through MMIO bridge."""
+    model = FuncModel()
+    bridge = model.bridge
+    size = 128
+
+    # ── Load (CH0): write known pattern to DRAM, DMA-load to SRAM ──
+    dram_off = _DMA_DRAM_ADDR - Addr.DRAM_BASE
+    pattern_src = np.arange(size, dtype=np.uint8)
+    model.dram[dram_off:dram_off + size] = pattern_src.tobytes()
+
+    bridge.handle('write', DMA.BASE + DMA.CH0_SRC, _DMA_DRAM_ADDR)
+    bridge.handle('write', DMA.BASE + DMA.CH0_DST, Addr.SRAM_BASE + _DMA_SRAM_OFF)
+    bridge.handle('write', DMA.BASE + DMA.CH0_SIZE, size)
+    bridge.handle('write', DMA.BASE + DMA.CMD, 1)
+
+    sram_read = bytes(model.sram[_DMA_SRAM_OFF:_DMA_SRAM_OFF + size])
+    assert sram_read == pattern_src.tobytes(), \
+        "DMA load: SRAM data after load must match DRAM source"
+
+    # ── Store (CH1): write known pattern to SRAM, DMA-store to DRAM ──
+    pattern_store = bytes(range(100, 100 + size))
+    store_sram_off = _DMA_SRAM_OFF + 0x1000
+    model.sram[store_sram_off:store_sram_off + size] = pattern_store
+
+    bridge.handle('write', DMA.BASE + DMA.CH1_SRC, Addr.SRAM_BASE + store_sram_off)
+    bridge.handle('write', DMA.BASE + DMA.CH1_DST, _DMA_DRAM_ADDR + 0x1000)
+    bridge.handle('write', DMA.BASE + DMA.CH1_SIZE, size)
+    bridge.handle('write', DMA.BASE + DMA.CMD, 1)
+
+    dram_data = bytes(model.dram[dram_off + 0x1000:dram_off + 0x1000 + size])
+    assert dram_data == pattern_store, \
+        "DMA store: DRAM data after store must match SRAM source"
+
+    # ── Anti-vacuous: load != store (different data directions) ──
+    assert sram_read != dram_data, \
+        "DMA load and store must transfer different data (anti-vacuous)"
+
+    # Verify STATUS is DONE after transfer
+    status = bridge.handle('read', DMA.BASE + DMA.STATUS)
+    assert status == 2, f"DMA STATUS={status}, expected DONE(2)"
 
 
 # ══════════════════════════════════════════════════════════════════════
