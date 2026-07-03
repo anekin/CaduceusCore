@@ -2130,3 +2130,70 @@ def test_boundary_all_zero_vectors():
     assert np.allclose(softmax_zero, 1.0 / sfu_len, atol=1e-6), "Softmax on zero input must be uniform"
 
 
+
+def test_boundary_int32_overflow_saturation():
+    """Vector resid_add/add/mul saturate INT32 overflow instead of wrapping.
+
+    Anti-vacuous: saturated result must differ from the wrap-around value.
+    """
+    model = FuncModel()
+    bridge = model.bridge
+    vec = GoldenVector()
+    INT32_MAX = np.iinfo(np.int32).max
+    INT32_MIN = np.iinfo(np.int32).min
+
+    # ── resid_add overflow (positive) ──
+    orig = np.array([50000.0], dtype=np.float32)
+    delta = np.array([INT32_MAX], dtype=np.int32)
+    _vec_write_f16(model, orig, _VEC_A_OFF)
+    _vec_write_i32(model, delta, _VEC_B_OFF)
+    _vec_mmio_op(model, op=5, dim=1)
+    _vec_mmio_wait(model)
+    resid_out = _vec_read_i32(model, 1, _VEC_O_OFF)[0]
+    assert resid_out == INT32_MAX, f"resid_add overflow: got {resid_out}, expected INT32_MAX"
+    # Wrap-around would be 50000 + INT32_MAX (mod 2^32) = -2147433648
+    assert resid_out != np.int64(50000) + np.int64(INT32_MAX), "resid_add anti-vacuous: saturated != wrap"
+
+    # ── add overflow (positive) ──
+    a = np.array([INT32_MAX], dtype=np.int32)
+    b = np.array([1], dtype=np.int32)
+    _vec_write_i32(model, a, _VEC_A_OFF)
+    _vec_write_i32(model, b, _VEC_B_OFF)
+    _vec_mmio_op(model, op=0, dim=1)
+    _vec_mmio_wait(model)
+    add_out = _vec_read_i32(model, 1, _VEC_O_OFF)[0]
+    assert add_out == INT32_MAX, f"add overflow: got {add_out}, expected INT32_MAX"
+    assert add_out != np.int32(np.int64(INT32_MAX) + 1), "add anti-vacuous: saturated != wrap"
+
+    # ── add overflow (negative) ──
+    a = np.array([INT32_MIN], dtype=np.int32)
+    b = np.array([-1], dtype=np.int32)
+    _vec_write_i32(model, a, _VEC_A_OFF)
+    _vec_write_i32(model, b, _VEC_B_OFF)
+    _vec_mmio_op(model, op=0, dim=1)
+    _vec_mmio_wait(model)
+    add_out_min = _vec_read_i32(model, 1, _VEC_O_OFF)[0]
+    assert add_out_min == INT32_MIN, f"add underflow: got {add_out_min}, expected INT32_MIN"
+
+    # ── mul overflow (positive) ──
+    a = np.array([2**16], dtype=np.int32)
+    b = np.array([2**16], dtype=np.int32)
+    _vec_write_i32(model, a, _VEC_A_OFF)
+    _vec_write_i32(model, b, _VEC_B_OFF)
+    _vec_mmio_op(model, op=1, dim=1)
+    _vec_mmio_wait(model)
+    mul_out = _vec_read_i32(model, 1, _VEC_O_OFF)[0]
+    assert mul_out == INT32_MAX, f"mul overflow: got {mul_out}, expected INT32_MAX"
+    assert mul_out != np.int32(np.int64(2**16) * np.int64(2**16)), "mul anti-vacuous: saturated != wrap"
+
+    # ── mul overflow (negative) ──
+    a = np.array([2**16], dtype=np.int32)
+    b = np.array([-2**16], dtype=np.int32)
+    _vec_write_i32(model, a, _VEC_A_OFF)
+    _vec_write_i32(model, b, _VEC_B_OFF)
+    _vec_mmio_op(model, op=1, dim=1)
+    _vec_mmio_wait(model)
+    mul_out_min = _vec_read_i32(model, 1, _VEC_O_OFF)[0]
+    assert mul_out_min == INT32_MIN, f"mul underflow: got {mul_out_min}, expected INT32_MIN"
+
+

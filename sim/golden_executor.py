@@ -658,13 +658,15 @@ class GoldenVector:
 
     @staticmethod
     def add(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-        """Element-wise add in INT32."""
-        return (a.astype(np.int32) + b.astype(np.int32)).astype(np.int32)
+        """Element-wise add in INT32 with saturation."""
+        result = a.astype(np.int64) + b.astype(np.int64)
+        return np.clip(result, INT32_MIN, INT32_MAX).astype(np.int32)
 
     @staticmethod
     def mul(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-        """Element-wise multiply in INT32."""
-        return (a.astype(np.int32) * b.astype(np.int32)).astype(np.int32)
+        """Element-wise multiply in INT32 with saturation."""
+        result = a.astype(np.int64) * b.astype(np.int64)
+        return np.clip(result, INT32_MIN, INT32_MAX).astype(np.int32)
 
     # ── Reductions ──────────────────────────────────────────────────
 
