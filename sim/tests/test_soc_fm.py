@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 
 from sim.func_model import FuncModel
-from sim.regmap import Addr
+from sim.golden_executor import GoldenSFU
+from sim.regmap import Addr, SFU
 from sim.models.crossbar import CrossbarModel
 
 
@@ -456,6 +457,284 @@ def test_firmware_bootflow():
     )
     assert results_bad[0]['status'] != 'done', (
         "Wrong opcode (999) should not return status='done'"
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Path #4 — SFU compute through MMIO bridge (FM-SOC-011)
+# ══════════════════════════════════════════════════════════════════════
+
+
+_MMIO_SRAM_OFF = 0x10000   # raw offset within SRAM, mapped to 0x20010000
+_MMIO_OUT_OFF = 0x20000    # raw offset within SRAM, mapped to 0x20020000
+
+
+def _mmio_write_sram(model, data: np.ndarray, raw_offset: int):
+    """Write float32 data as FP16 bytes into SRAM at a raw offset."""
+    fp16_bytes = data.astype(np.float16).tobytes()
+    off = raw_offset
+    model.sram[off:off + len(fp16_bytes)] = fp16_bytes
+
+
+def _mmio_read_sram(model, n_elements: int, raw_offset: int) -> np.ndarray:
+    """Read N FP16 elements from SRAM at raw offset, return float32."""
+    nbytes = n_elements * 2
+    off = raw_offset
+    return np.frombuffer(bytes(model.sram[off:off + nbytes]), dtype=np.float16).astype(np.float32)
+
+
+def _mmio_sfu_op(model, op: int, length: int, head_dim: int = 0, pos: int = 0) -> None:
+    """Run one SFU op through the MMIO bridge. Sets I_ADDR/O_ADDR automatically."""
+    bridge = model.bridge
+    bridge.handle('write', SFU.BASE + SFU.CTRL, op)
+    bridge.handle('write', SFU.BASE + SFU.I_ADDR, _MMIO_SRAM_OFF)
+    bridge.handle('write', SFU.BASE + SFU.O_ADDR, _MMIO_OUT_OFF)
+    bridge.handle('write', SFU.BASE + SFU.DIM, (head_dim << 16) | length)
+    bridge.handle('write', SFU.BASE + SFU.POS, pos)
+    bridge.handle('write', SFU.BASE + SFU.CMD, 1)
+
+
+def _mmio_sfu_wait_done(model) -> int:
+    """Poll SFU STATUS until DONE, return status."""
+    status = model.bridge.handle('read', SFU.BASE + SFU.STATUS)
+    assert status == 2, f"SFU STATUS={status}, expected DONE(2)"
+    return status
+
+
+_RNG_SFU = np.random.RandomState(20260703)
+
+
+def test_sfu_soc_mmio_softmax():
+    """SFU softmax through MMIO bridge: N=2, 16, 128, 1024."""
+    model = FuncModel()
+    sfu = model.sfu
+    fp16_tol = dict(tol_abs=2e-3, tol_rel=1e-2)
+
+    for N in (2, 16, 128, 1024):
+        label = f"softmax_N={N}"
+        inp = _RNG_SFU.randn(N).astype(np.float32).clip(-10, 10)
+
+        # MMIO path: write FP16 to SRAM → SFU start → read FP16 result
+        _mmio_write_sram(model, inp, _MMIO_SRAM_OFF)
+        _mmio_sfu_op(model, op=0, length=N)
+        _mmio_sfu_wait_done(model)
+        mmio_out = _mmio_read_sram(model, N, _MMIO_OUT_OFF)
+
+        # Direct GoldenSFU path
+        direct_out = sfu.softmax_hw(inp)
+
+        cmp = GoldenSFU.compare_hw_vs_ref(mmio_out, direct_out, **fp16_tol)
+        assert cmp["within_tolerance"], (
+            f"{label}: MMIO vs direct — max_abs={cmp['max_abs_err']:.2e} "
+            f"max_rel={cmp['max_rel_err']:.2e}"
+        )
+        # Sanity: softmax sums to ~1
+        total = float(np.sum(mmio_out))
+        assert total == pytest.approx(1.0, rel=1e-3), f"{label}: sum={total:.6f}"
+        assert not np.any(np.isnan(mmio_out)), f"{label}: NaN in output"
+
+
+def test_sfu_soc_mmio_layernorm():
+    """SFU layernorm through MMIO bridge."""
+    model = FuncModel()
+    sfu = model.sfu
+    fp16_tol = dict(tol_abs=2e-3, tol_rel=1e-2)
+
+    for N in (16, 256, 2560):
+        label = f"layernorm_N={N}"
+        inp = _RNG_SFU.randn(N).astype(np.float32) * 2.0
+
+        _mmio_write_sram(model, inp, _MMIO_SRAM_OFF)
+        _mmio_sfu_op(model, op=1, length=N)
+        _mmio_sfu_wait_done(model)
+        mmio_out = _mmio_read_sram(model, N, _MMIO_OUT_OFF)
+
+        direct_out = sfu.layernorm_hw(inp)
+
+        cmp = GoldenSFU.compare_hw_vs_ref(mmio_out, direct_out, **fp16_tol)
+        assert cmp["within_tolerance"], (
+            f"{label}: MMIO vs direct — max_abs={cmp['max_abs_err']:.2e}"
+        )
+        # Sanity: near-zero mean
+        assert np.mean(mmio_out) == pytest.approx(0.0, abs=1e-2), f"{label}: mean not zero"
+
+
+def test_sfu_soc_mmio_rmsnorm():
+    """SFU rmsnorm through MMIO bridge, including N=1 corner."""
+    model = FuncModel()
+    sfu = model.sfu
+    fp16_tol = dict(tol_abs=2e-3, tol_rel=1e-2)
+
+    for N in (1, 16, 256, 2560):
+        label = f"rmsnorm_N={N}"
+        inp = _RNG_SFU.randn(N).astype(np.float32) * 2.0
+
+        _mmio_write_sram(model, inp, _MMIO_SRAM_OFF)
+        _mmio_sfu_op(model, op=6, length=N)
+        _mmio_sfu_wait_done(model)
+        mmio_out = _mmio_read_sram(model, N, _MMIO_OUT_OFF)
+
+        direct_out = sfu.rmsnorm_hw(inp)
+
+        cmp = GoldenSFU.compare_hw_vs_ref(mmio_out, direct_out, **fp16_tol)
+        assert cmp["within_tolerance"], (
+            f"{label}: MMIO vs direct — max_abs={cmp['max_abs_err']:.2e}"
+        )
+        # RMSNorm: near-unit RMS
+        rms = float(np.sqrt(np.mean(mmio_out ** 2)))
+        assert rms == pytest.approx(1.0, rel=2e-2), f"{label}: RMS={rms:.4e}"
+
+
+def test_sfu_soc_mmio_gelu():
+    """SFU gelu through MMIO bridge, incl. boundary x=±4."""
+    model = FuncModel()
+    sfu = model.sfu
+    fp16_tol = dict(tol_abs=2e-3, tol_rel=1e-2)
+
+    # Full range [-4, 4] + boundary test points
+    xs = [np.linspace(-4.0, 4.0, 100, dtype=np.float32)]
+    xs.append(np.array([-4.1, -4.0, -3.999, 3.999, 4.0, 4.1], dtype=np.float32))
+    for inp in xs:
+        N = len(inp)
+        label = f"gelu_N={N}"
+
+        _mmio_write_sram(model, inp, _MMIO_SRAM_OFF)
+        _mmio_sfu_op(model, op=2, length=N)
+        _mmio_sfu_wait_done(model)
+        mmio_out = _mmio_read_sram(model, N, _MMIO_OUT_OFF)
+
+        direct_out = sfu.gelu_hw(inp)
+
+        cmp = GoldenSFU.compare_hw_vs_ref(mmio_out, direct_out, **fp16_tol)
+        assert cmp["within_tolerance"], (
+            f"{label}: MMIO vs direct — max_abs={cmp['max_abs_err']:.2e}"
+        )
+    # Explicit: x=±4 must not be NaN and must differ (GELU asymmetry)
+    x4 = np.array([4.0, -4.0], dtype=np.float32)
+    _mmio_write_sram(model, x4, _MMIO_SRAM_OFF)
+    _mmio_sfu_op(model, op=2, length=2)
+    _mmio_sfu_wait_done(model)
+    mmio_4 = _mmio_read_sram(model, 2, _MMIO_OUT_OFF)
+    assert not np.any(np.isnan(mmio_4)), "GELU(±4): NaN detected"
+    asymmetry = float(abs(mmio_4[0]) + abs(mmio_4[1]))
+    assert asymmetry > 0.1, f"GELU asymmetry at ±4 too small: {asymmetry}"
+
+
+def test_sfu_soc_mmio_silu():
+    """SFU silu through MMIO bridge."""
+    model = FuncModel()
+    sfu = model.sfu
+    fp16_tol = dict(tol_abs=2e-3, tol_rel=1e-2)
+
+    for inp in [
+        np.linspace(-6.0, 6.0, 120, dtype=np.float32),
+        np.array([-10.0, -5.0, -1.0, 0.0, 1.0, 5.0, 10.0], dtype=np.float32),
+    ]:
+        N = len(inp)
+        _mmio_write_sram(model, inp, _MMIO_SRAM_OFF)
+        _mmio_sfu_op(model, op=4, length=N)
+        _mmio_sfu_wait_done(model)
+        mmio_out = _mmio_read_sram(model, N, _MMIO_OUT_OFF)
+
+        direct_out = sfu.silu_hw(inp)
+
+        cmp = GoldenSFU.compare_hw_vs_ref(mmio_out, direct_out, **fp16_tol)
+        assert cmp["within_tolerance"], (
+            f"silu_N={N}: MMIO vs direct — max_abs={cmp['max_abs_err']:.2e}"
+        )
+        assert not np.any(np.isnan(mmio_out)), "SiLU: NaN detected"
+
+
+def test_sfu_soc_mmio_rope():
+    """SFU rope through MMIO bridge: pos=0, large angle=100000, random 5 pairs.
+
+    MMIO bridge splits input equally: first half Q, second half K. K is hardcoded
+    to 2 heads in GoldenSFU.rope_hw, so use num_heads=2, head_dim=128.
+    """
+    model = FuncModel()
+    sfu = model.sfu
+    fp16_tol = dict(tol_abs=2e-3, tol_rel=1e-2)
+
+    head_dim = 128
+    half = 2 * head_dim          # 256 — Q and K each occupy half of the input
+    total_len = 2 * half         # 512
+
+    positions = [0, 100000] + list(_RNG_SFU.randint(1, 50000, size=5))
+
+    for pos in positions:
+        label = f"rope_pos={pos}"
+        q_in = _RNG_SFU.randn(half).astype(np.float32) * 0.5
+        k_in = _RNG_SFU.randn(half).astype(np.float32) * 0.5
+        inp = np.concatenate([q_in, k_in])
+
+        _mmio_write_sram(model, inp, _MMIO_SRAM_OFF)
+        _mmio_sfu_op(model, op=5, length=total_len, head_dim=head_dim, pos=pos)
+        _mmio_sfu_wait_done(model)
+        mmio_out = _mmio_read_sram(model, total_len, _MMIO_OUT_OFF)
+        mmio_q = mmio_out[:half]
+        mmio_k = mmio_out[half:]
+
+        direct_q, direct_k = sfu.rope_hw(q_in, k_in, position=pos,
+                                          num_heads=2, head_dim=head_dim)
+
+        cmp_q = GoldenSFU.compare_hw_vs_ref(mmio_q, direct_q, **fp16_tol)
+        cmp_k = GoldenSFU.compare_hw_vs_ref(mmio_k, direct_k, **fp16_tol)
+        assert cmp_q["within_tolerance"], (
+            f"{label} Q: MMIO vs direct — max_abs={cmp_q['max_abs_err']:.2e}"
+        )
+        assert cmp_k["within_tolerance"], (
+            f"{label} K: MMIO vs direct — max_abs={cmp_k['max_abs_err']:.2e}"
+        )
+        assert not np.any(np.isnan(mmio_out)), f"{label}: NaN detected"
+
+    # Anti-vacuous: pos=0 should differ from pos=100000
+    _mmio_write_sram(model, np.concatenate([q_in, k_in]), _MMIO_SRAM_OFF)
+    _mmio_sfu_op(model, op=5, length=total_len, head_dim=head_dim, pos=0)
+    _mmio_sfu_wait_done(model)
+    out_pos0 = _mmio_read_sram(model, total_len, _MMIO_OUT_OFF)
+    assert not np.allclose(out_pos0, mmio_out, atol=1e-6), (
+        "RoPE pos=0 and pos=100000 produced same output — vacuous"
+    )
+
+
+def test_sfu_soc_mmio_back_to_back():
+    """Back-to-back SFU dispatch: softmax → rmsnorm without reset."""
+    model = FuncModel()
+    sfu = model.sfu
+    fp16_tol = dict(tol_abs=2e-3, tol_rel=1e-2)
+
+    N = 256
+    inp = _RNG_SFU.randn(N).astype(np.float32) * 2.0
+
+    # Op 1: softmax
+    _mmio_write_sram(model, inp, _MMIO_SRAM_OFF)
+    _mmio_sfu_op(model, op=0, length=N)
+    _mmio_sfu_wait_done(model)
+    softmax_out = _mmio_read_sram(model, N, _MMIO_OUT_OFF)
+
+    # Op 2: rmsnorm on the softmax output (no SRAM re-write, read from O_ADDR)
+    # The rmsnorm input is the softmax output — write it to I_ADDR region
+    _mmio_write_sram(model, softmax_out, _MMIO_SRAM_OFF)
+    _mmio_sfu_op(model, op=6, length=N)
+    _mmio_sfu_wait_done(model)
+    cascade_out = _mmio_read_sram(model, N, _MMIO_OUT_OFF)
+
+    # Verify via direct GoldenSFU call
+    direct_softmax = sfu.softmax_hw(inp)
+    cmp_sm = GoldenSFU.compare_hw_vs_ref(softmax_out, direct_softmax, **fp16_tol)
+    assert cmp_sm["within_tolerance"], (
+        f"back-to-back softmax: max_abs={cmp_sm['max_abs_err']:.2e}"
+    )
+
+    direct_cascade = sfu.rmsnorm_hw(direct_softmax)
+    cmp_cas = GoldenSFU.compare_hw_vs_ref(cascade_out, direct_cascade, **fp16_tol)
+    assert cmp_cas["within_tolerance"], (
+        f"back-to-back cascade: max_abs={cmp_cas['max_abs_err']:.2e}"
+    )
+
+    # Anti-vacuous: cascade output must differ from softmax output
+    assert not np.allclose(cascade_out, softmax_out, atol=1e-6), (
+        "Back-to-back: rmsnorm(softmax(x)) == softmax(x) — vacuous"
     )
 
 

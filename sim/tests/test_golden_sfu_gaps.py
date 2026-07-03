@@ -340,3 +340,70 @@ def test_sf07_gelu_negative_consistent_with_ref(sfu):
     asymmetry = abs(float(hw_edge[0]) + float(hw_edge[1]))
     assert asymmetry > 3.0, \
         f"GELU asymmetry at ±4 too small: |gelu(4)+gelu(-4)|={asymmetry:.4f} (expected > 3.0)"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SF-08: Rope — random 50 position pairs
+# ══════════════════════════════════════════════════════════════════════
+
+_RNG_ROPE50 = np.random.RandomState(20260701)
+_ROPE50_HEAD_DIM = 128
+_ROPE50_NUM_HEADS = 4
+_ROPE50_Q_LEN = _ROPE50_NUM_HEADS * _ROPE50_HEAD_DIM
+_ROPE50_K_LEN = 2 * _ROPE50_HEAD_DIM
+_ROPE50_POSITIONS = sorted(_RNG_ROPE50.randint(0, 100000, size=50).tolist())
+_ROPE50_XQ = _RNG_ROPE50.randn(_ROPE50_Q_LEN).astype(np.float32) * 0.5
+_ROPE50_XK = _RNG_ROPE50.randn(_ROPE50_K_LEN).astype(np.float32) * 0.5
+# Test tolerance: CORDIC 12-stage produces ~ Q18.14 fixed-point precision
+_ROPE50_TOL = dict(tol_abs=1e-1, tol_rel=1e-1)
+
+
+@pytest.mark.parametrize("pos", _ROPE50_POSITIONS,
+                         ids=[f"pos={p}" for p in _ROPE50_POSITIONS])
+def test_sf08_rope_random_50_pairs(sfu, pos):
+    """SF-08: RoPE at 50 random positions — hw vs ref within tolerance."""
+    hw_q, hw_k = sfu.rope_hw(
+        _ROPE50_XQ.copy(), _ROPE50_XK.copy(), position=pos,
+        num_heads=_ROPE50_NUM_HEADS, head_dim=_ROPE50_HEAD_DIM,
+    )
+    ref_q, ref_k = sfu.rope_ref(
+        _ROPE50_XQ, _ROPE50_XK, position=pos,
+        num_heads=_ROPE50_NUM_HEADS, head_dim=_ROPE50_HEAD_DIM,
+    )
+    cmp_q = GoldenSFU.compare_hw_vs_ref(hw_q, ref_q, **_ROPE50_TOL)
+    cmp_k = GoldenSFU.compare_hw_vs_ref(hw_k, ref_k, **_ROPE50_TOL)
+    assert cmp_q["within_tolerance"], (
+        f"RoPE Q pos={pos}: max_abs={cmp_q['max_abs_err']:.2e}"
+    )
+    assert cmp_k["within_tolerance"], (
+        f"RoPE K pos={pos}: max_abs={cmp_k['max_abs_err']:.2e}"
+    )
+    assert not np.any(np.isnan(hw_q)), f"RoPE Q pos={pos}: NaN"
+    assert not np.any(np.isnan(hw_k)), f"RoPE K pos={pos}: NaN"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SF-09: RMSNorm — N=1 corner
+# ══════════════════════════════════════════════════════════════════════
+
+
+def test_sf09_rmsnorm_n1_corner(sfu):
+    """SF-09: RMSNorm at N=1 (single-element vector)."""
+    rng = np.random.RandomState(20260702)
+
+    for _ in range(20):
+        val = rng.randn() * 5.0
+        x = np.array([val], dtype=np.float32)
+        hw = sfu.rmsnorm_hw(x)
+        ref = sfu.rmsnorm_ref(x)
+        cmp = GoldenSFU.compare_hw_vs_ref(hw, ref, tol_abs=1e-5)
+        assert cmp["within_tolerance"], (
+            f"rmsnorm N=1 val={val:.4f}: max_abs={cmp['max_abs_err']:.2e}"
+        )
+        # For N=1, RMSNorm output = x / sqrt(x^2 + eps) ≈ sign(x)
+        # Large |x| → output ≈ ±1
+        if abs(val) > 1.0:
+            expected_sign = 1.0 if val > 0 else -1.0
+            assert float(hw[0]) == pytest.approx(expected_sign, abs=0.01), (
+                f"rmsnorm N=1 val={val:.4f}: expected sign={expected_sign:.0f}, got {float(hw[0]):.4f}"
+            )
