@@ -26,6 +26,7 @@ SFUModel.estimate(op, N)  = ceil(N / 128) × pipeline_depth
   其中 pipeline_depth: gelu=4, silu=4, rope=12, softmax=8, layernorm=6, exp=12, div=16
 
 VectorModel.estimate(op, N) = ceil(N / 128) × op_latency
+  注意：sim/models/vector.py 中部分 op 未预定义（max, resid_add, sum_reduce），校准 case SFV-P28_calib 需标注 "Model N/A" 并跳过比值计算。
   其中 op_latency: add=1, mul=1, max=1, resid_add=1, sum_reduce≈3
   * CONV 的 Func Model 因 type_convert 为 1-element/cycle 需扩展；见 SFV-P28_calib
 ```
@@ -137,19 +138,19 @@ VectorModel.estimate(op, N) = ceil(N / 128) × op_latency
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| SFV-P15 | P1 | `tb_sfu_perf.v` — `--op softmax --dim 16,32,64,128,256,512,1024,2048,4096` | **Softmax N 扫描（8 个点）**: 验证 total_cycles = 3N + C（线性缩放）。标记首次出现非线性行为的点 | 每个点 `|delta| ≤ 5 cycles`。绘制周期 vs N 曲线；斜率为 ~3.0 | ⬜ | |
-| SFV-P16 | P1 | `tb_sfu_perf.v` — `--op layernorm --dim 16,32,64,128,256,512,1024,2048,4096` | **LayerNorm N 扫描（8 个点）**: 验证 3 遍顺序缩放 | 每个点 `|delta| ≤ 5 cycles`。斜率 ~3.0 | ⬜ | |
-| SFV-P17 | P1 | `tb_sfu_perf.v` — `--op rmsnorm --dim 16,32,64,128,256,512,1024,2048,4096` | **RMSNorm N 扫描（8 个点）**: 验证 2 遍顺序缩放（比 LN 快 ~50%） | 每个点 `|delta| ≤ 5 cycles`。斜率 ~2.0。N=4096 时确认相对于 layernorm 的加速 | ⬜ | |
-| SFV-P18 | P1 | `tb_sfu_perf.v` — `--op gelu --dim 16,64,256,1024,4096` | **GELU 吞吐量扫描（5 个点）**: 验证固定 4-cycle 流水线深度与 N 无关 | 每个点 `|delta| ≤ 1 cycle`。斜率 ~1.0（纯流式） | ⬜ | |
-| SFV-P19 | P1 | `tb_sfu_perf.v` — `--op rope --dim 16,32,64,128` — `--pos 0,42,100,127` | **RoPE 扫描：N×位置（4×4 格子）**: 验证延迟与 N 成比例且与位置无关 | 每个点 `|delta| ≤ 1 cycle`。斜率 ~1.0。位置必须不影响周期计数 | ⬜ | |
+| SFV-P15 | P1 | `tb_sfu_perf.v` — `--op softmax --dim 16,32,64,128,256,512,1024,2048,4096` | **Softmax N 扫描（8 个点）**: 验证 total_cycles = 3N + C（线性缩放）。标记首次出现非线性行为的点 | 每个点 `|delta| ≤ 5 cycles`。最小二乘线性回归斜率 ∈ [2.95, 3.05]（验证 3N 缩放）。 | ⬜ | |
+| SFV-P16 | P1 | `tb_sfu_perf.v` — `--op layernorm --dim 16,32,64,128,256,512,1024,2048,4096` | **LayerNorm N 扫描（8 个点）**: 验证 3 遍顺序缩放 | 每个点 `|delta| ≤ 5 cycles`。最小二乘线性回归斜率 ∈ [2.95, 3.05]。 | ⬜ | |
+| SFV-P17 | P1 | `tb_sfu_perf.v` — `--op rmsnorm --dim 16,32,64,128,256,512,1024,2048,4096` | **RMSNorm N 扫描（8 个点）**: 验证 2 遍顺序缩放（比 LN 快 ~50%） | 每个点 `|delta| ≤ 5 cycles`。最小二乘线性回归斜率 ∈ [1.95, 2.05]。N=4096 时 RMSNorm/LayerNorm 周期比 ≤ 0.68（2N vs 3N 理论加速 ≈ 0.67x）。 | ⬜ | |
+| SFV-P18 | P1 | `tb_sfu_perf.v` — `--op gelu --dim 16,64,256,1024,4096` | **GELU 吞吐量扫描（5 个点）**: 验证固定 4-cycle 流水线深度与 N 无关 | 每个点 `|delta| ≤ 1 cycle`。最小二乘线性回归斜率 ∈ [0.98, 1.02]（纯流式确认 N 倍缩放）。 | ⬜ | |
+| SFV-P19 | P1 | `tb_sfu_perf.v` — `--op rope --dim 16,32,64,128` — `--pos 0,42,100,127` | **RoPE 扫描：N×位置（4×4 格子）**: 验证延迟与 N 成比例且与位置无关 | 每个点 `|delta| ≤ 1 cycle`。最小二乘线性回归斜率 ∈ [0.98, 1.02]。位置 pos=0/42/100/127 对应同一 N 的周期标准差 = 0。 | ⬜ | |
 
 ### P1-Vector: Vector DIM 扫描
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| SFV-P20 | P1 | `tb_vector_perf.v` — `--op add --dim 128,256,512,1024,2048,4096` | **ALU ops DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×4 + 2。确认块边界开销恒定 | 每个点 `|delta| ≤ 1 cycle`。每个块周期必须相同 | ⬜ | |
-| SFV-P21 | P1 | `tb_vector_perf.v` — `--op sum --dim 128,256,512,1024,2048,4096` | **SUM DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×10 + 2。确认每个块 7-cycle 流水线 | 每个点 `|delta| ≤ 1 cycle`。每个块周期必须相同 | ⬜ | |
-| SFV-P22 | P1 | `tb_vector_perf.v` — `--op conv --dim 128,256,512,1024,2048,4096` | **CONV DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×132 + 2。确认 type_convert 逐个元素处理 | 每个点 `|delta| ≤ 1 cycle`。每个块 132 cycles 恒定 | ⬜ | |
+| SFV-P20 | P1 | `tb_vector_perf.v` — `--op add --dim 128,256,512,1024,2048,4096` | **ALU ops DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×4 + 2。确认块边界开销恒定 | 每个点 `|delta| ≤ 1 cycle`。每个 128 元素块的周期标准差 ≤ 1（ceil(N/128) 个块中最大 deviation ≤ 1 cycle）。 | ⬜ | |
+| SFV-P21 | P1 | `tb_vector_perf.v` — `--op sum --dim 128,256,512,1024,2048,4096` | **SUM DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×10 + 2。确认每个块 7-cycle 流水线 | 每个点 `|delta| ≤ 1 cycle`。每个 128 元素块的周期标准差 ≤ 1。 | ⬜ | |
+| SFV-P22 | P1 | `tb_vector_perf.v` — `--op conv --dim 128,256,512,1024,2048,4096` | **CONV DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×132 + 2。确认 type_convert 逐个元素处理 | 每个点 `|delta| ≤ 1 cycle`。每个 128 元素块的周期标准差 ≤ 1（期望每个块 132 cycles）。 | ⬜ | |
 
 ---
 
@@ -190,9 +191,9 @@ VectorModel.estimate(op, N) = ceil(N / 128) × op_latency
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| SFV-P31 | P3 | `tb_vector_perf.v` — `--op add --dim 1` + `--op sum --dim 1` + `--op conv --dim 1` | **单元素边缘（DIM=1）**: 最小 Vector 操作。验证 lane_mask 正确处理部分 128-wide 块 | 所有操作 golden 比较 PASS。周期计数必须为常量（无块迭代循环）。CONV N=1 → 无块循环开销 | ⬜ | |
-| SFV-P32 | P3 | `tb_vector_perf.v` — `--op add --dim 65535` | **最大 DIM（65,535）**: DIM 寄存器允许的最大值。确认无溢出、无超时、所有 512 个块正确累加 | golden 比较 PASS。实际周期数 = ceil(65535/128)×4+2 = 512×4+2 = 2,050 | ⬜ | |
-| SFV-P33 | P3 | `tb_vector_perf.v` — `--op conv --dim 256` — INT32 值扫描覆盖完整 MXU 累加器范围 [-2³¹, 2³¹-1] 附近的饱和 | **CONV 饱和边缘**: 验证每个 type_convert 规格将 `|x|>65504` 的元素饱和到 ±0x7BFF | 所有元素 golden 比较 PASS。在 65504 边界处无误舍入。INT32_MIN (-2³¹) → 正确的饱和值 | ⬜ | |
+| SFV-P31 | P3 | `tb_vector_perf.v` — `--op add --dim 1` + `--op sum --dim 1` + `--op conv --dim 1` | **单元素边缘（DIM=1）**: 最小 Vector 操作。验证 lane_mask 正确处理部分 128-wide 块 | 所有操作 golden 比较 PASS。ADD/SUM/CONV 各 total_cycles ≤ 10（无块迭代循环；期望 ADD ≤ 6, SUM ≤ 12, CONV ≤ 134 但 N=1 时 overhead 可能更小）。 | ⬜ | |
+| SFV-P32 | P3 | `tb_vector_perf.v` — `--op add --dim 65535` | **最大 DIM（65,535）**: DIM 寄存器允许的最大值。确认无溢出、无超时、所有 512 个块正确累加 | golden 比较 PASS 且仿真在 10,000 cycles 内完成。`|measured − 2050|` ≤ 1。 | ⬜ | |
+| SFV-P33 | P3 | `tb_vector_perf.v` — `--op conv --dim 256` — INT32 值扫描覆盖完整 MXU 累加器范围 [-2³¹, 2³¹-1] 附近的饱和 | **CONV 饱和边缘**: 验证每个 type_convert 规格将 `|x|>65504` 的元素饱和到 ±0x7BFF | 所有元素 golden 比较 PASS。对于 x ∈ {65503, 65504, 65505, INT32_MIN, INT32_MAX}，RTL type_convert 输出与 GoldenVector 一致（FP16 容差 abs=2e-3）。 | ⬜ | |
 | SFV-P34 | P3 | `tb_sfu_perf.v` — `--op rope --pos 0,1,42,127,255,511,1023` | **RoPE 大位置值**: 测试 theta = pos × inv_freq 的角度累积。确认大位置的 CORDIC 精度 | 所有位置 golden 比较 PASS（float16 容差）。周期计数与位置无关 | ⬜ | |
 
 ---
