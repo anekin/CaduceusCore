@@ -59,6 +59,8 @@ class FuncModel:
             boot_rom=self.boot_rom,
         )
         self.riscv.mmio_callback = self.bridge.handle
+        self.riscv.irq_handler = self.firmware.dispatch_interrupt
+        self.bridge.irq_notify_callback = self.riscv.set_interrupt_pending
 
     def load_boot_rom(self, path: str) -> int:
         """Load Intel HEX firmware into boot ROM.

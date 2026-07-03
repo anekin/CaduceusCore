@@ -82,6 +82,10 @@ class RISCVMini:
         self.mmio_callback: Optional[Callable] = None
         self._insn_cache: Dict[int, int] = {}
 
+        # Interrupt handling
+        self.interrupt_pending: bool = False
+        self.irq_handler: Optional[Callable[[int], None]] = None
+
     # ── Memory access ───────────────────────────────────────────────
 
     def _is_mmio(self, addr: int) -> bool:
@@ -258,18 +262,20 @@ class RISCVMini:
         elif opcode == 0x0F:  # FENCE / FENCE.I — NOP
             pass
 
-        elif opcode == 0x73:  # SYSTEM (ECALL/EBREAK)
+        elif opcode == 0x73:  # SYSTEM (ECALL/EBREAK/WFI)
             if funct3 == 0:
+                funct12 = (insn >> 20) & 0xFFF
                 addr = self.state.read(10)  # a0
-                if (insn >> 20) == 0:  # ECALL
+                if funct12 == 0:  # ECALL
                     if addr == 0:
                         self.running = False  # exit(0)
                         return False
-                elif (insn >> 20) == 1:  # EBREAK
+                elif funct12 == 1:  # EBREAK
                     self.running = False
                     return False
-            elif funct3 == 0 and (insn >> 20) == 0x305:  # WFI — NOP for us
-                pass
+                elif funct12 == 0x305:  # WFI — wake on interrupt
+                    if self.interrupt_pending:
+                        self._handle_irq()
 
         else:
             pass  # Unknown instruction — skip
@@ -277,6 +283,43 @@ class RISCVMini:
         self.state.pc = self.state.next_pc
         self.instructions_executed += 1
         return self.running if hasattr(self, 'running') else True
+
+    # ── Interrupt handling ──────────────────────────────────────────
+
+    def set_interrupt_pending(self):
+        """Mark an interrupt as pending. Called by MMIOBridge._set_irq()."""
+        self.interrupt_pending = True
+
+    def _handle_irq(self):
+        """Trap handler: read INTC.PENDING via MMIO, find highest-priority
+        source, dispatch to irq_handler, write ACK, clear flag if done."""
+        from sim.regmap import INTC
+        if not self.mmio_callback:
+            self.interrupt_pending = False
+            return
+
+        pending = self.mmio_callback('read', INTC.BASE + INTC.PENDING, 0) & 0xFFFFFFFF
+        if pending == 0:
+            self.interrupt_pending = False
+            return
+
+        source_bit = 0
+        while source_bit < 32:
+            if pending & (1 << source_bit):
+                break
+            source_bit += 1
+        if source_bit == 32:
+            self.interrupt_pending = False
+            return
+
+        if self.irq_handler:
+            self.irq_handler(source_bit)
+
+        self.mmio_callback('write', INTC.BASE + INTC.ACK, 1 << source_bit)
+
+        pending_after = self.mmio_callback('read', INTC.BASE + INTC.PENDING, 0) & 0xFFFFFFFF
+        if pending_after == 0:
+            self.interrupt_pending = False
 
     # ── Run ─────────────────────────────────────────────────────────
 
@@ -407,6 +450,7 @@ class NPUFirmware:
         self.ring_buffer_addr = 0x80000000  # Ring Buffer in DRAM
         self.ring_size = 64  # entries
         self.irq_pending = 0
+        self._irq_serviced = False
 
     def run_loop(self, max_commands: int = 10) -> List[dict]:
         """Main firmware loop: poll doorbell → dispatch → complete."""
@@ -426,6 +470,24 @@ class NPUFirmware:
 
             # Write completion (simplified: would write to Completion Ring)
         return results
+
+    def dispatch_interrupt(self, source_bit: int):
+        """Called by RISCVMini trap handler when an IRQ fires.
+
+        Reads INTC.PENDING to determine which engine completed,
+        then dispatches the next queued operation or updates doorbell.
+        """
+        from sim.regmap import INTC, MXU
+        pending = self.irq_pending
+        if self.bridge:
+            pending = self.bridge.handle('read', INTC.BASE + INTC.PENDING, 0)
+        self.irq_pending = pending
+
+        if source_bit == 0 and self.bridge:
+            status = self.bridge.handle('read', MXU.BASE + MXU.STATUS, 0)
+            if status & 2:
+                self.bridge.handle('write', MXU.BASE + MXU.IRQ_EN, 0)
+                self._irq_serviced = True
 
     def _dram_read(self, addr: int, size: int) -> bytes:
         """Read from DRAM with address translation."""

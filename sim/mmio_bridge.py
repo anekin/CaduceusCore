@@ -21,6 +21,7 @@ class MMIOBridge:
 
     modules: Dict[str, Any] = field(default_factory=dict)
     # modules['mxu'], ['sfu'], ['vector'], ['dma'], ['dram'], ['sram']
+    irq_notify_callback: Optional[Callable[[], None]] = None
 
     def __post_init__(self):
         self._status: Dict[int, int] = {}
@@ -485,6 +486,8 @@ class MMIOBridge:
         base = INTC.BASE
         self._status[base + INTC.PENDING] = \
             self._status.get(base + INTC.PENDING, 0) | (1 << module_bit)
+        if self.irq_notify_callback:
+            self.irq_notify_callback()
 
     @property
     def trace(self) -> list:

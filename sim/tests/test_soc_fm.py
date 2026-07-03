@@ -268,3 +268,95 @@ def test_riscv_mmio_routing():
     emu._mem_write(Addr.MXU_BASE + 0x00, 0x00000003)
     val = emu._mem_read(Addr.MXU_BASE + 0x00)
     assert val == 0x00000003
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Path #9 — Interrupt delivery: Engine IRQ → INTC → Ibex WFI
+# ══════════════════════════════════════════════════════════════════════
+
+
+def test_interrupt_delivery():
+    """End-to-end interrupt delivery: MXU completes → IRQ fires →
+    INTC.PENDING set → RISCVMini interrupt_pending → WFI wakes →
+    trap handler dispatches → ACK clears pending."""
+    from sim.regmap import MXU, INTC
+
+    model = FuncModel()
+    emu = model.riscv
+    bridge = model.bridge
+
+    WFI_INSN = (0x305 << 20) | 0x73  # funct12=0x305, opcode=SYSTEM
+    M, K, N = 1, 8, 4
+
+    # ── 1. Anti-vacuous: IRQ_EN=0 → no IRQ raised ───────────────────
+    model2 = FuncModel()
+    bridge2 = model2.bridge
+    emu2 = model2.riscv
+
+    bridge2.handle('write', MXU.BASE + MXU.CTRL, 0)
+    bridge2.handle('write', MXU.BASE + MXU.IRQ_EN, 0)
+    bridge2.handle('write', MXU.BASE + MXU.DIM0, (K << 16) | M)
+    bridge2.handle('write', MXU.BASE + MXU.DIM1, N)
+    bridge2.handle('write', MXU.BASE + MXU.I_ADDR, Addr.SRAM_BASE + 0x1000)
+    bridge2.handle('write', MXU.BASE + MXU.W_ADDR, Addr.SRAM_BASE + 0x2000)
+    bridge2.handle('write', MXU.BASE + MXU.O_ADDR, Addr.SRAM_BASE + 0x3000)
+
+    act_buf = np.ones(M * K, dtype=np.int8)
+    packed_wgt = bytes([0x11] * ((K * N + 1) // 2))
+    model2.sram[0x1000:0x1000 + len(act_buf)] = act_buf.tobytes()
+    model2.sram[0x2000:0x2000 + len(packed_wgt)] = packed_wgt
+
+    bridge2.handle('write', MXU.BASE + MXU.CMD, 1)
+
+    pending = bridge2.handle('read', INTC.BASE + INTC.PENDING, 0)
+    assert pending == 0, f"IRQ_EN=0: expected PENDING=0, got 0x{pending:08X}"
+    assert not emu2.interrupt_pending, "IRQ_EN=0: interrupt_pending must be False"
+
+    # ── 2. IRQ_EN=1: MXU completes → IRQ fires ──────────────────────
+    bridge.handle('write', MXU.BASE + MXU.CTRL, 0)
+    bridge.handle('write', MXU.BASE + MXU.IRQ_EN, 1)
+    bridge.handle('write', MXU.BASE + MXU.DIM0, (K << 16) | M)
+    bridge.handle('write', MXU.BASE + MXU.DIM1, N)
+    bridge.handle('write', MXU.BASE + MXU.I_ADDR, Addr.SRAM_BASE + 0x1000)
+    bridge.handle('write', MXU.BASE + MXU.W_ADDR, Addr.SRAM_BASE + 0x2000)
+    bridge.handle('write', MXU.BASE + MXU.O_ADDR, Addr.SRAM_BASE + 0x3000)
+
+    act_buf2 = np.ones(M * K, dtype=np.int8)
+    model.sram[0x1000:0x1000 + len(act_buf2)] = act_buf2.tobytes()
+    model.sram[0x2000:0x2000 + len(packed_wgt)] = packed_wgt
+
+    bridge.handle('write', MXU.BASE + MXU.CMD, 1)
+
+    pending2 = bridge.handle('read', INTC.BASE + INTC.PENDING, 0)
+    assert pending2 & 1, f"IRQ_EN=1: expected INTC.PENDING[0] set, got 0x{pending2:08X}"
+    assert emu.interrupt_pending, "IRQ_EN=1: interrupt_pending must be True after _set_irq"
+
+    # ── 3. WFI wakes → trap handler dispatches → ACK clears ─────────
+    model.boot_rom[0:4] = struct.pack('<I', WFI_INSN)
+    emu.state.pc = 0
+    emu.running = True
+    result = emu.step()
+    assert result, "WFI step should return True after handling IRQ"
+
+    pending3 = bridge.handle('read', INTC.BASE + INTC.PENDING, 0)
+    assert pending3 == 0, (
+        f"After ACK: expected INTC.PENDING=0, got 0x{pending3:08X}"
+    )
+    assert not emu.interrupt_pending, (
+        "After WFI handler: interrupt_pending must be False"
+    )
+    assert model.firmware._irq_serviced, (
+        "NPUFirmware should have recorded IRQ service"
+    )
+
+    # ── 4. WFI as NOP when no interrupt pending ──────────────────────
+    assert not emu.interrupt_pending
+    model.boot_rom[4:8] = struct.pack('<I', WFI_INSN)
+    emu.state.pc = 4
+    emu.running = True
+    result_nop = emu.step()
+    assert result_nop, "WFI without pending IRQ should still return True (NOP)"
+    pc_after = emu.state.pc
+    assert pc_after == 8, (
+        f"WFI NOP should advance PC to 8, got 0x{pc_after:08X}"
+    )
