@@ -2624,3 +2624,346 @@ def test_28block_chain():
         )
 
     assert len(set(baseline_hashes)) > 1, "All block fingerprints are identical"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# P4 — End-to-end host→PCIe→DRAM→doorbell→firmware→IRQ→17-op blk.0 chain (FM-SOC-10X)
+# ══════════════════════════════════════════════════════════════════════
+
+
+def _e2e_blk0_op_block_base(op_idx):
+    """Per-op non-overlapping DRAM region for host↔NPU transfers."""
+    return 0x8001_0000 + op_idx * 0x0002_0000
+
+
+def _e2e_blk0_load_input(op, manifest):
+    """Load and return the input bytes + element count for one op."""
+    opcode = op["opcode"]
+    if opcode == "MMUL":
+        dims = op["dimensions"]
+        M_eff = min(dims.get("M", 1), 64)
+        K_eff = min(dims.get("K", 0), 64)
+        input_fmt = manifest["files"][op["input_hex"]]["format"]
+        input_eb = _EB_BY_FMT[input_fmt]
+        input_full = _blk0_read_hex(op["input_hex"], input_eb)
+        need = M_eff * K_eff * input_eb
+        input_bytes = input_full[:need]
+        if len(input_bytes) < need:
+            input_bytes = input_bytes + b"\x00" * (need - len(input_bytes))
+        return input_bytes, M_eff * K_eff
+
+    if opcode in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
+        input_hex = op.get("input_hex")
+        if input_hex is None:
+            prefix = f"op{op['idx']:02d}_"
+            candidates = [
+                fname for fname, finfo in manifest["files"].items()
+                if fname.startswith(prefix) and fname.endswith("_input.hex")
+            ]
+            if not candidates:
+                raise ValueError(f"op{op['idx']:02d} {opcode}: missing input_hex")
+            input_hex = candidates[0]
+        dims = op["dimensions"]
+        if opcode == "ROPE":
+            elements = dims.get("q_len", 0) + dims.get("k_len", 0)
+        else:
+            elements = dims.get("elements", 0)
+        input_fmt = manifest["files"][input_hex]["format"]
+        input_eb = _EB_BY_FMT[input_fmt]
+        input_full = _blk0_read_hex(input_hex, input_eb)
+        need = elements * input_eb
+        input_bytes = input_full[:need]
+        if len(input_bytes) < need:
+            input_bytes = input_bytes + b"\x00" * (need - len(input_bytes))
+        return input_bytes, elements
+
+    if opcode in ("VMUL", "VRESID"):
+        elements = op["dimensions"]["elements"]
+        if opcode == "VMUL":
+            a_hex, b_hex = "op14_vmul_gate_input.hex", "op14_vmul_up_input.hex"
+        elif op["idx"] == 9:
+            a_hex, b_hex = "op09_vresid_pre_input.hex", "op09_vresid_pre_o_out.hex"
+        elif op["idx"] == 16:
+            a_hex, b_hex = "op16_vresid_post_input.hex", "op16_vresid_post_down.hex"
+        else:
+            raise ValueError(f"Unknown Vector op idx {op['idx']}")
+        a_fmt = manifest["files"][a_hex]["format"]
+        b_fmt = manifest["files"][b_hex]["format"]
+        a_bytes = _blk0_read_hex(a_hex, _EB_BY_FMT[a_fmt])
+        b_bytes = _blk0_read_hex(b_hex, _EB_BY_FMT[b_fmt])
+        need_a = elements * _EB_BY_FMT[a_fmt]
+        need_b = elements * _EB_BY_FMT[b_fmt]
+        if len(a_bytes) < need_a:
+            a_bytes = a_bytes + b"\x00" * (need_a - len(a_bytes))
+        if len(b_bytes) < need_b:
+            b_bytes = b_bytes + b"\x00" * (need_b - len(b_bytes))
+        return a_bytes + b_bytes, elements
+
+    raise ValueError(f"Unsupported opcode {opcode}")
+
+
+def _e2e_blk0_load_weight(op, manifest):
+    """For MMUL ops, return packed weight bytes + effective M/K/N."""
+    dims = op["dimensions"]
+    M_eff = min(dims.get("M", 1), 64)
+    K_eff = min(dims.get("K", 0), 64)
+    N_eff = min(dims.get("N", 0), 64)
+    weight_size = (K_eff * N_eff + 1) // 2
+    weight_full = _blk0_read_hex(op["weight_hex"], elem_bytes=1)
+    weight_bytes = weight_full[:weight_size]
+    if len(weight_bytes) < weight_size:
+        weight_bytes = weight_bytes + b"\x00" * (weight_size - len(weight_bytes))
+    return weight_bytes, M_eff, K_eff, N_eff
+
+
+def _e2e_blk0_golden(op, manifest, input_bytes, weight_bytes=None):
+    """Compute the GoldenExecutor reference for one op."""
+    opcode = op["opcode"]
+    if opcode == "MMUL":
+        wgt_packed, M_eff, K_eff, N_eff = weight_bytes, None, None, None
+        # Re-extract dims from the same truncation logic
+        dims = op["dimensions"]
+        M_eff = min(dims.get("M", 1), 64)
+        K_eff = min(dims.get("K", 0), 64)
+        N_eff = min(dims.get("N", 0), 64)
+        act = np.frombuffer(input_bytes[:M_eff * K_eff], dtype=np.int8).reshape(M_eff, K_eff)
+        wgt_packed = np.frombuffer(weight_bytes, dtype=np.uint8)
+        num_blocks = (K_eff + 127) // 128
+        scales = np.ones((num_blocks, N_eff), dtype=np.float32)
+        return GoldenMXU().matmul_int4_per_block(
+            act, wgt_packed, scales, M_eff, K_eff, N_eff, group_size=128)
+
+    if opcode in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
+        dims = op["dimensions"]
+        if opcode == "ROPE":
+            elements = dims.get("q_len", 0) + dims.get("k_len", 0)
+            head_dim = dims.get("head_dim", 128)
+        else:
+            elements = dims.get("elements", 0)
+            head_dim = 0
+        inp = np.frombuffer(input_bytes, dtype=np.float16).astype(np.float32)
+        sfu = GoldenSFU()
+        if opcode == "SOFTMAX":
+            return sfu.softmax_hw(inp)
+        if opcode == "RMSNORM":
+            return sfu.rmsnorm_hw(inp)
+        if opcode == "SILU":
+            return sfu.silu_hw(inp)
+        # ROPE
+        hd = head_dim if head_dim else max(elements // 4, 2)
+        k_len = 2 * hd
+        q_len = elements - k_len
+        if q_len <= 0:
+            q_len = elements // 2
+            k_len = elements - q_len
+        q_in = inp[:q_len]
+        k_in = inp[q_len:elements]
+        nq = max(1, q_len // hd) if hd else 1
+        q_out, k_out = sfu.rope_hw(q_in, k_in, position=dims.get("position", 0),
+                                   num_heads=nq, head_dim=hd)
+        out = np.zeros(elements, dtype=np.float32)
+        out[:q_len] = q_out
+        out[q_len:elements] = k_out
+        return out
+
+    if opcode in ("VMUL", "VRESID"):
+        elements = op["dimensions"]["elements"]
+        a_fmt = "int32" if opcode == "VMUL" else "fp16"
+        a_eb = _EB_BY_FMT[a_fmt]
+        b_eb = 4
+        a_bytes = input_bytes[:elements * a_eb]
+        b_bytes = input_bytes[elements * a_eb:elements * a_eb + elements * b_eb]
+        vec = GoldenVector()
+        if opcode == "VMUL":
+            a = np.frombuffer(a_bytes, dtype=np.int32)
+            b = np.frombuffer(b_bytes, dtype=np.int32)
+            return vec.mul(a, b)
+        # VRESID
+        a = np.frombuffer(a_bytes, dtype=np.float16).astype(np.float32)
+        b = np.frombuffer(b_bytes, dtype=np.int32)
+        return vec.residual_add(a, b)
+
+    raise ValueError(f"Unsupported opcode {opcode}")
+
+
+def _e2e_blk0_opcode(op):
+    """Map manifest opcode string to engine.isa OpCode value."""
+    from engine.isa import OpCode as OC
+    mapping = {
+        "MMUL": OC.MMUL,
+        "RMSNORM": OC.RMSNORM,
+        "SOFTMAX": OC.SOFTMAX,
+        "ROPE": OC.ROPE,
+        "SILU": OC.SILU,
+        "VMUL": OC.VMUL,
+        "VRESID": OC.VRESID,
+    }
+    return mapping[op["opcode"]].value
+
+
+def test_e2e_host_pcie_doorbell_firmware_compute():
+    """P4 full flow: host→PCIe→DRAM→doorbell→firmware→IRQ→17-op blk.0→DRAM→PCIe→host.
+
+    Exercises all 13 SoC data paths simultaneously:
+      - Host writes weights/activations to DRAM via PCIe TLP (path 7).
+      - AXI crossbar routes host PCIe traffic to DRAM (path 8).
+      - Host queues 17 doorbell commands via host_write_command (path 10).
+      - Firmware run_loop() wakes on HOST IRQ, dispatches each op via
+        interrupt-driven _wait_done (paths 9 + 11).
+      - MXU/SFU/Vector compute engines produce results stored back to DRAM
+        (paths 3 + 4 + 5 + 6 DMA inside tile_mmul).
+      - Host reads results via pcie.tlp_read and compares to direct
+        GoldenMXU/SFU/Vector references.
+      - Anti-vacuous: corrupting one Q_proj weight byte makes op01 output
+        differ from the golden reference.
+    """
+    import json
+    from engine.isa import OpCode
+
+    manifest_path = os.path.join(_BLK0_VECTOR_DIR, "blk0_manifest.json")
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+
+    model = FuncModel(dram_mb=256)
+    fp16_tol = dict(tol_abs=2e-3, tol_rel=1e-2)
+    corrupt_op_idx = 1  # Q_proj MMUL
+
+    # ── Stage 1: host writes all inputs/weights/scales to DRAM via PCIe ──
+    op_meta = {}
+    for op in manifest["ops"]:
+        idx = op["idx"]
+        opcode = op["opcode"]
+        base = _e2e_blk0_op_block_base(idx)
+        addrs = {
+            "input": base + 0x00000,
+            "weight": base + 0x04000,
+            "output": base + 0x08000,
+            "scale": base + 0x14000,
+            "desc": base + 0x1F000,
+        }
+
+        input_bytes, _ = _e2e_blk0_load_input(op, manifest)
+        model.host_write_data(addrs["input"], np.frombuffer(input_bytes, dtype=np.uint8))
+
+        if opcode == "MMUL":
+            weight_bytes, M_eff, K_eff, N_eff = _e2e_blk0_load_weight(op, manifest)
+            model.host_write_data(addrs["weight"], np.frombuffer(weight_bytes, dtype=np.uint8))
+            num_blocks = (K_eff + 127) // 128
+            scales = np.ones((num_blocks, N_eff), dtype=np.float32)
+            model.host_write_data(addrs["scale"], scales.ravel())
+            model.host_write_descriptor(
+                addrs["desc"],
+                input_addr=addrs["input"], weight_addr=addrs["weight"],
+                output_addr=addrs["output"], scale_addr=addrs["scale"],
+                input_size=M_eff * K_eff,
+                weight_size=len(weight_bytes),
+                output_size=M_eff * N_eff * 4,
+                scale_size=num_blocks * N_eff * 4,
+                M=M_eff, K=K_eff, N=N_eff,
+            )
+        elif opcode in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
+            dims = op["dimensions"]
+            elements = dims.get("q_len", 0) + dims.get("k_len", 0) if opcode == "ROPE" else dims.get("elements", 0)
+            model.host_write_descriptor(
+                addrs["desc"],
+                input_addr=addrs["input"], output_addr=addrs["output"],
+                input_size=elements, output_size=elements,
+                M=1, K=elements, N=1,
+            )
+        elif opcode in ("VMUL", "VRESID"):
+            elements = op["dimensions"]["elements"]
+            a_fmt = "int32" if opcode == "VMUL" else "fp16"
+            a_eb = _EB_BY_FMT[a_fmt]
+            b_addr = addrs["input"] + elements * a_eb
+            model.host_write_descriptor(
+                addrs["desc"],
+                input_addr=addrs["input"], weight_addr=b_addr,
+                output_addr=addrs["output"],
+                input_size=elements, weight_size=elements,
+                output_size=elements * 4,
+                M=1, K=elements, N=1,
+            )
+
+        op_meta[idx] = {
+            "op": op,
+            "addrs": addrs,
+            "input_bytes": input_bytes,
+            "weight_bytes": weight_bytes if opcode == "MMUL" else None,
+        }
+
+    # ── Stage 2: corrupt Q_proj weight byte before firmware dispatch ──
+    corrupt_w_addr = op_meta[corrupt_op_idx]["addrs"]["weight"]
+    corrupt_weight = bytearray(model.pcie.tlp_read(corrupt_w_addr, 1))
+    corrupt_weight[0] ^= 0xFF
+    model.pcie.tlp_write(corrupt_w_addr, bytes(corrupt_weight))
+
+    # ── Stage 3: host queues doorbell commands in 15+2 batches ──
+    # Ring size is 16, so at most 15 entries can be outstanding.
+    ops = manifest["ops"]
+    for op in ops[:15]:
+        model.host_write_command(_e2e_blk0_opcode(op), op_meta[op["idx"]]["addrs"]["desc"])
+    pending = model.bridge.handle("read", Addr.INTC_BASE + 0x00, 0)
+    assert pending & (1 << 8), f"Expected HOST doorbell IRQ pending, got 0x{pending:08X}"
+    assert model.riscv.interrupt_pending
+
+    # ── Stage 4: firmware dispatches first 15 ops via interrupt-driven loop ──
+    results = model.firmware.run_loop(max_commands=15)
+    assert len(results) == 15, f"Expected 15 results, got {len(results)}"
+    for r in results:
+        assert r["status"] == "done", f"Command failed: {r}"
+
+    # Queue and run remaining ops.
+    for op in ops[15:]:
+        model.host_write_command(_e2e_blk0_opcode(op), op_meta[op["idx"]]["addrs"]["desc"])
+    results.extend(model.firmware.run_loop(max_commands=len(ops) - 15))
+    assert len(results) == len(ops), (
+        f"Expected {len(ops)} results, got {len(results)}"
+    )
+    for r in results:
+        assert r["status"] == "done", f"Command failed: {r}"
+
+    pending_after = model.bridge.handle("read", Addr.INTC_BASE + 0x00, 0)
+    assert pending_after == 0, (
+        f"INTC.PENDING should be 0 after IRQ-driven completion, got 0x{pending_after:08X}"
+    )
+
+    # ── Stage 5: host reads results via PCIe and verifies against GoldenExecutor ──
+    for op in manifest["ops"]:
+        idx = op["idx"]
+        opcode = op["opcode"]
+        meta = op_meta[idx]
+        addrs = meta["addrs"]
+        label = f"op{idx:02d} {op['name']}"
+
+        golden = _e2e_blk0_golden(op, manifest, meta["input_bytes"], meta["weight_bytes"])
+
+        if opcode == "MMUL":
+            dims = op["dimensions"]
+            M_eff = min(dims.get("M", 1), 64)
+            N_eff = min(dims.get("N", 0), 64)
+            out_bytes = model.pcie.tlp_read(addrs["output"], M_eff * N_eff * 4)
+            out_arr = np.frombuffer(out_bytes, dtype=np.float32).reshape(M_eff, N_eff)
+            if idx == corrupt_op_idx:
+                assert not np.allclose(out_arr, golden, rtol=1e-5), (
+                    f"Anti-vacuous fail: corrupted {label} still matches golden"
+                )
+            else:
+                assert np.allclose(out_arr, golden, rtol=1e-5), (
+                    f"{label}: MMUL mismatch via PCIe readback"
+                )
+        elif opcode in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
+            dims = op["dimensions"]
+            elements = dims.get("q_len", 0) + dims.get("k_len", 0) if opcode == "ROPE" else dims.get("elements", 0)
+            out_bytes = model.pcie.tlp_read(addrs["output"], elements * 2)
+            out_arr = np.frombuffer(out_bytes, dtype=np.float16).astype(np.float32)
+            cmp = GoldenSFU.compare_hw_vs_ref(out_arr, golden, **fp16_tol)
+            assert cmp["within_tolerance"], (
+                f"{label}: SFU mismatch max_abs={cmp['max_abs_err']:.2e}"
+            )
+        elif opcode in ("VMUL", "VRESID"):
+            elements = op["dimensions"]["elements"]
+            out_bytes = model.pcie.tlp_read(addrs["output"], elements * 4)
+            out_arr = np.frombuffer(out_bytes, dtype=np.int32)
+            assert np.array_equal(out_arr, golden), (
+                f"{label}: Vector mismatch at indices {np.where(out_arr != golden)[0]}"
+            )

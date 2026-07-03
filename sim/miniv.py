@@ -596,7 +596,7 @@ class NPUFirmware:
                     self.riscv._handle_irq()
 
             elif op in (OpCode.SOFTMAX, OpCode.LAYERNORM, OpCode.GELU,
-                        OpCode.RELU, OpCode.SILU, OpCode.ROPE):
+                        OpCode.RELU, OpCode.SILU, OpCode.ROPE, OpCode.RMSNORM):
                 sfu_op = {
                     OpCode.SOFTMAX: 0,
                     OpCode.LAYERNORM: 1,
@@ -604,6 +604,7 @@ class NPUFirmware:
                     OpCode.RELU: 3,
                     OpCode.SILU: 4,
                     OpCode.ROPE: 5,
+                    OpCode.RMSNORM: 6,
                 }[op]
                 self._mmio_write(SFU.BASE + SFU.CTRL, sfu_op)
                 self._mmio_write(SFU.BASE + SFU.I_ADDR, desc['input_addr'])
