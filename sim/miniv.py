@@ -7,12 +7,21 @@ Goal: run NPU firmware logic before riscv-gcc cross-compilation is available.
 When riscv-gcc is ready, replace with Spike + real ELF.
 """
 
+import os
 import struct
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
 from engine.isa import OpCode
 from sim.models.crossbar import CrossbarModel
+
+
+# ── Address constants ────────────────────────────────────────────────
+
+BOOT_ROM_BASE = 0x0000_0000
+BOOT_ROM_SIZE = 0x0001_0000  # 64 KB
+DMEM_BASE     = 0x0001_0000
+DMEM_SIZE     = 0x0001_0000  # 64 KB
 
 
 @dataclass
@@ -33,18 +42,40 @@ class RV32State:
 class RISCVMini:
     """Minimal RV32I emulator with MMIO callback support.
 
+    Two modes:
+      - Legacy (no crossbar): uses self.mem for all addresses < 0x4000_0000.
+      - SoC mode (crossbar provided): shared sram/dram through crossbar,
+        local boot ROM and DMEM, unified address decoder.
+
     Usage:
-        emu = RISCVMini(memory_size=128*1024)  # 128KB RAM
+        emu = RISCVMini(memory_size=128*1024)  # 128KB RAM (legacy)
+        emu = RISCVMini(crossbar=xbar, sram=sram, dram=dram)  # SoC mode
         emu.load_program(0x00000000, code_bytes)
-        emu.mmio_callback = my_callback  # called on MMIO load/store
+        emu.mmio_callback = my_callback
         emu.run(max_instructions=1000000)
     """
 
-    def __init__(self, memory_size: int = 256 * 1024):
+    def __init__(
+        self,
+        memory_size: int = 256 * 1024,
+        crossbar: Optional[CrossbarModel] = None,
+        sram: Optional[bytearray] = None,
+        dram: Optional[bytearray] = None,
+        boot_rom: Optional[bytearray] = None,
+        dmem_size: int = DMEM_SIZE,
+    ):
         self.mem = bytearray(memory_size)
         self.state = RV32State()
         self.instructions_executed = 0
         self.running = False
+
+        # SoC mode: shared memories through crossbar
+        self._crossbar: Optional[CrossbarModel] = crossbar
+        self._sram: Optional[bytearray] = sram
+        self._dram: Optional[bytearray] = dram
+        self._boot_rom: Optional[bytearray] = boot_rom
+        self.dmem = bytearray(dmem_size)
+        self._soc_mode = crossbar is not None
 
         # MMIO regions: (base, size, callback_name)
         self.mmio_regions: List[Tuple[int, int, str]] = []
@@ -54,7 +85,8 @@ class RISCVMini:
     # ── Memory access ───────────────────────────────────────────────
 
     def _is_mmio(self, addr: int) -> bool:
-        return addr >= 0x40000000
+        # MMIO range: 0x4000_0000 – 0x7FFF_FFFF (below DRAM at 0x8000_0000)
+        return 0x40000000 <= addr < 0x80000000
 
     def _mem_read(self, addr: int) -> int:
         addr &= 0xFFFFFFFF
@@ -62,6 +94,32 @@ class RISCVMini:
             if self.mmio_callback:
                 return self.mmio_callback('read', addr, 4) & 0xFFFFFFFF
             return 0
+
+        # SoC mode: route through address decoder
+        if self._soc_mode:
+            size = 4
+            # Boot ROM (read-only)
+            if BOOT_ROM_BASE <= addr < BOOT_ROM_BASE + BOOT_ROM_SIZE:
+                if self._boot_rom is not None:
+                    off = addr - BOOT_ROM_BASE
+                    if off + size <= len(self._boot_rom):
+                        return struct.unpack_from('<I', self._boot_rom, off)[0]
+                return 0
+            # DMEM
+            if DMEM_BASE <= addr < DMEM_BASE + len(self.dmem):
+                off = addr - DMEM_BASE
+                return struct.unpack_from('<I', self.dmem, off)[0]
+            # SRAM / DRAM through crossbar
+            try:
+                sram_bytes = self._crossbar.read(
+                    CrossbarModel.MASTER_IBEX, addr, size)
+                if sram_bytes is not None and len(sram_bytes) >= size:
+                    return struct.unpack_from('<I', sram_bytes, 0)[0]
+            except ValueError:
+                pass
+            return 0
+
+        # Legacy mode
         if addr + 4 <= len(self.mem):
             return struct.unpack_from('<I', self.mem, addr)[0]
         return 0
@@ -73,6 +131,29 @@ class RISCVMini:
             if self.mmio_callback:
                 self.mmio_callback('write', addr, val)
             return
+
+        # SoC mode: route through address decoder
+        if self._soc_mode:
+            data = struct.pack('<I', val)
+            # Boot ROM / DMEM (low address range)
+            if BOOT_ROM_BASE <= addr < BOOT_ROM_BASE + BOOT_ROM_SIZE:
+                if self._boot_rom is not None:
+                    off = addr - BOOT_ROM_BASE
+                    if off + 4 <= len(self._boot_rom):
+                        self._boot_rom[off:off + 4] = data
+                return
+            if DMEM_BASE <= addr < DMEM_BASE + len(self.dmem):
+                off = addr - DMEM_BASE
+                self.dmem[off:off + 4] = data
+                return
+            # SRAM / DRAM through crossbar
+            try:
+                self._crossbar.write(CrossbarModel.MASTER_IBEX, addr, data)
+            except ValueError:
+                pass
+            return
+
+        # Legacy mode
         if addr + 4 <= len(self.mem):
             struct.pack_into('<I', self.mem, addr, val)
 
@@ -209,10 +290,85 @@ class RISCVMini:
 
     def load_program(self, base_addr: int, code: bytes):
         """Load raw RISC-V binary at base_addr, set PC."""
+        if self._soc_mode and base_addr < BOOT_ROM_BASE + BOOT_ROM_SIZE:
+            target = self._boot_rom if (
+                self._boot_rom is not None and
+                base_addr + len(code) <= len(self._boot_rom)
+            ) else self.dmem
+        else:
+            target = self.mem
         for i, b in enumerate(code):
-            if base_addr + i < len(self.mem):
-                self.mem[base_addr + i] = b
+            if base_addr + i < len(target):
+                target[base_addr + i] = b
         self.state.pc = base_addr
+
+    @staticmethod
+    def load_hex(
+        path: str,
+        mem: bytearray,
+        base_addr: int = 0x00000000,
+    ) -> int:
+        """Load a hex firmware file into a bytearray at base_addr.
+
+        Supports two formats:
+          - Intel HEX (:LLAAAATT[DD...]CC)
+          - Raw 32-bit word hex (one 8-char hex word per line)
+
+        Returns number of bytes loaded. Raises FileNotFoundError if the
+        file does not exist.
+        """
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"HEX file not found: {path}")
+
+        bytes_loaded = 0
+        with open(path, 'r') as f:
+            first_line = f.readline().strip()
+            f.seek(0)
+            if first_line.startswith(':'):
+                bytes_loaded = RISCVMini._load_intel_hex(f, mem, base_addr)
+            else:
+                bytes_loaded = RISCVMini._load_raw_word_hex(f, mem, base_addr)
+        return bytes_loaded
+
+    @staticmethod
+    def _load_intel_hex(f, mem: bytearray, base_addr: int) -> int:
+        bytes_loaded = 0
+        for line in f:
+            line = line.strip()
+            if not line.startswith(':'):
+                continue
+            byte_count = int(line[1:3], 16)
+            addr = int(line[3:7], 16)
+            record_type = int(line[7:9], 16)
+            if record_type == 0x00:
+                data = bytes.fromhex(line[9:9 + byte_count * 2])
+                target_addr = base_addr + addr
+                mem[target_addr:target_addr + byte_count] = data
+                bytes_loaded += byte_count
+            elif record_type == 0x01:
+                break
+        return bytes_loaded
+
+    @staticmethod
+    def _load_raw_word_hex(f, mem: bytearray, base_addr: int) -> int:
+        bytes_loaded = 0
+        addr = 0
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('@'):
+                if line.startswith('@'):
+                    addr = int(line[1:], 16)
+                continue
+            try:
+                word = int(line, 16) & 0xFFFFFFFF
+            except ValueError:
+                continue
+            target = base_addr + addr
+            if target + 4 <= len(mem):
+                struct.pack_into('<I', mem, target, word)
+                bytes_loaded += 4
+            addr += 4
+        return bytes_loaded
 
     # ── Helpers ─────────────────────────────────────────────────────
 

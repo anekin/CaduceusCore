@@ -5,13 +5,14 @@ Func Model 主入口 — RISC-V 固件 + MMIO Bridge + Golden Executor 集成。
 Phase 2: Python 固件模拟器（riscv-gcc 就绪后切换 Spike + 真实 ELF）
 """
 
+import os
 import numpy as np
 import struct
 
 from sim.regmap import Addr, print_map
 from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector, GoldenDMA
 from sim.mmio_bridge import MMIOBridge
-from sim.miniv import RISCVMini, NPUFirmware
+from sim.miniv import RISCVMini, NPUFirmware, BOOT_ROM_SIZE, BOOT_ROM_BASE
 from sim.axi_tracer import AXITracer
 from sim.models.pcie import PCIeModel
 from sim.models.crossbar import CrossbarModel
@@ -24,6 +25,7 @@ class FuncModel:
         # Memories
         self.dram = bytearray(dram_mb * 1024 * 1024)
         self.sram = bytearray(sram_kb * 1024)
+        self.boot_rom = bytearray(BOOT_ROM_SIZE)
 
         self.crossbar = CrossbarModel(sram=self.sram, dram=self.dram)
         self.pcie = PCIeModel(crossbar=self.crossbar)
@@ -48,6 +50,25 @@ class FuncModel:
             'crossbar': self.crossbar,
             'dram': self.dram, 'sram': self.sram,
         }, bridge=self.bridge)
+
+        # RISC-V emulator in SoC mode (Ibex replacement)
+        self.riscv = RISCVMini(
+            crossbar=self.crossbar,
+            sram=self.sram,
+            dram=self.dram,
+            boot_rom=self.boot_rom,
+        )
+        self.riscv.mmio_callback = self.bridge.handle
+
+    def load_boot_rom(self, path: str) -> int:
+        """Load Intel HEX firmware into boot ROM.
+
+        Returns number of bytes loaded. If path does not exist, returns 0
+        without raising.
+        """
+        if not os.path.exists(path):
+            return 0
+        return RISCVMini.load_hex(path, self.boot_rom, BOOT_ROM_BASE)
 
     def _dram_write(self, addr: int, data: bytes):
         """Direct write to DRAM with address translation."""
@@ -242,8 +263,11 @@ if __name__ == "__main__":
         print(f"  {w}")
 
     # Export trace
-    tracer.to_json('/Users/zheng/npu/traces/conv2d_smoke_axi.json')
-    print("\nTrace exported to traces/conv2d_smoke_axi.json")
+    from pathlib import Path
+    trace_path = Path(__file__).resolve().parent.parent / 'traces' / 'conv2d_smoke_axi.json'
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    tracer.to_json(str(trace_path))
+    print(f"\nTrace exported to {trace_path}")
     print("\nPhase 3 AXI Tracer: ✅ DONE")
 
     if ok:

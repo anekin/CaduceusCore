@@ -69,6 +69,33 @@ class MMIOBridge:
 
         return 0
 
+    # ── APB Protocol Layer ──────────────────────────────────────────
+
+    def apb_read(self, paddr: int, psel: int = 1, penable: int = 1) -> int:
+        """APB read with handshake validation (functional, not cycle-accurate).
+
+        On the APB bus, psel must be asserted (=1) before penable goes high.
+        If psel is deasserted, the slave returns 0 (not selected).
+        If penable is deasserted during the setup phase, no data is driven.
+
+        Returns prdata (32-bit).
+        """
+        if not psel:
+            return 0
+        if not penable:
+            return 0
+        return self.handle('read', paddr, 0)
+
+    def apb_write(self, paddr: int, pwdata: int, psel: int = 1, penable: int = 1):
+        """APB write with handshake validation (functional, not cycle-accurate).
+
+        APB write requires both psel and penable to be asserted.
+        A write during setup phase (penable=0) is ignored silently.
+        """
+        if not psel or not penable:
+            return
+        self.handle('write', paddr, pwdata)
+
     # ── MXU ─────────────────────────────────────────────────────────
 
     def _handle_mxu(self, rw: str, addr: int, value: int) -> int:
