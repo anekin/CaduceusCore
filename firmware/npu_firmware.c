@@ -25,7 +25,7 @@
 /* ── Ring Buffer 配置 ────────────────────────────────────────────── */
 
 #define RING_BUF_ADDR        DRAM_BASE
-#define RING_ENTRIES         16
+#define RING_ENTRIES         32
 #define CMD_DESC_SIZE        32
 #define COMPLETION_RING_ADDR (DRAM_BASE + 0x800)
 
