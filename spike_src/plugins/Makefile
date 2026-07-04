@@ -4,7 +4,7 @@
 # source headers directly (no Spike core modifications).
 
 CXX      ?= g++
-CXXFLAGS  = -std=c++17 -fPIC -O2 -Wall
+CXXFLAGS  = -std=c++17 -fPIC -O2 -Wall -D_GLIBCXX_USE_CXX11_ABI=0
 INCLUDES  = -I../riscv
 
 PLUGIN    = npu_mmio_plugin.so
