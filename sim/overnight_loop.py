@@ -324,7 +324,7 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
                 if tok > 0:
                     dram_demand = tok * total_weight_gb
                     break
-    dram_available = 43.5  # GB/s effective
+    dram_available = _cfg.get("memory", {}).get("bandwidth_gbps", 51.2) * _cfg.get("memory", {}).get("dram_efficiency", 0.85)  # GB/s effective, from config
     bw_pct = (dram_demand / dram_available) * 100 if dram_available > 0 else 0
 
     # Compute batch range for dynamic summary (not hardcoded)

@@ -1,5 +1,144 @@
 # Architectural Observations Log
 
+## 2026-07-04 22:05 — Iteration 156 — Stable (64th Clean Run since iter 92)
+
+### Run Summary
+- **Iteration**: 156 (stable since iter 92, 64 consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 9 health checks**: ✅ PASS
+- **No changes**: identical to iter 155, converged steady state
+
+### Cron Constraint Staleness (49 iterations uncorrected since iter 107)
+Same 3 stale constraints persist in the cron prompt:
+| Constraint | Cron Prompt | Actual | Delta |
+|------------|-------------|--------|-------|
+| DRAM BW | 20.2 GB/s | 33.0 GB/s | +63% |
+| batch M≥2 | 31 tok/s | 12 tok/s raw | −62% |
+| bottleneck root | tiling overhead | DRAM BW | wrong cause |
+
+> **Action needed**: user must update the cron prompt's "关键约束" section with actual numbers.
+> The morning_summary stale-constraint table already auto-flags these.
+
+---
+
+## 2026-07-04 20:07 — Iteration 155 — Code Fix Applied (63rd Clean Run since iter 92)
+
+### Run Summary
+- **Iteration**: 155 (stable since iter 92, 63 consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues found**: 0
+- **Code fix applied**: ✅ `dram_available = 43.5` hardcoded → config-derived `memory.bandwidth_gbps * memory.dram_efficiency = 51.2 * 0.85 = 43.52`
+- **All 9 health checks**: ✅ PASS
+- **Sweep**: 8 configs, 64×256 (25.0 tok/s @ 32mm²) best area-efficient target
+
+### Fix Detail
+`overnight_loop.py:327` previously hardcoded `dram_available = 43.5`. Now reads from `npu_config.yaml`:
+```python
+dram_available = _cfg.get("memory", {}).get("bandwidth_gbps", 51.2) * _cfg.get("memory", {}).get("dram_efficiency", 0.85)
+```
+Yield: 43.52 GB/s (was 43.5). Negligible difference but eliminates the `hardcoded-performance-constant` error pattern. Config changes now automatically propagate to the summary.
+
+### Cron Constraint Staleness (48 iterations uncorrected since iter 107)
+Same 3 stale constraints auto-flagged:
+
+| Constraint | Cron Prompt | Actual | Delta |
+|------------|-------------|--------|-------|
+| DRAM BW 不是瓶颈 | 20.2 GB/s | 33.0 GB/s | +63% |
+| batch M≥2 → 31 tok/s | 31 tok/s | 12 tok/s raw | −62% |
+| 瓶颈：tiling overhead | tiling | DRAM BW | wrong root cause |
+
+### Architecture Q (unresolved since iter 112)
+Should default config switch to 64×256 (hits 25 tok/s at 32mm², +5mm²) or stay at 64×64 (misses by 4% but 18% smaller)?
+
+---
+
+## 2026-07-04 18:01 — Iteration 153 — Stable, No Code Issues (61st Clean Run since iter 92)
+
+
+### Run Summary
+- **Iteration**: 153 (stable since iter 92, 61 consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 9 health checks**: ✅ PASS
+- **No changes**: identical to prior iterations, converged steady state
+
+### Status
+Unchanged. M=1 decode at 64×64 remains DRAM-BW-bound (33.0/43.5 GB/s = 76%).
+64×256 hits 25.0 tok/s @ 32mm² (+18% area, +4% perf). All larger arrays hit target.
+
+### Counter Logic Verified
+- `iter_count()` correctly excludes Post-Analysis markers
+- `issues_fixable` counter aligned with `fix_issues()` branches
+- No undercount/overcount: 0 issues → 0 fixable → correct
+
+### Cron Constraint Staleness (46 iterations uncorrected since iter 107)
+Same 3 stale constraints auto-flagged by stale-constraint table:
+1. "DRAM BW 不是瓶颈：需求 20.2 < 可用 43.5 GB/s" → actual 33.0 GB/s (+63%)
+2. "batch M≥2 → 31 tok/s" → actual 12 tok/s raw (−62%)
+3. "真正的瓶颈：M=1 decode 的 tiling overhead" → primary bottleneck is DRAM BW
+
+### Architecture Q (unresolved since iter 112)
+Should we switch default config to 64×256 (hits 25 tok/s at 32mm²) or stay at 64×64 (misses by 4% but 18% smaller)?
+
+---
+
+## 2026-07-04 16:00 — Iteration 152 — Stable, No Code Issues (60th Clean Run since iter 92)
+
+### Run Summary
+- **Iteration**: 152 (stable since iter 92, 60 consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 9 health checks**: ✅ PASS
+- **No changes**: converged steady state, identical to prior iterations
+
+### Status
+Unchanged. M=1 decode at 64×64 remains DRAM-BW-bound (33.0/43.5 GB/s = 76%).
+64×256 hits 25.0 tok/s @ 32mm² (+18% area, +4% perf). All larger arrays hit target.
+
+### Counter Logic Verified
+- `iter_count()` correctly excludes Post-Analysis markers (L45: `and "Post-Analysis" not in l`)
+- `issues_fixable` counter aligned with `fix_issues()` branches (weight_preloaded, compiler.py, broken import)
+- No undercount/overcount: 0 issues → 0 fixable → correct
+
+### Cron Constraint Staleness (45 iterations uncorrected since iter 107)
+Same 3 stale constraints auto-flagged by stale-constraint table:
+1. "DRAM BW 不是瓶颈：需求 20.2 < 可用 43.5 GB/s" → actual 33.0 GB/s (+63%)
+2. "batch M≥2 → 31 tok/s" → actual 12 tok/s raw (−62%)
+3. "真正的瓶颈：M=1 decode 的 tiling overhead" → primary bottleneck is DRAM BW
+
+### Architecture Q (unresolved since iter 112)
+Should we switch default config to 64×256 (hits 25 tok/s at 32mm²) or stay at 64×64 (misses by 4% but 18% smaller)?
+
+---
+
+## 2026-07-04 04:01 — Iteration 146 — Stable, No Code Issues (54th Clean Run since iter 92)
+
+### Run Summary
+- **Iteration**: 146 (stable since iter 92, 54 consecutive clean runs)
+- **E2E**: 24.0 tok/s @ 64×64, target 25 — ❌ NOT MET (−4%)
+- **Code issues**: 0 found, 0 fixed
+- **All 9 health checks**: ✅ PASS
+- **`from sim.` broken imports**: 0 matches — migration verified complete
+- **`weight_preloaded` residuals**: Only comments/signatures with `=False` — no production `=True`
+- **dram_efficiency**: 0.85 in config ✅
+- **No changes**: identical to prior iterations, converged steady state
+
+### Status
+Unchanged. M=1 decode at 64×64 remains DRAM-BW-bound (33.0/43.5 GB/s = 76%).
+64×256 hits 25.0 tok/s @ 32mm². All larger arrays hit target.
+
+### Cron Constraint Staleness (ongoing — 39 iterations uncorrected since iter 107)
+Same 3 stale constraints — all auto-flagged by stale-constraint table:
+1. "DRAM BW 不是瓶颈：需求 20.2 < 可用 43.5 GB/s" → actual 33.0 GB/s (+63%)
+2. "batch M≥2 → 31 tok/s" → actual 12 tok/s raw (−62%)
+3. "真正的瓶颈：M=1 decode 的 tiling overhead" → primary bottleneck is DRAM BW
+
+### Architecture Q (unresolved since iter 112)
+Should we switch default config to 64×256 (hits 25 tok/s target at 32mm²) or stay at 64×64 (misses by 4% but smaller area)?
+
+---
+
 ## 2026-07-03 20:08 — Iteration 142 — Stable, No Code Issues (50th Clean Run since iter 92)
 
 ### Run Summary
