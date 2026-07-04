@@ -16,6 +16,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# RTL $readmemh paths are relative to the repository parent directory.
+RUN_DIR="$(cd "$REPO_ROOT/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Source EDA environment (VCS, cocotb Python)
@@ -38,20 +40,24 @@ export PYTHONPATH="${PYTHONPATH:-}:$REPO_ROOT"
 export MODULE=sim.rtl_soc_runner
 export TOPLEVEL=tb_soc_spike
 export TOPLEVEL_LANG=verilog
+export TESTCASE=test_soc_spike_p0
 
 # Compile simv if not present
 if [ ! -x "$SIMV" ]; then
     echo "[INFO] Compiling simv_soc_spike ..."
     vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps \
         -kdb \
+        -f "$REPO_ROOT/rtl/cpu/ibex.flist" \
         -f "$REPO_ROOT/rtl/ip/verilog-axi.flist" \
         -f "$REPO_ROOT/rtl/ip/verilog-pcie.flist" \
         -f "$REPO_ROOT/rtl/soc/soc.flist" \
+        "$REPO_ROOT/rtl/tb/tb_soc_spike.v" \
         -top tb_soc_spike \
         -o "$SIMV" \
         -l "$BUILD_DIR/elaborate.log" \
         +vpi \
-        -P "$PLI_TAB"
+        -P "$PLI_TAB" \
+        -load "$COCOTB_VPI_LIB"
     echo "[INFO] Compile complete: $SIMV"
 else
     echo "[INFO] Reusing existing simv: $SIMV"
@@ -70,8 +76,10 @@ for CASE in $CASES; do
     echo "============================================================"
     export FM_SOC_CASE_ID="$CASE"
     export FM_SOC_RTL_MODE=spike
+    export TESTCASE=test_soc_spike_p0
     CASE_LOG="$EVIDENCE_DIR/${CASE}.log"
-    if "$SIMV" +COCOTB +FM_SOC_CASE_ID="$CASE" > "$CASE_LOG" 2>&1; then
+    (cd "$RUN_DIR" && "$SIMV" +COCOTB +FM_SOC_CASE_ID="$CASE") > "$CASE_LOG" 2>&1 || true
+    if grep -qE 'TESTS=1 PASS=1 FAIL=0 SKIP=0' "$CASE_LOG"; then
         echo "[PASS] $CASE"
         PASS=$((PASS + 1))
     else

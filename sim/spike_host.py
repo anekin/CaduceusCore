@@ -40,8 +40,9 @@ PLUGIN_SO = PROJECT / "spike_src" / "plugins" / "npu_mmio_plugin.so"
 
 FIRMWARE_RING_BASE = 0x80100000  # hard-coded in C firmware; shadows part of low DRAM
 
-# C firmware mmul_desc_t uses a 12-field packed layout.
-MMUL_DESC_FMT = "<12I"
+# C firmware mmul_desc_t uses a 15-field packed layout
+# (input/weight/output/scale addr + input/weight/output/scale sram + sizes + M,K,N).
+MMUL_DESC_FMT = "<15I"
 MMUL_DESC_SIZE = struct.calcsize(MMUL_DESC_FMT)
 
 SFU_DESC_FMT = "<12I"
@@ -64,47 +65,55 @@ DESC_STRIDE = 64
 
 def write_mmul_descriptor(model: FuncModel, desc_addr: int,
                           input_addr: int, weight_addr: int, output_addr: int,
-                          input_sram: int, weight_sram: int, output_sram: int,
-                          input_size: int, weight_size: int, output_size: int,
-                          M: int, K: int, N: int):
-    """Write a descriptor in the format expected by firmware npu_firmware.c."""
+                          scale_addr: int = 0,
+                          input_sram: int = 0, weight_sram: int = 0,
+                          output_sram: int = 0, scale_sram: int = 0,
+                          input_size: int = 0, weight_size: int = 0,
+                          output_size: int = 0, scale_size: int = 0,
+                          M: int = 1, K: int = 1, N: int = 1):
     buf = struct.pack(MMUL_DESC_FMT,
-                      input_addr, weight_addr, output_addr,
-                      input_sram, weight_sram, output_sram,
-                      input_size, weight_size, output_size,
+                      input_addr, weight_addr, output_addr, scale_addr,
+                      input_sram, weight_sram, output_sram, scale_sram,
+                      input_size, weight_size, output_size, scale_size,
                       M, K, N)
     model.host_write_data(desc_addr, np.frombuffer(buf, dtype=np.uint8))
 
 
 def write_sfu_descriptor(model: FuncModel, desc_addr: int,
-                         op: int, input_addr: int, output_addr: int,
-                         input_sram: int, output_sram: int, size: int,
-                         dim: int = 0, pos: int = 0):
-    """Write an SFU descriptor in the format expected by firmware npu_firmware.c."""
-    buf = struct.pack(SFU_DESC_FMT,
-                      op, input_addr, output_addr,
-                      input_sram, output_sram, size, dim, pos,
-                      0, 0, 0, 0)
+                          op: int, input_addr: int, output_addr: int,
+                          input_sram: int, output_sram: int, size: int,
+                          dim: int = 0, pos: int = 0):
+    """Write an SFU descriptor in the 15-word generic layout expected by firmware npu_firmware.c."""
+    buf = struct.pack('<15I',
+                      input_addr, 0, output_addr, 0,
+                      input_sram, output_sram, 0, 0,
+                      dim, 0, 0, 0,
+                      1, dim, 1)
     model.host_write_data(desc_addr, np.frombuffer(buf, dtype=np.uint8))
 
 
 def write_vector_descriptor(model: FuncModel, desc_addr: int,
-                            op: int, a_addr: int, b_addr: int, o_addr: int,
-                            dim: int):
-    """Write a Vector descriptor in the format expected by firmware npu_firmware.c."""
-    buf = struct.pack(VECTOR_DESC_FMT,
-                      op, a_addr, b_addr, o_addr, dim,
-                      0, 0, 0)
+                             op: int, a_addr: int, b_addr: int, o_addr: int,
+                             dim: int):
+    """Write a Vector descriptor in the 15-word generic layout expected by firmware npu_firmware.c."""
+    buf = struct.pack('<15I',
+                      a_addr, b_addr, o_addr, 0,
+                      0, 0, 0, 0,
+                      dim, 0, 0, 0,
+                      1, dim, 1)
     model.host_write_data(desc_addr, np.frombuffer(buf, dtype=np.uint8))
 
 
 def write_dma_copy_descriptor(model: FuncModel, desc_addr: int,
-                              src_addr: int, dst_addr: int, size: int):
-    """Write a DMA_COPY descriptor in the format expected by firmware npu_firmware.c."""
-    buf = struct.pack(DMA_COPY_DESC_FMT,
-                      src_addr, dst_addr, size,
-                      0, 0, 0, 0, 0)
+                               src_addr: int, dst_addr: int, size: int):
+    """Write a DMA_COPY descriptor in the 15-word generic layout expected by firmware npu_firmware.c."""
+    buf = struct.pack('<15I',
+                      src_addr, 0, dst_addr, 0,
+                      0, 0, 0, 0,
+                      size, 0, 0, 0,
+                      1, size, 1)
     model.host_write_data(desc_addr, np.frombuffer(buf, dtype=np.uint8))
+
 
 
 def write_cmd_entry(model: FuncModel, ring_index: int,
@@ -202,9 +211,12 @@ def run_one_op(gguf_path: str, layer: int, op: str, M: int = 1) -> bool:
 
     write_mmul_descriptor(model, desc_addr,
                           input_addr=act_addr, weight_addr=wgt_addr, output_addr=out_addr,
+                          scale_addr=wgt_addr + len(wgt_bytes),
                           input_sram=input_sram, weight_sram=weight_sram, output_sram=output_sram,
-                          input_size=act.nbytes, weight_size=len(combined_weight_blob),
-                          output_size=M * N * 4, M=M, K=K, N=N)
+                          scale_sram=scale_sram,
+                          input_size=act.nbytes, weight_size=len(wgt_bytes),
+                          output_size=M * N * 4, scale_size=len(scale_bytes),
+                          M=M, K=K, N=N)
     model.host_write_command(0, desc_addr)
 
     # Pre-set MXU SCALE_ADDR so the bridge uses per-block dequantization.

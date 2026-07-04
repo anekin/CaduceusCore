@@ -567,6 +567,7 @@ module caduceus_soc_spike_top #(
     assign cb_m_arlen[2]  = sfu_arlen;
     assign cb_m_arsize[2] = sfu_arsize;
     assign cb_m_arburst[2]= sfu_arburst;
+    assign cb_m_arvalid[2]= sfu_arvalid;
     assign sfu_arready    = cb_m_arready[2];
     assign sfu_rid_8      = {2'b0, cb_m_rid[2]};
     assign sfu_rdata      = cb_m_rdata[2];
@@ -597,6 +598,7 @@ module caduceus_soc_spike_top #(
     assign cb_m_arlen[3]  = vec_arlen;
     assign cb_m_arsize[3] = vec_arsize;
     assign cb_m_arburst[3]= vec_arburst;
+    assign cb_m_arvalid[3]= vec_arvalid;
     assign vec_arready    = cb_m_arready[3];
     assign vec_rid_8      = {2'b0, cb_m_rid[3]};
     assign vec_rdata      = cb_m_rdata[3];
@@ -627,6 +629,7 @@ module caduceus_soc_spike_top #(
     assign cb_m_arlen[4]  = dma_arlen;
     assign cb_m_arsize[4] = dma_arsize;
     assign cb_m_arburst[4]= dma_arburst;
+    assign cb_m_arvalid[4]= dma_arvalid;
     assign dma_arready    = cb_m_arready[4];
     assign dma_rid_8      = {2'b0, cb_m_rid[4]};
     assign dma_rdata      = cb_m_rdata[4];

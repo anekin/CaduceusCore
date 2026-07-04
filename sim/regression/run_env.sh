@@ -51,8 +51,15 @@ if command -v cocotb-config &>/dev/null; then
     export COCOTB_VPI_LIB COCOTB_LIB_DIR
 fi
 
-# ── PLI Table (VPI access permissions for cocotb) ─────────────────────────
+# ── Static dtc (CentOS 7 / glibc 2.17 compatible) ─────────────────────────
+# Spike invokes `dtc` at runtime. The system/conda dtc on sz0001 may be
+# linked against a newer glibc; provide a statically-linked fallback.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -x "$SCRIPT_DIR/tools/dtc" ]; then
+    export PATH="$SCRIPT_DIR/tools:$PATH"
+fi
+
+# ── PLI Table (VPI access permissions for cocotb) ─────────────────────────
 PLI_TAB="$SCRIPT_DIR/pli.tab"
 if [ ! -f "$PLI_TAB" ]; then
     echo "acc+=rw,wn:*" > "$PLI_TAB"

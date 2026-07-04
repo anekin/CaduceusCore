@@ -76,6 +76,21 @@ typedef struct {
 #define VEC_OP_CONV  4
 #define VEC_OP_RESID 5
 
+#define MXU_WRP_WEIGHT_BASE 0x30
+#define MXU_WRP_ACT_BASE    0x34
+#define MXU_WRP_OUT_BASE    0x38
+#define MXU_WRP_CMD         0x3C
+#define MXU_WRP_STATUS      0x40
+#define MXU_WRP_K_TILES     0x44
+#define MXU_WRP_DIM_N       0x48
+
+#define VEC_WRP_A_BASE      0x30
+#define VEC_WRP_B_BASE      0x34
+#define VEC_WRP_O_BASE      0x38
+#define VEC_WRP_CMD         0x3C
+#define VEC_WRP_STATUS      0x40
+#define VEC_WRP_LEN         0x44
+
 /* ── DMA Registers ──────────────────────────────────────────────── */
 
 typedef struct {

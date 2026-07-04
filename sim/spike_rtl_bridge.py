@@ -5,20 +5,30 @@ Routes Spike RISC-V firmware loads/stores to real RTL bus transactions:
   - SRAM/DRAM data accesses (0x2000_0000+, 0x8000_0000+) → AXI4 via cocotbext-axi
   - NPU MMIO register accesses (0x4000_0000+)           → APB master
 
-The Unix socket server runs in a daemon thread.  bridge.handle() is decorated
-with @cocotb.function so it executes in the cocotb simulation context and the
-server thread blocks until the RTL transaction completes.
+The Unix socket server runs in a cocotb.external thread so that
+bridge.handle() (decorated with @cocotb.function) executes in the cocotb
+simulation context and the server thread blocks until the RTL transaction
+completes.
 """
 
 from __future__ import annotations
 
+import logging
 import os
+import queue
 import re
 import socketserver
 import sys
 import threading
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+try:
+    import cocotb
+except Exception:
+    cocotb = None
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _PACKAGE_ROOT = _SCRIPT_DIR.parent
@@ -98,9 +108,9 @@ class SimpleAPBMaster:
 class RTLMMIOBridge:
     """Bridge from Spike text MMIO protocol to RTL AXI4/APB transactions.
 
-    handle() is decorated with @cocotb.function so it can be called from the
-    socket server thread and still execute RTL transactions in the cocotb
-    simulation context.
+    Requests from the socket server thread are placed on a queue and drained
+    by a background cocotb task so that RTL transactions run in the simulator
+    context.
     """
 
     def __init__(self, axi_master, apb_master, dut):
@@ -108,6 +118,20 @@ class RTLMMIOBridge:
         self.apb = apb_master
         self.dut = dut
         self._status: dict = {}
+        self._req_queue: queue.Queue = queue.Queue()
+
+    async def _process_requests(self) -> None:
+        """Background cocotb task that drains the MMIO request queue."""
+        from cocotb.triggers import ClockCycles
+        while True:
+            await ClockCycles(self.dut.clk, 1)
+            while not self._req_queue.empty():
+                op, addr, value, evt, result = self._req_queue.get_nowait()
+                try:
+                    result[0] = await self._handle_async(op, addr, value)
+                except Exception as exc:
+                    result[0] = exc
+                evt.set()
 
     @staticmethod
     def _abs_addr(addr: int) -> int:
@@ -137,13 +161,18 @@ class RTLMMIOBridge:
             data = value.to_bytes(4, "little")
             await self.axi.write(addr, data)
             self._status[addr] = value & 0xFFFFFFFF
+            print(f"[AXI] write addr=0x{addr:08X} data=0x{value:08X}", flush=True)
             return 0
 
     def handle(self, op: str, addr: int, value: int = 0) -> int:
         """Synchronous entry point called from the server thread."""
-        import cocotb
-        decorated = cocotb.function(self._handle_async)
-        return decorated(op, addr, value)
+        result = [None]
+        evt = threading.Event()
+        self._req_queue.put((op, addr, value, evt, result))
+        evt.wait()
+        if isinstance(result[0], Exception):
+            raise result[0]
+        return result[0]
 
 
 def _handle_request(bridge: RTLMMIOBridge, line: str) -> str:
@@ -207,8 +236,10 @@ def serve_rtl(
     sock_path: str = DEFAULT_SOCK_PATH,
     ready_event: Optional[threading.Event] = None,
 ):
-    """Start a threaded Unix socket server around *bridge*."""
+    """Start a threaded Unix socket server around *bridge* and a request processor."""
     server = ThreadedRTLServer(sock_path, bridge, ready_event=ready_event)
+    if cocotb is not None:
+        cocotb.start_soon(bridge._process_requests())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server

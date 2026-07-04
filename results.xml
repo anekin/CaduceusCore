@@ -1,0 +1,8 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1783157886" />
+    <testcase name="test_soc_spike_p1" classname="sim.rtl_soc_runner" file="/home/prj/zhengs/caduceuscore/CaduceusCore/sim/rtl_soc_runner.py" lineno="1755" time="22.456624746322632" sim_time_ns="500138.501" ratio_time="22271.31221408951">
+      <failure message="Test failed with RANDOM_SEED=1783157886" />
+    </testcase>
+  </testsuite>
+</testsuites>

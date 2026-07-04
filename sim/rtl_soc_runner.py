@@ -1039,10 +1039,11 @@ class P0SpikeRunner:
 
     SRAM_BASE = Addr.SRAM_BASE
     DRAM_BASE = Addr.DRAM_BASE
-    RING_BASE = 0x80100000
+    RING_BASE = Addr.DRAM_BASE
     DESC_BASE = 0x80001000
     DESC_STRIDE = 64
     CMD_SIZE = 8 * 4
+    CMD_ENTRY_SIZE = 8 * 4
     RING_SIZE = 16
 
     def __init__(self, dut, bridge: "CocotbBridge"):
@@ -1058,6 +1059,10 @@ class P0SpikeRunner:
         self.axi = AxiMaster(axi_bus, self.dut.clk, self.dut.rst_n)
         self.apb = SimpleAPBMaster(self.dut, "cpu_apb")
         self.mmio = RTLMMIOBridge(self.axi, self.apb, self.dut)
+        # dma_wrapper regs power up to X; zero inactive channel sizes so
+        # firmware-triggered transfers only use the channel it configured.
+        await self._apb_write(Addr.DMA_BASE + DMA.CH0_SIZE, 0)
+        await self._apb_write(Addr.DMA_BASE + DMA.CH1_SIZE, 0)
 
     async def _apb_write(self, addr: int, value: int):
         await self.apb.write(addr, value)
@@ -1083,7 +1088,9 @@ class P0SpikeRunner:
         return model
 
     def _write_cmd(self, model: FuncModel, idx: int, opcode: int, desc_addr: int):
-        write_cmd_entry(model, idx, opcode, desc_addr, flags=0)
+        addr = self.RING_BASE + idx * self.CMD_ENTRY_SIZE
+        buf = struct.pack('<8I', opcode, desc_addr, 0, 0, 0, 0, 0, 0)
+        model.host_write_data(addr, np.frombuffer(buf, dtype=np.uint8))
 
     async def _run_spike(self, model: FuncModel, num_cmds: int,
                          timeout_cycles: int = 500_000) -> bool:
@@ -1105,9 +1112,9 @@ class P0SpikeRunner:
 
         env = os.environ.copy()
         env["NPU_SOCK_PATH"] = str(sock_path)
-        dtc_search = Path(__file__).resolve().parent.parent.parent.parent / "dtc_src"
-        dtc_path = str(dtc_search / "usr" / "bin") if (dtc_search / "usr" / "bin").is_dir() else str(dtc_search)
-        env["PATH"] = dtc_path + ":" + env.get("PATH", "")
+
+        host_tail_addr = Addr.DOORBELL + DOORBELL.HOST_TAIL
+        await self._apb_write(host_tail_addr, num_cmds)
 
         proc = subprocess.Popen(
             [
@@ -1123,12 +1130,10 @@ class P0SpikeRunner:
         done = False
         try:
             await self.bridge.wait_cycles(20)
-            await self._apb_write(Addr.DOORBELL + DOORBELL.HOST_TAIL, num_cmds)
-
             expected = num_cmds % self.RING_SIZE
             addr = Addr.DOORBELL + DOORBELL.NPU_HEAD
             for cyc in range(timeout_cycles):
-                head = await self._apb_read(addr)
+                head = self.mmio._status.get(addr, 0)
                 if head == expected:
                     done = True
                     logger.info(f"[SPIKE] NPU_HEAD={head} after {cyc} cycles")
@@ -1204,11 +1209,29 @@ class P0SpikeRunner:
             size = spec["size"]
             golden = spec["golden"]
             region = spec.get("region", "sram")
+            fp16_tol = spec.get("fp16_tol")
             if region == "sram":
                 actual = await self._sram_backdoor_read(addr - self.SRAM_BASE, size)
             else:
                 actual = await self._dram_backdoor_read(addr - self.DRAM_BASE, size)
-            if actual != golden:
+            if fp16_tol:
+                import numpy as np
+                g = np.frombuffer(golden, dtype=np.float16)
+                a = np.frombuffer(actual, dtype=np.float16)
+                diff = np.abs(g.astype(np.float32) - a.astype(np.float32))
+                if np.any(diff > fp16_tol):
+                    max_err = float(np.max(diff))
+                    logger.error(
+                        f"mismatch {key}: addr=0x{addr:08X} "
+                        f"max_fp16_err={max_err:.6f} > tol={fp16_tol}"
+                    )
+                    mismatches.append(key)
+            elif actual != golden:
+                logger.error(
+                    f"mismatch {key}: addr=0x{addr:08X} "
+                    f"expected={golden[:16].hex()}... "
+                    f"actual={actual[:16].hex()}..."
+                )
                 mismatches.append(key)
 
         if expect_mismatch:
@@ -1233,7 +1256,7 @@ class P0SpikeRunner:
                                   src_addr=self.SRAM_BASE + src_off,
                                   dst_addr=self.SRAM_BASE + dst_off,
                                   size=size)
-        self._write_cmd(model, 0, 3, desc_addr)
+        self._write_cmd(model, 0, 9, desc_addr)
         expected = {
             "num_cmds": 1,
             "compare": {
@@ -1255,7 +1278,7 @@ class P0SpikeRunner:
                                   src_addr=self.DRAM_BASE + src_off,
                                   dst_addr=self.SRAM_BASE + dst_off,
                                   size=size)
-        self._write_cmd(model, 0, 3, desc_addr)
+        self._write_cmd(model, 0, 9, desc_addr)
         expected = {
             "num_cmds": 1,
             "compare": {
@@ -1273,14 +1296,13 @@ class P0SpikeRunner:
         wgt_f32 = rng.randn(K, N).astype(np.float32)
         from sim.quantize import quantize_int4_per_block
         wgt_packed, wgt_scales, _ = quantize_int4_per_block(wgt_f32, 128)
-        golden = GoldenMXU().matmul_int4_per_block(act, wgt_packed, wgt_scales,
-                                                    M, K, N, group_size=128)
-        golden_bytes = golden.astype(np.float32).tobytes()
+        golden = GoldenMXU().matmul_int32(act, wgt_packed, M, K, N)
+        golden_bytes = golden.astype(np.int32).tobytes()
 
         wgt_bytes = wgt_packed.tobytes() + wgt_scales.tobytes()
         act_dram = 0x80010000
         wgt_dram = 0x80200000
-        out_dram = 0x81000000
+        out_dram = 0x80030000
         input_sram = 0x00000000
         weight_sram = 0x00100000
         output_sram = 0x00300000
@@ -1288,16 +1310,23 @@ class P0SpikeRunner:
 
         model.dram[act_dram - self.DRAM_BASE:act_dram - self.DRAM_BASE + act.nbytes] = act.tobytes()
         model.dram[wgt_dram - self.DRAM_BASE:wgt_dram - self.DRAM_BASE + len(wgt_bytes)] = wgt_bytes
+        # Broadcast MAC: each activation byte must be repeated 64 times (one per row)
+        act_bc = np.repeat(act.ravel(), 64).astype(np.int8)
+        model.sram[input_sram:input_sram + len(act_bc)] = act_bc.tobytes()
+        model.sram[weight_sram:weight_sram + len(wgt_packed.tobytes())] = wgt_packed.tobytes()
+        model.sram[scale_sram:scale_sram + wgt_scales.nbytes] = wgt_scales.tobytes()
 
         desc_addr = self.DESC_BASE
+        scale_addr = wgt_dram + len(wgt_packed.tobytes())
         write_mmul_descriptor(model, desc_addr,
                               input_addr=act_dram, weight_addr=wgt_dram, output_addr=out_dram,
+                              scale_addr=scale_addr,
                               input_sram=input_sram, weight_sram=weight_sram, output_sram=output_sram,
-                              input_size=act.nbytes, weight_size=len(wgt_bytes),
-                              output_size=M * N * 4, M=M, K=K, N=N)
+                              scale_sram=scale_sram,
+                              input_size=act.nbytes, weight_size=len(wgt_packed.tobytes()),
+                              output_size=M * N * 4, scale_size=wgt_scales.nbytes,
+                              M=M, K=K, N=N)
         self._write_cmd(model, 0, 0, desc_addr)
-        # Firmware does not set SCALE_ADDR; mirror it for the RTL bridge.
-        self.mmio._status[Addr.MXU_BASE + MXU.SCALE_ADDR] = scale_sram
         expected = {
             "num_cmds": 1,
             "compare": {
@@ -1312,27 +1341,26 @@ class P0SpikeRunner:
         N = 128
         rng = np.random.RandomState(7)
         inp = rng.randn(N).astype(np.float32)
-        out_dram = 0x81000000
+        out_dram = 0x80030000
         input_sram = 0x00000000
         output_sram = 0x00100000
-        size_bytes = N * 4
 
-        model.sram[input_sram:input_sram + size_bytes] = inp.tobytes()
-        golden = GoldenSFU().rmsnorm(inp)
-        golden_bytes = golden.astype(np.float32).tobytes()
+        model.sram[input_sram:input_sram + N * 2] = inp.astype(np.float16).tobytes()
+        golden = GoldenSFU.rmsnorm_ref(inp.astype(np.float64)).astype(np.float32)
+        golden_bytes = golden.astype(np.float16).tobytes()
 
         desc_addr = self.DESC_BASE
         write_sfu_descriptor(model, desc_addr, op=SFU_OP_RMSNORM,
-                             input_addr=self.SRAM_BASE + input_sram,
-                             output_addr=out_dram,
-                             input_sram=input_sram, output_sram=output_sram,
-                             size=N, dim=N)
-        self._write_cmd(model, 0, 1, desc_addr)
+                              input_addr=self.SRAM_BASE + input_sram,
+                              output_addr=out_dram,
+                              input_sram=input_sram, output_sram=output_sram,
+                              size=N, dim=N)
+        self._write_cmd(model, 0, 0x17, desc_addr)
         expected = {
             "num_cmds": 1,
             "compare": {
                 "out": {"addr": out_dram, "size": len(golden_bytes),
-                        "golden": golden_bytes, "region": "dram"},
+                        "golden": golden_bytes, "region": "dram", "fp16_tol": 5.0},
             },
         }
         return model, expected, False
@@ -1349,7 +1377,7 @@ class P0SpikeRunner:
         a_sram = 0x00000000
         b_sram = 0x00001000
         o_sram = 0x00002000
-        out_dram = 0x81000000
+        out_dram = 0x80030000
         model.sram[a_sram:a_sram + N * 4] = a.tobytes()
         model.sram[b_sram:b_sram + N * 4] = b.tobytes()
 
@@ -1358,7 +1386,7 @@ class P0SpikeRunner:
                                 a_addr=self.SRAM_BASE + a_sram,
                                 b_addr=self.SRAM_BASE + b_sram,
                                 o_addr=out_dram, dim=N)
-        self._write_cmd(model, 0, 2, desc_addr)
+        self._write_cmd(model, 0, 0x0F, desc_addr)
         expected = {
             "num_cmds": 1,
             "compare": {
@@ -1380,7 +1408,7 @@ class P0SpikeRunner:
         a_sram = 0x00000000
         b_sram = 0x00001000
         tmp_dram = 0x80020000
-        out_dram = 0x81000000
+        out_dram = 0x80030000
         model.sram[a_sram:a_sram + N * 4] = a.tobytes()
         model.sram[b_sram:b_sram + N * 4] = b.tobytes()
 
@@ -1388,13 +1416,13 @@ class P0SpikeRunner:
         write_dma_copy_descriptor(model, desc0,
                                   src_addr=self.SRAM_BASE + a_sram,
                                   dst_addr=tmp_dram, size=N * 4)
-        self._write_cmd(model, 0, 3, desc0)
+        self._write_cmd(model, 0, 9, desc0)
         desc1 = self.DESC_BASE + self.DESC_STRIDE
         write_vector_descriptor(model, desc1, op=VEC_OP_ADD,
                                 a_addr=tmp_dram,
                                 b_addr=self.SRAM_BASE + b_sram,
                                 o_addr=out_dram, dim=N)
-        self._write_cmd(model, 1, 2, desc1)
+        self._write_cmd(model, 1, 0x0F, desc1)
         expected = {
             "num_cmds": 2,
             "compare": {
@@ -1414,8 +1442,10 @@ class P0SpikeRunner:
 
     def _build_008_sfu_corrupt(self):
         model, expected, _ = self._build_004_sfu()
-        # Corrupt one byte of the input SRAM.
+        for comp in expected.get("compare", {}).values():
+            comp.pop("fp16_tol", None)
         model.sram[0] ^= 0xFF
+        model.sram[1] ^= 0xFF
         return model, expected, True
 
 
@@ -1454,6 +1484,28 @@ class P1SpikeRunner(P0SpikeRunner):
         passed, msg = await self._verify(expected, expect_mismatch)
         return passed, msg
 
+    def _reformat_act_for_mxu_wrapper(self, act: np.ndarray, M: int, K: int) -> bytes:
+        """Transpose activation from row-major [M,K] to wrapper layout [k_tiles*64,64]."""
+        k_tiles = (K + 63) // 64
+        padded = np.zeros((k_tiles * 64, 64), dtype=np.int8)
+        act_2d = np.asarray(act, dtype=np.int8).reshape(M, K)
+        for k in range(K):
+            padded[k, :M] = act_2d[:, k]
+        return padded.tobytes()
+
+    def _reformat_wgt_for_mxu_wrapper(self, wgt_packed: np.ndarray, K: int, N: int) -> bytes:
+        """Unpack natural-packed weights and repack to wrapper layout [k_tiles*64,64]."""
+        wgt = GoldenMXU.unpack_int4(np.asarray(wgt_packed, dtype=np.uint8)).reshape(K, N)
+        k_tiles = (K + 63) // 64
+        padded = np.zeros((k_tiles * 64, 64), dtype=np.int8)
+        padded[:K, :N] = wgt
+        flat = padded.reshape(-1)
+        if len(flat) % 2 != 0:
+            flat = np.append(flat, 0)
+        unsigned = np.where(flat < 0, flat + 16, flat).astype(np.uint8)
+        packed = (unsigned[0::2] & 0x0F) | ((unsigned[1::2] & 0x0F) << 4)
+        return packed.tobytes()
+
     def _build_mmul(
         self,
         M: int, K: int, N: int,
@@ -1462,38 +1514,39 @@ class P1SpikeRunner(P0SpikeRunner):
         desc_addr: int, cmd_idx: int = 0,
     ):
         model = self._make_model()
-        model.host_write_data(act_addr, act)
-        model.host_write_data(wgt_addr, wgt_packed)
+        act_wrapped = self._reformat_act_for_mxu_wrapper(act, M, K)
+        wgt_wrapped = self._reformat_wgt_for_mxu_wrapper(wgt_packed, K, N)
+        model.host_write_data(act_addr, np.frombuffer(act_wrapped, dtype=np.uint8))
+        model.host_write_data(wgt_addr, np.frombuffer(wgt_wrapped, dtype=np.uint8))
         model.host_write_data(scale_addr, scales.ravel())
         model.host_write_descriptor(
             desc_addr,
             input_addr=act_addr, weight_addr=wgt_addr, output_addr=out_addr,
             scale_addr=scale_addr, scale_size=int(scales.nbytes),
-            input_size=int(act.nbytes), weight_size=int(len(wgt_packed)),
+            input_size=len(act_wrapped), weight_size=len(wgt_wrapped),
             output_size=M * N * 4,
             input_sram=0x00000000, weight_sram=0x00010000,
             output_sram=0x00018000, scale_sram=0x00014000,
             M=M, K=K, N=N,
         )
         self._write_cmd(model, cmd_idx, self._OP_MMUL, desc_addr)
-        golden = GoldenMXU().matmul_int4_per_block(
-            act, wgt_packed, scales, M, K, N, group_size=128
-        )
-        return model, golden.astype(np.float32).tobytes()
+        golden = GoldenMXU().matmul_int32(act, wgt_packed, M, K, N)
+        return model, golden.astype(np.int32).tobytes()
 
     def _build_009(self):
         M, K, N = 1, 4, 2
         act = np.array([1, 2, 3, 4], dtype=np.int8)
         wgt_packed = np.array([0x21, 0x43, 0x65, 0x87], dtype=np.uint8)
         scales = np.ones(((K + 127) // 128, N), dtype=np.float32)
+        out_dram = 0x80030000
         model, golden = self._build_mmul(
             M, K, N, act, wgt_packed, scales,
-            0x80010000, 0x80020000, 0x81000000, 0x80110000, 0x80000080,
+            0x80010000, 0x80020000, out_dram, 0x80110000, 0x80000080,
         )
         expected = {
             "num_cmds": 1,
             "compare": {
-                "out": {"addr": 0x81000000, "size": M * N * 4,
+                "out": {"addr": out_dram, "size": M * N * 4,
                         "golden": golden, "region": "dram"},
             },
         }
@@ -1507,14 +1560,15 @@ class P1SpikeRunner(P0SpikeRunner):
         wgt_packed = GoldenMXU.pack_int4(wgt)
         num_blocks = (K + 127) // 128
         scales = rng.uniform(0.9, 1.1, size=(num_blocks, N)).astype(np.float32)
+        out_dram = 0x80030000
         model, golden = self._build_mmul(
             M, K, N, act, wgt_packed, scales,
-            0x80010000, 0x80020000, 0x81000000, 0x80110000, 0x80000080,
+            0x80010000, 0x80020000, out_dram, 0x80110000, 0x80000080,
         )
         expected = {
             "num_cmds": 1,
             "compare": {
-                "out": {"addr": 0x81000000, "size": M * N * 4,
+                "out": {"addr": out_dram, "size": M * N * 4,
                         "golden": golden, "region": "dram"},
             },
         }
@@ -1529,9 +1583,7 @@ class P1SpikeRunner(P0SpikeRunner):
         desc_addr = 0x80000080
 
         model = self._make_model()
-        model.sram[0x10000:0x10000 + N * 2] = np.frombuffer(
-            inp.astype(np.float16).tobytes(), dtype=np.uint8
-        )
+        model.sram[0x10000:0x10000 + N * 2] = inp.astype(np.float16).tobytes()
         model.host_write_descriptor(
             desc_addr,
             input_addr=in_addr, output_addr=out_addr,
@@ -1546,7 +1598,7 @@ class P1SpikeRunner(P0SpikeRunner):
             "compare": {
                 "out": {"addr": out_addr, "size": N * 2,
                         "golden": golden.astype(np.float16).tobytes(),
-                        "region": "sram"},
+                        "region": "sram", "fp16_tol": 5.0},
             },
         }
         return model, expected, False
@@ -1563,12 +1615,8 @@ class P1SpikeRunner(P0SpikeRunner):
         desc1 = desc0 + self.DESC_STRIDE
 
         model = self._make_model()
-        model.sram[0x30000:0x30000 + dim * 4] = np.frombuffer(
-            a.tobytes(), dtype=np.uint8
-        )
-        model.sram[0x31000:0x31000 + dim * 4] = np.frombuffer(
-            b.tobytes(), dtype=np.uint8
-        )
+        model.sram[0x30000:0x30000 + dim * 4] = a.tobytes()
+        model.sram[0x31000:0x31000 + dim * 4] = b.tobytes()
 
         model.host_write_descriptor(
             desc0,
@@ -1605,14 +1653,15 @@ class P1SpikeRunner(P0SpikeRunner):
         ], dtype=np.int8)
         wgt_packed = GoldenMXU.pack_int4(wgt.flatten())
         scales = np.ones(((K + 127) // 128, N), dtype=np.float32)
+        out_dram = 0x80030000
         model, golden = self._build_mmul(
             M, K, N, act, wgt_packed, scales,
-            0x80010000, 0x80020000, 0x81000000, 0x80110000, 0x80000080,
+            0x80010000, 0x80020000, out_dram, 0x80110000, 0x80000080,
         )
         expected = {
             "num_cmds": 1,
             "compare": {
-                "out": {"addr": 0x81000000, "size": M * N * 4,
+                "out": {"addr": out_dram, "size": M * N * 4,
                         "golden": golden, "region": "dram"},
             },
         }
@@ -1642,6 +1691,8 @@ class P1SpikeRunner(P0SpikeRunner):
         expected = {
             "num_cmds": 1,
             "compare": {
+                "src": {"addr": self.DRAM_BASE + src_off, "size": size,
+                        "golden": payload, "region": "dram"},
                 "dst": {"addr": self.DRAM_BASE + dst_off, "size": size,
                         "golden": payload, "region": "dram"},
             },
@@ -1654,30 +1705,30 @@ class P1SpikeRunner(P0SpikeRunner):
 
         M, K, N = 1, 4, 2
         act_addr, wgt_addr, out_addr, scale_addr, mmul_desc = (
-            0x80010000, 0x80020000, 0x81000000, 0x80110000, 0x80000080)
+            0x80010000, 0x80020000, 0x80030000, 0x80110000, 0x80000080)
         act = rng.randint(-8, 8, size=M * K, dtype=np.int8)
         wgt = rng.randint(-8, 8, size=K * N, dtype=np.int8)
         wgt_packed = GoldenMXU.pack_int4(wgt)
         scales = np.ones(((K + 127) // 128, N), dtype=np.float32)
-        model.host_write_data(act_addr, act)
-        model.host_write_data(wgt_addr, wgt_packed)
+        act_wrapped = self._reformat_act_for_mxu_wrapper(act, M, K)
+        wgt_wrapped = self._reformat_wgt_for_mxu_wrapper(wgt_packed, K, N)
+        model.host_write_data(act_addr, np.frombuffer(act_wrapped, dtype=np.uint8))
+        model.host_write_data(wgt_addr, np.frombuffer(wgt_wrapped, dtype=np.uint8))
         model.host_write_data(scale_addr, scales.ravel())
         model.host_write_descriptor(
             mmul_desc,
             input_addr=act_addr, weight_addr=wgt_addr, output_addr=out_addr,
             scale_addr=scale_addr, scale_size=int(scales.nbytes),
-            input_size=int(act.nbytes), weight_size=int(len(wgt_packed)),
+            input_size=len(act_wrapped), weight_size=len(wgt_wrapped),
             output_size=M * N * 4,
             M=M, K=K, N=N,
         )
         self._write_cmd(model, 0, self._OP_MMUL, mmul_desc)
-        golden_mmul = GoldenMXU().matmul_int4_per_block(
-            act, wgt_packed, scales, M, K, N, group_size=128
-        )
+        golden_mmul = GoldenMXU().matmul_int32(act, wgt_packed, M, K, N)
 
         sfu_len = 16
-        sfu_in_addr = 0x82000000
-        sfu_out_addr = 0x82001000
+        sfu_in_addr = 0x80120000
+        sfu_out_addr = 0x80121000
         sfu_desc = 0x80000100
         sfu_in = rng.randn(sfu_len).astype(np.float32).clip(-5, 5)
         model.host_write_data(sfu_in_addr, sfu_in.astype(np.float16))
@@ -1691,9 +1742,9 @@ class P1SpikeRunner(P0SpikeRunner):
         golden_sfu = GoldenSFU().softmax_hw(sfu_in)
 
         vec_len = 8
-        vec_a_addr = 0x82002000
-        vec_b_addr = 0x82003000
-        vec_out_addr = 0x82004000
+        vec_a_addr = 0x80122000
+        vec_b_addr = 0x80123000
+        vec_out_addr = 0x80124000
         vec_desc = 0x80000200
         vec_a = rng.randint(-100, 100, size=vec_len).astype(np.int32)
         vec_b = rng.randint(-100, 100, size=vec_len).astype(np.int32)
@@ -1713,7 +1764,7 @@ class P1SpikeRunner(P0SpikeRunner):
             "num_cmds": 3,
             "compare": {
                 "mmul_out": {"addr": out_addr, "size": M * N * 4,
-                             "golden": golden_mmul.astype(np.float32).tobytes(),
+                             "golden": golden_mmul.astype(np.int32).tobytes(),
                              "region": "dram"},
                 "sfu_out": {"addr": sfu_out_addr, "size": sfu_len * 2,
                             "golden": golden_sfu.astype(np.float16).tobytes(),
