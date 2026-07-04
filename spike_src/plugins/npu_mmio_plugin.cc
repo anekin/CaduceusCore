@@ -29,7 +29,12 @@
 static constexpr reg_t NPU_SRAM_BASE = 0x20000000ULL;
 static constexpr reg_t NPU_END       = 0x40011fffULL;
 
-static constexpr const char* NPU_SOCK_PATH = "/tmp/npu_mmio.sock";
+static constexpr const char* NPU_SOCK_PATH_DEFAULT = "/tmp/npu_mmio.sock";
+
+static const char* npu_sock_path() {
+  const char* env = std::getenv("NPU_SOCK_PATH");
+  return env && env[0] ? env : NPU_SOCK_PATH_DEFAULT;
+}
 static constexpr int NPU_SOCK_TIMEOUT_MS   = 2000;
 static constexpr int NPU_CONNECT_RETRIES   = 40;   /* brief retry on first access */
 static constexpr int NPU_CONNECT_DELAY_US  = 50000;
@@ -117,7 +122,7 @@ class npu_t : public abstract_device_t {
     struct sockaddr_un addr;
     std::memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
-    std::strncpy(addr.sun_path, NPU_SOCK_PATH, sizeof(addr.sun_path) - 1);
+    std::strncpy(addr.sun_path, npu_sock_path(), sizeof(addr.sun_path) - 1);
 
     if (::connect(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
       close(fd);
@@ -139,7 +144,7 @@ class npu_t : public abstract_device_t {
 
     connect_permanently_failed = true;
     if (!connect_failed_logged) {
-      fprintf(stderr, "npu_mmio_plugin: unable to connect to %s\n", NPU_SOCK_PATH);
+      fprintf(stderr, "npu_mmio_plugin: unable to connect to %s\n", npu_sock_path());
       connect_failed_logged = true;
     }
     return false;

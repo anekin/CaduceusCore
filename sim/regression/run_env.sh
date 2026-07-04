@@ -59,11 +59,10 @@ fi
 export PLI_TAB
 
 # ── License (override default multi-server list to local-only) ────────────
-# The default SNPSLMD_LICENSE_FILE includes 4 unreachable 172.16.x.x IPs.
-# Override with the local license daemon to avoid lmstat timeout stalls.
-if [ -z "$SNPSLMD_LICENSE_FILE" ]; then
-    export SNPSLMD_LICENSE_FILE="27020@sz0001"
-fi
+# The default SNPSLMD_LICENSE_FILE set by `module load vcs` includes 4
+# unreachable 172.16.x.x IPs. Force the local license daemon to avoid
+# lmstat timeout stalls.
+export SNPSLMD_LICENSE_FILE="27020@sz0001"
 
 # ── Verify ─────────────────────────────────────────────────────────────────
 echo "=== CaduceusCore EDA Environment ==="

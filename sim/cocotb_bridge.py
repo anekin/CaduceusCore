@@ -607,7 +607,13 @@ class CocotbBridge:
             if seg_len == word_bytes:
                 word_val = int.from_bytes(seg_data, "little")
             else:
-                old_val = int(mem[word_idx].value)
+                # DRAM model memory can contain X bits before initialization;
+                # treat them as 0 when doing a read-modify-write via backdoor.
+                old_str = str(mem[word_idx].value)
+                if "x" in old_str.lower():
+                    logger.warning(f"DRAM word {word_idx} contains X; treating as 0")
+                    old_str = old_str.replace("x", "0").replace("X", "0")
+                old_val = int(old_str, 2)
                 boff = seg_start - word_start
                 mask = ((1 << (seg_len * 8)) - 1) << (boff * 8)
                 word_val = (old_val & ~mask) | (int.from_bytes(seg_data, "little") << (boff * 8))

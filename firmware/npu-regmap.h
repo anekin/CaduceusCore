@@ -99,10 +99,12 @@ typedef struct {
 /* ── Doorbell Registers ─────────────────────────────────────────── */
 
 typedef struct {
-    volatile uint32_t HOST_TAIL;  /* 0x00: W: host writes after cmd */
-    volatile uint32_t NPU_HEAD;   /* 0x04: R/W: fw consumed pointer */
-    volatile uint32_t HOST_HEAD;  /* 0x08: R: host completion ring */
-    volatile uint32_t NPU_TAIL;   /* 0x0C: R: host submission ring */
+    volatile uint32_t HOST_TAIL;              /* 0x00: W: host writes after cmd */
+    volatile uint32_t NPU_HEAD;               /* 0x04: R/W: fw consumed pointer */
+    volatile uint32_t HOST_HEAD;              /* 0x08: R: host completion ring */
+    volatile uint32_t NPU_TAIL;               /* 0x0C: R: host submission ring */
+    volatile uint32_t LAST_STATUS;            /* 0x10: R/W: last command status */
+    volatile uint32_t COMPLETION_STATUS[16];  /* 0x14: per-ring-index status */
 } npu_doorbell_t;
 
 /* ── INTC Registers ─────────────────────────────────────────────── */

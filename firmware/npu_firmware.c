@@ -24,29 +24,33 @@
 
 /* ── Ring Buffer 配置 ────────────────────────────────────────────── */
 
-#define RING_BUF_ADDR       DRAM_BASE   // Ring Buffer 基址 (DRAM 数据区开头)
-#define RING_ENTRIES        64
-#define CMD_DESC_SIZE       32             // 命令描述符大小 (bytes)
+#define RING_BUF_ADDR        DRAM_BASE
+#define RING_ENTRIES         16
+#define CMD_DESC_SIZE        32
+#define COMPLETION_RING_ADDR (DRAM_BASE + 0x800)
 
 /* 命令描述符结构 (与 Host 约定) */
 typedef struct __attribute__((packed)) {
-    uint32_t opcode;       // 0=MMUL, 1=SFU, 2=VECTOR, 3=DMA_COPY
+    uint32_t opcode;       // engine-level OpCode (MMUL/SFU/Vector/DMA)
     uint32_t desc_addr;    // 操作描述符的 DRAM 地址
     uint32_t flags;        // bit0=中断完成, bit1=立即执行
     uint32_t _pad[5];      // 对齐到 32B
 } cmd_entry_t;
 
-/* 操作描述符 — MMUL */
+/* 操作描述符 — MMUL (matches Func Model host_write_descriptor 15-word layout) */
 typedef struct __attribute__((packed)) {
     uint32_t input_addr;
     uint32_t weight_addr;
     uint32_t output_addr;
+    uint32_t scale_addr;
     uint32_t input_sram;
     uint32_t weight_sram;
     uint32_t output_sram;
+    uint32_t scale_sram;
     uint32_t input_size;
     uint32_t weight_size;
     uint32_t output_size;
+    uint32_t scale_size;
     uint32_t M, K, N;
 } mmul_desc_t;
 
@@ -90,8 +94,6 @@ typedef struct __attribute__((packed)) {
 
 /* ── 全局状态 ────────────────────────────────────────────────────── */
 
-static uint32_t g_npu_head  = 0;
-static uint32_t g_npu_tail  = 0;   // Host 更新后同步过来的
 static uint32_t g_cmd_count = 0;
 
 /* ── MMIO 读写原语 ───────────────────────────────────────────────── */
@@ -125,15 +127,33 @@ static void dma_copy(uint32_t src, uint32_t dst, uint32_t size,
 }
 
 static void mxu_start(uint32_t i_addr, uint32_t w_addr, uint32_t o_addr,
-                      uint32_t M, uint32_t K, uint32_t N) {
+                      uint32_t scale_addr,
+                      uint32_t M, uint32_t K, uint32_t N,
+                      uint32_t ctrl) {
     npu_mxu_t *mxu = NPU_MXU;
     mxu->I_ADDR = i_addr;
     mxu->W_ADDR = w_addr;
     mxu->O_ADDR = o_addr;
+    mxu->SCALE_ADDR = scale_addr;
+    mxu->CTRL   = ctrl & 0xF;
     mxu->DIM0   = (M & 0xFFFF) | ((K & 0xFFFF) << 16);
     mxu->DIM1   = (N & 0xFFFF);
     npu_start(&mxu->CMD);
     npu_wait_done(&mxu->STATUS);
+}
+
+/* Map engine-level OpCode to hardware SFU_OP_* value. */
+static uint32_t sfu_hw_op(uint32_t opcode) {
+    switch (opcode) {
+    case 0x01: return 0;
+    case 0x02: return 1;
+    case 0x03: return 2;
+    case 0x04: return 3;
+    case 0x06: return 4;
+    case 0x05: return 5;
+    case 0x17: return 6;
+    default:   return 0;
+    }
 }
 
 static void sfu_start(uint32_t op, uint32_t i_addr, uint32_t o_addr,
@@ -167,43 +187,46 @@ static void read_mmul_desc(uint32_t desc_addr, mmul_desc_t *desc) {
     desc->input_addr  = src[0];
     desc->weight_addr = src[1];
     desc->output_addr = src[2];
-    desc->input_sram  = src[3];
-    desc->weight_sram = src[4];
-    desc->output_sram = src[5];
-    desc->input_size  = src[6];
-    desc->weight_size = src[7];
-    desc->output_size = src[8];
-    desc->M = src[9];
-    desc->K = src[10];
-    desc->N = src[11];
+    desc->scale_addr  = src[3];
+    desc->input_sram  = src[4];
+    desc->weight_sram = src[5];
+    desc->output_sram = src[6];
+    desc->scale_sram  = src[7];
+    desc->input_size  = src[8];
+    desc->weight_size = src[9];
+    desc->output_size = src[10];
+    desc->scale_size  = src[11];
+    desc->M = src[12];
+    desc->K = src[13];
+    desc->N = src[14];
 }
 
+/* SFU/Vector/DMA descriptors are stored in the same 15-word layout as MMUL
+ * (host_write_descriptor).  Extract the relevant fields here.
+ */
 static void read_sfu_desc(uint32_t desc_addr, sfu_desc_t *desc) {
     volatile uint32_t *src = (volatile uint32_t *)(uintptr_t)desc_addr;
-    desc->op          = src[0];
-    desc->input_addr  = src[1];
+    desc->input_addr  = src[0];
     desc->output_addr = src[2];
-    desc->input_sram  = src[3];
-    desc->output_sram = src[4];
-    desc->size        = src[5];
-    desc->dim         = src[6];
-    desc->pos         = src[7];
+    desc->input_sram  = 0x00000000;
+    desc->output_sram = 0x00018000;
+    desc->dim         = src[8];
+    desc->pos         = 0;
 }
 
 static void read_vector_desc(uint32_t desc_addr, vector_desc_t *desc) {
     volatile uint32_t *src = (volatile uint32_t *)(uintptr_t)desc_addr;
-    desc->op     = src[0];
-    desc->a_addr = src[1];
-    desc->b_addr = src[2];
-    desc->o_addr = src[3];
-    desc->dim    = src[4];
+    desc->a_addr = src[0];
+    desc->b_addr = src[1];
+    desc->o_addr = src[2];
+    desc->dim    = src[8];
 }
 
 static void read_dma_copy_desc(uint32_t desc_addr, dma_copy_desc_t *desc) {
     volatile uint32_t *src = (volatile uint32_t *)(uintptr_t)desc_addr;
     desc->src_addr = src[0];
-    desc->dst_addr = src[1];
-    desc->size     = src[2];
+    desc->dst_addr = src[2];
+    desc->size     = src[8];
 }
 
 /* ── 命令消费 ────────────────────────────────────────────────────── */
@@ -219,63 +242,105 @@ static cmd_entry_t read_cmd_entry(uint32_t head) {
 }
 
 static void write_completion(uint32_t cmd_id, uint32_t status) {
-    /* Completion Ring 紧接 Ring Buffer */
-    uint32_t comp_addr = RING_BUF_ADDR + RING_ENTRIES * CMD_DESC_SIZE;
     volatile uint32_t *comp =
-        (volatile uint32_t *)(uintptr_t)(comp_addr + cmd_id * 32);
+        (volatile uint32_t *)(uintptr_t)(COMPLETION_RING_ADDR + cmd_id * 32);
     comp[0] = cmd_id;
     comp[1] = status;
+    NPU_DB->COMPLETION_STATUS[cmd_id] = status;
 }
 
 static int dispatch_cmd(cmd_entry_t *cmd) {
-    switch (cmd->opcode) {
-    case 0: {  /* MMUL */
+    uint32_t op = cmd->opcode;
+
+    if (op == 0) {  /* MMUL */
         mmul_desc_t desc;
         read_mmul_desc(cmd->desc_addr, &desc);
 
-        /* DMA: DRAM → SRAM (weight + activation) */
-        dma_copy(desc.weight_addr, desc.weight_sram, desc.weight_size, 0);
-        dma_copy(desc.input_addr,  desc.input_sram,  desc.input_size,  0);
+        if (desc.M == 0 || desc.K == 0 || desc.N == 0)
+            return 1;  /* corrupted descriptor */
 
-        /* MXU 计算 */
-        mxu_start(desc.input_sram, desc.weight_sram, desc.output_sram,
-                  desc.M, desc.K, desc.N);
+        const uint32_t TILE_H = 128;
+        const uint32_t TILE_W = 128;
+        const uint32_t TILE_WEIGHT_BYTES = TILE_H * TILE_W / 2;
+        const uint32_t TILE_SCALE_BYTES  = TILE_W * 4;
 
-        /* DMA: SRAM → DRAM (output) */
-        dma_copy(desc.output_sram, desc.output_addr, desc.output_size, 1);
+        uint32_t act_sram  = 0x00000000;
+        uint32_t wbuf[2]   = {0x00010000, 0x00012000};
+        uint32_t sbuf[2]   = {0x00014000, 0x00015000};
+        uint32_t out_sram  = 0x00018000;
+
+        uint32_t num_blocks = (desc.K + TILE_H - 1) / TILE_H;
+        uint32_t num_tiles  = (desc.N + TILE_W - 1) / TILE_W;
+
+        dma_copy(desc.input_addr, act_sram, desc.input_size, 0);
+
+        for (uint32_t n_tile = 0; n_tile < num_tiles; n_tile++) {
+            uint32_t n_start = n_tile * TILE_W;
+            uint32_t n_end   = (n_start + TILE_W < desc.N) ? (n_start + TILE_W) : desc.N;
+            uint32_t tile_width = n_end - n_start;
+            uint32_t out_offset = out_sram + n_start * 4;
+
+            for (uint32_t k_block = 0; k_block < num_blocks; k_block++) {
+                uint32_t k_start = k_block * TILE_H;
+                uint32_t k_end   = (k_start + TILE_H < desc.K) ? (k_start + TILE_H) : desc.K;
+                uint32_t block_height = k_end - k_start;
+
+                uint32_t buf_idx = k_block % 2;
+                uint32_t w_addr  = wbuf[buf_idx];
+                uint32_t s_addr  = sbuf[buf_idx];
+
+                uint32_t wgt_offset = (n_tile * num_blocks + k_block) * TILE_WEIGHT_BYTES;
+                uint32_t wgt_bytes  = (block_height * tile_width + 1) / 2;
+                dma_copy(desc.weight_addr + wgt_offset, w_addr, wgt_bytes, 0);
+
+                if (desc.scale_size > 0) {
+                    uint32_t scale_offset = (n_tile * num_blocks + k_block) * TILE_SCALE_BYTES;
+                    dma_copy(desc.scale_addr + scale_offset, s_addr, tile_width * 4, 0);
+                } else {
+                    s_addr = 0;
+                }
+
+                uint32_t act_offset = act_sram + k_start;
+                uint32_t accumulate_ctrl = (k_block > 0) ? 4 : 0;
+
+                mxu_start(act_offset, w_addr, out_offset,
+                          s_addr, desc.M, block_height, tile_width, accumulate_ctrl);
+            }
+
+            dma_copy(out_offset, desc.output_addr + n_start * 4,
+                     desc.M * tile_width * 4, 1);
+        }
         return 0;
     }
-    case 1: {  /* SFU */
+
+    if (op == 0x01 || op == 0x02 || op == 0x03 || op == 0x04 ||
+        op == 0x05 || op == 0x06 || op == 0x17) {
         sfu_desc_t desc;
         read_sfu_desc(cmd->desc_addr, &desc);
 
-        dma_copy(desc.input_addr, desc.input_sram, desc.size, 0);
-        sfu_start(desc.op, desc.input_sram, desc.output_sram,
-                  desc.size >> 2, desc.dim, desc.pos);
-        dma_copy(desc.output_sram, desc.output_addr, desc.size, 1);
+        uint32_t hw_op = sfu_hw_op(op);
+        sfu_start(hw_op, desc.input_addr, desc.output_addr, desc.dim, 0, desc.pos);
         return 0;
     }
-    case 2: {  /* Vector */
+
+    if (op >= 0x0F && op <= 0x14) {  /* Vector: VADD/VMUL/VRED_MAX/VRED_SUM/VCONV/VRESID */
         vector_desc_t desc;
         read_vector_desc(cmd->desc_addr, &desc);
 
-        uint32_t size = desc.dim * sizeof(uint32_t);
-        dma_copy(desc.a_addr, VEC_A_SRAM, size, 0);
-        dma_copy(desc.b_addr, VEC_B_SRAM, size, 0);
-        vector_start(desc.op, VEC_A_SRAM, VEC_B_SRAM, VEC_O_SRAM, desc.dim);
-        dma_copy(VEC_O_SRAM, desc.o_addr, size, 1);
+        uint32_t hw_op = op - 0x0F;  /* 0x0F..0x14 -> 0..5 */
+        vector_start(hw_op, desc.a_addr, desc.b_addr, desc.o_addr, desc.dim);
         return 0;
     }
-    case 3: {  /* DMA_COPY */
+
+    if (op == 9 || op == 10 || op == 0x15 || op == 0x16) {  /* DMA_COPY */
         dma_copy_desc_t desc;
         read_dma_copy_desc(cmd->desc_addr, &desc);
 
         dma_copy(desc.src_addr, desc.dst_addr, desc.size, 0);
         return 0;
     }
-    default:
-        return 1;  /* unknown opcode */
-    }
+
+    return 1;  /* unknown opcode */
 }
 
 /* ── 中断处理 ────────────────────────────────────────────────────── */
@@ -292,35 +357,30 @@ static void handle_irq(void) {
 /* ── 主循环 ──────────────────────────────────────────────────────── */
 
 void firmware_main(void) {
-    /* 初始化 Doorbell — 等待 Host 设置 HOST_TAIL */
-    NPU_DB->NPU_HEAD = 0;
+    uint32_t npu_head = NPU_DB->NPU_HEAD;
+    NPU_INTC->ENABLE = 0x1FF;
 
-    /* 使能中断 */
-    NPU_INTC->ENABLE = 0xFF;  /* 全部使能 */
-
-    /* 主循环 */
     for (;;) {
-        /* 读取 Host Tail */
         uint32_t host_tail = NPU_DB->HOST_TAIL;
-        uint32_t npu_head  = NPU_DB->NPU_HEAD;
 
-        /* 无新命令 → WFI 等中断 / 轮询 */
         if (host_tail == npu_head) {
             __asm__ volatile("wfi");
             continue;
         }
 
-        /* 消费所有就绪命令 */
         while (npu_head != host_tail) {
             cmd_entry_t cmd = read_cmd_entry(npu_head);
+            NPU_DB->LAST_STATUS = 0x100 | (npu_head & 0xFF);
             int status = dispatch_cmd(&cmd);
+            NPU_DB->LAST_STATUS = (uint32_t)status;
             write_completion(npu_head, status);
             npu_head = (npu_head + 1) % RING_ENTRIES;
             g_cmd_count++;
         }
 
-        /* 更新 NPU Head → Host 可见 */
         NPU_DB->NPU_HEAD = npu_head;
+        NPU_DB->HOST_HEAD = npu_head;
+        NPU_INTC->ACK = (1 << 8);
     }
 }
 

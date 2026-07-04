@@ -129,6 +129,7 @@ def serve(
     bridge: MMIOBridge,
     sock_path: str = DEFAULT_SOCK_PATH,
     ready_event: Optional[threading.Event] = None,
+    register_signals: bool = True,
 ) -> ThreadedUnixMMIOServer:
     """Start a threaded Unix socket MMIO server around *bridge*.
 
@@ -138,11 +139,12 @@ def serve(
     """
     server = ThreadedUnixMMIOServer(sock_path, bridge, ready_event=ready_event)
 
-    def _shutdown_handler(signum, frame):
-        server.shutdown()
+    if register_signals:
+        def _shutdown_handler(signum, frame):
+            server.shutdown()
 
-    signal.signal(signal.SIGTERM, _shutdown_handler)
-    signal.signal(signal.SIGINT, _shutdown_handler)
+        signal.signal(signal.SIGTERM, _shutdown_handler)
+        signal.signal(signal.SIGINT, _shutdown_handler)
 
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

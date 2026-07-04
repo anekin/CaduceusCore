@@ -119,10 +119,12 @@ class DMA:
 class DOORBELL:
     BASE = Addr.DOORBELL
 
-    HOST_TAIL = 0x00  # W: Host 写完 CMD 后更新 tail → 触发 NPU 唤醒
-    NPU_HEAD  = 0x04  # R/W: NPU 固件更新 head（已消费到哪）
-    HOST_HEAD = 0x08  # R: NPU 更新 → Host 看到完成
-    NPU_TAIL  = 0x0C  # R: Host 更新 → NPU 看到新 CMD (只读)
+    HOST_TAIL   = 0x00  # W: Host 写完 CMD 后更新 tail → 触发 NPU 唤醒
+    NPU_HEAD    = 0x04  # R/W: NPU 固件更新 head（已消费到哪）
+    HOST_HEAD   = 0x08  # R: NPU 更新 → Host 看到完成
+    NPU_TAIL    = 0x0C  # R: Host 更新 → NPU 看到新 CMD (只读)
+    LAST_STATUS = 0x10  # R/W: last command status (0=done, non-zero=error)
+    COMPLETION_STATUS = 0x14  # per-ring-index status array (16 x uint32)
 
 
 # ══════════════════════════════════════════════════════════════════════

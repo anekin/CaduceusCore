@@ -26,12 +26,17 @@ LDFLAGS        = -march=$(ARCH) -mabi=$(ABI) \
                 -T link.ld \
                 -Wl,-Map=$(TARGET).map
 
+SPIKE_LDFLAGS  = -march=$(ARCH) -mabi=$(ABI) \
+                -nostdlib -nodefaultlibs \
+                -T spike_link.ld \
+                -Wl,-Map=$(TARGET)_spike.map
+
 SRCS           = startup.S npu_firmware.c test_data.S
 OBJS           = $(patsubst %.S,$(BUILD_DIR)/%.o,$(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS)))
 
 .PHONY: all clean disasm hex
 
-all: $(TARGET).elf $(TARGET).hex $(BUILD_DIR)/dram_init.hex
+all: $(TARGET).elf $(TARGET).hex $(BUILD_DIR)/dram_init.hex $(TARGET)_spike.elf
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -44,6 +49,10 @@ $(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
 
 $(TARGET).elf: $(OBJS) link.ld
 	$(CC) $(OBJS) $(LDFLAGS) -o $@
+	$(SIZE) $@
+
+$(TARGET)_spike.elf: $(OBJS) spike_link.ld
+	$(CC) $(OBJS) $(SPIKE_LDFLAGS) -o $@
 	$(SIZE) $@
 
 # ── Boot ROM hex: .text + .rodata + .data (≤64KB) ─────────────────

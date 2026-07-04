@@ -6,6 +6,8 @@ Phase 2: Python 固件模拟器（riscv-gcc 就绪后切换 Spike + 真实 ELF�
 """
 
 import os
+from typing import Optional
+
 import numpy as np
 import struct
 
@@ -21,7 +23,7 @@ from sim.models.crossbar import CrossbarModel
 class FuncModel:
     """Top-level Func Model: DRAM + SRAM + MMIO Bridge + Modules + Firmware."""
 
-    def __init__(self, dram_mb: int = 64, sram_kb: int = 512):
+    def __init__(self, dram_mb: int = 64, sram_kb: int = 512, use_spike: Optional[bool] = None):
         # Memories
         self.dram = bytearray(dram_mb * 1024 * 1024)
         self.sram = bytearray(sram_kb * 1024)
@@ -43,13 +45,13 @@ class FuncModel:
             'dram': self.dram, 'sram': self.sram,
         })
 
-        # Firmware
-        self.firmware = NPUFirmware(sim_modules={
+        sim_modules = {
             'mxu': self.mxu, 'sfu': self.sfu,
             'vector': self.vector, 'dma': self.dma_engine,
             'crossbar': self.crossbar,
             'dram': self.dram, 'sram': self.sram,
-        }, bridge=self.bridge)
+        }
+        self.firmware = self._create_firmware(sim_modules, self.bridge, use_spike)
 
         # RISC-V emulator in SoC mode (Ibex replacement)
         self.riscv = RISCVMini(
@@ -67,6 +69,26 @@ class FuncModel:
         self.firmware.boot(self.riscv, boot_rom_path=os.path.join(
             os.path.dirname(__file__), "..", "firmware", "build", "npu_firmware.hex",
         ))
+
+    @staticmethod
+    def _create_firmware(sim_modules: dict, bridge: MMIOBridge, use_spike: Optional[bool]) -> "NPUFirmware":
+        if use_spike is None:
+            env = os.environ.get("CADUCEUS_USE_SPIKE", "").lower()
+            use_spike = env in ("1", "true", "yes")
+
+        if use_spike is False:
+            return NPUFirmware(sim_modules=sim_modules, bridge=bridge)
+
+        # Lazy import breaks a circular dependency with sim.spike_mmio_server.
+        from sim.spike_firmware import SpikeFirmware, _spike_available
+
+        if _spike_available():
+            return SpikeFirmware(sim_modules=sim_modules, bridge=bridge)
+
+        raise RuntimeError(
+            "use_spike=True but Spike firmware artifacts are missing: "
+            "build spike, plugins/npu_mmio_plugin.so, and firmware/npu_firmware.elf"
+        )
 
     def load_boot_rom(self, path: str) -> int:
         """Load Intel HEX firmware into boot ROM.
