@@ -61,6 +61,7 @@ if [ ! -x "$SIMV" ]; then
     echo "[INFO] Compiling simv_soc_spike for P2P3 ..."
     vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps \
         -kdb \
+        -Mdir="$BUILD_DIR/csrc" \
         -f "$REPO_ROOT/rtl/cpu/ibex.flist" \
         -f "$REPO_ROOT/rtl/ip/verilog-axi.flist" \
         -f "$REPO_ROOT/rtl/ip/verilog-pcie.flist" \

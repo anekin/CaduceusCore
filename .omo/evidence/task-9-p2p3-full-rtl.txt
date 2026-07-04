@@ -1,0 +1,573 @@
+=== CaduceusCore EDA Environment ===
+VCS:         /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/bin/vcs
+VCS_HOME:    /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+Python:      Python 3.11.9
+PLI_TAB:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/pli.tab
+LICENSE:     27020@sz0001
+====================================
+[INFO] Compiling simv_soc_spike for P2P3 ...
+                         Chronologic VCS (TM)
+       Version V-2023.12-SP2_Full64 -- Sun Jul  5 00:36:27 2026
+
+                    Copyright (c) 1991 - 2024 Synopsys, Inc.
+   This software and the associated documentation are proprietary to Synopsys,
+ Inc. This software may only be used in accordance with the terms and conditions
+ of a written license agreement with Synopsys, Inc. All other use, reproduction,
+   or distribution of this software is strictly prohibited.  Licensed Products
+     communicate with Synopsys servers for the purpose of providing software
+    updates, detecting software piracy and verifying that customers are using
+    Licensed Products in conformity with the applicable License Key for such
+  Licensed Products. Synopsys will use information gathered in connection with
+    this process to deliver software updates and pursue software pirates and
+                                   infringers.
+
+ Inclusivity & Diversity - Visit SolvNetPlus to read the "Synopsys Statement on
+            Inclusivity and Diversity" (Refer to article 000036315 at
+                        https://solvnetplus.synopsys.com)
+
+     -.--ns INFO     gpi                                ..mbed/gpi_embed.cpp:79   in set_program_name_in_venv        Did not detect Python virtual environment. Using system-wide Python interpreter
+     -.--ns INFO     gpi                                ../gpi/GpiCommon.cpp:101  in gpi_print_registered_impl       VPI registered
+
+Warning-[VPI-CT-NS] VPI function is not supported
+  The VPI function 'vpi_register_cb' is not supported in the compiler.
+  Please fix the code being referred to by the '-load' compile option.
+
+     -.--ns ERROR    gpi                                ..b/vpi/VpiCbHdl.cpp:72   in arm_callback                    VPI: Unable to register a callback handle for VPI type cbStartOfSimulation(11)
+
+Warning-[VPI-CT-NS] VPI function is not supported
+  The VPI function 'vpi_chk_error' is not supported in the compiler.
+  Please fix the code being referred to by the '-load' compile option.
+
+
+Warning-[VPI-CT-NS] VPI function is not supported
+  The VPI function 'vpi_register_cb' is not supported in the compiler.
+  Please fix the code being referred to by the '-load' compile option.
+
+     -.--ns ERROR    gpi                                ..b/vpi/VpiCbHdl.cpp:72   in arm_callback                    VPI: Unable to register a callback handle for VPI type cbEndOfSimulation(12)
+
+Warning-[VPI-CT-NS] VPI function is not supported
+  The VPI function 'vpi_chk_error' is not supported in the compiler.
+  Please fix the code being referred to by the '-load' compile option.
+
+Parsing design file 'rtl/cpu/ibex/ibex_pkg.sv'
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_pkg.sv'
+Parsing design file 'rtl/cpu/ibex/vendor/prim/prim_secded_pkg.sv'
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_ram_1p_pkg.sv'
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_ram_2p_pkg.sv'
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_rom_pkg.sv'
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_mubi_pkg.sv'
+Parsing design file 'rtl/cpu/ibex/vendor/prim/prim_util_pkg.sv'
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_and2.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert_standard_macros.svh'.
+Back to file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert_sec_cm.svh'.
+Back to file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_flop_macros.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_and2.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_buf.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_buf.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_clock_buf.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_clock_buf.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_clock_div.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_clock_div.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_clock_gating.sv'
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_clock_inv.sv'
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_clock_mux2.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_clock_mux2.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_flop.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_flop.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_flop_2sync.sv'
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_flop_en.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_flop_en.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_flop_no_rst.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_flop_no_rst.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_ram_1p.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_ram_1p.sv'.
+Parsing included file 'rtl/cpu/ibex/vendor/prim_generic/prim_util_memload.svh'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_ram_1p.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_ram_1r1w.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_ram_1r1w.sv'.
+Parsing included file 'rtl/cpu/ibex/vendor/prim_generic/prim_util_memload.svh'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_ram_1r1w.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_ram_2p.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_ram_2p.sv'.
+Parsing included file 'rtl/cpu/ibex/vendor/prim_generic/prim_util_memload.svh'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_ram_2p.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_rom.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_rom.sv'.
+Parsing included file 'rtl/cpu/ibex/vendor/prim_generic/prim_util_memload.svh'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_rom.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_rst_sync.sv'
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_xnor2.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_xnor2.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim_generic/prim_xor2.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/vendor/prim_generic/prim_xor2.sv'.
+Parsing design file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'
+Parsing design file 'rtl/cpu/ibex/ibex_alu.sv'
+Parsing design file 'rtl/cpu/ibex/ibex_compressed_decoder.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_compressed_decoder.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_controller.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_controller.sv'.
+Parsing included file 'rtl/cpu/ibex/vendor/prim/dv_fcov_macros.svh'.
+Back to file 'rtl/cpu/ibex/ibex_controller.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_counter.sv'
+Parsing design file 'rtl/cpu/ibex/ibex_csr.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_csr.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_cs_registers.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_cs_registers.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_decoder.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_decoder.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_dummy_instr.sv'
+Parsing design file 'rtl/cpu/ibex/ibex_ex_block.sv'
+Parsing design file 'rtl/cpu/ibex/ibex_id_stage.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_id_stage.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_if_stage.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_if_stage.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_load_store_unit.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_load_store_unit.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_multdiv_slow.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_multdiv_slow.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_multdiv_fast.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_multdiv_fast.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_prefetch_buffer.sv'
+Parsing design file 'rtl/cpu/ibex/ibex_fetch_fifo.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_fetch_fifo.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_register_file_ff.sv'
+Parsing design file 'rtl/cpu/ibex/ibex_wb_stage.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_wb_stage.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_lockstep.sv'
+Parsing design file 'rtl/cpu/ibex/ibex_core.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_core.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_pmp.sv'
+Parsing design file 'rtl/cpu/ibex/ibex_icache.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_icache.sv'.
+Parsing design file 'rtl/cpu/ibex/ibex_top.sv'
+Parsing included file 'rtl/cpu/ibex/vendor/prim/prim_assert.sv'.
+Back to file 'rtl/cpu/ibex/ibex_top.sv'.
+Parsing design file 'rtl/ip/verilog-axi/arbiter.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_adapter.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_adapter_rd.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_adapter_wr.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_axil_adapter.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_axil_adapter_rd.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_axil_adapter_wr.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_cdma.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_cdma_desc_mux.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_crossbar.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_crossbar_addr.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_crossbar_rd.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_crossbar_wr.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_dma.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_dma_desc_mux.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_dma_rd.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_dma_wr.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_dp_ram.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_fifo.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_fifo_rd.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_fifo_wr.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_interconnect.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_ram.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_ram_rd_if.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_ram_wr_if.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_ram_wr_rd_if.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_register.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_register_rd.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_register_wr.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_vfifo.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_vfifo_dec.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_vfifo_enc.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_vfifo_raw.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_vfifo_raw_rd.v'
+Parsing design file 'rtl/ip/verilog-axi/axi_vfifo_raw_wr.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_adapter.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_adapter_rd.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_adapter_wr.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_cdc.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_cdc_rd.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_cdc_wr.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_crossbar.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_crossbar_addr.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_crossbar_rd.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_crossbar_wr.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_dp_ram.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_interconnect.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_ram.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_reg_if.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_reg_if_rd.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_reg_if_wr.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_register.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_register_rd.v'
+Parsing design file 'rtl/ip/verilog-axi/axil_register_wr.v'
+Parsing design file 'rtl/ip/verilog-axi/priority_encoder.v'
+Parsing design file 'rtl/ip/verilog-pcie/arbiter.v'
+
+Warning-[OPD] Override previous declaration
+rtl/ip/verilog-pcie/arbiter.v, 34
+  module 'arbiter' previously declared at:"rtl/ip/verilog-axi/arbiter.v", 34
+  This module will be overridden by the last declaration.
+  
+
+Parsing design file 'rtl/ip/verilog-pcie/axis_arb_mux.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_client_axis_sink.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_client_axis_source.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_if_axi.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_if_axi_rd.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_if_axi_wr.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_if_desc_mux.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_if_mux.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_if_mux_rd.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_if_mux_wr.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_if_pcie.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_if_pcie_rd.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_if_pcie_us.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_if_pcie_us_rd.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_if_pcie_us_wr.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_if_pcie_wr.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_psdpram.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_psdpram_async.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_ram_demux.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_ram_demux_rd.v'
+Parsing design file 'rtl/ip/verilog-pcie/dma_ram_demux_wr.v'
+Parsing design file 'rtl/ip/verilog-pcie/irq_rate_limit.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_axi_dma_desc_mux.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_axi_master.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_axi_master_rd.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_axi_master_wr.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_axil_master.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_axil_master_minimal.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_msix.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_ptile_cfg.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_ptile_fc_counter.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_ptile_if.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_ptile_if_rx.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_ptile_if_tx.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_s10_cfg.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_s10_if.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_s10_if_rx.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_s10_if_tx.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_s10_msi.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_tlp_demux.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_tlp_demux_bar.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_tlp_fc_count.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_tlp_fifo.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_tlp_fifo_mux.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_tlp_fifo_raw.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_tlp_mux.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_axi_dma.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_axi_dma_rd.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_axi_dma_wr.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_axi_master.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_axi_master_rd.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_axi_master_wr.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_axil_master.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_axis_cq_demux.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_axis_rc_demux.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_cfg.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_if.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_if_cc.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_if_cq.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_if_rc.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_if_rq.v'
+Parsing design file 'rtl/ip/verilog-pcie/pcie_us_msi.v'
+Parsing design file 'rtl/ip/verilog-pcie/priority_encoder.v'
+
+Warning-[OPD] Override previous declaration
+rtl/ip/verilog-pcie/priority_encoder.v, 34
+  module 'priority_encoder' previously declared 
+  at:"rtl/ip/verilog-axi/priority_encoder.v", 34
+  This module will be overridden by the last declaration.
+  
+
+Parsing design file 'rtl/ip/verilog-pcie/pulse_merge.v'
+Parsing design file 'rtl/soc/caduceus_soc_top.v'
+Parsing design file 'rtl/soc/caduceus_soc_spike_top.v'
+Parsing design file 'rtl/soc/boot_rom.v'
+Parsing design file 'rtl/soc/sram_ctrl.v'
+Parsing design file 'rtl/soc/apb_decoder.v'
+Parsing design file 'rtl/soc/axi_crossbar.v'
+
+Warning-[OPD] Override previous declaration
+rtl/soc/axi_crossbar.v, 31
+  module 'axi_crossbar' previously declared 
+  at:"rtl/ip/verilog-axi/axi_crossbar.v", 34
+  This module will be overridden by the last declaration.
+  
+
+Parsing design file 'rtl/soc/doorbell.v'
+Parsing design file 'rtl/intc/intc_top.v'
+Parsing design file 'rtl/ip/pcie_ep_wrapper.v'
+Parsing design file 'rtl/ip/dram_model.v'
+Parsing design file 'rtl/ip/dma_wrapper.v'
+Parsing design file 'rtl/cpu/ibex_wrapper.v'
+
+Warning-[IPDW] Identifier previously declared
+rtl/cpu/ibex_wrapper.v, 133
+  Second declaration for identifier 'lockstep_cmp_en_unused' ignored
+  Identifier 'lockstep_cmp_en_unused' previously declared as wire. 
+  [rtl/cpu/ibex_wrapper.v, 125]
+
+Parsing design file 'rtl/wrapper/apb_to_mmio.v'
+Parsing design file 'rtl/wrapper/mxu_soc_wrapper.v'
+Parsing design file 'rtl/wrapper/sfu_soc_wrapper.v'
+Parsing design file 'rtl/wrapper/vector_soc_wrapper.v'
+Parsing design file 'rtl/mxu/mxu_top.v'
+Parsing design file 'rtl/mxu/mmio_if.v'
+Parsing design file 'rtl/mxu/controller.v'
+Parsing design file 'rtl/mxu/mac_array.v'
+Parsing design file 'rtl/mxu/pe.v'
+Parsing design file 'rtl/mxu/accumulator.v'
+Parsing design file 'rtl/mxu/weight_buffer.v'
+Parsing design file 'rtl/mxu/activation_buffer.v'
+Parsing design file 'rtl/sfu/sfu_top.v'
+Parsing design file 'rtl/sfu/softmax_hw.v'
+Parsing design file 'rtl/sfu/layernorm_hw.v'
+Parsing design file 'rtl/sfu/rmsnorm_hw.v'
+Parsing design file 'rtl/sfu/rope_hw.v'
+Parsing design file 'rtl/sfu/gelu_hw.v'
+Parsing design file 'rtl/sfu/silu_hw.v'
+Parsing design file 'rtl/sfu/exp_lut.v'
+Parsing design file 'rtl/vector/vector_top.v'
+Parsing design file 'rtl/vector/vector_alu.v'
+Parsing design file 'rtl/vector/reduce_tree.v'
+Parsing design file 'rtl/vector/type_convert.v'
+Parsing design file 'rtl/vector/resid_add.v'
+Parsing design file '/home/prj/zhengs/caduceuscore/CaduceusCore/rtl/tb/tb_soc_spike.v'
+Top Level Modules:
+       tb_soc_spike
+TimeScale is 1 ns / 1 ps
+
+Warning-[TFIPC] Too few instance port connections
+rtl/vector/vector_top.v, 217
+vector_top, "vector_alu #(.NUM_LANES(NUM_LANES)) u_vector_alu( .clk (clk),  .rst_n (rst_n),  .op (((op_reg == OP_MUL) ? 2'b1 : 2'b0)),  .a_i (a_chunk),  .b_i (b_chunk),  .lane_mask (lane_mask),  .valid_i (((state == ST_BIN_EXEC) && ((op_reg == OP_ADD) || (op_reg == OP_MUL)))),  .result_o (alu_result));"
+  The above instance has fewer port connections than the module definition.
+  Please use '+lint=TFIPC-L' to print out detailed information of unconnected 
+  ports.
+
+
+Warning-[TFIPC] Too few instance port connections
+rtl/vector/vector_top.v, 233
+vector_top, "resid_add #(.NUM_LANES(NUM_LANES)) u_resid_add( .clk (clk),  .rst_n (rst_n),  .orig_i (a_chunk),  .delta_i (b_chunk),  .valid_i (((state == ST_BIN_EXEC) && (op_reg == OP_RESID))),  .result_o (resid_result));"
+  The above instance has fewer port connections than the module definition.
+  Please use '+lint=TFIPC-L' to print out detailed information of unconnected 
+  ports.
+
+
+Warning-[TFIPC] Too few instance port connections
+rtl/ip/verilog-pcie/pcie_axi_master.v, 175
+pcie_axi_master, "pcie_tlp_demux #(.PORTS(2), .TLP_DATA_WIDTH(TLP_DATA_WIDTH), .TLP_STRB_WIDTH(TLP_STRB_WIDTH), .TLP_HDR_WIDTH(TLP_HDR_WIDTH), .IN_TLP_SEG_COUNT(TLP_SEG_COUNT), .OUT_TLP_SEG_COUNT(TLP_SEG_COUNT), .FIFO_ENABLE(0)) pcie_tlp_demux_inst( .clk (clk),  .rst (rst),  .in_tlp_data (rx_req_tlp_data),  .in_tlp_strb (0),  .in_tlp_hdr (rx_req_tlp_hdr),  .in_tlp_bar_id (0),  .in_tlp_func_num (0),  .in_tlp_error (0),  .in_tlp_valid (rx_req_tlp_valid),  .in_tlp_sop (rx_req_tlp_sop),  .in_tlp_eop (rx_req_tlp_eop),  .in_tlp_ready (rx_req_tlp_ready),  .out_tlp_data ({write_rx_req_tlp_data, read_rx_req_tlp_data}),  .out_tlp_hdr ({write_rx_req_tlp_hdr, read_rx_req_tlp_hdr}),  .out_tlp_valid ({write_rx_req_tlp_valid, read_rx_req_tlp_valid}),  .out_tlp_sop ({write_rx_req_tlp_so ... "
+  The above instance has fewer port connections than the module definition.
+  Please use '+lint=TFIPC-L' to print out detailed information of unconnected 
+  ports.
+
+
+Warning-[IRRIPS] Incorrect range in part select
+rtl/ip/verilog-axi/axi_adapter_rd.v, 502
+axi_adapter_rd
+  The array slice direction does not match the array declaration.
+  addr_reg[(S_ADDR_BIT_OFFSET - 1):M_ADDR_BIT_OFFSET]
+  Please check the array slice range.
+
+
+Warning-[IRRIPS] Incorrect range in part select
+rtl/ip/verilog-axi/axi_adapter_wr.v, 551
+axi_adapter_wr
+  The array slice direction does not match the array declaration.
+  addr_reg[(S_ADDR_BIT_OFFSET - 1):M_ADDR_BIT_OFFSET]
+  Please check the array slice range.
+
+
+Warning-[IRRIPS] Incorrect range in part select
+rtl/ip/verilog-axi/axi_adapter_wr.v, 552
+axi_adapter_wr
+  The array slice direction does not match the array declaration.
+  addr_reg[(S_ADDR_BIT_OFFSET - 1):M_ADDR_BIT_OFFSET]
+  Please check the array slice range.
+
+
+Warning-[IRRIPS] Incorrect range in part select
+rtl/ip/verilog-axi/axi_adapter_wr.v, 579
+axi_adapter_wr
+  The array slice direction does not match the array declaration.
+  addr_reg[(S_ADDR_BIT_OFFSET - 1):M_ADDR_BIT_OFFSET]
+  Please check the array slice range.
+
+
+Warning-[IRRIPS] Incorrect range in part select
+rtl/ip/verilog-axi/axi_adapter_wr.v, 580
+axi_adapter_wr
+  The array slice direction does not match the array declaration.
+  addr_reg[(S_ADDR_BIT_OFFSET - 1):M_ADDR_BIT_OFFSET]
+  Please check the array slice range.
+
+
+Warning-[PCWM-W] Port connection width mismatch
+rtl/ip/verilog-pcie/pcie_axi_master.v, 175
+"pcie_tlp_demux #(2, TLP_DATA_WIDTH, TLP_STRB_WIDTH, TLP_HDR_WIDTH, , TLP_SEG_COUNT, TLP_SEG_COUNT, 0, , , , , , ) pcie_tlp_demux_inst( .clk (clk),  .rst (rst),  .in_tlp_data (rx_req_tlp_data),  .in_tlp_strb (0),  .in_tlp_hdr (rx_req_tlp_hdr),  .in_tlp_bar_id (0),  .in_tlp_func_num (0),  .in_tlp_error (0),  .in_tlp_valid (rx_req_tlp_valid),  .in_tlp_sop (rx_req_tlp_sop),  .in_tlp_eop (rx_req_tlp_eop),  .in_tlp_ready (rx_req_tlp_ready),  .out_tlp_data ({write_rx_req_tlp_data, read_rx_req_tlp_data}),  .out_tlp_hdr ({write_rx_req_tlp_hdr, read_rx_req_tlp_hdr}),  .out_tlp_valid ({write_rx_req_tlp_valid, read_rx_req_tlp_valid}),  .out_tlp_sop ({write_rx_req_tlp_sop, read_rx_req_tlp_sop}),  .out_tlp_eop ({write_rx_req_tlp_eop, read_rx_req_tlp_eop}),  .out_tlp_ ... "
+  The following 32-bit expression is connected to 16-bit port "in_tlp_strb" of
+  module "pcie_tlp_demux", instance "pcie_tlp_demux_inst".
+  Expression: 0
+  Instantiated module defined at: "rtl/ip/verilog-pcie/pcie_tlp_demux.v", 34
+  Use +lint=PCWM for more details.
+
+
+Warning-[PCWM-W] Port connection width mismatch
+rtl/ip/verilog-pcie/pcie_axi_master.v, 175
+"pcie_tlp_demux #(2, TLP_DATA_WIDTH, TLP_STRB_WIDTH, TLP_HDR_WIDTH, , TLP_SEG_COUNT, TLP_SEG_COUNT, 0, , , , , , ) pcie_tlp_demux_inst( .clk (clk),  .rst (rst),  .in_tlp_data (rx_req_tlp_data),  .in_tlp_strb (0),  .in_tlp_hdr (rx_req_tlp_hdr),  .in_tlp_bar_id (0),  .in_tlp_func_num (0),  .in_tlp_error (0),  .in_tlp_valid (rx_req_tlp_valid),  .in_tlp_sop (rx_req_tlp_sop),  .in_tlp_eop (rx_req_tlp_eop),  .in_tlp_ready (rx_req_tlp_ready),  .out_tlp_data ({write_rx_req_tlp_data, read_rx_req_tlp_data}),  .out_tlp_hdr ({write_rx_req_tlp_hdr, read_rx_req_tlp_hdr}),  .out_tlp_valid ({write_rx_req_tlp_valid, read_rx_req_tlp_valid}),  .out_tlp_sop ({write_rx_req_tlp_sop, read_rx_req_tlp_sop}),  .out_tlp_eop ({write_rx_req_tlp_eop, read_rx_req_tlp_eop}),  .out_tlp_ ... "
+  The following 32-bit expression is connected to 3-bit port "in_tlp_bar_id" 
+  of module "pcie_tlp_demux", instance "pcie_tlp_demux_inst".
+  Expression: 0
+  Instantiated module defined at: "rtl/ip/verilog-pcie/pcie_tlp_demux.v", 34
+  Use +lint=PCWM for more details.
+
+
+Warning-[PCWM-W] Port connection width mismatch
+rtl/ip/verilog-pcie/pcie_axi_master.v, 175
+"pcie_tlp_demux #(2, TLP_DATA_WIDTH, TLP_STRB_WIDTH, TLP_HDR_WIDTH, , TLP_SEG_COUNT, TLP_SEG_COUNT, 0, , , , , , ) pcie_tlp_demux_inst( .clk (clk),  .rst (rst),  .in_tlp_data (rx_req_tlp_data),  .in_tlp_strb (0),  .in_tlp_hdr (rx_req_tlp_hdr),  .in_tlp_bar_id (0),  .in_tlp_func_num (0),  .in_tlp_error (0),  .in_tlp_valid (rx_req_tlp_valid),  .in_tlp_sop (rx_req_tlp_sop),  .in_tlp_eop (rx_req_tlp_eop),  .in_tlp_ready (rx_req_tlp_ready),  .out_tlp_data ({write_rx_req_tlp_data, read_rx_req_tlp_data}),  .out_tlp_hdr ({write_rx_req_tlp_hdr, read_rx_req_tlp_hdr}),  .out_tlp_valid ({write_rx_req_tlp_valid, read_rx_req_tlp_valid}),  .out_tlp_sop ({write_rx_req_tlp_sop, read_rx_req_tlp_sop}),  .out_tlp_eop ({write_rx_req_tlp_eop, read_rx_req_tlp_eop}),  .out_tlp_ ... "
+  The following 32-bit expression is connected to 8-bit port "in_tlp_func_num"
+  of module "pcie_tlp_demux", instance "pcie_tlp_demux_inst".
+  Expression: 0
+  Instantiated module defined at: "rtl/ip/verilog-pcie/pcie_tlp_demux.v", 34
+  Use +lint=PCWM for more details.
+
+
+Warning-[PCWM-W] Port connection width mismatch
+rtl/ip/verilog-pcie/pcie_axi_master.v, 175
+"pcie_tlp_demux #(2, TLP_DATA_WIDTH, TLP_STRB_WIDTH, TLP_HDR_WIDTH, , TLP_SEG_COUNT, TLP_SEG_COUNT, 0, , , , , , ) pcie_tlp_demux_inst( .clk (clk),  .rst (rst),  .in_tlp_data (rx_req_tlp_data),  .in_tlp_strb (0),  .in_tlp_hdr (rx_req_tlp_hdr),  .in_tlp_bar_id (0),  .in_tlp_func_num (0),  .in_tlp_error (0),  .in_tlp_valid (rx_req_tlp_valid),  .in_tlp_sop (rx_req_tlp_sop),  .in_tlp_eop (rx_req_tlp_eop),  .in_tlp_ready (rx_req_tlp_ready),  .out_tlp_data ({write_rx_req_tlp_data, read_rx_req_tlp_data}),  .out_tlp_hdr ({write_rx_req_tlp_hdr, read_rx_req_tlp_hdr}),  .out_tlp_valid ({write_rx_req_tlp_valid, read_rx_req_tlp_valid}),  .out_tlp_sop ({write_rx_req_tlp_sop, read_rx_req_tlp_sop}),  .out_tlp_eop ({write_rx_req_tlp_eop, read_rx_req_tlp_eop}),  .out_tlp_ ... "
+  The following 32-bit expression is connected to 4-bit port "in_tlp_error" of
+  module "pcie_tlp_demux", instance "pcie_tlp_demux_inst".
+  Expression: 0
+  Instantiated module defined at: "rtl/ip/verilog-pcie/pcie_tlp_demux.v", 34
+  Use +lint=PCWM for more details.
+
+Notice: Ports coerced to inout, use -notice for details
+Starting vcs inline pass...
+
+33 modules and 0 UDP read.
+recompiling package _vcs_DPI_package
+recompiling package ibex_pkg
+recompiling package prim_pkg
+recompiling package prim_secded_pkg
+recompiling package prim_ram_1p_pkg
+recompiling package prim_ram_2p_pkg
+recompiling package prim_rom_pkg
+recompiling package prim_mubi_pkg
+recompiling package prim_util_pkg
+recompiling module axi_adapter
+recompiling module pcie_axi_master_wr
+recompiling module sram_ctrl
+recompiling module apb_decoder
+recompiling module axi_crossbar
+recompiling module doorbell
+recompiling module intc_top
+recompiling module pcie_ep_wrapper
+recompiling module dram_model
+recompiling module dma_wrapper
+recompiling module apb_to_mmio
+recompiling module mxu_soc_wrapper
+recompiling module sfu_soc_wrapper
+recompiling module mmio_if
+recompiling module controller
+recompiling module pe
+recompiling module softmax_hw
+recompiling module layernorm_hw
+recompiling module rmsnorm_hw
+recompiling module rope_hw
+recompiling module vector_alu
+recompiling module type_convert
+recompiling module resid_add
+recompiling module tb_soc_spike
+All of 33 modules done
+rm -f _cuarc*.so _csrc*.so pre_vcsobj_*.so share_vcsobj_*.so
+if [ -x /home/prj/zhengs/caduceuscore/CaduceusCore/build/p2p3_full_rtl/simv_soc_spike ]; then chmod a-x /home/prj/zhengs/caduceuscore/CaduceusCore/build/p2p3_full_rtl/simv_soc_spike; fi
+g++  -o /home/prj/zhengs/caduceuscore/CaduceusCore/build/p2p3_full_rtl/simv_soc_spike      -rdynamic  -Wl,-rpath='$ORIGIN'/simv_soc_spike.daidir -Wl,-rpath=./simv_soc_spike.daidir -Wl,-rpath=/NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/linux64/lib -L/NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/linux64/lib  -Wl,-rpath-link=./  /usr/lib64/libnuma.so.1   objs/amcQw_d.o   _235198_archive_1.so   SIM_l.o      rmapats_mop.o rmapats.o rmar.o rmar_nd.o  rmar_llvm_0_1.o rmar_llvm_0_0.o            -lvirsim -lerrorinf -lsnpsmalloc -lvfs    -lvcsnew -lsimprofile -luclinative /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/linux64/lib/vcs_tls.o   -Wl,-whole-archive  -lvcsucli    -Wl,-no-whole-archive          /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/linux64/lib/vcs_save_restore_new.o -ldl -lm  -lc -lpthread -ldl 
+/home/prj/zhengs/caduceuscore/CaduceusCore/build/p2p3_full_rtl/simv_soc_spike up to date
+CPU time: 28.812 seconds to compile + 1.694 seconds to elab + .520 seconds to link
+Verdi KDB elaboration done and the database successfully generated: 0 error(s), 0 warning(s)
+[INFO] Compile complete: /home/prj/zhengs/caduceuscore/CaduceusCore/build/p2p3_full_rtl/simv_soc_spike
+
+============================================================
+[RUN] FM-SOC-013
+============================================================
+[PASS] FM-SOC-013
+
+============================================================
+[RUN] FM-SOC-027
+============================================================
+[PASS] FM-SOC-027
+
+============================================================
+[RUN] FM-SOC-017
+============================================================
+[PASS] FM-SOC-017
+
+============================================================
+[RUN] FM-SOC-018
+============================================================
+[PASS] FM-SOC-018
+
+============================================================
+[RUN] FM-SOC-019
+============================================================
+[PASS] FM-SOC-019
+
+============================================================
+[RUN] FM-SOC-020
+============================================================
+[PASS] FM-SOC-020
+
+============================================================
+[RUN] FM-SOC-028
+============================================================
+[PASS] FM-SOC-028
+
+============================================================
+[RUN] FM-SOC-029
+============================================================
+[PASS] FM-SOC-029
+
+============================================================
+[RUN] FM-SOC-030
+============================================================
+[PASS] FM-SOC-030
+
+============================================================
+[RUN] FM-SOC-031
+============================================================
+[PASS] FM-SOC-031
+
+============================================================
+[SUMMARY] P2+P3 Full RTL + Spike
+  PASS: 10
+  FAIL: 0
+  SKIP: 0
+  TOTAL: 10
+============================================================

@@ -142,3 +142,34 @@ assign cb_m_arvalid[4] = dma_arvalid;
 #### Verification
 
 补全后 P0 8/8 PASS、P1 6/7 PASS（FM-SOC-026 的 chain SFU 零输出为独立问题，见 BUG-RTL-SOC-004 / I24）。
+
+---
+
+### BUG-RTL-SOC-004 — SFU wrapper 在 rd_state 忙时丢弃 I_ADDR prefetch
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-04 |
+| **Block** | T9 |
+| **Case** | FM-SOC-027 |
+| **Severity** | Major |
+| **Type** | RTL (SFU wrapper) |
+| **Status** | Fixed |
+
+#### Symptom
+
+FM-SOC-027（blk.0 17-op chain）执行到第 2 个 Vector→SFU 依赖操作时，SFU 输出全 0，仿真超时被判定为 FAIL。波形显示 SFU wrapper 在 `rd_state` 忙时收到新的 `I_ADDR` prefetch 请求，但直接丢弃，导致后续 SFU 运算读取到 stale/零数据。
+
+#### Root Cause
+
+`rtl/wrapper/sfu_soc_wrapper.v` 的 prefetch 握手逻辑仅在 `prefetch_pending==0` 时锁存 `I_ADDR`，未考虑 `rd_state` 正在处理前一次读请求的情况。当后一条指令的 `I_ADDR` 提前到达时，地址被丢弃，`sfu_top` 读到的仍是旧 SRAM 数据。
+
+#### Fix
+
+增加一个 `prefetch_pending` 锁存：若 `rd_state` 忙，将新 `I_ADDR` 暂存，等当前读完成后再把锁存地址送入读通道。
+
+Commit: `722c6a8 fix(rtl): BUG-RTL-SOC-004 — SFU wrapper drops I_ADDR prefetch when rd_state busy`
+
+#### Verification
+
+FM-SOC-027 在 P2+P3 回归中 PASS；P2+P3 全部 10 个 active cases PASS（10/10）。
