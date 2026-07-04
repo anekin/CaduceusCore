@@ -184,7 +184,15 @@ module sfu_soc_wrapper #(
                                                apb_i_addr;
     wire [AXI_ADDR_WIDTH-1:0] apb_i_line = {apb_i_addr_eff[31:6], 6'd0};
     wire i_addr_cached = rd_line_valid && (rd_line_addr == apb_i_line);
-    wire apb_prefetch  = apb_wr_i_addr && !i_addr_cached && (rd_state == RD_IDLE);
+
+    // If software writes I_ADDR while a read is already in flight, the
+    // APB-triggered prefetch cannot start immediately.  Latch the request
+    // and launch it as soon as the state machine returns to IDLE.
+    reg prefetch_pending;
+    wire need_prefetch = apb_wr_i_addr && !i_addr_cached;
+    wire prefetch_now  = need_prefetch && (rd_state == RD_IDLE);
+    wire prefetch_later = prefetch_pending && (rd_state == RD_IDLE);
+    wire prefetch_start = prefetch_now || prefetch_later;
 
     // Hold the APB CMD.START write until the first line is in the cache.
     // sfu_top expects single-cycle SRAM read latency; we must hide the AXI
@@ -205,6 +213,7 @@ module sfu_soc_wrapper #(
             rd_prefetch_next  <= 1'b0;
             apb_i_addr        <= {AXI_ADDR_WIDTH{1'b0}};
             start_hold        <= 1'b0;
+            prefetch_pending  <= 1'b0;
         end else begin
             // Capture the programmed input base address.
             if (apb_wr_i_addr)
@@ -216,6 +225,13 @@ module sfu_soc_wrapper #(
                 start_hold <= 1'b1;
             else if (start_hold_clr)
                 start_hold <= 1'b0;
+
+            // Latch a prefetch request that could not be launched immediately
+            // because the read state machine was busy.
+            if (need_prefetch && (rd_state != RD_IDLE))
+                prefetch_pending <= 1'b1;
+            else if (prefetch_start)
+                prefetch_pending <= 1'b0;
 
             // Swap next line into current line.  This also clears the next
             // line slot so a new prefetch can be triggered.
@@ -231,8 +247,9 @@ module sfu_soc_wrapper #(
 
             case (rd_state)
                 RD_IDLE: begin
-                    if (apb_prefetch) begin
-                        // Software just wrote I_ADDR: prefetch the first line.
+                    if (prefetch_start) begin
+                        // Software wrote I_ADDR (or a pending prefetch is
+                        // ready): fetch the first line into the current slot.
                         rd_state         <= RD_AR;
                         rd_line_addr     <= apb_i_line;
                         rd_line_valid    <= 1'b0;

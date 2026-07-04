@@ -1128,18 +1128,22 @@ class P0SpikeRunner:
         )
 
         done = False
+        last_diag_head = -1
         try:
             await self.bridge.wait_cycles(20)
             expected = num_cmds % self.RING_SIZE
             addr = Addr.DOORBELL + DOORBELL.NPU_HEAD
             for cyc in range(timeout_cycles):
                 head = self.mmio._status.get(addr, 0)
+                if head != last_diag_head:
+                    print(f"[SPIKE] NPU_HEAD={head} after {cyc} cycles", flush=True)
+                    last_diag_head = head
                 if head == expected:
                     done = True
-                    logger.info(f"[SPIKE] NPU_HEAD={head} after {cyc} cycles")
+                    print(f"[SPIKE] NPU_HEAD={head} after {cyc} cycles", flush=True)
                     break
                 if proc.poll() is not None:
-                    logger.error("[SPIKE] process exited early")
+                    print("[SPIKE] process exited early", flush=True)
                     break
                 await self.bridge.wait_cycles(1)
         finally:

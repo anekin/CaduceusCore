@@ -417,9 +417,7 @@ void firmware_main(void) {
 
         while (npu_head != host_tail) {
             cmd_entry_t cmd = read_cmd_entry(npu_head);
-            NPU_DB->LAST_STATUS = 0x100 | (npu_head & 0xFF);
             int status = dispatch_cmd(&cmd);
-            NPU_DB->LAST_STATUS = (uint32_t)status;
             write_completion(npu_head, status);
             npu_head = (npu_head + 1) % RING_ENTRIES;
             g_cmd_count++;
