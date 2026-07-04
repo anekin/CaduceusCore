@@ -64,6 +64,7 @@ class SpikeFirmware:
         spike_bin: Optional[Path] = None,
         plugin_so: Optional[Path] = None,
         firmware_elf: Optional[Path] = None,
+        serve_fn: Optional[Callable] = None,
     ):
         self.mod = sim_modules
         self.bridge = bridge
@@ -78,6 +79,7 @@ class SpikeFirmware:
         self._spike_bin = spike_bin or SPIKE_BIN
         self._plugin_so = plugin_so or PLUGIN_SO
         self._firmware_elf = firmware_elf or FIRMWARE_ELF
+        self._serve_fn = serve_fn or serve
 
         global _instance_counter
         with _instance_lock:
@@ -226,7 +228,7 @@ class SpikeFirmware:
             self.bridge._status[DOORBELL.BASE + DOORBELL.NPU_HEAD] = self.doorbell["npu_head"]
 
         ready_event = threading.Event()
-        self._server_obj = serve(
+        self._server_obj = self._serve_fn(
             self.bridge,
             sock_path=str(self._sock_path),
             ready_event=ready_event,

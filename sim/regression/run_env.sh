@@ -40,6 +40,7 @@ if [ ! -d "$COCOTB_PY_ENV" ]; then
     echo "         Install: conda create -n py3.11 python=3.11 && pip install cocotb cocotbext-axi cocotbext-pcie"
 else
     export PATH="$COCOTB_PY_ENV/bin:$PATH"
+    export LD_LIBRARY_PATH="$COCOTB_PY_ENV/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 export COCOTB_PY_ENV
 

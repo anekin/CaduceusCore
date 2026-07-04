@@ -14,6 +14,7 @@
 
 # ── SoC Top-Level ───────────────────────────────────────────────────
 rtl/soc/caduceus_soc_top.v
+rtl/soc/caduceus_soc_spike_top.v
 
 # ── SoC Infrastructure ────────────────────────────────────────────
 rtl/soc/boot_rom.v

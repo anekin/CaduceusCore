@@ -65,6 +65,49 @@ except ImportError:
 
 from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
 
+try:
+    from sim.spike_rtl_bridge import RTLMMIOBridge, SimpleAPBMaster, serve_rtl
+    SPIKE_RTL_BRIDGE_AVAILABLE = True
+except Exception:
+    SPIKE_RTL_BRIDGE_AVAILABLE = False
+
+try:
+    from sim.spike_firmware import SpikeFirmware
+    SPIKE_FIRMWARE_AVAILABLE = True
+except Exception:
+    SPIKE_FIRMWARE_AVAILABLE = False
+
+try:
+    from cocotbext.axi import AxiBus, AxiMaster
+    COCOTBEXT_AXI_AVAILABLE = True
+except Exception:
+    COCOTBEXT_AXI_AVAILABLE = False
+
+try:
+    from sim.func_model import FuncModel
+    from sim.spike_host import (
+        write_mmul_descriptor,
+        write_sfu_descriptor,
+        write_vector_descriptor,
+        write_dma_copy_descriptor,
+        write_cmd_entry,
+        FIRMWARE_RING_BASE,
+        DESC_BASE,
+        DESC_STRIDE,
+        SFU_OP_RMSNORM,
+        SFU_OP_SOFTMAX,
+        VEC_OP_ADD,
+    )
+    FUNC_MODEL_AVAILABLE = True
+except Exception as exc:
+    FUNC_MODEL_AVAILABLE = False
+
+try:
+    from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector
+    GOLDEN_AVAILABLE = True
+except Exception:
+    GOLDEN_AVAILABLE = False
+
 logger = logging.getLogger("rtl_soc_runner")
 
 # ── Address shorthand (mirrors cocotb_bridge constants) ─────────────────
@@ -985,6 +1028,415 @@ if COCOTB_AVAILABLE:
         logger.info(f"RTLSoCRunner smoke: {summary}")
 
         assert passed, f"{case_id} failed"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Spike-RTL P0 runner
+# ═══════════════════════════════════════════════════════════════════════════
+
+class P0SpikeRunner:
+    """Run FM-SOC-001..008 against the RTL SoC using a Spike RISC-V CPU."""
+
+    SRAM_BASE = Addr.SRAM_BASE
+    DRAM_BASE = Addr.DRAM_BASE
+    RING_BASE = 0x80100000
+    DESC_BASE = 0x80001000
+    DESC_STRIDE = 64
+    CMD_SIZE = 8 * 4
+    RING_SIZE = 16
+
+    def __init__(self, dut, bridge: "CocotbBridge"):
+        self.dut = dut
+        self.bridge = bridge
+        self.axi: Optional["AxiMaster"] = None
+        self.apb: Optional[SimpleAPBMaster] = None
+        self.mmio: Optional[RTLMMIOBridge] = None
+
+    async def setup(self):
+        from cocotbext.axi import AxiBus, AxiMaster
+        axi_bus = AxiBus.from_prefix(self.dut, "cpu_m_axi")
+        self.axi = AxiMaster(axi_bus, self.dut.clk, self.dut.rst_n)
+        self.apb = SimpleAPBMaster(self.dut, "cpu_apb")
+        self.mmio = RTLMMIOBridge(self.axi, self.apb, self.dut)
+
+    async def _apb_write(self, addr: int, value: int):
+        await self.apb.write(addr, value)
+
+    async def _apb_read(self, addr: int) -> int:
+        return await self.apb.read(addr)
+
+    async def _sram_backdoor_write(self, offset: int, data: bytes):
+        await self.bridge._sram_backdoor_write(self.SRAM_BASE + offset, data)
+
+    async def _sram_backdoor_read(self, offset: int, size: int) -> bytes:
+        return await self.bridge._sram_backdoor_read(self.SRAM_BASE + offset, size)
+
+    async def _dram_backdoor_write(self, offset: int, data: bytes):
+        await self.bridge._dram_backdoor_write(self.DRAM_BASE + offset, data)
+
+    async def _dram_backdoor_read(self, offset: int, size: int) -> bytes:
+        return await self.bridge._dram_backdoor_read(self.DRAM_BASE + offset, size)
+
+    def _make_model(self) -> FuncModel:
+        model = FuncModel(sram_kb=4096)
+        model.firmware.ring_buffer_addr = self.RING_BASE
+        return model
+
+    def _write_cmd(self, model: FuncModel, idx: int, opcode: int, desc_addr: int):
+        write_cmd_entry(model, idx, opcode, desc_addr, flags=0)
+
+    async def _run_spike(self, model: FuncModel, num_cmds: int,
+                         timeout_cycles: int = 500_000) -> bool:
+        import subprocess
+        from pathlib import Path
+
+        sock_path = Path(f"/tmp/npu_mmio_p0_{os.getpid()}.sock")
+        server = serve_rtl(self.mmio, sock_path=str(sock_path))
+
+        ddr_path = Path(__file__).resolve().parent.parent / "ddr.bin"
+        ddr_path.write_bytes(model.dram)
+
+        dram_size = len(model.dram)
+        spike_dram_size = ((dram_size + (1 << 20) + 0xFFFFF) // 0x100000) * 0x100000
+
+        spike_bin = Path(__file__).resolve().parent.parent / "spike_src" / "build" / "spike"
+        plugin_so = Path(__file__).resolve().parent.parent / "spike_src" / "plugins" / "npu_mmio_plugin.so"
+        firmware_elf = Path(__file__).resolve().parent.parent / "firmware" / "build" / "npu_firmware_spike.elf"
+
+        env = os.environ.copy()
+        env["NPU_SOCK_PATH"] = str(sock_path)
+        dtc_search = Path(__file__).resolve().parent.parent.parent.parent / "dtc_src"
+        dtc_path = str(dtc_search / "usr" / "bin") if (dtc_search / "usr" / "bin").is_dir() else str(dtc_search)
+        env["PATH"] = dtc_path + ":" + env.get("PATH", "")
+
+        proc = subprocess.Popen(
+            [
+                str(spike_bin), "--isa=RV32IM", "--pc=0x10000",
+                f"-m0x00010000:0x20000,0x80000000:0x{spike_dram_size:x}",
+                f"--kernel={ddr_path}",
+                f"--extlib={plugin_so}", "--device=npu,0x20000000",
+                str(firmware_elf),
+            ],
+            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+
+        done = False
+        try:
+            await self.bridge.wait_cycles(20)
+            await self._apb_write(Addr.DOORBELL + DOORBELL.HOST_TAIL, num_cmds)
+
+            expected = num_cmds % self.RING_SIZE
+            addr = Addr.DOORBELL + DOORBELL.NPU_HEAD
+            for cyc in range(timeout_cycles):
+                head = await self._apb_read(addr)
+                if head == expected:
+                    done = True
+                    logger.info(f"[SPIKE] NPU_HEAD={head} after {cyc} cycles")
+                    break
+                if proc.poll() is not None:
+                    logger.error("[SPIKE] process exited early")
+                    break
+                await self.bridge.wait_cycles(1)
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+            stdout, stderr = proc.stdout.read(), proc.stderr.read()
+            proc.stdout.close()
+            proc.stderr.close()
+            if stdout.strip():
+                logger.info(f"[SPIKE STDOUT]\n{stdout.strip()}")
+            if stderr.strip():
+                logger.error(f"[SPIKE STDERR]\n{stderr.strip()}")
+            server.shutdown()
+            try:
+                sock_path.unlink()
+            except FileNotFoundError:
+                pass
+
+        return done
+
+    async def run_case(self, case_id: str) -> Tuple[bool, str]:
+        if not FUNC_MODEL_AVAILABLE:
+            return False, "FuncModel not available"
+        if not GOLDEN_AVAILABLE:
+            return False, "Golden executors not available"
+        if not SPIKE_RTL_BRIDGE_AVAILABLE:
+            return False, "Spike RTL bridge not available"
+
+        builders = {
+            "FM-SOC-001": self._build_001_dma_sram,
+            "FM-SOC-002": self._build_002_dma_dram,
+            "FM-SOC-003": self._build_003_mxu,
+            "FM-SOC-004": self._build_004_sfu,
+            "FM-SOC-005": self._build_005_vector,
+            "FM-SOC-006": self._build_006_chain,
+            "FM-SOC-007": self._build_007_mxu_corrupt,
+            "FM-SOC-008": self._build_008_sfu_corrupt,
+        }
+        if case_id not in builders:
+            return False, f"Unknown case {case_id}"
+
+        model, expected, expect_mismatch = builders[case_id]()
+        await self._preload_rtl(model)
+        ok = await self._run_spike(model, expected["num_cmds"])
+        if not ok:
+            return False, "Spike firmware timeout"
+
+        passed, msg = await self._verify(expected, expect_mismatch)
+        return passed, msg
+
+    async def _preload_rtl(self, model: FuncModel):
+        sram = model.sram
+        for off, length in _nonzero_regions(sram):
+            await self._sram_backdoor_write(off, bytes(sram[off:off + length]))
+        for off, length in _nonzero_regions(model.dram):
+            await self._dram_backdoor_write(off, bytes(model.dram[off:off + length]))
+
+    async def _verify(self, expected: dict, expect_mismatch: bool) -> Tuple[bool, str]:
+        mismatches = []
+        for key, spec in expected.get("compare", {}).items():
+            addr = spec["addr"]
+            size = spec["size"]
+            golden = spec["golden"]
+            region = spec.get("region", "sram")
+            if region == "sram":
+                actual = await self._sram_backdoor_read(addr - self.SRAM_BASE, size)
+            else:
+                actual = await self._dram_backdoor_read(addr - self.DRAM_BASE, size)
+            if actual != golden:
+                mismatches.append(key)
+
+        if expect_mismatch:
+            if mismatches:
+                return True, f"anti-vacuous mismatch detected in {mismatches}"
+            return False, "expected mismatch but data matched"
+        if mismatches:
+            return False, f"mismatch in {mismatches}"
+        return True, "all comparisons match"
+
+    # ── P0 case builders ────────────────────────────────────────────────────
+
+    def _build_001_dma_sram(self):
+        model = self._make_model()
+        src_off = 0x0000
+        dst_off = 0x1000
+        size = 64
+        payload = bytes(range(size))
+        model.sram[src_off:src_off + size] = payload
+        desc_addr = self.DESC_BASE
+        write_dma_copy_descriptor(model, desc_addr,
+                                  src_addr=self.SRAM_BASE + src_off,
+                                  dst_addr=self.SRAM_BASE + dst_off,
+                                  size=size)
+        self._write_cmd(model, 0, 3, desc_addr)
+        expected = {
+            "num_cmds": 1,
+            "compare": {
+                "dst": {"addr": self.SRAM_BASE + dst_off, "size": size,
+                        "golden": payload, "region": "sram"},
+            },
+        }
+        return model, expected, False
+
+    def _build_002_dma_dram(self):
+        model = self._make_model()
+        src_off = 0x100000
+        dst_off = 0x2000
+        size = 64
+        payload = bytes((i * 7 + 13) & 0xFF for i in range(size))
+        model.dram[src_off:src_off + size] = payload
+        desc_addr = self.DESC_BASE
+        write_dma_copy_descriptor(model, desc_addr,
+                                  src_addr=self.DRAM_BASE + src_off,
+                                  dst_addr=self.SRAM_BASE + dst_off,
+                                  size=size)
+        self._write_cmd(model, 0, 3, desc_addr)
+        expected = {
+            "num_cmds": 1,
+            "compare": {
+                "dst": {"addr": self.SRAM_BASE + dst_off, "size": size,
+                        "golden": payload, "region": "sram"},
+            },
+        }
+        return model, expected, False
+
+    def _build_003_mxu(self):
+        model = self._make_model()
+        M, K, N = 1, 64, 64
+        rng = np.random.RandomState(42)
+        act = rng.randint(-128, 127, size=M * K, dtype=np.int8).reshape(M, K)
+        wgt_f32 = rng.randn(K, N).astype(np.float32)
+        from sim.quantize import quantize_int4_per_block
+        wgt_packed, wgt_scales, _ = quantize_int4_per_block(wgt_f32, 128)
+        golden = GoldenMXU().matmul_int4_per_block(act, wgt_packed, wgt_scales,
+                                                    M, K, N, group_size=128)
+        golden_bytes = golden.astype(np.float32).tobytes()
+
+        wgt_bytes = wgt_packed.tobytes() + wgt_scales.tobytes()
+        act_dram = 0x80010000
+        wgt_dram = 0x80200000
+        out_dram = 0x81000000
+        input_sram = 0x00000000
+        weight_sram = 0x00100000
+        output_sram = 0x00300000
+        scale_sram = weight_sram + len(wgt_packed.tobytes())
+
+        model.dram[act_dram - self.DRAM_BASE:act_dram - self.DRAM_BASE + act.nbytes] = act.tobytes()
+        model.dram[wgt_dram - self.DRAM_BASE:wgt_dram - self.DRAM_BASE + len(wgt_bytes)] = wgt_bytes
+
+        desc_addr = self.DESC_BASE
+        write_mmul_descriptor(model, desc_addr,
+                              input_addr=act_dram, weight_addr=wgt_dram, output_addr=out_dram,
+                              input_sram=input_sram, weight_sram=weight_sram, output_sram=output_sram,
+                              input_size=act.nbytes, weight_size=len(wgt_bytes),
+                              output_size=M * N * 4, M=M, K=K, N=N)
+        self._write_cmd(model, 0, 0, desc_addr)
+        # Firmware does not set SCALE_ADDR; mirror it for the RTL bridge.
+        self.mmio._status[Addr.MXU_BASE + MXU.SCALE_ADDR] = scale_sram
+        expected = {
+            "num_cmds": 1,
+            "compare": {
+                "out": {"addr": out_dram, "size": len(golden_bytes),
+                        "golden": golden_bytes, "region": "dram"},
+            },
+        }
+        return model, expected, False
+
+    def _build_004_sfu(self):
+        model = self._make_model()
+        N = 128
+        rng = np.random.RandomState(7)
+        inp = rng.randn(N).astype(np.float32)
+        out_dram = 0x81000000
+        input_sram = 0x00000000
+        output_sram = 0x00100000
+        size_bytes = N * 4
+
+        model.sram[input_sram:input_sram + size_bytes] = inp.tobytes()
+        golden = GoldenSFU().rmsnorm(inp)
+        golden_bytes = golden.astype(np.float32).tobytes()
+
+        desc_addr = self.DESC_BASE
+        write_sfu_descriptor(model, desc_addr, op=SFU_OP_RMSNORM,
+                             input_addr=self.SRAM_BASE + input_sram,
+                             output_addr=out_dram,
+                             input_sram=input_sram, output_sram=output_sram,
+                             size=N, dim=N)
+        self._write_cmd(model, 0, 1, desc_addr)
+        expected = {
+            "num_cmds": 1,
+            "compare": {
+                "out": {"addr": out_dram, "size": len(golden_bytes),
+                        "golden": golden_bytes, "region": "dram"},
+            },
+        }
+        return model, expected, False
+
+    def _build_005_vector(self):
+        model = self._make_model()
+        N = 128
+        rng = np.random.RandomState(11)
+        a = rng.randint(-1000, 1000, size=N, dtype=np.int32)
+        b = rng.randint(-1000, 1000, size=N, dtype=np.int32)
+        golden = GoldenVector().add(a, b)
+        golden_bytes = golden.astype(np.int32).tobytes()
+
+        a_sram = 0x00000000
+        b_sram = 0x00001000
+        o_sram = 0x00002000
+        out_dram = 0x81000000
+        model.sram[a_sram:a_sram + N * 4] = a.tobytes()
+        model.sram[b_sram:b_sram + N * 4] = b.tobytes()
+
+        desc_addr = self.DESC_BASE
+        write_vector_descriptor(model, desc_addr, op=VEC_OP_ADD,
+                                a_addr=self.SRAM_BASE + a_sram,
+                                b_addr=self.SRAM_BASE + b_sram,
+                                o_addr=out_dram, dim=N)
+        self._write_cmd(model, 0, 2, desc_addr)
+        expected = {
+            "num_cmds": 1,
+            "compare": {
+                "out": {"addr": out_dram, "size": len(golden_bytes),
+                        "golden": golden_bytes, "region": "dram"},
+            },
+        }
+        return model, expected, False
+
+    def _build_006_chain(self):
+        model = self._make_model()
+        N = 128
+        rng = np.random.RandomState(19)
+        a = rng.randint(-500, 500, size=N, dtype=np.int32)
+        b = rng.randint(-500, 500, size=N, dtype=np.int32)
+        golden = GoldenVector().add(a, b)
+        golden_bytes = golden.astype(np.int32).tobytes()
+
+        a_sram = 0x00000000
+        b_sram = 0x00001000
+        tmp_dram = 0x80020000
+        out_dram = 0x81000000
+        model.sram[a_sram:a_sram + N * 4] = a.tobytes()
+        model.sram[b_sram:b_sram + N * 4] = b.tobytes()
+
+        desc0 = self.DESC_BASE
+        write_dma_copy_descriptor(model, desc0,
+                                  src_addr=self.SRAM_BASE + a_sram,
+                                  dst_addr=tmp_dram, size=N * 4)
+        self._write_cmd(model, 0, 3, desc0)
+        desc1 = self.DESC_BASE + self.DESC_STRIDE
+        write_vector_descriptor(model, desc1, op=VEC_OP_ADD,
+                                a_addr=tmp_dram,
+                                b_addr=self.SRAM_BASE + b_sram,
+                                o_addr=out_dram, dim=N)
+        self._write_cmd(model, 1, 2, desc1)
+        expected = {
+            "num_cmds": 2,
+            "compare": {
+                "out": {"addr": out_dram, "size": len(golden_bytes),
+                        "golden": golden_bytes, "region": "dram"},
+            },
+        }
+        return model, expected, False
+
+    def _build_007_mxu_corrupt(self):
+        model, expected, _ = self._build_003_mxu()
+        # Corrupt one byte in the weight DRAM region.
+        wgt_dram = 0x80200000
+        off = wgt_dram - self.DRAM_BASE
+        model.dram[off] ^= 0xFF
+        return model, expected, True
+
+    def _build_008_sfu_corrupt(self):
+        model, expected, _ = self._build_004_sfu()
+        # Corrupt one byte of the input SRAM.
+        model.sram[0] ^= 0xFF
+        return model, expected, True
+
+
+if COCOTB_AVAILABLE and SPIKE_RTL_BRIDGE_AVAILABLE and FUNC_MODEL_AVAILABLE:
+    @cocotb.test()
+    async def test_soc_spike_p0(dut):
+        """Run one P0 case with Spike CPU driving the RTL SoC.
+
+        Case ID is taken from FM_SOC_CASE_ID; defaults to FM-SOC-001.
+        """
+        bridge = CocotbBridge(dut)
+        await bridge.start_clock()
+        await bridge.reset(5)
+
+        runner = P0SpikeRunner(dut, bridge)
+        await runner.setup()
+
+        case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-001")
+        passed, msg = await runner.run_case(case_id)
+        logger.info(f"P0SpikeRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
+        assert passed, f"{case_id} failed: {msg}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════

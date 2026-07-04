@@ -9,7 +9,7 @@
 //
 // Features:
 //   - AXI4 slave at 0x8000_0000 (2 GB addressable window)
-//   - Sparse 8 MB storage: reg [511:0] mem [0:131071] (131,072 × 512-bit)
+//   - Sparse 16 MB storage: reg [511:0] mem [0:262143] (262,144 × 512-bit)
 //   - Fixed DDR latency: tRC = 48 ns = 48 cycles @ 1 GHz (parameter LATENCY_CYCLES)
 //   - Back-to-back read/write: pipelined AW→W→B and AR→R channels
 //   - Out-of-range address → DECERR on RRESP/BRESP (AXI4 RESP = 2'b11)
@@ -27,7 +27,7 @@ module dram_model #(
     parameter int unsigned DATA_WIDTH     = 512,
     parameter int unsigned ADDR_WIDTH     = 32,
     parameter int unsigned ID_WIDTH       = 8,
-    parameter int unsigned MEM_DEPTH      = 131072,   // 8 MB / 64 B per word
+    parameter int unsigned MEM_DEPTH      = 262144,   // 16 MB / 64 B per word
     parameter int unsigned LATENCY_CYCLES = 48         // tRC @ 1 GHz (48 ns)
 ) (
     input  wire                     clk,
@@ -112,7 +112,7 @@ module dram_model #(
     // Behavioral model — constants
     // =========================================================================
     localparam logic [ADDR_WIDTH-1:0] DRAM_BASE  = 32'h8000_0000;
-    localparam logic [ADDR_WIDTH-1:0] DRAM_MASK  = 32'h007F_FFFF;  // 8 MB - 1
+    localparam logic [ADDR_WIDTH-1:0] DRAM_MASK  = 32'h00FF_FFFF;  // 16 MB - 1
     localparam int unsigned           ADDR_SHIFT = $clog2(DATA_WIDTH/8);  // 6
 
     // =========================================================================
