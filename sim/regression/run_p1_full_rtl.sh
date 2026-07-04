@@ -14,14 +14,14 @@ mkdir -p "$BUILD_DIR"
 if [ $# -ge 1 ]; then
     CASES="$1"
 else
-    CASES="FM-SOC-010 FM-SOC-011 FM-SOC-012 FM-SOC-024 FM-SOC-025"
+    CASES="FM-SOC-009 FM-SOC-010 FM-SOC-011 FM-SOC-012 FM-SOC-024 FM-SOC-025 FM-SOC-026"
 fi
 
 export PYTHONPATH="${PYTHONPATH:-}:$REPO_ROOT"
 export MODULE=sim.rtl_soc_runner
 export TOPLEVEL=tb_soc_spike
 export TOPLEVEL_LANG=verilog
-export FM_SOC_RTL_MODE=direct
+export FM_SOC_RTL_MODE=spike
 
 if [ ! -x "$SIMV" ] && [ -x "$P0_SIMV" ]; then
     echo "[INFO] Reusing existing P0 simv: $P0_SIMV"
@@ -54,11 +54,6 @@ for CASE in $CASES; do
     echo "============================================================"
     echo "[RUN] $CASE"
     echo "============================================================"
-    if [ "$CASE" = "FM-SOC-009" ] || [ "$CASE" = "FM-SOC-026" ]; then
-        echo "[SKIP] $CASE — doorbell/Spike firmware path blocked by missing/broken npu_mmio_plugin.so"
-        SKIP=$((SKIP + 1))
-        continue
-    fi
     export FM_SOC_CASE_ID="$CASE"
     CASE_LOG="$EVIDENCE_DIR/${CASE}.log"
     if (cd "$RUN_DIR" && "$SIMV" +COCOTB +FM_SOC_CASE_ID="$CASE") > "$CASE_LOG" 2>&1; then
@@ -72,7 +67,7 @@ done
 
 echo ""
 echo "============================================================"
-echo "[SUMMARY] P1 Full RTL direct-MMIO"
+echo "[SUMMARY] P1 Full RTL Spike-firmware"
 echo "  PASS: $PASS"
 echo "  FAIL: $FAIL"
 echo "  SKIP: $SKIP"

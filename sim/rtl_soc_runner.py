@@ -1419,181 +1419,311 @@ class P0SpikeRunner:
         return model, expected, True
 
 
-class P1DirectRunner:
-    SRAM_BASE = Addr.SRAM_BASE
-    DRAM_BASE = Addr.DRAM_BASE
-
-    _STATUS_ADDR = {
-        "FM-SOC-010": MXU_BASE + MXU.STATUS,
-        "FM-SOC-011": SFU_BASE + SFU.STATUS,
-        "FM-SOC-012": VECTOR_BASE + VECTOR.STATUS,
-        "FM-SOC-024": MXU_BASE + MXU.STATUS,
-    }
-
-    def __init__(self, dut, bridge: "CocotbBridge"):
-        self.dut = dut
-        self.bridge = bridge
-        self.apb = SimpleAPBMaster(dut, "cpu_apb")
-        self.pcie = RTLSoCRunner(bridge)
+class P1SpikeRunner(P0SpikeRunner):
+    _OP_MMUL = 0
+    _OP_SOFTMAX = 1
+    _OP_VADD = 0x0F
+    _OP_VMUL = 0x10
+    _OP_DMA_COPY = 9
 
     async def run_case(self, case_id: str) -> Tuple[bool, str]:
-        if not NUMPY_AVAILABLE:
-            return False, "NumPy not available"
+        if not FUNC_MODEL_AVAILABLE:
+            return False, "FuncModel not available"
+        if not GOLDEN_AVAILABLE:
+            return False, "Golden executors not available"
+        if not SPIKE_RTL_BRIDGE_AVAILABLE:
+            return False, "Spike RTL bridge not available"
 
-        cfg = load_golden_vectors(case_id)
-        if cfg is None:
-            return False, f"golden vectors not found for {case_id}"
+        builders = {
+            "FM-SOC-009": self._build_009,
+            "FM-SOC-010": self._build_010,
+            "FM-SOC-011": self._build_011,
+            "FM-SOC-012": self._build_012,
+            "FM-SOC-024": self._build_024,
+            "FM-SOC-025": self._build_025,
+            "FM-SOC-026": self._build_026,
+        }
+        if case_id not in builders:
+            return False, f"Unknown case {case_id}"
 
-        logger.info(f"P1DirectRunner: {case_id} — preload")
-        await self._preload(cfg)
+        model, expected, expect_mismatch = builders[case_id]()
+        await self._preload_rtl(model)
+        ok = await self._run_spike(model, expected["num_cmds"])
+        if not ok:
+            return False, "Spike firmware timeout"
+        passed, msg = await self._verify(expected, expect_mismatch)
+        return passed, msg
 
-        logger.info(f"P1DirectRunner: {case_id} — PCIe TLP writes")
-        for addr, data in cfg.pcie_writes.items():
-            await self.pcie._pcie_tlp_write(addr, data)
-
-        logger.info(f"P1DirectRunner: {case_id} — APB MMIO writes")
-        for addr, value in cfg.mmio_write_sequence:
-            await self.apb.write(addr, value)
-
-        status_addr = self._STATUS_ADDR.get(case_id)
-        if status_addr is not None:
-            logger.info(f"P1DirectRunner: {case_id} — poll STATUS 0x{status_addr:08X}")
-            await self._poll_done(status_addr)
-
-        return await self._verify(case_id, cfg)
-
-    async def _preload(self, cfg: TestCaseConfig):
-        if cfg.sram_initial is not None:
-            for off, length in _nonzero_regions(cfg.sram_initial):
-                await self.bridge._sram_backdoor_write(
-                    self.SRAM_BASE + off, cfg.sram_initial[off:off + length]
-                )
-        for off, data in cfg.sram_preloads.items():
-            await self.bridge._sram_backdoor_write(self.SRAM_BASE + off, data)
-
-        if cfg.dram_initial is not None:
-            for off, length in _nonzero_regions(cfg.dram_initial):
-                await self.bridge._dram_backdoor_write(
-                    self.DRAM_BASE + off, cfg.dram_initial[off:off + length]
-                )
-        for off, data in cfg.dram_preloads.items():
-            await self.bridge._dram_backdoor_write(self.DRAM_BASE + off, data)
-
-    async def _poll_done(self, status_addr: int, timeout: int = 500_000):
-        for cyc in range(timeout):
-            status = await self.apb.read(status_addr)
-            if status & 0x2:
-                logger.info(f"P1DirectRunner: STATUS=0x{status:08X} after {cyc} cycles")
-                return status
-            await self.bridge.wait_cycles(1)
-        raise TimeoutError(f"STATUS.DONE timeout at 0x{status_addr:08X}")
-
-    async def _verify(self, case_id: str, cfg: TestCaseConfig) -> Tuple[bool, str]:
-        vectors_dir = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "..", "rtl", "test_vectors", "soc_e2e",
-        )
-        expected_path = os.path.join(vectors_dir, case_id, "expected.npz")
-        if not os.path.exists(expected_path):
-            return False, f"expected.npz missing for {case_id}"
-
-        with np.load(expected_path, allow_pickle=True) as exp:
-            mismatches: List[str] = []
-
-            if "sram_final" in exp:
-                sram_final = exp["sram_final"].tobytes()
-                await self._compare_memory(
-                    sram_final, "sram", self.SRAM_BASE,
-                    fp16_region=self._fp16_output_region(case_id, cfg),
-                    mismatches=mismatches,
-                )
-
-            if "dram_final" in exp:
-                dram_final = exp["dram_final"].tobytes()
-                await self._compare_memory(
-                    dram_final, "dram", self.DRAM_BASE,
-                    mismatches=mismatches,
-                )
-
-            if "pcie_readbacks_addr" in exp and "pcie_readbacks_data" in exp:
-                for addr, data in zip(exp["pcie_readbacks_addr"], exp["pcie_readbacks_data"]):
-                    actual = await self.pcie._pcie_tlp_read(int(addr), len(data))
-                    if actual != bytes(data):
-                        mismatches.append(
-                            f"PCIe 0x{int(addr):08X}: expected {bytes(data)[:16].hex()}... "
-                            f"got {actual[:16].hex()}..."
-                        )
-
-            if "mmio_readbacks_addr" in exp and "mmio_readbacks_value" in exp:
-                for addr, value in zip(exp["mmio_readbacks_addr"], exp["mmio_readbacks_value"]):
-                    addr_i = int(addr)
-                    if (addr_i & 0xFFF) == 0x008:
-                        continue
-                    actual = await self.apb.read(addr_i)
-                    if (actual & 0xFFFFFFFF) != (int(value) & 0xFFFFFFFF):
-                        mismatches.append(
-                            f"MMIO 0x{addr_i:08X}: expected 0x{int(value):08X} got 0x{actual:08X}"
-                        )
-
-        if mismatches:
-            for m in mismatches[:10]:
-                logger.error(f"  MISMATCH: {m}")
-            return False, f"{len(mismatches)} mismatches"
-        return True, "all comparisons match"
-
-    def _fp16_output_region(self, case_id: str, cfg: TestCaseConfig) -> Optional[Tuple[int, int]]:
-        if case_id != "FM-SOC-011":
-            return None
-        writes = dict(cfg.mmio_write_sequence)
-        o_addr = writes.get(SFU_BASE + SFU.O_ADDR, 0)
-        dim = writes.get(SFU_BASE + SFU.DIM, 0)
-        if o_addr < self.SRAM_BASE:
-            o_addr += self.SRAM_BASE
-        return (o_addr, int(dim) * 2)
-
-    async def _compare_memory(
+    def _build_mmul(
         self,
-        expected: bytes,
-        region: str,
-        base_addr: int,
-        fp16_region: Optional[Tuple[int, int]] = None,
-        mismatches: Optional[List[str]] = None,
-    ) -> List[str]:
-        if mismatches is None:
-            mismatches = []
+        M: int, K: int, N: int,
+        act: np.ndarray, wgt_packed: np.ndarray, scales: np.ndarray,
+        act_addr: int, wgt_addr: int, out_addr: int, scale_addr: int,
+        desc_addr: int, cmd_idx: int = 0,
+    ):
+        model = self._make_model()
+        model.host_write_data(act_addr, act)
+        model.host_write_data(wgt_addr, wgt_packed)
+        model.host_write_data(scale_addr, scales.ravel())
+        model.host_write_descriptor(
+            desc_addr,
+            input_addr=act_addr, weight_addr=wgt_addr, output_addr=out_addr,
+            scale_addr=scale_addr, scale_size=int(scales.nbytes),
+            input_size=int(act.nbytes), weight_size=int(len(wgt_packed)),
+            output_size=M * N * 4,
+            input_sram=0x00000000, weight_sram=0x00010000,
+            output_sram=0x00018000, scale_sram=0x00014000,
+            M=M, K=K, N=N,
+        )
+        self._write_cmd(model, cmd_idx, self._OP_MMUL, desc_addr)
+        golden = GoldenMXU().matmul_int4_per_block(
+            act, wgt_packed, scales, M, K, N, group_size=128
+        )
+        return model, golden.astype(np.float32).tobytes()
 
-        fp16_start, fp16_len = fp16_region or (None, 0)
+    def _build_009(self):
+        M, K, N = 1, 4, 2
+        act = np.array([1, 2, 3, 4], dtype=np.int8)
+        wgt_packed = np.array([0x21, 0x43, 0x65, 0x87], dtype=np.uint8)
+        scales = np.ones(((K + 127) // 128, N), dtype=np.float32)
+        model, golden = self._build_mmul(
+            M, K, N, act, wgt_packed, scales,
+            0x80010000, 0x80020000, 0x81000000, 0x80110000, 0x80000080,
+        )
+        expected = {
+            "num_cmds": 1,
+            "compare": {
+                "out": {"addr": 0x81000000, "size": M * N * 4,
+                        "golden": golden, "region": "dram"},
+            },
+        }
+        return model, expected, False
 
-        for off, length in _nonzero_regions(expected):
-            if region == "sram":
-                actual = await self.bridge._sram_backdoor_read(base_addr + off, length)
-            else:
-                actual = await self.bridge._dram_backdoor_read(base_addr + off, length)
-            exp_seg = expected[off:off + length]
+    def _build_010(self):
+        M, K, N = 4, 64, 32
+        rng = np.random.RandomState(12345)
+        act = rng.randint(-128, 127, size=M * K, dtype=np.int8).reshape(M, K)
+        wgt = rng.randint(-8, 8, size=K * N, dtype=np.int8)
+        wgt_packed = GoldenMXU.pack_int4(wgt)
+        num_blocks = (K + 127) // 128
+        scales = rng.uniform(0.9, 1.1, size=(num_blocks, N)).astype(np.float32)
+        model, golden = self._build_mmul(
+            M, K, N, act, wgt_packed, scales,
+            0x80010000, 0x80020000, 0x81000000, 0x80110000, 0x80000080,
+        )
+        expected = {
+            "num_cmds": 1,
+            "compare": {
+                "out": {"addr": 0x81000000, "size": M * N * 4,
+                        "golden": golden, "region": "dram"},
+            },
+        }
+        return model, expected, False
 
-            if (
-                fp16_start is not None
-                and base_addr + off <= fp16_start < base_addr + off + length
-            ):
-                rel_off = fp16_start - (base_addr + off)
-                end = min(rel_off + fp16_len, length)
-                exp_fp16 = np.frombuffer(exp_seg[rel_off:end], dtype=np.float16)
-                act_fp16 = np.frombuffer(actual[rel_off:end], dtype=np.float16)
-                if not np.allclose(act_fp16, exp_fp16, atol=2e-3, rtol=1e-2):
-                    diff = np.max(np.abs(act_fp16.astype(np.float32) - exp_fp16.astype(np.float32)))
-                    mismatches.append(f"{region.upper()} 0x{fp16_start:08X} FP16 diff={diff:.3e}")
-                if actual[:rel_off] != exp_seg[:rel_off] or actual[end:length] != exp_seg[end:length]:
-                    mismatches.append(
-                        f"{region.upper()} 0x{base_addr + off:08X}: non-FP16 bytes differ"
-                    )
-            else:
-                if actual != exp_seg:
-                    mismatches.append(
-                        f"{region.upper()} 0x{base_addr + off:08X}: expected {exp_seg[:16].hex()}... "
-                        f"got {actual[:16].hex()}..."
-                    )
+    def _build_011(self):
+        N = 1024
+        rng = np.random.RandomState(20260703)
+        inp = rng.randn(N).astype(np.float32).clip(-10, 10)
+        in_addr = self.SRAM_BASE + 0x10000
+        out_addr = self.SRAM_BASE + 0x20000
+        desc_addr = 0x80000080
 
-        return mismatches
+        model = self._make_model()
+        model.sram[0x10000:0x10000 + N * 2] = np.frombuffer(
+            inp.astype(np.float16).tobytes(), dtype=np.uint8
+        )
+        model.host_write_descriptor(
+            desc_addr,
+            input_addr=in_addr, output_addr=out_addr,
+            input_size=N, output_size=N,
+            M=1, K=N, N=1,
+        )
+        self._write_cmd(model, 0, self._OP_SOFTMAX, desc_addr)
+
+        golden = GoldenSFU().softmax_hw(inp)
+        expected = {
+            "num_cmds": 1,
+            "compare": {
+                "out": {"addr": out_addr, "size": N * 2,
+                        "golden": golden.astype(np.float16).tobytes(),
+                        "region": "sram"},
+            },
+        }
+        return model, expected, False
+
+    def _build_012(self):
+        dim = 128
+        rng = np.random.RandomState(20260704)
+        a = rng.randint(-10000, 10000, size=dim).astype(np.int32)
+        b = rng.randint(-10000, 10000, size=dim).astype(np.int32)
+        a_addr = self.SRAM_BASE + 0x30000
+        b_addr = self.SRAM_BASE + 0x31000
+        o_addr = self.SRAM_BASE + 0x40000
+        desc0 = 0x80000080
+        desc1 = desc0 + self.DESC_STRIDE
+
+        model = self._make_model()
+        model.sram[0x30000:0x30000 + dim * 4] = np.frombuffer(
+            a.tobytes(), dtype=np.uint8
+        )
+        model.sram[0x31000:0x31000 + dim * 4] = np.frombuffer(
+            b.tobytes(), dtype=np.uint8
+        )
+
+        model.host_write_descriptor(
+            desc0,
+            input_addr=a_addr, weight_addr=b_addr, output_addr=o_addr,
+            input_size=dim, weight_size=dim, output_size=dim,
+            M=1, K=dim, N=1,
+        )
+        self._write_cmd(model, 0, self._OP_VADD, desc0)
+        model.host_write_descriptor(
+            desc1,
+            input_addr=a_addr, weight_addr=b_addr, output_addr=o_addr,
+            input_size=dim, weight_size=dim, output_size=dim,
+            M=1, K=dim, N=1,
+        )
+        self._write_cmd(model, 1, self._OP_VMUL, desc1)
+
+        golden = GoldenVector().mul(a, b)
+        expected = {
+            "num_cmds": 2,
+            "compare": {
+                "out": {"addr": o_addr, "size": dim * 4,
+                        "golden": golden.astype(np.int32).tobytes(),
+                        "region": "sram"},
+            },
+        }
+        return model, expected, False
+
+    def _build_024(self):
+        M, K, N = 1, 8, 4
+        act = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int8).reshape(M, K)
+        wgt = np.array([
+            [0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 2, 3], [4, 5, 6, 7],
+            [0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 2, 3], [4, 5, 6, 7],
+        ], dtype=np.int8)
+        wgt_packed = GoldenMXU.pack_int4(wgt.flatten())
+        scales = np.ones(((K + 127) // 128, N), dtype=np.float32)
+        model, golden = self._build_mmul(
+            M, K, N, act, wgt_packed, scales,
+            0x80010000, 0x80020000, 0x81000000, 0x80110000, 0x80000080,
+        )
+        expected = {
+            "num_cmds": 1,
+            "compare": {
+                "out": {"addr": 0x81000000, "size": M * N * 4,
+                        "golden": golden, "region": "dram"},
+            },
+        }
+        return model, expected, False
+
+    def _build_025(self):
+        # Crossbar stress has no concurrent-master firmware command.
+        # Run an honest DMA-copy smoke and report the limitation.
+        model = self._make_model()
+        src_off = 0x100000
+        dst_off = 0x200000
+        size = 64
+        payload = b"CROSSBAR_P1_SMOKE_025_" + bytes(range(size - 22))
+        payload = payload[:size]
+        model.dram[src_off:src_off + size] = payload
+
+        desc_addr = 0x80000080
+        model.host_write_descriptor(
+            desc_addr,
+            input_addr=self.DRAM_BASE + src_off,
+            output_addr=self.DRAM_BASE + dst_off,
+            input_size=size, output_size=size,
+            M=1, K=size, N=1,
+        )
+        self._write_cmd(model, 0, self._OP_DMA_COPY, desc_addr)
+
+        expected = {
+            "num_cmds": 1,
+            "compare": {
+                "dst": {"addr": self.DRAM_BASE + dst_off, "size": size,
+                        "golden": payload, "region": "dram"},
+            },
+        }
+        return model, expected, False
+
+    def _build_026(self):
+        rng = np.random.RandomState(20260703)
+        model = self._make_model()
+
+        M, K, N = 1, 4, 2
+        act_addr, wgt_addr, out_addr, scale_addr, mmul_desc = (
+            0x80010000, 0x80020000, 0x81000000, 0x80110000, 0x80000080)
+        act = rng.randint(-8, 8, size=M * K, dtype=np.int8)
+        wgt = rng.randint(-8, 8, size=K * N, dtype=np.int8)
+        wgt_packed = GoldenMXU.pack_int4(wgt)
+        scales = np.ones(((K + 127) // 128, N), dtype=np.float32)
+        model.host_write_data(act_addr, act)
+        model.host_write_data(wgt_addr, wgt_packed)
+        model.host_write_data(scale_addr, scales.ravel())
+        model.host_write_descriptor(
+            mmul_desc,
+            input_addr=act_addr, weight_addr=wgt_addr, output_addr=out_addr,
+            scale_addr=scale_addr, scale_size=int(scales.nbytes),
+            input_size=int(act.nbytes), weight_size=int(len(wgt_packed)),
+            output_size=M * N * 4,
+            M=M, K=K, N=N,
+        )
+        self._write_cmd(model, 0, self._OP_MMUL, mmul_desc)
+        golden_mmul = GoldenMXU().matmul_int4_per_block(
+            act, wgt_packed, scales, M, K, N, group_size=128
+        )
+
+        sfu_len = 16
+        sfu_in_addr = 0x82000000
+        sfu_out_addr = 0x82001000
+        sfu_desc = 0x80000100
+        sfu_in = rng.randn(sfu_len).astype(np.float32).clip(-5, 5)
+        model.host_write_data(sfu_in_addr, sfu_in.astype(np.float16))
+        model.host_write_descriptor(
+            sfu_desc,
+            input_addr=sfu_in_addr, output_addr=sfu_out_addr,
+            input_size=sfu_len, output_size=sfu_len,
+            M=1, K=sfu_len, N=1,
+        )
+        self._write_cmd(model, 1, self._OP_SOFTMAX, sfu_desc)
+        golden_sfu = GoldenSFU().softmax_hw(sfu_in)
+
+        vec_len = 8
+        vec_a_addr = 0x82002000
+        vec_b_addr = 0x82003000
+        vec_out_addr = 0x82004000
+        vec_desc = 0x80000200
+        vec_a = rng.randint(-100, 100, size=vec_len).astype(np.int32)
+        vec_b = rng.randint(-100, 100, size=vec_len).astype(np.int32)
+        model.host_write_data(vec_a_addr, vec_a)
+        model.host_write_data(vec_b_addr, vec_b)
+        model.host_write_descriptor(
+            vec_desc,
+            input_addr=vec_a_addr, weight_addr=vec_b_addr,
+            output_addr=vec_out_addr,
+            input_size=vec_len, weight_size=vec_len, output_size=vec_len,
+            M=1, K=vec_len, N=1,
+        )
+        self._write_cmd(model, 2, self._OP_VADD, vec_desc)
+        golden_vec = GoldenVector().add(vec_a, vec_b)
+
+        expected = {
+            "num_cmds": 3,
+            "compare": {
+                "mmul_out": {"addr": out_addr, "size": M * N * 4,
+                             "golden": golden_mmul.astype(np.float32).tobytes(),
+                             "region": "dram"},
+                "sfu_out": {"addr": sfu_out_addr, "size": sfu_len * 2,
+                            "golden": golden_sfu.astype(np.float16).tobytes(),
+                            "region": "dram"},
+                "vec_out": {"addr": vec_out_addr, "size": vec_len * 4,
+                            "golden": golden_vec.astype(np.int32).tobytes(),
+                            "region": "dram"},
+            },
+        }
+        return model, expected, False
 
 
 if COCOTB_AVAILABLE and SPIKE_RTL_BRIDGE_AVAILABLE and FUNC_MODEL_AVAILABLE:
@@ -1612,17 +1742,19 @@ if COCOTB_AVAILABLE and SPIKE_RTL_BRIDGE_AVAILABLE and FUNC_MODEL_AVAILABLE:
         assert passed, f"{case_id} failed: {msg}"
 
 
-if COCOTB_AVAILABLE and SPIKE_RTL_BRIDGE_AVAILABLE and NUMPY_AVAILABLE:
+if COCOTB_AVAILABLE and SPIKE_RTL_BRIDGE_AVAILABLE and FUNC_MODEL_AVAILABLE:
     @cocotb.test()
     async def test_soc_spike_p1(dut):
         bridge = CocotbBridge(dut)
         await bridge.start_clock()
         await bridge.reset(5)
 
-        case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-010")
-        runner = P1DirectRunner(dut, bridge)
+        runner = P1SpikeRunner(dut, bridge)
+        await runner.setup()
+
+        case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-009")
         passed, msg = await runner.run_case(case_id)
-        logger.info(f"P1DirectRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
+        logger.info(f"P1SpikeRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
         assert passed, f"{case_id} failed: {msg}"
 
 
