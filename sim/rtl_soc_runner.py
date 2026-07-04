@@ -1419,13 +1419,186 @@ class P0SpikeRunner:
         return model, expected, True
 
 
+class P1DirectRunner:
+    SRAM_BASE = Addr.SRAM_BASE
+    DRAM_BASE = Addr.DRAM_BASE
+
+    _STATUS_ADDR = {
+        "FM-SOC-010": MXU_BASE + MXU.STATUS,
+        "FM-SOC-011": SFU_BASE + SFU.STATUS,
+        "FM-SOC-012": VECTOR_BASE + VECTOR.STATUS,
+        "FM-SOC-024": MXU_BASE + MXU.STATUS,
+    }
+
+    def __init__(self, dut, bridge: "CocotbBridge"):
+        self.dut = dut
+        self.bridge = bridge
+        self.apb = SimpleAPBMaster(dut, "cpu_apb")
+        self.pcie = RTLSoCRunner(bridge)
+
+    async def run_case(self, case_id: str) -> Tuple[bool, str]:
+        if not NUMPY_AVAILABLE:
+            return False, "NumPy not available"
+
+        cfg = load_golden_vectors(case_id)
+        if cfg is None:
+            return False, f"golden vectors not found for {case_id}"
+
+        logger.info(f"P1DirectRunner: {case_id} — preload")
+        await self._preload(cfg)
+
+        logger.info(f"P1DirectRunner: {case_id} — PCIe TLP writes")
+        for addr, data in cfg.pcie_writes.items():
+            await self.pcie._pcie_tlp_write(addr, data)
+
+        logger.info(f"P1DirectRunner: {case_id} — APB MMIO writes")
+        for addr, value in cfg.mmio_write_sequence:
+            await self.apb.write(addr, value)
+
+        status_addr = self._STATUS_ADDR.get(case_id)
+        if status_addr is not None:
+            logger.info(f"P1DirectRunner: {case_id} — poll STATUS 0x{status_addr:08X}")
+            await self._poll_done(status_addr)
+
+        return await self._verify(case_id, cfg)
+
+    async def _preload(self, cfg: TestCaseConfig):
+        if cfg.sram_initial is not None:
+            for off, length in _nonzero_regions(cfg.sram_initial):
+                await self.bridge._sram_backdoor_write(
+                    self.SRAM_BASE + off, cfg.sram_initial[off:off + length]
+                )
+        for off, data in cfg.sram_preloads.items():
+            await self.bridge._sram_backdoor_write(self.SRAM_BASE + off, data)
+
+        if cfg.dram_initial is not None:
+            for off, length in _nonzero_regions(cfg.dram_initial):
+                await self.bridge._dram_backdoor_write(
+                    self.DRAM_BASE + off, cfg.dram_initial[off:off + length]
+                )
+        for off, data in cfg.dram_preloads.items():
+            await self.bridge._dram_backdoor_write(self.DRAM_BASE + off, data)
+
+    async def _poll_done(self, status_addr: int, timeout: int = 500_000):
+        for cyc in range(timeout):
+            status = await self.apb.read(status_addr)
+            if status & 0x2:
+                logger.info(f"P1DirectRunner: STATUS=0x{status:08X} after {cyc} cycles")
+                return status
+            await self.bridge.wait_cycles(1)
+        raise TimeoutError(f"STATUS.DONE timeout at 0x{status_addr:08X}")
+
+    async def _verify(self, case_id: str, cfg: TestCaseConfig) -> Tuple[bool, str]:
+        vectors_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..", "rtl", "test_vectors", "soc_e2e",
+        )
+        expected_path = os.path.join(vectors_dir, case_id, "expected.npz")
+        if not os.path.exists(expected_path):
+            return False, f"expected.npz missing for {case_id}"
+
+        with np.load(expected_path, allow_pickle=True) as exp:
+            mismatches: List[str] = []
+
+            if "sram_final" in exp:
+                sram_final = exp["sram_final"].tobytes()
+                await self._compare_memory(
+                    sram_final, "sram", self.SRAM_BASE,
+                    fp16_region=self._fp16_output_region(case_id, cfg),
+                    mismatches=mismatches,
+                )
+
+            if "dram_final" in exp:
+                dram_final = exp["dram_final"].tobytes()
+                await self._compare_memory(
+                    dram_final, "dram", self.DRAM_BASE,
+                    mismatches=mismatches,
+                )
+
+            if "pcie_readbacks_addr" in exp and "pcie_readbacks_data" in exp:
+                for addr, data in zip(exp["pcie_readbacks_addr"], exp["pcie_readbacks_data"]):
+                    actual = await self.pcie._pcie_tlp_read(int(addr), len(data))
+                    if actual != bytes(data):
+                        mismatches.append(
+                            f"PCIe 0x{int(addr):08X}: expected {bytes(data)[:16].hex()}... "
+                            f"got {actual[:16].hex()}..."
+                        )
+
+            if "mmio_readbacks_addr" in exp and "mmio_readbacks_value" in exp:
+                for addr, value in zip(exp["mmio_readbacks_addr"], exp["mmio_readbacks_value"]):
+                    addr_i = int(addr)
+                    if (addr_i & 0xFFF) == 0x008:
+                        continue
+                    actual = await self.apb.read(addr_i)
+                    if (actual & 0xFFFFFFFF) != (int(value) & 0xFFFFFFFF):
+                        mismatches.append(
+                            f"MMIO 0x{addr_i:08X}: expected 0x{int(value):08X} got 0x{actual:08X}"
+                        )
+
+        if mismatches:
+            for m in mismatches[:10]:
+                logger.error(f"  MISMATCH: {m}")
+            return False, f"{len(mismatches)} mismatches"
+        return True, "all comparisons match"
+
+    def _fp16_output_region(self, case_id: str, cfg: TestCaseConfig) -> Optional[Tuple[int, int]]:
+        if case_id != "FM-SOC-011":
+            return None
+        writes = dict(cfg.mmio_write_sequence)
+        o_addr = writes.get(SFU_BASE + SFU.O_ADDR, 0)
+        dim = writes.get(SFU_BASE + SFU.DIM, 0)
+        if o_addr < self.SRAM_BASE:
+            o_addr += self.SRAM_BASE
+        return (o_addr, int(dim) * 2)
+
+    async def _compare_memory(
+        self,
+        expected: bytes,
+        region: str,
+        base_addr: int,
+        fp16_region: Optional[Tuple[int, int]] = None,
+        mismatches: Optional[List[str]] = None,
+    ) -> List[str]:
+        if mismatches is None:
+            mismatches = []
+
+        fp16_start, fp16_len = fp16_region or (None, 0)
+
+        for off, length in _nonzero_regions(expected):
+            if region == "sram":
+                actual = await self.bridge._sram_backdoor_read(base_addr + off, length)
+            else:
+                actual = await self.bridge._dram_backdoor_read(base_addr + off, length)
+            exp_seg = expected[off:off + length]
+
+            if (
+                fp16_start is not None
+                and base_addr + off <= fp16_start < base_addr + off + length
+            ):
+                rel_off = fp16_start - (base_addr + off)
+                end = min(rel_off + fp16_len, length)
+                exp_fp16 = np.frombuffer(exp_seg[rel_off:end], dtype=np.float16)
+                act_fp16 = np.frombuffer(actual[rel_off:end], dtype=np.float16)
+                if not np.allclose(act_fp16, exp_fp16, atol=2e-3, rtol=1e-2):
+                    diff = np.max(np.abs(act_fp16.astype(np.float32) - exp_fp16.astype(np.float32)))
+                    mismatches.append(f"{region.upper()} 0x{fp16_start:08X} FP16 diff={diff:.3e}")
+                if actual[:rel_off] != exp_seg[:rel_off] or actual[end:length] != exp_seg[end:length]:
+                    mismatches.append(
+                        f"{region.upper()} 0x{base_addr + off:08X}: non-FP16 bytes differ"
+                    )
+            else:
+                if actual != exp_seg:
+                    mismatches.append(
+                        f"{region.upper()} 0x{base_addr + off:08X}: expected {exp_seg[:16].hex()}... "
+                        f"got {actual[:16].hex()}..."
+                    )
+
+        return mismatches
+
+
 if COCOTB_AVAILABLE and SPIKE_RTL_BRIDGE_AVAILABLE and FUNC_MODEL_AVAILABLE:
     @cocotb.test()
     async def test_soc_spike_p0(dut):
-        """Run one P0 case with Spike CPU driving the RTL SoC.
-
-        Case ID is taken from FM_SOC_CASE_ID; defaults to FM-SOC-001.
-        """
         bridge = CocotbBridge(dut)
         await bridge.start_clock()
         await bridge.reset(5)
@@ -1436,6 +1609,20 @@ if COCOTB_AVAILABLE and SPIKE_RTL_BRIDGE_AVAILABLE and FUNC_MODEL_AVAILABLE:
         case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-001")
         passed, msg = await runner.run_case(case_id)
         logger.info(f"P0SpikeRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
+        assert passed, f"{case_id} failed: {msg}"
+
+
+if COCOTB_AVAILABLE and SPIKE_RTL_BRIDGE_AVAILABLE and NUMPY_AVAILABLE:
+    @cocotb.test()
+    async def test_soc_spike_p1(dut):
+        bridge = CocotbBridge(dut)
+        await bridge.start_clock()
+        await bridge.reset(5)
+
+        case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-010")
+        runner = P1DirectRunner(dut, bridge)
+        passed, msg = await runner.run_case(case_id)
+        logger.info(f"P1DirectRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
         assert passed, f"{case_id} failed: {msg}"
 
 
