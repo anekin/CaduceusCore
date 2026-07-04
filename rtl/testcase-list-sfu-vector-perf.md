@@ -26,9 +26,9 @@ SFUModel.estimate(op, N)  = ceil(N / 128) × pipeline_depth
   其中 pipeline_depth: gelu=4, silu=4, rope=12, softmax=8, layernorm=6, exp=12, div=16
 
 VectorModel.estimate(op, N) = ceil(N / 128) × op_latency
-  注意：sim/models/vector.py 中部分 op 未预定义（max, resid_add, sum_reduce），校准 case SFV-P28_calib 需标注 "Model N/A" 并跳过比值计算。
   其中 op_latency: add=1, mul=1, max=1, resid_add=1, sum_reduce≈3
-  * CONV 的 Func Model 因 type_convert 为 1-element/cycle 需扩展；见 SFV-P28_calib
+  注意：`sim/models/vector.py` 中部分 op 未预定义（max, resid_add, sum_reduce），校准 case 需标注 "Model N/A", conv≈ceil(N/128)×132*  
+   * CONV 的 Func Model 因 type_convert 为 1-element/cycle 需扩展；见 SFV-P28_calib
 ```
 
 > **注意**: Func Model 是 batch 级抽象（假设 SFU 每 cycle 处理 width=128 个元素），RTL 实际有 FSM 多遍 SRAM 遍历开销。差距可达 4x-48x，这在架构层面是可解释的。Tier 2 校准 case 的目的是**透明记录**这个差距，不是判断"通过/失败"。
@@ -56,7 +56,7 @@ VectorModel.estimate(op, N) = ceil(N / 128) × op_latency
 
 - **P0**: 每个操作的单元素/最小向量基线 — 建立测量基础设施并推导精确的周期公式
 - **P1**: 参数扫描（元素数量、位置、DIM）— 验证周期公式在操作范围内线性缩放
-- **P2**: 背靠背吞吐量与架构校准 — 测量连续操作间间隙 + Func Model 对比
+- **P2**: 背靠背吞吐量 — 测量连续操作之间的间隙以及流水线利用率
 - **P3**: 边缘情况 — 最小/最大尺寸、部分块、饱和边界
 
 ---
@@ -84,7 +84,7 @@ VectorModel.estimate(op, N) = ceil(N / 128) × op_latency
 | **layernorm_hw** | 3 遍顺序 + 12 步 sqrt | 可变 (3N+15) | 1/周期 在遍历时 | 8 | `3N + 17` |
 | **rmsnorm_hw** | 2 遍顺序 + 8 sq+8 recip | 可变 (2N+19) | 1/周期 在遍历时 | 8 | `2N + 21` |
 
-*注意: 周期公式包括 `sfu_top` 开销（2 周期 MMIO 启动 + 1 周期 READ_INIT + 1 周期 DONE）。通过 VCS 仿真验证。*
+*注意: 周期公式包括 `sfu_top` 开销（2 周期 MMIO 启动 + 1 周期 READ_INIT + 1 周期 DONE）。`sfu_top` 在 ST_RUN 中提供元素，并等待子模块在 ST_FLUSH 中完成流水线。通过 VCS 仿真验证。*
 
 ### Vector 每个块的周期
 
@@ -138,19 +138,19 @@ VectorModel.estimate(op, N) = ceil(N / 128) × op_latency
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| SFV-P15 | P1 | `tb_sfu_perf.v` — `--op softmax --dim 16,32,64,128,256,512,1024,2048,4096` | **Softmax N 扫描（8 个点）**: 验证 total_cycles = 3N + C（线性缩放）。标记首次出现非线性行为的点 | 每个点 `|delta| ≤ 5 cycles`。最小二乘线性回归斜率 ∈ [2.95, 3.05]（验证 3N 缩放）。 | ⬜ | |
-| SFV-P16 | P1 | `tb_sfu_perf.v` — `--op layernorm --dim 16,32,64,128,256,512,1024,2048,4096` | **LayerNorm N 扫描（8 个点）**: 验证 3 遍顺序缩放 | 每个点 `|delta| ≤ 5 cycles`。最小二乘线性回归斜率 ∈ [2.95, 3.05]。 | ⬜ | |
-| SFV-P17 | P1 | `tb_sfu_perf.v` — `--op rmsnorm --dim 16,32,64,128,256,512,1024,2048,4096` | **RMSNorm N 扫描（8 个点）**: 验证 2 遍顺序缩放（比 LN 快 ~50%） | 每个点 `|delta| ≤ 5 cycles`。最小二乘线性回归斜率 ∈ [1.95, 2.05]。N=4096 时 RMSNorm/LayerNorm 周期比 ≤ 0.68（2N vs 3N 理论加速 ≈ 0.67x）。 | ⬜ | |
-| SFV-P18 | P1 | `tb_sfu_perf.v` — `--op gelu --dim 16,64,256,1024,4096` | **GELU 吞吐量扫描（5 个点）**: 验证固定 4-cycle 流水线深度与 N 无关 | 每个点 `|delta| ≤ 1 cycle`。最小二乘线性回归斜率 ∈ [0.98, 1.02]（纯流式确认 N 倍缩放）。 | ⬜ | |
-| SFV-P19 | P1 | `tb_sfu_perf.v` — `--op rope --dim 16,32,64,128` — `--pos 0,42,100,127` | **RoPE 扫描：N×位置（4×4 格子）**: 验证延迟与 N 成比例且与位置无关 | 每个点 `|delta| ≤ 1 cycle`。最小二乘线性回归斜率 ∈ [0.98, 1.02]。位置 pos=0/42/100/127 对应同一 N 的周期标准差 = 0。 | ⬜ | |
+| SFV-P15 | P1 | `tb_sfu_perf.v` — `--op softmax --dim 16,32,64,128,256,512,1024,2048,4096` | **Softmax N 扫描（8 个点）**: 验证 total_cycles = 3N + C（线性缩放）。标记首次出现非线性行为的点 | 每个点 `|delta| ≤ 5 cycles`。绘制周期 vs N 曲线；斜率为 ~3.0 | ⬜ | |
+| SFV-P16 | P1 | `tb_sfu_perf.v` — `--op layernorm --dim 16,32,64,128,256,512,1024,2048,4096` | **LayerNorm N 扫描（8 个点）**: 验证 3 遍顺序缩放 | 每个点 `|delta| ≤ 5 cycles`。斜率 ~3.0 | ⬜ | |
+| SFV-P17 | P1 | `tb_sfu_perf.v` — `--op rmsnorm --dim 16,32,64,128,256,512,1024,2048,4096` | **RMSNorm N 扫描（8 个点）**: 验证 2 遍顺序缩放（比 LN 快 ~50%） | 每个点 `|delta| ≤ 5 cycles`。斜率 ~2.0。N=4096 时确认相对于 layernorm 的加速 | ⬜ | |
+| SFV-P18 | P1 | `tb_sfu_perf.v` — `--op gelu --dim 16,64,256,1024,4096` | **GELU 吞吐量扫描（5 个点）**: 验证固定 4-cycle 流水线深度与 N 无关 | 每个点 `|delta| ≤ 1 cycle`。斜率 ~1.0（纯流式） | ⬜ | |
+| SFV-P19 | P1 | `tb_sfu_perf.v` — `--op rope --dim 16,32,64,128` — `--pos 0,42,100,127` | **RoPE 扫描：N×位置（4×4 格子）**: 验证延迟与 N 成比例且与位置无关 | 每个点 `|delta| ≤ 1 cycle`。斜率 ~1.0。位置必须不影响周期计数 | ⬜ | |
 
 ### P1-Vector: Vector DIM 扫描
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| SFV-P20 | P1 | `tb_vector_perf.v` — `--op add --dim 128,256,512,1024,2048,4096` | **ALU ops DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×4 + 2。确认块边界开销恒定 | 每个点 `|delta| ≤ 1 cycle`。max |per_chunk_cycles − 4| ≤ 1（其中 per_chunk_cycles = 每个 128 元素块的总 cycles，期望 4） | ⬜ | |
-| SFV-P21 | P1 | `tb_vector_perf.v` — `--op sum --dim 128,256,512,1024,2048,4096` | **SUM DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×10 + 2。确认每个块 7-cycle 流水线 | 每个点 `|delta| ≤ 1 cycle`。max |per_chunk_cycles − 10| ≤ 1（其中 per_chunk_cycles = 每个 128 元素块的总 cycles，期望 10） | ⬜ | |
-| SFV-P22 | P1 | `tb_vector_perf.v` — `--op conv --dim 128,256,512,1024,2048,4096` | **CONV DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×132 + 2。确认 type_convert 逐个元素处理 | 每个点 `|delta| ≤ 1 cycle`。max |per_chunk_cycles − 132| ≤ 1（其中 per_chunk_cycles = 每个 128 元素块的总 cycles，期望 132） | ⬜ | |
+| SFV-P20 | P1 | `tb_vector_perf.v` — `--op add --dim 128,256,512,1024,2048,4096` | **ALU ops DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×4 + 2。确认块边界开销恒定 | 每个点 `|delta| ≤ 1 cycle`。每个块周期必须相同 | ⬜ | |
+| SFV-P21 | P1 | `tb_vector_perf.v` — `--op sum --dim 128,256,512,1024,2048,4096` | **SUM DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×10 + 2。确认每个块 7-cycle 流水线 | 每个点 `|delta| ≤ 1 cycle`。每个块周期必须相同 | ⬜ | |
+| SFV-P22 | P1 | `tb_vector_perf.v` — `--op conv --dim 128,256,512,1024,2048,4096` | **CONV DIM 扫描（6 个点）**: 验证 total = ceil(N/128)×132 + 2。确认 type_convert 逐个元素处理 | 每个点 `|delta| ≤ 1 cycle`。每个块 132 cycles 恒定 | ⬜ | |
 
 ---
 
@@ -164,7 +164,7 @@ VectorModel.estimate(op, N) = ceil(N / 128) × op_latency
 |---------|:--:|------|----------|----------|------|------|
 | SFV-P23 | P2 | `tb_sfu_perf.v` — `--repeat 10` — softmax N=64 背靠背 | **Softmax 背靠背**: 10 个连续的 softmax 操作。测量操作间间隙 + 确认没有状态泄漏 | 间隙 `≤ 5 cycles`。所有 10 次运行的周期标准差 `≤ 1 cycle`。所有 golden 比较 PASS | ⬜ | |
 | SFV-P24 | P2 | `tb_sfu_perf.v` — 混合 5 个操作序列，重复 3 次 | **混合操作背靠背**: 在单次仿真运行中切换 5 种 SFU 操作。测量操作间切换开销 | 每个操作间间隙 `≤ 5 cycles`。总计 15 次 golden 比较 PASS | ⬜ | |
-| SFV-P25_calib | P2 | `SFUModel.estimate()` vs RTL 实测 — 所有 6 个 SFU 操作，N=128,1024,4096 | **SFU Func Model 架构校准**: 对每个操作和三种 N 大小，计算 `ceil(N/128)×pipeline_depth`(Func Model) vs RTL 实测周期。**不判 PASS/FAIL** — 只记录差距 | 生成 18 行对比表 (6 ops × 3 sizes)，含 RTL_cyc, Model_cyc, Ratio, 根因分析列。Ratio 必须落在预期范围内：softmax 40-50x, gelu/silu 20-35x, rope 5-10x, layernorm 40-55x, rmsnorm 30-42x。超出范围需在根因分析列标注异常，但**不改变 case 的 ⬜/✅ 状态** | ⬜ | |
+| SFV-P25_calib | P2 | `SFUModel.estimate()` vs RTL 实测 — 所有 6 个 SFU 操作，N=128,1024,4096 | **SFU Func Model 架构校准**: 对每个操作和三种 N 大小，计算 `ceil(N/128)×pipeline_depth`(Func Model) vs RTL 实测周期。**不判 PASS/FAIL** — 只记录差距 | 记录每个 (op, N) 的 `RTL/FuncModel` 比值。预期 Softmax 40-50x, Gelu/Silu 20-35x, RoPE 5-10x, Layernorm 40-55x, RMSNorm 30-42x。超出范围在根因分析列标注异常，但**不改变 case 的 ⬜/✅ 状态** | ⬜ | |
 
 ### P2-Vector: 背靠背 + 校准
 
@@ -172,7 +172,7 @@ VectorModel.estimate(op, N) = ceil(N / 128) × op_latency
 |---------|:--:|------|----------|----------|------|------|
 | SFV-P26 | P2 | `tb_vector_perf.v` — `--repeat 10` — ADD N=128 | **Vector 背靠背**: 10 个连续的 ADD 操作。测量间隙 | 间隙 `≤ 5 cycles`。所有运行的周期标准差 `≤ 1 cycle`。所有 golden 比较 PASS | ⬜ | |
 | SFV-P27 | P2 | `tb_vector_perf.v` — 混合 6 个操作序列，重复 2 次 | **混合操作背靠背**: 切换所有 6 种 Vector 操作。测量操作间切换开销 | 操作间间隙 `≤ 5 cycles`。总计 12 次 golden 比较 PASS | ⬜ | |
-| SFV-P28_calib | P2 | `VectorModel.estimate()` vs RTL 实测 — 所有 6 个 Vector 操作，DIM=128,1024,4096 | **Vector Func Model 架构校准**: `ceil(DIM/128)×op_latency`(Func Model) vs RTL 实测周期。**不判 PASS/FAIL** | 生成 18 行对比表 (6 ops × 3 sizes)。预期 Ratio 范围：ADD/MUL/MAX/RESID 3-6x, SUM 2-4x, CONV 0.8-1.3x。超出范围在根因分析列标注异常但**不改变 case 状态**。若 `VectorModel` 不支持某 op，在对比表中标注 "Model N/A" 并跳过该行比率计算 | ⬜ | |
+| SFV-P28_calib | P2 | `VectorModel.estimate()` vs RTL 实测 — 所有 6 个 Vector 操作，DIM=128,1024,4096 | **Vector Func Model 架构校准**: `ceil(DIM/128)×op_latency`(Func Model) vs RTL 实测周期。**不判 PASS/FAIL** | 记录每个 (op, DIM) 的 `RTL/FuncModel` 比值。预期 ADD/MUL/MAX/RESID 3-6x, SUM 2-4x, CONV 0.8-1.3x。超出范围在根因分析列标注异常，但**不改变 case 状态**。若 `VectorModel` 不支持某 op，在对比表中标注 "Model N/A" 并跳过比值计算 | ⬜ | |
 
 ---
 
@@ -185,16 +185,16 @@ VectorModel.estimate(op, N) = ceil(N / 128) × op_latency
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
 | SFV-P29 | P3 | `tb_sfu_perf.v` — 所有 6 个操作 `--dim 1` | **单元素边缘（N=1）**: 所有 SFU 操作的最小合法输入。LN,N=1 → 输出强制为 0；RMS,N=1 → 输出为符号(x) | 所有操作 golden 比较 PASS。每个 op 的 `|measured - formula(N=1)| ≤ 5`（N=1 不应触发多遍遍历；例如 softmax `|measured-36| ≤ 5`） | ⬜ | |
-| SFV-P30 | P3 | `tb_sfu_perf.v` — `--op softmax --dim 4096` + `--op layernorm --dim 4096` | **最大尺寸 N=4096**: 用于软最大值的 VEC_MAX 上限 + 用于 LN/RMS 的 MAX_LEN。确认没有溢出或状态机超时 | 两个操作 golden 比较 PASS。softmax `|measured-(3×4096+33)| ≤ 5`，layernorm `|measured-(3×4096+17)| ≤ 5` | ⬜ | |
+| SFV-P30 | P3 | `tb_sfu_perf.v` — `--op softmax --dim 4096` + `--op layernorm --dim 4096` | **最大尺寸 N=4096**: 用于软最大值的 VEC_MAX 上限 + 用于 LN/RMS 的 MAX_LEN。确认没有溢出或状态机超时 | 两个操作 golden 比较 PASS。softmax `|measured - (3×4096+33)| ≤ 5`，layernorm `|measured - (3×4096+17)| ≤ 5` | ⬜ | |
 
 ### P3-Vector
 
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
-| SFV-P31 | P3 | `tb_vector_perf.v` — `--op add --dim 1` + `--op sum --dim 1` + `--op conv --dim 1` | **单元素边缘（DIM=1）**: 最小 Vector 操作。验证 lane_mask 正确处理部分 128-wide 块 | 所有操作 golden 比较 PASS。ADD `|measured − 6| ≤ 1`。SUM `|measured − 12| ≤ 1`。CONV `|measured − 134| ≤ 1`。 | ⬜ | |
-| SFV-P32 | P3 | `tb_vector_perf.v` — `--op add --dim 65535` | **最大 DIM（65,535）**: DIM 寄存器允许的最大值。确认无溢出、无超时、所有 512 个块正确累加 | golden 比较 PASS 且仿真在 10,000 cycles 内完成。`|measured − 2050|` ≤ 1。 | ⬜ | |
-| SFV-P33 | P3 | `tb_vector_perf.v` — `--op conv --dim 256` — INT32 值扫描覆盖完整 MXU 累加器范围 [-2³¹, 2³¹-1] 附近的饱和 | **CONV 饱和边缘**: 验证每个 type_convert 规格将 `|x|>65504` 的元素饱和到 ±0x7BFF | 所有元素 golden 比较 PASS。对于 x ∈ {65503, 65504, 65505, INT32_MIN, INT32_MAX}，RTL type_convert 输出与 GoldenVector 一致（FP16 容差 abs=2e-3）。 | ⬜ | |
-| SFV-P34 | P3 | `tb_sfu_perf.v` — `--op rope --pos 0,1,42,127,255,511,1023` | **RoPE 大位置值**: 测试 theta = pos × inv_freq 的角度累积。确认大位置的 CORDIC 精度 | 所有位置 golden 比较 PASS（float16 容差）。所有位置周期计数的标准差 = 0（pos ∈ {0,1,42,127,255,511,1023}） | ⬜ | |
+| SFV-P31 | P3 | `tb_vector_perf.v` — `--op add --dim 1` + `--op sum --dim 1` + `--op conv --dim 1` | **单元素边缘（DIM=1）**: 最小 Vector 操作。验证 lane_mask 正确处理部分 128-wide 块 | 所有操作 golden 比较 PASS。周期计数必须为常量（无块迭代循环）。CONV N=1 → 无块循环开销 | ⬜ | |
+| SFV-P32 | P3 | `tb_vector_perf.v` — `--op add --dim 65535` | **最大 DIM（65,535）**: DIM 寄存器允许的最大值。确认无溢出、无超时、所有 512 个块正确累加 | golden 比较 PASS。实际周期数 = ceil(65535/128)×4+2 = 512×4+2 = 2,050 | ⬜ | |
+| SFV-P33 | P3 | `tb_vector_perf.v` — `--op conv --dim 256` — INT32 值扫描覆盖完整 MXU 累加器范围 [-2³¹, 2³¹-1] 附近的饱和 | **CONV 饱和边缘**: 验证每个 type_convert 规格将 |x|>65504 的元素饱和到 ±0x7BFF | 所有元素 golden 比较 PASS。接近 65504 边界时无误舍入。INT32_MIN (-2³¹) → 正确的饱和值 | ⬜ | |
+| SFV-P34 | P3 | `tb_sfu_perf.v` — `--op rope --pos 0,1,42,127,255,511,1023` | **RoPE 大位置值**: 测试 theta = pos × inv_freq 的角度累积。确认大位置的 CORDIC 精度 | 所有位置 golden 比较 PASS（float16 容差）。周期计数与位置无关 | ⬜ | |
 
 ---
 
@@ -210,17 +210,17 @@ VectorModel.estimate(op, N) = ceil(N / 128) × op_latency
 
 在执行任何 case 之前，必须创建以下内容：
 
-1. **`CaduceusCore/rtl/tb/tb_sfu_perf.v`**：扩展 `tb_sfu.v`。添加每 FSM 状态周期计数器（`cnt_IDLE, cnt_ST_READ_INIT, cnt_ST_RUN, cnt_ST_FLUSH, cnt_ST_DONE, cnt_TOTAL`）。添加 PERF 发射任务。添加反真空断言。遵循与 `tb_mxu_perf.v` 相同的模式。
+1. **`CaduceusCore/rtl/tb/tb_sfu_perf.v`**：扩展 `tb_sfu.v`。添加每 FSM 状态周期计数器（`cnt_IDLE, cnt_ST_READ_INIT, cnt_ST_RUN, cnt_ST_FLUSH, cnt_ST_DONE, cnt_TOTAL`）。添加 PERF 发射任务（`emit_perf`, `emit_perf_tile`）。添加反真空断言（`sram_ren` 切换, `sram_wen` 切换, `status_done` 精确脉冲 1 次）。遵循与 `tb_mxu_perf.v` 相同的模式。
 
-2. **`CaduceusCore/rtl/tb/tb_vector_perf.v`**：扩展 `tb_vector.v`。添加每 FSM 状态周期计数器（13 状态 FSM + `cnt_TOTAL`）。添加块计数器。添加 PERF 发射任务。添加反真空断言。
+2. **`CaduceusCore/rtl/tb/tb_vector_perf.v`**：扩展 `tb_vector.v`。添加每 FSM 状态周期计数器（13 状态 FSM + `cnt_TOTAL`）。添加块计数器。添加 PERF 发射任务。添加反真空断言（`sram_a_en`/`sram_b_en` 切换, `sram_o_wen` 切换, `status_done` 精确脉冲 1 次）。
 
-3. **`CaduceusCore/scripts/analyze_sfu_perf.py`**：SFU 周期公式 + VCS PERF 日志解析器。判决逻辑：流式操作 `|delta| ≤ 1`，规约操作 `|delta| ≤ 5`。
+3. **`CaduceusCore/scripts/analyze_sfu_perf.py`**：SFU 周期公式 + VCS PERF 日志解析器。导出每个操作的 `expected_cycles()`。解析标准化的 `PERF|case=X|event=E|cycles=N` 行。判决逻辑：流式操作 `|delta| ≤ 1`，规约操作 `|delta| ≤ 5`。
 
-4. **`CaduceusCore/scripts/analyze_vector_perf.py`**：Vector 周期公式 + VCS PERF 日志解析器。判决逻辑：`|delta| ≤ 1`。
+4. **`CaduceusCore/scripts/analyze_vector_perf.py`**：Vector 周期公式 + VCS PERF 日志解析器。导出每个操作和 DIM 的 `expected_cycles()`。判决逻辑：`|delta| ≤ 1`。
 
-5. **`CaduceusCore/scripts/run_sfu_perf_case.py`**：gen_vectors → SCP → VCS compile → simulate → compare_rtl → analyze_perf → evidence → commit。
+5. **`CaduceusCore/scripts/run_sfu_perf_case.py`**：与 `run_mxu_perf_case.py` 相同的步骤管道（gen_vectors → SCP → VCS compile → simulate → compare_rtl → analyze_perf → evidence → commit）。仅将引擎特定的路径和命令适配到 SFU。
 
-6. **`CaduceusCore/scripts/run_vector_perf_case.py`**：同管道，适配 Vector 引擎。
+6. **`CaduceusCore/scripts/run_vector_perf_case.py`**：与上面对 Vector 引擎的适配相同。
 
 ### Git 规则（zartbot 模式）
 
@@ -232,24 +232,32 @@ commit 格式: `[SFV-PXX] ⬜ → STATUS | result description`
   - 每完成一个 case（无论 PASS/FAIL）立即 commit
   - 不允许批量攒多个 case 再 commit
   - 修复后重新测试也要单独 commit
+  - `git log testcase-list-sfu-vector-perf.md` = 完整测试执行时间线
 
 ### PERF 行格式（跨引擎标准化）
+
+所有引擎必须使用完全相同的 `$display` 格式：
 
 ```
 PERF|case={case_id}|shape/op={params}|event={event_name}|cycles={count}
 ```
 
-- SFU: `op={op_name},dim={N}`（例如 `op=softmax,dim=64`）
-- Vector: `op={op_name},dim={N}`（例如 `op=add,dim=128`）
+对于每个引擎，{params} 替换为：
+- SFU: `op={op_name},dim={N}`（例如，`op=softmax,dim=64`）
+- Vector: `op={op_name},dim={N}`（例如，`op=add,dim=128`）
 - SFU RoPE 扩展: `op=rope,dim={N},pos={P}`（例如，`op=rope,dim=64,pos=42`）
 
 **VCS 版本**: SFU/Vector 必须使用 `vcs/vcs_2023.12sp2`（W-2024.09-SP2 在 EDA 服务器上存在 `rmapats.so` 编译错误；参见 `rtl/sfu/README.md:165` 和 `rtl/vector/README.md:128`）
 
+这确保 `analyze_sfu_perf.py` 和 `analyze_vector_perf.py` 可以共享相同的正则表达式解析器。
+
 ### 反真空断言（每个引擎）
+
+每个性能测试平台必须验证 DUT 确实在做工作：
 
 | 引擎 | 断言 |
 |--------|----------|
-| SFU | `sram_ren` 切换 ≥ N/2 次。`sram_wen` 切换 ≥ N/2 次。`status_done` 精确脉冲 1 次。`status_busy` 在 CMD 后 2 cycles 内上升 |
+| SFU | `sram_ren` 在操作期间切换 ≥ N/2 次（每字 2 个元素）。`sram_wen` 在操作期间切换 ≥ N/2 次。`status_done` 精确脉冲 1 次。`status_busy` 在 CMD 后的 2 cycles 内上升 |
 | Vector | `sram_a_en` 切换 ≥ ceil(N/128) 次。`sram_o_wen` 切换 ≥ ceil(NElemOutput/128) 次。对于 SUM：`reduce_valid_o` 每个块脉冲 1 次。`status_done` 精确脉冲 1 次 |
 
 ---
