@@ -176,6 +176,38 @@ FM-SOC-027 在 P2+P3 回归中 PASS；P2+P3 全部 10 个 active cases PASS（10
 
 ---
 
+## BUG-RTL-SOC-006 — SFU wrapper start_hold blocks CMD.START when I_ADDR prefetch in progress; npu_wait_done returns immediately on idle engine
+
+| Field | Value |
+|-------|-------|
+| **ID** | BUG-RTL-SOC-006 |
+| **Severity** | Major |
+| **Type** | RTL (SFU wrapper) + Firmware false-completion |
+| **Status** | Open |
+
+#### Symptom
+
+FM-SOC-026 (3-command chain: MMUL→SFU softmax→Vector add) FAILs: SFU softmax output at DRAM 0x80121000 is all zeros. SRAM debug shows no SFU_WRP write to `SFU_SCRATCH_OUT` (0x20080400). NPU_HEAD=3 confirms firmware dispatched all 3 commands. Single-command SFU case (FM-SOC-011) passes.
+
+#### Root Cause
+
+1. **SFU wrapper `start_hold` race**: When firmware writes `I_ADDR`, the wrapper starts an AXI prefetch (reads 64B line from crossbar→SRAM). `start_hold` gates ALL MMIO writes to `sfu_top` during prefetch (`start_hold_set = apb_wr_start && !i_addr_cached`). If the firmware writes `CMD.START` before the prefetch completes, `start_hold`=1 and the START write never reaches `sfu_top`. The SFU never starts computation.
+
+2. **`npu_wait_done` false completion**: The firmware's `npu_wait_done()` spins `while (*status_reg & 1)` — i.e., waits while BUSY bit is set. If the engine was never started (because START was blocked), STATUS[0] = 0 (IDLE), and `npu_wait_done` returns immediately. Firmware proceeds to DMA-copy the (non-existent) output → all zeros.
+
+3. **Why FM-SOC-011 passes**: FM-SOC-011 is a single-command case. The timing between `I_ADDR` and `CMD.START` depends on how many writes the firmware issues between them. In single-command mode, the timing may be more favorable (fewer register writes → START arrives sooner → race window smaller).
+
+#### Fix plan
+
+- RTL: Extend `start_hold` to also latch the pending START command, replaying it when `start_hold` clears. Alternative: split the `sfu_mmio_we_gated` gate to only block START, not CTRL/I_ADDR/O_ADDR/DIM.
+- Firmware workaround: Insert a small delay or poll I_ADDR mirror before writing START, ensuring the prefetch has completed.
+
+#### Verification
+
+FM-SOC-026 re-run after BUG-RTL-SOC-004 fix + `dram_mb=8` runner fix (2026-07-05): FAIL with same symptom. MMUL and Vector ops in the chain work; only SFU softmax output is zero. No SFU_WRP writes observed in SRAM debug log.
+
+---
+
 ## BUG-RTL-SOC-005 — SFU/Vector wrapper X-propagation from DRAM padding makes P4 chain non-deterministic
 
 | Field | Value |
