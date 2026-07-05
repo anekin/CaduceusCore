@@ -261,15 +261,15 @@ P3:        8 cases (boundary — APB, DMA, Ibex, firmware, dimension, zero-vecto
 P4:        5 cases (full E2E, multi-engine pipeline, 28-block full-layer chain, host→PCIe→doorbell→firmware→17-op blk.0)
 ─────────────────────
 
-### Status Counts
+### RTL Status Counts (after Todo 11 full regression)
 
-| Status | Count |
-|--------|:-----:|
-| Total  | 33    |
-| ✅ PASS | 22    |
-| ❌ FAIL | 0     |
-| ⏸️ SKIP | 3     |
-| ⬜ TODO | 8     |
+| Status | Count | Case IDs |
+|--------|:-----:|----------|
+| Total  | 33    | — |
+| ✅ PASS | 27    | FM-SOC-001..013, 017..020, 024..032, 10X |
+| ❌ FAIL | 0     | — |
+| ⏸️ SKIP | 6     | FM-SOC-014/015/016 (superseded by FM-SOC-027/032), FM-SOC-021/022/023 (superseded by FM-SOC-032/10X) |
+| ⬜ TODO | 0     | — |
 
-覆盖率:    22/33 cases PASS (66.7%), 0 FAIL, 3 SKIP (FM-SOC-021/022/023), 8 TODO
-Data path: 13/13 covered (100% — every path has at least one ✅ case)
+覆盖率:    27/33 RTL cases PASS (81.8%), 0 FAIL, 6 SKIP, 0 TODO; all 13 data paths covered.
+Func Model status column retains its original 22 ✅ / 0 ❌ / 3 ⏸️ / 8 ⬜ counts (independent of RTL).
