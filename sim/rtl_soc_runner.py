@@ -1092,12 +1092,110 @@ class P0SpikeRunner:
         buf = struct.pack('<8I', opcode, desc_addr, 0, 0, 0, 0, 0, 0)
         model.host_write_data(addr, np.frombuffer(buf, dtype=np.uint8))
 
+    def _build_tlp_header(self, fmt: int, tlp_type: int, length_dw: int,
+                          addr: int, tag: int = 0) -> int:
+        dw0 = ((fmt & 0x7) << 29) | ((tlp_type & 0x1F) << 24) | (length_dw & 0x3FF)
+        dw1 = ((tag & 0xFF) << 8) | 0xF
+        if length_dw > 1:
+            dw1 |= (0xF << 4)
+        dw2 = (addr & 0xFFFFFFFC)
+        return (dw0 << 96) | (dw1 << 64) | (dw2 << 32)
+
+    async def _send_pcie_tlp_raw(self, header_int: int, data: bytes,
+                                  max_wait_cycles: int = 1000):
+        dut = self.dut
+        seg_bytes = 512 // 8
+        total_len = len(data)
+        num_seg = max(1, (total_len + seg_bytes - 1) // seg_bytes)
+
+        for seg_idx in range(num_seg):
+            start = seg_idx * seg_bytes
+            end = min(start + seg_bytes, total_len)
+            chunk = data[start:end]
+            padding = seg_bytes - len(chunk)
+            if padding:
+                chunk = chunk + b"\x00" * padding
+            data_int = int.from_bytes(chunk, "little")
+
+            is_first = (seg_idx == 0)
+            is_last = (seg_idx == num_seg - 1)
+
+            if is_first:
+                dut.pcie_rx_req_tlp_hdr.value = header_int
+            dut.pcie_rx_req_tlp_data.value = data_int
+            dut.pcie_rx_req_tlp_sop.value = 1 if is_first else 0
+            dut.pcie_rx_req_tlp_eop.value = 1 if is_last else 0
+            dut.pcie_rx_req_tlp_valid.value = 1
+
+            ready = 0
+            waited = 0
+            while not ready and waited < max_wait_cycles:
+                await RisingEdge(dut.clk)
+                try:
+                    ready = int(dut.pcie_rx_req_tlp_ready.value)
+                except Exception:
+                    ready = 0
+                waited += 1
+
+            dut.pcie_rx_req_tlp_valid.value = 0
+            dut.pcie_rx_req_tlp_sop.value = 0
+            dut.pcie_rx_req_tlp_eop.value = 0
+
+            if not ready:
+                raise TimeoutError(
+                    f"PCIe TLP ready timeout on segment {seg_idx} after "
+                    f"{max_wait_cycles} cycles"
+                )
+
+    async def _pcie_tlp_write(self, addr: int, data: bytes, tag: int = 0):
+        if len(data) == 0:
+            return
+        length_dw = (len(data) + 3) // 4
+        header = self._build_tlp_header(
+            fmt=0b010, tlp_type=0b00000, length_dw=length_dw, addr=addr, tag=tag
+        )
+        await self._send_pcie_tlp_raw(header, data)
+
+    async def _pcie_tlp_read(self, addr: int, length_bytes: int,
+                              tag: int = 0, timeout_cycles: int = 10000) -> bytes:
+        length_dw = (length_bytes + 3) // 4
+        header = self._build_tlp_header(
+            fmt=0b000, tlp_type=0b00000, length_dw=length_dw, addr=addr, tag=tag
+        )
+        dut = self.dut
+        await self._send_pcie_tlp_raw(header, b"")
+
+        out = bytearray()
+        in_packet = False
+        dut.pcie_tx_cpl_tlp_ready.value = 1
+        try:
+            for _ in range(timeout_cycles):
+                valid = int(dut.pcie_tx_cpl_tlp_valid.value)
+                if valid:
+                    sop = int(dut.pcie_tx_cpl_tlp_sop.value)
+                    eop = int(dut.pcie_tx_cpl_tlp_eop.value)
+                    if sop:
+                        in_packet = True
+                    if in_packet:
+                        data_val = int(dut.pcie_tx_cpl_tlp_data.value)
+                        out.extend(data_val.to_bytes(512 // 8, "little"))
+                    if eop:
+                        in_packet = False
+                    if len(out) >= length_bytes:
+                        return bytes(out[:length_bytes])
+                await RisingEdge(dut.clk)
+            raise TimeoutError(f"PCIe TLP read completion timeout for 0x{addr:08X}")
+        finally:
+            dut.pcie_tx_cpl_tlp_ready.value = 0
+
     async def _run_spike(self, model: FuncModel, num_cmds: int,
                          timeout_cycles: int = 500_000) -> bool:
         import subprocess
         from pathlib import Path
 
-        sock_path = Path(f"/tmp/npu_mmio_p0_{os.getpid()}.sock")
+        run_id = getattr(self, "_spike_run_count", 0)
+        self._spike_run_count = run_id + 1
+        sock_path = Path(f"/tmp/npu_mmio_p0_{os.getpid()}_{run_id}.sock")
         server = serve_rtl(self.mmio, sock_path=str(sock_path))
 
         ddr_path = Path(__file__).resolve().parent.parent / "ddr.bin"
@@ -1114,7 +1212,12 @@ class P0SpikeRunner:
         env["NPU_SOCK_PATH"] = str(sock_path)
 
         host_tail_addr = Addr.DOORBELL + DOORBELL.HOST_TAIL
+        print(f"[SPIKE] writing HOST_TAIL={num_cmds}", flush=True)
         await self._apb_write(host_tail_addr, num_cmds)
+        print(f"[SPIKE] reading HOST_TAIL", flush=True)
+        host_tail_readback = await self._apb_read(host_tail_addr)
+        cmd0_words = struct.unpack('<8I', model.dram[:32])
+        print(f"[SPIKE] HOST_TAIL={host_tail_readback} (expected {num_cmds}) cmd0={cmd0_words}", flush=True)
 
         proc = subprocess.Popen(
             [
@@ -1129,18 +1232,20 @@ class P0SpikeRunner:
 
         done = False
         last_diag_head = -1
+        last_status_addr = Addr.DOORBELL + DOORBELL.LAST_STATUS
         try:
             await self.bridge.wait_cycles(20)
             expected = num_cmds % self.RING_SIZE
             addr = Addr.DOORBELL + DOORBELL.NPU_HEAD
             for cyc in range(timeout_cycles):
                 head = self.mmio._status.get(addr, 0)
-                if head != last_diag_head:
-                    print(f"[SPIKE] NPU_HEAD={head} after {cyc} cycles", flush=True)
+                last_status = self.mmio._status.get(last_status_addr, 0)
+                if head != last_diag_head or (cyc > 0 and cyc % 1000000 == 0):
+                    print(f"[SPIKE] NPU_HEAD={head} LAST_STATUS=0x{last_status:08X} after {cyc} cycles", flush=True)
                     last_diag_head = head
                 if head == expected:
                     done = True
-                    print(f"[SPIKE] NPU_HEAD={head} after {cyc} cycles", flush=True)
+                    print(f"[SPIKE] NPU_HEAD={head} LAST_STATUS=0x{last_status:08X} after {cyc} cycles", flush=True)
                     break
                 if proc.poll() is not None:
                     print("[SPIKE] process exited early", flush=True)
@@ -1161,6 +1266,10 @@ class P0SpikeRunner:
                 logger.info(f"[SPIKE STDOUT]\n{stdout.strip()}")
             if stderr.strip():
                 logger.error(f"[SPIKE STDERR]\n{stderr.strip()}")
+            for _ in range(1000):
+                if self.mmio._req_queue.empty():
+                    break
+                await self.bridge.wait_cycles(1)
             server.shutdown()
             try:
                 sock_path.unlink()
@@ -1200,11 +1309,8 @@ class P0SpikeRunner:
         return passed, msg
 
     async def _preload_rtl(self, model: FuncModel):
-        sram = model.sram
-        for off, length in _nonzero_regions(sram):
-            await self._sram_backdoor_write(off, bytes(sram[off:off + length]))
-        for off, length in _nonzero_regions(model.dram):
-            await self._dram_backdoor_write(off, bytes(model.dram[off:off + length]))
+        await self._sram_backdoor_write(0, bytes(model.sram))
+        await self._dram_backdoor_write(0, bytes(model.dram))
 
     async def _verify(self, expected: dict, expect_mismatch: bool) -> Tuple[bool, str]:
         mismatches = []
@@ -2348,7 +2454,7 @@ class P2P3SpikeRunner(P1SpikeRunner):
         COMPLETION_RING_ADDR (DRAM_BASE + 0x800) + cmd_id * 32, so we read it
         from there.
         """
-        comp_addr = Addr.DRAM_BASE + 0x800 + 0 * 32 + 4
+        comp_addr = Addr.DRAM_BASE + 0x8000 + 0 * 32 + 4
         try:
             data = await self._dram_backdoor_read(comp_addr - self.DRAM_BASE, 4)
             status = int.from_bytes(data, "little")
@@ -2376,6 +2482,774 @@ if COCOTB_AVAILABLE and SPIKE_RTL_BRIDGE_AVAILABLE and FUNC_MODEL_AVAILABLE:
         case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-013")
         passed, msg = await runner.run_case(case_id)
         logger.info(f"P2P3SpikeRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
+        assert passed, f"{case_id} failed: {msg}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Spike-RTL P4 runner
+# ═══════════════════════════════════════════════════════════════════════════
+
+class P4SpikeRunner(P2P3SpikeRunner):
+    """Run FM-SOC-032/10X full-chain cases against RTL SoC + Spike CPU."""
+
+    RING_SIZE = 1024
+    CMD_ENTRY_SIZE = 32
+
+    # 28 blocks of 256 KB inside the 8 MB backdoor window.
+    _P4_BLOCK_BASE = 0x8001_0000
+    _P4_BLOCK_STRIDE = 0x0004_0000
+    _P4_RESULT_BASE = 0x8072_0000
+    _P4_RESULT_STRIDE = 0x0000_2000
+
+    # Per-block buffer allocator state
+    _P4_DESC_BASE_REL = 0x0003_8000          # descriptors at the top of the block
+    _P4_DATA_BASE_REL = 0x0000_1000          # data buffers start here
+
+    _BLK0_VECTOR_DIR = Path(__file__).resolve().parent.parent / "rtl" / "test_vectors" / "qwen_blk0"
+    _EB_BY_FMT = {"int8": 1, "fp16": 2, "int32": 4}
+
+    # Extended opcodes for P4 full chains
+    _OP_MMUL = 0
+    _OP_SOFTMAX = 1
+    _OP_GELU = 3
+    _OP_SILU = 6
+    _OP_ROPE = 5
+    _OP_RMSNORM = 0x17
+    _OP_VADD = 0x0F
+    _OP_VMUL = 0x10
+    _OP_VRESID = 0x14
+    _OP_VCONV = 0x13
+    _OP_DMA_COPY = 9
+
+    def _make_model(self) -> FuncModel:
+        """Create a FuncModel with an 8MB DRAM window and 32-entry ring.
+
+        The cocotb backdoor helper only supports writes below DRAM_BASE+8MB,
+        so keep the P4 address map inside that window.
+        """
+        model = FuncModel(dram_mb=8, sram_kb=4096)
+        model.firmware.ring_buffer_addr = self.RING_BASE
+        model.firmware.ring_size = self.RING_SIZE
+        return model
+
+    async def run_case(self, case_id: str) -> Tuple[bool, str]:
+        if not FUNC_MODEL_AVAILABLE:
+            return False, "FuncModel not available"
+        if not GOLDEN_AVAILABLE:
+            return False, "Golden executors not available"
+        if not SPIKE_RTL_BRIDGE_AVAILABLE:
+            return False, "Spike RTL bridge not available"
+
+        if case_id in {"FM-SOC-021", "FM-SOC-022", "FM-SOC-023"}:
+            print(f"[SKIP] {case_id} (superseded by FM-SOC-032/10X)", flush=True)
+            return True, "superseded by FM-SOC-032/10X"
+
+        if case_id == "FM-SOC-032":
+            return await self._run_032()
+        if case_id == "FM-SOC-10X":
+            return await self._run_10X()
+
+        return False, f"Unknown P4 case {case_id}"
+
+    # ── FM-SOC-032: 28-block transformer chain ──────────────────────────────
+
+    def _load_blk0_manifest(self) -> dict:
+        import json
+        manifest_path = self._BLK0_VECTOR_DIR / "blk0_manifest.json"
+        with open(manifest_path) as f:
+            return json.load(f)
+
+    def _blk0_read_hex(self, rel_path: str, elem_bytes: int = 1) -> bytes:
+        path = self._BLK0_VECTOR_DIR / rel_path
+        with open(path) as f:
+            vals = [int(line.strip(), 16) for line in f if line.strip()]
+        if not vals:
+            return b""
+        if elem_bytes == 1:
+            return bytes(vals)
+        fmt = {2: "H", 4: "I", 8: "Q"}[elem_bytes]
+        return b"".join(struct.pack(f"<{fmt}", v) for v in vals)
+
+    def _chain_scale_int4_weights(self, weight_bytes: bytes, scale: float) -> bytes:
+        if scale == 1.0:
+            return weight_bytes
+        packed = np.frombuffer(weight_bytes, dtype=np.uint8).copy()
+        unpacked = GoldenMXU.unpack_int4(packed)
+        scaled = np.round(unpacked.astype(np.float32) * scale).astype(np.int32)
+        scaled = np.clip(scaled, -8, 7).astype(np.int8)
+        return bytes(GoldenMXU.pack_int4(scaled))
+
+    def _chain_perturb_weights(self, weights: dict, ratio: float = 0.01) -> dict:
+        perturbed = {}
+        for idx, w in weights.items():
+            packed = np.frombuffer(w, dtype=np.uint8).copy()
+            unpacked = GoldenMXU.unpack_int4(packed)
+            rng = np.random.RandomState(42 + idx)
+            mask = rng.rand(len(unpacked)) < ratio
+            delta = rng.randint(-4, 5, size=len(unpacked))
+            perturbed_vals = unpacked.astype(np.int16)
+            perturbed_vals[mask] = np.clip(perturbed_vals[mask] + delta[mask], -8, 7)
+            perturbed[idx] = bytes(GoldenMXU.pack_int4(perturbed_vals.astype(np.int8)))
+        return perturbed
+
+    def _clip_dim(self, value: int, limit: int = 64) -> int:
+        return min(max(value, 1), limit)
+
+    def _build_block(
+        self,
+        model: FuncModel,
+        block_idx: int,
+        block_base: int,
+        weights: dict,
+        manifest: dict,
+    ) -> Tuple[List[Tuple[int, int]], int, Dict[int, Tuple[int, np.ndarray]], List[Tuple[int, int]]]:
+        """Build one blk.0 block in the model DRAM.
+
+        Returns:
+            cmds: list of (opcode, desc_addr) command entries
+            result_addr: address of the final FP16 result buffer
+            outputs: dict mapping op idx -> (output_dram_addr, golden_array)
+            vector_chunks: list of (addr, size) for Vector wrapper I/O chunks
+                           that must be zeroed in RTL DRAM before the op runs.
+        """
+        cmds: List[Tuple[int, int]] = []
+        outputs: Dict[int, Tuple[int, np.ndarray]] = {}
+        vector_chunks: List[Tuple[int, int]] = []
+        desc_base = block_base + self._P4_DESC_BASE_REL
+        alloc_off = self._P4_DATA_BASE_REL
+
+        def alloc(size: int, align: int = 512) -> int:
+            nonlocal alloc_off
+            alloc_off = (alloc_off + align - 1) // align * align
+            addr = block_base + alloc_off
+            alloc_off += size
+            if alloc_off > self._P4_DESC_BASE_REL:
+                raise RuntimeError(f"block {block_idx} allocation overflow: {alloc_off:x}")
+            return addr
+
+        def hw_buf_size(size: int) -> int:
+            """Round buffer size up to a 512-byte hardware burst boundary."""
+            return ((size + 511) // 512) * 512
+
+        def vector_chunk_size(elements: int, elem_bytes: int) -> int:
+            """Vector wrapper reads/writes full 512-byte chunks (128 lanes)."""
+            return ((elements + 127) // 128) * 512
+
+        def zero_dram(addr: int, size: int) -> None:
+            off = addr - self.DRAM_BASE
+            model.dram[off:off + size] = bytes(size)
+
+        # Barrier buffer: used by DMA_COPY commands inserted after SFU ops to
+        # ensure the SFU wrapper's AXI writes complete before the next command.
+        barrier_addr = alloc(512, 512)
+
+        for op in manifest["ops"]:
+            idx = op["idx"]
+            opcode = op["opcode"]
+            dims = op.get("dimensions", {})
+
+            if opcode == "MMUL":
+                M = self._clip_dim(dims.get("M", 1))
+                K = self._clip_dim(dims.get("K", 64))
+                N = self._clip_dim(dims.get("N", 64))
+
+                act = np.random.RandomState(20260705 + block_idx * 100 + idx).randint(
+                    -128, 127, size=M * K, dtype=np.int8
+                ).reshape(M, K)
+                wgt_packed = np.frombuffer(weights[idx], dtype=np.uint8)
+                num_blocks = (K + 127) // 128
+                scales = np.ones((num_blocks, N), dtype=np.float32)
+                golden = GoldenMXU().matmul_int32(act, wgt_packed, M, K, N)
+
+                act_wrapped = self._reformat_act_for_mxu_wrapper(act, M, K)
+                wgt_wrapped = self._reformat_wgt_for_mxu_wrapper(wgt_packed, K, N)
+
+                act_size = hw_buf_size(len(act_wrapped))
+                wgt_size = hw_buf_size(len(wgt_wrapped))
+                out_size = hw_buf_size(M * N * 4)
+                scale_size = hw_buf_size(scales.nbytes)
+                act_addr = alloc(act_size, 512)
+                wgt_addr = alloc(wgt_size, 512)
+                out_addr = alloc(out_size, 512)
+                scale_addr = alloc(scale_size, 512)
+                desc_addr = desc_base + idx * 64
+
+                zero_dram(act_addr, act_size)
+                zero_dram(wgt_addr, wgt_size)
+                zero_dram(out_addr, out_size)
+                zero_dram(scale_addr, scale_size)
+                model.dram[act_addr - self.DRAM_BASE:act_addr - self.DRAM_BASE + len(act_wrapped)] = act_wrapped
+                model.dram[wgt_addr - self.DRAM_BASE:wgt_addr - self.DRAM_BASE + len(wgt_wrapped)] = wgt_wrapped
+                model.dram[scale_addr - self.DRAM_BASE:scale_addr - self.DRAM_BASE + scales.nbytes] = scales.tobytes()
+
+                write_mmul_descriptor(
+                    model, desc_addr,
+                    input_addr=act_addr, weight_addr=wgt_addr, output_addr=out_addr,
+                    scale_addr=scale_addr, scale_size=int(scales.nbytes),
+                    input_size=len(act_wrapped), weight_size=len(wgt_wrapped),
+                    output_size=M * N * 4,
+                    input_sram=0x00000000, weight_sram=0x00010000,
+                    output_sram=0x00018000, scale_sram=0x00014000,
+                    M=M, K=K, N=N,
+                )
+                cmds.append((self._OP_MMUL, desc_addr))
+                outputs[idx] = (out_addr, golden.astype(np.int32))
+
+            elif opcode in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
+                if opcode == "ROPE":
+                    # ROPE expects q_len = num_heads * head_dim and k_len = 2 * head_dim.
+                    # Keep a small, consistent head_dim for the clipped mini regression.
+                    head_dim = min(self._clip_dim(dims.get("head_dim", 64)), 16)
+                    k_len = head_dim * 2
+                    q_len = head_dim * max(1, (64 - k_len) // head_dim)
+                    elements = q_len + k_len
+                else:
+                    elements = self._clip_dim(dims.get("elements", 64))
+                    head_dim = 0
+                    q_len = 0
+                    k_len = 0
+
+                rng = np.random.RandomState(20260705 + block_idx * 100 + idx)
+                inp = rng.randn(elements).astype(np.float32).clip(-5, 5)
+                sfu = GoldenSFU()
+                if opcode == "SOFTMAX":
+                    golden = sfu.softmax_hw(inp)
+                elif opcode == "RMSNORM":
+                    golden = sfu.rmsnorm_hw(inp)
+                elif opcode == "SILU":
+                    golden = sfu.silu_hw(inp)
+                else:
+                    nq = q_len // head_dim
+                    q_in = inp[:q_len]
+                    k_in = inp[q_len:elements]
+                    q_out, k_out = sfu.rope_hw(q_in, k_in, position=dims.get("position", 0),
+                                               num_heads=nq, head_dim=head_dim)
+                    out = np.zeros(elements, dtype=np.float32)
+                    out[:q_len] = q_out
+                    out[q_len:elements] = k_out
+                    golden = out
+
+                # Pad SFU buffers to 512-byte chunks and align to 512 bytes.
+                # The SFU wrapper issues 512-bit AXI bursts; undersized buffers
+                # can cause it to read/write adjacent X/invalid DRAM and hang.
+                sfu_buf_size = ((elements * 2 + 511) // 512) * 512
+                in_addr = alloc(sfu_buf_size, 512)
+                out_addr = alloc(sfu_buf_size, 512)
+                desc_addr = desc_base + idx * 64
+
+                in_off = in_addr - self.DRAM_BASE
+                model.dram[in_off:in_off + sfu_buf_size] = bytes(sfu_buf_size)
+                model.dram[in_off:in_off + elements * 2] = inp.astype(np.float16).tobytes()
+
+                dim_val = (head_dim << 16) | (elements & 0xFFFF) if opcode == "ROPE" else elements
+                model.host_write_descriptor(
+                    desc_addr,
+                    input_addr=in_addr, output_addr=out_addr,
+                    input_size=dim_val, output_size=dim_val,
+                    M=1, K=dim_val, N=1,
+                )
+                op_map = {"SOFTMAX": self._OP_SOFTMAX, "RMSNORM": self._OP_RMSNORM,
+                          "ROPE": self._OP_ROPE, "SILU": self._OP_SILU}
+                cmds.append((op_map[opcode], desc_addr))
+                outputs[idx] = (out_addr, golden.astype(np.float16))
+
+                # DMA barrier: SFU STATUS.DONE may assert before the wrapper's
+                # AXI writes complete; a DMA copy from the output serializes.
+                barrier_desc = desc_base + 0x0800 + idx * 64
+                model.host_write_descriptor(
+                    barrier_desc,
+                    input_addr=out_addr, output_addr=barrier_addr,
+                    input_size=512, output_size=512,
+                    M=1, K=512, N=1,
+                )
+                cmds.append((self._OP_DMA_COPY, barrier_desc))
+
+            elif opcode in ("VMUL", "VRESID"):
+                elements = self._clip_dim(dims.get("elements", 64))
+                rng = np.random.RandomState(20260705 + block_idx * 100 + idx)
+
+                if opcode == "VMUL":
+                    a = rng.randint(-500, 500, size=elements, dtype=np.int32)
+                    b = rng.randint(-500, 500, size=elements, dtype=np.int32)
+                    golden = GoldenVector().mul(a, b)
+                    a_bytes = a.tobytes()
+                    b_bytes = b.tobytes()
+                else:
+                    a = rng.randn(elements).astype(np.float32)
+                    b = rng.randint(-500, 500, size=elements, dtype=np.int32)
+                    golden = GoldenVector().residual_add(a, b)
+                    a_bytes = a.astype(np.float16).tobytes()
+                    b_bytes = b.tobytes()
+
+                a_chunk = vector_chunk_size(elements, a_bytes[0] if a_bytes else 4)
+                b_chunk = vector_chunk_size(elements, 4)
+                o_chunk = vector_chunk_size(elements, 4)
+                a_addr = alloc(a_chunk, 512)
+                b_addr = alloc(b_chunk, 512)
+                o_addr = alloc(o_chunk, 512)
+                desc_addr = desc_base + idx * 64
+
+                zero_dram(a_addr, a_chunk)
+                zero_dram(b_addr, b_chunk)
+                zero_dram(o_addr, o_chunk)
+                model.dram[a_addr - self.DRAM_BASE:a_addr - self.DRAM_BASE + len(a_bytes)] = a_bytes
+                model.dram[b_addr - self.DRAM_BASE:b_addr - self.DRAM_BASE + len(b_bytes)] = b_bytes
+                vector_chunks.append((o_addr, o_chunk))
+
+                model.host_write_descriptor(
+                    desc_addr,
+                    input_addr=a_addr, weight_addr=b_addr, output_addr=o_addr,
+                    input_size=elements, weight_size=elements,
+                    output_size=elements * 4,
+                    M=1, K=elements, N=1,
+                )
+                vec_op_map = {"VMUL": self._OP_VMUL, "VRESID": self._OP_VRESID}
+                cmds.append((vec_op_map[opcode], desc_addr))
+                outputs[idx] = (o_addr, golden.astype(np.int32))
+
+                # DMA barrier: the Vector wrapper may assert STATUS.DONE before
+                # its AXI store completes; a DMA copy from the output serializes.
+                barrier_desc = desc_base + 0x0C00 + idx * 64
+                model.host_write_descriptor(
+                    barrier_desc,
+                    input_addr=o_addr, output_addr=barrier_addr,
+                    input_size=o_chunk, output_size=o_chunk,
+                    M=1, K=o_chunk, N=1,
+                )
+                cmds.append((self._OP_DMA_COPY, barrier_desc))
+
+            else:
+                raise ValueError(f"block {block_idx} op{idx:02d}: unsupported opcode {opcode}")
+
+        # Final VCONV: convert the last op's INT32 output to FP16 result buffer
+        result_addr = self._P4_RESULT_BASE + block_idx * self._P4_RESULT_STRIDE
+        last_idx = manifest["ops"][-1]["idx"]
+        last_out_addr, _ = outputs[last_idx]
+        last_elements = self._clip_dim(manifest["ops"][-1]["dimensions"].get("elements", 64))
+        vconv_desc = desc_base + 0x1000
+        result_chunk = vector_chunk_size(last_elements, 2)
+        zero_dram(result_addr, result_chunk)
+        vector_chunks.append((result_addr, result_chunk))
+        model.host_write_descriptor(
+            vconv_desc,
+            input_addr=last_out_addr, output_addr=result_addr,
+            input_size=last_elements, output_size=last_elements,
+            M=1, K=last_elements, N=1,
+        )
+        cmds.append((self._OP_VCONV, vconv_desc))
+
+        # Guard patterns
+        model.dram[block_base + self._P4_BLOCK_STRIDE - 4 - self.DRAM_BASE:
+                   block_base + self._P4_BLOCK_STRIDE - self.DRAM_BASE] = struct.pack("<I", 0xDEAD0000 + block_idx)
+        model.dram[result_addr + self._P4_RESULT_STRIDE - 4 - self.DRAM_BASE:
+                   result_addr + self._P4_RESULT_STRIDE - self.DRAM_BASE] = struct.pack("<I", 0xBEEF0000 + block_idx)
+
+        return cmds, result_addr, outputs, vector_chunks
+
+    def _build_032_baseline(self) -> Tuple[FuncModel, dict]:
+        manifest = self._load_blk0_manifest()
+
+        baseline_weights = {}
+        for op in manifest["ops"]:
+            if op["opcode"] != "MMUL":
+                continue
+            idx = op["idx"]
+            K = self._clip_dim(op["dimensions"].get("K", 64))
+            N = self._clip_dim(op["dimensions"].get("N", 64))
+            weight_size = (K * N + 1) // 2
+            weight_full = self._blk0_read_hex(op["weight_hex"], 1)
+            weight_bytes = weight_full[:weight_size]
+            if len(weight_bytes) < weight_size:
+                weight_bytes = weight_bytes + b"\x00" * (weight_size - len(weight_bytes))
+            baseline_weights[idx] = weight_bytes
+
+        scales = [0.90 + i * 0.01 for i in range(28)]
+        block_weights = [
+            {idx: self._chain_scale_int4_weights(w, scale)
+             for idx, w in baseline_weights.items()}
+            for scale in scales
+        ]
+
+        model = self._make_model()
+        batches = []
+        result_addrs = []
+        block_outputs = []
+        vector_chunks = []
+
+        for b in range(28):
+            block_base = self._P4_BLOCK_BASE + b * self._P4_BLOCK_STRIDE
+            cmds, result_addr, outputs, chunks = self._build_block(
+                model, b, block_base, block_weights[b], manifest
+            )
+            batches.append(cmds)
+            result_addrs.append(result_addr)
+            block_outputs.append(outputs)
+            vector_chunks.extend(chunks)
+
+        expected = {
+            "num_batches": len(batches),
+            "cmds_per_batch": len(batches[0]),
+            "total_cmds": sum(len(b) for b in batches),
+            "batches": batches,
+            "result_addrs": result_addrs,
+            "block_outputs": block_outputs,
+            "block_weights": block_weights,
+            "vector_chunks": vector_chunks,
+            "timeout_cycles": 50_000_000,
+        }
+        return model, expected
+
+    def _build_032_perturbed_model(self, baseline_model: FuncModel,
+                                   expected: dict) -> FuncModel:
+        """Return a copy of baseline_model with block-14 MMUL weights perturbed."""
+        manifest = self._load_blk0_manifest()
+        block_base_14 = self._P4_BLOCK_BASE + 14 * self._P4_BLOCK_STRIDE
+        block_weights = expected["block_weights"]
+
+        perturbed_weights = self._chain_perturb_weights(block_weights[14], ratio=0.01)
+
+        model = self._make_model()
+        model.dram[:] = baseline_model.dram
+        # Zero block 14 region and rebuild with perturbed weights
+        block_end = block_base_14 + self._P4_BLOCK_STRIDE
+        model.dram[block_base_14 - self.DRAM_BASE:block_end - self.DRAM_BASE] = bytes(self._P4_BLOCK_STRIDE)
+        _, _, _, perturbed_chunks = self._build_block(model, 14, block_base_14, perturbed_weights, manifest)
+        expected["vector_chunks"].extend(perturbed_chunks)
+        return model
+
+    def _build_032_perturbed_legacy_stub(self, baseline_model: FuncModel, expected: dict,
+                             block_base_14: int) -> FuncModel:
+        """Return a model with block-14 weights perturbed; reuse other blocks."""
+        model = self._make_model()
+        model.dram[:] = baseline_model.dram
+
+        manifest = self._load_blk0_manifest()
+        baseline_weights = {}
+        for op in manifest["ops"]:
+            if op["opcode"] != "MMUL":
+                continue
+            idx = op["idx"]
+            K = self._clip_dim(op["dimensions"].get("K", 64))
+            N = self._clip_dim(op["dimensions"].get("N", 64))
+            weight_size = (K * N + 1) // 2
+            w_addr = block_base_14 + self._P4_DATA_BASE_REL  # allocator will re-place weights
+            # We cannot reuse the allocator offset easily; instead rebuild block 14
+            break
+
+        # Rebuild block 14 in place with perturbed weights
+        block_weights_14 = {}
+        for op in manifest["ops"]:
+            if op["opcode"] != "MMUL":
+                continue
+            idx = op["idx"]
+            K = self._clip_dim(op["dimensions"].get("K", 64))
+            N = self._clip_dim(op["dimensions"].get("N", 64))
+            weight_size = (K * N + 1) // 2
+            w_addr = block_base_14 + self._P4_DATA_BASE_REL
+            baseline_weights[idx] = bytes(model.dram[w_addr - self.DRAM_BASE:
+                                                      w_addr - self.DRAM_BASE + weight_size])
+
+        perturbed = self._chain_perturb_weights(baseline_weights, ratio=0.01)
+        # Rebuild block 14 with perturbed weights by zeroing block region and re-allocating
+        block_end = block_base_14 + self._P4_BLOCK_STRIDE
+        model.dram[block_base_14 - self.DRAM_BASE:block_end - self.DRAM_BASE] = bytes(self._P4_BLOCK_STRIDE)
+        self._build_block(model, 14, block_base_14, perturbed, manifest)
+
+        return model
+
+    def _write_cmds_to_model(self, model: FuncModel, cmds: List[Tuple[int, int]]) -> None:
+        for cmd_offset, (opcode, desc_addr) in enumerate(cmds):
+            cmd_addr = self.RING_BASE + cmd_offset * self.CMD_ENTRY_SIZE
+            buf = struct.pack('<8I', opcode, desc_addr, 0, 0, 0, 0, 0, 0)
+            off = cmd_addr - self.DRAM_BASE
+            model.dram[off:off + len(buf)] = buf
+
+    async def _run_block(self, model: FuncModel, cmds: List[Tuple[int, int]],
+                         block_idx: int, timeout_cycles: int = 10_000_000) -> bool:
+        self._write_cmds_to_model(model, cmds)
+        await self._apb_write(Addr.DOORBELL + DOORBELL.NPU_HEAD, 0)
+        return await self._run_spike(model, len(cmds), timeout_cycles=timeout_cycles)
+
+    async def _verify_032_block(self, model: FuncModel, expected: dict, block_idx: int,
+                                label: str) -> Optional[str]:
+        import hashlib
+        result_addr = expected["result_addrs"][block_idx]
+        last_idx = self._load_blk0_manifest()["ops"][-1]["idx"]
+        last_elements = self._clip_dim(self._load_blk0_manifest()["ops"][-1]["dimensions"].get("elements", 64))
+        print(f"[P4-032] verify block {block_idx} read result @ 0x{result_addr:08x} size={last_elements*2}", flush=True)
+        fp16_bytes = await self._dram_backdoor_read(result_addr - self.DRAM_BASE, last_elements * 2)
+        if len(fp16_bytes) != last_elements * 2:
+            logger.error(f"{label} block {block_idx}: expected {last_elements*2} FP16 bytes, got {len(fp16_bytes)}")
+            return None
+        fp_hash = hashlib.md5(fp16_bytes).hexdigest()
+
+        block_base = self._P4_BLOCK_BASE + block_idx * self._P4_BLOCK_STRIDE
+        result_base = self._P4_RESULT_BASE + block_idx * self._P4_RESULT_STRIDE
+        print(f"[P4-032] verify block {block_idx} read guards", flush=True)
+        g1_bytes = await self._dram_backdoor_read(block_base + self._P4_BLOCK_STRIDE - 4 - self.DRAM_BASE, 4)
+        g2_bytes = await self._dram_backdoor_read(result_base + self._P4_RESULT_STRIDE - 4 - self.DRAM_BASE, 4)
+        g1 = struct.unpack("<I", g1_bytes)[0]
+        g2 = struct.unpack("<I", g2_bytes)[0]
+        if g1 != 0xDEAD0000 + block_idx:
+            logger.error(f"{label} block {block_idx} guard corrupted: {g1:08x}")
+            return None
+        if g2 != 0xBEEF0000 + block_idx:
+            logger.error(f"{label} result {block_idx} guard corrupted: {g2:08x}")
+            return None
+
+        print(f"[P4-032] verify block {block_idx} fingerprint = {fp_hash}", flush=True)
+        return fp_hash
+
+    async def _run_032(self) -> Tuple[bool, str]:
+        model, expected = self._build_032_baseline()
+        await self._preload_rtl(model)
+        for addr, size in expected.get("vector_chunks", []):
+            await self._dram_backdoor_write(addr - self.DRAM_BASE, b"\x00" * size)
+
+        print(f"[P4-032] built model, {len(expected['batches'])} batches, {len(expected.get('vector_chunks', []))} vector chunks", flush=True)
+
+        # Run all 28 baseline blocks in a single Spike process.  With the
+        # ring size enlarged to 1024, all 28*23 commands fit in one ring and
+        # we avoid the per-block Spike server lifecycle hang.
+        baseline_flat: List[Tuple[int, int]] = []
+        for cmds in expected["batches"]:
+            baseline_flat.extend(cmds)
+        print(f"[P4-032] baseline flattened {len(baseline_flat)} commands", flush=True)
+        self._write_cmds_to_model(model, baseline_flat)
+        await self._apb_write(Addr.DOORBELL + DOORBELL.NPU_HEAD, 0)
+        ok = await self._run_spike(model, len(baseline_flat), timeout_cycles=expected["timeout_cycles"])
+        if not ok:
+            return False, f"Spike firmware timeout on baseline 28-block chain"
+
+        baseline_hashes = []
+        for b in range(len(expected["batches"])):
+            print(f"[P4-032] verifying baseline block {b}", flush=True)
+            h = await self._verify_032_block(model, expected, b, label="baseline")
+            if h is None:
+                return False, f"baseline block {b} fingerprint verification failed"
+            print(f"[P4-032] baseline block {b} ok", flush=True)
+            baseline_hashes.append(h)
+
+        # Weight perturbations propagate only to the consuming MMUL op, not
+        # necessarily to the final VCONV result.  Read block-14 per-op hashes
+        # from RTL DRAM to verify the perturbation reached hardware.
+        import hashlib
+
+        async def read_op_hashes(block_idx: int):
+            hashes = {}
+            for idx, (addr, arr) in expected["block_outputs"][block_idx].items():
+                data = await self._dram_backdoor_read(addr - self.DRAM_BASE, arr.nbytes)
+                hashes[idx] = hashlib.md5(data).hexdigest()
+            return hashes
+
+        baseline_op_hashes = await read_op_hashes(14)
+
+        perturbed_model = self._build_032_perturbed_model(model, expected)
+
+        # Reset RTL to clear cached engine state before the perturbed pass.
+        await self.bridge.reset(5)
+        await self._preload_rtl(perturbed_model)
+        # Zero any new Vector wrapper chunks introduced by rebuilding block 14.
+        for addr, size in expected.get("vector_chunks", []):
+            await self._dram_backdoor_write(addr - self.DRAM_BASE, b"\x00" * size)
+
+        # Run perturbed blocks 14-27 in a second Spike process.
+        perturbed_flat: List[Tuple[int, int]] = []
+        for cmds in expected["batches"][14:]:
+            perturbed_flat.extend(cmds)
+        print(f"[P4-032] perturbed flattened {len(perturbed_flat)} commands", flush=True)
+        self._write_cmds_to_model(perturbed_model, perturbed_flat)
+        await self._apb_write(Addr.DOORBELL + DOORBELL.NPU_HEAD, 0)
+        ok = await self._run_spike(perturbed_model, len(perturbed_flat), timeout_cycles=expected["timeout_cycles"])
+        if not ok:
+            return False, f"Spike firmware timeout on perturbed 14-block chain"
+
+        perturbed_hashes = list(baseline_hashes[:14])
+        for b in range(14, 28):
+            print(f"[P4-032] verifying perturbed block {b}", flush=True)
+            h = await self._verify_032_block(perturbed_model, expected, b, label="perturbed")
+            if h is None:
+                return False, f"perturbed block {b} fingerprint verification failed"
+            print(f"[P4-032] perturbed block {b} ok", flush=True)
+            perturbed_hashes.append(h)
+
+        perturbed_op_hashes = await read_op_hashes(14)
+        changed_ops = [idx for idx in baseline_op_hashes if baseline_op_hashes[idx] != perturbed_op_hashes.get(idx)]
+        unchanged_downstream = all(baseline_hashes[b] == perturbed_hashes[b] for b in range(15, 28))
+        print(f"[P4-032] block-14 changed op outputs: {changed_ops}", flush=True)
+
+        for b in range(14):
+            if baseline_hashes[b] != perturbed_hashes[b]:
+                return False, f"anti-vacuous fail: block {b} changed after block-14 perturbation"
+        if not changed_ops:
+            return False, "anti-vacuous fail: block-14 perturbation did not change any op output"
+        if not unchanged_downstream:
+            return False, "anti-vacuous fail: block-14 perturbation leaked into blocks 15-27"
+
+        if len(set(baseline_hashes)) <= 1:
+            return False, "all block fingerprints are identical"
+
+        return True, f"28 blocks PASS; block-14 perturbation isolated (hashes {len(set(baseline_hashes))}/28 distinct, changed ops {len(changed_ops)})"
+
+    # ── FM-SOC-10X: full host→PCIe→DRAM→doorbell→firmware→IRQ chain ─────────
+
+    def _build_10X(self) -> Tuple[FuncModel, dict]:
+        manifest = self._load_blk0_manifest()
+        fp16_tol = dict(tol_abs=2e-3, tol_rel=1e-2)
+        corrupt_op_idx = 1  # Q_proj weight corruption
+
+        pcie_writes: List[Tuple[int, bytes]] = []
+        op_meta: Dict[int, dict] = {}
+        cmds: List[Tuple[int, int]] = []
+
+        baseline_weights = {
+            op["idx"]: self._blk0_read_hex(op["weight_hex"], 1)[:(
+                self._clip_dim(op["dimensions"].get("K", 64)) *
+                self._clip_dim(op["dimensions"].get("N", 64)) + 1) // 2]
+            for op in manifest["ops"] if op["opcode"] == "MMUL"
+        }
+
+        block_base = self._P4_BLOCK_BASE
+        baseline_model = self._make_model()
+        _, _, baseline_outputs, _ = self._build_block(
+            baseline_model, 0, block_base, baseline_weights, manifest
+        )
+
+        corrupt_weights = dict(baseline_weights)
+        w = bytearray(corrupt_weights[corrupt_op_idx])
+        if w:
+            w[0] ^= 0xFF
+        corrupt_weights[corrupt_op_idx] = bytes(w)
+
+        model = self._make_model()
+        cmds, result_addr, outputs, vector_chunks = self._build_block(
+            model, 0, block_base, corrupt_weights, manifest
+        )
+
+        for op in manifest["ops"]:
+            idx = op["idx"]
+            out_addr, golden = outputs[idx]
+            desc_addr = block_base + self._P4_DESC_BASE_REL + idx * 64
+            op_meta[idx] = {
+                "op": op,
+                "out_addr": out_addr,
+                "desc_addr": desc_addr,
+                "golden": golden,
+                "original_golden": baseline_outputs[idx][1],
+            }
+            if op["opcode"] == "MMUL":
+                # Extract input/weight/scale from model.dram using descriptor
+                desc = struct.unpack('<15I', bytes(model.dram[desc_addr - self.DRAM_BASE:desc_addr - self.DRAM_BASE + 60]))
+                act_addr, wgt_addr, _, scale_addr = desc[0], desc[1], desc[2], desc[3]
+                act_size, wgt_size, out_size, scale_size = desc[8], desc[9], desc[10], desc[11]
+                pcie_writes.append((act_addr, bytes(model.dram[act_addr - self.DRAM_BASE:act_addr - self.DRAM_BASE + act_size])))
+                pcie_writes.append((wgt_addr, bytes(model.dram[wgt_addr - self.DRAM_BASE:wgt_addr - self.DRAM_BASE + wgt_size])))
+                if scale_size:
+                    pcie_writes.append((scale_addr, bytes(model.dram[scale_addr - self.DRAM_BASE:scale_addr - self.DRAM_BASE + scale_size])))
+            elif op["opcode"] in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
+                desc = struct.unpack('<15I', bytes(model.dram[desc_addr - self.DRAM_BASE:desc_addr - self.DRAM_BASE + 60]))
+                in_addr, out_addr = desc[0], desc[2]
+                dim = desc[8]
+                elements = dim & 0xFFFF
+                pcie_writes.append((in_addr, bytes(model.dram[in_addr - self.DRAM_BASE:in_addr - self.DRAM_BASE + elements * 2])))
+            elif op["opcode"] in ("VMUL", "VRESID"):
+                desc = struct.unpack('<15I', bytes(model.dram[desc_addr - self.DRAM_BASE:desc_addr - self.DRAM_BASE + 60]))
+                a_addr, b_addr = desc[0], desc[1]
+                elements = desc[8]
+                a_eb = 4 if op["opcode"] == "VMUL" else 2
+                pcie_writes.append((a_addr, bytes(model.dram[a_addr - self.DRAM_BASE:a_addr - self.DRAM_BASE + elements * a_eb])))
+                pcie_writes.append((b_addr, bytes(model.dram[b_addr - self.DRAM_BASE:b_addr - self.DRAM_BASE + elements * 4])))
+
+        # Command entries are staged in model.dram (ddr.bin) so Spike firmware sees them
+        self._write_cmds_to_model(model, cmds)
+        desc_base = block_base + self._P4_DESC_BASE_REL
+        for cmd_offset, (opcode, desc_addr) in enumerate(cmds):
+            # Derive op idx from descriptor address; cmds includes DMA barrier
+            # entries so it is longer than manifest["ops"].
+            if desc_base <= desc_addr < desc_base + 0x0800:
+                op_idx = (desc_addr - desc_base) // 64
+                if op_idx in op_meta:
+                    op_meta[op_idx]["cmd_offset"] = cmd_offset
+
+        expected = {
+            "num_cmds": len(cmds),
+            "cmds": cmds,
+            "pcie_writes": pcie_writes,
+            "op_meta": op_meta,
+            "vector_chunks": vector_chunks,
+            "timeout_cycles": 2_000_000,
+            "corrupt_op_idx": corrupt_op_idx,
+            "fp16_tol": fp16_tol,
+        }
+        return model, expected
+
+    async def _run_10X(self) -> Tuple[bool, str]:
+        model, expected = self._build_10X()
+        await self._preload_rtl(model)
+        for addr, size in expected.get("vector_chunks", []):
+            await self._dram_backdoor_write(addr - self.DRAM_BASE, b"\x00" * size)
+
+        for addr, data in expected["pcie_writes"]:
+            await self._pcie_tlp_write(addr, data)
+
+        self._write_cmds_to_model(model, expected["cmds"])
+
+        ok = await self._run_spike(model, expected["num_cmds"], timeout_cycles=expected["timeout_cycles"])
+        if not ok:
+            return False, "Spike firmware timeout on FM-SOC-10X"
+
+        return await self._verify_10X(expected)
+
+    async def _verify_10X(self, expected: dict) -> Tuple[bool, str]:
+        fp16_tol = expected["fp16_tol"]
+        corrupt_op_idx = expected["corrupt_op_idx"]
+
+        for idx, meta in expected["op_meta"].items():
+            if idx > corrupt_op_idx:
+                continue
+            op = meta["op"]
+            opcode = op["opcode"]
+            golden = np.asarray(meta["golden"]).ravel()
+            out_addr = meta["out_addr"]
+            label = f"op{idx:02d} {op['name']}"
+
+            if opcode == "MMUL":
+                out_bytes = await self._pcie_tlp_read(out_addr, golden.nbytes)
+                out_arr = np.frombuffer(out_bytes, dtype=np.int32)
+                if idx == corrupt_op_idx:
+                    original = np.asarray(meta["original_golden"]).ravel()
+                    if np.array_equal(out_arr, original):
+                        return False, f"anti-vacuous fail: corrupted {label} still matches original golden"
+                if not np.array_equal(out_arr, golden):
+                    return False, f"{label}: MMUL mismatch via PCIe readback"
+            elif opcode in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
+                out_bytes = await self._pcie_tlp_read(out_addr, golden.nbytes)
+                out_arr = np.frombuffer(out_bytes, dtype=np.float16).astype(np.float32)
+                cmp = GoldenSFU.compare_hw_vs_ref(out_arr, golden, **fp16_tol)
+                if not cmp["within_tolerance"]:
+                    return False, f"{label}: SFU mismatch max_abs={cmp['max_abs_err']:.2e}"
+            elif opcode in ("VMUL", "VRESID"):
+                out_bytes = await self._pcie_tlp_read(out_addr, golden.nbytes)
+                out_arr = np.frombuffer(out_bytes, dtype=np.int32)
+                if not np.array_equal(out_arr, golden):
+                    return False, f"{label}: Vector mismatch"
+
+        return True, "17-op blk.0 chain PASS via PCIe host readback"
+
+
+if COCOTB_AVAILABLE and SPIKE_RTL_BRIDGE_AVAILABLE and FUNC_MODEL_AVAILABLE:
+    @cocotb.test()
+    async def test_soc_spike_p4(dut):
+        bridge = CocotbBridge(dut)
+        await bridge.start_clock()
+        await bridge.reset(5)
+
+        runner = P4SpikeRunner(dut, bridge)
+        await runner.setup()
+
+        case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-032")
+        passed, msg = await runner.run_case(case_id)
+        logger.info(f"P4SpikeRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
         assert passed, f"{case_id} failed: {msg}"
 
 

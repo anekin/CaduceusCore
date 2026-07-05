@@ -25,9 +25,9 @@
 /* ── Ring Buffer 配置 ────────────────────────────────────────────── */
 
 #define RING_BUF_ADDR        DRAM_BASE
-#define RING_ENTRIES         32
+#define RING_ENTRIES         1024
 #define CMD_DESC_SIZE        32
-#define COMPLETION_RING_ADDR (DRAM_BASE + 0x800)
+#define COMPLETION_RING_ADDR (DRAM_BASE + RING_ENTRIES * CMD_DESC_SIZE)
 
 /* 命令描述符结构 (与 Host 约定) */
 typedef struct __attribute__((packed)) {
@@ -143,9 +143,9 @@ static void mxu_start(uint32_t i_addr, uint32_t w_addr, uint32_t o_addr,
                       uint32_t scale_addr,
                       uint32_t M, uint32_t K, uint32_t N,
                       uint32_t ctrl) {
-    npu_mxu_t *mxu = NPU_MXU;
     uint32_t k_tiles = (K + 63) / 64;
     mxu_wrapper_preload(w_addr, i_addr, o_addr, k_tiles, N & 0xFFFF);
+    npu_mxu_t *mxu = NPU_MXU;
     mxu->I_ADDR = i_addr;
     mxu->W_ADDR = w_addr;
     mxu->O_ADDR = o_addr;
@@ -171,16 +171,41 @@ static uint32_t sfu_hw_op(uint32_t opcode) {
     }
 }
 
+#define SFU_SCRATCH_IN  (NPU_SRAM_BASE + 0x80000)
+#define SFU_SCRATCH_OUT (NPU_SRAM_BASE + 0x80400)
+#define VEC_SCRATCH_A   (NPU_SRAM_BASE + 0x81000)
+#define VEC_SCRATCH_B   (NPU_SRAM_BASE + 0x81400)
+#define VEC_SCRATCH_O   (NPU_SRAM_BASE + 0x81800)
+
+static uint32_t sfu_scratch_size(uint32_t elements) {
+    uint32_t bytes = elements * 2;
+    return ((bytes + 511) / 512) * 512;
+}
+
 static void sfu_start(uint32_t op, uint32_t i_addr, uint32_t o_addr,
                       uint32_t elements, uint32_t dim, uint32_t pos) {
     npu_sfu_t *sfu = NPU_SFU;
+    uint32_t size = sfu_scratch_size(elements);
+
+    NPU_DB->LAST_STATUS = 0x00005000 | (op & 0xFF);
+    dma_copy(i_addr, SFU_SCRATCH_IN, size, 0);
+
+    NPU_DB->LAST_STATUS = 0x00005100 | (op & 0xFF);
     sfu->CTRL   = op & 0xF;
-    sfu->I_ADDR = i_addr;
-    sfu->O_ADDR = o_addr;
+    sfu->I_ADDR = SFU_SCRATCH_IN;
+    sfu->O_ADDR = SFU_SCRATCH_OUT;
     sfu->DIM    = (elements & 0xFFFF) | ((dim & 0xFFFF) << 16);
     sfu->POS    = pos;
+
+    NPU_DB->LAST_STATUS = 0x00005200 | (op & 0xFF);
     npu_start(&sfu->CMD);
+    NPU_DB->LAST_STATUS = 0x00005300 | (op & 0xFF);
     npu_wait_done(&sfu->STATUS);
+
+    NPU_DB->LAST_STATUS = 0x00005400 | (op & 0xFF);
+    dma_copy(SFU_SCRATCH_OUT, o_addr, size, 0);
+
+    NPU_DB->LAST_STATUS = 0x00005500 | (op & 0xFF);
 }
 
 static void vec_wrapper_load_a(uint32_t a_addr, uint32_t o_addr,
@@ -209,19 +234,38 @@ static void vec_wrapper_store_o(uint32_t o_addr, uint32_t elements) {
     while (!(wrp[VEC_WRP_STATUS / 4] & 0x00000001));
 }
 
+static uint32_t vector_scratch_size(uint32_t elements) {
+    return ((elements + 127) / 128) * 512;
+}
+
 static void vector_start(uint32_t op, uint32_t a_addr, uint32_t b_addr,
                          uint32_t o_addr, uint32_t elements) {
     npu_vector_t *vec = NPU_VECTOR;
-    vec_wrapper_load_a(a_addr, o_addr, elements);
-    vec_wrapper_load_b(b_addr, elements);
+    uint32_t a_size = vector_scratch_size(elements);
+    uint32_t b_size = vector_scratch_size(elements);
+    uint32_t o_size = vector_scratch_size(elements);
+
+    NPU_DB->LAST_STATUS = 0x00006000 | (op & 0xFF);
+    dma_copy(a_addr, VEC_SCRATCH_A, a_size, 0);
+    NPU_DB->LAST_STATUS = 0x00006100 | (op & 0xFF);
+    dma_copy(b_addr, VEC_SCRATCH_B, b_size, 0);
+
+    NPU_DB->LAST_STATUS = 0x00006200 | (op & 0xFF);
+    vec_wrapper_load_a(VEC_SCRATCH_A, VEC_SCRATCH_O, elements);
+    vec_wrapper_load_b(VEC_SCRATCH_B, elements);
     vec->CTRL   = op & 0xF;
-    vec->A_ADDR = a_addr;
-    vec->B_ADDR = b_addr;
-    vec->O_ADDR = o_addr;
+    vec->A_ADDR = VEC_SCRATCH_A;
+    vec->B_ADDR = VEC_SCRATCH_B;
+    vec->O_ADDR = VEC_SCRATCH_O;
     vec->DIM    = elements & 0xFFFF;
     npu_start(&vec->CMD);
+    NPU_DB->LAST_STATUS = 0x00006300 | (op & 0xFF);
     npu_wait_done(&vec->STATUS);
-    vec_wrapper_store_o(o_addr, elements);
+    vec_wrapper_store_o(VEC_SCRATCH_O, elements);
+
+    NPU_DB->LAST_STATUS = 0x00006400 | (op & 0xFF);
+    dma_copy(VEC_SCRATCH_O, o_addr, o_size, 0);
+    NPU_DB->LAST_STATUS = 0x00006500 | (op & 0xFF);
 }
 
 /* ── 描述符读取 ──────────────────────────────────────────────────── */
@@ -295,99 +339,110 @@ static void write_completion(uint32_t cmd_id, uint32_t status) {
 
 static int dispatch_cmd(cmd_entry_t *cmd) {
     uint32_t op = cmd->opcode;
+    NPU_DB->LAST_STATUS = 0x00001000 | (op & 0xFF);
+    int status = 1;
 
     if (op == 0) {  /* MMUL */
         mmul_desc_t desc;
         read_mmul_desc(cmd->desc_addr, &desc);
 
         if (desc.M == 0 || desc.K == 0 || desc.N == 0)
-            return 1;  /* corrupted descriptor */
+            status = 1;  /* corrupted descriptor */
+        else {
+            const uint32_t TILE_H = 64;
+            const uint32_t TILE_W = 64;
+            const uint32_t TILE_WEIGHT_BYTES = TILE_H * TILE_W / 2;
+            const uint32_t TILE_SCALE_BYTES  = TILE_W * 4;
 
-        const uint32_t TILE_H = 64;
-        const uint32_t TILE_W = 64;
-        const uint32_t TILE_WEIGHT_BYTES = TILE_H * TILE_W / 2;
-        const uint32_t TILE_SCALE_BYTES  = TILE_W * 4;
+            uint32_t act_sram  = 0x00000000;
+            uint32_t wbuf[2]   = {0x00010000, 0x00012000};
+            uint32_t sbuf[2]   = {0x00014000, 0x00015000};
+            uint32_t out_sram  = 0x00018000;
 
-        uint32_t act_sram  = 0x00000000;
-        uint32_t wbuf[2]   = {0x00010000, 0x00012000};
-        uint32_t sbuf[2]   = {0x00014000, 0x00015000};
-        uint32_t out_sram  = 0x00018000;
+            uint32_t act_sram_abs = NPU_SRAM_BASE + act_sram;
 
-        uint32_t act_sram_abs = NPU_SRAM_BASE + act_sram;
+            uint32_t num_blocks = (desc.K + TILE_H - 1) / TILE_H;
+            uint32_t num_tiles  = (desc.N + TILE_W - 1) / TILE_W;
 
-        uint32_t num_blocks = (desc.K + TILE_H - 1) / TILE_H;
-        uint32_t num_tiles  = (desc.N + TILE_W - 1) / TILE_W;
+            dma_copy(desc.input_addr, act_sram_abs, desc.input_size, 0);
 
-        dma_copy(desc.input_addr, act_sram_abs, desc.input_size, 0);
+            for (uint32_t n_tile = 0; n_tile < num_tiles; n_tile++) {
+                uint32_t n_start = n_tile * TILE_W;
+                uint32_t n_end   = (n_start + TILE_W < desc.N) ? (n_start + TILE_W) : desc.N;
+                uint32_t tile_width = n_end - n_start;
+                uint32_t out_offset = out_sram + n_start * 4;
 
-        for (uint32_t n_tile = 0; n_tile < num_tiles; n_tile++) {
-            uint32_t n_start = n_tile * TILE_W;
-            uint32_t n_end   = (n_start + TILE_W < desc.N) ? (n_start + TILE_W) : desc.N;
-            uint32_t tile_width = n_end - n_start;
-            uint32_t out_offset = out_sram + n_start * 4;
+                for (uint32_t k_block = 0; k_block < num_blocks; k_block++) {
+                    uint32_t k_start = k_block * TILE_H;
+                    uint32_t k_end   = (k_start + TILE_H < desc.K) ? (k_start + TILE_H) : desc.K;
+                    uint32_t block_height = k_end - k_start;
 
-            for (uint32_t k_block = 0; k_block < num_blocks; k_block++) {
-                uint32_t k_start = k_block * TILE_H;
-                uint32_t k_end   = (k_start + TILE_H < desc.K) ? (k_start + TILE_H) : desc.K;
-                uint32_t block_height = k_end - k_start;
+                    uint32_t buf_idx = k_block % 2;
+                    uint32_t w_addr  = wbuf[buf_idx];
+                    uint32_t s_addr  = sbuf[buf_idx];
+                    uint32_t w_addr_abs = NPU_SRAM_BASE + w_addr;
+                    uint32_t s_addr_abs = (desc.scale_size > 0) ? (NPU_SRAM_BASE + s_addr) : 0;
 
-                uint32_t buf_idx = k_block % 2;
-                uint32_t w_addr  = wbuf[buf_idx];
-                uint32_t s_addr  = sbuf[buf_idx];
-                uint32_t w_addr_abs = NPU_SRAM_BASE + w_addr;
-                uint32_t s_addr_abs = (desc.scale_size > 0) ? (NPU_SRAM_BASE + s_addr) : 0;
+                    uint32_t wgt_offset = (n_tile * num_blocks + k_block) * TILE_WEIGHT_BYTES;
+                    dma_copy(desc.weight_addr + wgt_offset, w_addr_abs, TILE_WEIGHT_BYTES, 0);
 
-                uint32_t wgt_offset = (n_tile * num_blocks + k_block) * TILE_WEIGHT_BYTES;
-                dma_copy(desc.weight_addr + wgt_offset, w_addr_abs, TILE_WEIGHT_BYTES, 0);
+                    if (desc.scale_size > 0) {
+                        uint32_t scale_offset = (n_tile * num_blocks + k_block) * TILE_SCALE_BYTES;
+                        dma_copy(desc.scale_addr + scale_offset, s_addr_abs, TILE_SCALE_BYTES, 0);
+                    }
 
-                if (desc.scale_size > 0) {
-                    uint32_t scale_offset = (n_tile * num_blocks + k_block) * TILE_SCALE_BYTES;
-                    dma_copy(desc.scale_addr + scale_offset, s_addr_abs, TILE_SCALE_BYTES, 0);
+                    uint32_t act_offset     = act_sram + k_start * 64;
+                    uint32_t act_offset_abs = NPU_SRAM_BASE + act_offset;
+                    uint32_t out_offset_abs = NPU_SRAM_BASE + out_offset;
+                    uint32_t accumulate_ctrl = (k_block > 0) ? 4 : 0;
+
+                    mxu_start(act_offset_abs, w_addr_abs, out_offset_abs,
+                              s_addr_abs, desc.M, block_height, tile_width, accumulate_ctrl);
                 }
 
-                uint32_t act_offset     = act_sram + k_start * 64;
-                uint32_t act_offset_abs = NPU_SRAM_BASE + act_offset;
-                uint32_t out_offset_abs = NPU_SRAM_BASE + out_offset;
-                uint32_t accumulate_ctrl = (k_block > 0) ? 4 : 0;
-
-                mxu_start(act_offset_abs, w_addr_abs, out_offset_abs,
-                          s_addr_abs, desc.M, block_height, tile_width, accumulate_ctrl);
+                dma_copy(NPU_SRAM_BASE + out_offset, desc.output_addr + n_start * 4,
+                         desc.M * tile_width * 4, 1);
             }
-
-            dma_copy(NPU_SRAM_BASE + out_offset, desc.output_addr + n_start * 4,
-                     desc.M * tile_width * 4, 1);
+            status = 0;
         }
-        return 0;
-    }
-
-    if (op == 0x01 || op == 0x02 || op == 0x03 || op == 0x04 ||
-        op == 0x05 || op == 0x06 || op == 0x17) {
+    } else if (op == 0x01 || op == 0x02 || op == 0x03 || op == 0x04 ||
+               op == 0x06 || op == 0x17) {
         sfu_desc_t desc;
+        NPU_DB->LAST_STATUS = 0x00004000 | (op & 0xFF);
         read_sfu_desc(cmd->desc_addr, &desc);
 
         uint32_t hw_op = sfu_hw_op(op);
+        NPU_DB->LAST_STATUS = 0x00004100 | (op & 0xFF);
         sfu_start(hw_op, desc.input_addr, desc.output_addr, desc.dim, 0, desc.pos);
-        return 0;
-    }
+        status = 0;
+    } else if (op == 0x05) {  /* ROPE: dim packs (head_dim << 16) | elements */
+        sfu_desc_t desc;
+        read_sfu_desc(cmd->desc_addr, &desc);
 
-    if (op >= 0x0F && op <= 0x14) {  /* Vector: VADD/VMUL/VRED_MAX/VRED_SUM/VCONV/VRESID */
+        uint32_t elements  = desc.dim & 0xFFFF;
+        uint32_t head_dim  = (desc.dim >> 16) & 0xFFFF;
+        sfu_start(sfu_hw_op(op), desc.input_addr, desc.output_addr,
+                  elements, head_dim, desc.pos);
+        status = 0;
+    } else if (op >= 0x0F && op <= 0x14) {  /* Vector: VADD/VMUL/VRED_MAX/VRED_SUM/VCONV/VRESID */
         vector_desc_t desc;
         read_vector_desc(cmd->desc_addr, &desc);
 
         uint32_t hw_op = op - 0x0F;  /* 0x0F..0x14 -> 0..5 */
         vector_start(hw_op, desc.a_addr, desc.b_addr, desc.o_addr, desc.dim);
-        return 0;
-    }
-
-    if (op == 9 || op == 10 || op == 0x15 || op == 0x16) {  /* DMA_COPY */
+        status = 0;
+    } else if (op == 9 || op == 10 || op == 0x15 || op == 0x16) {  /* DMA_COPY */
         dma_copy_desc_t desc;
         read_dma_copy_desc(cmd->desc_addr, &desc);
 
         dma_copy(desc.src_addr, desc.dst_addr, desc.size, 0);
-        return 0;
+        status = 0;
+    } else {
+        status = 1;  /* unknown opcode */
     }
 
-    return 1;  /* unknown opcode */
+    NPU_DB->LAST_STATUS = 0x00002000 | (status & 0xFF);
+    return status;
 }
 
 /* ── 中断处理 ────────────────────────────────────────────────────── */
@@ -406,6 +461,14 @@ static void handle_irq(void) {
 void firmware_main(void) {
     uint32_t npu_head = NPU_DB->NPU_HEAD;
     NPU_INTC->ENABLE = 0x1FF;
+    /* Debug: verify completion ring DRAM address is writable. */
+    {
+        volatile uint32_t *test = (volatile uint32_t *)(uintptr_t)(COMPLETION_RING_ADDR);
+        uint32_t mark = 0xDEADBEEF;
+        test[0] = mark;
+        uint32_t readback = test[0];
+        NPU_DB->LAST_STATUS = (readback == mark) ? 0xAA : 0xBB;
+    }
 
     for (;;) {
         uint32_t host_tail = NPU_DB->HOST_TAIL;

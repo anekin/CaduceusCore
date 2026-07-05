@@ -320,12 +320,12 @@ module tb_soc_spike;
     end
 
     //=========================================================================
-    // Simulation Timeout (10M cycles)
+    // Simulation Timeout (50M cycles)
     //=========================================================================
     initial begin
-        #10000000;  // 10 ms = 10M cycles @ 1 GHz
+        #50000000;  // 50 ms = 50M cycles @ 1 GHz
         if (!sim_done_flag) begin
-            $display("[TMO] Simulation timeout after 10M cycles");
+            $display("[TMO] Simulation timeout after 50M cycles");
             $display("FAIL: TIMEOUT");
             $finish;
         end

@@ -161,7 +161,6 @@ class RTLMMIOBridge:
             data = value.to_bytes(4, "little")
             await self.axi.write(addr, data)
             self._status[addr] = value & 0xFFFFFFFF
-            print(f"[AXI] write addr=0x{addr:08X} data=0x{value:08X}", flush=True)
             return 0
 
     def handle(self, op: str, addr: int, value: int = 0) -> int:

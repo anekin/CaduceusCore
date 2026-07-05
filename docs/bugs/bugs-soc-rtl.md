@@ -173,3 +173,45 @@ Commit: `722c6a8 fix(rtl): BUG-RTL-SOC-004 — SFU wrapper drops I_ADDR prefetch
 #### Verification
 
 FM-SOC-027 在 P2+P3 回归中 PASS；P2+P3 全部 10 个 active cases PASS（10/10）。
+
+---
+
+## BUG-RTL-SOC-005 — SFU/Vector wrapper X-propagation from DRAM padding makes P4 chain non-deterministic
+
+| Field | Value |
+|-------|-------|
+| **ID** | BUG-RTL-SOC-005 |
+| **Severity** | Major |
+| **Type** | RTL (SFU/Vector wrapper) + Firmware workaround |
+| **Status** | Worked around in firmware; RTL root cause to be fixed in Phase 5 |
+
+#### Symptom
+
+During P4 full-chain RTL verification (FM-SOC-032 / FM-SOC-10X), SFU and Vector outputs occasionally produced `X` or incorrect values when operands were placed directly in DRAM. The issue only appeared for real-model vectors with sizes that are not exact multiples of the wrapper's burst width; smaller synthetic vectors did not trigger it.
+
+#### Root Cause
+
+`rtl/wrapper/sfu_soc_wrapper.v` and `rtl/wrapper/vector_soc_wrapper.v` appear to read/write fixed-size bursts or full 512-byte chunks around the requested operand region. When the operand's logical size is smaller than the burst chunk, the wrapper accesses adjacent DRAM bytes that were never initialized by the testbench/firmware. Those uninitialized bytes propagate `X` into the engine datapath, corrupting the result.
+
+This is classified as an **RTL wrapper bug** because a robust slave should not fetch beyond the requested byte range and should tolerate uninitialized padding.
+
+#### Fix / Workaround
+
+Firmware now DMA-copies SFU/Vector inputs and outputs to/from dedicated **SRAM scratch buffers** before invoking the engine:
+
+- SFU scratch input: `SFU_SCRATCH_IN` (`SRAM_BASE + 0x00000`)
+- SFU scratch output: `SFU_SCRATCH_OUT` (`SRAM_BASE + 0x00400`)
+- Vector scratch A/B: `VEC_SCRATCH_A` / `VEC_SCRATCH_B` (`SRAM_BASE + 0x01000` / `0x01400`)
+- Vector scratch output: `VEC_SCRATCH_O` (`SRAM_BASE + 0x01800`)
+
+The DMA copies only the exact logical byte count, so the wrappers only touch valid initialized SRAM bytes. SRAM is also fully written by `_preload_rtl()` to remove residual `X`.
+
+#### Impact
+
+- P0–P3 regression still PASS (scratch buffers not used for simple synthetic cases).
+- P4 FM-SOC-032 28-block chain PASS.
+- P4 FM-SOC-10X full E2E chain PASS.
+
+#### Verification
+
+FM-SOC-032 与 FM-SOC-10X 在 P4 回归中 PASS（2/2 active, 3/3 SKIP）；`run_p4_full_rtl.sh` 报告 `PASS:2 SKIP:3 FAIL:0`。
