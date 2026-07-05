@@ -1083,7 +1083,7 @@ class P0SpikeRunner:
         return await self.bridge._dram_backdoor_read(self.DRAM_BASE + offset, size)
 
     def _make_model(self) -> FuncModel:
-        model = FuncModel(sram_kb=4096)
+        model = FuncModel(dram_mb=8, sram_kb=4096)
         model.firmware.ring_buffer_addr = self.RING_BASE
         return model
 
