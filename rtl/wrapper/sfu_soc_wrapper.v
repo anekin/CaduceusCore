@@ -201,6 +201,23 @@ module sfu_soc_wrapper #(
     wire start_hold_set = apb_wr_start && !i_addr_cached;
     wire start_hold_clr = i_addr_cached;
 
+    // If firmware writes CMD.START while we are still prefetching the first
+    // line, the APB transaction is stalled (pready=0) and the write does not
+    // reach sfu_top.  Latch the START request and replay it as a one-shot
+    // MMIO write on the cycle start_hold de-asserts.
+    reg start_pending;
+    wire start_pending_set = apb_wr_start && start_hold;
+    wire start_pending_clr = start_pending && start_hold_clr;
+
+    // After CMD.START is accepted, sfu_top needs a few cycles to register
+    // status_busy.  Firmware may otherwise read STATUS immediately and see
+    // BUSY=0, treating the operation as complete before it started.  Insert
+    // a short post-START APB stall so the first STATUS poll sees BUSY=1.
+    localparam POST_START_STALL_CYCLES = 2;
+    reg [1:0] post_start_stall;
+    wire post_start_stall_active = |post_start_stall;
+    wire load_post_start_stall = apb_wr_start && !start_hold && !post_start_stall_active;
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             rd_state          <= RD_IDLE;
@@ -213,6 +230,8 @@ module sfu_soc_wrapper #(
             rd_prefetch_next  <= 1'b0;
             apb_i_addr        <= {AXI_ADDR_WIDTH{1'b0}};
             start_hold        <= 1'b0;
+            start_pending     <= 1'b0;
+            post_start_stall  <= '0;
             prefetch_pending  <= 1'b0;
         end else begin
             // Capture the programmed input base address.
@@ -225,6 +244,21 @@ module sfu_soc_wrapper #(
                 start_hold <= 1'b1;
             else if (start_hold_clr)
                 start_hold <= 1'b0;
+
+            // Latch a START request that arrived while we were holding it;
+            // replay as a one-shot when the prefetch completes.
+            if (start_pending_set)
+                start_pending <= 1'b1;
+            else if (start_pending_clr)
+                start_pending <= 1'b0;
+
+            // Post-START stall counter: keep APB held for a few cycles after
+            // the START write completes so firmware cannot read STATUS before
+            // sfu_top sets status_busy.
+            if (load_post_start_stall)
+                post_start_stall <= POST_START_STALL_CYCLES[1:0];
+            else if (post_start_stall_active)
+                post_start_stall <= post_start_stall - 1'b1;
 
             // Latch a prefetch request that could not be launched immediately
             // because the read state machine was busy.
@@ -385,6 +419,23 @@ module sfu_soc_wrapper #(
     // wr_line_dirty has been cleared.
     wire fifo_pop = (wr_state == WR_IDLE && !wr_fifo_empty && req_same_line);
 
+    // Partial-line flush: engines may write fewer than 16 words to a line
+    // (e.g., small SFU vectors).  After the FIFO has stayed empty in WR_IDLE
+    // for several cycles, the burst is done and the dirty line must be flushed.
+    localparam PARTIAL_FLUSH_CYCLES = 1;
+    reg [2:0] partial_flush_cnt;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            partial_flush_cnt <= '0;
+        else if (wr_state == WR_IDLE && wr_line_dirty && wr_fifo_empty && !sfu_wen)
+            partial_flush_cnt <= partial_flush_cnt + 1'b1;
+        else
+            partial_flush_cnt <= '0;
+    end
+
+    wire partial_flush = (partial_flush_cnt == PARTIAL_FLUSH_CYCLES);
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             wr_state       <= WR_IDLE;
@@ -422,6 +473,9 @@ module sfu_soc_wrapper #(
                             // Keep the FIFO entry; it will be applied after flush.
                             wr_state <= WR_ARB;
                         end
+                    end else if (partial_flush) begin
+                        // Flush the remaining valid bytes of a partial line.
+                        wr_state <= WR_ARB;
                     end
                 end
 
@@ -472,19 +526,28 @@ module sfu_soc_wrapper #(
     //=========================================================================
     wire        sfu_irq;
 
-    // Gate MMIO write-enable to sfu_top while we are holding CMD.START.
-    // All other APB writes (including CTRL/I_ADDR/O_ADDR/DIM) pass through.
-    wire sfu_mmio_we_gated = sfu_mmio_we && !start_hold;
+    // Gate only the CMD.START MMIO write while we are holding it for the
+    // first-line prefetch.  All other APB writes (CTRL/I_ADDR/O_ADDR/DIM/POS)
+    // pass through normally so configuration registers are not delayed.
+    // When a START arrived during the hold window, replay it as a one-shot
+    // MMIO write the cycle the prefetch completes.
+    wire replay_start = start_pending && start_hold_clr;
+    wire block_start  = start_hold && (sfu_mmio_addr == SFU_CMD_OFF);
+
+    wire        sfu_mmio_cs_gated   = sfu_mmio_cs   || replay_start;
+    wire        sfu_mmio_we_gated   = (sfu_mmio_we && !block_start) || replay_start;
+    wire [11:0] sfu_mmio_addr_gated = replay_start ? SFU_CMD_OFF : sfu_mmio_addr;
+    wire [31:0] sfu_mmio_wdata_gated= replay_start ? 32'h0000_0001 : sfu_mmio_wdata;
 
     sfu_top #(
         .ADDR_WIDTH(SFU_ADDR_WIDTH)
     ) u_sfu_top (
         .clk         (clk),
         .rst_n       (rst_n),
-        .mmio_cs     (sfu_mmio_cs),
+        .mmio_cs     (sfu_mmio_cs_gated),
         .mmio_we     (sfu_mmio_we_gated),
-        .mmio_addr   (sfu_mmio_addr),
-        .mmio_wdata  (sfu_mmio_wdata),
+        .mmio_addr   (sfu_mmio_addr_gated),
+        .mmio_wdata  (sfu_mmio_wdata_gated),
         .mmio_rdata  (sfu_mmio_rdata),
         .mmio_ready  (sfu_mmio_ready),
         .sram_rdata  (sfu_rdata_to_top),
@@ -498,9 +561,11 @@ module sfu_soc_wrapper #(
 
     assign irq = sfu_irq;
 
-    // APB response: insert wait states while holding START for prefetch.
+    // APB response: insert wait states while holding START for prefetch,
+    // and for a short window after every START write to close the STATUS
+    // read race.
     assign prdata  = apb_prdata;
-    assign pready  = !start_hold;
+    assign pready  = !start_hold && !post_start_stall_active;
     assign pslverr = 1'b0;
 
 endmodule

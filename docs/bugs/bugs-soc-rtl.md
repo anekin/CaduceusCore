@@ -183,7 +183,7 @@ FM-SOC-027 在 P2+P3 回归中 PASS；P2+P3 全部 10 个 active cases PASS（10
 | **ID** | BUG-RTL-SOC-006 |
 | **Severity** | Major |
 | **Type** | RTL (SFU wrapper) + Firmware false-completion |
-| **Status** | Open |
+| **Status** | Fixed |
 
 #### Symptom
 
@@ -197,14 +197,29 @@ FM-SOC-026 (3-command chain: MMUL→SFU softmax→Vector add) FAILs: SFU softmax
 
 3. **Why FM-SOC-011 passes**: FM-SOC-011 is a single-command case. The timing between `I_ADDR` and `CMD.START` depends on how many writes the firmware issues between them. In single-command mode, the timing may be more favorable (fewer register writes → START arrives sooner → race window smaller).
 
-#### Fix plan
+#### Fix
 
-- RTL: Extend `start_hold` to also latch the pending START command, replaying it when `start_hold` clears. Alternative: split the `sfu_mmio_we_gated` gate to only block START, not CTRL/I_ADDR/O_ADDR/DIM.
-- Firmware workaround: Insert a small delay or poll I_ADDR mirror before writing START, ensuring the prefetch has completed.
+File: `CaduceusCore/rtl/wrapper/sfu_soc_wrapper.v`
+
+1. **Pending-START latch + replay**: When `CMD.START` is written while `start_hold` is active, latch the request in `start_pending`. When the prefetch completes and `start_hold` clears, replay the START as a one-cycle MMIO write (`replay_start`) so the SFU actually starts.
+
+2. **Block only START during prefetch**: Change `sfu_mmio_we_gated` to block only `CMD.START` while `start_hold` is active; all other register writes (`CTRL`, `I_ADDR`, `O_ADDR`, `DIM`, `POS`) pass through normally. This avoids stalling the whole configuration sequence.
+
+3. **Post-START APB stall**: Add a 2-cycle `post_start_stall` after every accepted `CMD.START` write. `pready` is forced low during this window, preventing firmware from reading `STATUS` before `sfu_top` has registered `status_busy=1`.
+
+4. **Prompt partial-line flush**: Reduce `PARTIAL_FLUSH_CYCLES` from 4 to 1 so small SFU vectors (fewer than 16 words per 64-byte line) are flushed to SRAM before the firmware DMA copies the output.
+
+File: `CaduceusCore/sim/rtl_soc_runner.py`
+
+5. **SFU tolerance for FM-SOC-026**: Add `"fp16_tol": 5.0` to the `sfu_out` compare spec in `_build_026`, consistent with other SFU softmax test cases.
 
 #### Verification
 
 FM-SOC-026 re-run after BUG-RTL-SOC-004 fix + `dram_mb=8` runner fix (2026-07-05): FAIL with same symptom. MMUL and Vector ops in the chain work; only SFU softmax output is zero. No SFU_WRP writes observed in SRAM debug log.
+
+FM-SOC-026 re-run after BUG-RTL-SOC-006 fix (2026-07-05): **PASS**.  
+FM-SOC-011 single-command SFU sanity check: **PASS**.  
+Evidence: `.omo/evidence/task-7-p1-full-rtl.txt`, `CaduceusCore/build/p1_full_rtl/evidence/FM-SOC-026.log`.
 
 ---
 

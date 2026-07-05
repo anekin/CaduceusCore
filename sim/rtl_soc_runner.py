@@ -1879,7 +1879,7 @@ class P1SpikeRunner(P0SpikeRunner):
                              "region": "dram"},
                 "sfu_out": {"addr": sfu_out_addr, "size": sfu_len * 2,
                             "golden": golden_sfu.astype(np.float16).tobytes(),
-                            "region": "dram"},
+                            "region": "dram", "fp16_tol": 5.0},
                 "vec_out": {"addr": vec_out_addr, "size": vec_len * 4,
                             "golden": golden_vec.astype(np.int32).tobytes(),
                             "region": "dram"},
