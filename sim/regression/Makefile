@@ -598,6 +598,44 @@ run_e2e_crossbar_stress: $(SOC_SIMV_COCOTB)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# run_pcie_dma_e2e — Cocotb PCIe DMA E2E Tests (T5.2)
+# ═══════════════════════════════════════════════════════════════════════════
+
+.PHONY: run_pcie_dma_e2e
+run_pcie_dma_e2e: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[PCIE_DMA_E2E] Running PCIe DMA E2E tests (6 TCs)...$(NC)"
+	@echo "$(YELLOW)[PCIE_DMA_E2E] Using cocotb env: $(COCOTB_PY_ENV)$(NC)"
+	@FAILED=0; \
+	EVIDENCE_DIR="$(REPO_ROOT)/.omo/evidence"; \
+	mkdir -p "$$EVIDENCE_DIR"; \
+	LOG_FILE="$$EVIDENCE_DIR/cocotb_e2e.log"; \
+	for tc in test_tc_soc1_pcie_dma_read test_tc_soc2_pcie_dma_write \
+	         test_tc_soc3_concurrent_bridge_dma test_tc_soc4_invalid_descriptor \
+	         test_tc_soc5_host_ur_response test_tc_soc6_dma_irq; do \
+	    echo "$(YELLOW)[PCIE_DMA_E2E] Running $$tc...$(NC)"; \
+	    cd $(REPO_ROOT)/.. && \
+	        LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+	        PYTHONPATH=$(REPO_ROOT)/sim MODULE=sim.tests.test_soc_pcie_dma TESTCASE=$$tc \
+	        TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+	        PYTHONIOENCODING=utf-8 \
+	        COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/pcie_dma_$$tc_results.xml \
+	        ./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
+	        +BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee -a "$$LOG_FILE"; \
+	    if [ $${PIPESTATUS[0]} -ne 0 ]; then \
+	        echo "$(RED)[PCIE_DMA_E2E] $$tc: FAIL$(NC)"; \
+	        FAILED=1; \
+	    else \
+	        echo "$(GREEN)[PCIE_DMA_E2E] $$tc: PASS$(NC)"; \
+	    fi; \
+	done; \
+	if [ $$FAILED -eq 0 ]; then \
+	    echo "$(GREEN)PCIE_DMA_E2E: PASS — all 6/6 tests passed$(NC)"; \
+	else \
+	    echo "$(RED)PCIE_DMA_E2E: FAIL$(NC)" && exit 1; \
+	fi
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Func Model SoC Case Targets (Todo 3: RTL SoC e2e test execution)
 # ═══════════════════════════════════════════════════════════════════════════
 #
@@ -735,6 +773,7 @@ help:
 	@echo "  run_e2e_dma_load    — Cocotb E2E-10 DMA load->compute->store"
 	@echo "  run_e2e_dma_concurrent — Cocotb E2E-11 DMA+MXU concurrent"
 	@echo "  run_e2e_crossbar_stress — Cocotb E2E-12 6-master crossbar stress"
+	@echo "  run_pcie_dma_e2e     — Cocotb PCIe DMA E2E (6 tests: read/write/concurrent/error/UR/IRQ)"
 	@echo "  run_fm_soc_case CASE_ID=<id> — Run one FM-SOC-NNN case (default: FM-SOC-001)"
 	@echo "  run_fm_soc_001 ... run_fm_soc_008 — P0 cases FM-SOC-001 through FM-SOC-008"
 	@echo "    EXTRA_DEFINES=+define+USE_RTL_PCIE   — optional mixed-mode defines"

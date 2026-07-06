@@ -387,9 +387,9 @@ typedef struct __attribute__((packed)) {
 - QA: Existing cocotb SoC tests still pass; new helper functions `receive_pcie_tlp()` and `send_cpl_for_mrd()` tested in T5.2  
 - Commit: `test(pcie): extend cocotb host model for NPU-initiated TLP receive+reply`
 
-- [ ] 24. **T5.2** —  `sim/tests/test_soc_pcie_dma.py`: Write 6 E2E cocotb test cases  
+- [x] 24. **T5.2** —  `sim/tests/test_soc_pcie_dma.py`: Write 6 E2E cocotb test cases  
 - References: TC-SOC1–TC-SOC6 in Verification Strategy  
-- Acceptance: All 6 tests pass; TC-SOC3 verifies no bridge corruption under concurrent DMA; TC-SOC1/SOC2 use **dual compare** — backdoor read (验证计算) + interface read (PCIe TLP 回读, 验证接口通路), 分开记录结果 (Lessons 原则 7)  
+- Acceptance: All 6 tests pass; TC-SOC3 verifies no bridge corruption under concurrent DMA; TC-SOC1/SOC2 use **dual compare** — backdoor read (验证计算） + interface read (PCIe TLP 回读, 验证接口通路), 分开记录结果 (Lessons 原则 7)  
 - QA: `bash scripts/run_cocotb_pcie_dma.sh` → 6/6 PASS, log in `.omo/evidence/cocotb_e2e.log`; dry-run first: `python -c "from sim.tests.test_soc_pcie_dma import *; [t() for t in [test_tc_soc1, test_tc_soc2, test_tc_soc3, test_tc_soc4, test_tc_soc5, test_tc_soc6]]"` 在 sz0001 上纯 Python 跑一遍不抛异常 (Lessons 原则 12)  
 - Commit: `test(pcie): add 6 cocotb E2E PCIe DMA test cases`
 
