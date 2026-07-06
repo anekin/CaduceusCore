@@ -81,7 +81,7 @@ def quantize_int4_symmetric(w: np.ndarray) -> np.ndarray:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate MXU qwen_e2e vectors from real GGUF weights")
-    parser.add_argument("--gguf", type=str, default="/tmp/models/qwen2.5-3b-instruct-q4_k_m.gguf",
+    parser.add_argument("--gguf", type=str, default=str(_CADUCEUS_CORE / "build/models/qwen2.5-3b-instruct-q4_k_m.gguf"),
                         help="Path to Qwen2.5-3B-Instruct Q4_K_M GGUF")
     parser.add_argument("--tensor", type=str, default="blk.0.attn_q.weight",
                         help="Tensor name to extract (Qwen GGUF uses attn_q.weight for Q_proj)")

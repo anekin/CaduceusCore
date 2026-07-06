@@ -11,8 +11,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SFU_DIR = REPO_ROOT / "rtl/test_vectors/sfu"
 VEC_DIR = REPO_ROOT / "rtl/test_vectors/vector"
-SFU_SIMV = os.environ.get("SFU_SIMV", "/tmp/simv_tb_sfu_infra")
-VEC_SIMV = os.environ.get("VEC_SIMV", "/tmp/simv_tb_vector_sumfix")
+SFU_SIMV = os.environ.get("SFU_SIMV", str(REPO_ROOT / "build/simv_tb_sfu_infra"))
+VEC_SIMV = os.environ.get("VEC_SIMV", str(REPO_ROOT / "build/simv_tb_vector_sumfix"))
 RESULTS_FILE = REPO_ROOT / "build/evidence/task-17-rerun.txt"
 JOBS = int(os.environ.get("JOBS", "4"))
 

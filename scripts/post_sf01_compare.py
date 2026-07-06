@@ -4,8 +4,8 @@
 Usage:
     python3 scripts/post_sf01_compare.py
 
-Reads /tmp/sf01_result_raw.hex (Q1.14 format), converts to FP16,
-writes /tmp/sf01_result.hex, then calls compare_sfu.py.
+Reads CaduceusCore/rtl/results/sf01_result_raw.hex (Q1.14 format), converts to FP16,
+writes CaduceusCore/rtl/results/sf01_result.hex, then calls compare_sfu.py.
 """
 import json
 import struct

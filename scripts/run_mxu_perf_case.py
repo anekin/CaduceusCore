@@ -37,8 +37,8 @@ REPO_ROOT = CADUCEUS_CORE.parent
 TESTCASE_LIST = CADUCEUS_CORE / "rtl" / "testcase-list-mxu-perf.md"
 LEARNINGS_FILE = REPO_ROOT / ".omo" / "notepads" / "mxu-module-perf" / "learnings.md"
 
-DEFAULT_OUT_DIR = Path("/tmp/mxu_perf_cases")
-DEFAULT_SIMV = Path("/tmp/simv_mxu_perf")
+DEFAULT_OUT_DIR = REPO_ROOT / "build/mxu_perf_cases"
+DEFAULT_SIMV = REPO_ROOT / "build/simv_mxu_perf"
 DEFAULT_EDA_SERVER = "zhengs@192.168.0.11"
 DEFAULT_VCS_MODULE = "vcs/vcs_vW-2024.09-SP2_P"
 DEFAULT_EVIDENCE_DIR = REPO_ROOT / ".omo" / "evidence" / "mxu-perf"

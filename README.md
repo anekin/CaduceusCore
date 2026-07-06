@@ -104,7 +104,7 @@ After generating the SFU/Vector test vectors and building the SFU/Vector simv bi
 python3 scripts/run_task17_regression.py
 ```
 
-The script discovers all scenarios under `rtl/test_vectors/sfu` and `rtl/test_vectors/vector`, runs them against the default simv binaries (`/tmp/simv_tb_sfu_infra` and `/tmp/simv_tb_vector_sumfix`), and writes a summary to `build/evidence/task-17-rerun.txt`. Override the binaries or parallelism with environment variables:
+The script discovers all scenarios under `rtl/test_vectors/sfu` and `rtl/test_vectors/vector`, runs them against the default simv binaries (`build/simv_tb_sfu_infra` and `build/simv_tb_vector_sumfix`), and writes a summary to `build/evidence/task-17-rerun.txt`. Override the binaries or parallelism with environment variables:
 
 ```bash
 SFU_SIMV=/path/to/simv_tb_sfu VEC_SIMV=/path/to/simv_tb_vector JOBS=8 python3 scripts/run_task17_regression.py

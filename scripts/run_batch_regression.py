@@ -26,14 +26,14 @@ LEARNINGS_FILE = REPO_ROOT / ".omo/notepads/sfu-vector-phase2/learnings.md"
 
 VCS_SETUP = "source /NAS/Tools/methodology/modules/init/bash && module load vcs/vcs_2023.12sp2"
 
-SIMV_SFU = "/tmp/simv_tb_sfu_fast"
-SIMV_VECTOR = "/tmp/simv_tb_vector_fast"
+SIMV_SFU = str(REPO_ROOT / "build/simv_tb_sfu_fast")
+SIMV_VECTOR = str(REPO_ROOT / "build/simv_tb_vector_fast")
 
-BATCH_SFU = "/tmp/sfu_batch.txt"
-BATCH_VECTOR = "/tmp/vector_batch.txt"
+BATCH_SFU = str(REPO_ROOT / "build/run/sfu_batch.txt")
+BATCH_VECTOR = str(REPO_ROOT / "build/run/vector_batch.txt")
 
-BATCH_LOG_SFU = "/tmp/sfu_batch.log"
-BATCH_LOG_VECTOR = "/tmp/vector_batch.log"
+BATCH_LOG_SFU = str(REPO_ROOT / "build/run/sfu_batch.log")
+BATCH_LOG_VECTOR = str(REPO_ROOT / "build/run/vector_batch.log")
 
 BATCH_RE = re.compile(r"^\[BATCH\]\s+(\S+)\s+(PASS|FAIL)$")
 
@@ -60,7 +60,7 @@ def compile_simv(top: str, rtl_subdir: str, output: str) -> None:
         f"{VCS_SETUP} && cd {REPO_ROOT} && "
         f"vcs -full64 -sverilog -timescale=1ns/1ps -top {top} "
         f"CaduceusCore/rtl/tb/{top}.v CaduceusCore/rtl/{rtl_subdir}/*.v "
-        f"-o {output} -l /tmp/{top}_compile.log"
+        f"-o {output} -l {REPO_ROOT}/build/{top}_compile.log"
     )
     print(f"[compile] {top} -> {output}")
     subprocess.run(cmd, shell=True, check=True, executable="/bin/bash")
@@ -116,6 +116,7 @@ def run_engine(
 
 
 def main() -> int:
+    Path(BATCH_SFU).parent.mkdir(parents=True, exist_ok=True)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     EVIDENCE_FILE.parent.mkdir(parents=True, exist_ok=True)
 

@@ -188,7 +188,7 @@ ssh zhengs@192.168.0.11 "cd /home/prj/zhengs/caduceuscore && \
   module load vcs/vcs_2023.12sp2 && \
   vcs -full64 -sverilog -timescale=1ns/1ps -top tb_sfu \
       CaduceusCore/rtl/tb/tb_sfu.v CaduceusCore/rtl/sfu/*.v \
-      -o /tmp/simv_tb_sfu -l /tmp/tb_sfu_compile.log"
+      -o build/simv_tb_sfu -l build/tb_sfu_compile.log"
 ```
 
 ### Step 4: Simulate a Single Scenario
@@ -200,7 +200,7 @@ TESTDIR=CaduceusCore/rtl/test_vectors/sfu/$SCENARIO
 ssh zhengs@192.168.0.11 "cd /home/prj/zhengs/caduceuscore && \
   source /NAS/Tools/methodology/modules/init/bash && \
   module load vcs/vcs_2023.12sp2 && \
-  /tmp/simv_tb_sfu +testdir=$TESTDIR +scenario=$SCENARIO \
+  build/simv_tb_sfu +testdir=$TESTDIR +scenario=$SCENARIO \
       -l CaduceusCore/rtl/results/vcs_sim_sfu_${SCENARIO}.log"
 ```
 
@@ -218,7 +218,7 @@ Or manually via the pre-compiled fast simv binary:
 ssh zhengs@192.168.0.11 "cd /home/prj/zhengs/caduceuscore && \
   source /NAS/Tools/methodology/modules/init/bash && \
   module load vcs/vcs_2023.12sp2 && \
-  /tmp/simv_tb_sfu_fast +batchfile=/tmp/sfu_batch.txt -l /tmp/sfu_batch.log"
+  build/simv_tb_sfu_fast +batchfile=build/run/sfu_batch.txt -l build/run/sfu_batch.log"
 ```
 
 ### Inline Comparison Tolerance

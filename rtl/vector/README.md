@@ -143,7 +143,7 @@ ssh zhengs@192.168.0.11 "cd /home/prj/zhengs/caduceuscore && \
   module load vcs/vcs_2023.12sp2 && \
   vcs -full64 -sverilog -timescale=1ns/1ps -top tb_vector \
       CaduceusCore/rtl/tb/tb_vector.v CaduceusCore/rtl/vector/*.v \
-      -o /tmp/simv_tb_vector -l /tmp/tb_vector_compile.log"
+      -o build/simv_tb_vector -l build/tb_vector_compile.log"
 ```
 
 ### Step 3: Simulate a Single Scenario
@@ -155,7 +155,7 @@ TESTDIR=CaduceusCore/rtl/test_vectors/vector/$SCENARIO
 ssh zhengs@192.168.0.11 "cd /home/prj/zhengs/caduceuscore && \
   source /NAS/Tools/methodology/modules/init/bash && \
   module load vcs/vcs_2023.12sp2 && \
-  /tmp/simv_tb_vector +testdir=$TESTDIR +scenario=$SCENARIO \
+  build/simv_tb_vector +testdir=$TESTDIR +scenario=$SCENARIO \
       -l CaduceusCore/rtl/results/vcs_sim_vector_${SCENARIO}.log"
 ```
 
@@ -173,7 +173,7 @@ Or via pre-compiled fast simv binary:
 ssh zhengs@192.168.0.11 "cd /home/prj/zhengs/caduceuscore && \
   source /NAS/Tools/methodology/modules/init/bash && \
   module load vcs/vcs_2023.12sp2 && \
-  /tmp/simv_tb_vector_fast +batchfile=/tmp/vector_batch.txt -l /tmp/vector_batch.log"
+  build/simv_tb_vector_fast +batchfile=build/run/vector_batch.txt -l build/run/vector_batch.log"
 ```
 
 ### Comparison Modes
