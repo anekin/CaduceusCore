@@ -318,15 +318,21 @@ module caduceus_soc_spike_top #(
     //=========================================================================
     // APB Bus (cpu APB master → apb_decoder)
     //=========================================================================
-    wire [6:0]   apb_psel_o;
-    wire [6:0]   apb_penable_o;
+    wire [7:0]   apb_psel_o;
+    wire [7:0]   apb_penable_o;
     wire [31:0]  apb_paddr_o;
     wire         apb_pwrite_o;
     wire [31:0]  apb_pwdata_o;
 
-    wire [6:0]   apb_pready_i;
-    wire [6:0]   apb_pslverr_i;
-    wire [31:0]  apb_prdata [0:6];
+    wire [7:0]   apb_pready_i;
+    wire [7:0]   apb_pslverr_i;
+    wire [31:0]  apb_prdata [0:7];
+
+    // Slave 7 (PCIe_DMA) is not instantiated in spike_top yet; tie off response
+    // for safe APB decoder elaboration until T3.3 spike integration.
+    assign apb_pready_i[7]  = 1'b1;
+    assign apb_pslverr_i[7] = 1'b0;
+    assign apb_prdata[7]    = 32'h0;
 
     //=========================================================================
     // Interrupt wires
@@ -834,7 +840,7 @@ module caduceus_soc_spike_top #(
     );
 
     //─────────────────────────────────────────────────────────────────────────
-    // APB Decoder (cpu APB master → 7 slaves)
+    // APB Decoder (cpu APB master → 8 slaves)
     //─────────────────────────────────────────────────────────────────────────
     apb_decoder u_apb_decoder (
         .clk      (clk),

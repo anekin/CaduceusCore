@@ -6,25 +6,25 @@
 // Instantiated modules (from prior tasks):
 //   T1  boot_rom          — inside ibex_wrapper (64KB ROM, 0x0000_0000)
 //   T2  sram_ctrl         — AXI4 slave, 4MB SRAM at 0x2000_0000
-//   T3  apb_decoder       — 1→7 APB decoder at 0x4000_0000
+//   T3  apb_decoder       — 1→8 APB decoder at 0x4000_0000
 //   T4  ibex_wrapper      — Ibex RV32IMC core + AXI4/APB masters
 //   T5  mxu_soc_wrapper   — MXU engine (APB slave + AXI4 master)
 //   T5  sfu_soc_wrapper   — SFU engine (APB slave + AXI4 master)
 //   T5  vector_soc_wrapper— Vector engine (APB slave + AXI4 master)
-//   T6  intc_top          — 7-source interrupt controller
-//   T7  axi_crossbar      — M=6, S=2 AXI4 crossbar
+//   T6  intc_top          — 8-source interrupt controller (T3.5 expanded from 7)
+//   T7  axi_crossbar      — M=7, S=2 AXI4 crossbar
 //   T8  pcie_ep_wrapper   — PCIe endpoint (cocotbext-pcie host model)
 //   T9  dram_model        — Behavioral DRAM model at 0x8000_0000
 //   TD  doorbell          — Host↔NPU ring buffer doorbell
 //   T11 dma_wrapper       — axi_cdma DMA engine
 //
 // Interconnects:
-//   - Data (AXI4): 6 masters → crossbar → SRAM(port0) + DRAM(port1)
-//   - MMIO (APB):  ibex APB → apb_decoder → 7 slaves
+//   - Data (AXI4): 7 masters → crossbar → SRAM(port0) + DRAM(port1)
+//   - MMIO (APB):  ibex APB → apb_decoder → 8 slaves
 //   - IRQ:         all module irqs → intc_top → cpu_irq → ibex
 //   - Clock/Reset: single clk @1GHz, rst_n async assert, sync de-assert
 //
-// Parameters: CROSSBAR_MASTERS=6, SRAM_SIZE=32'd4194304, DRAM_SIZE=32'd2147483648
+// Parameters: CROSSBAR_MASTERS=7, SRAM_SIZE=32'd4194304, DRAM_SIZE=32'd2147483648
 //
 // VCS compile:
 //   vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps
@@ -39,7 +39,7 @@
 `default_nettype none
 
 module caduceus_soc_top #(
-    parameter int unsigned CROSSBAR_MASTERS = 6,
+    parameter int unsigned CROSSBAR_MASTERS = 7,
     parameter int unsigned SRAM_SIZE        = 32'd4194304,   // 4 MB
     parameter int unsigned DRAM_SIZE        = 32'd2147483648 // 2 GB
 ) (
@@ -63,6 +63,32 @@ module caduceus_soc_top #(
     output wire         pcie_tx_cpl_tlp_eop,
     input  wire         pcie_tx_cpl_tlp_ready,
 
+    // ── PCIe DMA TLP ports (exposed for cocotbext-pcie host model) ────────
+    // TLP_DATA_WIDTH=512, TLP_HDR_WIDTH=128, TLP_SEG_COUNT=1
+    input  wire [511:0] pcie_dma_rx_cpl_tlp_data,
+    input  wire [127:0] pcie_dma_rx_cpl_tlp_hdr,
+    input  wire [3:0]   pcie_dma_rx_cpl_tlp_error,
+    input  wire         pcie_dma_rx_cpl_tlp_valid,
+    input  wire         pcie_dma_rx_cpl_tlp_sop,
+    input  wire         pcie_dma_rx_cpl_tlp_eop,
+    output wire         pcie_dma_rx_cpl_tlp_ready,
+
+    output wire [127:0] pcie_dma_tx_rd_req_tlp_hdr,
+    output wire [4:0]   pcie_dma_tx_rd_req_tlp_seq,
+    output wire         pcie_dma_tx_rd_req_tlp_valid,
+    output wire         pcie_dma_tx_rd_req_tlp_sop,
+    output wire         pcie_dma_tx_rd_req_tlp_eop,
+    input  wire         pcie_dma_tx_rd_req_tlp_ready,
+
+    output wire [511:0] pcie_dma_tx_wr_req_tlp_data,
+    output wire [15:0]  pcie_dma_tx_wr_req_tlp_strb,
+    output wire [127:0] pcie_dma_tx_wr_req_tlp_hdr,
+    output wire [4:0]   pcie_dma_tx_wr_req_tlp_seq,
+    output wire         pcie_dma_tx_wr_req_tlp_valid,
+    output wire         pcie_dma_tx_wr_req_tlp_sop,
+    output wire         pcie_dma_tx_wr_req_tlp_eop,
+    input  wire         pcie_dma_tx_wr_req_tlp_ready,
+
     // ── Timer interrupt (external; tie to 0 if unused) ────────────────────
     input  wire         timer_irq_i
 );
@@ -70,7 +96,7 @@ module caduceus_soc_top #(
     //=========================================================================
     // Local parameters (derived from crossbar)
     //=========================================================================
-    localparam int unsigned CB_NUM_M      = 6;
+    localparam int unsigned CB_NUM_M      = 7;
     localparam int unsigned CB_NUM_S      = 2;
     localparam int unsigned CB_DATA_WIDTH = 512;
     localparam int unsigned CB_ADDR_WIDTH = 32;
@@ -313,6 +339,25 @@ module caduceus_soc_top #(
                  pcie_arcache_unused1, pcie_arcache_unused0;
     wire         pcie_arprot_unused2, pcie_arprot_unused1, pcie_arprot_unused0;
 
+    // PCIe DMA (master 6)
+    wire [5:0]   pcie_dma_awid_6;   wire [31:0] pcie_dma_awaddr;  wire [7:0]  pcie_dma_awlen;
+    wire [2:0]   pcie_dma_awsize;   wire [1:0]  pcie_dma_awburst; wire        pcie_dma_awvalid;
+    wire         pcie_dma_awready;  wire [511:0]pcie_dma_wdata;   wire [63:0] pcie_dma_wstrb;
+    wire         pcie_dma_wlast;    wire        pcie_dma_wvalid;  wire        pcie_dma_wready;
+    wire [5:0]   pcie_dma_bid_6;    wire [1:0]  pcie_dma_bresp;   wire        pcie_dma_bvalid;
+    wire         pcie_dma_bready;   wire [5:0]  pcie_dma_arid_6;  wire [31:0] pcie_dma_araddr;
+    wire [7:0]   pcie_dma_arlen;    wire [2:0]  pcie_dma_arsize;  wire [1:0]  pcie_dma_arburst;
+    wire         pcie_dma_arvalid;  wire        pcie_dma_arready; wire [5:0]  pcie_dma_rid_6;
+    wire [511:0] pcie_dma_rdata;    wire [1:0]  pcie_dma_rresp;   wire        pcie_dma_rlast;
+    wire         pcie_dma_rvalid;   wire        pcie_dma_rready;
+    // PCIe DMA extra outputs (awlock/cache/prot/arlock/cache/prot — unused by crossbar)
+    wire         pcie_dma_awlock_unused, pcie_dma_awcache_unused3, pcie_dma_awcache_unused2,
+                 pcie_dma_awcache_unused1, pcie_dma_awcache_unused0;
+    wire         pcie_dma_awprot_unused2, pcie_dma_awprot_unused1, pcie_dma_awprot_unused0;
+    wire         pcie_dma_arlock_unused, pcie_dma_arcache_unused3, pcie_dma_arcache_unused2,
+                 pcie_dma_arcache_unused1, pcie_dma_arcache_unused0;
+    wire         pcie_dma_arprot_unused2, pcie_dma_arprot_unused1, pcie_dma_arprot_unused0;
+
     //=========================================================================
     // APB Bus (ibex APB master → apb_decoder)
     //=========================================================================
@@ -325,17 +370,17 @@ module caduceus_soc_top #(
     wire         apb_m_pready;
     wire         apb_m_pslverr;
 
-    // APB decoder → slaves (7 ports)
-    wire [6:0]   apb_psel_o;
-    wire [6:0]   apb_penable_o;
+    // APB decoder → slaves (8 ports)
+    wire [7:0]   apb_psel_o;
+    wire [7:0]   apb_penable_o;
     wire [31:0]  apb_paddr_o;
     wire         apb_pwrite_o;
     wire [31:0]  apb_pwdata_o;
 
     // APB slave response (per slave)
-    wire [6:0]   apb_pready_i;
-    wire [6:0]   apb_pslverr_i;
-    wire [31:0]  apb_prdata [0:6];  // unpacked array, matching apb_decoder prdata_i
+    wire [7:0]   apb_pready_i;
+    wire [7:0]   apb_pslverr_i;
+    wire [31:0]  apb_prdata [0:7];  // unpacked array, matching apb_decoder prdata_i
 
     //=========================================================================
     // Interrupt wires
@@ -345,6 +390,7 @@ module caduceus_soc_top #(
     wire vec_irq;
     wire dma_irq;
     wire pcie_irq;
+    wire pcie_dma_irq;
     wire doorbell_irq;
     wire cpu_irq;
 
@@ -493,7 +539,7 @@ module caduceus_soc_top #(
     //─────────────────────────────────────────────────────────────────────────
     // AXI4 Crossbar — M=6, S=2, round-robin
     //─────────────────────────────────────────────────────────────────────────
-    // Master ports:  0=Ibex  1=MXU  2=SFU  3=Vector  4=DMA  5=PCIe
+    // Master ports:  0=Ibex  1=MXU  2=SFU  3=Vector  4=DMA  5=PCIe  6=PCIe_DMA
     // Slave ports:   0=SRAM(0x2000_0000)  1=DRAM(0x8000_0000)
 
     // --- Map width-adapter output to crossbar master 0 ---
@@ -684,6 +730,37 @@ module caduceus_soc_top #(
     assign pcie_rvalid    = cb_m_rvalid[5];
     assign cb_m_rready[5] = pcie_rready;
 
+    // PCIe_DMA (master 6) — ID_WIDTH=6 direct match
+    assign cb_m_awid[6]   = pcie_dma_awid_6;
+    assign cb_m_awaddr[6] = pcie_dma_awaddr;
+    assign cb_m_awlen[6]  = pcie_dma_awlen;
+    assign cb_m_awsize[6] = pcie_dma_awsize;
+    assign cb_m_awburst[6]= pcie_dma_awburst;
+    assign cb_m_awvalid[6]= pcie_dma_awvalid;
+    assign pcie_dma_awready  = cb_m_awready[6];
+    assign cb_m_wdata[6]  = pcie_dma_wdata;
+    assign cb_m_wstrb[6]  = pcie_dma_wstrb;
+    assign cb_m_wlast[6]  = pcie_dma_wlast;
+    assign cb_m_wvalid[6] = pcie_dma_wvalid;
+    assign pcie_dma_wready   = cb_m_wready[6];
+    assign pcie_dma_bid_6  = cb_m_bid[6];
+    assign pcie_dma_bresp  = cb_m_bresp[6];
+    assign pcie_dma_bvalid = cb_m_bvalid[6];
+    assign cb_m_bready[6] = pcie_dma_bready;
+    assign cb_m_arid[6]   = pcie_dma_arid_6;
+    assign cb_m_araddr[6] = pcie_dma_araddr;
+    assign cb_m_arlen[6]  = pcie_dma_arlen;
+    assign cb_m_arsize[6] = pcie_dma_arsize;
+    assign cb_m_arburst[6]= pcie_dma_arburst;
+    assign cb_m_arvalid[6]= pcie_dma_arvalid;
+    assign pcie_dma_arready  = cb_m_arready[6];
+    assign pcie_dma_rid_6  = cb_m_rid[6];
+    assign pcie_dma_rdata  = cb_m_rdata[6];
+    assign pcie_dma_rresp  = cb_m_rresp[6];
+    assign pcie_dma_rlast  = cb_m_rlast[6];
+    assign pcie_dma_rvalid = cb_m_rvalid[6];
+    assign cb_m_rready[6] = pcie_dma_rready;
+
     // --- Crossbar instantiation ---
     axi_crossbar #(
         .DATA_WIDTH (CB_DATA_WIDTH),
@@ -852,7 +929,7 @@ module caduceus_soc_top #(
     );
 
     //─────────────────────────────────────────────────────────────────────────
-    // APB Decoder (ibex APB master → 7 slaves)
+    // APB Decoder (ibex APB master → 8 slaves)
     //─────────────────────────────────────────────────────────────────────────
     apb_decoder u_apb_decoder (
         .clk      (clk),
@@ -1170,6 +1247,95 @@ module caduceus_soc_top #(
     );
 
     //─────────────────────────────────────────────────────────────────────────
+    // PCIe DMA Wrapper (APB slave 7 at 0x4000_7000, AXI4 master 6)
+    //─────────────────────────────────────────────────────────────────────────
+    pcie_dma_wrapper u_pcie_dma_wrapper (
+        .clk               (clk),
+        .rst_n             (rst_n),
+
+        // TLP RX (completion from host)
+        .rx_cpl_tlp_data   (pcie_dma_rx_cpl_tlp_data),
+        .rx_cpl_tlp_hdr    (pcie_dma_rx_cpl_tlp_hdr),
+        .rx_cpl_tlp_error  (pcie_dma_rx_cpl_tlp_error),
+        .rx_cpl_tlp_valid  (pcie_dma_rx_cpl_tlp_valid),
+        .rx_cpl_tlp_sop    (pcie_dma_rx_cpl_tlp_sop),
+        .rx_cpl_tlp_eop    (pcie_dma_rx_cpl_tlp_eop),
+        .rx_cpl_tlp_ready  (pcie_dma_rx_cpl_tlp_ready),
+
+        // TLP TX (read request to host)
+        .tx_rd_req_tlp_hdr (pcie_dma_tx_rd_req_tlp_hdr),
+        .tx_rd_req_tlp_seq (pcie_dma_tx_rd_req_tlp_seq),
+        .tx_rd_req_tlp_valid(pcie_dma_tx_rd_req_tlp_valid),
+        .tx_rd_req_tlp_sop (pcie_dma_tx_rd_req_tlp_sop),
+        .tx_rd_req_tlp_eop (pcie_dma_tx_rd_req_tlp_eop),
+        .tx_rd_req_tlp_ready(pcie_dma_tx_rd_req_tlp_ready),
+
+        // TLP TX (write request to host)
+        .tx_wr_req_tlp_data(pcie_dma_tx_wr_req_tlp_data),
+        .tx_wr_req_tlp_strb(pcie_dma_tx_wr_req_tlp_strb),
+        .tx_wr_req_tlp_hdr (pcie_dma_tx_wr_req_tlp_hdr),
+        .tx_wr_req_tlp_seq (pcie_dma_tx_wr_req_tlp_seq),
+        .tx_wr_req_tlp_valid(pcie_dma_tx_wr_req_tlp_valid),
+        .tx_wr_req_tlp_sop (pcie_dma_tx_wr_req_tlp_sop),
+        .tx_wr_req_tlp_eop (pcie_dma_tx_wr_req_tlp_eop),
+        .tx_wr_req_tlp_ready(pcie_dma_tx_wr_req_tlp_ready),
+
+        // AXI4 master → crossbar master 6
+        .m_axi_awid        (pcie_dma_awid_6),
+        .m_axi_awaddr      (pcie_dma_awaddr),
+        .m_axi_awlen       (pcie_dma_awlen),
+        .m_axi_awsize      (pcie_dma_awsize),
+        .m_axi_awburst     (pcie_dma_awburst),
+        .m_axi_awlock      (pcie_dma_awlock_unused),
+        .m_axi_awcache     ({pcie_dma_awcache_unused3, pcie_dma_awcache_unused2,
+                             pcie_dma_awcache_unused1, pcie_dma_awcache_unused0}),
+        .m_axi_awprot      ({pcie_dma_awprot_unused2, pcie_dma_awprot_unused1,
+                             pcie_dma_awprot_unused0}),
+        .m_axi_awvalid     (pcie_dma_awvalid),
+        .m_axi_awready     (pcie_dma_awready),
+        .m_axi_wdata       (pcie_dma_wdata),
+        .m_axi_wstrb       (pcie_dma_wstrb),
+        .m_axi_wlast       (pcie_dma_wlast),
+        .m_axi_wvalid      (pcie_dma_wvalid),
+        .m_axi_wready      (pcie_dma_wready),
+        .m_axi_bid         (pcie_dma_bid_6),
+        .m_axi_bresp       (pcie_dma_bresp),
+        .m_axi_bvalid      (pcie_dma_bvalid),
+        .m_axi_bready      (pcie_dma_bready),
+        .m_axi_arid        (pcie_dma_arid_6),
+        .m_axi_araddr      (pcie_dma_araddr),
+        .m_axi_arlen       (pcie_dma_arlen),
+        .m_axi_arsize      (pcie_dma_arsize),
+        .m_axi_arburst     (pcie_dma_arburst),
+        .m_axi_arlock      (pcie_dma_arlock_unused),
+        .m_axi_arcache     ({pcie_dma_arcache_unused3, pcie_dma_arcache_unused2,
+                             pcie_dma_arcache_unused1, pcie_dma_arcache_unused0}),
+        .m_axi_arprot      ({pcie_dma_arprot_unused2, pcie_dma_arprot_unused1,
+                             pcie_dma_arprot_unused0}),
+        .m_axi_arvalid     (pcie_dma_arvalid),
+        .m_axi_arready     (pcie_dma_arready),
+        .m_axi_rid         (pcie_dma_rid_6),
+        .m_axi_rdata       (pcie_dma_rdata),
+        .m_axi_rresp       (pcie_dma_rresp),
+        .m_axi_rlast       (pcie_dma_rlast),
+        .m_axi_rvalid      (pcie_dma_rvalid),
+        .m_axi_rready      (pcie_dma_rready),
+
+        // APB slave from apb_decoder port 7
+        .psel              (apb_psel_o[7]),
+        .penable           (apb_penable_o[7]),
+        .pwrite            (apb_pwrite_o),
+        .paddr             (apb_paddr_o),      // 32-bit, matches wrapper port
+        .pwdata            (apb_pwdata_o),
+        .prdata            (apb_prdata[7]),
+        .pready            (apb_pready_i[7]),
+        .pslverr           (apb_pslverr_i[7]),
+
+        // IRQ — routed to intc_top bit 7
+        .pcie_dma_irq      (pcie_dma_irq)
+    );
+
+    //─────────────────────────────────────────────────────────────────────────
     // Doorbell (APB slave 5 at 0x4000_5000)
     //─────────────────────────────────────────────────────────────────────────
     doorbell u_doorbell (
@@ -1202,6 +1368,7 @@ module caduceus_soc_top #(
         .pcie_irq      (pcie_irq),
         .host_irq      (doorbell_irq),
         .timer_irq     (timer_irq_i),
+        .pcie_dma_irq  (pcie_dma_irq),
 
         .psel          (apb_psel_o[6]),
         .penable       (apb_penable_o[6]),

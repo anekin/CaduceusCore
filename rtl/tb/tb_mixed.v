@@ -1216,6 +1216,33 @@ module tb_mixed;
     wire         pcie_tx_cpl_tlp_eop;
     reg          pcie_tx_cpl_tlp_ready;
 
+    // PCIe DMA TLP RX (completion to DMA master)
+    reg  [511:0] pcie_dma_rx_cpl_tlp_data;
+    reg  [127:0] pcie_dma_rx_cpl_tlp_hdr;
+    reg  [3:0]   pcie_dma_rx_cpl_tlp_error;
+    reg          pcie_dma_rx_cpl_tlp_valid;
+    reg          pcie_dma_rx_cpl_tlp_sop;
+    reg          pcie_dma_rx_cpl_tlp_eop;
+    wire         pcie_dma_rx_cpl_tlp_ready;
+
+    // PCIe DMA TLP TX (read request from DMA master)
+    wire [127:0] pcie_dma_tx_rd_req_tlp_hdr;
+    wire [4:0]   pcie_dma_tx_rd_req_tlp_seq;
+    wire         pcie_dma_tx_rd_req_tlp_valid;
+    wire         pcie_dma_tx_rd_req_tlp_sop;
+    wire         pcie_dma_tx_rd_req_tlp_eop;
+    reg          pcie_dma_tx_rd_req_tlp_ready;
+
+    // PCIe DMA TLP TX (write request from DMA master)
+    wire [511:0] pcie_dma_tx_wr_req_tlp_data;
+    wire [15:0]  pcie_dma_tx_wr_req_tlp_strb;
+    wire [127:0] pcie_dma_tx_wr_req_tlp_hdr;
+    wire [4:0]   pcie_dma_tx_wr_req_tlp_seq;
+    wire         pcie_dma_tx_wr_req_tlp_valid;
+    wire         pcie_dma_tx_wr_req_tlp_sop;
+    wire         pcie_dma_tx_wr_req_tlp_eop;
+    reg          pcie_dma_tx_wr_req_tlp_ready;
+
     //=========================================================================
     // Test Infrastructure
     //=========================================================================
@@ -1305,7 +1332,7 @@ module tb_mixed;
     );
 `else
     caduceus_soc_top #(
-        .CROSSBAR_MASTERS (6),
+        .CROSSBAR_MASTERS (7),
         .SRAM_SIZE        (32'd4194304),
         .DRAM_SIZE        (32'd2147483648)
     ) u_dut (
@@ -1327,6 +1354,31 @@ module tb_mixed;
         .pcie_tx_cpl_tlp_sop     (pcie_tx_cpl_tlp_sop),
         .pcie_tx_cpl_tlp_eop     (pcie_tx_cpl_tlp_eop),
         .pcie_tx_cpl_tlp_ready   (pcie_tx_cpl_tlp_ready),
+
+        // PCIe DMA TLP ports
+        .pcie_dma_rx_cpl_tlp_data   (pcie_dma_rx_cpl_tlp_data),
+        .pcie_dma_rx_cpl_tlp_hdr    (pcie_dma_rx_cpl_tlp_hdr),
+        .pcie_dma_rx_cpl_tlp_error  (pcie_dma_rx_cpl_tlp_error),
+        .pcie_dma_rx_cpl_tlp_valid  (pcie_dma_rx_cpl_tlp_valid),
+        .pcie_dma_rx_cpl_tlp_sop    (pcie_dma_rx_cpl_tlp_sop),
+        .pcie_dma_rx_cpl_tlp_eop    (pcie_dma_rx_cpl_tlp_eop),
+        .pcie_dma_rx_cpl_tlp_ready  (pcie_dma_rx_cpl_tlp_ready),
+
+        .pcie_dma_tx_rd_req_tlp_hdr (pcie_dma_tx_rd_req_tlp_hdr),
+        .pcie_dma_tx_rd_req_tlp_seq (pcie_dma_tx_rd_req_tlp_seq),
+        .pcie_dma_tx_rd_req_tlp_valid(pcie_dma_tx_rd_req_tlp_valid),
+        .pcie_dma_tx_rd_req_tlp_sop (pcie_dma_tx_rd_req_tlp_sop),
+        .pcie_dma_tx_rd_req_tlp_eop (pcie_dma_tx_rd_req_tlp_eop),
+        .pcie_dma_tx_rd_req_tlp_ready(pcie_dma_tx_rd_req_tlp_ready),
+
+        .pcie_dma_tx_wr_req_tlp_data(pcie_dma_tx_wr_req_tlp_data),
+        .pcie_dma_tx_wr_req_tlp_strb(pcie_dma_tx_wr_req_tlp_strb),
+        .pcie_dma_tx_wr_req_tlp_hdr (pcie_dma_tx_wr_req_tlp_hdr),
+        .pcie_dma_tx_wr_req_tlp_seq (pcie_dma_tx_wr_req_tlp_seq),
+        .pcie_dma_tx_wr_req_tlp_valid(pcie_dma_tx_wr_req_tlp_valid),
+        .pcie_dma_tx_wr_req_tlp_sop (pcie_dma_tx_wr_req_tlp_sop),
+        .pcie_dma_tx_wr_req_tlp_eop (pcie_dma_tx_wr_req_tlp_eop),
+        .pcie_dma_tx_wr_req_tlp_ready(pcie_dma_tx_wr_req_tlp_ready),
 
         .timer_irq_i             (timer_irq)
     );
@@ -1411,6 +1463,16 @@ module tb_mixed;
 
         // PCIe TLP TX — always ready
         pcie_tx_cpl_tlp_ready = 1'b1;
+
+        // PCIe DMA TLP idle / ready
+        pcie_dma_rx_cpl_tlp_data  = 512'd0;
+        pcie_dma_rx_cpl_tlp_hdr   = 128'd0;
+        pcie_dma_rx_cpl_tlp_error = 4'd0;
+        pcie_dma_rx_cpl_tlp_valid = 1'b0;
+        pcie_dma_rx_cpl_tlp_sop   = 1'b0;
+        pcie_dma_rx_cpl_tlp_eop   = 1'b0;
+        pcie_dma_tx_rd_req_tlp_ready = 1'b1;
+        pcie_dma_tx_wr_req_tlp_ready = 1'b1;
 
 `ifndef USE_RTL_PCIE
         // Zero-initialize Ibex DMEM (only present in full SoC)
