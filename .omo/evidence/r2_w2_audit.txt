@@ -1,0 +1,34 @@
+Wave 2 Review Gate (R2) — Atlas Audit
+Plan: pcie-dma-implementation
+Date: 2026-07-06
+VERDICT: APPROVE
+
+Scope audited: T2.1 (rtl/ip/pcie_dma_wrapper.v) + T2.2 (rtl/ip/pcie_dma_tb.sv)
+
+Evidence examined:
+1. rtl/ip/pcie_dma_wrapper.v — read in full; 886 lines; APB register file, 2-phase descriptor FSM,
+   dma_if_pcie + dma_if_axi instantiations with plan C2/C3 parameter overrides, two dma_psdpram
+   cross-connects, IRQ output. No vendored verilog-pcie files modified.
+2. rtl/ip/pcie_dma_tb.sv — read in full; 875 lines; inline APB BFM, AXI4 slave memory model, TLP
+   send/receive BFM; 5 self-checking test cases (TC1–TC5).
+3. .omo/evidence/pcie_dma_tb.log — VCS W-2024.09-SP2 compile + simulation on sz0001:
+   - 0 errors, 1 pre-existing vendor warning (dma_if_pcie_wr.v:1148 SIOB)
+   - TC1 APB register readback: PASS
+   - TC2 Read descriptor emits PCIe MRd: PASS
+   - TC3 PCIe CplD drives AXI write: PASS
+   - TC4 Write descriptor emits PCIe MWr: PASS
+   - TC5 Completion UR error propagation: PASS
+   - Final: PCIE_DMA_TEST: ALL PASS
+4. Independent re-run on sz0001 (2026-07-06 22:22–22:24): identical 5/5 PASS result.
+5. Parameter override grep: TLP_DATA_WIDTH=512 and AXI_DATA_WIDTH=512 explicitly set in both wrapper
+   and testbench instantiations.
+6. Vendored file gate: git diff --name-only origin/main..feat_pcie | grep 'rtl/ip/verilog-pcie/' returns empty.
+
+Acceptance criteria check:
+- [x] APB register readback matches written values (TC1)
+- [x] START bit -> FSM emits s_axis_read_desc_valid with correct data (TC2)
+- [x] DONE bit sets after m_axis_read_desc_status_valid / m_axis_write_desc_status_valid (TC3/TC4)
+- [x] TLP output matches expected header/data (TC2/TC4)
+- [x] Error injection on completion returns error status (TC5)
+
+No blockers. Wave 2 is approved; proceed to Wave 3 (SoC integration).

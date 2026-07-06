@@ -117,6 +117,38 @@
 - All tests use descriptive patterns (incrementing bytes, repeated ASCII) so data corruption is immediately obvious
 - Every test includes an anti-vacuous assertion to confirm the test is actually exercising real behavior
 
+## [2026-07-06] T2.2: pcie_dma_tb.sv created and VCS PASS on sz0001
+
+### Implementation summary
+- Created `rtl/ip/pcie_dma_tb.sv` (875 lines) — standalone SystemVerilog testbench for `pcie_dma_wrapper.v`
+- All 5 self-checking test cases pass on sz0001 with VCS W-2024.09-SP2
+- VCS evidence logged to `.omo/evidence/pcie_dma_tb.log`
+
+### Testbench structure
+1. **DUT**: `pcie_dma_wrapper` with plan C2/C3 parameter overrides (TLP_DATA_WIDTH=512, AXI_DATA_WIDTH=512, etc.)
+2. **Inline BFMs**:
+   - APB write/read tasks (`apb_write`, `apb_read`) using C5 register map offsets 0x00-0x20
+   - TLP send/receive tasks for MRd capture, CplD injection, and MWr capture
+   - AXI4 slave memory model with SRAM-like address mapping for write (TC3) and read (TC4) paths
+3. **5 test cases**:
+   - TC1: APB register write/readback for PCIE_ADDR_LO/HI, AXI_ADDR, LEN, TAG
+   - TC2: `start_rd` triggers PCIe MRd; verify Fmt+Type=0x00, length=16 DW, address matches descriptor
+   - TC3: Drive CplD with 64 bytes of pattern data; verify AXI write address/data and `STATUS.rd_done`
+   - TC4: `start_wr` triggers AXI read → PCIe MWr; verify Fmt+Type=0x40, address/data match
+   - TC5: Inject UR completion; verify `RD_ERR_CODE` is non-zero (0xA) and `STATUS.error` is set
+
+### RTL issues / integration notes found during debug
+1. **Reset/init wait**: `dma_if_pcie_rd` requires ~256 cycles for PCIe tag FIFO initialization. Added `repeat (300) @(posedge clk)` after reset deassertion to ensure readiness before descriptors.
+2. **TLP header bit widths**: The upstream `dma_if_pcie_rd` completion parser uses AT field width of **2 bits** ([107:106]), not 3. Initial CplD header concatenation was 129 bits (1 bit too wide), causing MSB truncation and malformed Fmt+Type. Corrected to 2-bit AT and 12-bit byte_count.
+3. **Address extraction**: 3-DW headers place address in `hdr[63:34]`; 4-DW headers in `hdr[63:2]`. Used PCIe addresses < 0x8000_0000 in tests to force 3-DW headers and simplify checking.
+4. **Completion format for hardware**: CplD must use Fmt=3'b010 (with data) for SC, Fmt=3'b000 (no data) for UR/CA; Type=5'b01010; Requester ID must match wrapper config (16'h0001); tag must be the PCIe tag captured from the MRd header.
+5. **Pre-existing vendor warning**: `dma_if_pcie_wr.v:1148` SIOB warning remains (vendored code, not modified).
+
+### Verification result
+- Compile: 0 errors, 1 pre-existing vendor warning
+- Simulation: 5/5 PASS, final `PCIE_DMA_TEST: ALL PASS`
+- Command used: `vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps -f rtl/ip/verilog-pcie.flist rtl/ip/pcie_dma_wrapper.v rtl/ip/pcie_dma_tb.sv -top pcie_dma_tb -o simv_pcie_dma_tb`
+
 ## [2026-07-06] T2.1: pcie_dma_wrapper.v created
 
 ### Implementation summary
