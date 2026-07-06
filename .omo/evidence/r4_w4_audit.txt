@@ -1,0 +1,28 @@
+R4 Wave 4 Review Gate
+Verdict: APPROVE
+
+Evidence checked:
+- .omo/plans/pcie-dma-implementation.md Wave 4 section: T4.1 and T4.2 checkboxes confirmed as [x]
+- firmware/npu-regmap.h: NPU_PCIE_DMA_BASE=0x40007000UL, OP_PCIE_DMA=7, npu_pcie_dma_t struct
+- firmware/npu_firmware.c: pcie_dma_desc_t struct (24B), pcie_dma_exec() handler, opcode 7 dispatch
+- .omo/evidence/firmware_build.log: make -C firmware completed, 0 warnings, 0 errors
+- .omo/evidence/spike_e2e.log: [PASS] pcie_dma — opcode 7 dispatched, NPU_HEAD=1
+- git log: commits 85987f9 and 9171f6c on feat_pcie match expected messages
+- git diff origin/main..feat_pcie: rtl/ip/verilog-pcie/ returned empty (vendored file gate PASS)
+
+Findings:
+- F1 (non-blocking): sizeof(npu_pcie_dma_t) = 36 bytes (plan C6 acceptance says ≤32 bytes).
+  The full hardware APB map exposes 9 registers (0x00–0x20, 36 bytes), but the doorbell
+  descriptor path uses only the first 8 registers (32 bytes). The firmware descriptor struct
+  pcie_dma_desc_t is 24 bytes — within the 32-byte doorbell budget. This discrepancy is
+  documented in both the regmap header comment and learnings T4.1 entry. No REJECT.
+
+Conditions for APPROVE:
+- [x] T4.1 regmap struct matches plan C5 offsets 0x00–0x20
+- [x] OP_PCIE_DMA = 7 defined at correct location
+- [x] T4.2 pcie_dma_exec() reads descriptor, configures registers, polls with timeout
+- [x] T4.2 dispatch_cmd() op==7 branch present and correct
+- [x] firmware build: 0 warnings, 0 errors
+- [x] Spike E2E: [PASS] opcode 7 dispatch confirmed
+- [x] Git commits: both Wave 4 commits present with correct messages
+- [x] Vendored file gate: no verilog-pcie files modified

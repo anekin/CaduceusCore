@@ -373,7 +373,7 @@ typedef struct __attribute__((packed)) {
 - QA: `make -C firmware` then `bash scripts/run_spike_pcie_dma.sh` → opcode 7 dispatch PASS, log in `.omo/evidence/spike_e2e.log`
 - Commit: `feat(fw): add PCIe DMA descriptor handler in doorbell dispatch`
 
-- [ ] 22. **R4** —  Review Gate: Atlas 审计 W4 证据（firmware build + Spike E2E）  
+- [x] 22. **R4** —  Review Gate: Atlas 审计 W4 证据（firmware build + Spike E2E）  
 - What: `task(subagent_type="atlas", ...)` 审计 T4.1+T4.2 输出  
 - Evidence: firmware ELF build log, Spike E2E dispatch log (`OP_PCIE_DMA = 7` case)  
 - Acceptance: Atlas 输出 **approve**  
