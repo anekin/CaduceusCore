@@ -153,6 +153,40 @@ test specification.
 - Two new FM-SOC cases proposed: FM-SOC-036 (36-layer forward) and FM-SOC-037
   (36-layer anti-vacuous with corrupted layer 17 weight).
 
+## [2026-07-06] W1.2: Qwen2.5-3B 3-layer Func Model forward pass verified
+
+Created `scripts/run_qwen25_3b_forward.py` and verified a 3-layer (0,1,2) forward pass
+for Qwen2.5-3B-Instruct-Q4_K_M against llama.cpp reference.
+
+### Key findings
+- **Model parameters**: hidden=2048, intermediate=11008, heads=16, kv_heads=2 (GQA),
+  head_dim=128, 36 layers, rope_theta=1000000.0. Confirms W1.1 spec.
+- **Biases matter**: Qwen2.5 has Q/K/V biases that must be added after projection.
+  Without biases, layer 0 cos_sim drops to ~0.91.
+- **Weight transposition**: After q4_dequant.load_weights_from_gguf(), 2D tensors are
+  transposed to (N_out, K_in). All matmuls must be `W @ x`, not `x @ W`.
+- **Tokenization**: Qwen2.5 GGUF has add_bos=False. The "Hello" prompt tokenizes to
+  [9707], not [151643] (which is BOS). Using BOS gives cos_sim = -0.0085.
+- **RMSNorm precision**: float32 vs float64 computation is negligible
+  (cos_sim=0.9999999 difference), not a source of mismatch.
+
+### Verification results (3B model)
+- Layer 0: cos_sim=0.999870 (≥ 0.999) ✓
+- Layer 1: cos_sim=0.999951 (≥ 0.999) ✓
+- Layer 2: cos_sim=1.000000 (≥ 0.999) ✓
+- TESTS=3 PASS=3 FAIL=0
+
+### Golden .npz files
+- `rtl/test_vectors/soc_e2e/qwen25-3b-3layer/expected.npz` — combined output
+- `expected_l0.npz`, `expected_l1.npz`, `expected_l2.npz` — per-layer vectors
+- `input.npz` — input metadata (token_ids)
+- Float32 hidden states, shape (2048,) per layer
+
+### Script
+- `scripts/run_qwen25_3b_forward.py`: CLI takes --layers, --model, --prompt
+- Loads GGUF → dequantizes → runs float32 forward pass → compares vs llama.cpp
+- Generates golden .npz and evidence log in one invocation
+
 ## [2026-07-06] W5.5: Descriptor field alignment verified — 15/15 fields match
 
 All 15 descriptor fields across the unified 15-word generic layout are verified

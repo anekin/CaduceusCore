@@ -1,0 +1,8 @@
+# W1.2: Qwen2.5-3B 3-Layer Func Model Forward Pass
+# Generated: 2026-07-06 15:51:04
+
+TESTS=3 PASS=3 FAIL=0
+
+[PASS] Layer 0: cos_sim=0.999870, max_rel_err=3.09e+01, max_abs_err=3.96e-02
+[PASS] Layer 1: cos_sim=0.999951, max_rel_err=2.38e+01, max_abs_err=1.30e+00
+[PASS] Layer 2: cos_sim=1.000000, max_rel_err=7.79e+00, max_abs_err=8.47e+00
