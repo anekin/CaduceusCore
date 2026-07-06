@@ -715,3 +715,19 @@ Log: `.omo/evidence/cocotb_e2e.log`
 
 3. TC3's failure was a test design race condition, not a hardware bug. Default testbench initialization of `tlp_ready=1` means the DMA engine can issue TLPs before the cocotb test starts monitoring. Background-task launch solves this.
 
+## [2026-07-07] Wave 6 — TC-SOC1 CplD interface dual-compare (R5 Finding 1)
+
+### Motivation
+R5 audit Finding 1 noted that TC-SOC1 only had backdoor SRAM verification, missing an independent PCIe interface-level check of the CplD payload driven into `pcie_dma_rx_cpl_tlp_*`.
+
+### Implementation
+- Added `_monitor_cpld_payload()` as a local async coroutine inside `test_tc_soc1_pcie_dma_read()`.
+- Launched via `cocotb.start_soon()` **before** `send_cpl_for_mrd()`, so it captures the actual 512-bit data beats on `pcie_dma_rx_cpl_tlp_data` from SOP through EOP.
+- After `send_cpl_for_mrd()` returns, `await cpld_monitor` collects the captured bytes.
+- Dual compare: backdoor SRAM (`sram_ok`) + CplD interface (`cpld_ok`), each logged separately.
+- Final log: `PCIE_DMA_E2E: PASS — DMA read OK (backdoor=True, cpld_interface=True)`
+
+### Verification
+- Single-test run on sz0001: `TESTS=1 PASS=1 FAIL=0`, 2040.50 ns simulation time, 0.37s real time.
+- The monitor coroutine pattern (`cocotb.start_soon` → monitor → `await send_cpl_for_mrd` → `await monitor`) mirrors TC-SOC2's dual-compare methodology and closes the R5 Finding 1 gap.
+

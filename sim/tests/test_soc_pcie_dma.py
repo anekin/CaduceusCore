@@ -226,7 +226,11 @@ async def test_tc_soc1_pcie_dma_read(dut):
 
     Host prepares a known data pattern, programs a DMA read descriptor,
     captures the NPU MRd TLP, sends a CplD with the pattern data, waits
-    for the hardware to write it into SRAM, then backdoor-verifies SRAM.
+    for the hardware to write it into SRAM, then performs dual compare:
+
+      1. Backdoor SRAM read — verify data landed correctly.
+      2. Interface-level CplD readback — verify CplD payload driven on
+         pcie_dma_rx_cpl_tlp_* matches host_data.
     """
     label = "test_tc_soc1_pcie_dma_read"
     bridge = await setup_bridge(dut)
@@ -250,21 +254,71 @@ async def test_tc_soc1_pcie_dma_read(dut):
     )
     assert mrd_hdr != 0, f"{label}: MRd header is zero — no TLP captured"
 
+    # ── Background CplD payload monitor ───────────────────────────────
+    async def _monitor_cpld_payload(dut, timeout_cycles=5000):
+        """
+        Capture CplD payload at the PCIe RX interface.
+
+        Monitors pcie_dma_rx_cpl_tlp_valid/sop/eop/data and concatenates
+        all data beats between SOP and EOP into a bytearray.
+        """
+        payload = bytearray()
+        captured = False
+        for _ in range(timeout_cycles):
+            await RisingEdge(dut.clk)
+            if not int(dut.pcie_dma_rx_cpl_tlp_valid.value):
+                continue
+            data_int = int(dut.pcie_dma_rx_cpl_tlp_data.value)
+            payload.extend(data_int.to_bytes(64, "little"))
+            captured = True
+            if int(dut.pcie_dma_rx_cpl_tlp_eop.value):
+                break
+        if not captured:
+            raise TimeoutError(
+                f"[{label}] CplD monitor timed out — no valid seen"
+            )
+        return bytes(payload)
+
+    cpld_monitor = cocotb.start_soon(_monitor_cpld_payload(dut))
+
     # Send CplD back with host data
     await bridge.send_cpl_for_mrd(mrd_hdr, host_data)
+
+    # Collect captured CplD payload from the monitor
+    cpld_payload = await cpld_monitor
 
     # Wait for hardware RD_DONE
     await poll_dma_status(bridge, STATUS_RD_DONE)
     _tc_logger.info(f"[{label}] RD_DONE asserted")
 
-    # Backdoor-read SRAM and verify data integrity
+    # Dual compare 1: backdoor SRAM read (verify data landed correctly)
     sram_data = await bridge._sram_backdoor_read(axi_addr, len_bytes)
-    assert bytes(sram_data) == host_data, (
-        f"[{label}] SRAM data mismatch at 0x{axi_addr:08X}: "
-        f"expected {host_data[:16].hex()}..., got {bytes(sram_data[:16]).hex()}..."
+    sram_ok = bytes(sram_data) == host_data
+    _tc_logger.info(
+        f"[{label}] Backdoor SRAM compare: {'OK' if sram_ok else 'MISMATCH'}"
     )
 
-    _tc_logger.warning(f"[{label}] PCIE_DMA_E2E: PASS — DMA read OK")
+    # Dual compare 2: interface-level CplD payload compare
+    cpld_ok = cpld_payload[:len_bytes] == host_data
+    _tc_logger.info(
+        f"[{label}] CplD interface compare: {'OK' if cpld_ok else 'MISMATCH'}"
+    )
+
+    assert sram_ok, (
+        f"[{label}] SRAM data mismatch at 0x{axi_addr:08X}: "
+        f"expected {host_data[:16].hex()}..., "
+        f"got {bytes(sram_data[:16]).hex()}..."
+    )
+    assert cpld_ok, (
+        f"[{label}] CplD payload mismatch at interface: "
+        f"expected {host_data[:16].hex()}..., "
+        f"got {cpld_payload[:min(16, len(cpld_payload))].hex()}..."
+    )
+
+    _tc_logger.warning(
+        f"[{label}] PCIE_DMA_E2E: PASS — DMA read OK "
+        f"(backdoor={sram_ok}, cpld_interface={cpld_ok})"
+    )
 
 
 @cocotb.test()
