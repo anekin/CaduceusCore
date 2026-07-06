@@ -112,6 +112,7 @@ def demo_end_to_end():
     print(f"    DRAM BW available: {eff_bw_gbps:.1f} GB/s (eff)")
 
     # Batch M projection
+    batch_tok_s = {}  # store for summary
     for M in [2, 4, 8]:
         total_cycles = sum(
             mxu.estimate(M * (1 if _ == 1 else 1), K, N).total_cycles
@@ -119,6 +120,7 @@ def demo_end_to_end():
         )
         us = total_cycles / 1000
         tok_s = M * 1e6 / us if us > 0 else 0
+        batch_tok_s[M] = tok_s
         print(f"    Batch M={M}: {tok_s:.0f} tok/s ({us:.0f} μs for {M} tokens)")
 
     # ── Step 6: Multi-core pipeline ─────────────────────────────
@@ -145,12 +147,15 @@ def demo_end_to_end():
     print(f"  ✅ Golden Model: 功能验证由 golden_executor/tests 覆盖")
     print(f"  ✅ 多核流水线: 2核加速 {single_core / pipe_result['total_cycles']:.1f}×")
     print(f"  {'✅' if report.decode_tok_per_s >= 25 else '❌'} 单 token 性能: {report.decode_tok_per_s:.0f} tok/s (目标 25)")
-    print(f"  ✅ Batch M=2: 31 tok/s (达标)")
+    m2_raw = batch_tok_s.get(2, 0)
+    m2_pipeline = m2_raw * pipe_result.get('speedup', 1.88)
+    print(f"  {'✅' if m2_pipeline >= 50 else '❌'} Batch M=2 raw: {m2_raw:.0f} tok/s, 含流水线: {m2_pipeline:.0f} tok/s (目标 ≥50)")
 
     print()
     print(f"  关键发现:")
     print(f"  - M=1 decode: systolic array 利用率低 (tiling 开销占主导)")
-    print(f"  - Continuous batching (M≥2): 同一硬件达标 (31 tok/s @ 27mm²)")
+    m2_pipeline = batch_tok_s.get(2, 0) * pipe_result.get('speedup', 1.88)
+    print(f"  - Continuous batching (M≥2): raw {batch_tok_s.get(2, 0):.0f}, pipeline {m2_pipeline:.0f} tok/s @ 27mm²")
     print(f"  - 带宽不是瓶颈: DRAM BW 需求 {total_weight_gb / (report.decode_per_token_us / 1e6):.1f} < 可用 {eff_bw_gbps:.1f} GB/s")
 
     print(f"\n  下一阶段:")
