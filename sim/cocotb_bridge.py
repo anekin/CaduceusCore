@@ -863,20 +863,24 @@ class CocotbBridge:
         512 bytes (max payload 256 bytes → 1-2 beats under MPS=256, or up
         to 8 beats with the default 512-bit data width).
 
-        The CplD header follows the PCIe spec:
+        The CplD header follows the PCIe spec matched by ``dma_if_pcie_rd.v``
+        completion parser at lines 971–992:
 
-        - **DW0**: Fmt=3'b010 (with data), Type=5'b01010 (Completion) → 0x4A;
-          Requester ID extracted from the MRd header DW0[15:0].
-        - **DW1**: Completer ID = 16'h0001; Byte Count = ``len(data)``.
-        - **DW2**: Lower Address [6:0] extracted from MRd DW2[8:2];
-          Tag extracted from MRd DW1[31:24] (or overridden by ``tag`` arg).
+        - **DW0** (hdr[127:96]): Fmt[127:125]=3'b010, Type[124:120]=5'b01010,
+          Length[105:96] = ceil(byte_count / 4).
+        - **DW1** (hdr[95:64]): Completer ID[95:80]=16'h0001,
+          Completion Status[79:77]; Byte Count[75:64] = ``len(data)``.
+        - **DW2** (hdr[63:32]): Requester ID[63:48] = requester_id from MRd
+          header[95:80]; Tag[47:40] = mrd_tag from header[79:72];
+          Lower Address[38:32] = MRd header[38:32].
+        - **DW3** (hdr[31:0]): 0 (3-DW CplD header).
 
         Args:
             request_hdr: 128-bit MRd TLP header captured from
                          ``receive_pcie_tlp("tx_rd_req")["hdr"]``.
             data:       Completion payload data (0–512 bytes).
-            tag:        Override tag value.  When 0 (default), the tag is
-                        extracted from the MRd header (DW1[31:24]).
+             tag:        Override tag value.  When 0 (default), the tag is
+                         extracted from the MRd header (DW1[15:8]).
             status:     Completion status (0=SC, 1=UR, 2=CRS, 4=CA).
                         0 in DW3 for Successful Completion.
 
@@ -889,17 +893,20 @@ class CocotbBridge:
 
         # ── Extract fields from the MRd header ─────────────────────────────
         # 3-DW MRd header packed as {DW0[127:96], DW1[95:64], DW2[63:32], 0[31:0]}:
-        #   DW0: Fmt+Type | Requester ID[15:0]
-        #   DW1: Tag[7:0] | 0 | LastDWBE | FirstDWBE
-        #   DW2: Address[31:2] | 2'b00
-        #   DW3: 0
+        #   DW0  [127:96]: {Fmt(3), Type(5), TC(3), Attr, AT(2), Length(10)}
+        #   DW1  [95:64]:  {RequesterID(16), Tag(8), LastDWBE(4), FirstDWBE(4)}
+        #   DW2  [63:32]:  {Address[31:2], 2'b00}
+        #   DW3  [31:0]:   0
+        #
+        # Field positions confirmed against dma_if_pcie_rd.v MRd construction.
+        # Standard PCIe 3-DW MRd: RequesterID at header[95:80], Tag at header[79:72].
 
-        dw0 = (request_hdr >> 96) & 0xFFFFFFFF
-        dw1 = (request_hdr >> 64) & 0xFFFFFFFF
-        dw2_mrd = (request_hdr >> 32) & 0xFFFFFFFF
+        dw0 = (request_hdr >> 96) & 0xFFFFFFFF  # DW0: Fmt/Type/TC/Attr/Length
+        dw1 = (request_hdr >> 64) & 0xFFFFFFFF  # DW1: RequesterID + Tag + BEs
+        dw2_mrd = (request_hdr >> 32) & 0xFFFFFFFF  # DW2: Address[31:2]
 
-        requester_id = dw0 & 0xFFFF  # DW0[15:0]
-        mrd_tag = (dw1 >> 24) & 0xFF  # DW1[31:24] = Tag[7:0]
+        requester_id = (dw1 >> 16) & 0xFFFF  # DW1[31:16] = header[95:80]
+        mrd_tag = (dw1 >> 8) & 0xFF         # DW1[15:8]  = header[79:72]
 
         # Lower Address = byte address bits [6:0] of the original request.
         # For a 3-DW MRd, DW2 = {Address[31:2], 2'b00}, so the byte address
@@ -909,20 +916,37 @@ class CocotbBridge:
         effective_tag = tag if tag != 0 else mrd_tag
         byte_count = len(data)
 
-        # ── Build 3-DW CplD header ─────────────────────────────────────────
-        # DW0: [31:24]=Fmt+Type(0x4A), [15:0]=RequesterID
-        cpld_dw0 = (0x4A << 24) | requester_id
-        # DW1: [31:16]=CompleterID=0x0001, [15:0]=ByteCount
-        cpld_dw1 = (0x0001 << 16) | byte_count
-        # DW2: [18:12]=LowerAddr[6:0], [7:0]=Tag
-        cpld_dw2 = ((lower_addr & 0x7F) << 12) | (effective_tag & 0xFF)
-        # DW3: 0 (Successful Completion; use status arg for error injection)
-        cpld_dw3 = status & 0x7  # Completion Status in DW3[15:13] is omitted for
-                                 # simplicity; unless status != 0 we send clean 0.
-        if status != 0:
-            # Map status codes to DW3[15:13]: 1=UR, 4=CA, etc.  Set the whole
-            # DW3 to the status bits shifted for visibility in simulaiton.
-            cpld_dw3 = (status & 0x7) << 13
+        # ── Build 3-DW CplD header matching dma_if_pcie_rd.v:971-992 ──────
+        # DW0 [127:96] = {Fmt(3), Type=5'b01010, Reserved(10), Length(10)}
+        #   For Successful Completion (status=0) with data: Fmt=3'b010
+        #   For UR/CA (status!=0) or 0-byte payload: Fmt=3'b000 (no data)
+        #   Reserved = {T9, TC[2:0], T8, ATTR2, LN, TH, TD, EP} = 10'b0
+        #   Length = data payload in DWs (10-bit; 0 encodes 1024 DWs),
+        #   rounded up to 32-bit alignment: ceil(byte_count / 4).
+        has_data = (status == 0) and (byte_count > 0)
+        cpld_fmt = 0x2 if has_data else 0x0   # 3'b010 with data, 3'b000 no data
+        cpld_fmt_type = (cpld_fmt << 5) | 0x0A  # Fmt(3) | Type=5'b01010
+        length_dw = (byte_count + 3) // 4 if has_data else 1
+        if length_dw == 0:
+            length_dw = 1
+        cpld_dw0 = (cpld_fmt_type << 24) | (length_dw & 0x3FF)
+
+        # DW1 [95:64] = {CompleterID=0x0001(16), Status(3), BCM=0(1), ByteCount(12)}
+        cpld_dw1 = (
+            (0x0001 << 16)
+            | ((status & 0x7) << 13)
+            | (byte_count & 0xFFF)
+        )
+
+        # DW2 [63:32] = {RequesterID(16), Tag(8), Reserved(1), LowerAddr(7)}
+        cpld_dw2 = (
+            ((requester_id & 0xFFFF) << 16)
+            | ((effective_tag & 0xFF) << 8)
+            | (lower_addr & 0x7F)
+        )
+
+        # DW3 [31:0] = 0 (3-DW header; data goes on pcie_dma_rx_cpl_tlp_data)
+        cpld_dw3 = 0
 
         cpld_hdr = (
             (cpld_dw0 << 96)

@@ -606,32 +606,47 @@ run_pcie_dma_e2e: $(SOC_SIMV_COCOTB)
 	@echo "$(YELLOW)[PCIE_DMA_E2E] Running PCIe DMA E2E tests (6 TCs)...$(NC)"
 	@echo "$(YELLOW)[PCIE_DMA_E2E] Using cocotb env: $(COCOTB_PY_ENV)$(NC)"
 	@FAILED=0; \
+	PASSED=0; \
+	TOTAL=0; \
 	EVIDENCE_DIR="$(REPO_ROOT)/.omo/evidence"; \
 	mkdir -p "$$EVIDENCE_DIR"; \
 	LOG_FILE="$$EVIDENCE_DIR/cocotb_e2e.log"; \
 	for tc in test_tc_soc1_pcie_dma_read test_tc_soc2_pcie_dma_write \
 	         test_tc_soc3_concurrent_bridge_dma test_tc_soc4_invalid_descriptor \
 	         test_tc_soc5_host_ur_response test_tc_soc6_dma_irq; do \
+	    TOTAL=$$((TOTAL + 1)); \
 	    echo "$(YELLOW)[PCIE_DMA_E2E] Running $$tc...$(NC)"; \
+	    TMPLOG=$$(mktemp); \
 	    cd $(REPO_ROOT)/.. && \
 	        LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
-	        PYTHONPATH=$(REPO_ROOT)/sim MODULE=sim.tests.test_soc_pcie_dma TESTCASE=$$tc \
+	        PYTHONPATH=$(REPO_ROOT) MODULE=sim.tests.test_soc_pcie_dma TESTCASE=$$tc \
+	        BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex \
 	        TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
 	        PYTHONIOENCODING=utf-8 \
-	        COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/pcie_dma_$$tc_results.xml \
+	        COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/pcie_dma_$${tc}_results.xml \
 	        ./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
-	        +BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee -a "$$LOG_FILE"; \
-	    if [ $${PIPESTATUS[0]} -ne 0 ]; then \
-	        echo "$(RED)[PCIE_DMA_E2E] $$tc: FAIL$(NC)"; \
-	        FAILED=1; \
+	        +BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee "$$TMPLOG" ; \
+	    cat "$$TMPLOG" >> "$$LOG_FILE" ; \
+	    XML_FILE="$(REPO_ROOT)/sim/regression/pcie_dma_$${tc}_results.xml" ; \
+	    if [ -f "$$XML_FILE" ]; then \
+	        if grep -q '<testcase' "$$XML_FILE" && ! grep -q '<failure\|<error' "$$XML_FILE"; then \
+	            echo "$(GREEN)[PCIE_DMA_E2E] $$tc: PASS$(NC)" ; \
+	            PASSED=$$((PASSED + 1)) ; \
+	        else \
+	            echo "$(RED)[PCIE_DMA_E2E] $$tc: FAIL (cocotb XML reports failure)$(NC)" ; \
+	            FAILED=$$((FAILED + 1)) ; \
+	        fi ; \
 	    else \
-	        echo "$(GREEN)[PCIE_DMA_E2E] $$tc: PASS$(NC)"; \
-	    fi; \
-	done; \
+	        echo "$(RED)[PCIE_DMA_E2E] $$tc: FAIL (no results XML file)$(NC)" ; \
+	        FAILED=$$((FAILED + 1)) ; \
+	    fi ; \
+	    rm -f "$$TMPLOG" ; \
+	done ; \
+	echo "" ; \
 	if [ $$FAILED -eq 0 ]; then \
-	    echo "$(GREEN)PCIE_DMA_E2E: PASS — all 6/6 tests passed$(NC)"; \
+	    echo "$(GREEN)PCIE_DMA_E2E: PASS — all $$PASSED/$$TOTAL tests passed$(NC)" ; \
 	else \
-	    echo "$(RED)PCIE_DMA_E2E: FAIL$(NC)" && exit 1; \
+	    echo "$(RED)PCIE_DMA_E2E: FAIL — $$PASSED/$$TOTAL passed, $$FAILED failed$(NC)" && exit 1 ; \
 	fi
 
 
