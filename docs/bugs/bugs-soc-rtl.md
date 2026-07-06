@@ -277,3 +277,44 @@ Ibex-specific firmware changes (MEIE enable, vector table, DMA channel clearing,
 npubarrier in wait_done) and IbexWrapper APB timing fixes (penable gating,
 live data_addr/data_wdata latching) were sufficient for clean 33/33 PASS with
 no additional RTL bug work.
+
+---
+
+## Final Bug Statistics (2026-07-06)
+
+### Total: 6 bugs (BUG-RTL-SOC-001 through BUG-RTL-SOC-006)
+
+### By Severity
+
+| Severity | Count | Bug IDs |
+|----------|:-----:|---------|
+| Critical | 2 | BUG-RTL-SOC-001 (GLIBC ABI — Spike plugin), BUG-RTL-SOC-003 (missing `cb_m_arvalid` — SoC integration) |
+| Major | 4 | BUG-RTL-SOC-002 (DRAM 8 MB window), BUG-RTL-SOC-004 (SFU prefetch dropped), BUG-RTL-SOC-005 (X-prop from DRAM padding), BUG-RTL-SOC-006 (SFU start_hold race) |
+
+### By Status
+
+| Status | Count | Bug IDs |
+|--------|:-----:|---------|
+| Fixed | 4 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-006 |
+| Open | 1 | BUG-RTL-SOC-002 (DRAM 8 MB window — current cases avoid the region) |
+| Worked around | 1 | BUG-RTL-SOC-005 (SRAM scratch buffers + full SRAM/DRAM preload) |
+
+### By Module
+
+| Module | Count | Bug IDs |
+|--------|:-----:|---------|
+| Environment (GLIBC/DRAM model) | 2 | BUG-RTL-SOC-001, BUG-RTL-SOC-002 |
+| RTL: SoC integration (`caduceus_soc_spike_top.v`) | 1 | BUG-RTL-SOC-003 |
+| RTL: SFU wrapper (`sfu_soc_wrapper.v`) | 2 | BUG-RTL-SOC-004, BUG-RTL-SOC-006 |
+| RTL: SFU/Vector wrapper X-propagation | 1 | BUG-RTL-SOC-005 |
+
+### Quality Metrics
+
+| Metric | Value |
+|--------|:-----:|
+| Total RTL bugs found during substitution | 6 |
+| Bugs fixed in RTL source | 4 (66.7%) |
+| Bugs with firmware/environment workarounds | 2 (33.3%) |
+| Ibex-specific bugs (full RTL CPU replacement) | 0 |
+| Regressions after fixes | 0 (27/27 active PASS on Spike, 33/33 PASS on Ibex) |
+| Re-opened bugs | 0 |

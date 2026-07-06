@@ -149,6 +149,11 @@ make -j4 all              # 全部并行执行
 | DMA wrapper | ✅ ALL TESTS PASSED | Task 11 |
 | SoC elaboration (47 modules) | ✅ 0 errors | Task 13 |
 | `pytest` (210 tests) | ✅ 210/210 | 本任务 |
+| **SoC E2E: P0** (001-008) | ✅ 8/8 PASS | Task 6/11/12 |
+| **SoC E2E: P1** (009-012, 024-026) | ✅ 7/7 PASS | Task 7/11/12 |
+| **SoC E2E: P2+P3** (013, 027, 017-020, 028-031) | ✅ 10/10 PASS | Task 9/11/12 |
+| **SoC E2E: P4** (032, 10X) | ✅ 2/2 PASS (+3 SKIP superseded) | Task 10/11/12 |
+| **SoC E2E: Full Ibex** (all 33) | ✅ 33/33 PASS | Task 12 |
 
 ## 设计原则
 
