@@ -108,3 +108,24 @@ Commit `e121a96` adds the 205-line document with all 14 lessons and appendices.
 - `run_mxu_perf_case.py`: Changed `REPO_ROOT = CADUCEUS_CORE.parent` to `REPO_ROOT = CADUCEUS_CORE`, removed `CaduceusCore/` prefix from VCS compile command RTL paths.
 
 **Verification:** All `build/`, `.omo/`, and `rtl/` paths now start with `/home/prj/zhengs/caduceuscore/CaduceusCore/`. py_compile passes on both scripts.
+
+## [2026-07-06T14:45Z] Task 0.1-fix: firmware hex non-zero issue resolved
+
+### Diagnosis
+The `test_boot_rom_loading` test failed because it checked for non-zero code at address 0x0, but the linker script (`firmware/link.ld`) intentionally zero-pads addresses 0x00-0x7f for the RISC-V vectored trap table. The actual firmware entry point `_start` begins at offset 0x80 (Ibex reset vector = boot_addr + 0x80).
+
+### Root Cause
+- **Not a firmware build bug**: The hex file correctly contains non-zero instructions at offset 0x80 (`00010297` = `auipc t0,0x10`, the first instruction of `_start`)
+- **Test expectation mismatch**: The test read at `0x00000000` expecting non-zero, but the correct checks are at `0x00000000` (zero for trap table) and `0x00000080` (non-zero for `_start`)
+
+### Fix
+- Updated `sim/tests/test_soc_fm.py::test_boot_rom_loading`: now checks address 0x0 for zero trap table and address 0x80 for non-zero firmware instructions
+- Test passes: `1 passed in 0.31s`
+
+### Files Changed
+- `sim/tests/test_soc_fm.py` — updated `test_boot_rom_loading` assertion
+- `build/evidence/firmware-hex-fix.txt` — evidence with hex words and disassembly
+
+### Verification
+- First 8 hex words at 0x80: `00010297 f8028293 00010317 f7830313 00001397 a8838393 0062dc63 0003ae03`
+- Matches `_start` disassembly exactly
