@@ -500,3 +500,70 @@ Because T3.3 added new top-level `pcie_dma_*` TLP ports to `caduceus_soc_top`, a
 ### Notes
 - Existing modes (`mmul_smoke`, `chain`, `forward`) were already timing out in this worktree due to the same Spike launch issues (wrong ELF, wrong memory map, wrong dtc PATH, plugin ABI mismatch). The fixes above correct the launch path, but those modes still hit unrelated pre-existing firmware/bridge issues (e.g., SFU golden model exceptions) and are outside the scope of this QA step.
 
+## [2026-07-07] T5.1 — cocotb_bridge.py extended for NPU-initiated PCIe DMA TLP receive + CplD send
+
+### Implementation summary
+- Added 3 new async methods to `CocotbBridge` class in `sim/cocotb_bridge.py`:
+  - `receive_pcie_tlp(port, timeout_cycles)` — monitors `pcie_dma_tx_{rd_req,wr_req}_tlp_*` outputs from SoC
+  - `send_cpl_for_mrd(request_hdr, data, tag, status)` — builds CplD header and drives `pcie_dma_rx_cpl_tlp_*` inputs
+  - `send_pcie_dma_cpld(mrd_hdr, data)` — alias/wrapper for `send_cpl_for_mrd`
+
+### Method details
+
+#### `receive_pcie_tlp(port, timeout_cycles=10000) -> dict`
+- Accepts `"tx_rd_req"` (Memory Read Request) or `"tx_wr_req"` (Memory Write Request)
+- Asserts `{prefix}_tlp_ready = 1` so the DUT sees we are always accepting
+- Waits for `{prefix}_tlp_valid` high, captures sop/eop handshake
+- Returns dict: `{"hdr": int, "data": bytes, "strb": int (wr only), "seq": int}`
+- Multi-beat TLPs: concatenates 512-bit data beats until eop
+- No-DUT mode: returns default empty dict immediately
+- Raises `ValueError` for invalid port, `TimeoutError` for timeout
+
+#### `send_cpl_for_mrd(request_hdr, data, tag=0, status=0)`
+- **CplD header construction** from 3-DW MRd header:
+  - DW0[31:24]=0x4A (Fmt=010 + Type=01010), DW0[15:0]=RequesterID from MRd DW0
+  - DW1[31:16]=0x0001 (CompleterID), DW1[15:0]=len(data) (ByteCount)
+  - DW2[18:12]=LowerAddr[6:0] from MRd DW2[6:0], DW2[7:0]=Tag from MRd DW1[31:24]
+  - DW3=0 (Successful Completion) or status<<13 for error injection
+- **Multi-beat completions**: splits data into 64-byte (=512-bit) beats
+  - Max 8 beats for 512 B total; 1-4 beats under typical MPS=256
+- **Handshake**: drives `pcie_dma_rx_cpl_tlp_data/hdr/error/valid/sop/eop`, waits for `ready`
+- No-DUT mode: logs warning and returns immediately
+
+#### TLP Header bit-field layout (3-DW MRd, 128-bit packed)
+```
+hdr[127:96] = DW0 = {Fmt+Type, TC/Attr, RequesterID[15:0]}
+hdr[95:64]  = DW1 = {Tag[7:0], 0, LastDWBE[3:0], FirstDWBE[3:0]}
+hdr[63:32]  = DW2 = {Address[31:2], 2'b00}
+hdr[31:0]   = DW3 = 0
+```
+
+### No-DUT dry-run smoke
+- `python -c "from sim.cocotb_bridge import CocotbBridge"` → OK
+- All 3 methods are async coroutine functions, callable without DUT
+- `receive_pcie_tlp('tx_rd_req')` returns `{"hdr": 0, "data": b"", "strb": 0, "seq": 0}`
+- `receive_pcie_tlp('tx_wr_req')` returns same default dict
+- `send_cpl_for_mrd(0, b'hello')` logs "no DUT handle — skipping" and returns
+- Invalid port raises `ValueError`
+
+### Regression verification
+- `python -m py_compile sim/cocotb_bridge.py` → OK
+- `python -m pytest sim/tests/ --co -q` → 617 tests collected, 0 import errors
+- `python -m pytest sim/tests/test_golden_corruption.py sim/tests/test_soc_rtl_e2e.py -v` → 9/9 PASS
+
+### Design decisions
+- Used existing signal naming convention from `caduceus_soc_top.v`: `pcie_dma_rx_cpl_tlp_*` (host→SoC) and `pcie_dma_tx_{rd_req,wr_req}_tlp_*` (SoC→host)
+- CplD header follows PCIe spec: Fmt=3'b010, Type=5'b01010, RequesterID from MRd, CompleterID=16'h0001
+- Tag extracted from MRd DW1[31:24]; can be overridden via `tag` parameter
+- LowerAddress for CplD routing = MRd DW2[6:0] (byte address bits [6:0])
+- 64-byte beats match the 512-bit TLP_DATA_WIDTH of `pcie_dma_wrapper`
+- All methods follow existing async/await patterns and `RisingEdge(self.dut.clk)` usage
+- No RTL files modified (Python/cocotb only)
+
+### Known limitations
+- 4-DW (64-bit address) MRd headers not yet tested — extraction assumes 3-DW format
+  - In practice, SoC PCIe addresses are within 32-bit range, so 3-DW is sufficient
+  - 4-DW support can be added by checking Fmt field (DW0[127:125]) and conditionally extracting address from DW2 (hdr[63:2])
+- Completion Status codes simplified — DW3 error bits set for visibility but don't full match PCIe spec DW3[15:13] encoding for all status codes
+- No support for 10-bit tags (PCIe 4.0+) — assumes 8-bit tags as used by `dma_if_pcie`
+

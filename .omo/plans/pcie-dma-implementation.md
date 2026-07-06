@@ -381,7 +381,7 @@ typedef struct __attribute__((packed)) {
 
 ### Wave 5: Cocotb E2E Verification
 
-- [ ] 23. **T5.1** —  `sim/cocotb_bridge.py`: Extend cocotb host model to receive NPU MWr/MRd + send CplD  
+- [x] 23. **T5.1** —  `sim/cocotb_bridge.py`: Extend cocotb host model to receive NPU MWr/MRd + send CplD  
 - References: Cocotb PCIe model inversion (Metis S3); `cocotbext-pcie` API  
 - Acceptance: Host model can capture the renamed `pcie_tx_tlp_data` (renamed from `pcie_tx_cpl_tlp_data` to reflect it now carries both completions and DMA requests), parse NPU MWr/MRd, generate CplD responses  
 - QA: Existing cocotb SoC tests still pass; new helper functions `receive_pcie_tlp()` and `send_cpl_for_mrd()` tested in T5.2  

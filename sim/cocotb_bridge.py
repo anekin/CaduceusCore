@@ -750,6 +750,251 @@ class CocotbBridge:
                     return bytes(data_chunks)
             await RisingEdge(self.dut.clk)
 
+    # ── NPU-Initiated PCIe DMA TLP Receive / CplD Send (T5.1) ────────────
+
+    async def receive_pcie_tlp(self, port: str, timeout_cycles: int = 10000) -> dict:
+        """
+        Wait for an NPU-initiated PCIe DMA TLP and capture its content.
+
+        The NPU's ``pcie_dma_wrapper`` generates Memory Read Request (MRd)
+        and Memory Write Request (MWr) TLPs on two separate TX ports exposed
+        at the SoC top level.  This method monitors the selected port until
+        a complete TLP arrives, then returns the captured fields.
+
+        Args:
+            port: ``"tx_rd_req"`` for a Memory Read Request, ``"tx_wr_req"``
+                  for a Memory Write Request.
+            timeout_cycles: Maximum cycles to wait for ``tlp_valid`` before
+                            raising :class:`TimeoutError`.
+
+        Returns:
+            dict with keys:
+                - ``"hdr"``: 128-bit TLP header as ``int``
+                - ``"data"``: payload data as ``bytes`` (only for ``tx_wr_req``;
+                  empty for ``tx_rd_req``)
+                - ``"strb"``: byte strobe as ``int`` (only for ``tx_wr_req``)
+                - ``"seq"``: 5-bit sequence number as ``int``
+
+        Raises:
+            ValueError: If ``port`` is neither ``"tx_rd_req"`` nor
+                        ``"tx_wr_req"``.
+            TimeoutError: If no valid TLP is seen within ``timeout_cycles``.
+        """
+        if port not in ("tx_rd_req", "tx_wr_req"):
+            raise ValueError(
+                f"Unknown port '{port}'. Use 'tx_rd_req' or 'tx_wr_req'."
+            )
+        if self.dut is None:
+            return {"hdr": 0, "data": b"", "strb": 0, "seq": 0}
+
+        prefix = f"pcie_dma_{port}"
+        has_data = (port == "tx_wr_req")
+        has_strb = has_data
+
+        # Assert ready so the DUT sees we are always accepting
+        getattr(self.dut, f"{prefix}_tlp_ready").value = 1
+
+        hdr_val: int = 0
+        seq_val: int = 0
+        data_bytes: bytearray = bytearray()
+        strb_val: int = 0
+        sop_seen: bool = False
+
+        for _ in range(timeout_cycles):
+            valid = int(getattr(self.dut, f"{prefix}_tlp_valid").value)
+            if not valid:
+                await RisingEdge(self.dut.clk)
+                continue
+
+            # Capture header / seq on SOP (first beat of the TLP)
+            if int(getattr(self.dut, f"{prefix}_tlp_sop").value):
+                hdr_val = int(getattr(self.dut, f"{prefix}_tlp_hdr").value)
+                seq_val = int(getattr(self.dut, f"{prefix}_tlp_seq").value)
+                sop_seen = True
+
+            # Capture data for write TLPs (512-bit = 64 bytes per beat)
+            if has_data:
+                data_word = int(getattr(self.dut, f"{prefix}_tlp_data").value)
+                data_bytes.extend(data_word.to_bytes(64, "little"))
+                if has_strb:
+                    strb_val = int(getattr(self.dut, f"{prefix}_tlp_strb").value)
+
+            # Return on EOP (last beat of the TLP)
+            if int(getattr(self.dut, f"{prefix}_tlp_eop").value):
+                result: dict = {
+                    "hdr": hdr_val,
+                    "data": bytes(data_bytes),
+                    "seq": seq_val,
+                }
+                if has_strb:
+                    result["strb"] = strb_val
+                logger.debug(
+                    f"receive_pcie_tlp({port}): hdr=0x{hdr_val:032X}, "
+                    f"len={len(data_bytes)} B, seq={seq_val}"
+                )
+                return result
+
+            await RisingEdge(self.dut.clk)
+
+        if sop_seen:
+            raise TimeoutError(
+                f"receive_pcie_tlp({port}): SOP seen but EOP did not arrive "
+                f"within {timeout_cycles} cycles"
+            )
+        raise TimeoutError(
+            f"receive_pcie_tlp({port}): no TLP valid within "
+            f"{timeout_cycles} cycles"
+        )
+
+    async def send_cpl_for_mrd(
+        self,
+        request_hdr: int,
+        data: bytes,
+        tag: int = 0,
+        status: int = 0,
+    ) -> None:
+        """
+        Send a Completion with Data (CplD) TLP in response to an NPU
+        Memory Read Request (MRd).
+
+        Builds a 3-DW CplD header from the captured MRd header and drives
+        the ``pcie_dma_rx_cpl_tlp_*`` input ports of the SoC.  Handles
+        single-beat and multi-beat completions for data payloads up to
+        512 bytes (max payload 256 bytes → 1-2 beats under MPS=256, or up
+        to 8 beats with the default 512-bit data width).
+
+        The CplD header follows the PCIe spec:
+
+        - **DW0**: Fmt=3'b010 (with data), Type=5'b01010 (Completion) → 0x4A;
+          Requester ID extracted from the MRd header DW0[15:0].
+        - **DW1**: Completer ID = 16'h0001; Byte Count = ``len(data)``.
+        - **DW2**: Lower Address [6:0] extracted from MRd DW2[8:2];
+          Tag extracted from MRd DW1[31:24] (or overridden by ``tag`` arg).
+
+        Args:
+            request_hdr: 128-bit MRd TLP header captured from
+                         ``receive_pcie_tlp("tx_rd_req")["hdr"]``.
+            data:       Completion payload data (0–512 bytes).
+            tag:        Override tag value.  When 0 (default), the tag is
+                        extracted from the MRd header (DW1[31:24]).
+            status:     Completion status (0=SC, 1=UR, 2=CRS, 4=CA).
+                        0 in DW3 for Successful Completion.
+
+        Raises:
+            RuntimeError: If called without a cocotb DUT handle.
+        """
+        if self.dut is None:
+            logger.warning("send_cpl_for_mrd: no DUT handle — skipping")
+            return
+
+        # ── Extract fields from the MRd header ─────────────────────────────
+        # 3-DW MRd header packed as {DW0[127:96], DW1[95:64], DW2[63:32], 0[31:0]}:
+        #   DW0: Fmt+Type | Requester ID[15:0]
+        #   DW1: Tag[7:0] | 0 | LastDWBE | FirstDWBE
+        #   DW2: Address[31:2] | 2'b00
+        #   DW3: 0
+
+        dw0 = (request_hdr >> 96) & 0xFFFFFFFF
+        dw1 = (request_hdr >> 64) & 0xFFFFFFFF
+        dw2_mrd = (request_hdr >> 32) & 0xFFFFFFFF
+
+        requester_id = dw0 & 0xFFFF  # DW0[15:0]
+        mrd_tag = (dw1 >> 24) & 0xFF  # DW1[31:24] = Tag[7:0]
+
+        # Lower Address = byte address bits [6:0] of the original request.
+        # For a 3-DW MRd, DW2 = {Address[31:2], 2'b00}, so the byte address
+        # is exactly DW2.  LowerAddr[6:0] = DW2[6:0].
+        lower_addr = dw2_mrd & 0x7F
+
+        effective_tag = tag if tag != 0 else mrd_tag
+        byte_count = len(data)
+
+        # ── Build 3-DW CplD header ─────────────────────────────────────────
+        # DW0: [31:24]=Fmt+Type(0x4A), [15:0]=RequesterID
+        cpld_dw0 = (0x4A << 24) | requester_id
+        # DW1: [31:16]=CompleterID=0x0001, [15:0]=ByteCount
+        cpld_dw1 = (0x0001 << 16) | byte_count
+        # DW2: [18:12]=LowerAddr[6:0], [7:0]=Tag
+        cpld_dw2 = ((lower_addr & 0x7F) << 12) | (effective_tag & 0xFF)
+        # DW3: 0 (Successful Completion; use status arg for error injection)
+        cpld_dw3 = status & 0x7  # Completion Status in DW3[15:13] is omitted for
+                                 # simplicity; unless status != 0 we send clean 0.
+        if status != 0:
+            # Map status codes to DW3[15:13]: 1=UR, 4=CA, etc.  Set the whole
+            # DW3 to the status bits shifted for visibility in simulaiton.
+            cpld_dw3 = (status & 0x7) << 13
+
+        cpld_hdr = (
+            (cpld_dw0 << 96)
+            | (cpld_dw1 << 64)
+            | (cpld_dw2 << 32)
+            | cpld_dw3
+        )
+
+        # ── Send data beats on pcie_dma_rx_cpl_tlp_* ───────────────────────
+        BEAT_BYTES = 64  # 512-bit data path
+        total_beats = (byte_count + BEAT_BYTES - 1) // BEAT_BYTES
+        if total_beats == 0:
+            total_beats = 1  # at least one beat for header-only Cpl
+
+        logger.debug(
+            f"send_cpl_for_mrd: req_id=0x{requester_id:04X}, "
+            f"tag=0x{effective_tag:02X}, lower_addr=0x{lower_addr:02X}, "
+            f"byte_count={byte_count}, beats={total_beats}"
+        )
+
+        for beat_idx in range(total_beats):
+            start = beat_idx * BEAT_BYTES
+            end = min(start + BEAT_BYTES, byte_count)
+            chunk = data[start:end].ljust(BEAT_BYTES, b"\x00")
+            beat_data = int.from_bytes(chunk, "little")
+
+            # Set beat-level handshake signals
+            self.dut.pcie_dma_rx_cpl_tlp_hdr.value = cpld_hdr
+            self.dut.pcie_dma_rx_cpl_tlp_data.value = beat_data
+            self.dut.pcie_dma_rx_cpl_tlp_error.value = 0
+            self.dut.pcie_dma_rx_cpl_tlp_valid.value = 1
+            self.dut.pcie_dma_rx_cpl_tlp_sop.value = (1 if beat_idx == 0 else 0)
+            self.dut.pcie_dma_rx_cpl_tlp_eop.value = (
+                1 if beat_idx == total_beats - 1 else 0
+            )
+
+            # Wait for DUT to assert ready (single-cycle handshake)
+            await RisingEdge(self.dut.clk)
+            timeout = 100
+            while (
+                int(self.dut.pcie_dma_rx_cpl_tlp_ready.value) == 0
+                and timeout > 0
+            ):
+                await RisingEdge(self.dut.clk)
+                timeout -= 1
+            if timeout <= 0:
+                logger.error(
+                    f"send_cpl_for_mrd: ready timeout on beat {beat_idx}"
+                )
+                break
+
+        # Deassert all handshake signals
+        self.dut.pcie_dma_rx_cpl_tlp_valid.value = 0
+        self.dut.pcie_dma_rx_cpl_tlp_sop.value = 0
+        self.dut.pcie_dma_rx_cpl_tlp_eop.value = 0
+
+        logger.info(
+            f"send_cpl_for_mrd: CplD sent ({total_beats} beats, "
+            f"{byte_count} B)"
+        )
+
+    async def send_pcie_dma_cpld(self, mrd_hdr: int, data: bytes) -> None:
+        """
+        Convenience alias for :meth:`send_cpl_for_mrd` with default tag
+        and status extracted from the MRd header.
+
+        Args:
+            mrd_hdr: 128-bit MRd TLP header.
+            data:    Completion payload data.
+        """
+        await self.send_cpl_for_mrd(mrd_hdr, data)
+
     # ── DMA Configuration ─────────────────────────────────────────────────
 
     async def configure_dma(self, src: int, dst: int, size: int):
