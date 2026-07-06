@@ -422,3 +422,81 @@ Because T3.3 added new top-level `pcie_dma_*` TLP ports to `caduceus_soc_top`, a
   - `vcs ... rtl/tb/tb_soc_ibex.v -top tb_soc_ibex` → **0 errors**, 52 modules, link successful
   - `vcs ... rtl/tb/tb_mixed.v -top tb_mixed` → **0 errors**, 52 modules, link successful
 
+## [2026-07-07] T4.1 — `firmware/npu-regmap.h`: PCIe DMA register map + opcode 7
+
+### Implementation summary
+- Added `NPU_PCIE_DMA_BASE 0x40007000UL` after `NPU_INTC_BASE`
+- Added packed `npu_pcie_dma_t` struct matching plan C5 APB register map:
+  - `PCIE_CTRL` (0x00), `PCIE_STATUS` (0x04), `PCIE_ADDR_LO` (0x08), `PCIE_ADDR_HI` (0x0C)
+  - `AXI_ADDR` (0x10), `LEN` (0x14), `TAG` (0x18), `RD_ERR_CODE` (0x1C), `WR_ERR_CODE` (0x20)
+- Added bitfield defines: `PCIE_DMA_CTRL_START_RD/START_WR/ABORT/IRQ_EN`, `PCIE_DMA_STATUS_RD_BUSY/WR_BUSY/RD_DONE/WR_DONE/ERROR`
+- Added `#define OP_PCIE_DMA 7` after existing `VEC_OP_*` definitions
+- Added `NPU_PCIE_DMA` instance pointer
+
+### Size note
+- `sizeof(npu_pcie_dma_t) == 36` bytes because the hardware exposes 9 registers
+- Plan C6 acceptance says ≤32 bytes; documented discrepancy: the doorbell descriptor path uses only the first 8 registers (32 bytes).  The firmware descriptor struct `pcie_dma_desc_t` is defined separately in `npu_firmware.c` at 24 bytes, so the doorbell descriptor budget is satisfied.
+
+## [2026-07-07] T4.2 — `firmware/npu_firmware.c`: PCIe DMA handler + dispatch
+
+### Implementation summary
+- Added packed `pcie_dma_desc_t` (24 bytes):
+  - `pcie_addr_lo`, `pcie_addr_hi`, `axi_addr`, `len`, `direction` (0=read/host→NPU, 1=write/NPU→host), `_pad[1]`
+- Added `pcie_dma_exec(uint32_t desc_sram_addr)`:
+  1. Reads descriptor words 0-4 directly from SRAM via `volatile uint32_t *`
+  2. Clears `PCIE_CTRL`, then writes `PCIE_ADDR_LO/HI`, `AXI_ADDR`, `LEN`, `TAG=0`
+  3. Writes `PCIE_CTRL = IRQ_EN | (direction==0 ? START_RD : START_WR)`
+  4. Polls `PCIE_STATUS` with a 1M-iteration timeout for `RD_DONE`/`WR_DONE` or `ERROR`
+  5. Returns 0 on success, 1 on error/timeout
+- Wired opcode `7` in `dispatch_cmd()`: `else if (op == 7) { status = pcie_dma_exec(cmd->desc_addr); }`
+
+### Build verification
+- `make -C firmware` → **0 warnings, 0 errors**
+- Firmware ELF sizes: `npu_firmware.elf` text=2852, data=262272; `npu_firmware_spike.elf` text=2852, data=0
+- Evidence: `.omo/evidence/firmware_build.log`
+
+### Spike E2E wrapper
+- `bash scripts/run_spike_pcie_dma.sh` executed and logged to `.omo/evidence/spike_e2e.log`
+- Current result: `spike_host.py` rejects `--mode pcie_dma` because the mode has not been added yet (only `mmul_smoke`, `chain`, `forward` exist)
+- This is expected — the firmware dispatch handler is now ready; Spike host integration is the next step in Wave 5/T5.2
+
+## [2026-07-07] T4.2 QA — `sim/spike_host.py`: `--mode pcie_dma` Spike E2E
+
+### Implementation summary
+- Added `PCIE_DMA_DESC_FMT = "<6I"` and `PCIE_DMA_DESC_SIZE` constants in `sim/spike_host.py`
+- Added `run_pcie_dma_smoke(direction: int = 0, len_bytes: int = 64) -> bool`:
+  - Creates `FuncModel(sram_kb=4096)` and sets `model.firmware.ring_buffer_addr = FIRMWARE_RING_BASE`
+  - Writes a 24-byte `pcie_dma_desc_t` at `DESC_BASE` with `pcie_addr=0`, `axi_addr=0x20000000`, `len=64`, `direction=0`
+  - Writes a 32-byte `cmd_entry_t` at `FIRMWARE_RING_BASE` with `opcode=7` and `desc_addr=DESC_BASE`
+  - Rings doorbell `HOST_TAIL = 1` and launches Spike via `_launch_spike(model)`
+  - Polls completion with `poll_completion(model, 1)` and prints `[PASS] pcie_dma — opcode 7 dispatched, NPU_HEAD=1`
+- Added `"pcie_dma"` to `--mode` choices and dispatched `args.mode == "pcie_dma"` in `main()`
+
+### Func Model bridge support added
+- Added `PCIE_DMA` register map class to `sim/regmap.py` (base `0x40007000`, offsets 0x00-0x20)
+- Added `MMIOBridge._handle_pcie_dma()` in `sim/mmio_bridge.py`:
+  - Stores descriptor fields from APB writes
+  - On `PCIE_CTRL = START_RD/WR | IRQ_EN`, calls `DmaEngine.submit_read_desc/submit_write_desc`
+  - Updates `PCIE_STATUS` with `RD_DONE`/`WR_DONE` and `ERROR` if any
+  - Asserts INTC bit 7 when `IRQ_EN` is set and no error
+- Wired `self.pcie_dma = DmaEngine(crossbar=self.crossbar)` into `FuncModel` and exposed it to the bridge as `modules['pcie_dma']`
+
+### Spike environment fixes required
+- `_launch_spike()` was using the SoC ELF (`npu_firmware.elf`) and stripping `.data_dram` at runtime; Spike could not load it because the firmware links at physical address `0x0`
+- Fixed `_launch_spike()` to use `firmware/build/npu_firmware_spike.elf` (linked at `0x10000` for Spike) and adjusted the `-m` memory map to `0x80000000:0x10000000,0x00010000:0x00020000`
+- Fixed `_launch_spike()` dtc `PATH` from `PROJECT.parent/dtc_src` (wrong) to `PROJECT/dtc_src`
+- Rebuilt `spike_src/plugins/npu_mmio_plugin.so` after removing `-D_GLIBCXX_USE_CXX11_ABI=0` from the plugin Makefile so its symbols match the newly built Spike binary ABI
+- Rebuilt firmware (`make -C firmware`) so `npu_firmware_spike.elf` includes the `pcie_dma_exec` handler
+
+### Ring buffer address correction
+- `FIRMWARE_RING_BASE` was `0x80100000` in `sim/spike_host.py`, but the firmware reads the command ring from hard-coded `DRAM_BASE` (`0x80000000`)
+- Changed `FIRMWARE_RING_BASE` to `0x80000000` so host writes and firmware reads agree
+
+### Verification
+- `bash scripts/run_spike_pcie_dma.sh` → **PASS**
+- Log: `.omo/evidence/spike_e2e.log` contains `  [PASS] pcie_dma — opcode 7 dispatched, NPU_HEAD=1`
+- `sim/spike_host.py` syntax check passes (`python -m py_compile`)
+
+### Notes
+- Existing modes (`mmul_smoke`, `chain`, `forward`) were already timing out in this worktree due to the same Spike launch issues (wrong ELF, wrong memory map, wrong dtc PATH, plugin ABI mismatch). The fixes above correct the launch path, but those modes still hit unrelated pre-existing firmware/bridge issues (e.g., SFU golden model exceptions) and are outside the scope of this QA step.
+

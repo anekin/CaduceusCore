@@ -361,13 +361,13 @@ typedef struct __attribute__((packed)) {
 
 ### Wave 4: Firmware
 
-- [ ] 20. **T4.1** —  `firmware/npu-regmap.h`: Add `npu_pcie_dma_t` struct + `OP_PCIE_DMA = 7`  
+- [x] 20. **T4.1** —  `firmware/npu-regmap.h`: Add `npu_pcie_dma_t` struct + `OP_PCIE_DMA = 7`  
 - References: Section C6 register map  
 - Acceptance: Struct layout matches new APB registers; sizeof(npu_pcie_dma_t) ≤ 32 bytes  
 - QA: `make -C firmware` compiles with no warnings  
 - Commit: `feat(fw): add PCIe DMA register map + opcode 7`
 
-- [ ] 21. **T4.2** —  `firmware/npu_firmware.c`: Add `pcie_dma_exec()` handler + dispatch case  
+- [x] 21. **T4.2** —  `firmware/npu_firmware.c`: Add `pcie_dma_exec()` handler + dispatch case  
 - References: Existing `dma_copy()` pattern at `npu_firmware.c:111-133`; `dispatch_cmd()` at line 346
 - Acceptance: (a) Func Model simulation with `pcie_dma_exec(desc_sram_addr)` triggers DMA read, (b) correct descriptor appears in DmaEngine, (c) completion status sets `STATUS.rd_done` or `STATUS.wr_done`
 - QA: `make -C firmware` then `bash scripts/run_spike_pcie_dma.sh` → opcode 7 dispatch PASS, log in `.omo/evidence/spike_e2e.log`

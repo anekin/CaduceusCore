@@ -36,9 +36,10 @@ from sim.spike_mmio_server import DEFAULT_SOCK_PATH, serve
 PROJECT = _HERE.parent
 SPIKE_BIN = Path(__file__).resolve().parent.parent / "spike_src" / "build" / "spike"
 FIRMWARE_ELF = PROJECT / "firmware" / "build" / "npu_firmware.elf"
+FIRMWARE_SPIKE_ELF = PROJECT / "firmware" / "build" / "npu_firmware_spike.elf"
 PLUGIN_SO = PROJECT / "spike_src" / "plugins" / "npu_mmio_plugin.so"
 
-FIRMWARE_RING_BASE = 0x80100000  # hard-coded in C firmware; shadows part of low DRAM
+FIRMWARE_RING_BASE = 0x80000000  # hard-coded in C firmware as DRAM_BASE
 
 # C firmware mmul_desc_t uses a 15-field packed layout
 # (input/weight/output/scale addr + input/weight/output/scale sram + sizes + M,K,N).
@@ -53,6 +54,9 @@ VECTOR_DESC_SIZE = struct.calcsize(VECTOR_DESC_FMT)
 
 DMA_COPY_DESC_FMT = "<8I"
 DMA_COPY_DESC_SIZE = struct.calcsize(DMA_COPY_DESC_FMT)
+
+PCIE_DMA_DESC_FMT = "<6I"
+PCIE_DMA_DESC_SIZE = struct.calcsize(PCIE_DMA_DESC_FMT)
 
 CMD_ENTRY_FMT = "<8I"
 CMD_ENTRY_SIZE = struct.calcsize(CMD_ENTRY_FMT)
@@ -821,26 +825,22 @@ def _launch_spike(model: FuncModel):
     ddr_path = PROJECT / "ddr.bin"
     ddr_path.write_bytes(model.dram)
 
-    # Strip the firmware's pre-loaded DRAM section so the host kernel image wins.
-    stripped_elf = PROJECT / "firmware" / "build" / "npu_firmware.host.elf"
-    subprocess.run(
-        ["riscv64-unknown-elf-objcopy", "--remove-section", ".data_dram",
-         str(FIRMWARE_ELF), str(stripped_elf)],
-        check=True,
-        stderr=subprocess.DEVNULL,
-    )
+    # Use the Spike-specific firmware ELF (linked at 0x10000 to avoid the
+    # physical-address-0 load restriction).  Host-provided DRAM data is
+    # supplied via ddr.bin at runtime.
+    spike_elf = FIRMWARE_SPIKE_ELF if FIRMWARE_SPIKE_ELF.exists() else FIRMWARE_ELF
 
     env = os.environ.copy()
-    env["PATH"] = str(Path(__file__).resolve().parent.parent.parent / "dtc_src") + ":" + env.get("PATH", "")
+    env["PATH"] = str(PROJECT / "dtc_src") + ":" + env.get("PATH", "")
 
     cmd = [
         str(SPIKE_BIN),
         "--isa=RV32IM",
-        "-m0x80000000:0x10000000",
+        "-m0x80000000:0x10000000,0x00010000:0x00020000",
         f"--kernel={ddr_path}",
         f"--extlib={PLUGIN_SO}",
         "--device=npu,0x20000000",
-        str(stripped_elf),
+        str(spike_elf),
     ]
 
     proc = subprocess.Popen(
@@ -995,6 +995,40 @@ def _verify_output(model: FuncModel, output_addr: int, golden: np.ndarray, dtype
     return np.array_equal(out, golden.flatten())
 
 
+def run_pcie_dma_smoke(direction: int = 0, len_bytes: int = 64) -> bool:
+    """Run a PCIe DMA smoke test through Spike firmware opcode 7 dispatch."""
+    SRAM_KB = 4096
+    model = FuncModel(sram_kb=SRAM_KB)
+    model.firmware.ring_buffer_addr = FIRMWARE_RING_BASE
+
+    desc_addr = DESC_BASE
+    pcie_addr_lo = 0x00000000
+    pcie_addr_hi = 0x00000000
+    axi_addr = 0x20000000  # SRAM base
+
+    desc_buf = struct.pack(PCIE_DMA_DESC_FMT,
+                           pcie_addr_lo, pcie_addr_hi, axi_addr,
+                           len_bytes, direction, 0)
+    model.host_write_data(desc_addr, np.frombuffer(desc_buf, dtype=np.uint8))
+
+    write_cmd_entry(model, 0, opcode=7, desc_addr=desc_addr)
+
+    model.bridge.handle('write', DOORBELL.BASE + DOORBELL.HOST_TAIL, 1)
+
+    proc, server = _launch_spike(model)
+    try:
+        done = poll_completion(model, 1)
+    finally:
+        _cleanup_spike(proc, server)
+
+    expected_head = 1 % 64
+    if done:
+        print(f"  [PASS] pcie_dma — opcode 7 dispatched, NPU_HEAD={expected_head}")
+        return True
+    print(f"  [FAIL] pcie_dma — timeout waiting for NPU_HEAD={expected_head}")
+    return False
+
+
 def run_chain_smoke(op_types: list) -> list:
     """Run a mixed-type command chain and verify each output."""
     rng = np.random.RandomState(123)
@@ -1080,7 +1114,7 @@ def main() -> int:
     parser.add_argument("--ops", default="Q_proj,K_proj,V_proj",
                         help="Comma-separated list of ops")
     parser.add_argument("--mode", default="mmul_smoke",
-                        choices=["mmul_smoke", "chain", "forward"],
+                        choices=["mmul_smoke", "chain", "forward", "pcie_dma"],
                         help="Run mode")
     parser.add_argument("--ops-file", default=None,
                         help="JSON file with chain ops for --mode chain")
@@ -1237,6 +1271,16 @@ def main() -> int:
         print(f"Evidence saved: {e2e_path}  {npz_path}")
         print(f"{'='*70}")
         return 0 if all_ok else 1
+
+    if args.mode == "pcie_dma":
+        print(f"{'='*70}")
+        print("Spike Host PCIe DMA: opcode 7 dispatch smoke test")
+        print(f"{'='*70}")
+        ok = run_pcie_dma_smoke()
+        print(f"{'='*70}")
+        print(f"Spike Host PCIe DMA Summary: {'PASS' if ok else 'FAIL'}")
+        print(f"{'='*70}")
+        return 0 if ok else 1
 
     return 1
 
