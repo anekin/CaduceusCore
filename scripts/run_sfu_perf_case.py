@@ -41,6 +41,16 @@ DEFAULT_EVIDENCE_DIR = REPO_ROOT / "build" / "evidence"
 
 VCS_SETUP = "source /NAS/Tools/methodology/modules/init/bash && module load {vcs_module}"
 
+# Op name → numeric code mapping (from rtl/sfu/sfu_top.v OP_* constants)
+OP_CODE_MAP: dict[str, int] = {
+    "softmax":   0,
+    "layernorm": 1,
+    "gelu":      2,
+    "silu":      4,
+    "rope":      5,
+    "rmsnorm":   6,
+}
+
 
 # ══════════════════════════════════════════════════════════════════════
 # CLI
@@ -183,7 +193,8 @@ def step_run_simulation(
     sim_log_remote = Path(f"{simv}.{case_id}.log")
 
     setup = VCS_SETUP.format(vcs_module=shlex.quote(vcs_module))
-    plusargs = f"+case={case_id} +op={op} +dim={dim}"
+    op_code = OP_CODE_MAP.get(op.lower(), 0)
+    plusargs = f"+case={case_id} +op_code={op_code} +dim={dim}"
     if op.lower() == "rope":
         plusargs += f" +pos={pos}"
     if repeat > 1:

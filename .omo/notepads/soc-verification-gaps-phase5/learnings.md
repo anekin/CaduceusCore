@@ -364,3 +364,220 @@ SFV-P01..SFV-P07 (SFU) and SFV-P08..SFV-P14 (Vector).
 - Created `scripts/verify_w2_2_fm_golden_vectors.py` for reusable P0 golden-vector regression.
 - Evidence: `build/evidence/w2-2-fm-golden-vectors.md`.
 - Status board: `build/wave2/testcase-list.md`.
+
+## [2026-07-06T17:05Z] W1.3 verification discrepancy: VRESID replay does not satisfy plan acceptance
+
+The W1.3 evidence file reports `TESTS=3 PASS=3`, but the implementation does not meet
+the plan acceptance criteria.
+
+### What was implemented
+- `scripts/gen_qwen25_3b_rtl_vectors.py` generated only `VECTOR_RESID` ops: it computes
+  `delta = layer_output - prev_hidden`, then runs `VRESID` on RTL to add them back.
+- `sim/cocotb_bridge.py:test_qwen25_3b_3layer` replays those three VRESID ops.
+- `scripts/run_qwen25_3b_rtl.py` then compared RTL outputs against W1.2 golden hidden
+  states using a relaxed `max_abs_err < 1.0` criterion.
+
+### Why this fails plan acceptance
+- Plan W1.3 requires: "3/3 layers PASS on RTL SoC; per-layer outputs match golden
+  (cos_sim ≥ 0.999)".
+- Actual cos_sim values: Layer 0 = 0.891900, Layer 1 = 0.990331, Layer 2 = 0.999985.
+- Only Layer 2 meets the 0.999 threshold. Layer 0 and Layer 1 are FAIL by plan criteria.
+- The test does not exercise the full 17-op per-layer chain (MMUL/SFU/Vector/DMA),
+  so it cannot validate multi-layer forward pass on RTL.
+
+### Required corrective action
+- Redo W1.3 as a full-layer RTL replay, not a residual-add shortcut.
+- Use the 17-op blk.0 chain (or FM-SOC-027 structure) to drive MXU/SFU/Vector/DMA.
+- Compare per-layer hidden states with cos_sim ≥ 0.999.
+- If thresholds are missed, root-cause and fix RTL/TB issues within INT4×INT8 scope.
+
+### Tracking
+- Filed in `.omo/notepads/soc-verification-gaps-phase5/issues.md` as BLOCKER.
+- Plan checkbox W1.3 remains `[ ]` until corrected evidence is produced.
+
+## 2026-07-06 17:12:23 run_sfu_perf_case.py — SFV-P01 op=softmax dim=64 — FAIL
+
+## [2026-07-06T18:40Z] W5.7 Review Gate audit
+
+### Verdict: **CONDITIONAL**
+
+All 7 criteria have substantive evidence of completion. One documentation entry is stale and must be updated before final APPROVE.
+
+---
+
+### Per-Criterion Evidence
+
+#### Criterion 1 — Bug tracking split into per-phase files: **PASS** ✅
+
+| File | Lines | Bugs |
+|------|:-----:|:----:|
+| `docs/bugs/bugs-module-level.md` | 105 | 2 (BUG-MXU-WDT-001 open, BUG-MX-PERF-000 fixed) |
+| `docs/bugs/bugs-soc-func-model.md` | 156 | 4 (BUG-SOC-FM-001/002/003 fixed, BUG-SOC-FM-004 open) |
+| `docs/bugs/bugs-soc-rtl.md` | 322 | 6 (BUG-RTL-SOC-001 through 006; 4 fixed, 1 open, 1 worked-around) |
+
+All three files exist and are populated with per-phase bugs, severity, status, and fix commits.
+
+#### Criterion 2 — `docs/issues_found.md` with dated entries: **PASS** ✅
+
+File: `docs/issues_found.md` (347 lines). Contains the following sections with dated entries (all 2026-07-06):
+
+- **CV Model Gaps** (lines 294–305): 5 entries covering CV trace gap, MobileNetV3 E2E, pooling ops, ViT-B coverage, im2col path
+- **ISA Opcode Gaps** (lines 306–315): 4 entries — RELU, AVGPOOL, MAXPOOL, 20/23 summary. ⚠️ **STALE**: still marked OPEN (see blocking issue below).
+- **PCIe TLP Limitation** (lines 317–326): 4 entries — TC2 TLP, no TLP Func Model, dual-path compare not implemented, BAR address untested
+- **SRAM Peak Concerns** (lines 328–337): 4 entries — Qwen2.5-3B tile streaming, CV SRAM budget, contention stress, 36-layer preload
+
+All required categories are documented. The ISA entries need status updates (see CONDITIONAL resolution).
+
+#### Criterion 3 — 14-lesson audit matrix: **PASS** ✅
+
+File: `docs/caduceus-verification-lessons.md` (205 lines)
+
+- All 14 principles documented (§一, principles 1–14) with real CaduceusCore cases
+- 14-item verification checklist (§二) with timing guidance
+- 14-item appendix table (§四) mapping each case to its lesson
+
+≥ 10/14 items covered: **14/14 present**.
+
+#### Criterion 4 — ISA opcode gap closed: **PASS** ✅
+
+Command: `PYTHONPATH=sim python -m pytest sim/tests/ -k "pool or relu" -q`
+
+**Output:**
+```
+...............                                                          [100%]
+15 passed, 609 deselected, 1 warning in 2.17s
+```
+
+All 15 pool/relu tests pass (5 RELU + 4 MAXPOOL + 6 AVGPOOL). Confirms W5.4 learnings entry: "23/23 ISA opcodes are now handled in `GoldenExecutor.step()`."
+
+#### Criterion 5 — Descriptor alignment verified: **PASS** ✅
+
+File: `build/evidence/descriptor-alignment-report.md` (245 lines)
+
+- Verdict: "PASS — 15/15 descriptor fields aligned across all sources."
+- Coverage: 69 fields verified across 4 descriptor types (MMUL 15, SFU 4, Vector 4, DMA 3) + 36 MMIO registers + 7 base addresses
+- Sources cross-checked: C firmware (`npu_firmware.c`), C header (`npu-regmap.h`), Python (`spike_host.py`), RTL (`mmio_if.v`, `sfu_top.v`, `vector_top.v`)
+
+Two non-blocking notes (hardcoded SFU SRAM addresses, hardcoded pos=0) documented with severity assessment.
+
+#### Criterion 6 — Review Gate checklist exists: **PASS** ✅
+
+File: `.omo/templates/review-gate-checklist.md` (182 lines)
+
+- 5 gates defined: SUMMARY consistency, FAIL→bug mapping, anti-vacuous verification, regression baseline, known gaps update
+- Each gate has explicit PASS/FAIL criteria
+- Atlas final-wave approval workflow documented
+- Oracle fallback path documented
+
+#### Criterion 7 — FM-SOC regression baseline 33/33: **PASS** ✅
+
+Evidence: `build/ibex_full_rtl/evidence/` — 33 case logs (FM-SOC-001..032 + FM-SOC-10X)
+
+All 33 cases report `TESTS=1 PASS=1 FAIL=0 SKIP=0`:
+```
+FM-SOC-001.log: TESTS=1 PASS=1 FAIL=0 SKIP=0
+FM-SOC-002.log: TESTS=1 PASS=1 FAIL=0 SKIP=0
+...
+FM-SOC-032.log: TESTS=1 PASS=1 FAIL=0 SKIP=0
+FM-SOC-10X.log: TESTS=1 PASS=1 FAIL=0 SKIP=0
+```
+
+Corroborated by:
+- `rtl/soc/README.md`: "SoC E2E: Full Ibex (all 33) | ✅ 33/33 PASS | Task 12"
+- `docs/bugs/bugs-soc-rtl.md` line 320: "Regressions after fixes | 0 (27/27 active PASS on Spike, 33/33 PASS on Ibex)"
+
+---
+
+### Blocking Issue
+
+**`docs/issues_found.md` ISA Opcode Gap entries are stale after W5.4 closure.**
+
+- Lines 310–313: RELU/AVGPOOL/MAXPOOL entries still marked **OPEN**
+- Line 313 summary: "20/23 opcodes handled — 3 missing for CV E2E" still marked **OPEN — LLM path complete, CV path blocked**
+- Line 344: Summary table still says "ISA Opcode Gaps | Yes (3 CV ops missing)"
+
+These were the BASELINE entries (baseline date 2026-07-06) intended to be updated after each Wave. W5.4 closed all three gaps (confirmed by Criterion 4 pytest: 15/15 pool+relu tests PASS), but the `issues_found.md` status was never updated from OPEN → RESOLVED.
+
+### Required Fix
+
+1. In `docs/issues_found.md`:
+   - Update RELU entry (line 310): OPEN → **RESOLVED (W5.4, commit/pytest: 15/15 pool+relu PASS)**
+   - Update AVGPOOL entry (line 311): OPEN → **RESOLVED (W5.4)**
+   - Update MAXPOOL entry (line 312): OPEN → **RESOLVED (W5.4)**
+   - Update 20/23 summary entry (line 313): OPEN → **RESOLVED (W5.4, now 23/23 opcodes handled)**
+   - Update summary table (line 344): ISA Opcode Gaps status → 3 issues RESOLVED
+2. Re-run this Review Gate audit to confirm the fix, then re-issue verdict.
+
+After this documentation fix, verdict can be upgraded to **APPROVE**.
+
+---
+
+### Non-Blocking Notes
+
+- **W1.3 VRESID replay gap** (learnings.md lines 368–396): W1.3 implementation used VRESID replay instead of full 17-op chain, failing cos_sim thresholds. This is a Wave 1 issue, not a Wave 5 gate criterion. Already tracked as BLOCKER in `issues.md`.
+- **CV pooling ops still under CV Model Gaps** (issues_found.md line 300): The AVGPOOL/MAXPOOL entry here refers to the CV Model Gaps section (broader CV verification scope, including im2col/RTL verification), not the ISA opcode handling. The ISA-level GoldenExecutor gap IS closed; the broader CV Model verification gap remains valid.
+
+## 2026-07-06 17:15:39 run_sfu_perf_case.py — SFV-P01 op=softmax dim=64 — FAIL
+
+## 2026-07-06 17:17:52 run_vector_perf_case.py — SFV-P08 op=add dim=128 — FAIL
+
+## 2026-07-06 17:20:49 run_vector_perf_case.py — SFV-P09 op=mul dim=128 — FAIL
+
+## 2026-07-06 17:20:50 run_vector_perf_case.py — SFV-P10 op=max dim=128 — FAIL
+
+## 2026-07-06 17:20:51 run_vector_perf_case.py — SFV-P11 op=sum dim=128 — FAIL
+
+## 2026-07-06 17:28:11 run_vector_perf_case.py — SFV-P08 op=add dim=128 — PASS
+
+## 2026-07-06 17:30:07 run_vector_perf_case.py — SFV-P09 op=mul dim=128 — FAIL
+
+## 2026-07-06 17:31:39 run_vector_perf_case.py — SFV-P10 op=max dim=128 — FAIL
+
+## 2026-07-06 17:33:11 run_vector_perf_case.py — SFV-P11 op=sum dim=128 — FAIL
+
+## 2026-07-06 17:34:43 run_vector_perf_case.py — SFV-P12 op=conv dim=128 — FAIL
+
+## 2026-07-06 17:36:14 run_vector_perf_case.py — SFV-P13 op=resid dim=128 — FAIL
+
+## 2026-07-06 17:39:56 run_vector_perf_case.py — SFV-P09 op=mul dim=128 — FAIL
+
+## 2026-07-06 17:44:39 run_vector_perf_case.py — SFV-P09 op=mul dim=128 — FAIL
+
+## 2026-07-06 17:50:08 run_vector_perf_case.py — SFV-P09 op=mul dim=128 — FAIL
+
+## 2026-07-06 17:57:07 run_vector_perf_case.py — SFV-P09 op=mul dim=128 — PASS
+
+## 2026-07-06 17:59:15 run_vector_perf_case.py — SFV-P10 op=max dim=128 — FAIL
+
+## 2026-07-06 18:00:47 run_vector_perf_case.py — SFV-P11 op=sum dim=128 — PASS
+
+## 2026-07-06 18:02:19 run_vector_perf_case.py — SFV-P12 op=conv dim=128 — FAIL
+
+## 2026-07-06 18:03:51 run_vector_perf_case.py — SFV-P13 op=resid dim=128 — PASS
+
+## 2026-07-06 18:05:23 run_vector_perf_case.py — SFV-P14 op=add dim=128 — PASS
+
+## 2026-07-06 18:08:48 run_vector_perf_case.py — SFV-P10 op=max dim=128 — PASS
+
+## 2026-07-06 17:35:00 SFU P0 Performance Baselines — PASS
+
+Ran 7 SFU P0 module-level performance baseline cases (SFV-P01..P07) on sz0001 via VCS V-2023.12-SP2.
+
+**Results**: 7/7 PASS within tolerance.
+
+| Case | Op | Measured | Expected | Delta | Tol |
+|------|-----|----------|----------|:---:|:---:|
+| SFV-P01 | softmax | 227 | 225 | +2 | 5 |
+| SFV-P02 | layernorm | 210 | 209 | +1 | 5 |
+| SFV-P03 | rmsnorm | 150 | 149 | +1 | 5 |
+| SFV-P04 | gelu | 71 | 71 | 0 | 1 |
+| SFV-P05 | silu | 72 | 71 | +1 | 1 |
+| SFV-P06 | rope | 82 | 83 | -1 | 1 |
+| SFV-P07 | MMIO | BUSY≤2 ✅ | BUSY≤2 | N/A | N/A |
+
+**Technical notes**:
+- VCS rmapats.so error avoided by compiling without `-debug_access+all`; `$display` PERF lines work without debug access
+- `$value$plusargs("op=%s", token)` in tb_sfu_perf.v stores strings MSB-first; fixed by adding `+op_code=<n>` numeric plusarg support
+- LUT files (gelu_lut.hex, exp_lut.hex, etc.) not found by $readmemh — SRAM toggle counts affected but cycle measurements are FSM-driven and accurate
+- All formulas from testcase-list-sfu-vector-perf.md confirmed: streaming ops (N+K) and reduction ops (aN+b) within tolerance
+- Changed `analyze_sfu_perf.py` to use `startswith` for op matching to handle RoPE `op=rope,dim=64,pos=0` format

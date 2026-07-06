@@ -578,13 +578,17 @@ module tb_sfu_perf;
         end
         $display("[TB] case_id = %0s", case_id);
 
-        if (!$value$plusargs("op=%s", op_token)) begin
-            $display("[TB] ERROR: +op= plusarg not provided");
-            $display("[TB] Usage: +op=softmax|layernorm|gelu|silu|rope|rmsnorm [+dim=N] [+pos=P]");
+        // Try numeric op_code first (deterministic, avoids VCS string byte-order)
+        if ($value$plusargs("op_code=%d", op_code)) begin
+            $sformat(op_token, "%0s", "numeric");
+        end else if (!$value$plusargs("op=%s", op_token)) begin
+            $display("[TB] ERROR: neither +op_code= nor +op= plusarg provided");
+            $display("[TB] Usage: +op_code=0|1|2|3|4|5|6 or +op=softmax|layernorm|...");
             $display("FAIL");
             $finish;
+        end else begin
+            op_code = op_token_to_code(op_token);
         end
-        op_code = op_token_to_code(op_token);
         op_str  = op_code_to_str(op_code);
         $display("[TB] op = %0s (code=%0d)", op_str, op_code);
 

@@ -132,7 +132,7 @@ def analyze_entries(entries: list[dict], case_id: Optional[str] = None) -> dict:
 
     # Extract op and dim from the op field (format: "op=softmax,dim=64")
     op_field = filtered[0]["op"]
-    op_match = re.match(r"op=(\w+),dim=(\d+)", op_field)
+    op_match = re.match(r"op=(\w+),dim=(\d+)(?:,pos=(\d+))?", op_field)
     if not op_match:
         results["total_cycles"] = measured
         results["verdict"] = f"PASS (measured={measured}, no formula available)"
@@ -245,8 +245,9 @@ def main() -> int:
 
     if args.op and args.dim is not None:
         # Specific op/dim mode: filter entries and compare
-        op_field = f"op={args.op},dim={args.dim}"
-        filtered = [e for e in entries if e["op"] == op_field]
+        # Use startswith to handle RoPE with pos suffix (e.g., "op=rope,dim=64,pos=0")
+        op_prefix = f"op={args.op},dim={args.dim}"
+        filtered = [e for e in entries if e["op"].startswith(op_prefix)]
 
         if not filtered:
             print(f"[{args.case}] FAIL: no PERF entries for op={op_field}")
