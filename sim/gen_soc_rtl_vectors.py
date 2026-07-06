@@ -63,7 +63,7 @@ sys.path.insert(0, str(_ROOT / "sim"))
 from sim.func_model import FuncModel
 from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector, GoldenDMA
 from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
-from sim.models.crossbar import CrossbarModel
+from models.crossbar import CrossbarModel
 from engine.isa import OpCode
 
 # ══════════════════════════════════════════════════════════════════════

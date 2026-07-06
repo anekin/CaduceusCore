@@ -4,7 +4,7 @@ import struct
 from dataclasses import dataclass
 from typing import Tuple
 
-from sim.models.crossbar import CrossbarModel
+from models.crossbar import CrossbarModel
 
 
 @dataclass

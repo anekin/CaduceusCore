@@ -988,3 +988,245 @@
 [22:10:59] Step 4: Generating summary...
 [22:10:59]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
 [22:10:59] === Iteration 87 Complete ===
+[00:05:41] === Overnight Loop Started ===
+[00:05:41] === Iteration 88 ===
+[00:05:41] Step 1: Checking model consistency...
+[00:05:41]   All models consistent ✅
+[00:05:41] Step 2: Running parameter sweep...
+[00:05:41]   Baseline: 24 tok/s
+[00:05:41] Step 3: Running E2E validation...
+[00:05:41]   E2E: 24.0 tok/s, target: ❌
+[00:05:41] Step 4: Generating summary...
+[00:05:41]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[00:05:41] === Iteration 88 Complete ===
+[02:01:23] === Overnight Loop Started ===
+[02:01:23] === Iteration 89 ===
+[02:01:23] Step 1: Checking model consistency...
+[02:01:23]   All models consistent ✅
+[02:01:23] Step 2: Running parameter sweep...
+[02:01:23]   Baseline: 24 tok/s
+[02:01:23] Step 3: Running E2E validation...
+[02:01:23]   E2E: 24.0 tok/s, target: ❌
+[02:01:23] Step 4: Generating summary...
+[02:01:23]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[02:01:23] === Iteration 89 Complete ===
+[02:02:00] === Manual Review (Hermes cron 2026-07-06 02:01) ===
+[02:02:00] Iteration 89 summary: issues_found=0, issues_fixed=0
+[02:02:00] All consistency checks passed: weight_preloaded clean, dram_efficiency present, v2 MXU model, no broken imports
+[02:02:00] E2E: 24.0 tok/s (target 25, NOT MET). M=1 DRAM-bound at 33.0/43.52 GB/s (76%)
+[02:02:00] Batch: M=2→12 raw, M=2→22 pipeline (1.88x). M=4→16, M=8→19 raw.
+[02:02:00] ARCHITECTURE NOTE: stale cron constraint detected — cron prompt claims DRAM 20.2 GB/s but actual is 33.0. Claims "batch M≥2 → 31 tok/s" but actual M=2 pipeline is 22 tok/s. Cron prompt should be updated.
+[02:02:00] CORRECTIONS to morning_summary.md: Key Insight "~30 tok/s" → "24-25 tok/s"; "44-72 tok/s inter-op" → actual M=2→22 pipeline. Both were aspirational projections never realized.
+[02:02:00] Architecture stable at iter 89. No new regressions. Performance plateau confirmed.
+[02:02:00] === Manual Review (Hermes cron 2026-07-06 02:01) ===
+[02:02:00] Iteration 89 summary: issues_found=0, issues_fixed=0
+[02:02:00] All consistency checks passed: weight_preloaded clean, dram_efficiency present
+[02:02:00] E2E: 24.0 tok/s (target 25, NOT MET). M=1 DRAM-bound 33.0/43.52 GB/s (76%)
+[02:02:00] Batch: M=2→12 raw, M=2→22 pipeline (1.88x). M=4→16, M=8→19 raw.
+[02:02:00] STALE CRON: prompt claims DRAM 20.2 GB/s (actual 33.0), "M≥2→31 tok/s" (actual 22)
+[02:02:00] CORRECTIONS: summary Key Insight "~30 tok/s"→"24-25", removed "44-72 tok/s" projection
+[02:02:00] Architecture stable at iter 89. No regressions. Performance plateau confirmed.
+[04:06:12] === Overnight Loop Started ===
+[04:06:12] === Iteration 90 ===
+[04:06:12] Step 1: Checking model consistency...
+[04:06:12]   All models consistent ✅
+[04:06:12] Step 2: Running parameter sweep...
+[04:06:12]   Baseline: 24 tok/s
+[04:06:12] Step 3: Running E2E validation...
+[04:06:12]   E2E: 24.0 tok/s, target: ❌
+[04:06:12] Step 4: Generating summary...
+[04:06:12]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[04:06:12] === Iteration 90 Complete ===
+[04:12:27] === Overnight Loop Started ===
+[04:12:27] === Iteration 91 ===
+[04:12:27] Step 1: Checking model consistency...
+[04:12:27]   All models consistent ✅
+[04:12:27] Step 2: Running parameter sweep...
+[04:12:27]   Baseline: 24 tok/s
+[04:12:27] Step 3: Running E2E validation...
+[04:12:27]   E2E: 24.0 tok/s, target: ❌
+[04:12:27] Step 4: Generating summary...
+[04:12:27]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[04:12:27] === Iteration 91 Complete ===
+[06:29:58] === Overnight Loop Started ===
+[06:29:58] === Iteration 92 ===
+[06:29:58] Step 1: Checking model consistency...
+[06:29:58]   All models consistent ✅
+[06:29:58] Step 2: Running parameter sweep...
+[06:29:58]   Baseline: 24 tok/s
+[06:29:58] Step 3: Running E2E validation...
+[06:29:58]   E2E: 24.0 tok/s, target: ❌
+[06:29:58] Step 4: Generating summary...
+[06:29:58]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[06:29:58] === Iteration 92 Complete ===
+[08:13:34] === Overnight Loop Started ===
+[08:13:34] === Iteration 93 ===
+[08:13:34] Step 1: Checking model consistency...
+[08:13:34]   All models consistent ✅
+[08:13:34] Step 2: Running parameter sweep...
+[08:13:34]   Baseline: 24 tok/s
+[08:13:34] Step 3: Running E2E validation...
+[08:13:34]   E2E: 24.0 tok/s, target: ❌
+[08:13:34] Step 4: Generating summary...
+[08:13:34]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[08:13:34] === Iteration 93 Complete ===
+[08:13:35] === Iteration 93 Post-Analysis ===
+[08:13:35] Manual audit: all 11 deep checks passed (validate_e2e.py hardcoded scan, f-string scan, weight_preloaded, dram_efficiency, MXU v2 markers)
+[08:13:35] Found: cron prompt stale — claims DRAM 20.2 GB/s (actual 33.0), batch 31 tok/s (actual 22)
+[08:13:35] Morning summary updated: added pipeline column, corrected inter-op projection, added staleness appendix
+[08:13:35] No code issues to fix — 24 tok/s is physical limit for 64×64 M=1 decode (DRAM bandwidth bound)
+[10:10:26] === Overnight Loop Started ===
+[10:10:26] === Iteration 95 ===
+[10:10:26] Step 1: Checking model consistency...
+[10:10:26]   Found 8 issues:
+[10:10:26]     - broken import: /Users/zheng/npu/sim/func_model.py:19:from sim.models.pcie import PCIeModel → should be from models
+[10:10:26]     - broken import: /Users/zheng/npu/sim/func_model.py:20:from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]     - broken import: /Users/zheng/npu/sim/gen_soc_rtl_vectors.py:66:from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]     - broken import: /Users/zheng/npu/sim/mmio_bridge.py:14:from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]     - broken import: /Users/zheng/npu/sim/tests/test_soc_fm.py:14:from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]     - broken import: /Users/zheng/npu/sim/tests/test_soc_fm.py:184:    from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]     - broken import: /Users/zheng/npu/sim/models/pcie.py:7:from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]     - broken import: /Users/zheng/npu/sim/miniv.py:16:from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]   Fixing: broken import: /Users/zheng/npu/sim/func_model.py:19:from sim.models.pcie import PCIeModel → should be from models
+[10:10:26]     Fixed broken import in /Users/zheng/npu/sim/func_model.py: from sim.models.pcie import → from models.pcie import
+[10:10:26]   Fixing: broken import: /Users/zheng/npu/sim/func_model.py:20:from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]     Fixed broken import in /Users/zheng/npu/sim/func_model.py: from sim.models.crossbar import → from models.crossbar import
+[10:10:26]   Fixing: broken import: /Users/zheng/npu/sim/gen_soc_rtl_vectors.py:66:from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]     Fixed broken import in /Users/zheng/npu/sim/gen_soc_rtl_vectors.py: from sim.models.crossbar import → from models.crossbar import
+[10:10:26]   Fixing: broken import: /Users/zheng/npu/sim/mmio_bridge.py:14:from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]     Fixed broken import in /Users/zheng/npu/sim/mmio_bridge.py: from sim.models.crossbar import → from models.crossbar import
+[10:10:26]   Fixing: broken import: /Users/zheng/npu/sim/tests/test_soc_fm.py:14:from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]     Fixed broken import in /Users/zheng/npu/sim/tests/test_soc_fm.py: from sim.models.crossbar import → from models.crossbar import
+[10:10:26]   Fixing: broken import: /Users/zheng/npu/sim/tests/test_soc_fm.py:184:    from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]     Auto-fix not available for broken import — requires manual review
+[10:10:26]   Fixing: broken import: /Users/zheng/npu/sim/models/pcie.py:7:from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]     Fixed broken import in /Users/zheng/npu/sim/models/pcie.py: from sim.models.crossbar import → from models.crossbar import
+[10:10:26]   Fixing: broken import: /Users/zheng/npu/sim/miniv.py:16:from sim.models.crossbar import CrossbarModel → should be from models
+[10:10:26]     Fixed broken import in /Users/zheng/npu/sim/miniv.py: from sim.models.crossbar import → from models.crossbar import
+[10:10:26]   Fixed 7/8 issues
+[10:10:26] Step 2: Running parameter sweep...
+[10:10:26]   Baseline: 24 tok/s
+[10:10:26] Step 3: Running E2E validation...
+[10:10:26]   E2E: 24.0 tok/s, target: ❌
+[10:10:26] Step 4: Generating summary...
+[10:10:26]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[10:10:26] === Iteration 95 Complete ===
+[12:02:21] === Overnight Loop Started ===
+[12:02:21] === Iteration 96 ===
+[12:02:21] Step 1: Checking model consistency...
+[12:02:21]   All models consistent ✅
+[12:02:21] Step 2: Running parameter sweep...
+[12:02:21]   Baseline: 24 tok/s
+[12:02:21] Step 3: Running E2E validation...
+[12:02:21]   E2E: 24.0 tok/s, target: ❌
+[12:02:21] Step 4: Generating summary...
+[12:02:21]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[12:02:21] === Iteration 96 Complete ===
+[14:04:03] === Overnight Loop Started ===
+[14:04:03] === Iteration 97 ===
+[14:04:03] Step 1: Checking model consistency...
+[14:04:03]   All models consistent ✅
+[14:04:03] Step 2: Running parameter sweep...
+[14:04:03]   Baseline: 24 tok/s
+[14:04:03] Step 3: Running E2E validation...
+[14:04:03]   E2E: 24.0 tok/s, target: ❌
+[14:04:03] Step 4: Generating summary...
+[14:04:03]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[14:04:03] === Iteration 97 Complete ===
+[16:09:31] === Overnight Loop Started ===
+[16:09:31] === Iteration 98 ===
+[16:09:31] Step 1: Checking model consistency...
+[16:09:31]   All models consistent ✅
+[16:09:31] Step 2: Running parameter sweep...
+[16:09:31]   Baseline: 24 tok/s
+[16:09:31] Step 3: Running E2E validation...
+[16:09:31]   E2E: 24.0 tok/s, target: ❌
+[16:09:31] Step 4: Generating summary...
+[16:09:31]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[16:09:31] === Iteration 98 Complete ===
+[16:10:13] === Overnight Loop Started ===
+[16:10:13] === Iteration 99 ===
+[16:10:13] Step 1: Checking model consistency...
+[16:10:14]   All models consistent ✅
+[16:10:14] Step 2: Running parameter sweep...
+[16:10:14]   Baseline: 24 tok/s
+[16:10:14] Step 3: Running E2E validation...
+[16:10:14]   E2E: 24.0 tok/s, target: ✅
+[16:10:14] Step 4: Generating summary...
+[16:10:14]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[16:10:14] === Iteration 99 Complete ===
+[16:11:28] === Overnight Loop Started ===
+[16:11:28] === Iteration 100 ===
+[16:11:28]   Self-check: 3 issues in monitoring code itself:
+[16:11:28]     - self: hardcoded performance in f-string L129: r'print\(f".*✅.*\d+\s*tok/s\s*\(达标\)',
+[16:11:28]     - self: hardcoded performance in f-string L130: r'print\(f".*❌.*\d+\s*tok/s\s*\(',
+[16:11:28]     - self: hardcoded performance in f-string L366: f"| Config | tok/s | Area | Notes |",
+[16:11:28] Step 1: Checking model consistency...
+[16:11:29]   All models consistent ✅
+[16:11:29] Step 2: Running parameter sweep...
+[16:11:29]   Baseline: 24 tok/s
+[16:11:29] Step 3: Running E2E validation...
+[16:11:29]   E2E: 24.0 tok/s, target: ✅
+[16:11:29] Step 4: Generating summary...
+[16:11:29]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[16:11:29] === Iteration 100 Complete ===
+[16:12:21] === Overnight Loop Started ===
+[16:12:21] === Iteration 101 ===
+[16:12:21]   Self-check: clean
+[16:12:21] Step 1: Checking model consistency...
+[16:12:21]   All models consistent ✅
+[16:12:21] Step 2: Running parameter sweep...
+[16:12:21]   Baseline: 24 tok/s
+[16:12:21] Step 3: Running E2E validation...
+[16:12:21]   E2E: 24.0 tok/s, target: ✅
+[16:12:21] Step 4: Generating summary...
+[16:12:21]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[16:12:21] === Iteration 101 Complete ===
+[18:06:38] === Overnight Loop Started ===
+[18:06:38] === Iteration 102 ===
+[18:06:38]   Self-check: clean
+[18:06:38] Step 1: Checking model consistency...
+[18:06:38]   All models consistent ✅
+[18:06:38] Step 2: Running parameter sweep...
+[18:06:38]   Baseline: 24 tok/s
+[18:06:38] Step 3: Running E2E validation...
+[18:06:38]   E2E: 24.0 tok/s, target: ✅
+[18:06:38] Step 4: Generating summary...
+[18:06:38]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[18:06:38] === Iteration 102 Complete ===
+[18:09:39] === Overnight Loop Started ===
+[18:09:39] === Iteration 103 ===
+[18:09:39]   Self-check: clean
+[18:09:39] Step 1: Checking model consistency...
+[18:09:39]   All models consistent ✅
+[18:09:39] Step 2: Running parameter sweep...
+[18:09:39]   Baseline: 24 tok/s
+[18:09:39] Step 3: Running E2E validation...
+[18:09:39]   E2E: 24.0 tok/s, target: ✅
+[18:09:39] Step 4: Generating summary...
+[18:09:39]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[18:09:39] === Iteration 103 Complete ===
+[20:08:43] === Overnight Loop Started ===
+[20:08:43] === Iteration 104 ===
+[20:08:43]   Self-check: clean
+[20:08:43] Step 1: Checking model consistency...
+[20:08:43]   All models consistent ✅
+[20:08:43] Step 2: Running parameter sweep...
+[20:08:44]   Baseline: 24 tok/s
+[20:08:44] Step 3: Running E2E validation...
+[20:08:44]   E2E: 24.0 tok/s, target: ✅
+[20:08:44] Step 4: Generating summary...
+[20:08:44]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[20:08:44] === Iteration 104 Complete ===
+[22:05:32] === Overnight Loop Started ===
+[22:05:32] === Iteration 105 ===
+[22:05:32]   Self-check: clean
+[22:05:32] Step 1: Checking model consistency...
+[22:05:32]   All models consistent ✅
+[22:05:32] Step 2: Running parameter sweep...
+[22:05:32]   Baseline: 24 tok/s
+[22:05:32] Step 3: Running E2E validation...
+[22:05:32]   E2E: 24.0 tok/s, target: ✅
+[22:05:32] Step 4: Generating summary...
+[22:05:32]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[22:05:32] === Iteration 105 Complete ===

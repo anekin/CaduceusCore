@@ -11,7 +11,7 @@ import os
 from sim.func_model import FuncModel
 from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector
 from sim.regmap import Addr, MXU, SFU, VECTOR, DMA
-from sim.models.crossbar import CrossbarModel
+from models.crossbar import CrossbarModel
 
 
 def _dram_read_direct(model: FuncModel, addr: int, size: int) -> bytes:
@@ -181,7 +181,7 @@ def test_pcie_integration():
 
 def test_crossbar_concurrent():
     """3 masters (MXU read + DMA read + PCIe write) concurrently, different addresses."""
-    from sim.models.crossbar import CrossbarModel
+    from models.crossbar import CrossbarModel
 
     model = FuncModel()
     xbar = model.crossbar

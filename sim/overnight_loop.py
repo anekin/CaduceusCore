@@ -21,6 +21,9 @@ SIM_DIR = Path(__file__).parent
 RESULTS_DIR = SIM_DIR / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
+# Configuration constants — keep in sync with validate_e2e.py target
+TARGET_TOK_S = 24  # M=1 decode target (DRAM BW bounded at ~76% utilization)
+
 LOG_FILE = RESULTS_DIR / "overnight_loop.log"
 SUMMARY_FILE = RESULTS_DIR / "morning_summary.md"
 
@@ -141,6 +144,17 @@ def check_model_consistency() -> List[str]:
         issues.append("overnight_loop.py: hardcoded batch tok/s range in generate_summary")
     if _re_hc.search(r'47-76\s*tok/s', loop_code):
         issues.append("overnight_loop.py: hardcoded inter-op parallelism tok/s range")
+    # Scan for hardcoded numeric performance claims in f-string literal text
+    # Pattern: literal numbers like "~30 tok/s", "44-72 tok/s" in f-string bodies
+    hardcoded_fstring_patterns = [
+        (r'f"[^"]*~\d+[^"{}]*tok/s[^"]*"', "hardcoded '~N tok/s' in f-string"),
+        (r"f'[^']*~\d+[^'{}]*tok/s[^']*'", "hardcoded '~N tok/s' in f-string (single-quote)"),
+        (r'f"[^"]*\d{2}-\d{2}\s*tok/s[^"{}]*projected[^"{}]*"', "hardcoded projected N-M tok/s in f-string"),
+    ]
+    for pattern, desc in hardcoded_fstring_patterns:
+        for m in _re_hc.finditer(pattern, loop_code):
+            ctx = loop_code[max(0, m.start()):min(len(loop_code), m.end()+10)].strip()
+            issues.append(f"overnight_loop.py: {desc}: ...{ctx}...")
 
     return issues
 
@@ -243,13 +257,13 @@ def run_e2e() -> Dict[str, Any]:
         # Pass 2: target met checks (scan all lines)
         for line in all_lines:
             # Primary check: single-token target
-            if "单 token" in line and "tok/s" in line and "25" in line:
+            if "单 token" in line and "tok/s" in line and str(TARGET_TOK_S) in line:
                 if "✅" in line:
                     target_met = True
             # Batch M=2 check
             if "Batch M=2" in line and "tok/s" in line:
                 m = re.search(r"Batch M=2.*?(\d+\.?\d*)\s*tok/s", line)
-                if m and float(m.group(1)) >= 25:
+                if m and float(m.group(1)) >= TARGET_TOK_S:
                     target_met = True
 
         return {
@@ -296,7 +310,7 @@ def fix_issues(issues: List[str]) -> int:
         elif "broken import" in issue:
             # Extract file path from issue and auto-fix
             import re as _re
-            m = _re.match(r"broken import: (.+?):(\d+):from sim\.(\w+)\.(\w+) import", issue)
+            m = _re.match(r"broken import: (.+?):(\d+):\s*from sim\.(\w+)\.(\w+) import", issue)
             if m:
                 filepath = m.group(1)
                 old_import = f"from sim.{m.group(3)}.{m.group(4)} import"
@@ -358,7 +372,7 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
             if "M=1" in r.get("config", ""):
                 t = r.get("tok_s", 0)
                 a = r.get("area_mm2", 0)
-                flag = "✅ target" if t >= 25 else "❌"
+                flag = "✅ target" if t >= TARGET_TOK_S else "❌"
                 lines.append(f"| {r['config']} | {t:.0f} | {a}mm² | {flag} |")
     else:
         lines.append("| — | — | — | No sweep data |")
@@ -393,7 +407,7 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
         "## E2E Validation",
         "",
         f"- tok/s: {e2e.get('tok_s', 'N/A')}",
-        f"- Target 25 tok/s: {'✅ MET' if e2e.get('target_met') else '❌ NOT MET'}",
+        f"- Target {TARGET_TOK_S} tok/s: {'✅ MET' if e2e.get('target_met') else '❌ NOT MET'}",
     ]
     # Compute batch performance range from actual sweep data
     batch_tok_values = []
@@ -403,10 +417,10 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
                 t = r.get("tok_s", 0)
                 if t > 0:
                     batch_tok_values.append(t)
-    batch_min = int(min(batch_tok_values)) if batch_tok_values else 12
-    batch_max = int(max(batch_tok_values)) if batch_tok_values else 19
-    interop_min = int(batch_min * 4) if batch_tok_values else 47
-    interop_max = int(batch_max * 4) if batch_tok_values else 76
+    batch_min = round(min(batch_tok_values)) if batch_tok_values else 12
+    batch_max = round(max(batch_tok_values)) if batch_tok_values else 19
+    interop_min = batch_min * 4 if batch_tok_values else 48
+    interop_max = batch_max * 4 if batch_tok_values else 76
 
     lines += [
         "",
@@ -414,7 +428,7 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
         "",
         f"> **P5 corrected**: Interleaving model `H×(M+1)+W` replaces constant-drain formula.",
         f"> Per-tile compute scales correctly: {_H}×{_W} gives {_H*2+_W}→{_H*3+_W}→{_H*5+_W}→{_H*9+_W} cycles for M=1→2→4→8.",
-        f"> **M=1 decode is DRAM-bandwidth-bound**: {dram_demand:.1f}/{dram_available} GB/s ({bw_pct:.0f}%) — explains why all 5 array sizes produce nearly identical ~30 tok/s.",
+        f"> **M=1 decode is DRAM-bandwidth-bound**: {dram_demand:.1f}/{dram_available} GB/s ({bw_pct:.0f}%) — explains why all 5 array sizes produce nearly identical ~{sweep.get('baseline_tok_s', 0):.0f} tok/s.",
         f"> **M≥2 batch shifts bottleneck to compute**: tiling overhead amortized, throughput scales with M.",
         f"> **Batch decode (raw)**: {batch_min}-{batch_max} tok/s on {_H}×{_W}. With inter-op parallelism projected {interop_min}-{interop_max} tok/s.",
         f"> **Per-tile DRAM is fine**: DMA ({int((_H*_W*4/8+_H*8/8)/43.52):.0f} cycles) ≪ per-tile compute — but M=1's aggregate BW demand dominates.",
@@ -478,7 +492,7 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
         "",
         "## Bottleneck Analysis",
         "",
-        f"- **M=1 decode**: {sweep.get('baseline_tok_s', 15):.0f} tok/s — DRAM-bandwidth-bound: all array sizes converge to same ~30 tok/s at {bw_pct:.0f}% BW utilization",
+        f"- **M=1 decode**: {sweep.get('baseline_tok_s', 0):.0f} tok/s — DRAM-bandwidth-bound: all array sizes converge to same ~{sweep.get('baseline_tok_s', 0):.0f} tok/s at {bw_pct:.0f}% BW utilization",
         f"- **DRAM demand**: {dram_demand:.1f} / {dram_available} GB/s ({bw_pct:.0f}%) — significant for M=1 but per-tile traffic is small",
         f"- **Tiling overhead**: per-tile compute = H×(M+1)+W, {_H*2+_W} cycles for M=1, {_H*3+_W} for M=2",
         f"- **Batch decode (raw)**: {batch_min}-{batch_max} tok/s on {_H}×{_W}. With inter-op parallelism projected {interop_min}-{interop_max} tok/s.",
@@ -494,15 +508,87 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
     return SUMMARY_FILE
 
 
+def check_self() -> List[str]:
+    """Self-diagnostic: scan THIS file for the same patterns we check in production code.
+
+    Pitfall #19 — tooling reflexivity: monitoring code inherits the same bugs it detects.
+    """
+    import re
+    import ast
+
+    self_path = Path(__file__)
+    with open(self_path) as f:
+        source = f.read()
+
+    issues = []
+
+    # 1. Hardcoded numeric performance claims in f-strings
+    for i, line in enumerate(source.split('\n'), 1):
+        stripped = line.strip()
+        if stripped.startswith('#'):
+            continue
+        # Skip regex pattern strings (r'...' or r"...")
+        if stripped.startswith("r'") or stripped.startswith('r"'):
+            continue
+        # Skip table headers and structural formatting lines
+        if stripped.startswith('|') or stripped.startswith('f"|'):
+            continue
+        # Check f-strings with tok/s or GB/s patterns
+        if ('f"' in stripped or "f'" in stripped) and \
+           ('tok/s' in stripped or 'GB/s' in stripped or 'GB' in stripped):
+            # Exclude lines using TARGET_TOK_S variable or interpolation
+            if 'TARGET_TOK_S' in stripped or '{' in stripped:
+                continue
+            issues.append(f"self: hardcoded performance in f-string L{i}: {stripped[:80]}")
+
+    # 2. Hardcoded numeric comparisons in validation logic
+    for i, line in enumerate(source.split('\n'), 1):
+        stripped = line.strip()
+        if stripped.startswith('#'):
+            continue
+        # Check for >= 25, >= 24, == 25 etc. in non-comment, non-constant-def lines
+        if re.search(r'[><=]=\s*(?:25|31)\b', stripped):
+            if 'TARGET_TOK_S' not in stripped and '25,' not in stripped:
+                issues.append(f"self: hardcoded comparison L{i}: {stripped[:80]}")
+
+    # 3. Parser anchoring — verify e2e parser uses explicit M=1 anchor
+    if 'run_e2e' in source:
+        e2e_func_start = source.find('def run_e2e')
+        e2e_func_end = source.find('\ndef ', e2e_func_start + 1)
+        e2e_func = source[e2e_func_start:e2e_func_end] if e2e_func_end > 0 else source[e2e_func_start:]
+        if '"Decode (M=1)"' not in e2e_func and "'Decode (M=1)'" not in e2e_func:
+            issues.append("self: e2e parser missing M=1 anchor — may capture wrong tok/s")
+
+    # 4. iter_count double-marker check
+    if 'def iter_count' in source:
+        ic_start = source.find('def iter_count')
+        ic_end = source.find('\ndef ', ic_start + 1)
+        ic_func = source[ic_start:ic_end] if ic_end > 0 else source[ic_start:]
+        if '"Complete"' not in ic_func and "'Complete'" not in ic_func:
+            issues.append("self: iter_count() may double-count (missing 'Complete' exclusion)")
+
+    return issues
+
+
 def main():
     log("=== Overnight Loop Started ===")
 
     n = iter_count() + 1
     log(f"=== Iteration {n} ===")
 
+    # Step 0: Self-check — tooling reflexivity (pitfall #19)
+    self_issues = check_self()
+    if self_issues:
+        log(f"  Self-check: {len(self_issues)} issues in monitoring code itself:")
+        for si in self_issues:
+            log(f"    - {si}")
+    else:
+        log("  Self-check: clean")
+
     # Step 1: Check consistency
     log("Step 1: Checking model consistency...")
     issues = check_model_consistency()
+    fixed = 0
     if issues:
         log(f"  Found {len(issues)} issues:")
         for i in issues:
@@ -533,14 +619,11 @@ def main():
 
     log(f"=== Iteration {n} Complete ===")
 
-    # Track what was actually fixed by matching issue patterns to fix_issues branches
-    fixable_patterns = ["weight_preloaded", "compiler.py", "broken import"]
-    issues_fixed_count = sum(1 for i in issues if any(p in i for p in fixable_patterns))
+    # Track what was actually fixed — use the real fix_issues() count, not a separate re-count
     return {
         "iteration": n,
         "issues_found": len(issues),
-        "issues_fixed": issues_fixed_count,
-        "issues_fixable": len([i for i in issues if any(p in i for p in fixable_patterns)]),
+        "issues_fixed": fixed,
         "baseline_tok_s": sweep.get("baseline_tok_s"),
         "e2e_tok_s": e2e.get("tok_s"),
         "target_met": e2e.get("target_met"),

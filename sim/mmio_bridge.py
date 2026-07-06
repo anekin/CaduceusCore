@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, Optional
 import numpy as np
 
 from sim.golden_executor import GoldenSFU, GoldenVector
-from sim.models.crossbar import CrossbarModel
+from models.crossbar import CrossbarModel
 from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
 
 

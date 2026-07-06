@@ -16,8 +16,8 @@ from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector, GoldenDMA
 from sim.mmio_bridge import MMIOBridge
 from sim.miniv import RISCVMini, NPUFirmware, BOOT_ROM_SIZE, BOOT_ROM_BASE
 from sim.axi_tracer import AXITracer
-from sim.models.pcie import PCIeModel
-from sim.models.crossbar import CrossbarModel
+from models.pcie import PCIeModel
+from models.crossbar import CrossbarModel
 
 
 class FuncModel:
