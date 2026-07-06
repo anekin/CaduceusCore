@@ -123,8 +123,34 @@ Func Model default parameter (`entries=256`) was copied from the RTL ROM size wi
 | Metric | Value |
 |--------|:-----:|
 | Total bugs | 3 |
-| Open | 0 |
+| Open | 1 |
 | Fixed | 3 |
 | Critical | 0 |
 | Major | 3 |
-| Minor | 0 |
+| Minor | 1 |
+
+---
+
+### 2026-07-06 [Minor] SFU Descriptor: Firmware Hardcodes SRAM Addresses, Ignores Python Host Input (BUG-SOC-FM-004)
+
+**Case**: W5.5 Descriptor Field Alignment Verification
+**Status**: Open (documented, no fix needed)
+
+#### Description
+
+The C firmware `read_sfu_desc()` hardcodes `input_sram = 0x00000000` and `output_sram = 0x00018000` instead of reading them from descriptor offsets [4] and [5]. The Python host writes these correctly in `write_sfu_descriptor()`, but the fields are ignored. Similarly, `read_sfu_desc()` hardcodes `pos = 0` — the descriptor has no dedicated `pos` field in the 15-word layout.
+
+#### Root Cause
+
+The firmware's `sfu_start()` uses its own hardcoded scratch buffer addresses (`SFU_SCRATCH_IN`/`SFU_SCRATCH_OUT` macros) rather than the descriptor SRAM fields. The descriptor's `input_sram`/`output_sram` fields were designed for a use case where the host controls SRAM layout, but the firmware takes a simpler approach with fixed buffers.
+
+#### Impact
+
+- None for current single-position forward pass (pos=0 is correct).  
+- If SRAM scratch layout ever changes, the firmware would need updates in two places instead of reading from the descriptor.  
+- For multi-token generation (pos > 0), the ROPE position encoding will need to be added to the descriptor or passed via a separate mechanism.
+
+#### Evidence
+
+- Verified in W5.5 descriptor alignment check (`scripts/verify_descriptor_alignment.py`, `build/evidence/descriptor-alignment-report.md`)
+- No functional misbehavior in current single-op smoke tests or forward pass

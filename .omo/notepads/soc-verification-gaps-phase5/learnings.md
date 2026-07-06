@@ -152,3 +152,32 @@ test specification.
   confirming tile streaming via DMA is mandatory (4 MB SRAM).
 - Two new FM-SOC cases proposed: FM-SOC-036 (36-layer forward) and FM-SOC-037
   (36-layer anti-vacuous with corrupted layer 17 weight).
+
+## [2026-07-06] W5.5: Descriptor field alignment verified — 15/15 fields match
+
+All 15 descriptor fields across the unified 15-word generic layout are verified
+aligned between C firmware (`npu_firmware.c`), Python Func Model (`spike_host.py`),
+and RTL MMIO registers (mmio_if.v, sfu_top.v, vector_top.v).
+
+### Verification Scope
+- **15-word generic descriptor layout**: MMUL (15 fields), SFU (4), Vector (4),
+  DMA_COPY (3) — all offset matches between Python `struct.pack('<15I', ...)`
+  and firmware `src[N]` reads.
+- **MMIO register offsets**: 36 registers across MXU (11), SFU (8), Vector (8),
+  DMA (9) — all match across `regmap.py`, `npu-regmap.h`, and RTL source.
+- **Base addresses**: 7 base addresses match across all 3 sources.
+
+### Minor Findings (non-blocking)
+- SFU `read_sfu_desc()` hardcodes `input_sram=0x00000000` / `output_sram=0x00018000`
+  instead of reading from descriptor [4]/[5]. Python writes correctly. Not a
+  functional bug because `sfu_start()` uses its own hardcoded scratch addresses.
+- SFU `read_sfu_desc()` hardcodes `pos=0`. Correct for single-position forward
+  pass; will need descriptor extension for multi-token generation.
+- `sfu_desc_t.op` field never populated — opcode comes from `cmd_entry`.
+- `DESC_STRIDE=64` (descriptor spacing) vs `CMD_DESC_SIZE=32` (ring buffer entry)
+  serve different purposes; no mismatch.
+
+### Evidence
+- `scripts/verify_descriptor_alignment.py` — automated verification script
+- `build/evidence/descriptor-alignment-report.md` — full alignment table
+- BUG-SOC-FM-004 filed in `docs/bugs/bugs-soc-func-model.md` for SFU hardcoded SRAM
