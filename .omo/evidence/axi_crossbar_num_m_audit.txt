@@ -1,0 +1,67 @@
+15://   - AXI ID preservation: slave-side ID = {master_sel[2:0], axi_id[5:0]}
+24://   MSEL_WIDTH  = 3     (log2(NUM_M))
+25://   NUM_M       = 6     (number of master ports)
+36:    parameter int unsigned NUM_M       = 6,
+44:    input  wire [NUM_M-1:0][M_ID_WIDTH-1:0]     m_awid_i,
+45:    input  wire [NUM_M-1:0][ADDR_WIDTH-1:0]     m_awaddr_i,
+46:    input  wire [NUM_M-1:0][7:0]                m_awlen_i,
+47:    input  wire [NUM_M-1:0][2:0]                m_awsize_i,
+48:    input  wire [NUM_M-1:0][1:0]                m_awburst_i,
+49:    input  wire [NUM_M-1:0]                     m_awvalid_i,
+50:    output wire [NUM_M-1:0]                     m_awready_o,
+52:    input  wire [NUM_M-1:0][DATA_WIDTH-1:0]     m_wdata_i,
+53:    input  wire [NUM_M-1:0][DATA_WIDTH/8-1:0]   m_wstrb_i,
+54:    input  wire [NUM_M-1:0]                     m_wlast_i,
+55:    input  wire [NUM_M-1:0]                     m_wvalid_i,
+56:    output wire [NUM_M-1:0]                     m_wready_o,
+58:    output wire [NUM_M-1:0][M_ID_WIDTH-1:0]     m_bid_o,
+59:    output wire [NUM_M-1:0][1:0]                m_bresp_o,
+60:    output wire [NUM_M-1:0]                     m_bvalid_o,
+61:    input  wire [NUM_M-1:0]                     m_bready_i,
+63:    input  wire [NUM_M-1:0][M_ID_WIDTH-1:0]     m_arid_i,
+64:    input  wire [NUM_M-1:0][ADDR_WIDTH-1:0]     m_araddr_i,
+65:    input  wire [NUM_M-1:0][7:0]                m_arlen_i,
+66:    input  wire [NUM_M-1:0][2:0]                m_arsize_i,
+67:    input  wire [NUM_M-1:0][1:0]                m_arburst_i,
+68:    input  wire [NUM_M-1:0]                     m_arvalid_i,
+69:    output wire [NUM_M-1:0]                     m_arready_o,
+71:    output wire [NUM_M-1:0][M_ID_WIDTH-1:0]     m_rid_o,
+72:    output wire [NUM_M-1:0][DATA_WIDTH-1:0]     m_rdata_o,
+73:    output wire [NUM_M-1:0][1:0]                m_rresp_o,
+74:    output wire [NUM_M-1:0]                     m_rlast_o,
+75:    output wire [NUM_M-1:0]                     m_rvalid_o,
+76:    input  wire [NUM_M-1:0]                     m_rready_i,
+134:    wire [NUM_M-1:0][MSEL_WIDTH:0]   m_aw_dec;
+135:    wire [NUM_M-1:0][MSEL_WIDTH:0]   m_ar_dec;
+136:    wire [NUM_M-1:0]                 m_aw_hit;
+137:    wire [NUM_M-1:0]                 m_ar_hit;
+138:    wire [NUM_M-1:0][MSEL_WIDTH-1:0] m_aw_slave;
+139:    wire [NUM_M-1:0][MSEL_WIDTH-1:0] m_ar_slave;
+144:        for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_decode
+157:    reg [NUM_M-1:0]                     m_aw_active;
+158:    reg [NUM_M-1:0][MSEL_WIDTH:0]       m_aw_tgt;
+159:    reg [NUM_M-1:0][M_ID_WIDTH-1:0]     m_aw_id_stored;
+160:    reg [NUM_M-1:0][7:0]                m_aw_len_stored;
+161:    reg [NUM_M-1:0][7:0]                m_w_beat;
+162:    reg [NUM_M-1:0]                     m_w_last;
+164:    reg [NUM_M-1:0]                     m_ar_active;
+165:    reg [NUM_M-1:0][MSEL_WIDTH:0]       m_ar_tgt;
+166:    reg [NUM_M-1:0][M_ID_WIDTH-1:0]     m_ar_id_stored;
+167:    reg [NUM_M-1:0][7:0]                m_ar_len_stored;
+168:    reg [NUM_M-1:0][7:0]                m_r_beat;
+205:        for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_aw_ready
+212:    wire [NUM_M-1:0] m_aw_accept;
+214:        for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_aw_acc
+249:        for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_w_ready
+276:        for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_b_mst
+310:        for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_ar_ready
+316:    wire [NUM_M-1:0] m_ar_accept;
+318:        for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_ar_acc
+352:        for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_r_mst
+402:            for (mi_s = 0; mi_s < NUM_M; mi_s = mi_s + 1) begin
+431:            for (mi_s = 0; mi_s < NUM_M; mi_s = mi_s + 1) begin
+461:            for (mi_s = 0; mi_s < NUM_M; mi_s = mi_s + 1) begin
+504:                    for (ak_s = 0; ak_s < NUM_M && !rr_found; ak_s = ak_s + 1) begin
+505:                        gnt_val = (aw_priority[si_s] + 1 + ak_s) % NUM_M;
+554:                    for (rk_s = 0; rk_s < NUM_M && !rr_found; rk_s = rk_s + 1) begin
+555:                        gnt_val = (ar_priority[si_s] + 1 + rk_s) % NUM_M;
