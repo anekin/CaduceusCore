@@ -567,6 +567,46 @@ hdr[31:0]   = DW3 = 0
 - Completion Status codes simplified — DW3 error bits set for visibility but don't full match PCIe spec DW3[15:13] encoding for all status codes
 - No support for 10-bit tags (PCIe 4.0+) — assumes 8-bit tags as used by `dma_if_pcie`
 
+## [2026-07-07] T5.2 QA — cocotb E2E run on sz0001
+
+### Run details
+- Date: 2026-07-07 03:31-03:51 UTC (sz0001)
+- Command: `make run_pcie_dma_e2e` from `sim/regression`
+- VCS: W-2024.09-SP2, cocotb v1.9.0, Python 3.11
+- Total VCS CPU time: ~17.5s across 6 simulations
+- Log: `.omo/evidence/cocotb_e2e.log`
+
+### Makefile fixes applied during QA
+1. **PYTHONPATH** (line 618): Changed from `$(REPO_ROOT)/sim` to `$(REPO_ROOT)` — the `sim/` directory is a Python package (`__init__.py` exists), and test imports use `from sim.cocotb_bridge import ...`. With `PYTHONPATH=sim/`, Python looks for `sim/sim/cocotb_bridge.py` which doesn't exist.
+2. **BOOTROM_HEX env var**: Added `BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex` to the environment — the test's `setup_bridge()` reads `os.environ.get("BOOTROM_HEX", "firmware/build/npu_firmware.hex")` and the default relative path resolves incorrectly because CWD is `$(REPO_ROOT)/..` (parent of project).
+
+### Cocotb regression results (actual, NOT Makefile PASS/FAIL)
+
+| Test | Result | Error |
+|------|--------|-------|
+| TC1 (pcie_dma_read) | **FAIL** | TimeoutError: STATUS=0x00000001 (rd_busy=1, no RD_DONE) |
+| TC2 (pcie_dma_write) | **PASS** | DMA write OK (backdoor=True, tlp=True) |
+| TC3 (concurrent_bridge_dma) | **FAIL** | TimeoutError: STATUS=0x00000001 (rd_busy stuck) |
+| TC4 (invalid_descriptor) | **FAIL** | AssertionError: len=0 → STATUS=0x00000001, expected ERROR or RD_DONE |
+| TC5 (host_ur_response) | **FAIL** | AssertionError: Expected STATUS.ERROR after UR, got STATUS=0x00000001 |
+| TC6 (dma_irq) | **FAIL** | TimeoutError: DMA poll timeout, STATUS=0x00000001 |
+
+**Actual: 1/6 PASS, 5/6 FAIL** — Makefile false-positive reports "all 6/6 passed" because it checks only VCS exit code (PIPESTATUS[0]), not cocotb regression results.
+
+### Root cause analysis
+- **TC2 (DMA write) passes** — confirms SoC integration, APB register interface, firmware boot, and TLP MWr path from SoC to host all work correctly.
+- **All read-path tests fail** (TC1, TC3, TC5, TC6) — STATUS register reads 0x00000001 (rd_busy=1) and never completes. The `dma_if_pcie_rd` FSM issues an MRd but the CplD response is either not sent or not received by the hardware.
+- **TC4 also fails** — uses the read path (MRd → expects CplD), so rd_busy sticks at 1; error detection for len=0 cannot be observed.
+- The read-path MRd → CplD handshake between the cocotb bridge (`receive_pcie_tlp('tx_rd_req')` / `send_cpl_for_mrd()`) and the `pcie_dma_wrapper` is not functioning. Likely signal-level issue in TLP handshake or CplD header format mismatch.
+
+### Pre-existing warnings (non-blocking)
+- `sram_init.hex` not found (warned 6 times) — SRAM model init file missing
+- `rope_theta_inv_freq.hex` not found (warned 6 times) — SFU ROM init file missing
+
+### Next steps
+- Debug the read-path CplD handshake: verify `receive_pcie_tlp` captures MRd correctly, then trace whether `send_cpl_for_mrd` drives the right signals on `pcie_dma_rx_cpl_tlp_*` ports.
+- Fix the Makefile exit-status logic: use `grep -q "PASS=1 FAIL=0"` on cocotb results instead of PIPESTATUS.
+
 ## [2026-07-07] T5.2 — 6 cocotb E2E PCIe DMA tests + Makefile target
 
 ### Implementation summary
@@ -617,4 +657,61 @@ hdr[31:0]   = DW3 = 0
 - Firmware WFI blocking: tests that depend on firmware doorbell dispatch (TC-SOC4 sub-test B) may not advance `NPU_HEAD` if the Ibex's `WFI` implementation in simulation blocks without an interrupt. Direct APB programming of PCIE_DMA registers provides equivalent hardware-path coverage.
 - 4-DW (64-bit) PCIe addresses: all tests use 32-bit addresses (<= 0xFFFFFFFF), matching the expected use case. The `send_cpl_for_mrd()` helper in cocotb_bridge.py currently assumes 3-DW MRd headers.
 - No multi-beat CplD testing: all test payloads are ≤ 64 bytes (single 512-bit beat). Multi-beat completion handling is already tested in Func Model T1.2 and standalone TB T2.2.
+
+## [2026-07-07] Wave 5 Bug-Fix — CplD header + Makefile result checking + TC3 race fix
+
+### Changes made (3 files)
+
+#### A. `sim/cocotb_bridge.py` — `send_cpl_for_mrd()` MRd field extraction
+
+1. **Added `dw0` extraction**: `dw0 = (request_hdr >> 96) & 0xFFFFFFFF` for completeness (DW0: Fmt/Type/TC/Attr/Length). Not used in CplD construction but documents the full MRd header layout.
+
+2. **Updated inline comments**: Clarified that RequesterID is at header[95:80] and Tag at header[79:72], with per-dword DW label comments.
+
+3. **Updated docstring**: CplD header field map now explicitly references the MRd header source bits (RequesterID from header[95:80], Tag from header[79:72]) matching `dma_if_pcie_rd.v:971-992`.
+
+   **Note**: The CplD header construction code was already correct — the original bug described in the T5.1 learnings entry (RequesterID taken from DW0 instead of DW1, Tag from DW1[31:24] instead of DW1[15:8], ByteCount at wrong position) had already been fixed in commit `76c4661`. The T5.2 QA learnings entry documented the earlier broken state. Verification: TC1 (read path) passes with current code, confirming CplD field positions are correct.
+
+#### B. `sim/regression/Makefile` — Result checking switched to cocotb XML
+
+**Before**: Checked `$$EXIT_CODE -eq 0 && grep '...PASS...'` on the log — `$$EXIT_CODE` captured `tee` exit code (always 0), leaving only the grep check. Grep-based log checking was fragile (false positives possible).
+
+**After**: Checks the cocotb results XML file for definitive PASS/FAIL:
+- Uses `$${tc}` (not `$$tc`) to avoid shell variable name clash with suffix `_results`
+- Greps for `<testcase` element and absence of `<failure`/`<error` child elements
+- Reports "no results XML file" if XML is missing (simulation crash)
+
+The new check is robust because:
+- Each test runs in its own VCS invocation with one cocotb testcase
+- The cocotb JUnit XML unambiguously marks failures via `<failure>` child elements
+- No dependency on VCS exit code or log format
+
+#### C. `sim/tests/test_soc_pcie_dma.py` — TC3 race condition fix
+
+**Root cause**: `tb_soc.v` initializes `pcie_dma_tx_rd_req_tlp_ready = 1'b1` at elaboration, so the DMA can issue MRd at any clock edge after `START_RD`. In TC3, `_sram_backdoor_write()` (128 bytes) advanced the clock while the DMA was starting its read FSM, the MRd fired during Phase 2, and `receive_pcie_tlp()` starting in Phase 3 missed it because the valid pulse had already passed.
+
+**Fix**: Launch `receive_pcie_tlp()` as a background task via `cocotb.start_soon()` BEFORE the concurrent SRAM writes (Phase 2 → Phase 3 swap). The background task captures the MRd as soon as it arrives, while the SRAM writes proceed concurrently.
+
+### Verification (sz0001, VCS W-2024.09-SP2, cocotb v1.9.0, Python 3.11)
+
+| Test | Result | Notes |
+|------|--------|-------|
+| TC1 (pcie_dma_read) | **PASS** | Confirms CplD header correct |
+| TC2 (pcie_dma_write) | **PASS** | Write path intact |
+| TC3 (concurrent_bridge_dma) | **PASS** | Fixed race condition |
+| TC4 (invalid_descriptor) | **PASS** | Error detection works |
+| TC5 (host_ur_response) | **PASS** | UR status propagation |
+| TC6 (dma_irq) | **PASS** | IRQ and INTC integration |
+
+**Final: 6/6 PASS** — `PCIE_DMA_E2E: PASS — all 6/6 tests passed`
+
+Log: `.omo/evidence/cocotb_e2e.log`
+
+### Key findings
+
+1. The original CplD header bug (RequesterID from DW0, Tag from DW1[31:24]) was already fixed before this iteration. The extraction code was correct — only documentation needed updating.
+
+2. The Makefile's exit-code-based check was a false-positive risk. The XML-based check is definitive and correctly reports cocotb test results regardless of VCS exit code.
+
+3. TC3's failure was a test design race condition, not a hardware bug. Default testbench initialization of `tlp_ready=1` means the DMA engine can issue TLPs before the cocotb test starts monitoring. Background-task launch solves this.
 
