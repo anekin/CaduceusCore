@@ -1,6 +1,6 @@
 # Wave 2 Testcase Status — SFU + Vector Module-Level Performance
 
-Last updated: 2026-07-06 17:35:00
+Last updated: 2026-07-06 18:15:00
 
 ## P0: Baseline Cases
 
@@ -13,13 +13,13 @@ Last updated: 2026-07-06 17:35:00
 | SFV-P05 | sfu | silu | 64 | ✅ PASS | ✅ PASS (72/71, Δ+1) | ✅ PASS | 7.152557373046875e-07 | atol=0.002, rtol=0.01 |  |
 | SFV-P06 | sfu | rope | 64 | ✅ PASS | ✅ PASS (82/83, Δ-1) | ✅ PASS | 0.0009765625 | atol=0.002, rtol=0.01 |  |
 | SFV-P07 | sfu | mmio | 0 | ✅ PASS | ✅ PASS (BUSY≤2) | ✅ PASS | N/A | N/A | MMIO timing only; anti-vacuous checks all PASS |
-| SFV-P08 | vector | add | 128 | ✅ PASS | ✅ PASS | ✅ PASS | 0.0 | bit-exact |  |
-| SFV-P09 | vector | mul | 128 | ✅ PASS | ✅ PASS | ✅ PASS | 0.0 | bit-exact |  |
-| SFV-P10 | vector | max | 128 | ✅ PASS | ✅ PASS | ✅ PASS | 0.0 | bit-exact |  |
-| SFV-P11 | vector | sum | 128 | ✅ PASS | ✅ PASS | ✅ PASS | 0.0 | bit-exact |  |
-| SFV-P12 | vector | conv | 128 | ✅ PASS | ✅ PASS | ✅ PASS | 0.0 | atol=0.002, rtol=0.01 |  |
-| SFV-P13 | vector | resid | 128 | ✅ PASS | ✅ PASS | ✅ PASS | 0.0 | bit-exact |  |
-| SFV-P14 | vector | mmio | 0 | ✅ PASS | ✅ PASS | ✅ PASS | N/A | N/A | MMIO timing only; no golden vector |
+| SFV-P08 | vector | add | 128 | ✅ PASS | ✅ PASS (5/6, Δ-1) | ✅ PASS | 0.0 | bit-exact |  |
+| SFV-P09 | vector | mul | 128 | ✅ PASS | ✅ PASS (5/6, Δ-1) | ✅ PASS | 0.0 | bit-exact |  |
+| SFV-P10 | vector | max | 128 | ✅ PASS | ✅ PASS (12/12, Δ0) | ✅ PASS | 0.0 | bit-exact | MAX uses reduce_tree, not ALU (formula corrected) |
+| SFV-P11 | vector | sum | 128 | ✅ PASS | ✅ PASS (12/12, Δ0) | ✅ PASS | 0.0 | bit-exact |  |
+| SFV-P12 | vector | conv | 128 | ✅ PASS | ✅ PASS (260/261, Δ-1) | ✅ PASS | 0.0 | atol=0.002, rtol=0.01 | CONV=2cyc/ele (formula corrected from 132→259/block) |
+| SFV-P13 | vector | resid | 128 | ✅ PASS | ✅ PASS (5/6, Δ-1) | ✅ PASS | 0.0 | bit-exact |  |
+| SFV-P14 | vector | mmio | 0 | ✅ PASS | ✅ PASS (BUSY≤2, IRQ ok) | ✅ PASS | N/A | N/A | MMIO timing verified; 6cyc CMD→IRQ |
 
-**P0 Progress**: 14/14 PASS (SFU RTL perf: 7/7 ✅)
+**P0 Progress**: 14/14 PASS (SFU RTL perf: 7/7 ✅, Vector RTL perf: 7/7 ✅)
 

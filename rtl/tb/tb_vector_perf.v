@@ -209,6 +209,9 @@ module tb_vector_perf;
     reg         busy_rose_in_2;
     reg [1:0]   busy_check_cnt;
 
+    // TOTAL counting trigger — start on CMD.START write, stop at DONE
+    reg         perf_counting;
+
     always @(posedge clk or negedge rst_n) begin : blk_perf_counters
         if (!rst_n) begin
             perf_rst              <= 1'b0;
@@ -238,6 +241,7 @@ module tb_vector_perf;
             status_busy_av        <= 1'b0;
             busy_rose_in_2        <= 1'b0;
             busy_check_cnt        <= 2'd0;
+            perf_counting         <= 1'b0;
         end else begin
             // ── Increment local cycle counter ────────────────────────────
             perf_cycle <= perf_cycle + 32'd1;
@@ -269,7 +273,15 @@ module tb_vector_perf;
                 status_busy_av        <= 1'b0;
                 busy_rose_in_2        <= 1'b0;
                 busy_check_cnt        <= 2'd0;
+                perf_counting         <= 1'b0;
             end
+
+            // ── CMD.START detection ─────────────────────────────────────
+            // When MMIO writes CMD=START (addr=0x04, data[0]=1), begin
+            // counting TOTAL cycles.  This captures the ~2-cycle overhead
+            // between CMD.START and the FSM leaving IDLE.
+            if (mmio_cs && mmio_we && mmio_addr == 12'h04 && mmio_wdata[0])
+                perf_counting <= 1'b1;
 
             // ── SRAM toggle counters ────────────────────────────────────
             sram_a_en_prev <= sram_a_en;
@@ -293,8 +305,10 @@ module tb_vector_perf;
 
             // ── State tracking ──────────────────────────────────────────
             if (fsm_state != state_prev) begin
-                if (fsm_state == ST_DONE && state_prev != ST_DONE)
+                if (fsm_state == ST_DONE && state_prev != ST_DONE) begin
                     cnt_done_pulses <= cnt_done_pulses + 32'd1;
+                    perf_counting <= 1'b0;  // Stop TOTAL counting at DONE
+                end
 
                 if (state_prev == ST_IDLE && fsm_state != ST_IDLE)
                     busy_check_cnt <= 2'd0;
@@ -309,7 +323,7 @@ module tb_vector_perf;
                 busy_check_cnt <= busy_check_cnt + 2'd1;
 
             // ── Per-state cycle accumulation ────────────────────────────
-            if (fsm_state != ST_IDLE && fsm_state != ST_DONE) begin
+            if (perf_counting && fsm_state != ST_DONE) begin
                 cnt_TOTAL <= cnt_TOTAL + 32'd1;
 
                 case (fsm_state)
@@ -390,29 +404,46 @@ module tb_vector_perf;
     //=========================================================================
     function automatic [3:0] op_token_to_code;
         input [127:0] token;
-        reg [7:0] c0, c1, c2, c3, c4, c5;
+        reg [31:0] lower3, lower4;
+        reg [63:0] lower5;
         begin
-            c0 = token[7:0]   | 8'h20;
-            c1 = token[15:8]  | 8'h20;
-            c2 = token[23:16] | 8'h20;
-            c3 = token[31:24] | 8'h20;
-            c4 = token[39:32] | 8'h20;
-            c5 = token[47:40] | 8'h20;
+            // $value$plusargs stores the string bytes at LSB:
+            // "mul"  → token[23:16]='m', [15:8]='u', [7:0]='l'
+            // "conv" → token[31:24]='c', [23:16]='o', [15:8]='n', [7:0]='v'
+            // "resid"→ token[39:32]='r', [31:24]='e', etc.
+            // Case-insensitive comparison: OR 0x20 with each byte.
 
-            if (c0 == 8'h61 && c1 == 8'h64 && c2 == 8'h64)
+            lower3 = token[23:0] | 24'h20_20_20;
+            lower4 = token[31:0] | 32'h20_20_20_20;
+            lower5 = token[39:0] | 40'h20_20_20_20_20;
+
+            // 3-char ops: byte 3 (token[31:24]) must be zero
+            if (token[31:24] == 8'h00) begin
+                case (lower3)
+                    24'h61_64_64: op_token_to_code = OP_ADD;   // "add"
+                    24'h6D_75_6C: op_token_to_code = OP_MUL;   // "mul"
+                    24'h6D_61_78: op_token_to_code = OP_MAX;   // "max"
+                    24'h73_75_6D: op_token_to_code = OP_SUM;   // "sum"
+                    default:      op_token_to_code = OP_ADD;
+                endcase
+            end
+            // 4-char ops: byte 4 (token[39:32]) must be zero
+            else if (token[39:32] == 8'h00) begin
+                if (lower4 == 32'h63_6F_6E_76)        // "conv"
+                    op_token_to_code = OP_CONV;
+                else
+                    op_token_to_code = OP_ADD;
+            end
+            // 5-char ops
+            else if (token[47:40] == 8'h00) begin
+                if (lower5 == 40'h72_65_73_69_64)     // "resid"
+                    op_token_to_code = OP_RESID;
+                else
+                    op_token_to_code = OP_ADD;
+            end
+            else begin
                 op_token_to_code = OP_ADD;
-            else if (c0 == 8'h6D && c1 == 8'h75 && c2 == 8'h6C)
-                op_token_to_code = OP_MUL;
-            else if (c0 == 8'h6D && c1 == 8'h61 && c2 == 8'h78)
-                op_token_to_code = OP_MAX;
-            else if (c0 == 8'h73 && c1 == 8'h75 && c2 == 8'h6D)
-                op_token_to_code = OP_SUM;
-            else if (c0 == 8'h63 && c1 == 8'h6F && c2 == 8'h6E && c3 == 8'h76)
-                op_token_to_code = OP_CONV;
-            else if (c0 == 8'h72 && c1 == 8'h65 && c2 == 8'h73 && c3 == 8'h69 && c4 == 8'h64)
-                op_token_to_code = OP_RESID;
-            else
-                op_token_to_code = OP_ADD;
+            end
         end
     endfunction
 

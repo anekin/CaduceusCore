@@ -1,8 +1,8 @@
-# Vector Perf Case: SFV-P10
+# Vector Perf Case: SFV-P14
 
-- **Op**: max
+- **Op**: add
 - **Dim**: 128
-- **Command**: `scripts/run_vector_perf_case.py --case SFV-P10 --op max --dim 128`
+- **Command**: `scripts/run_vector_perf_case.py --case SFV-P14 --op add --dim 128`
 
 ## Compile Log
 
@@ -32,61 +32,62 @@ CPU time: 3.115 seconds to compile + .889 seconds to elab + .364 seconds to link
 ## Simulation Log (tail)
 
 ```
-Command: /home/prj/zhengs/caduceuscore/CaduceusCore/build/simv_tb_vector_perf +case=SFV-P10 +op=max +dim=128 -l /home/prj/zhengs/caduceuscore/CaduceusCore/build/simv_tb_vector_perf.SFV-P10.log
+Command: /home/prj/zhengs/caduceuscore/CaduceusCore/build/simv_tb_vector_perf +case=SFV-P14 +op=add +dim=128 -l /home/prj/zhengs/caduceuscore/CaduceusCore/build/simv_tb_vector_perf.SFV-P14.log
 Chronologic VCS simulator copyright 1991-2023
 Contains Synopsys proprietary information.
-Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Jul  6 18:07 2026
-[TB] case_id = SFV-P10
-[TB] op = max (code=2)
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Jul  6 18:03 2026
+[TB] case_id = SFV-P14
+[TB] op = add (code=0)
 [TB] dim = 128
 [TB] Reset released at 55000
-[TB] Wrote CTRL=2 (max)
+[TB] Wrote CTRL=0 (add)
 [TB] MMIO configured
 [TB] === CMD loop iteration 0 / 1 ===
 [TB] CMD=START at cycle 16
-[TB] IRQ asserted at cycle 29
-PERF|case=SFV-P10|op=op=max,dim=128|event=READ|cycles=1
-PERF|case=SFV-P10|op=op=max,dim=128|event=LATCH|cycles=1
-PERF|case=SFV-P10|op=op=max,dim=128|event=BIN_EXEC|cycles=0
-PERF|case=SFV-P10|op=op=max,dim=128|event=BIN_WRITE|cycles=0
-PERF|case=SFV-P10|op=op=max,dim=128|event=REDUCE_FEED|cycles=1
-PERF|case=SFV-P10|op=op=max,dim=128|event=REDUCE_WAIT|cycles=6
-PERF|case=SFV-P10|op=op=max,dim=128|event=REDUCE_ACC|cycles=1
-PERF|case=SFV-P10|op=op=max,dim=128|event=REDUCE_WRITE|cycles=1
-PERF|case=SFV-P10|op=op=max,dim=128|event=CONV_FEED|cycles=0
-PERF|case=SFV-P10|op=op=max,dim=128|event=CONV_CAPTURE|cycles=0
-PERF|case=SFV-P10|op=op=max,dim=128|event=CONV_WRITE|cycles=0
-PERF|case=SFV-P10|op=op=max,dim=128|event=TOTAL|cycles=12
-PERF|case=SFV-P10|op=op=max,dim=128|event=CHUNKS|cycles=0
-[PERF] ASSERT (op 0): all anti-vacuous checks PASS
+[TB] IRQ asserted at cycle 22
+PERF|case=SFV-P14|op=op=add,dim=128|event=READ|cycles=1
+PERF|case=SFV-P14|op=op=add,dim=128|event=LATCH|cycles=1
+PERF|case=SFV-P14|op=op=add,dim=128|event=BIN_EXEC|cycles=1
+PERF|case=SFV-P14|op=op=add,dim=128|event=BIN_WRITE|cycles=1
+PERF|case=SFV-P14|op=op=add,dim=128|event=REDUCE_FEED|cycles=0
+PERF|case=SFV-P14|op=op=add,dim=128|event=REDUCE_WAIT|cycles=0
+PERF|case=SFV-P14|op=op=add,dim=128|event=REDUCE_ACC|cycles=0
+PERF|case=SFV-P14|op=op=add,dim=128|event=REDUCE_WRITE|cycles=0
+PERF|case=SFV-P14|op=op=add,dim=128|event=CONV_FEED|cycles=0
+PERF|case=SFV-P14|op=op=add,dim=128|event=CONV_CAPTURE|cycles=0
+PERF|case=SFV-P14|op=op=add,dim=128|event=CONV_WRITE|cycles=0
+PERF|case=SFV-P14|op=op=add,dim=128|event=TOTAL|cycles=5
+PERF|case=SFV-P14|op=op=add,dim=128|event=CHUNKS|cycles=0
+[PERF] FAIL (op 0): sram_a_en toggle count 1 too low (expected >= 2)
+[PERF] ASSERT (op 0): 1 checks FAILED
 [TB] All 1 CMD operations complete.
 PASS
 $finish called from file "rtl/tb/tb_vector_perf.v", line 740.
-$finish at simulation time               365000
+$finish at simulation time               295000
            V C S   S i m u l a t i o n   R e p o r t 
-Time: 365000 ps
-CPU Time:      0.590 seconds;       Data structure size:   2.7Mb
-Mon Jul  6 18:08:47 2026
+Time: 295000 ps
+CPU Time:      0.580 seconds;       Data structure size:   2.7Mb
+Mon Jul  6 18:05:23 2026
 ```
 
 ## Cycle Analysis
 
 ```
-[SFV-P10] op=max,dim=128 expected=12 measured=12 delta=0 PASS
+[SFV-P14] op=add,dim=128 expected=6 measured=5 delta=-1 PASS
   Chunk count: 0
   Per-state breakdown:
-    BIN_EXEC: 0
-    BIN_WRITE: 0
+    BIN_EXEC: 1
+    BIN_WRITE: 1
     CHUNKS: 0
     CONV_CAPTURE: 0
     CONV_FEED: 0
     CONV_WRITE: 0
     LATCH: 1
     READ: 1
-    REDUCE_ACC: 1
-    REDUCE_FEED: 1
-    REDUCE_WAIT: 6
-    REDUCE_WRITE: 1
+    REDUCE_ACC: 0
+    REDUCE_FEED: 0
+    REDUCE_WAIT: 0
+    REDUCE_WRITE: 0
 PASS
 ```
 

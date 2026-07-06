@@ -35,10 +35,10 @@ from typing import Optional
 VECTOR_FORMULAS: dict[str, str] = {
     "add":   "ceil(N/128) * 4 + 2",
     "mul":   "ceil(N/128) * 4 + 2",
-    "max":   "ceil(N/128) * 4 + 2",
+    "max":   "ceil(N/128) * 10 + 2",  # MAX routes through reduce_tree, not ALU
     "resid": "ceil(N/128) * 4 + 2",
     "sum":   "ceil(N/128) * 10 + 2",
-    "conv":  "ceil(N/128) * 132 + 2",
+    "conv":  "ceil(N/128) * 259 + 2", # CONV_FEED(N) + CONV_CAPTURE(N) = 2N, not N
 }
 
 
@@ -49,10 +49,10 @@ def expected_cycles(op: str, dim: int) -> int:
     formulas: dict[str, int] = {
         "add":   chunks * 4 + 2,
         "mul":   chunks * 4 + 2,
-        "max":   chunks * 4 + 2,
+        "max":   chunks * 10 + 2,   # MAX routes through reduce_tree, not ALU
         "resid": chunks * 4 + 2,
         "sum":   chunks * 10 + 2,
-        "conv":  chunks * 132 + 2,
+        "conv":  chunks * 259 + 2,  # CONV_FEED(N) + CONV_CAPTURE(N) sequential
     }
     result = formulas.get(op.lower())
     if result is None:
