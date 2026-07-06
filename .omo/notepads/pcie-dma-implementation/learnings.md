@@ -92,3 +92,27 @@
 - All 7 smoke assertions pass: `PYTHONPATH=. python sim/models/pcie.py`
 - Existing test suite: 42/46 pass (4 pre-existing failures are missing test vector manifest files — not related to this change)
 - Import verification: `PYTHONPATH=sim python -c "from sim.models.pcie import DmaEngine"` succeeds
+
+## [2026-07-06] T1.2: 7 pytest cases for DmaEngine Func Model
+
+### Implementation summary
+- Created `sim/tests/test_pcie_dma_fm.py` with 7 pytest cases + 1 enum-sanity bonus
+- All 8 tests pass: `bash scripts/run_fm_pcie_dma.sh` → 8 passed in 0.10s
+
+### Test cases implemented
+1. **TC1** (`test_tc1_single_mwr_256`): Single MWr NPU→host, 256 bytes incrementing pattern — verifies header format (Fmt+Type, length, address), host_mem integrity, anti-vacuous corruption check
+2. **TC2** (`test_tc2_mrd_split_completion`): MRd NPU←host, 512 bytes split CPLD (RCB=128) — verifies 2 MRd + 4 CPLD headers, byte_count tracking, full data reassembly, MRd/CPLD header distinction
+3. **TC3** (`test_tc3_unaligned_transfer`): Odd address (0x1001), odd length (33 bytes) — verifies byte-level integrity, boundary isolation (bytes at 0x1000 and 0x1022 untouched)
+4. **TC4** (`test_tc4_max_length_4096`): 4096 bytes at MPS=256 → 16 TLPs — verifies all 16 headers, per-chunk data, MRd readback path
+5. **TC5** (`test_tc5_concurrent_read_write`): Tags 5 (write) and 42 (read) submitted concurrently — verifies both complete DESC_ERR_NONE, IRQ edge-triggered (asserted then cleared), write/read data land at correct offsets, anti-vacuous aliasing check
+6. **TC6** (`test_tc6_completion_error_ur`): `inject_completion_error(tag=7, CPL_STATUS_UR)` → `submit_read_desc` — verifies DESC_ERR_UR, IRQ fires on error, destination NOT written
+7. **TC7** (`test_tc7_axi_dec_error`): CrossbarModel with tiny windows + `submit_write_desc(axi_addr=0x50000000)` → crossbar raises ValueError → DESC_ERR_DECERR — verifies IRQ fires, error code is 4 (not UR=1)
+
+### Bonus
+- `test_tag_enums_distinct`: Verifies all 5 error codes, 3 CPL statuses, and 5 Fmt+Type constants are distinct
+
+### Design notes
+- TC7 uses `CrossbarModel` with out-of-range axi_addr to trigger DECERR in `submit_write_desc` (the crossbar's `_decode` raises `ValueError("Address ... unmapped (DECERR)")`)
+- `inject_axi_dec_error()` is only checked in `submit_read_desc` (not `submit_write_desc`), so TC7 uses crossbar route for write-descriptor DECERR
+- All tests use descriptive patterns (incrementing bytes, repeated ASCII) so data corruption is immediately obvious
+- Every test includes an anti-vacuous assertion to confirm the test is actually exercising real behavior
