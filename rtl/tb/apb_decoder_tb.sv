@@ -9,10 +9,11 @@
 //   5. APB write 0x4000_4000 → psel_o[4]=1  (PCIe)
 //   6. APB write 0x4000_5000 → psel_o[5]=1  (DOORBELL)
 //   7. APB write 0x4000_6000 → psel_o[6]=1  (INTC)
-//   8. Out-of-range 0x4000_7000 → pslverr=1
-//   9. Out-of-range 0x5000_0000 → pslverr=1
-//  10. Readback prdata mux from selected slave
-//  11. 100 random APB transactions → correct slave hit
+//   8. APB write 0x4000_7000 → psel_o[7]=1  (PCIE_DMA)
+//   9. Out-of-range 0x4000_8000 → pslverr=1
+//  10. Out-of-range 0x5000_0000 → pslverr=1
+//  11. Readback prdata mux from selected slave
+//  12. 100 random APB transactions → correct slave hit
 //
 // Usage:
 //   iverilog -g2012 -o simv_dec_tb \
@@ -44,6 +45,7 @@ module apb_decoder_tb;
     localparam [31:0] PCIE_BASE     = 32'h4000_4000;
     localparam [31:0] DOORBELL_BASE = 32'h4000_5000;
     localparam [31:0] INTC_BASE     = 32'h4000_6000;
+    localparam [31:0] PCIE_DMA_BASE = 32'h4000_7000;
 
     //=========================================================================
     // Signals
@@ -59,15 +61,15 @@ module apb_decoder_tb;
     reg  [31:0] pwdata;
 
     // APB slave port signals (to dummy slaves)
-    wire [6:0]  psel_o;
-    wire [6:0]  penable_o;
+    wire [7:0]  psel_o;
+    wire [7:0]  penable_o;
     wire [31:0] paddr_o;
     wire        pwrite_o;
     wire [31:0] pwdata_o;
 
     // Slave response (from dummy slaves)
-    wire [6:0]  pready_i;
-    wire [6:0]  pslverr_i;
+    wire [7:0]  pready_i;
+    wire [7:0]  pslverr_i;
     wire [31:0] prdata_slv0;
     wire [31:0] prdata_slv1;
     wire [31:0] prdata_slv2;
@@ -75,6 +77,7 @@ module apb_decoder_tb;
     wire [31:0] prdata_slv4;
     wire [31:0] prdata_slv5;
     wire [31:0] prdata_slv6;
+    wire [31:0] prdata_slv7;
 
     // Muxed response back to master
     wire        pready;
@@ -109,7 +112,7 @@ module apb_decoder_tb;
         .pslverr_i  (pslverr_i),
         .prdata_i   ('{prdata_slv0, prdata_slv1, prdata_slv2,
                        prdata_slv3, prdata_slv4, prdata_slv5,
-                       prdata_slv6}),
+                       prdata_slv6, prdata_slv7}),
         .pready     (pready),
         .pslverr    (pslverr),
         .prdata     (prdata)
@@ -121,8 +124,8 @@ module apb_decoder_tb;
     // All slaves are zero-wait-state: pready=1'b1, pslverr=1'b0.
     // prdata is driven with the slave index to verify muxing.
 
-    assign pready_i   = 7'h7F;          // all 7 slaves always ready
-    assign pslverr_i  = 7'h00;          // no slave errors
+    assign pready_i   = 8'hFF;          // all 8 slaves always ready
+    assign pslverr_i  = 8'h00;          // no slave errors
 
     assign prdata_slv0 = 32'hAAAA_AAA0; // slave 0 signature
     assign prdata_slv1 = 32'hAAAA_AAA1;
@@ -131,6 +134,7 @@ module apb_decoder_tb;
     assign prdata_slv4 = 32'hAAAA_AAA4;
     assign prdata_slv5 = 32'hAAAA_AAA5;
     assign prdata_slv6 = 32'hAAAA_AAA6;
+    assign prdata_slv7 = 32'hAAAA_AAA7;
 
     //=========================================================================
     // Clock & reset
@@ -214,9 +218,9 @@ module apb_decoder_tb;
     // ── Check psel_o during setup phase ─────────────────────────────────
     task check_psel;
         input [31:0] addr;
-        input  [6:0] expected;
+        input  [7:0] expected;
         input [8*64:1] desc;
-        reg [6:0] actual;
+        reg [7:0] actual;
     begin
         test_num = test_num + 1;
         // Start a write but check psel_o during setup phase
@@ -327,61 +331,65 @@ module apb_decoder_tb;
         $display("=====================================================");
         $display("\n--- Phase 1: Slave select verification ---\n");
 
-        // Test 1-7: Verify each slave's psel_o
-        check_psel(MXU_BASE,      7'b000_0001, "MXU      @ 0x4000_0000 → psel_o[0]");
-        check_psel(SFU_BASE,      7'b000_0010, "SFU      @ 0x4000_1000 → psel_o[1]");
-        check_psel(VECTOR_BASE,   7'b000_0100, "VECTOR   @ 0x4000_2000 → psel_o[2]");
-        check_psel(DMA_BASE,      7'b000_1000, "DMA      @ 0x4000_3000 → psel_o[3]");
-        check_psel(PCIE_BASE,     7'b001_0000, "PCIe     @ 0x4000_4000 → psel_o[4]");
-        check_psel(DOORBELL_BASE, 7'b010_0000, "DOORBELL @ 0x4000_5000 → psel_o[5]");
-        check_psel(INTC_BASE,     7'b100_0000, "INTC     @ 0x4000_6000 → psel_o[6]");
+        // Test 1-8: Verify each slave's psel_o
+        check_psel(MXU_BASE,      8'b0000_0001, "MXU      @ 0x4000_0000 → psel_o[0]");
+        check_psel(SFU_BASE,      8'b0000_0010, "SFU      @ 0x4000_1000 → psel_o[1]");
+        check_psel(VECTOR_BASE,   8'b0000_0100, "VECTOR   @ 0x4000_2000 → psel_o[2]");
+        check_psel(DMA_BASE,      8'b0000_1000, "DMA      @ 0x4000_3000 → psel_o[3]");
+        check_psel(PCIE_BASE,     8'b0001_0000, "PCIe     @ 0x4000_4000 → psel_o[4]");
+        check_psel(DOORBELL_BASE, 8'b0010_0000, "DOORBELL @ 0x4000_5000 → psel_o[5]");
+        check_psel(INTC_BASE,     8'b0100_0000, "INTC     @ 0x4000_6000 → psel_o[6]");
+        check_psel(PCIE_DMA_BASE, 8'b1000_0000, "PCIE_DMA @ 0x4000_7000 → psel_o[7]");
 
         $display("\n--- Phase 2: Intra-slab offset tests ---\n");
 
-        // Test 8-10: Offsets within a slave's 4KB window
-        check_psel(32'h4000_0004, 7'b000_0001, "MXU offset +0x004 → psel_o[0]");
-        check_psel(32'h4000_0FFC, 7'b000_0001, "MXU offset +0xFFC → psel_o[0]");
-        check_psel(32'h4000_6008, 7'b100_0000, "INTC offset +0x008 → psel_o[6]");
+        // Test 9-12: Offsets within a slave's 4KB window
+        check_psel(32'h4000_0004, 8'b0000_0001, "MXU offset +0x004 → psel_o[0]");
+        check_psel(32'h4000_0FFC, 8'b0000_0001, "MXU offset +0xFFC → psel_o[0]");
+        check_psel(32'h4000_6008, 8'b0100_0000, "INTC offset +0x008 → psel_o[6]");
+        check_psel(32'h4000_7FFC, 8'b1000_0000, "PCIE_DMA offset +0xFFC → psel_o[7]");
 
         $display("\n--- Phase 3: Out-of-range → pslverr ---\n");
 
-        // Test 11-13: Out-of-range addresses
-        check_pslverr(32'h4000_7000, 1'b1, "0x4000_7000 (beyond INTC) → pslverr");
-        check_pslverr(32'h4000_7FFC, 1'b1, "0x4000_7FFC (gap region)  → pslverr");
-        check_pslverr(32'h5000_0000, 1'b1, "0x5000_0000 (wrong region)→ pslverr");
-        check_pslverr(32'h0000_0000, 1'b1, "0x0000_0000 (boot ROM)   → pslverr");
-        check_pslverr(32'h2000_0000, 1'b1, "0x2000_0000 (SRAM)       → pslverr");
-        check_pslverr(32'h8000_0000, 1'b1, "0x8000_0000 (DRAM)       → pslverr");
-        check_pslverr(32'hFFFF_FFFF, 1'b1, "0xFFFF_FFFF (max addr)   → pslverr");
+        // Test 13-19: Out-of-range addresses
+        check_pslverr(32'h4000_8000, 1'b1, "0x4000_8000 (beyond DMA)→ pslverr");
+        check_pslverr(32'h4000_8FFC, 1'b1, "0x4000_8FFC (gap region)   → pslverr");
+        check_pslverr(32'h5000_0000, 1'b1, "0x5000_0000 (wrong region) → pslverr");
+        check_pslverr(32'h0000_0000, 1'b1, "0x0000_0000 (boot ROM)    → pslverr");
+        check_pslverr(32'h2000_0000, 1'b1, "0x2000_0000 (SRAM)        → pslverr");
+        check_pslverr(32'h8000_0000, 1'b1, "0x8000_0000 (DRAM)        → pslverr");
+        check_pslverr(32'hFFFF_FFFF, 1'b1, "0xFFFF_FFFF (max addr)    → pslverr");
 
         $display("\n--- Phase 4: pslverr stays 0 for valid slaves ---\n");
 
-        // Test 14-16: Valid addresses → no pslverr
-        check_pslverr(MXU_BASE,      1'b0, "MXU    @ 0x4000_0000 → pslverr=0");
-        check_pslverr(SFU_BASE,      1'b0, "SFU    @ 0x4000_1000 → pslverr=0");
-        check_pslverr(INTC_BASE,     1'b0, "INTC   @ 0x4000_6000 → pslverr=0");
+        // Test 20-23: Valid addresses → no pslverr
+        check_pslverr(MXU_BASE,      1'b0, "MXU      @ 0x4000_0000 → pslverr=0");
+        check_pslverr(SFU_BASE,      1'b0, "SFU      @ 0x4000_1000 → pslverr=0");
+        check_pslverr(INTC_BASE,     1'b0, "INTC     @ 0x4000_6000 → pslverr=0");
+        check_pslverr(PCIE_DMA_BASE, 1'b0, "PCIE_DMA @ 0x4000_7000 → pslverr=0");
 
         $display("\n--- Phase 5: Readback prdata muxing ---\n");
 
-        // Test 17-23: Read from each slave → correct prdata
-        check_readback(MXU_BASE,      32'hAAAA_AAA0, "Read MXU      → prdata = 0xAAAA_AAA0");
-        check_readback(SFU_BASE,      32'hAAAA_AAA1, "Read SFU      → prdata = 0xAAAA_AAA1");
-        check_readback(VECTOR_BASE,   32'hAAAA_AAA2, "Read VECTOR   → prdata = 0xAAAA_AAA2");
-        check_readback(DMA_BASE,      32'hAAAA_AAA3, "Read DMA      → prdata = 0xAAAA_AAA3");
-        check_readback(PCIE_BASE,     32'hAAAA_AAA4, "Read PCIe     → prdata = 0xAAAA_AAA4");
-        check_readback(DOORBELL_BASE, 32'hAAAA_AAA5, "Read DOORBELL → prdata = 0xAAAA_AAA5");
-        check_readback(INTC_BASE,     32'hAAAA_AAA6, "Read INTC     → prdata = 0xAAAA_AAA6");
+        // Test 24-31: Read from each slave → correct prdata
+        check_readback(MXU_BASE,      32'hAAAA_AAA0, "Read MXU       → prdata = 0xAAAA_AAA0");
+        check_readback(SFU_BASE,      32'hAAAA_AAA1, "Read SFU       → prdata = 0xAAAA_AAA1");
+        check_readback(VECTOR_BASE,   32'hAAAA_AAA2, "Read VECTOR    → prdata = 0xAAAA_AAA2");
+        check_readback(DMA_BASE,      32'hAAAA_AAA3, "Read DMA       → prdata = 0xAAAA_AAA3");
+        check_readback(PCIE_BASE,     32'hAAAA_AAA4, "Read PCIe      → prdata = 0xAAAA_AAA4");
+        check_readback(DOORBELL_BASE, 32'hAAAA_AAA5, "Read DOORBELL  → prdata = 0xAAAA_AAA5");
+        check_readback(INTC_BASE,     32'hAAAA_AAA6, "Read INTC      → prdata = 0xAAAA_AAA6");
+        check_readback(PCIE_DMA_BASE, 32'hAAAA_AAA7, "Read PCIE_DMA  → prdata = 0xAAAA_AAA7");
 
         $display("\n--- Phase 6: Out-of-range read → prdata=0 ---\n");
 
-        // Test 24: Out-of-range read returns 0
-        check_readback(32'h4000_7000, 32'h0000_0000, "Read 0x4000_7000 → prdata = 0x0000_0000");
+        // Test 32: Out-of-range read returns 0
+        check_readback(32'h4000_8000, 32'h0000_0000, "Read 0x4000_8000 → prdata = 0x0000_0000");
 
         $display("\n--- Phase 7: Write+readback round-trip (per slave) ---\n");
 
-        // Test 25-31: Write data to slave offset, then read back
+        // Test 33-40: Write data to slave offset, then read back
         begin
-            reg [31:0] slv_base [0:6];
+            reg [31:0] slv_base [0:7];
             reg [31:0] rdback;
             slv_base[0] = MXU_BASE;
             slv_base[1] = SFU_BASE;
@@ -390,7 +398,8 @@ module apb_decoder_tb;
             slv_base[4] = PCIE_BASE;
             slv_base[5] = DOORBELL_BASE;
             slv_base[6] = INTC_BASE;
-            for (i = 0; i < 7; i = i + 1) begin
+            slv_base[7] = PCIE_DMA_BASE;
+            for (i = 0; i < 8; i = i + 1) begin
                 test_num = test_num + 1;
                 apb_write(slv_base[i] + 32'h08, 32'h1234_5678 + i);
                 apb_read(slv_base[i] + 32'h08, rdback);
@@ -404,11 +413,11 @@ module apb_decoder_tb;
 
         $display("\n--- Phase 8: Random APB transaction smoke (100 cycles) ---\n");
 
-        // Test 32: Random transactions across all 7 slaves and gaps
+        // Test 41: Random transactions across all 8 slaves and gaps
         begin
             reg [31:0] rand_addr;
             reg  [2:0] rand_slave;
-            reg  [6:0] expected_psel;
+            reg  [7:0] expected_psel;
             reg         expected_err;
             test_num = test_num + 1;
             $display("  Running 100 random APB transactions...");
@@ -417,11 +426,11 @@ module apb_decoder_tb;
                 rand_slave   = ($random(seed) & 32'h7);
                 rand_addr    = (($random(seed) & 32'h7) < 6)
                     ? (32'h4000_0000 | (rand_slave << 12) | ($random(seed) & 32'hFFC))
-                    : 32'h4000_7000 + ($random(seed) & 32'hFFF);
+                    : 32'h4000_8000 + ($random(seed) & 32'hFFF);
 
-                expected_psel = 7'h0;
+                expected_psel = 8'h0;
                 expected_err  = 1'b0;
-                if ((rand_addr[31:16] == 16'h4000) && (rand_addr[15:12] <= 4'd6)) begin
+                if ((rand_addr[31:16] == 16'h4000) && (rand_addr[15:12] <= 4'd7)) begin
                     expected_psel[rand_addr[15:12]] = 1'b1;
                 end else begin
                     expected_err = 1'b1;
@@ -462,21 +471,21 @@ module apb_decoder_tb;
 
         $display("\n--- Phase 9: APB protocol timing (penable gate) ---\n");
 
-        // Test 33: psel_o should be 0 when psel=0
+        // Test 42: psel_o should be 0 when psel=0
         test_num = test_num + 1;
         apb_idle();
         @(posedge clk);
         #1;
-        if (psel_o === 7'h00) begin
-            $display("  [PASS] Test %0d: Idle bus → psel_o = 7'h00", test_num);
+        if (psel_o === 8'h00) begin
+            $display("  [PASS] Test %0d: Idle bus → psel_o = 8'h00", test_num);
             pass_cnt = pass_cnt + 1;
         end else begin
-            $display("  [FAIL] Test %0d: Idle bus → psel_o = %b (expected 7'h00)",
+            $display("  [FAIL] Test %0d: Idle bus → psel_o = %b (expected 8'h00)",
                      test_num, psel_o);
             fail_cnt = fail_cnt + 1;
         end
 
-        // Test 34: During access phase psel_o should still be asserted
+        // Test 43: During access phase psel_o should still be asserted
         test_num = test_num + 1;
         @(posedge clk);
         psel    = 1'b1;

@@ -8,7 +8,7 @@
 #
 # Targets:
 #   all               — Run all regression tests
-#   run_apb_smoke     — APB decoder smoke test (7-slave select + pslverr)
+#   run_apb_smoke     — APB decoder smoke test (8-slave select + pslverr)
 #   run_intc_test     — INTC 7-source interrupt controller test
 #   run_dma_test      — DMA wrapper transfer test
 #   run_crossbar_stress — AXI4 crossbar concurrent stress (≥10k cycles)
@@ -123,7 +123,7 @@ all: run_apb_smoke run_intc_test run_dma_test run_crossbar_stress \
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# run_apb_smoke — APB Decoder (7-slave select + pslverr)
+# run_apb_smoke — APB Decoder (8-slave select + pslverr)
 # ═══════════════════════════════════════════════════════════════════════════
 
 APB_SRC := $(SOC_DIR)/apb_decoder.v $(TB_DIR)/apb_decoder_tb.sv
@@ -723,7 +723,7 @@ help:
 	@echo ""
 	@echo "Primary targets:"
 	@echo "  all                 — Run all regression tests"
-	@echo "  run_apb_smoke       — APB decoder (7-slave select)"
+	@echo "  run_apb_smoke       — APB decoder (8-slave select)"
 	@echo "  run_intc_test       — INTC 7-source controller"
 	@echo "  run_dma_test        — DMA wrapper transfer"
 	@echo "  run_crossbar_stress — AXI crossbar concurrent (>=10k cycles)"
