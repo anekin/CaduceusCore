@@ -281,3 +281,67 @@
 - **E2E verification**: 6/6 PASS (Qwen2.5-1.5B, 2 layers)
 
 All test results and evidence files are in `logs/` and `.omo/evidence/`.
+
+---
+
+## Known Verification Blind Spots
+
+> **Purpose**: Track verification coverage gaps that are explicitly known but not yet resolved. Updated after each Wave of Phase 5 gap-filling.
+> **Baseline Date**: 2026-07-06
+
+<!-- After each Wave, update entries below and mark progress. -->
+
+### CV Model Gaps
+
+| Date | Entry | Description | Reference | Status |
+|------|-------|-------------|-----------|--------|
+| 2026-07-06 | **No CV trace in Func Model** | Arc Model has CV traces (ViT-B/16, YOLOv8, ResNet, MobileNetV3, SD 1.5 UNet) but Func Model only covers LLM. No im2col→GEMM golden reference exists for Conv2D path in `golden_executor.py`. All CV verification currently relies on Arc Model analytical estimates only. | `docs/arc_vs_func.md` §Arc vs Func对比; `docs/rtl_development_plan.md` §8 risks | OPEN |
+| 2026-07-06 | **MobileNetV3-Small E2E not verified** | MobileNetV3-Small 15-layer E2E is scoped in W3.4 (Func Model) and W3.5 (RTL SoC single Conv2D). No verification evidence exists yet for any CV layer on either Func Model or RTL. | `.omo/plans/soc-verification-gaps-phase5.md` W3 T18/T19 | OPEN — scoped to W3 |
+| 2026-07-06 | **Pooling ops (AVGPOOL/MAXPOOL) unimplemented in GoldenExecutor** | AVGPOOL (0x08) and MAXPOOL (0x07) are defined in `OpCode` and handled in `npu_sim.py` timing model, but `GoldenExecutor.step()` raises `ValueError` for these opcodes. No golden reference, no test vectors, no RTL verification. | `sim/engine/isa.py` L21-L22; `sim/golden_executor.py` L1355-L1356 `else: raise ValueError`; `docs/rtl_development_plan.md` §8 risk table | OPEN |
+| 2026-07-06 | **ViT-B/16 zero functional coverage** | ViT-B/16 is a C-class differentiator (competitors lack vision), but no functional verification exists. Layout uses pure GEMM path reusing LLM MXU, but no ViT-layer golden outputs exist in Func Model. | `docs/model_zoo.md` C类 table; `docs/arc_vs_func.md` | OPEN |
+| 2026-07-06 | **im2col hardware path not modeled** | Conv2D requires im2col transformation before GEMM. No im2col Python model exists in Func Model. The transformation logic (tile scheduling, nibble ordering, padding) is untested without RTL. | `docs/rtl_development_plan.md` §8; `sim/tile_scheduler.py` | OPEN |
+
+<!-- Updated after W3 -->
+
+### ISA Opcode Gaps
+
+| Date | Entry | Description | Reference | Status |
+|------|-------|-------------|-----------|--------|
+| 2026-07-06 | **RELU not handled in GoldenExecutor.step()** | RELU (OpCode 0x04) is defined in `isa.py` and routed through the SFU timing model in `npu_sim.py`, but `GoldenExecutor.step()` has no RELU branch. Calling step() with RELU raises `ValueError`. SFU RTL has a RELU op (SFU_OP_RELU=3 in `npu-regmap.h`) but no Func Model golden to compare against. | `sim/engine/isa.py` L18; `sim/golden_executor.py` L1355-1356; `firmware/npu-regmap.h` L54 | OPEN |
+| 2026-07-06 | **AVGPOOL not handled in GoldenExecutor.step()** | AVGPOOL (OpCode 0x08) defined in ISA, used in CV models (downsampling), but not implemented in `GoldenExecutor.step()`. No golden reference for 2x2 average pooling exists. | `sim/engine/isa.py` L22; `sim/golden_executor.py` L1355-1356; `docs/NPU硬件详细架构设计v0.1.md` §指令集 | OPEN |
+| 2026-07-06 | **MAXPOOL not handled in GoldenExecutor.step()** | MAXPOOL (OpCode 0x07) defined in ISA for CV downsampling, but not implemented in `GoldenExecutor.step()`. No golden reference for 2x2 max pooling. RTL also lacks MAXPOOL verification. | `sim/engine/isa.py` L21; `sim/golden_executor.py` L1355-1356; `docs/NPU硬件详细架构设计v0.1.md` §指令集 | OPEN |
+| 2026-07-06 | **20/23 opcodes handled — 3 missing for CV E2E** | Overall ISA status: 20 of 23 total opcodes handled in `GoldenExecutor.step()`. The 3 missing (RELU, AVGPOOL, MAXPOOL) are all CV-specific operators. LLM-only workloads (MMUL + SFU + Vector + DMA) are fully covered. | `docs/rtl_development_plan.md` §8; `sim/engine/isa.py` L12-L39 | OPEN — LLM path complete, CV path blocked |
+
+<!-- Updated after W3 or W5 ISA gap closure -->
+
+### PCIe TLP Limitation
+
+| Date | Entry | Description | Reference | Status |
+|------|-------|-------------|-----------|--------|
+| 2026-07-06 | **TC2 TLP Memory Read fails — no completion data** | `pcie_ep_tb.sv` TC2 issues a TLP Memory Read request but receives no completion data. Testbench log: `[INFO] No completion received — may need full pcie_axi_master init`. Root cause may be in vendored `verilog-pcie/pcie_axi_master` IP rather than testbench logic. | `.omo/plans/soc-verification-gaps-phase5.md` W3 T16; `rtl/tb/pcie_ep_tb.sv` TC2 | OPEN — scoped to W3 investigation |
+| 2026-07-06 | **No PCIe TLP functional model in Func Model** | `FuncModel.host_write_*()` writes directly to DRAM via `_dram_write()` without any TLP-level modeling. No TLP parser, no BAR address translation, no PCIe EP register state. The entire host→NPU data path has no golden reference at the TLP level. | `docs/soc-fm-gap-spec.md` Gap #7 (§PCIE-TLP); `sim/func_model.py` L46-L93 | OPEN |
+| 2026-07-06 | **Dual-path comparison (backdoor + PCIe) not yet implemented** | Lesson 7 principle: E2E compare should do backdoor SRAM read AND interface PCIe TLP read separately. Currently only backdoor comparison exists. PCIe read path is untested on RTL SoC. | `docs/caduceus-verification-lessons.md` Lesson 7; `.omo/plans/soc-verification-gaps-phase5.md` W3 T17/T17b | OPEN — scoped to W3 |
+| 2026-07-06 | **BAR address translation untested in simulation** | PCIe BAR0→SRAM (0x2000_0000) and BAR1→DRAM (0x8000_0000) mapping is only documented in RTL comments. No Func Model or directed test verifies that TLP address write to BAR regions reaches the correct memory target. | `rtl/ip/pcie_ep_wrapper.v`; `docs/soc-fm-gap-spec.md` Gap #7 §Target State | OPEN |
+
+<!-- Updated after W3 -->
+
+### SRAM Peak Concerns
+
+| Date | Entry | Description | Reference | Status |
+|------|-------|-------------|-----------|--------|
+| 2026-07-06 | **Qwen2.5-3B full weights exceed 4MB SRAM — tile streaming required** | Qwen2.5-3B per-layer weights (Q_proj+K_proj+V_proj+O_proj+gate+up+down = 7 linear layers × 2048×2048 × 0.5 bytes = ~14MB) exceed the 4MB unified SRAM. Must rely on tile streaming via DMA. Only blk.0 4-instruction smoke (MMUL+RMSNorm+Softmax+Residual) tested on SoC — not the streaming data path. | `docs/caduceus-verification-lessons.md` Lesson 9; `.omo/plans/soc-verification-gaps-phase5.md` §Scope; `rtl/soc/README.md` §验证结果 | OPEN |
+| 2026-07-06 | **No real-model SRAM peak quantification for CV workloads** | MobileNetV3-Small peak activation ~300MB (requires tiled im2col). The exact per-layer SRAM budget under 4MB constraint has not been computed. L1 SRAM (256KB×2) allocation for double-buffering is in the config but not verified against real CV model tiles. | `docs/rtl_development_plan.md` §8 risk row "SRAM读写带宽不足"; `sim/tile_scheduler.py` | OPEN |
+| 2026-07-06 | **No SRAM contention stress test on RTL SoC** | 6 AXI4 masters (Ibex/MXU/SFU/Vector/DMA/PCIe) share 4MB SRAM through a single crossbar. No simulation verifies concurrent access patterns (MXU reading weights + SFU writing activations + DMA loading next tile) cause no contention-induced stall or data corruption. | `.omo/plans/soc-verification-gaps-phase5.md` W4 PERF-02 (DMA+MXU overlap); `rtl/soc/axi_crossbar.v` | OPEN — W4 perf tests will provide first data |
+| 2026-07-06 | **36-layer weight preload not stress-tested** | Full 36-layer Qwen2.5-3B forward pass requires 36× DMA weight preloads. Each preload involves descriptor chain walking, AXI burst transfers, and SRAM region management. Only a single blk.0 smoke test has been run on SoC — no multi-layer weight streaming verified. | `.omo/plans/soc-verification-gaps-phase5.md` W1 T4 (36-layer forward); `firmware/npu_firmware.c` descriptor struct | OPEN — scoped to W1 |
+
+<!-- Updated after W1 and W4 -->
+
+### Summary of Known Blind Spots
+
+| Section | Total Items | LLM Path Blocked | CV Path Blocked | Depends On |
+|---------|:-----------:|:----------------:|:----------------:|------------|
+| CV Model Gaps | 5 | No | Yes | W3 (MobileNet E2E), W5 (pooling ops) |
+| ISA Opcode Gaps | 4 | No (20/20 LLM ops handled) | Yes (3 CV ops missing) | W5 T30 (GoldenExecutor pool/relu) |
+| PCIe TLP Limitation | 4 | Partial (TC2 blocks PCIe read verification) | Partial | W3 T16 (TC2 fix) |
+| SRAM Peak Concerns | 4 | Partial (tile streaming not stress-tested) | Yes | W1 (36-layer), W4 (perf) |
+| **Total** | **17** | **2 blocked** | **12 blocked** | — |
