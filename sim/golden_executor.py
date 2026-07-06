@@ -694,6 +694,11 @@ class GoldenVector:
         result = a.astype(np.int64) * b.astype(np.int64)
         return np.clip(result, INT32_MIN, INT32_MAX).astype(np.int32)
 
+    @staticmethod
+    def max(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        """Element-wise max in INT32 (bit-exact comparator)."""
+        return np.maximum(a, b).astype(np.int32)
+
     # ── Reductions ──────────────────────────────────────────────────
 
     @staticmethod

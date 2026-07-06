@@ -269,3 +269,98 @@ module-level testing, following the `tb_mxu_perf.v` / `run_mxu_perf_case.py` pat
 - PERF format matches `tb_mxu_perf.v` standard: `PERF|case=X|op=...|event=E|cycles=N`
 
 ## 2026-07-06 15:26:36 run_sfu_perf_case.py — SFV-P01 op=softmax dim=64 — PASS
+
+## 2026-07-06 15:59:27 run_sfu_perf_case.py — SFV-P01 op=softmax dim=64 — PASS
+
+## Pre-Wave 0.2 docstring fix: /tmp/mxu_perf → build/mxu_perf in gen_mxu_vectors.py (2026-07-06)
+
+**What changed:** Line 12 docstring example path `/tmp/mxu_perf` → `build/mxu_perf`.
+
+**Verification (all zero matches — PASS):**
+- `grep -r '/tmp/simv' scripts/ rtl/*/README.md README.md` → exit 1 (no matches)
+- `grep -r '/tmp/' scripts/run_batch_regression.py scripts/run_task17_regression.py scripts/run_mxu_perf_case.py` → exit 1 (no matches)
+- `grep '/tmp/' scripts/gen_mxu_vectors.py` → exit 1 (no matches)
+
+**Rationale:** After the Pre-Wave 0.2 runtime `/tmp` → `build/` migration in regression scripts (run_batch_regression.py, run_mxu_perf_case.py), this docstring example was the sole remaining hardcoded `/tmp` path. The `build/` directory is repo-relative and properly gitignored.
+
+## [2026-07-06T16:14Z] Wave 3.1: PCIe EP TC2 TLP Memory Read fixed in testbench
+
+### Symptom
+`make run_pcie_test` reported TC2 as an INFO-level non-fatal skip:
+`[INFO] No completion received — may need full pcie_axi_master init`.
+
+### Root Cause
+The behavioral AXI4 SRAM slave in `rtl/tb/pcie_ep_tb.sv` had a broken
+read-response state machine. The "finalize burst" and "drive response"
+assignments in the same sequential always block conflicted, keeping
+`m_axi_rvalid` high after the burst should have ended. The vendored
+`pcie_axi_master_rd` therefore never saw a clean AXI read completion and
+never emitted a PCIe Completion TLP.
+
+### Fix
+- Refactored the AXI slave R-channel handling so finalization and response
+driving are mutually exclusive branches.
+- Hardened TC2 to call `tlp_recv_completion()` and compare the returned
+completion data against the known written pattern (anti-vacuous check).
+
+### Verification
+`make run_pcie_test` on sz0001 now passes all 4 tests:
+TC1 PASS, TC2 PASS (data matches), TC3 PASS, TC4 PASS.
+
+### Evidence
+- `build/evidence/w3-1-pcie-tc2.txt`
+- `sim/regression/pcie_test.log`
+
+## 2026-07-06 16:15:17 run_sfu_perf_case.py — SFV-P01 op=softmax dim=64 — PASS
+
+## 2026-07-06 16:15:17 run_sfu_perf_case.py — SFV-P02 op=layernorm dim=64 — PASS
+
+## 2026-07-06 16:15:17 run_sfu_perf_case.py — SFV-P03 op=rmsnorm dim=64 — PASS
+
+## 2026-07-06 16:15:17 run_sfu_perf_case.py — SFV-P04 op=gelu dim=64 — PASS
+
+## 2026-07-06 16:15:18 run_sfu_perf_case.py — SFV-P05 op=silu dim=64 — PASS
+
+## 2026-07-06 16:15:18 run_sfu_perf_case.py — SFV-P06 op=rope dim=64 — PASS
+
+## 2026-07-06 16:15:18 run_vector_perf_case.py — SFV-P08 op=add dim=128 — PASS
+
+## 2026-07-06 16:15:18 run_vector_perf_case.py — SFV-P09 op=mul dim=128 — PASS
+
+## 2026-07-06 16:15:18 run_vector_perf_case.py — SFV-P10 op=max dim=128 — PASS
+
+## 2026-07-06 16:15:18 run_vector_perf_case.py — SFV-P11 op=sum dim=128 — PASS
+
+## 2026-07-06 16:15:18 run_vector_perf_case.py — SFV-P12 op=conv dim=128 — PASS
+
+## 2026-07-06 16:15:18 run_vector_perf_case.py — SFV-P13 op=resid dim=128 — PASS
+
+## 2026-07-06 16:15:31 run_sfu_perf_case.py — SFV-P01 op=softmax dim=64 — PASS
+
+## [2026-07-06T16:20:12Z] W2.2: SFU+Vector Func Model golden vectors verified (14/14 PASS)
+
+
+### Scope
+Verified the Func Model golden reference for all 14 SFU+Vector P0 module-level performance cases:
+SFV-P01..SFV-P07 (SFU) and SFV-P08..SFV-P14 (Vector).
+
+### Method
+- Ran `scripts/run_sfu_perf_case.py --dry-run` / `scripts/run_vector_perf_case.py --dry-run` for cycle-formula checks.
+- Generated synthetic inputs sized to each case's N/DIM.
+- Compared `GoldenSFU` / `GoldenVector` hardware-equivalent output against numpy reference.
+
+### Tolerance
+- SFU / CONV FP16 outputs: `rtol=0.01, atol=0.002`
+- Vector INT32 ops (add, mul, max, sum, resid): bit-exact.
+
+### Results
+- Overall: **14/14 PASS**
+- Worst-case absolute error: `SFV-P04` max_abs_err=1.576e-03, max_rel_err=1.306e-01
+- GELU shows the largest absolute error (~1.5e-3) from the 64-entry LUT; still within 2e-3 FP16 tolerance.
+- RoPE verification used 1 Q head (128 elems / 64 pairs) + 2 KV heads (256 elems) to match RTL GQA.
+
+### Changes
+- Added `GoldenVector.max()` element-wise static method in `sim/golden_executor.py` (Func Model only).
+- Created `scripts/verify_w2_2_fm_golden_vectors.py` for reusable P0 golden-vector regression.
+- Evidence: `build/evidence/w2-2-fm-golden-vectors.md`.
+- Status board: `build/wave2/testcase-list.md`.
