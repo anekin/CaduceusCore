@@ -9,7 +9,7 @@ Generates $readmemh-format test vectors for RTL MXU verification.
 Usage:
     python3 CaduceusCore/scripts/gen_mxu_vectors.py --scenario single_tile --out-dir CaduceusCore/rtl/test_vectors/mxu
     python3 CaduceusCore/scripts/gen_mxu_vectors.py --scenario all --out-dir CaduceusCore/rtl/test_vectors/mxu
-    python3 CaduceusCore/scripts/gen_mxu_vectors.py --shape 64,80,64 --out-dir /tmp/mxu_perf
+    python3 CaduceusCore/scripts/gen_mxu_vectors.py --shape 64,80,64 --out-dir build/mxu_perf
 """
 
 import argparse
