@@ -181,3 +181,57 @@ and RTL MMIO registers (mmio_if.v, sfu_top.v, vector_top.v).
 - `scripts/verify_descriptor_alignment.py` — automated verification script
 - `build/evidence/descriptor-alignment-report.md` — full alignment table
 - BUG-SOC-FM-004 filed in `docs/bugs/bugs-soc-func-model.md` for SFU hardcoded SRAM
+
+## [2026-07-06] W2.1: SFU + Vector perf measurement infrastructure created (6 files)
+
+Created the 6-file performance measurement infrastructure for SFU and Vector
+module-level testing, following the `tb_mxu_perf.v` / `run_mxu_perf_case.py` pattern.
+
+### Files Created
+1. **`rtl/tb/tb_sfu_perf.v`** (373 lines) — SFU perf testbench wrapping `sfu_top.v`:
+   - Per-FSM-state cycle counters (IDLE, READ_INIT, RUN, FLUSH, DONE + TOTAL)
+   - Anti-vacuous assertions (sram_ren toggles, sram_wen toggles, status_done
+     single-pulse, status_busy within 2 cycles)
+   - Standardized PERF| output format matching `tb_mxu_perf.v`
+   - Accepts `+case=`, `+op=`, `+dim=`, `+pos=`, `+repeat=` plusargs
+   - Synthetic test data generation (no vectors needed)
+
+2. **`rtl/tb/tb_vector_perf.v`** (451 lines) — Vector perf testbench wrapping `vector_top.v`:
+   - Per-state counters for all 13 FSM states + TOTAL + chunk counter
+   - Wide SRAM model (4096-bit, 128 lanes, dual read ports)
+   - Anti-vacuous assertions (sram_a_en, sram_o_wen, status_done, status_busy)
+   - Accepts `+case=`, `+op=`, `+dim=`, `+repeat=` plusargs
+
+3. **`scripts/analyze_sfu_perf.py`** (199 lines) — SFU cycle formula + PERF log parser:
+   - Expected formulas: gelu=N+7, silu=N+7, rope=N+19, softmax=3N+33,
+     layernorm=3N+17, rmsnorm=2N+21
+   - Tolerances: streaming |delta|≤1, reduction |delta|≤5
+   - Parses `PERF|case=X|op=...|event=E|cycles=N` lines
+
+4. **`scripts/analyze_vector_perf.py`** (192 lines) — Vector cycle formula + PERF log parser:
+   - Expected formulas: ALU=ceil(N/128)×4+2, SUM=ceil(N/128)×10+2,
+     CONV=ceil(N/128)×132+2
+   - Tolerance: all ops |delta|≤1
+
+5. **`scripts/run_sfu_perf_case.py`** (339 lines) — SFU case end-to-end runner:
+   - VCS compile (`tb_sfu_perf` top, `vcs_2023.12sp2`)
+   - SSH to sz0001 for remote execution
+   - Simulation with plusargs, log download, cycle analysis
+   - Evidence output to `build/evidence/sfv-*-summary.md`
+
+6. **`scripts/run_vector_perf_case.py`** (332 lines) — Vector case end-to-end runner
+
+### Verification
+- All 6 files confirmed present via `ls`
+- VCS compile of `tb_sfu_perf.v` succeeds on sz0001 (vcs_2023.12sp2)
+- `simv_tb_sfu_perf` binary at `build/simv_tb_sfu_perf`
+- Dry-run: `run_sfu_perf_case.py --op softmax --dim 64 --dry-run` outputs
+  `expected=225` (3×64+33 formula) and verdict PASS
+
+### Key Design Decisions
+- Pure perf measurement (no golden comparison) — synthetic test data in TB
+- Hierarchical reference `u_dut.state` for FSM probing (no RTL modifications)
+- VCS `vcs_2023.12sp2` per SFU/Vector README requirement (W-2024.09 has `rmapats.so` bug)
+- PERF format matches `tb_mxu_perf.v` standard: `PERF|case=X|op=...|event=E|cycles=N`
+
+## 2026-07-06 15:26:36 run_sfu_perf_case.py — SFV-P01 op=softmax dim=64 — PASS
