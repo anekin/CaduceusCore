@@ -198,9 +198,6 @@ module dma_wrapper #(
             ch0_src_latch <= {AXI_ADDR_WIDTH{1'b0}};
             ch0_dst_latch <= {AXI_ADDR_WIDTH{1'b0}};
             ch0_len_latch <= {LEN_WIDTH{1'b0}};
-            ch1_src_latch <= {AXI_ADDR_WIDTH{1'b0}};
-            ch1_dst_latch <= {AXI_ADDR_WIDTH{1'b0}};
-            ch1_len_latch <= {LEN_WIDTH{1'b0}};
             ch0_valid     <= 1'b0;
             ch1_valid     <= 1'b0;
         end else begin

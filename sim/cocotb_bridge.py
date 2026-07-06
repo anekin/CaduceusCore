@@ -1712,6 +1712,92 @@ class CocotbBridge:
         except AttributeError:
             return self._apb_write_cache.get(addr, 0)
 
+    # ── Doorbell Backdoor Helpers ─────────────────────────────────────────
+
+    async def _doorbell_backdoor_write(self, addr: int, data: int):
+        """Write a doorbell register directly via hierarchical VPI access.
+
+        In Ibex-RTL mode the live APB master belongs to the Ibex CPU, so the
+        testbench cannot drive ``u_ibex_wrapper.apb_*`` without corrupting
+        firmware transactions.  This helper reaches through ``u_dut.u_doorbell``
+        and writes the register file directly, then waits one clock so the
+        firmware sees a clean next-cycle update.
+
+        Args:
+            addr: Full APB address (e.g. ``Addr.DOORBELL + DOORBELL.HOST_TAIL``).
+            data: 32-bit data to write.
+
+        Raises:
+            ValueError: If ``addr`` is not one of the four doorbell registers.
+            RuntimeError: If called when cocotb is not running.
+        """
+        reg_map = {
+            Addr.DOORBELL + DOORBELL.HOST_TAIL: "host_tail_reg",
+            Addr.DOORBELL + DOORBELL.NPU_HEAD: "npu_head_reg",
+            Addr.DOORBELL + DOORBELL.HOST_HEAD: "host_head_reg",
+            Addr.DOORBELL + DOORBELL.NPU_TAIL: "npu_tail_reg",
+        }
+        reg_name = reg_map.get(addr)
+        if reg_name is None:
+            raise ValueError(
+                f"0x{addr:08X} is not a doorbell register; expected one of "
+                f"{list(reg_map.keys())}"
+            )
+        if self.dut is None:
+            raise RuntimeError("Doorbell backdoor write needs a DUT handle")
+
+        try:
+            doorbell_inst = self.dut.u_dut.u_doorbell
+            reg = getattr(doorbell_inst, reg_name)
+            from cocotb.handle import Force, Release
+            reg.value = Release()
+            await self.wait_cycles(1)
+            reg.value = Force(data & 0xFFFFFFFF)
+        except AttributeError as e:
+            raise RuntimeError(
+                f"Cannot reach doorbell register {reg_name}: {e}"
+            ) from e
+
+        logger.debug(f"Doorbell backdoor WR: 0x{addr:08X} ({reg_name}) <- 0x{data:08X}")
+        await self.wait_cycles(1)
+
+    async def _doorbell_backdoor_read(self, addr: int) -> int:
+        """Read a doorbell register directly via hierarchical VPI access.
+
+        See :meth:`_doorbell_backdoor_write` for the rationale.
+
+        Args:
+            addr: Full APB address of the doorbell register.
+
+        Returns:
+            The current 32-bit register value.
+        """
+        reg_map = {
+            Addr.DOORBELL + DOORBELL.HOST_TAIL: "host_tail_reg",
+            Addr.DOORBELL + DOORBELL.NPU_HEAD: "npu_head_reg",
+            Addr.DOORBELL + DOORBELL.HOST_HEAD: "host_head_reg",
+            Addr.DOORBELL + DOORBELL.NPU_TAIL: "npu_tail_reg",
+        }
+        reg_name = reg_map.get(addr)
+        if reg_name is None:
+            raise ValueError(
+                f"0x{addr:08X} is not a doorbell register; expected one of "
+                f"{list(reg_map.keys())}"
+            )
+        if self.dut is None:
+            raise RuntimeError("Doorbell backdoor read needs a DUT handle")
+
+        try:
+            doorbell_inst = self.dut.u_dut.u_doorbell
+            value = int(getattr(doorbell_inst, reg_name).value)
+        except AttributeError as e:
+            raise RuntimeError(
+                f"Cannot reach doorbell register {reg_name}: {e}"
+            ) from e
+
+        logger.debug(f"Doorbell backdoor RD: 0x{addr:08X} ({reg_name}) -> 0x{value:08X}")
+        return value
+
     # ── INTC / IRQ Helpers ────────────────────────────────────────────────
 
     async def poll_intc_pending(self, mask: int, timeout: int = 1000) -> int:

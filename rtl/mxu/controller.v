@@ -264,7 +264,7 @@ module controller (
                 //=============================================================
                 // STORE_OUT — route row addresses 0..m_cur-1
                 //=============================================================
-                // Entered only after the final K-tile of an (M,N) group, so
+                // Entered only after the final K-tile of an (M,N) tile group, so
                 // k_tile is always the last K-tile here.
                 S_STORE_OUT: begin
                     status_busy <= 1'b1;

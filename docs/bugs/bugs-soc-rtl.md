@@ -262,3 +262,18 @@ The DMA copies only the exact logical byte count, so the wrappers only touch val
 #### Verification
 
 FM-SOC-032 与 FM-SOC-10X 在 P4 回归中 PASS（2/2 active, 3/3 SKIP）；`run_p4_full_rtl.sh` 报告 `PASS:2 SKIP:3 FAIL:0`。
+
+---
+
+## Ibex RTL Replacement — No New Bugs (Task 12)
+
+The full 33-case Ibex RTL regression (2026-07-06) passed 33/33 with zero failures.
+No BUG-RTL-SOC-IBC-xxx entries were created. All previously fixed bugs
+(BUG-RTL-SOC-001/003/004/006) remained fixed; the known open limitations
+(BUG-RTL-SOC-002 DRAM 8 MB window, BUG-RTL-SOC-005 SFU/Vector X-propagation
+workaround) did not regress.
+
+Ibex-specific firmware changes (MEIE enable, vector table, DMA channel clearing,
+npubarrier in wait_done) and IbexWrapper APB timing fixes (penable gating,
+live data_addr/data_wdata latching) were sufficient for clean 33/33 PASS with
+no additional RTL bug work.

@@ -334,7 +334,7 @@ module ibex_wrapper #(
                 ST_APB_RD: begin
                     resp_valid <= 1'b0;
                     // APB read: psel=1, penable=1 → wait for pready
-                    if (apb_pready) begin
+                    if (apb_pready && apb_penable) begin
                         resp_rdata <= apb_prdata;
                         resp_err   <= apb_pslverr;
                         resp_valid <= 1'b1;
@@ -344,7 +344,7 @@ module ibex_wrapper #(
                 ST_APB_WR: begin
                     resp_valid <= 1'b0;
                     // APB write: psel=1, penable=1 → wait for pready
-                    if (apb_pready) begin
+                    if (apb_pready && apb_penable) begin
                         resp_err   <= apb_pslverr;
                         resp_valid <= 1'b1;
                     end
@@ -404,12 +404,13 @@ module ibex_wrapper #(
             end
 
             ST_APB_RD: begin
-                if (apb_pready)
+                // Wait for access phase (penable=1) and slave ready
+                if (apb_pready && apb_penable)
                     state_next = ST_IDLE;
             end
 
             ST_APB_WR: begin
-                if (apb_pready)
+                if (apb_pready && apb_penable)
                     state_next = ST_IDLE;
             end
 
@@ -513,12 +514,15 @@ module ibex_wrapper #(
             case (state)
                 ST_IDLE: begin
                     if (data_req && is_apb && data_gnt) begin
-                        // Setup phase
+                        // Setup phase — use live data_addr/data_wdata here.
+                        // req_addr/req_wdata are captured in the same cycle by
+                        // the main sequential block, so reading them in this
+                        // always block yields the *previous* request's address.
                         apb_psel_r    <= 1'b1;
                         apb_penable_r <= 1'b0;
                         apb_pwrite_r  <= data_we;
-                        apb_paddr_r   <= req_addr;
-                        apb_pwdata_r  <= req_wdata;
+                        apb_paddr_r   <= data_addr;
+                        apb_pwdata_r  <= data_wdata;
                     end else begin
                         apb_psel_r    <= 1'b0;
                         apb_penable_r <= 1'b0;
@@ -528,7 +532,10 @@ module ibex_wrapper #(
                 ST_APB_RD, ST_APB_WR: begin
                     // Access phase: penable=1 with psel=1
                     apb_penable_r <= 1'b1;
-                    if (apb_pready) begin
+                    // Only complete after penable has been high for at least one
+                    // full cycle. This guarantees slaves see a non-zero-width
+                    // access phase even when pready is combinatorially 1.
+                    if (apb_pready && apb_penable_r) begin
                         // Transaction complete, deassert
                         apb_psel_r    <= 1'b0;
                         apb_penable_r <= 1'b0;

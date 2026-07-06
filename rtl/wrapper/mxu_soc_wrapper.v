@@ -367,6 +367,7 @@ module mxu_soc_wrapper #(
                 end
 
                 PL_READY: begin
+                    wrp_load_done <= 1'b1;
                     if (wrp_trigger) begin
                         wrp_load_done  <= 1'b0;
                         pl_state       <= PL_LOAD_W_AR;

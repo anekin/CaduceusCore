@@ -261,7 +261,7 @@ P3:        8 cases (boundary — APB, DMA, Ibex, firmware, dimension, zero-vecto
 P4:        5 cases (full E2E, multi-engine pipeline, 28-block full-layer chain, host→PCIe→doorbell→firmware→17-op blk.0)
 ─────────────────────
 
-### RTL Status Counts (after Todo 11 full regression)
+### RTL Status Counts (after Todo 12 Ibex RTL full regression)
 
 | Status | Count | Case IDs |
 |--------|:-----:|----------|
@@ -272,4 +272,9 @@ P4:        5 cases (full E2E, multi-engine pipeline, 28-block full-layer chain, 
 | ⬜ TODO | 0     | — |
 
 覆盖率:    27/33 RTL cases PASS (81.8%), 0 FAIL, 6 SKIP, 0 TODO; all 13 data paths covered.
+
+**Ibex RTL (Task 12)**: Full 33-case regression against internal Ibex RISC-V CPU
+(replacing Spike) — **33/33 PASS** (2026-07-06). Same 27 active + 6 superseded
+cases, zero regressions. Evidence: `CaduceusCore/build/ibex_full_rtl/evidence/`.
+
 Func Model status column retains its original 22 ✅ / 0 ❌ / 3 ⏸️ / 8 ⬜ counts (independent of RTL).

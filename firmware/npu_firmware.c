@@ -112,11 +112,17 @@ static void dma_copy(uint32_t src, uint32_t dst, uint32_t size,
                      int channel) {
     npu_dma_t *dma = NPU_DMA;
     if (channel == 0) {
+        /* Clear CH1_SIZE so the wrapper does not re-run a stale CH1 transfer. */
+        dma->CH1_SIZE  = 0;
+        dma->CH1_STRIDE = 0;
         dma->CH0_SRC   = src;
         dma->CH0_DST   = dst;
         dma->CH0_SIZE  = size;
         dma->CH0_STRIDE = 0;
     } else {
+        /* Clear CH0_SIZE so the wrapper does not re-run a stale CH0 transfer. */
+        dma->CH0_SIZE  = 0;
+        dma->CH0_STRIDE = 0;
         dma->CH1_SRC   = src;
         dma->CH1_DST   = dst;
         dma->CH1_SIZE  = size;

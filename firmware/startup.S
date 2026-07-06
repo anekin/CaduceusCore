@@ -46,7 +46,11 @@ _start:
     li   t0, 0x880        /* MIE | MPIE */
     csrw mstatus, t0
 
-    /* ── Step 6: Jump to C firmware main loop ───────────────────── */
+    /* ── Step 6: Enable machine external interrupt (MEIE) ───────── */
+    li   t0, 0x800        /* MEIE */
+    csrw mie, t0
+
+    /* ── Step 7: Jump to C firmware main loop ───────────────────── */
     call firmware_main
 
     /* Should never return */

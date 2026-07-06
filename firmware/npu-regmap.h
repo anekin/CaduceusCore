@@ -151,7 +151,8 @@ typedef struct {
 /* ── Helpers ─────────────────────────────────────────────────────── */
 
 static inline void npu_wait_done(volatile uint32_t *status_reg) {
-    while (*status_reg & 1);  /* spin while BUSY */
+    while (*status_reg & 1)
+        __asm__ volatile("" ::: "memory");  /* spin while BUSY */
 }
 
 static inline void npu_start(volatile uint32_t *cmd_reg) {

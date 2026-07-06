@@ -23,7 +23,15 @@ STACK_SIZE = 16K;
 
 SECTIONS
 {
-    .text : {
+    /* Ibex reset vector is boot_addr + 0x80; reserve the first 0x80 bytes
+     * for the default vectored trap table and place _start at 0x80. */
+    .vectors 0x0 : {
+        FILL(0x00);
+        . = 0x7c;
+        LONG(0x00000000);
+    } > ROM
+
+    .text 0x80 : {
         *(.text.startup)
         *(.text .text.*)
         *(.text.trap)

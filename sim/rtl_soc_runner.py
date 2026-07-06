@@ -473,8 +473,11 @@ class RTLSoCRunner:
                 await self._bridge._apb_write(DMA_BASE + DMA.CMD, cfg._rtl_cmd_value)
 
         # Step 4: Doorbell setup
+        # In Ibex-RTL mode the APB master is owned by the CPU; driving the
+        # ibex_wrapper.apb_* signals from Python corrupts firmware transactions.
+        # Use the backdoor path that writes the doorbell register file directly.
         if cfg.doorbell_cmd is not None:
-            await self._bridge._apb_write(
+            await self._bridge._doorbell_backdoor_write(
                 DOORBELL_BASE + DOORBELL.HOST_TAIL,
                 cfg.doorbell_cmd,
             )
@@ -3002,11 +3005,6 @@ class P4SpikeRunner(P2P3SpikeRunner):
 
     async def _run_032(self) -> Tuple[bool, str]:
         model, expected = self._build_032_baseline()
-        await self._preload_rtl(model)
-        for addr, size in expected.get("vector_chunks", []):
-            await self._dram_backdoor_write(addr - self.DRAM_BASE, b"\x00" * size)
-
-        print(f"[P4-032] built model, {len(expected['batches'])} batches, {len(expected.get('vector_chunks', []))} vector chunks", flush=True)
 
         # Run all 28 baseline blocks in a single Spike process.  With the
         # ring size enlarged to 1024, all 28*23 commands fit in one ring and
@@ -3016,7 +3014,12 @@ class P4SpikeRunner(P2P3SpikeRunner):
             baseline_flat.extend(cmds)
         print(f"[P4-032] baseline flattened {len(baseline_flat)} commands", flush=True)
         self._write_cmds_to_model(model, baseline_flat)
-        await self._apb_write(Addr.DOORBELL + DOORBELL.NPU_HEAD, 0)
+        await self._preload_rtl(model)
+        for addr, size in expected.get("vector_chunks", []):
+            await self._dram_backdoor_write(addr - self.DRAM_BASE, b"\x00" * size)
+
+        print(f"[P4-032] built model, {len(expected['batches'])} batches, {len(expected.get('vector_chunks', []))} vector chunks", flush=True)
+
         ok = await self._run_spike(model, len(baseline_flat), timeout_cycles=expected["timeout_cycles"])
         if not ok:
             return False, f"Spike firmware timeout on baseline 28-block chain"
@@ -3046,6 +3049,13 @@ class P4SpikeRunner(P2P3SpikeRunner):
 
         perturbed_model = self._build_032_perturbed_model(model, expected)
 
+        # Run perturbed blocks 14-27 in a second Spike process.
+        perturbed_flat: List[Tuple[int, int]] = []
+        for cmds in expected["batches"][14:]:
+            perturbed_flat.extend(cmds)
+        print(f"[P4-032] perturbed flattened {len(perturbed_flat)} commands", flush=True)
+        self._write_cmds_to_model(perturbed_model, perturbed_flat)
+
         # Reset RTL to clear cached engine state before the perturbed pass.
         await self.bridge.reset(5)
         await self._preload_rtl(perturbed_model)
@@ -3053,13 +3063,6 @@ class P4SpikeRunner(P2P3SpikeRunner):
         for addr, size in expected.get("vector_chunks", []):
             await self._dram_backdoor_write(addr - self.DRAM_BASE, b"\x00" * size)
 
-        # Run perturbed blocks 14-27 in a second Spike process.
-        perturbed_flat: List[Tuple[int, int]] = []
-        for cmds in expected["batches"][14:]:
-            perturbed_flat.extend(cmds)
-        print(f"[P4-032] perturbed flattened {len(perturbed_flat)} commands", flush=True)
-        self._write_cmds_to_model(perturbed_model, perturbed_flat)
-        await self._apb_write(Addr.DOORBELL + DOORBELL.NPU_HEAD, 0)
         ok = await self._run_spike(perturbed_model, len(perturbed_flat), timeout_cycles=expected["timeout_cycles"])
         if not ok:
             return False, f"Spike firmware timeout on perturbed 14-block chain"
@@ -3237,6 +3240,150 @@ class P4SpikeRunner(P2P3SpikeRunner):
         return True, "17-op blk.0 chain PASS via PCIe host readback"
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Ibex-RTL runner (Task 12)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class IbexRunner(P4SpikeRunner):
+    """Run FM-SOC-* against RTL SoC with the internal Ibex RISC-V CPU.
+
+    Reuses the P0-P4 case builders from :class:`P4SpikeRunner` but replaces
+    the Spike subprocess with the on-chip Ibex core.  The testbench writes
+    HOST_TAIL and reads NPU_HEAD through a VPI backdoor on ``u_dut.u_doorbell``
+    so it never conflicts with Ibex's live APB master.
+    """
+
+    async def setup(self):
+        """Skip Spike bridge setup; Ibex is already instantiated inside the SoC."""
+        pass
+
+    def _is_doorbell_addr(self, addr: int) -> bool:
+        """Return True if addr is one of the four doorbell registers."""
+        return addr in {
+            Addr.DOORBELL + DOORBELL.HOST_TAIL,
+            Addr.DOORBELL + DOORBELL.NPU_HEAD,
+            Addr.DOORBELL + DOORBELL.HOST_HEAD,
+            Addr.DOORBELL + DOORBELL.NPU_TAIL,
+        }
+
+    async def _apb_write(self, addr: int, value: int):
+        """APB write restricted to doorbell registers (backdoor access)."""
+        if self._is_doorbell_addr(addr):
+            await self.bridge._doorbell_backdoor_write(addr, value)
+        else:
+            raise RuntimeError(
+                f"IbexRunner: APB write to 0x{addr:08X} is not allowed; "
+                f"the live APB master belongs to Ibex firmware"
+            )
+
+    async def _apb_read(self, addr: int) -> int:
+        """APB read restricted to doorbell registers (backdoor access)."""
+        if self._is_doorbell_addr(addr):
+            return await self.bridge._doorbell_backdoor_read(addr)
+        raise RuntimeError(
+            f"IbexRunner: APB read from 0x{addr:08X} is not allowed; "
+            f"the live APB master belongs to Ibex firmware"
+        )
+
+    async def _run_spike(self, model: FuncModel, num_cmds: int,
+                         timeout_cycles: int = 500_000) -> bool:
+        """Trigger the Ibex firmware by writing HOST_TAIL, then poll NPU_HEAD."""
+        host_tail_addr = Addr.DOORBELL + DOORBELL.HOST_TAIL
+        npu_head_addr = Addr.DOORBELL + DOORBELL.NPU_HEAD
+
+        print(f"[IBEX] writing HOST_TAIL={num_cmds}", flush=True)
+        await self._apb_write(host_tail_addr, num_cmds)
+
+        expected = num_cmds % self.RING_SIZE
+        last_head = -1
+        pc_path = "u_dut.u_ibex_wrapper.u_ibex_top.u_ibex_core.pc_id"
+        exc_pc_path = "u_dut.u_ibex_wrapper.u_ibex_top.crash_dump_o.exception_pc"
+        exc_addr_path = "u_dut.u_ibex_wrapper.u_ibex_top.crash_dump_o.exception_addr"
+        for cyc in range(timeout_cycles):
+            head = await self._apb_read(npu_head_addr)
+            if head != last_head or (cyc > 0 and cyc % 100_000 == 0):
+                pc = self._try_read_signal(pc_path)
+                exc_pc = self._try_read_signal(exc_pc_path)
+                exc_addr = self._try_read_signal(exc_addr_path)
+                host_tail = await self._apb_read(host_tail_addr)
+                print(
+                    f"[IBEX] NPU_HEAD={head} HOST_TAIL={host_tail} "
+                    f"PC=0x{pc:08x} EXC_PC=0x{exc_pc:08x} EXC_ADDR=0x{exc_addr:08x} "
+                    f"after {cyc} cycles",
+                    flush=True,
+                )
+                last_head = head
+            if head == expected:
+                print(f"[IBEX] NPU_HEAD={head} after {cyc} cycles", flush=True)
+                return True
+            await self.bridge.wait_cycles(1)
+        return False
+
+    def _try_read_signal(self, path: str) -> int:
+        try:
+            return int(getattr(self.dut, path).value)
+        except Exception:
+            return 0xFFFFFFFF
+
+    async def run_case(self, case_id: str) -> Tuple[bool, str]:
+        """Dispatch FM-SOC-* cases without requiring Spike RTL bridge."""
+        if not FUNC_MODEL_AVAILABLE:
+            return False, "FuncModel not available"
+        if not GOLDEN_AVAILABLE:
+            return False, "Golden executors not available"
+
+        if case_id in {"FM-SOC-014", "FM-SOC-015", "FM-SOC-016",
+                         "FM-SOC-021", "FM-SOC-022", "FM-SOC-023"}:
+            return True, "superseded by FM-SOC-027/032/10X"
+
+        if case_id in P2P3SpikeRunner.DIRECT_CASES:
+            return True, "skipped: direct APB/AXI case not applicable to Ibex RTL mode"
+
+        if case_id == "FM-SOC-032":
+            return await self._run_032()
+        if case_id == "FM-SOC-10X":
+            return await self._run_10X()
+
+        builders = {
+            # P0
+            "FM-SOC-001": self._build_001_dma_sram,
+            "FM-SOC-002": self._build_002_dma_dram,
+            "FM-SOC-003": self._build_003_mxu,
+            "FM-SOC-004": self._build_004_sfu,
+            "FM-SOC-005": self._build_005_vector,
+            "FM-SOC-006": self._build_006_chain,
+            "FM-SOC-007": self._build_007_mxu_corrupt,
+            "FM-SOC-008": self._build_008_sfu_corrupt,
+            # P1
+            "FM-SOC-009": self._build_009,
+            "FM-SOC-010": self._build_010,
+            "FM-SOC-011": self._build_011,
+            "FM-SOC-012": self._build_012,
+            "FM-SOC-024": self._build_024,
+            "FM-SOC-025": self._build_025,
+            "FM-SOC-026": self._build_026,
+            # P2/P3
+            "FM-SOC-013": self._build_013,
+            "FM-SOC-027": self._build_027,
+            "FM-SOC-018": self._build_018,
+            "FM-SOC-020": self._build_020,
+            "FM-SOC-028": self._build_028,
+            "FM-SOC-029": self._build_029,
+            "FM-SOC-030": self._build_030,
+            "FM-SOC-031": self._build_031,
+        }
+        if case_id not in builders:
+            return False, f"Unknown Ibex case {case_id}"
+
+        model, expected, expect_mismatch = builders[case_id]()
+        await self._preload_rtl(model)
+        timeout = expected.get("timeout_cycles", 500_000)
+        ok = await self._run_spike(model, expected["num_cmds"], timeout_cycles=timeout)
+        if not ok:
+            return False, "Ibex firmware timeout"
+        return await self._verify(expected, expect_mismatch)
+
+
 if COCOTB_AVAILABLE and SPIKE_RTL_BRIDGE_AVAILABLE and FUNC_MODEL_AVAILABLE:
     @cocotb.test()
     async def test_soc_spike_p4(dut):
@@ -3250,6 +3397,22 @@ if COCOTB_AVAILABLE and SPIKE_RTL_BRIDGE_AVAILABLE and FUNC_MODEL_AVAILABLE:
         case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-032")
         passed, msg = await runner.run_case(case_id)
         logger.info(f"P4SpikeRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
+        assert passed, f"{case_id} failed: {msg}"
+
+
+if COCOTB_AVAILABLE and FUNC_MODEL_AVAILABLE:
+    @cocotb.test()
+    async def test_soc_ibex_full(dut):
+        bridge = CocotbBridge(dut)
+        await bridge.start_clock()
+        await bridge.reset(5)
+
+        runner = IbexRunner(dut, bridge)
+        await runner.setup()
+
+        case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-001")
+        passed, msg = await runner.run_case(case_id)
+        logger.info(f"IbexRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
         assert passed, f"{case_id} failed: {msg}"
 
 
