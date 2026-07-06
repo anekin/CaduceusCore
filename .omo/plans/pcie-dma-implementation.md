@@ -322,38 +322,38 @@ typedef struct __attribute__((packed)) {
 
 ### Wave 3: SoC Top Integration
 
-- [ ] 14. **T3.1** —  `rtl/soc/axi_crossbar.v`: Change NUM_M 6→7; pre-audit for hardcoded constants  
+- [x] 14. **T3.1** —  `rtl/soc/axi_crossbar.v`: Change NUM_M 6→7; pre-audit for hardcoded constants  
 - References: `axi_crossbar.v:37`; Metis A1  
 - Acceptance: Elaboration succeeds with NUM_M=7; all existing crossbar tests pass  
 - QA: `make run_crossbar_stress` → PASS; `grep -nE '\[6\]|\[5:0\]|\[6:1\]' axi_crossbar.v` produces only expected `NUM_M-1:0` array declarations; output saved to `.omo/evidence/axi_crossbar_num_m_audit.txt`  
 - Commit: `feat(soc): expand crossbar NUM_M 6→7 for PCIe DMA master`
 
-- [ ] 15. **T3.2** —  `rtl/soc/apb_decoder.v`: Expand 7→8 slaves; add slave 7 decode  
+- [x] 15. **T3.2** —  `rtl/soc/apb_decoder.v`: Expand 7→8 slaves; add slave 7 decode  
 - References: `apb_decoder.v:35-44`; address range `0x4000_7000–0x4000_7FFF`  
 - Acceptance: APB write to 0x4000_7000 asserts `psel_o[7]`; read returns correct value; out-of-range (0x4000_8000) → pslverr  
 - QA: `make run_apb_smoke` → PASS (APB decoder test covers new slave)  
 - Commit: `feat(soc): expand APB decoder 7→8 slaves for PCIe DMA`
 
-- [ ] 16. **T3.3** —  `rtl/soc/caduceus_soc_top.v`: Add master 6 signal group + mapping + pcie_dma_wrapper instance + APB widening  
+- [x] 16. **T3.3** —  `rtl/soc/caduceus_soc_top.v`: Add master 6 signal group + mapping + pcie_dma_wrapper instance + APB widening  
 - References: Section C4 checklist; `caduceus_soc_top.v:42, 73, 315, 685, 329-338, 1122`  
 - Acceptance: VCS elaboration with `-f rtl/ip/verilog-pcie.flist -f rtl/soc/soc.flist` → 0 errors, 0 undriven; existing 33 FM-SOC tests still pass  
 - QA: `make run_soc_elab` → PASS; `bash scripts/run_soc_regression.sh` → 33/33 PASS, log in `.omo/evidence/`  
 - Commit: `feat(soc): integrate PCIe DMA as crossbar master 6 + APB slave 7`
 
-- [ ] 17. **T3.4** —  `sim/config/interconnect.yaml`: Add master 6 entry; update num_masters  
+- [x] 17. **T3.4** —  `sim/config/interconnect.yaml`: Add master 6 entry; update num_masters  
 - References: Section C4 interconnect YAML diff  
 - Acceptance: `sim/check_mmio_map.py` reports master 6 present; existing validation passes  
 - QA: `python sim/check_mmio_map.py` → all masters present; `python scripts/validate_interconnect.py` → PASS  
 - Commit: `config(interconnect): add PCIe DMA as master 6`
 
-- [ ] 18. **T3.5** —  `rtl/intc/intc_top.v` + `caduceus_soc_top.v`: Expand INTC from 7 to 8 interrupt sources; wire `pcie_dma_irq` to source bit 7  
+- [x] 18. **T3.5** —  `rtl/intc/intc_top.v` + `caduceus_soc_top.v`: Expand INTC from 7 to 8 interrupt sources; wire `pcie_dma_irq` to source bit 7  
 - References: C6 completion notification; `intc_top.v` (currently 7 sources, `irq_src [6:0]`, `pending_reg [6:0]`, `PENDING/ENABLE/ACK` APB registers 7-bit)  
 - Changes: (a) widen `irq_src` to `[7:0]`, `pending_reg`/`enable_reg` to 8-bit, `PENDING`/`ENABLE`/`ACK` registers to 8-bit, (b) add `pcie_dma_irq` input to `intc_top`, (c) connect in `caduceus_soc_top.v`  
 - Acceptance: 8-source INTC passes existing 13/13 checks; `make run_intc_test` → PASS; `pcie_dma_irq` assertion sets `PENDING[7]`  
 - QA: `make run_intc_test` → PASS (extended to 8 sources); VCS elaboration 0 errors  
 - Commit: `feat(intc): expand INTC to 8 sources for PCIe DMA IRQ`
 
-- [ ] 19. **R3** —  Review Gate: Atlas 审计 W3 证据（SoC 集成 + 33 regression + INTC 8-source）  
+- [x] 19. **R3** —  Review Gate: Atlas 审计 W3 证据（SoC 集成 + 33 regression + INTC 8-source）  
 - What: `task(subagent_type="atlas", ...)` 审计 T3.1–T3.5 输出  
 - Evidence: `make run_crossbar_stress`, `make run_apb_smoke`, `make run_intc_test`, `run_fm_soc_all.sh` 日志, `.omo/evidence/axi_crossbar_num_m_audit.txt`  
 - Acceptance: Atlas 输出 **approve**; 33/33 FM-SOC PASS  

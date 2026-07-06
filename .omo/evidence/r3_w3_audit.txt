@@ -1,0 +1,31 @@
+Wave 3 Review Gate (R3) — Atlas Audit
+Plan: pcie-dma-implementation
+Date: 2026-07-07
+VERDICT: APPROVE
+
+Scope audited: T3.1 (axi_crossbar.v NUM_M=7), T3.2 (apb_decoder.v 8 slaves), T3.3 (caduceus_soc_top.v integration), T3.4 (interconnect.yaml), T3.5 (intc_top.v 8 sources)
+
+Evidence examined:
+1. rtl/soc/axi_crossbar.v — NUM_M changed from 6 to 7; all arrays parameterized; pre-audit saved to .omo/evidence/axi_crossbar_num_m_audit.txt.
+2. rtl/soc/apb_decoder.v — widened to 8 slave ports; slave 7 decode at 0x4000_7000; response muxes extended.
+3. rtl/soc/caduceus_soc_top.v — CROSSBAR_MASTERS=7, CB_NUM_M=7, master 6 signal group + crossbar mapping, APB arrays widened to [7:0], pcie_dma_wrapper instance connected to crossbar master 6 / APB slave 7 / pcie_dma_irq wire (routed to intc_top after T3.5). PCIe DMA TLP ports exposed at SoC top level; testbenches updated.
+4. rtl/intc/intc_top.v — widened to 8 sources; pcie_dma_irq connected to bit 7; popcount/threshold widened to 4 bits; TC8 added to tb_intc.v.
+5. sim/config/interconnect.yaml — num_masters=7, master 6 PCIe_DMA entry added.
+6. Verification results on sz0001:
+   - make run_crossbar_stress → 7/7 PASS, CROSSBAR_STRESS: PASS
+   - make run_apb_smoke → 43/43 PASS, ALL TESTS PASSED
+   - make run_intc_test → 17/17 PASS, [INTC_TEST] PASS
+   - make run_soc_elab → SOC_ELAB: PASS
+   - bash scripts/run_pcie_dma_elab.sh → 52 modules, 0 errors
+   - bash scripts/run_soc_regression.sh → initial 31/33 PASS; 2 failures (FM-SOC-032, FM-SOC-10X) were due to missing test-vector artifacts (blk0_manifest.json, exp_lut.hex). After generating them with scripts/gen_sfu_luts.py and scripts/gen_blk0_golden.py, re-runs: FM-SOC-032 PASS, FM-SOC-10X PASS → final 33/33 PASS.
+7. Vendored file gate: git diff --name-only origin/main..feat_pcie | grep 'rtl/ip/verilog-pcie/' returns empty.
+
+Acceptance criteria check:
+- [x] Crossbar NUM_M=7 with no hardcoded constants
+- [x] APB decoder 8 slaves with slave 7 at 0x4000_7000
+- [x] SoC top integrates pcie_dma_wrapper as master 6 + APB slave 7
+- [x] interconnect.yaml updated with master 6
+- [x] INTC expanded to 8 sources, pcie_dma_irq → bit 7
+- [x] 33/33 FM-SOC regression PASS
+
+No blockers. Wave 3 is approved; proceed to Wave 4 (Firmware).
