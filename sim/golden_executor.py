@@ -462,6 +462,24 @@ class GoldenSFU:
         )
         return x * sigmoid
 
+    # ── ReLU ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def relu_hw(x: np.ndarray) -> np.ndarray:
+        """Hardware-equivalent ReLU: x if x > 0 else 0.
+
+        Hardware: zero-overhead comparator on SFU datapath, matches FP16 semantics.
+        Flushes subnormals on input path.
+        """
+        x = GoldenSFU._flush_f16_subnormals(x)
+        return np.maximum(x, 0.0).astype(np.float32)
+
+    @staticmethod
+    def relu_ref(x: np.ndarray) -> np.ndarray:
+        """Reference ReLU: float64."""
+        x = np.asarray(x, dtype=np.float64)
+        return np.maximum(x, 0.0).astype(np.float32)
+
     # ── LayerNorm (fixed-point) ─────────────────────────────────────
 
     @staticmethod
@@ -1204,6 +1222,19 @@ class GoldenExecutor:
             ).hexdigest()[:16]
             self.state.cycle += length // 128 + 4
 
+        elif op == OpCode.RELU:
+            sa = ops.get("sa", 0)
+            da = ops.get("da", 0)
+            length = ops.get("len", 2560)
+
+            inp = self.sram.read_float16(sa, length).astype(np.float32)
+            out = self.sfu.relu_hw(inp)
+            self.sram.write_float16(da, out.astype(np.float16))
+            self.state.sfu_output_hash = hashlib.md5(
+                out.astype(np.float16).tobytes()
+            ).hexdigest()[:16]
+            self.state.cycle += length // 128 + 1
+
         elif op == OpCode.ROPE:
             sa = ops.get("sa", 0)
             da = ops.get("da", 0)
@@ -1240,6 +1271,40 @@ class GoldenExecutor:
                 out.astype(np.float16).tobytes()
             ).hexdigest()[:16]
             self.state.cycle += elements // 128 * 2 + 10  # two-pass: square-sum + normalize
+
+        elif op == OpCode.MAXPOOL:
+            sa = ops.get("sa", 0)
+            da = ops.get("da", 0)
+            H = ops.get("H", 2)
+            W = ops.get("W", 2)
+            total = H * W
+            out_h, out_w = H // 2, W // 2
+
+            inp = self.sram.read_float16(sa, total).astype(np.float32).reshape(H, W)
+            out = np.zeros((out_h, out_w), dtype=np.float32)
+            for i in range(out_h):
+                for j in range(out_w):
+                    window = inp[i*2:i*2+2, j*2:j*2+2]
+                    out[i, j] = np.max(window)
+            self.sram.write_float16(da, out.astype(np.float16).flatten())
+            self.state.cycle += out_h * out_w // 128 + 2
+
+        elif op == OpCode.AVGPOOL:
+            sa = ops.get("sa", 0)
+            da = ops.get("da", 0)
+            H = ops.get("H", 2)
+            W = ops.get("W", 2)
+            total = H * W
+            out_h, out_w = H // 2, W // 2
+
+            inp = self.sram.read_float16(sa, total).astype(np.float32).reshape(H, W)
+            out = np.zeros((out_h, out_w), dtype=np.float32)
+            for i in range(out_h):
+                for j in range(out_w):
+                    window = inp[i*2:i*2+2, j*2:j*2+2]
+                    out[i, j] = np.mean(window)
+            self.sram.write_float16(da, out.astype(np.float16).flatten())
+            self.state.cycle += out_h * out_w // 128 + 2
 
         elif op == OpCode.DMA_LD:
             # DMA load: DRAM → SRAM (simple mode)
