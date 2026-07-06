@@ -1647,12 +1647,6 @@ class CocotbBridge:
         # Drive APB master signals via ibex_wrapper's APB port
         # The ibex_wrapper has APB master output: apb_paddr, apb_psel, ...
         # We override ibex's APB bus to inject writes.
-        # In sophisticated usage, the cocotbext-axi APB components handle this.
-        if COCOTBEXT_AXI_AVAILABLE:
-            # Use cocotbext axi APB master if hook is available
-            # For now, signal-level driving
-            pass
-
         # Signal-level APB write (manual):
         # ibex_wrapper.apb_* signals are connected to apb_decoder.
         # We need to drive them carefully.

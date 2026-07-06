@@ -1215,12 +1215,12 @@ class P0SpikeRunner:
         env["NPU_SOCK_PATH"] = str(sock_path)
 
         host_tail_addr = Addr.DOORBELL + DOORBELL.HOST_TAIL
-        print(f"[SPIKE] writing HOST_TAIL={num_cmds}", flush=True)
+        logger.info(f"[SPIKE] writing HOST_TAIL={num_cmds}")
         await self._apb_write(host_tail_addr, num_cmds)
-        print(f"[SPIKE] reading HOST_TAIL", flush=True)
+        logger.info("[SPIKE] reading HOST_TAIL")
         host_tail_readback = await self._apb_read(host_tail_addr)
         cmd0_words = struct.unpack('<8I', model.dram[:32])
-        print(f"[SPIKE] HOST_TAIL={host_tail_readback} (expected {num_cmds}) cmd0={cmd0_words}", flush=True)
+        logger.info(f"[SPIKE] HOST_TAIL={host_tail_readback} (expected {num_cmds}) cmd0={cmd0_words}")
 
         proc = subprocess.Popen(
             [
@@ -1244,14 +1244,14 @@ class P0SpikeRunner:
                 head = self.mmio._status.get(addr, 0)
                 last_status = self.mmio._status.get(last_status_addr, 0)
                 if head != last_diag_head or (cyc > 0 and cyc % 1000000 == 0):
-                    print(f"[SPIKE] NPU_HEAD={head} LAST_STATUS=0x{last_status:08X} after {cyc} cycles", flush=True)
+                    logger.info(f"[SPIKE] NPU_HEAD={head} LAST_STATUS=0x{last_status:08X} after {cyc} cycles")
                     last_diag_head = head
                 if head == expected:
                     done = True
-                    print(f"[SPIKE] NPU_HEAD={head} LAST_STATUS=0x{last_status:08X} after {cyc} cycles", flush=True)
+                    logger.info(f"[SPIKE] NPU_HEAD={head} LAST_STATUS=0x{last_status:08X} after {cyc} cycles")
                     break
                 if proc.poll() is not None:
-                    print("[SPIKE] process exited early", flush=True)
+                    logger.error("[SPIKE] process exited early")
                     break
                 await self.bridge.wait_cycles(1)
         finally:
@@ -2544,7 +2544,7 @@ class P4SpikeRunner(P2P3SpikeRunner):
             return False, "Spike RTL bridge not available"
 
         if case_id in {"FM-SOC-021", "FM-SOC-022", "FM-SOC-023"}:
-            print(f"[SKIP] {case_id} (superseded by FM-SOC-032/10X)", flush=True)
+            logger.info(f"[SKIP] {case_id} (superseded by FM-SOC-032/10X)")
             return True, "superseded by FM-SOC-032/10X"
 
         if case_id == "FM-SOC-032":
@@ -2920,46 +2920,6 @@ class P4SpikeRunner(P2P3SpikeRunner):
         expected["vector_chunks"].extend(perturbed_chunks)
         return model
 
-    def _build_032_perturbed_legacy_stub(self, baseline_model: FuncModel, expected: dict,
-                             block_base_14: int) -> FuncModel:
-        """Return a model with block-14 weights perturbed; reuse other blocks."""
-        model = self._make_model()
-        model.dram[:] = baseline_model.dram
-
-        manifest = self._load_blk0_manifest()
-        baseline_weights = {}
-        for op in manifest["ops"]:
-            if op["opcode"] != "MMUL":
-                continue
-            idx = op["idx"]
-            K = self._clip_dim(op["dimensions"].get("K", 64))
-            N = self._clip_dim(op["dimensions"].get("N", 64))
-            weight_size = (K * N + 1) // 2
-            w_addr = block_base_14 + self._P4_DATA_BASE_REL  # allocator will re-place weights
-            # We cannot reuse the allocator offset easily; instead rebuild block 14
-            break
-
-        # Rebuild block 14 in place with perturbed weights
-        block_weights_14 = {}
-        for op in manifest["ops"]:
-            if op["opcode"] != "MMUL":
-                continue
-            idx = op["idx"]
-            K = self._clip_dim(op["dimensions"].get("K", 64))
-            N = self._clip_dim(op["dimensions"].get("N", 64))
-            weight_size = (K * N + 1) // 2
-            w_addr = block_base_14 + self._P4_DATA_BASE_REL
-            baseline_weights[idx] = bytes(model.dram[w_addr - self.DRAM_BASE:
-                                                      w_addr - self.DRAM_BASE + weight_size])
-
-        perturbed = self._chain_perturb_weights(baseline_weights, ratio=0.01)
-        # Rebuild block 14 with perturbed weights by zeroing block region and re-allocating
-        block_end = block_base_14 + self._P4_BLOCK_STRIDE
-        model.dram[block_base_14 - self.DRAM_BASE:block_end - self.DRAM_BASE] = bytes(self._P4_BLOCK_STRIDE)
-        self._build_block(model, 14, block_base_14, perturbed, manifest)
-
-        return model
-
     def _write_cmds_to_model(self, model: FuncModel, cmds: List[Tuple[int, int]]) -> None:
         for cmd_offset, (opcode, desc_addr) in enumerate(cmds):
             cmd_addr = self.RING_BASE + cmd_offset * self.CMD_ENTRY_SIZE
@@ -2979,7 +2939,7 @@ class P4SpikeRunner(P2P3SpikeRunner):
         result_addr = expected["result_addrs"][block_idx]
         last_idx = self._load_blk0_manifest()["ops"][-1]["idx"]
         last_elements = self._clip_dim(self._load_blk0_manifest()["ops"][-1]["dimensions"].get("elements", 64))
-        print(f"[P4-032] verify block {block_idx} read result @ 0x{result_addr:08x} size={last_elements*2}", flush=True)
+        logger.info(f"[P4-032] verify block {block_idx} read result @ 0x{result_addr:08x} size={last_elements*2}")
         fp16_bytes = await self._dram_backdoor_read(result_addr - self.DRAM_BASE, last_elements * 2)
         if len(fp16_bytes) != last_elements * 2:
             logger.error(f"{label} block {block_idx}: expected {last_elements*2} FP16 bytes, got {len(fp16_bytes)}")
@@ -2988,7 +2948,7 @@ class P4SpikeRunner(P2P3SpikeRunner):
 
         block_base = self._P4_BLOCK_BASE + block_idx * self._P4_BLOCK_STRIDE
         result_base = self._P4_RESULT_BASE + block_idx * self._P4_RESULT_STRIDE
-        print(f"[P4-032] verify block {block_idx} read guards", flush=True)
+        logger.info(f"[P4-032] verify block {block_idx} read guards")
         g1_bytes = await self._dram_backdoor_read(block_base + self._P4_BLOCK_STRIDE - 4 - self.DRAM_BASE, 4)
         g2_bytes = await self._dram_backdoor_read(result_base + self._P4_RESULT_STRIDE - 4 - self.DRAM_BASE, 4)
         g1 = struct.unpack("<I", g1_bytes)[0]
@@ -3000,7 +2960,7 @@ class P4SpikeRunner(P2P3SpikeRunner):
             logger.error(f"{label} result {block_idx} guard corrupted: {g2:08x}")
             return None
 
-        print(f"[P4-032] verify block {block_idx} fingerprint = {fp_hash}", flush=True)
+        logger.info(f"[P4-032] verify block {block_idx} fingerprint = {fp_hash}")
         return fp_hash
 
     async def _run_032(self) -> Tuple[bool, str]:
@@ -3012,13 +2972,13 @@ class P4SpikeRunner(P2P3SpikeRunner):
         baseline_flat: List[Tuple[int, int]] = []
         for cmds in expected["batches"]:
             baseline_flat.extend(cmds)
-        print(f"[P4-032] baseline flattened {len(baseline_flat)} commands", flush=True)
+        logger.info(f"[P4-032] baseline flattened {len(baseline_flat)} commands")
         self._write_cmds_to_model(model, baseline_flat)
         await self._preload_rtl(model)
         for addr, size in expected.get("vector_chunks", []):
             await self._dram_backdoor_write(addr - self.DRAM_BASE, b"\x00" * size)
 
-        print(f"[P4-032] built model, {len(expected['batches'])} batches, {len(expected.get('vector_chunks', []))} vector chunks", flush=True)
+        logger.info(f"[P4-032] built model, {len(expected['batches'])} batches, {len(expected.get('vector_chunks', []))} vector chunks")
 
         ok = await self._run_spike(model, len(baseline_flat), timeout_cycles=expected["timeout_cycles"])
         if not ok:
@@ -3026,11 +2986,11 @@ class P4SpikeRunner(P2P3SpikeRunner):
 
         baseline_hashes = []
         for b in range(len(expected["batches"])):
-            print(f"[P4-032] verifying baseline block {b}", flush=True)
+            logger.info(f"[P4-032] verifying baseline block {b}")
             h = await self._verify_032_block(model, expected, b, label="baseline")
             if h is None:
                 return False, f"baseline block {b} fingerprint verification failed"
-            print(f"[P4-032] baseline block {b} ok", flush=True)
+            logger.info(f"[P4-032] baseline block {b} ok")
             baseline_hashes.append(h)
 
         # Weight perturbations propagate only to the consuming MMUL op, not
@@ -3053,7 +3013,7 @@ class P4SpikeRunner(P2P3SpikeRunner):
         perturbed_flat: List[Tuple[int, int]] = []
         for cmds in expected["batches"][14:]:
             perturbed_flat.extend(cmds)
-        print(f"[P4-032] perturbed flattened {len(perturbed_flat)} commands", flush=True)
+        logger.info(f"[P4-032] perturbed flattened {len(perturbed_flat)} commands")
         self._write_cmds_to_model(perturbed_model, perturbed_flat)
 
         # Reset RTL to clear cached engine state before the perturbed pass.
@@ -3069,17 +3029,17 @@ class P4SpikeRunner(P2P3SpikeRunner):
 
         perturbed_hashes = list(baseline_hashes[:14])
         for b in range(14, 28):
-            print(f"[P4-032] verifying perturbed block {b}", flush=True)
+            logger.info(f"[P4-032] verifying perturbed block {b}")
             h = await self._verify_032_block(perturbed_model, expected, b, label="perturbed")
             if h is None:
                 return False, f"perturbed block {b} fingerprint verification failed"
-            print(f"[P4-032] perturbed block {b} ok", flush=True)
+            logger.info(f"[P4-032] perturbed block {b} ok")
             perturbed_hashes.append(h)
 
         perturbed_op_hashes = await read_op_hashes(14)
         changed_ops = [idx for idx in baseline_op_hashes if baseline_op_hashes[idx] != perturbed_op_hashes.get(idx)]
         unchanged_downstream = all(baseline_hashes[b] == perturbed_hashes[b] for b in range(15, 28))
-        print(f"[P4-032] block-14 changed op outputs: {changed_ops}", flush=True)
+        logger.info(f"[P4-032] block-14 changed op outputs: {changed_ops}")
 
         for b in range(14):
             if baseline_hashes[b] != perturbed_hashes[b]:
@@ -3291,7 +3251,7 @@ class IbexRunner(P4SpikeRunner):
         host_tail_addr = Addr.DOORBELL + DOORBELL.HOST_TAIL
         npu_head_addr = Addr.DOORBELL + DOORBELL.NPU_HEAD
 
-        print(f"[IBEX] writing HOST_TAIL={num_cmds}", flush=True)
+        logger.info(f"[IBEX] writing HOST_TAIL={num_cmds}")
         await self._apb_write(host_tail_addr, num_cmds)
 
         expected = num_cmds % self.RING_SIZE
@@ -3306,15 +3266,14 @@ class IbexRunner(P4SpikeRunner):
                 exc_pc = self._try_read_signal(exc_pc_path)
                 exc_addr = self._try_read_signal(exc_addr_path)
                 host_tail = await self._apb_read(host_tail_addr)
-                print(
+                logger.info(
                     f"[IBEX] NPU_HEAD={head} HOST_TAIL={host_tail} "
                     f"PC=0x{pc:08x} EXC_PC=0x{exc_pc:08x} EXC_ADDR=0x{exc_addr:08x} "
-                    f"after {cyc} cycles",
-                    flush=True,
+                    f"after {cyc} cycles"
                 )
                 last_head = head
             if head == expected:
-                print(f"[IBEX] NPU_HEAD={head} after {cyc} cycles", flush=True)
+                logger.info(f"[IBEX] NPU_HEAD={head} after {cyc} cycles")
                 return True
             await self.bridge.wait_cycles(1)
         return False
