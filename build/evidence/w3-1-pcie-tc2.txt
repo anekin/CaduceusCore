@@ -1,0 +1,69 @@
+Wave 3.1 — PCIe EP testbench TC2 (TLP Memory Read) root cause and fix
+======================================================================
+Date: 2026-07-06
+Tester: Sisyphus-Junior
+Target: make run_pcie_test @ sz0001 (VCS V-2023.12-SP2)
+Files changed: rtl/tb/pcie_ep_tb.sv
+
+Observed failure (before fix)
+-----------------------------
+TC2 issued a TLP Memory Read to 0x2000_0100 but never received a completion:
+
+  --- TC2: TLP Memory Read from SRAM (0x2000_0100) ---
+  [INFO] No completion received — may need full pcie_axi_master init
+
+TC1/TC3/TC4 passed, so the pcie_axi_master write path and the TLP header format
+were correct.  The issue was isolated to the read completion path.
+
+Root cause
+----------
+The behavioral AXI4 SRAM slave in pcie_ep_tb.sv had a broken read-response
+state machine.  In the original code the "finalize burst" logic and the
+"drive response" logic were in the same sequential always block, and the
+later "drive response" assignment won, keeping m_axi_rvalid high after the
+burst should have terminated.  This caused the pcie_axi_master_rd engine to
+see a stuck/malformed AXI read response and therefore never emit a PCIe
+Completion TLP.
+
+The bug is in the testbench slave model, not in rtl/ip/pcie_ep_wrapper.v or
+in the vendored rtl/ip/verilog-pcie/pcie_axi_master* IP.
+
+Fix applied
+-----------
+Refactored the AXI read-response handling in rtl/tb/pcie_ep_tb.sv so that:
+1. AR-channel acceptance captures the burst info (no response driven yet).
+2. R-channel uses a clean if/else:
+   - If the last beat has been accepted, deactivate the burst and deassert
+     m_axi_rvalid/m_axi_rlast.
+   - Otherwise drive the current beat data and increment slv_r_beat when
+     m_axi_rvalid && m_axi_rready.
+3. DECERR read responses are also handled in the same state machine.
+
+TC2 was also hardened to use tlp_recv_completion() and compare the returned
+completion data against the known pattern written by TC1, making the test
+anti-vacuous.
+
+Verification result (after fix)
+-------------------------------
+$ cd sim/regression && source run_env.sh && make run_pcie_test
+
+  --- TC1: TLP Memory Write to SRAM (0x2000_0100) ---
+  [PASS] TLP write → SRAM verified
+
+  --- TC2: TLP Memory Read from SRAM (0x2000_0100) ---
+  [PASS] TLP read → completion data matches written pattern
+
+  --- TC3: Multiple TLP writes (4 different addresses) ---
+  [PASS] All 4 write addresses verified
+
+  --- TC4: Burst write 1KB to SRAM (0x2000_0200) ---
+  [PASS] Burst-16 TLP write: all 16 beats verified (1KB)
+
+  [TB] PCIe EP Wrapper Summary: 4 passed, 0 failed
+  PCIE_TEST: PASS
+
+Conclusion
+----------
+Outcome A achieved: fix in testbench AXI slave model; all 4 PCIe tests pass
+and TLP Memory Read returns the data previously written to SRAM.
+No vendored IP changes were required.

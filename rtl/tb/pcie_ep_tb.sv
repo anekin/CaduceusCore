@@ -308,6 +308,11 @@ module pcie_ep_tb;
             // AR channel
             if (m_axi_arvalid && m_axi_arready && !slv_r_active) begin
                 if (oob(m_axi_araddr)) begin
+                    // DECERR: return a single-beat error response
+                    slv_r_active  <= 1'b1;
+                    slv_r_id      <= m_axi_arid;
+                    slv_r_len     <= 8'd0;
+                    slv_r_beat    <= 8'd0;
                     m_axi_rvalid  <= 1'b1;
                     m_axi_rid     <= m_axi_arid;
                     m_axi_rresp   <= 2'b11;  // DECERR
@@ -326,22 +331,22 @@ module pcie_ep_tb;
 
             // R channel
             if (slv_r_active) begin
-                if (m_axi_rvalid && m_axi_rready) begin
-                    if (slv_r_beat >= slv_r_len) begin
-                        slv_r_active <= 1'b0;
-                        m_axi_rvalid  <= 1'b0;
-                        m_axi_arready <= 1'b1;
-                    end else begin
-                        slv_r_beat <= slv_r_beat + 1;
-                    end
-                end
-
-                if (slv_r_active) begin
+                if (m_axi_rvalid && m_axi_rready && (slv_r_beat >= slv_r_len)) begin
+                    // Last beat (or DECERR response) accepted
+                    slv_r_active  <= 1'b0;
+                    m_axi_arready <= 1'b1;
+                    m_axi_rvalid  <= 1'b0;
+                    m_axi_rlast   <= 1'b0;
+                end else begin
+                    // Drive read response
                     m_axi_rvalid <= 1'b1;
                     m_axi_rid    <= slv_r_id;
                     m_axi_rresp  <= 2'b00;
                     m_axi_rlast  <= (slv_r_beat == slv_r_len);
                     m_axi_rdata  <= sram[addr_to_idx(slv_r_addr + (slv_r_beat << 6))];
+                    if (m_axi_rvalid && m_axi_rready) begin
+                        slv_r_beat <= slv_r_beat + 1;
+                    end
                 end
             end
         end
@@ -533,20 +538,21 @@ module pcie_ep_tb;
         // =====================================================================
         $display("\n--- TC2: TLP Memory Read from SRAM (0x2000_0100) ---");
         begin
+            automatic reg [511:0] expected_data;
+            expected_data = tlp_data_pattern(32'h2000_0100, 8'h01); // data written by TC1
             tlp_send(tlp_mrd_hdr(32'h2000_0100, 10'd16, 8'h02), 512'd0);
 
-            // Wait for completion
-            repeat (200) @(posedge clk);
+            // Wait for and accept the completion TLP
+            tlp_recv_completion(cpl_hdr, cpl_data);
 
-            // The DUT should finish reading from AXI slave and send a completion.
-            // Check if tx_cpl_tlp_valid was asserted
-            if (tx_cpl_tlp_valid) begin
-                $display("[PASS] TLP read → completion received (data=0x%032h)", tx_cpl_tlp_data);
-                pass_cnt = pass_cnt + 1;
+            if (cpl_data !== expected_data) begin
+                $display("[FAIL] TLP read completion data mismatch at 0x2000_0100");
+                $display("       expected: %032h", expected_data);
+                $display("       got:      %032h", cpl_data);
+                fail_cnt = fail_cnt + 1;
             end else begin
-                // May not receive completion if pcie_axi_master needs more setup
-                $display("[INFO] No completion received — may need full pcie_axi_master init");
-                pass_cnt = pass_cnt + 1;  // Non-fatal for this standalone test
+                $display("[PASS] TLP read → completion data matches written pattern");
+                pass_cnt = pass_cnt + 1;
             end
         end
 
