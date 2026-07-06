@@ -1,0 +1,49 @@
+OMO / Atlas Readiness Evidence — W5.6
+Generated: 2026-07-06
+
+=== 1. opencode plugin list ===
+┌  Install plugin list
+│
+◇  Plugin package ready
+│
+◇  Detected server target
+│
+◇  Plugin config updated
+│
+●  Already configured in /home/prj/zhengs/caduceuscore/CaduceusCore/.opencode/opencode.json
+│
+◆  Installed list
+│
+●  Scope: local (/home/prj/zhengs/caduceuscore/CaduceusCore/.opencode)
+│
+└  Done
+
+=== 2. Local plugin config (.opencode/opencode.json) ===
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "oh-my-openagent@4.15.1"
+  ]
+}
+
+=== 3. Installed oh-my-openagent version ===
+  "version": "4.15.1",
+
+=== 4. Atlas agent definition in oh-my-openagent.json ===
+    "atlas": {
+      "model": "moonshotai-cn/kimi-k2.7-code",
+      "fallback_models": [
+        {
+          "model": "deepseek/deepseek-v4-pro",
+          "variant": "max"
+        }
+      ]
+    },
+
+=== 5. Atlas standalone command availability ===
+Atlas not in PATH (expected; Atlas is invoked via OMO task(subagent_type='atlas', ...))
+
+=== 6. Readiness conclusion ===
+- oh-my-openagent: 4.15.1 (>= 4.14) — PASS
+- Atlas agent configured in oh-my-openagent.json — PASS
+- Atlas is invoked as OMO subagent task(subagent_type="atlas", ...); no standalone atlas binary exists in PATH, which is expected.
