@@ -49,3 +49,46 @@
 - Exit code preserved via `set -o pipefail`: if the underlying script fails, pipe returns its exit code and `set -e` propagates it
 - Uses same pattern as `run_fm_pcie_dma.sh`: shebang, `set -euo pipefail`, `REPO_ROOT` computed from script location, `mkdir -p` evidence dir
 
+
+## [2026-07-06] sz0001 Env Check
+- Exit code: 1
+- Result: 1 failed, 7 passed, 38 deselected in 0.35s
+- Log: `.omo/evidence/env_check.log`
+
+## [2026-07-06] T1.1: DmaEngine class added to sim/models/pcie.py
+
+### Implementation summary
+- Added `DmaEngine` class (~620 lines, 30 methods/properties) to `sim/models/pcie.py`
+- Models NPU-initiated PCIe DMA engine (dma_if_pcie behavior) as a Func Model golden reference
+
+### Key capabilities implemented
+1. **TLP header builders**: `_build_memwr_header_3dw/4dw`, `_build_memrd_header_3dw/4dw`, `_build_cpld_header`
+   - 3-DW (12-byte) headers for addresses ≤ 0xFFFFFFFF
+   - 4-DW (16-byte) headers for addresses > 0xFFFFFFFF (64-bit)
+   - Fmt+Type encodings match `pcie_axi_master.v` lines 158-163: `MWR_3DW=0x40`, `MWR_4DW=0x60`, `MRD_3DW=0x00`, `MRD_4DW=0x20`, `CPLD=0x4A`
+2. **Tag lifecycle management**: `PCIE_TAG_COUNT=256`, `_alloc_tag()` / `_free_tag()`, pool exhaustion raises `RuntimeError`
+3. **Max payload splitting**: MPS=256 bytes default (PCIe encoding 1), payloads cross MPS boundaries → segmented TLPs
+4. **Completion parsing**: `_parse_cpld_header()` extracts length, tag, byte_count, status from 12-byte CPLD header
+5. **Descriptor-to-TLP translation**:
+   - `submit_write_desc(pcie_addr, axi_addr, len, tag)` — reads NPU memory → MWr TLPs to host
+   - `submit_read_desc(pcie_addr, axi_addr, len, tag)` — MRd TLPs → CPLD reassembly → writes to NPU memory
+6. **Error propagation**: UR/CA completion status → `DESC_ERR_UR`/`DESC_ERR_CA` descriptor errors; AXI DECERR → `DESC_ERR_DECERR`
+7. **IRQ assertion**: `irq` property asserted on any descriptor completion (edge-triggered, clears on read)
+8. **Error injection**: `inject_completion_error(tag, status)` and `inject_axi_dec_error(tag)` for smoke testing
+
+### RTL references used
+- `rtl/ip/verilog-pcie/dma_if_pcie.v` — `PCIE_TAG_COUNT=256`, descriptor port definitions, `PCIE_ADDR_WIDTH=64`, `TAG_WIDTH=8`, `LEN_WIDTH=16`
+- `rtl/ip/verilog-pcie/pcie_axi_master.v` (lines 158-163) — TLP Fmt+Type encoding (`010_00000` = 3-DW MWr, `011_00000` = 4-DW MWr)
+- `sim/models/pcie.py` (PCIeModel) — reused `struct.pack(">III", ...)` header-packing pattern, MPS=256, tag increment
+
+### Design decisions
+- Host memory simulated as 16MB `bytearray` (expandable on writes within range)
+- `tlp_write` gracefully skips host_mem writes for addresses beyond buffer bounds (prevents MemoryError for 64-bit smoke test addresses)
+- CPLD status embedded in DW2 bits 7:4 (Func Model extension; real hardware uses DW2[15:13])
+- Crossbar access optional: `submit_*_desc` works with or without crossbar (fallback to host_mem for smoke testing without crossbar)
+- `tlp_read_with_reassembly()` added for RCB=128 split-completion testing (separate from basic `tlp_read()`)
+
+### Verification
+- All 7 smoke assertions pass: `PYTHONPATH=. python sim/models/pcie.py`
+- Existing test suite: 42/46 pass (4 pre-existing failures are missing test vector manifest files — not related to this change)
+- Import verification: `PYTHONPATH=sim python -c "from sim.models.pcie import DmaEngine"` succeeds
