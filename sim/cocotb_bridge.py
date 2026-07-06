@@ -1674,7 +1674,9 @@ class CocotbBridge:
             self.dut.u_dut.u_ibex_wrapper.apb_pwrite.value = 0
         except AttributeError:
             # Hierarchical path may vary; skip in non-cocotb mode
-            pass
+            # (no-op: _apb_write_cache was updated above, non-cocotb callers
+            #  read from that cache in _apb_read)
+            logger.debug("_apb_write skipped (DUT path unavailable)")
 
     async def _apb_read(self, addr: int) -> int:
         """Read a 32-bit value from an APB address."""
@@ -2042,7 +2044,7 @@ if COCOTB_AVAILABLE:
                     "format": finfo.get("format", "int32"),
                 }
             except (ValueError, IndexError):
-                pass
+                logger.debug("Skipping manifest file entry %s (unexpected format)", fname)
 
         total_cycles = 0
         passed_count = 0
@@ -2358,7 +2360,7 @@ if COCOTB_AVAILABLE:
                     "format": finfo.get("format", "int32"),
                 }
             except (ValueError, IndexError):
-                pass
+                logger.debug("Skipping manifest file entry %s (unexpected format)", fname)
 
         op = next((o for o in manifest["ops"] if o["idx"] == op_idx), None)
         if op is None:
