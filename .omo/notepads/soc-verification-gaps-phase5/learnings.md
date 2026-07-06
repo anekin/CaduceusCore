@@ -129,3 +129,26 @@ The `test_boot_rom_loading` test failed because it checked for non-zero code at 
 ### Verification
 - First 8 hex words at 0x80: `00010297 f8028293 00010317 f7830313 00001397 a8838393 0062dc63 0003ae03`
 - Matches `_start` disassembly exactly
+
+## [2026-07-06] W1.1: Qwen2.5-3B 36-layer forward test spec created
+
+Created `docs/qwen25-3b-forward-spec.md` defining the full 36-layer forward pass
+test specification.
+
+### Key findings
+- Canonical Qwen2.5-3B parameters: hidden=2048, intermediate=11008, heads=16,
+  kv_heads=16, 36 layers, vocab_size=151936. Note: the codebase
+  `blk0_manifest.json` uses hidden=2560, intermediate=9728, heads=32, kv_heads=2
+  which matches Qwen2.5-7B not 3B — this is a known artifact from early
+  prototyping.
+- Per-layer 17-op chain (building block FM-SOC-027): 9 MMUL + 5 SFU + 3 Vector,
+  21,712 tiles per layer, 781,632 tiles across all 36 layers.
+- Golden reference path: `rtl/test_vectors/soc_e2e/qwen25-3b-36layer/expected.npz`
+  (does not exist yet; must be generated).
+- Tolerance: cos_sim >= 0.999 per layer, max_rel_err <= 1e-4 per op.
+  End-to-end (layer 35) tolerance relaxed to cos_sim >= 0.995 and
+  max_rel_err <= 1e-2 to account for FP16 accumulation across 36 layers.
+- Each layer's 7 weight tensors total ~49 MB packed (INT4 + FP32 scales),
+  confirming tile streaming via DMA is mandatory (4 MB SRAM).
+- Two new FM-SOC cases proposed: FM-SOC-036 (36-layer forward) and FM-SOC-037
+  (36-layer anti-vacuous with corrupted layer 17 weight).
