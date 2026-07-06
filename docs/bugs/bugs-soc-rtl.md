@@ -2,6 +2,8 @@
 
 > **阶段**: Phase 4 SoC RTL 逐步替换
 > **关联 plan**: `.omo/plans/soc-rtl-substitution.md`
+> **Module-level bugs**: see [`bugs-module-level.md](bugs-module-level.md)
+> **SoC Func Model bugs**: see [`bugs-soc-func-model.md](bugs-soc-func-model.md)
 
 ## 规则
 

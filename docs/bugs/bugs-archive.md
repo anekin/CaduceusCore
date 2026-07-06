@@ -1,3 +1,14 @@
+# Bug Tracking — Archive (Monolithic, superseded)
+
+> **⚠️ ARCHIVED**: This monolithic file has been split into per-phase files.
+> - Module-level bugs → [`bugs-module-level.md](bugs-module-level.md)
+> - SoC Func Model bugs → [`bugs-soc-func-model.md](bugs-soc-func-model.md)
+> - SoC RTL bugs → [`bugs-soc-rtl.md](bugs-soc-rtl.md)
+>
+> **Do not add new entries here.** Add entries to the appropriate per-phase file above.
+
+---
+
 # Bug Tracking — MXU 模块级性能验证
 
 > 更新: 2026-07-02
