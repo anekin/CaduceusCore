@@ -35,6 +35,103 @@ PYTHONPATH=sim python sim/timing/benchmark.py --alias mobilenetv3
 
 **RTL verification (optional, requires Synopsys VCS):** See `rtl/mxu/README.md`.
 
+## Reproduction & Verification
+
+This section describes how to reproduce the main verification workflows from a fresh clone. Module-specific details are in `rtl/mxu/README.md`, `rtl/sfu/README.md`, `rtl/vector/README.md`, `rtl/soc/README.md`, and `rtl/ip/README.md`.
+
+### Prerequisites
+
+- Python 3.10+ and `pip`
+- Git
+- Synopsys VCS (for RTL simulations; available on EDA server `sz0001` / `192.168.0.11`)
+- RISC-V GCC toolchain (for firmware build)
+- Spike RISC-V ISA simulator with CaduceusCore patches (for E2E forward pass)
+- Built firmware ELF
+
+Install Python dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+### 1. Build the firmware
+
+```bash
+make -C firmware
+```
+
+### 2. Module-level RTL regressions
+
+**MXU Phase 1:**
+
+```bash
+python3 scripts/gen_mxu_vectors.py --scenario all --out-dir rtl/test_vectors/mxu
+# Compile and run (requires VCS)
+vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps -top tb_mxu \
+    rtl/tb/tb_mxu.v rtl/mxu/*.v -o simv_mxu
+./simv_mxu +testdir=rtl/test_vectors/mxu/single_tile +scenario=single_tile
+python3 sim/compare_rtl.py rtl/test_vectors/mxu/single_tile
+```
+
+**SFU + Vector Phase 2:**
+
+```bash
+python3 scripts/gen_sfu_luts.py
+python3 scripts/gen_sfu_vectors.py --scenario all
+python3 scripts/gen_vector_vectors.py --scenario all
+python3 scripts/run_batch_regression.py
+```
+
+### 3. Full SoC RTL regression
+
+```bash
+bash sim/regression/run_fm_soc_all.sh
+```
+
+This runs the full FM-SOC-001..032 + FM-SOC-10X RTL regression against the RTL SoC with the internal Ibex RISC-V core.
+
+To run isolated SoC e2e make targets via the EDA server wrapper:
+
+```bash
+bash sim/regression/soc-verification-run.sh run_e2e_mxu_multi
+```
+
+### 4. Task 17 SFU/Vector regression
+
+After generating the SFU/Vector test vectors and building the SFU/Vector simv binaries, run:
+
+```bash
+python3 scripts/run_task17_regression.py
+```
+
+The script discovers all scenarios under `rtl/test_vectors/sfu` and `rtl/test_vectors/vector`, runs them against the default simv binaries (`/tmp/simv_tb_sfu_infra` and `/tmp/simv_tb_vector_sumfix`), and writes a summary to `build/evidence/task-17-rerun.txt`. Override the binaries or parallelism with environment variables:
+
+```bash
+SFU_SIMV=/path/to/simv_tb_sfu VEC_SIMV=/path/to/simv_tb_vector JOBS=8 python3 scripts/run_task17_regression.py
+```
+
+To verify the generated RTL result files against the Func Model golden reference:
+
+```bash
+python3 scripts/verify_results.py
+```
+
+Results are written to `build/evidence/task-17-compare_rtl-verify.txt`.
+
+### 5. Func Model op verification
+
+To verify the op05/op07 golden correctness using the Func Model:
+
+```bash
+PYTHONPATH=sim python3 scripts/verify_ops_func_model.py
+```
+
+### 6. Python pytest regression
+
+```bash
+PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q
+```
+
 ## 架构概览
 
 - **Arc Model DSE 推荐**：三场景两芯片方案 — S1 (FSA 128×256, 33 TOPS) + S2/S3 共用 (block 80×1536, 123 TOPS)
@@ -676,7 +773,9 @@ CaduceusCore/
 │   ├── config/                   #   NPU 架构 + DSE 场景 YAML 配置
 │   │   └── interconnect.yaml     #    AXI crossbar 互连配置 (Phase 3, NEW)
 │   ├── regression/               #   SoC 回归测试 (Phase 3, NEW)
-│   │   └── Makefile              #    8 targets (apb/intc/dma/crossbar/pcie/dram/soc/qwen)
+│   │   ├── Makefile              #    8 targets (apb/intc/dma/crossbar/pcie/dram/soc/qwen)
+│   │   ├── run_fm_soc_all.sh     #    全量 SoC RTL 回归入口
+│   │   └── soc-verification-run.sh #  EDA server 隔离 e2e target 运行器
 │   ├── tests/                    #   pytest 测试套件
 │   │   └── test_dma_noc_integration.py  #   DMA + NoC 集成测试 (NEW)
 │   └── reports/                  #   架构 DSE 报告
@@ -752,6 +851,11 @@ CaduceusCore/
 │   ├── gen_vector_vectors.py     #   Vector 测试向量生成 (Phase 2)
 │   ├── gen_e2e_qwen_vectors.py   #   E2E Qwen 测试向量生成 (Phase 2)
 │   ├── run_batch_regression.py   #   SFU + Vector 批量回归 (Phase 2)
+│   ├── run_task17_regression.py  #   Task 17 SFU/Vector 批量回归
+│   ├── verify_results.py         #   Task 17 RTL 结果比对
+│   ├── verify_ops_func_model.py  #   Func Model op05/op07/op10 验证
+│   ├── export_mobilenetv3_onnx.py#   MobileNetV3-Small ONNX 导出
+│   ├── extract_blk0_status.sh    #   qwen_blk0.log 解析助手
 │   └── validate_interconnect.py  #   Crossbar 互连验证 (Phase 3, NEW)
 ├── ggml-npu/                     # llama.cpp / GGUF 集成
 │   ├── q4_dequant.py             #   Q4_K/Q6_K 反量化 + GGUF 权值加载
