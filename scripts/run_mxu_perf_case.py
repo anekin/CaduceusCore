@@ -32,7 +32,7 @@ from typing import Sequence
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CADUCEUS_CORE = SCRIPT_DIR.parent
-REPO_ROOT = CADUCEUS_CORE.parent
+REPO_ROOT = CADUCEUS_CORE
 
 TESTCASE_LIST = CADUCEUS_CORE / "rtl" / "testcase-list-mxu-perf.md"
 LEARNINGS_FILE = REPO_ROOT / ".omo" / "notepads" / "mxu-module-perf" / "learnings.md"
@@ -274,7 +274,7 @@ def step_compile_vcs(
         f"{setup} && "
         f"cd {shlex.quote(str(REPO_ROOT))} && "
         f"vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps "
-        f"CaduceusCore/rtl/tb/tb_mxu_perf.v CaduceusCore/rtl/mxu/*.v "
+        f"rtl/tb/tb_mxu_perf.v rtl/mxu/*.v "
         f"-top tb_mxu_perf -o {shlex.quote(str(simv))} -l {shlex.quote(str(compile_log))}"
     )
     run_ssh(eda_server, cmd)

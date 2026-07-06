@@ -17,10 +17,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-SFU_ROOT = REPO_ROOT / "CaduceusCore/rtl/test_vectors/sfu"
-VECTOR_ROOT = REPO_ROOT / "CaduceusCore/rtl/test_vectors/vector"
-RESULTS_DIR = REPO_ROOT / "CaduceusCore/rtl/results"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SFU_ROOT = REPO_ROOT / "rtl/test_vectors/sfu"
+VECTOR_ROOT = REPO_ROOT / "rtl/test_vectors/vector"
+RESULTS_DIR = REPO_ROOT / "rtl/results"
 EVIDENCE_FILE = REPO_ROOT / ".omo/evidence/task-17-rerun.txt"
 LEARNINGS_FILE = REPO_ROOT / ".omo/notepads/sfu-vector-phase2/learnings.md"
 
@@ -59,7 +59,7 @@ def compile_simv(top: str, rtl_subdir: str, output: str) -> None:
     cmd = (
         f"{VCS_SETUP} && cd {REPO_ROOT} && "
         f"vcs -full64 -sverilog -timescale=1ns/1ps -top {top} "
-        f"CaduceusCore/rtl/tb/{top}.v CaduceusCore/rtl/{rtl_subdir}/*.v "
+        f"rtl/tb/{top}.v rtl/{rtl_subdir}/*.v "
         f"-o {output} -l {REPO_ROOT}/build/{top}_compile.log"
     )
     print(f"[compile] {top} -> {output}")

@@ -90,3 +90,21 @@ Five gates with explicit PASS/FAIL criteria:
 ### Evidence
 - `.omo/templates/review-gate-checklist.md`
 - `build/evidence/omo-atlas-readiness.txt`
+
+## [2026-07-06] W5.3-followup: caduceus-verification-lessons.md committed to git
+
+Brought the untracked file `docs/caduceus-verification-lessons.md` into version
+control — it was referenced by the plan and the W5.3 audit but never committed.
+Commit `e121a96` adds the 205-line document with all 14 lessons and appendices.
+
+## Pre-Wave 0.2 Fix: Correct build/ path resolution to repo root (2026-07-06)
+
+**Root cause:** The initial `/tmp` → `build/` migration introduced path resolution bugs in two scripts:
+- `run_batch_regression.py` used `REPO_ROOT = Path(__file__).resolve().parent.parent.parent` (3 levels up = `/home/prj/zhengs/caduceuscore/`), with `CaduceusCore/` prefixes on all sub-paths. Build artifacts landed at `/home/prj/zhengs/caduceuscore/build/` instead of the repo's `build/`.
+- `run_mxu_perf_case.py` used `REPO_ROOT = CADUCEUS_CORE.parent`, same effect.
+
+**Fix:**
+- `run_batch_regression.py`: Changed `REPO_ROOT` to 2 levels up (`parent.parent` = CaduceusCore dir), removed `CaduceusCore/` prefixes from `SFU_ROOT`, `VECTOR_ROOT`, `RESULTS_DIR`, and `compile_simv()` VCS command paths.
+- `run_mxu_perf_case.py`: Changed `REPO_ROOT = CADUCEUS_CORE.parent` to `REPO_ROOT = CADUCEUS_CORE`, removed `CaduceusCore/` prefix from VCS compile command RTL paths.
+
+**Verification:** All `build/`, `.omo/`, and `rtl/` paths now start with `/home/prj/zhengs/caduceuscore/CaduceusCore/`. py_compile passes on both scripts.
