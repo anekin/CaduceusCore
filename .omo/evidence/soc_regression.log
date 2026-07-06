@@ -172,27 +172,17 @@ LICENSE:     27020@sz0001
 ============================================================
 [RUN] FM-SOC-032
 ============================================================
-[FAIL] FM-SOC-032 (log: /home/prj/zhengs/wa2_caduceuscore/CaduceusCore/build/ibex_full_rtl/evidence/FM-SOC-032.log)
+[PASS] FM-SOC-032
 
 ============================================================
 [RUN] FM-SOC-10X
 ============================================================
-[FAIL] FM-SOC-10X (log: /home/prj/zhengs/wa2_caduceuscore/CaduceusCore/build/ibex_full_rtl/evidence/FM-SOC-10X.log)
+[PASS] FM-SOC-10X
 
 ============================================================
 [SUMMARY] Full RTL + Ibex (33-case FM-SOC regression)
-  PASS: 31
-  FAIL: 2
+  PASS: 33
+  FAIL: 0
   SKIP: 0
   TOTAL: 33
-============================================================
-
-============================================================
-[RE-RUN] After generating missing test vectors:
-  - scripts/gen_sfu_luts.py → exp_lut.hex, gelu_lut.hex
-  - scripts/gen_blk0_golden.py → rtl/test_vectors/qwen_blk0/blk0_manifest.json
-[RE-RUN] FM-SOC-032: PASS
-[RE-RUN] FM-SOC-10X: PASS
-
-[FINAL] Full RTL + Ibex FM-SOC regression: 33/33 PASS
 ============================================================

@@ -731,3 +731,24 @@ R5 audit Finding 1 noted that TC-SOC1 only had backdoor SRAM verification, missi
 - Single-test run on sz0001: `TESTS=1 PASS=1 FAIL=0`, 2040.50 ns simulation time, 0.37s real time.
 - The monitor coroutine pattern (`cocotb.start_soon` → monitor → `await send_cpl_for_mrd` → `await monitor`) mirrors TC-SOC2's dual-compare methodology and closes the R5 Finding 1 gap.
 
+## [2026-07-07] Wave 6 T6.1 — Full SoC Regression + Vendored File Gate
+
+### Regression run
+- **Date**: 2026-07-07 07:54 UTC
+- **Server**: sz0001 (VCS V-2023.12-SP2)
+- **Command**: `bash scripts/run_soc_regression.sh`
+- **Result**: **33/33 PASS, 0 FAIL, 0 SKIP**
+  - FM-SOC-001 through FM-SOC-032: 32/32 PASS
+  - FM-SOC-10X: 1/1 PASS
+- **Log**: `.omo/evidence/soc_regression.log`
+
+### Vendored file gate
+- **Command**: `git diff --name-only origin/main..feat_pcie | grep 'rtl/ip/verilog-pcie/'`
+- **Result**: **PASS** — empty output (no vendored PCIe RTL files modified)
+- The `rtl/ip/verilog-pcie/` directory from alexforencich/verilog-pcie (MIT) remains untouched on `feat_pcie`.
+
+### Commit
+- `chore(pcie): final regression PASS + vendored file gate verified`
+- Stages: `.omo/evidence/soc_regression.log` + `.omo/notepads/pcie-dma-implementation/learnings.md` only
+- Vendored gate confirmed at commit time.
+
