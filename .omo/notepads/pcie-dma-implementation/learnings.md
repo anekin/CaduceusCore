@@ -116,3 +116,46 @@
 - `inject_axi_dec_error()` is only checked in `submit_read_desc` (not `submit_write_desc`), so TC7 uses crossbar route for write-descriptor DECERR
 - All tests use descriptive patterns (incrementing bytes, repeated ASCII) so data corruption is immediately obvious
 - Every test includes an anti-vacuous assertion to confirm the test is actually exercising real behavior
+
+## [2026-07-06] T2.1: pcie_dma_wrapper.v created
+
+### Implementation summary
+- Created `rtl/ip/pcie_dma_wrapper.v` (886 lines) — wrapper for `dma_if_pcie` + `dma_if_axi` with APB slave and 2-phase descriptor FSM
+
+### Architecture
+1. **dma_if_pcie** (plan C2 params): TLP_DATA_WIDTH=512, PCIE_ADDR_WIDTH=64, PCIE_TAG_COUNT=256, READ/WRITE_OP_TABLE_SIZE=256, READ/WRITE_TX_LIMIT=128, READ_CPLH_FC_LIMIT=64, READ_CPLD_FC_LIMIT=256, IMM_ENABLE=0
+2. **dma_if_axi** (plan C3 params): AXI_DATA_WIDTH=512, AXI_ADDR_WIDTH=32, AXI_ID_WIDTH=6, AXI_MAX_BURST_LEN=256, RAM_SEL_WIDTH=2, RAM_ADDR_WIDTH=16, RAM_SEG_COUNT=2
+3. **RAM cross-connect**: Two `dma_psdpram` instances (SIZE=65536, SEG_COUNT=2, SEG_DATA_WIDTH=512, PIPELINE=2)
+   - `ram_pcie_to_axi`: dma_if_pcie writes → dma_if_axi reads (PCIe CPLD → AXI write path)
+   - `ram_axi_to_pcie`: dma_if_axi writes → dma_if_pcie reads (AXI read → PCIe MWr path)
+4. **APB slave** at 0x4000_4000 (port 4), register map matching plan C5:
+   - 0x00 PCIE_CTRL, 0x04 PCIE_STATUS, 0x08 PCIE_ADDR_LO, 0x0C PCIE_ADDR_HI
+   - 0x10 AXI_ADDR, 0x14 LEN, 0x18 TAG, 0x1C RD_ERR_CODE, 0x20 WR_ERR_CODE
+5. **2-phase descriptor FSM** (5 states):
+   - Read (host→NPU): IDLE → RD_PCIE_ISSUE → IDLE → RD_AXI_ISSUE → rd_done
+   - Write (NPU→host): IDLE → WR_AXI_ISSUE → IDLE → WR_PCIE_ISSUE → wr_done
+6. **IRQ**: pcie_dma_irq = ctrl_reg[3] && (rd_done_reg || wr_done_reg)
+
+### Design decisions
+- Reset polarity: `assign rst = ~rst_n;` (matching pcie_ep_wrapper.v:162 pattern)
+- All APB registers zero-wait-state (pready=1), out-of-range → pslverr
+- Descriptor valid outputs driven combinatorially from FSM state
+- Phase completion tracked via edge-sensitive flags, triggered by status_valid from sub-modules
+- RAM segment select (sel) outputs left unconnected — segments packed into wide buses compatible with dma_psdpram interface
+- Configuration tied: read_enable=1, write_enable=1, ext_tag_enable=1, rcb_128b=0, requester_id=16'h0001, max_read_request_size=3'b010, max_payload_size=3'b001
+- TLP ports exposed to top-level for testbench driving
+
+### VCS compilation
+- Parsing: 0 errors, 1 pre-existing vendor warning (SIOB in dma_if_pcie_wr.v:1148 — not our code)
+- All 5 instantiated modules (dma_if_axi, dma_if_axi_wr, dma_if_pcie_wr, dma_psdpram, pcie_dma_wrapper) recompiled in inline pass
+- Top module found: pcie_dma_wrapper
+- Full simv binary build timed out at 120s but code is clean (0 errors, 0 identifier issues)
+
+### Parameter override verification
+- `grep -rnE '(TLP_DATA_WIDTH|AXI_DATA_WIDTH)' rtl/ip/pcie_dma_wrapper.v` shows both overridden to 512
+
+### Style references
+- `pcie_ep_wrapper.v` — APB register decode pattern, reset conversion, zero-wait-state pready
+- `apb_decoder.v` — address decode convention (paddr[11:0], one-hot select)
+- `dma_if_pcie.v` — port mapping, parameter derivations
+- `dma_if_axi.v` — port mapping, AXI signal routing
