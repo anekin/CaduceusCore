@@ -16,6 +16,7 @@
 #define NPU_PCIE_BASE      0x40004000UL
 #define NPU_DOORBELL_BASE  0x40005000UL
 #define NPU_INTC_BASE      0x40006000UL
+#define NPU_PCIE_DMA_BASE  0x40007000UL
 #define NPU_SRAM_BASE      0x20000000UL
 #define NPU_SRAM_SIZE      (4 * 1024 * 1024)
 
@@ -76,6 +77,8 @@ typedef struct {
 #define VEC_OP_CONV  4
 #define VEC_OP_RESID 5
 
+#define OP_PCIE_DMA 7
+
 #define MXU_WRP_WEIGHT_BASE 0x30
 #define MXU_WRP_ACT_BASE    0x34
 #define MXU_WRP_OUT_BASE    0x38
@@ -111,6 +114,40 @@ typedef struct {
     volatile uint32_t IRQ_EN;        /* 0x38: bit0=irq enable */
 } npu_dma_t;
 
+/* ── PCIe DMA Registers ──────────────────────────────────────────── */
+
+/* NOTE: The full hardware APB map exposes 9 registers (36 bytes).  The
+ * doorbell descriptor path only uses the first 8 registers (32 bytes);
+ * RD_ERR_CODE and WR_ERR_CODE are status/debug registers.  sizeof() is
+ * therefore 36, which exceeds the 32-byte doorbell descriptor budget; the
+ * firmware descriptor struct pcie_dma_desc_t is kept separately at 24 bytes.
+ */
+typedef struct __attribute__((packed)) {
+    volatile uint32_t PCIE_CTRL;         /* 0x00: [0]=start_rd, [1]=start_wr,
+                                                 [2]=abort, [3]=irq_en */
+    volatile uint32_t PCIE_STATUS;       /* 0x04: [0]=rd_busy, [1]=wr_busy,
+                                                 [2]=rd_done, [3]=wr_done,
+                                                 [4]=error */
+    volatile uint32_t PCIE_ADDR_LO;      /* 0x08: PCIe address [31:0] */
+    volatile uint32_t PCIE_ADDR_HI;      /* 0x0C: PCIe address [63:32] */
+    volatile uint32_t AXI_ADDR;          /* 0x10: Local AXI address */
+    volatile uint32_t LEN;               /* 0x14: Transfer length (bytes) */
+    volatile uint32_t TAG;               /* 0x18: Descriptor tag */
+    volatile uint32_t RD_ERR_CODE;       /* 0x1C: Read error code */
+    volatile uint32_t WR_ERR_CODE;       /* 0x20: Write error code */
+} npu_pcie_dma_t;                        /* sizeof == 36 bytes */
+
+#define PCIE_DMA_CTRL_START_RD  (1 << 0)
+#define PCIE_DMA_CTRL_START_WR  (1 << 1)
+#define PCIE_DMA_CTRL_ABORT     (1 << 2)
+#define PCIE_DMA_CTRL_IRQ_EN    (1 << 3)
+
+#define PCIE_DMA_STATUS_RD_BUSY (1 << 0)
+#define PCIE_DMA_STATUS_WR_BUSY (1 << 1)
+#define PCIE_DMA_STATUS_RD_DONE (1 << 2)
+#define PCIE_DMA_STATUS_WR_DONE (1 << 3)
+#define PCIE_DMA_STATUS_ERROR   (1 << 4)
+
 /* ── Doorbell Registers ─────────────────────────────────────────── */
 
 typedef struct {
@@ -144,8 +181,9 @@ typedef struct {
 #define NPU_MXU    ((npu_mxu_t *)     NPU_MXU_BASE)
 #define NPU_SFU    ((npu_sfu_t *)     NPU_SFU_BASE)
 #define NPU_VECTOR ((npu_vector_t *)  NPU_VECTOR_BASE)
-#define NPU_DMA    ((npu_dma_t *)     NPU_DMA_BASE)
-#define NPU_DB     ((npu_doorbell_t *)NPU_DOORBELL_BASE)
+#define NPU_DMA      ((npu_dma_t *)       NPU_DMA_BASE)
+#define NPU_PCIE_DMA ((npu_pcie_dma_t *)  NPU_PCIE_DMA_BASE)
+#define NPU_DB       ((npu_doorbell_t *)  NPU_DOORBELL_BASE)
 #define NPU_INTC   ((npu_intc_t *)    NPU_INTC_BASE)
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
