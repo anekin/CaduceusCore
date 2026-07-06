@@ -357,23 +357,23 @@ module pcie_ep_tb;
     // =========================================================================
     // TLP Helper Functions
     // =========================================================================
-    // Build a 128-bit Memory Write TLP header
-    // DW0: [24:16]=Tag, [15:10]=ReqID(0), [9:0]=Length
-    // DW1: [31:2]=Addr[31:2]
-    // DW2: [63:32]=0
-    // DW3: [95:64]=ByteEnables
+    // Build a 128-bit Memory Write TLP header (pcie_axi_master parser layout)
+    // DW0 [127:96]: {Fmt[2:0], Type[4:0], Rsvd, TC, Tag[9:8], Attr, LN, TH, TD, EP, Attr, AT, Length[9:0]}
+    // DW1 [95:64] : {RequesterID[15:0], Tag[7:0], LastBE[3:0], FirstBE[3:0]}
+    // DW2 [63:32] : {Addr[31:2], PH[1:0]}  (3-DW header)
+    // DW3 [31:0]  : unused (zero)
     function automatic [127:0] tlp_mwr_hdr;
         input [31:0] addr;
         input [9:0]  length_dw;
         input [7:0]  tag;
         begin
             tlp_mwr_hdr = {
-                32'h0,                         // DW3: ByteEnables
-                {(32-10){1'b0}},               // DW2: Addr[63:32]=0 (32-bit addr)
-                2'b0, addr[31:2],              // DW1: Addr[31:2], 2'b0
-                3'b110, 5'b00000,              // DW0: Fmt(010)=3DW header, Type=MemWr
-                6'd0, tag,                     // DW0: ReqID, Tag
-                length_dw[9:0]                 // DW0: Length [9:0]
+                3'b010, 5'b00000,               // DW0: Fmt=010, Type=MemWr
+                14'b0,                          // DW0: all reserved/control bits zero
+                length_dw[9:0],                 // DW0: Length
+                16'h0000, tag, 4'b1111, 4'b1111,// DW1: reqID=0, tag, lastBE=F, firstBE=F
+                addr[31:2], 2'b00,              // DW2: 32-bit address + PH
+                32'h0000_0000                   // DW3
             };
         end
     endfunction
@@ -385,12 +385,12 @@ module pcie_ep_tb;
         input [7:0]  tag;
         begin
             tlp_mrd_hdr = {
-                32'h0,                         // DW3: ByteEnables
-                {(32-10){1'b0}},               // DW2: Addr[63:32]=0
-                2'b0, addr[31:2],              // DW1
-                3'b000, 5'b00000,              // DW0: Fmt(000)=3DW hdr no data, Type=MemRd
-                6'd0, tag,                     // DW0: ReqID, Tag
-                length_dw[9:0]                 // DW0: Length
+                3'b000, 5'b00000,               // DW0: Fmt=000, Type=MemRd
+                14'b0,
+                length_dw[9:0],
+                16'h0000, tag, 4'b1111, 4'b1111,// DW1
+                addr[31:2], 2'b00,              // DW2
+                32'h0000_0000                   // DW3
             };
         end
     endfunction
@@ -432,7 +432,7 @@ module pcie_ep_tb;
     end
     endtask
 
-    // ── Send multi-segment TLP write (burst write) ──────────────────────────
+    // ── Send a sequence of single-segment TLP writes (one per 64B beat) ────
     task tlp_write_burst;
         input [31:0] addr;
         input [7:0]  tag;
@@ -441,11 +441,11 @@ module pcie_ep_tb;
         automatic integer beat;
         for (beat = 0; beat < nbeats; beat = beat + 1) begin
             @(negedge clk);
-            rx_req_tlp_hdr   <= tlp_mwr_hdr(addr + (beat << 6), 16'd16, tag);
+            rx_req_tlp_hdr   <= tlp_mwr_hdr(addr + (beat << 6), 10'd16, tag);
             rx_req_tlp_data  <= tlp_data_pattern(addr + (beat << 6), tag);
             rx_req_tlp_valid <= 1'b1;
-            rx_req_tlp_sop   <= (beat == 0) ? 1'b1 : 1'b0;
-            rx_req_tlp_eop   <= (beat == nbeats - 1) ? 1'b1 : 1'b0;
+            rx_req_tlp_sop   <= 1'b1;
+            rx_req_tlp_eop   <= 1'b1;
 
             while (!rx_req_tlp_ready) @(posedge clk);
             @(negedge clk);
@@ -488,6 +488,7 @@ module pcie_ep_tb;
     integer i;
     reg [127:0] cpl_hdr;
     reg [511:0] cpl_data;
+    reg all_burst_ok;
 
     initial begin
         pass_cnt = 0;
@@ -592,7 +593,7 @@ module pcie_ep_tb;
             repeat (100) @(posedge clk);
 
             // Verify all 16 beats
-            reg all_burst_ok = 1;
+            all_burst_ok = 1;
             for (i = 0; i < 16; i = i + 1) begin
                 if (sram[addr_to_idx(32'h2000_0200 + (i << 6))] !==
                     tlp_data_pattern(32'h2000_0200 + (i << 6), 8'h10)) begin

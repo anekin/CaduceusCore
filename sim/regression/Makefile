@@ -132,7 +132,7 @@ APB_SIMV := simv_apb_decoder_tb
 .PHONY: run_apb_smoke
 run_apb_smoke: $(APB_SIMV)
 	@echo "$(YELLOW)[APB_SMOKE] Running...$(NC)"
-	@./$(APB_SIMV) +vcs+finish+0 2>&1 | tee apb_smoke.log
+	@./$(APB_SIMV) 2>&1 | tee apb_smoke.log
 	@grep -q "APB_SMOKE: PASS\|RESULT: ALL TESTS PASSED" apb_smoke.log && \
 		echo "$(GREEN)APB_SMOKE: PASS$(NC)" || \
 		(echo "$(RED)APB_SMOKE: FAIL$(NC)" && exit 1)
@@ -152,7 +152,7 @@ INTC_SIMV := simv_intc_tb
 .PHONY: run_intc_test
 run_intc_test: $(INTC_SIMV)
 	@echo "$(YELLOW)[INTC_TEST] Running...$(NC)"
-	@./$(INTC_SIMV) +vcs+finish+0 2>&1 | tee intc_test.log
+	@./$(INTC_SIMV) 2>&1 | tee intc_test.log
 	@grep -q "\[INTC_TEST\] PASS" intc_test.log && \
 		echo "$(GREEN)INTC_TEST: PASS$(NC)" || \
 		(echo "$(RED)INTC_TEST: FAIL$(NC)" && exit 1)
@@ -172,14 +172,17 @@ DMA_SIMV := simv_dma_wrapper_tb
 .PHONY: run_dma_test
 run_dma_test: $(DMA_SIMV)
 	@echo "$(YELLOW)[DMA_TEST] Running...$(NC)"
-	@./$(DMA_SIMV) +vcs+finish+0 2>&1 | tee dma_test.log
+	@./$(DMA_SIMV) 2>&1 | tee dma_test.log
 	@grep -q "ALL TESTS PASSED\|DMA_TEST: PASS" dma_test.log && \
 		echo "$(GREEN)DMA_TEST: PASS$(NC)" || \
 		(echo "$(RED)DMA_TEST: FAIL$(NC)" && exit 1)
 
 $(DMA_SIMV): $(DMA_SRC)
 	@echo "$(YELLOW)[DMA_TEST] Compiling...$(NC)"
-	$(VCS) $(VCS_COMMON) -top tb_dma_wrapper $(DMA_SRC) -o $(DMA_SIMV)
+	cd $(REPO_ROOT) && $(VCS) $(VCS_COMMON) -top tb_dma_wrapper \
+		-f rtl/ip/verilog-axi.flist \
+		$(subst $(RTL_DIR)/,rtl/,$(DMA_SRC)) \
+		-o sim/regression/$(DMA_SIMV)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -192,7 +195,7 @@ XBAR_SIMV := simv_axi_crossbar_tb
 .PHONY: run_crossbar_stress
 run_crossbar_stress: $(XBAR_SIMV)
 	@echo "$(YELLOW)[CROSSBAR_STRESS] Running (this may take a minute)...$(NC)"
-	@./$(XBAR_SIMV) +vcs+finish+0 2>&1 | tee crossbar_stress.log
+	@./$(XBAR_SIMV) 2>&1 | tee crossbar_stress.log
 	@grep -q "CROSSBAR_STRESS: PASS" crossbar_stress.log && \
 		echo "$(GREEN)CROSSBAR_STRESS: PASS$(NC)" || \
 		(echo "$(RED)CROSSBAR_STRESS: FAIL$(NC)" && exit 1)
@@ -212,14 +215,18 @@ PCIE_SIMV := simv_pcie_ep_tb
 .PHONY: run_pcie_test
 run_pcie_test: $(PCIE_SIMV)
 	@echo "$(YELLOW)[PCIE_TEST] Running...$(NC)"
-	@./$(PCIE_SIMV) +vcs+finish+0 2>&1 | tee pcie_test.log
+	@./$(PCIE_SIMV) 2>&1 | tee pcie_test.log
 	@grep -q "PCIE_TEST: PASS" pcie_test.log && \
 		echo "$(GREEN)PCIE_TEST: PASS$(NC)" || \
 		(echo "$(RED)PCIE_TEST: FAIL$(NC)" && exit 1)
 
 $(PCIE_SIMV): $(PCIE_SRC)
 	@echo "$(YELLOW)[PCIE_TEST] Compiling...$(NC)"
-	$(VCS) $(VCS_COMMON) -top pcie_ep_tb $(PCIE_SRC) -o $(PCIE_SIMV)
+	cd $(REPO_ROOT) && $(VCS) $(VCS_COMMON) -top pcie_ep_tb \
+		-f rtl/ip/verilog-axi.flist \
+		-f rtl/ip/verilog-pcie.flist \
+		$(subst $(RTL_DIR)/,rtl/,$(PCIE_SRC)) \
+		-o sim/regression/$(PCIE_SIMV)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -232,14 +239,14 @@ DRAM_SIMV := simv_dram_model_tb
 .PHONY: run_dram_test
 run_dram_test: $(DRAM_SIMV)
 	@echo "$(YELLOW)[DRAM_TEST] Running...$(NC)"
-	@./$(DRAM_SIMV) +vcs+finish+0 2>&1 | tee dram_test.log
+	@./$(DRAM_SIMV) 2>&1 | tee dram_test.log
 	@grep -q "^PASS\b" dram_test.log && \
 		echo "$(GREEN)DRAM_TEST: PASS$(NC)" || \
 		(echo "$(RED)DRAM_TEST: FAIL$(NC)" && exit 1)
 
 $(DRAM_SIMV): $(DRAM_SRC)
 	@echo "$(YELLOW)[DRAM_TEST] Compiling...$(NC)"
-	$(VCS) $(VCS_COMMON) -top dram_model_tb $(DRAM_SRC) -o $(DRAM_SIMV)
+	$(VCS) $(VCS_COMMON) +define+SIMULATION -top dram_model_tb $(DRAM_SRC) -o $(DRAM_SIMV)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
