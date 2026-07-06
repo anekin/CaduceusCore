@@ -542,9 +542,17 @@ def test_boot_rom_loading():
     loaded = model.load_boot_rom(hex_path)
     assert loaded > 0, f"Expected to load > 0 bytes from {hex_path}"
 
-    # Verify first 4 bytes are non-zero (firmware code loaded)
-    first_word = model.riscv._mem_read(0x00000000)
-    assert first_word != 0, "Boot ROM first word should be non-zero firmware code"
+    # Verify firmware code is present. The linker script (link.ld) reserves
+    # 0x00-0x7f (32 words) for the vectored trap table (FILL(0x00)), placing
+    # _start at 0x80. Check that offset for the first actual instruction.
+    trap_table_word = model.riscv._mem_read(0x00000000)
+    assert trap_table_word == 0, (
+        "Vectored trap table (0x00-0x7f) should be zero-padded per link.ld"
+    )
+    first_instruction = model.riscv._mem_read(0x00000080)
+    assert first_instruction != 0, (
+        f"Boot ROM at 0x80 should contain _start instruction (got 0x{first_instruction:08X})"
+    )
 
     # Missing file returns 0 without raising
     assert model.load_boot_rom("/nonexistent/hex/file.hex") == 0
