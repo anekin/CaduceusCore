@@ -15,7 +15,7 @@ Hardware spec reference: NPU硬件详细架构设计v0.2
 import hashlib
 import math
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -739,6 +739,31 @@ class GoldenVector:
         f32 = np.clip(f32, -f16_max, f16_max)
         return f32.astype(np.float16)
 
+    @staticmethod
+    def conv_f16_to_i32(arr: np.ndarray) -> np.ndarray:
+        """Convert FP16 array to INT32 with round-toward-zero truncation.
+
+        This is the SFU→MXU/Vector dtype bridge: FP16 activations from the SFU
+        pipeline are converted to INT32 for the Vector/MXU datapath.
+
+        Semantics:
+          - Finite values truncate toward zero (matches numpy float32→int32).
+          - FP16 subnormals are flushed to zero before conversion.
+          - ±Inf and NaN saturate sign-aware to INT32_MAX / INT32_MIN.
+        """
+        arr = np.asarray(arr, dtype=np.float16)
+        f32 = arr.astype(np.float32)
+        tiny = np.finfo(np.float16).tiny
+        f32[np.abs(f32) < tiny] = 0.0
+        sign = np.signbit(f32)
+        is_special = ~np.isfinite(f32)
+        out = np.empty(f32.shape, dtype=np.int32)
+        out[is_special & ~sign] = INT32_MAX
+        out[is_special & sign] = INT32_MIN
+        finite = ~is_special
+        out[finite] = f32[finite].astype(np.int32)
+        return out
+
     # ── Residual add ───────────────────────────────────────────────
 
     @staticmethod
@@ -1059,6 +1084,16 @@ class SRAM:
         raw = self.read_bytes(addr, n_elems * 2)
         return np.frombuffer(raw.tobytes(), dtype=np.float16).copy()
 
+    def write_int8(self, addr: int, data: np.ndarray):
+        """Write INT8 array to SRAM (little-endian, 1 byte each)."""
+        raw = np.asarray(data, dtype=np.int8).tobytes()
+        self.write_bytes(addr, np.frombuffer(raw, dtype=np.uint8))
+
+    def read_int8(self, addr: int, n_elems: int) -> np.ndarray:
+        """Read INT8 array from SRAM."""
+        raw = self.read_bytes(addr, n_elems)
+        return np.frombuffer(raw.tobytes(), dtype=np.int8).copy()
+
     def checksum_region(self, name: str) -> str:
         """MD5 checksum of a named region."""
         r = self.regions[name]
@@ -1139,6 +1174,48 @@ class GoldenExecutor:
         self.sram.define_region("accumulator", 0x280000, 256 * 1024)
         self.sram.define_region("sfu_io",      0x2C0000, 256 * 1024)
         self.sram.define_region("vector_io",   0x300000, 256 * 1024)  # v2
+
+        # Dtype bookkeeping for automatic inter-op VCONV insertion.
+        # Primary input dtype is the dtype the chained operand must present
+        # in SRAM for the op to consume it without an explicit preload.
+        self._OPCODE_INPUT_DTYPE = {
+            OpCode.MMUL: "int8",
+            OpCode.SOFTMAX: "fp16",
+            OpCode.LAYERNORM: "fp16",
+            OpCode.GELU: "fp16",
+            OpCode.RELU: "fp16",
+            OpCode.ROPE: "fp16",
+            OpCode.SILU: "fp16",
+            OpCode.MAXPOOL: "fp16",
+            OpCode.AVGPOOL: "fp16",
+            OpCode.RMSNORM: "fp16",
+            OpCode.VADD: "int32",
+            OpCode.VMUL: "int32",
+            OpCode.VRED_MAX: "int32",
+            OpCode.VRED_SUM: "int32",
+            OpCode.VCONV: "int32",
+            OpCode.VCONV_F16_I32: "fp16",
+            OpCode.VRESID: "int32",   # chained delta operand (sb)
+        }
+        self._OPCODE_OUTPUT_DTYPE = {
+            OpCode.MMUL: "int32",
+            OpCode.SOFTMAX: "fp16",
+            OpCode.LAYERNORM: "fp16",
+            OpCode.GELU: "fp16",
+            OpCode.RELU: "fp16",
+            OpCode.ROPE: "fp16",
+            OpCode.SILU: "fp16",
+            OpCode.MAXPOOL: "fp16",
+            OpCode.AVGPOOL: "fp16",
+            OpCode.RMSNORM: "fp16",
+            OpCode.VADD: "int32",
+            OpCode.VMUL: "int32",
+            OpCode.VRED_MAX: "fp16",
+            OpCode.VRED_SUM: "fp16",
+            OpCode.VCONV: "fp16",
+            OpCode.VCONV_F16_I32: "int32",
+            OpCode.VRESID: "int32",
+        }
 
     # ── Instruction execution ───────────────────────────────────────
 
@@ -1407,6 +1484,16 @@ class GoldenExecutor:
             self.sram.write_float16(da, out)
             self.state.cycle += length // 128 + 2
 
+        elif op == OpCode.VCONV_F16_I32:
+            # FP16 → INT32 conversion (SFU→MXU/Vector bridge)
+            sa = ops.get("sa", 0)
+            da = ops.get("da", 0)
+            length = ops.get("len", 2560)
+            inp = self.sram.read_float16(sa, length)
+            out = self.vector.conv_f16_to_i32(inp)
+            self.sram.write_int32(da, out)
+            self.state.cycle += length // 128 + 2
+
         elif op == OpCode.VRESID:
             # Residual add: da = sa + sb (both INT32 or mixed)
             sa = ops.get("sa", 0)
@@ -1428,11 +1515,140 @@ class GoldenExecutor:
         self.state.pc += 1
         return ExecutorState(**state_before)
 
-    def execute_program(self, program: List[NPUInstruction]) -> List[ExecutorState]:
+    def execute_program(self, program: List[NPUInstruction],
+                        auto_insert_dtype_converters: bool = False) -> List[ExecutorState]:
         """Execute full ISA program, return trace of per-instruction states."""
+        if auto_insert_dtype_converters:
+            return self.run_op_chain(program)
         trace = []
         for instr in program:
             state = self.step(instr)
+            trace.append(state)
+        return trace
+
+    @staticmethod
+    def _get_dst_addr(instr: NPUInstruction) -> Optional[int]:
+        return instr.operands.get("da") or instr.operands.get("oa")
+
+    @staticmethod
+    def _get_src_addr(instr: NPUInstruction) -> Optional[int]:
+        op = instr.opcode
+        if op == OpCode.MMUL:
+            return instr.operands.get("ia")
+        return instr.operands.get("sa")
+
+    @staticmethod
+    def _set_src_addr(instr: NPUInstruction, addr: int) -> NPUInstruction:
+        new_ops = dict(instr.operands)
+        op = instr.opcode
+        if op == OpCode.MMUL:
+            new_ops["ia"] = addr
+        elif op == OpCode.VRESID:
+            new_ops["sb"] = addr
+        else:
+            new_ops["sa"] = addr
+        return replace(instr, operands=new_ops)
+
+    @staticmethod
+    def _get_element_count(instr: NPUInstruction) -> int:
+        ops = instr.operands
+        op = instr.opcode
+        if op == OpCode.MMUL:
+            return ops.get("M", 1) * ops.get("N", 2560)
+        if op == OpCode.RMSNORM:
+            return ops.get("elements", 0)
+        return ops.get("len", 0)
+
+    def _insert_dtype_converters(self, program: List[NPUInstruction],
+                                 scratch_base: int = 0x380000) -> List[Any]:
+        """Expand *program* by inserting VCONV/VCONV_F16_I32 between mismatched ops.
+
+        For FP16 -> INT8 transitions an explicit INT32 -> INT8 clip/rewrite is
+        needed because there is no dedicated INT8 cast opcode; this is handled
+        at execution time by :meth:`run_op_chain`.
+        """
+        expanded: List[Any] = []
+        scratch = scratch_base
+        prev: Optional[NPUInstruction] = None
+
+        for instr in program:
+            if prev is None:
+                expanded.append(instr)
+                prev = instr
+                continue
+
+            prev_out = self._OPCODE_OUTPUT_DTYPE.get(prev.opcode)
+            next_in = self._OPCODE_INPUT_DTYPE.get(instr.opcode)
+            if prev_out is None or next_in is None or prev_out == next_in:
+                expanded.append(instr)
+                prev = instr
+                continue
+
+            length = self._get_element_count(prev)
+            prev_dst = self._get_dst_addr(prev)
+            if prev_dst is None:
+                raise ValueError(f"Cannot chain from {prev.opcode.name}: no destination address")
+
+            if prev_out == "int32" and next_in == "fp16":
+                conv = NPUInstruction(
+                    OpCode.VCONV,
+                    {"sa": prev_dst, "da": scratch, "len": length},
+                )
+                expanded.append(conv)
+                expanded.append(self._set_src_addr(instr, scratch))
+                scratch += ((length * 2 + 63) // 64) * 64
+
+            elif prev_out == "fp16" and next_in == "int32":
+                conv = NPUInstruction(
+                    OpCode.VCONV_F16_I32,
+                    {"sa": prev_dst, "da": scratch, "len": length},
+                )
+                expanded.append(conv)
+                expanded.append(self._set_src_addr(instr, scratch))
+                scratch += ((length * 4 + 63) // 64) * 64
+
+            elif prev_out == "fp16" and next_in == "int8":
+                temp_int32 = scratch
+                scratch += ((length * 4 + 63) // 64) * 64
+                int8_addr = scratch
+                scratch += ((length * 1 + 63) // 64) * 64
+                conv = NPUInstruction(
+                    OpCode.VCONV_F16_I32,
+                    {"sa": prev_dst, "da": temp_int32, "len": length},
+                )
+                expanded.append(conv)
+                expanded.append(("int8_clip", temp_int32, int8_addr, length))
+                expanded.append(self._set_src_addr(instr, int8_addr))
+
+            else:
+                raise ValueError(
+                    f"Unsupported dtype transition {prev_out} -> {next_in} "
+                    f"between {prev.opcode.name} and {instr.opcode.name}"
+                )
+
+            prev = instr
+
+        return expanded
+
+    def run_op_chain(self, program: List[NPUInstruction],
+                     scratch_base: int = 0x380000) -> List[ExecutorState]:
+        """Execute a program with automatic dtype-converter insertion.
+
+        Adjacent ops whose output/input dtypes differ receive an implicit
+        VCONV/VCONV_F16_I32 instruction; the converted result is written to
+        a scratch SRAM region and the consuming op's source address is updated
+        automatically.  No external hex preload is required.
+        """
+        expanded = self._insert_dtype_converters(program, scratch_base)
+        trace = []
+        for item in expanded:
+            if isinstance(item, tuple) and item[0] == "int8_clip":
+                _, src, dst, length = item
+                int32 = self.sram.read_int32(src, length)
+                int8 = np.clip(int32, -128, 127).astype(np.int8)
+                self.sram.write_int8(dst, int8)
+                continue
+            state = self.step(item)
             trace.append(state)
         return trace
 

@@ -37,6 +37,7 @@ class OpCode(IntEnum):
     DMA_LDD  = 0x15   # DMA 加载（描述符链模式）
     DMA_STD  = 0x16   # DMA 存储（描述符链模式）
     RMSNORM  = 0x17   # RMS Normalization (two-pass FPU)
+    VCONV_F16_I32 = 0x18   # FP16 → INT32 类型转换
     # ── Future extension ────────────────────────────────────────────
 
     @classmethod
@@ -53,6 +54,7 @@ class OpCode(IntEnum):
             "vadd": cls.VADD, "vmul": cls.VMUL,
             "vred_max": cls.VRED_MAX, "vred_sum": cls.VRED_SUM,
             "vconv": cls.VCONV, "vresid": cls.VRESID,
+            "vconv_f16_i32": cls.VCONV_F16_I32,
             # v2: DMA descriptor
             "dma_ldd": cls.DMA_LDD, "dma_std": cls.DMA_STD,
             # v3: RMSNorm
@@ -147,6 +149,7 @@ class NPUEncoder:
             words = [op << 27]
         elif op in (OpCode.VADD, OpCode.VMUL, OpCode.VRED_MAX,
                     OpCode.VRED_SUM, OpCode.VCONV, OpCode.VRESID,
+                    OpCode.VCONV_F16_I32,
                     OpCode.DMA_LDD, OpCode.DMA_STD,):
             # Generic Vector/DMA: op + sa + da + len
             sa = ops.get("sa", 0)
@@ -213,6 +216,7 @@ class NPUDecoder:
             }
         elif op in (OpCode.VADD, OpCode.VMUL, OpCode.VRED_MAX,
                     OpCode.VRED_SUM, OpCode.VCONV, OpCode.VRESID,
+                    OpCode.VCONV_F16_I32,
                     OpCode.DMA_LDD, OpCode.DMA_STD,):
             # Generic Vector/DMA
             operands = {
