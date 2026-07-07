@@ -117,6 +117,67 @@ def e2e_verify(gguf_path: str, layers: int, M: int = 1):
     return failed == 0
 
 
+def verify_36layer_true_e2e(model_path: str = None,
+                            prompt: str = "Hello") -> bool:
+    """36-layer Func Model L3 signoff entry point (QA happy).
+
+    Prints per-layer cos_sim and returns True when 36/36 PASS.
+    """
+    from qwen25_forward import (
+        DEFAULT_L3_GOLDEN_DIR, DEFAULT_MODEL_PATH, DEFAULT_PROMPT,
+        EVIDENCE_DIR, LLAMA_REF_DIR, compare_layer_outputs, run_forward_pass,
+        run_llamacpp_reference, save_golden_npz,
+    )
+    from qwen25_l3 import (
+        drift_analysis, worst_layer_decomposition, write_l3_evidence,
+    )
+
+    if model_path is None:
+        model_path = DEFAULT_MODEL_PATH
+    if prompt is None:
+        prompt = DEFAULT_PROMPT
+
+    print("=" * 70)
+    print("verify_36layer_true_e2e: 36-layer Qwen2.5-3B Func Model L3 signoff")
+    print("=" * 70)
+
+    layers = list(range(36))
+    results = run_forward_pass(model_path, layers, prompt, capture_intermediates=True)
+
+    golden_dir = DEFAULT_L3_GOLDEN_DIR
+    save_golden_npz(results, golden_dir, include_intermediates=True)
+
+    llama_outputs = run_llamacpp_reference(model_path, prompt, LLAMA_REF_DIR, n_tokens=1)
+    if not llama_outputs:
+        print("ERROR: llama.cpp reference generation failed")
+        return False
+
+    layer_results = compare_layer_outputs(
+        results["hidden_states"], llama_outputs.get("per_layer", {}), layers
+    )
+
+    cos_per_layer = {L: r["cos_sim"] for L, r in layer_results["per_layer"].items()}
+    drift = drift_analysis(cos_per_layer)
+
+    worst_layer = min(cos_per_layer, key=cos_per_layer.get) if cos_per_layer else None
+    worst_per_op = {}
+    if worst_layer is not None and "intermediates" in results:
+        worst_per_op = worst_layer_decomposition(
+            worst_layer, results["intermediates"][worst_layer],
+            llama_outputs.get("per_layer", {})
+        )
+
+    evidence_path = EVIDENCE_DIR / "w1-6-fm-l3-signoff.txt"
+    write_l3_evidence(
+        evidence_path, layer_results, drift,
+        worst_layer, worst_per_op, [0, 10, 20, 35]
+    )
+
+    all_pass = layer_results["failed"] == 0 and drift["drift_pass"]
+    print(f"\n36/36 PASS verdict: {'PASS' if all_pass else 'FAIL'}")
+    return all_pass
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=str(Path.home() / "models" /
