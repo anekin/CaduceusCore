@@ -997,7 +997,7 @@ module caduceus_soc_top #(
     // Vector SoC Wrapper (APB slave 2 at 0x4000_2000, AXI4 master 3)
     //─────────────────────────────────────────────────────────────────────────
     vector_soc_wrapper #(
-        .CHUNKS_MAX    (80)
+        .CHUNKS_MAX    (128)
     ) u_vector_wrapper (
         .clk           (clk),
         .rst_n         (rst_n),

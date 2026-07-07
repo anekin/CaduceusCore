@@ -77,12 +77,13 @@ module vector_top #(
     //=========================================================================
     // Local parameters / constants
     //=========================================================================
-    localparam [3:0] OP_ADD   = 4'd0;
-    localparam [3:0] OP_MUL   = 4'd1;
-    localparam [3:0] OP_MAX   = 4'd2;
-    localparam [3:0] OP_SUM   = 4'd3;
-    localparam [3:0] OP_CONV  = 4'd4;
-    localparam [3:0] OP_RESID = 4'd5;
+    localparam [3:0] OP_ADD      = 4'd0;
+    localparam [3:0] OP_MUL      = 4'd1;
+    localparam [3:0] OP_MAX      = 4'd2;
+    localparam [3:0] OP_SUM      = 4'd3;
+    localparam [3:0] OP_CONV     = 4'd4;
+    localparam [3:0] OP_RESID    = 4'd5;
+    localparam [3:0] OP_F16_I32  = 4'd6;
 
     localparam integer CHUNK_BYTES_INT32 = NUM_LANES * 4;  // 512
     localparam integer CHUNK_BYTES_FP16  = NUM_LANES * 2;  // 256
@@ -171,6 +172,9 @@ module vector_top #(
     localparam [3:0] ST_CONV_WRITE    = 4'd10;
     localparam [3:0] ST_DONE          = 4'd11;
     localparam [3:0] ST_LATCH         = 4'd12;
+    localparam [3:0] ST_F16_I32_FEED  = 4'd13;
+    localparam [3:0] ST_F16_I32_CAPT  = 4'd14;
+    localparam [3:0] ST_F16_I32_WRITE = 4'd15;
 
     reg [3:0]  state;
     reg [3:0]  op_reg;
@@ -190,7 +194,9 @@ module vector_top #(
 
     reg [7:0]  conv_idx;
     reg [NUM_LANES*FP16_W-1:0] conv_out_vector;
+    reg [VECTOR_W-1:0] f16i_out_vector;
     reg [DATA_W-1:0] conv_in_data;
+    reg [FP16_W-1:0] f16i_in_data;
 
     //=========================================================================
     // Helper: mask for a partial chunk
@@ -270,9 +276,23 @@ module vector_top #(
         .valid_o (tc_valid_o)
     );
 
+    wire [DATA_W-1:0] f16i_data_o;
+    wire              f16i_valid_o;
+
+    f16_to_i32 u_f16_to_i32 (
+        .clk     (clk),
+        .rst_n   (rst_n),
+        .data_i  (f16i_in_data),
+        .valid_i ( (state == ST_F16_I32_FEED) ),
+        .data_o  (f16i_data_o),
+        .valid_o (f16i_valid_o)
+    );
+
     // Combinatorial slice into the current conv input element
     always @(*) begin
         conv_in_data = a_chunk[conv_idx*DATA_W +: DATA_W];
+        // FP16 input occupies the lower 16 bits of each 32-bit SRAM word
+        f16i_in_data = a_chunk[conv_idx*DATA_W +: FP16_W];
     end
 
     //=========================================================================
@@ -300,6 +320,7 @@ module vector_top #(
             reduce_wait_cnt  <= 4'd0;
             conv_idx         <= 8'd0;
             conv_out_vector  <= {NUM_LANES*FP16_W{1'b0}};
+            f16i_out_vector  <= {VECTOR_W{1'b0}};
             sram_a_addr      <= {ADDR_W{1'b0}};
             sram_a_en        <= 1'b0;
             sram_b_addr      <= {ADDR_W{1'b0}};
@@ -356,6 +377,7 @@ module vector_top #(
                         OP_ADD, OP_MUL, OP_RESID: state <= ST_BIN_EXEC;
                         OP_MAX, OP_SUM:           state <= ST_REDUCE_FEED;
                         OP_CONV:                  state <= ST_CONV_FEED;
+                        OP_F16_I32:               state <= ST_F16_I32_FEED;
                         default:                  state <= ST_DONE;
                     endcase
                 end
@@ -472,6 +494,49 @@ module vector_top #(
 
                     a_addr <= a_addr + CHUNK_BYTES_INT32[ADDR_W-1:0];
                     o_addr <= o_addr + CHUNK_BYTES_FP16[ADDR_W-1:0];
+                    remaining <= remaining - {8'd0, chunk_count};
+
+                    if (remaining <= NUM_LANES)
+                        state <= ST_DONE;
+                    else
+                        state <= ST_READ;
+                end
+
+                // ── F16_I32 (FP16 -> INT32) ────────────────────────────────
+                ST_F16_I32_FEED: begin
+                    // f16_to_i32 valid_i asserted combinationally
+                    state <= ST_F16_I32_CAPT;
+                end
+
+                ST_F16_I32_CAPT: begin
+                    if (f16i_valid_o) begin
+                        f16i_out_vector[(conv_idx)*DATA_W +: DATA_W] <= f16i_data_o;
+                    end
+
+                    if (conv_idx + 1 >= chunk_count) begin
+                        state <= ST_F16_I32_WRITE;
+                    end else begin
+                        conv_idx <= conv_idx + 8'd1;
+                        state    <= ST_F16_I32_FEED;
+                    end
+                end
+
+                ST_F16_I32_WRITE: begin
+                    sram_o_addr  <= o_addr;
+                    sram_o_wdata <= f16i_out_vector;
+                    if (chunk_count >= NUM_LANES)
+                        sram_o_wstrb <= {512{1'b1}};
+                    else
+                        sram_o_wstrb <= ({512'h1 << (chunk_count * 4)}) - 512'h1;
+                    sram_o_wen   <= 1'b1;
+
+                    // Reset conv index for next chunk
+                    conv_idx <= 8'd0;
+
+                    // Input FP16 and output INT32 both occupy one 32-bit word
+                    // per element in this testbench memory layout.
+                    a_addr <= a_addr + CHUNK_BYTES_INT32[ADDR_W-1:0];
+                    o_addr <= o_addr + CHUNK_BYTES_INT32[ADDR_W-1:0];
                     remaining <= remaining - {8'd0, chunk_count};
 
                     if (remaining <= NUM_LANES)

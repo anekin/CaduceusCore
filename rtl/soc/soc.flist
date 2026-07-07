@@ -60,9 +60,10 @@ rtl/sfu/gelu_hw.v
 rtl/sfu/silu_hw.v
 rtl/sfu/exp_lut.v
 
-# ── Vector Engine Core (5 INT32 Vector Modules) ─────────────────
+# ── Vector Engine Core (6 INT32 Vector Modules) ─────────────────
 rtl/vector/vector_top.v
 rtl/vector/vector_alu.v
 rtl/vector/reduce_tree.v
 rtl/vector/type_convert.v
+rtl/vector/f16_to_i32.v
 rtl/vector/resid_add.v
