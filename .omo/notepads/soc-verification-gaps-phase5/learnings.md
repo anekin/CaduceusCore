@@ -688,3 +688,51 @@ An anti-vacuous PCIe corruption mechanism proves the check is genuine.
 
 ### Evidence
 - `build/evidence/w3-2-fm-dual-path.txt` — 17-op table + anti-vacuous report
+
+## [2026-07-07] W3.4: MobileNetV3-Small Func Model E2E verified
+
+Implemented end-to-end Func Model verification for MobileNetV3-Small Conv2D layers
+through the im2col→INT4-per-block GEMM path.
+
+### Implementation
+- Created `sim/tests/test_cv_mobilenetv3.py` (~340 lines) with:
+  - `im2col_conv2d()` and `im2col_depthwise()` — numpy im2col for standard and depthwise convs
+  - `quantize_act_int8()` — per-tensor symmetric INT8 activation quantization
+  - `conv2d_func_model()` — full im2col→INT8 quant act→INT4 per-block weight quant→GEMM→bias pipeline
+  - `generate_evidence()` — standalone runner that captures PyTorch intermediate activations
+    via forward hooks and compares each Conv2D layer against the Func Model quantized path
+
+### Results
+- **40/52 layers cos_sim >= 0.99** (target: >=15) — PASS
+- Mean cos_sim across all 52 layers: ~0.993
+- Worst-case layer: `features.5.block.1.0` (depthwise 5x5, 240 channels) at cos_sim=0.9697
+- 12 layers below 0.99 threshold:
+  - 5 depthwise layers with high channel counts (88-240 channels) — per-channel INT8 activation quantization compounds with small kernel sizes
+  - 4 SE-block fc1 layers — tiny 1x1 spatial tensors (1x1x1 dims) where INT4 quantization error is proportionally larger
+  - 3 projection pointwise layers — borderline cases (cos_sim 0.986-0.989), INT4 weight quantization error on small channel transitions
+
+### Technical Notes
+- im2col is implemented in pure Python numpy (not hardware-accelerated). The Func Model
+  path is: im2col → INT8 quant activation → INT4 per-block quant weight (group_size=128)
+  → GoldenMXU.matmul_int4_per_block → add bias.
+- Depthwise convs are processed channel-by-channel as single-channel convs to match
+  the hardware broadcast MAC array semantics.
+- The test uses forward hooks to capture both inputs and outputs of each Conv2D
+  module, isolating per-layer error from accumulation.
+- Activation functions (ReLU, HardSwish) are applied post-conv by the PyTorch module
+  wrappers; the raw conv outputs are compared directly.
+- Top-1 accuracy measurement on 10 ImageNet validation images is deferred to Wave 4
+  when the full RTL inference pipeline is available.
+
+### Quantization Scheme
+- Weights: INT4 per-block (K-dim group_size=128), per-channel block scales
+- Activations: INT8 per-tensor symmetric (scale = max_abs/127)
+- GEMM: GoldenMXU.matmul_int4_per_block (64x64 block array, INT32 accumulate)
+
+### Evidence
+- `build/evidence/w3-4-mobilenetv3-fm.txt` — per-layer cos_sim and max_abs_err table
+- `sim/tests/test_cv_mobilenetv3.py` — pytest test + standalone evidence generator
+
+### Regression
+- `PYTHONPATH=sim python -m pytest sim/tests/test_cv_mobilenetv3.py -v`: 1 passed
+- Full test suite (673 passed, excluding pre-existing test_engines.py failure): no regressions

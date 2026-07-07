@@ -1,0 +1,95 @@
+======================================================================
+W3.4 MobileNetV3-Small Func Model E2E Verification
+Timestamp: 2026-07-07T04:04:28Z
+======================================================================
+
+Loading model...
+  TorchVision: 0.27.0+cu130
+  PyTorch: 2.12.0+cu130
+Conv2D layers: 52
+Hooks captured outputs: 52 layers
+Hooks captured inputs:  52 layers
+
+======================================================================
+Per-Layer Func Model vs PyTorch (Raw Conv2D Output)
+======================================================================
+Layer                                               Groups Shape                  CosSim     MaxErr  Verdict
+------------------------------------------------------------------------------------------------------------
+features.0.0                                           g=1 [1, 16, 112, 112]    0.994569   4.079683     PASS
+features.1.block.0.0                                    DW [1, 16, 56, 56]      0.999161   5.870270     PASS
+features.1.block.1.fc1                                 g=1 [1, 8, 1, 1]         1.000000   0.000565     PASS
+features.1.block.1.fc2                                 g=1 [1, 16, 1, 1]        1.000000   0.000000     PASS
+features.1.block.2.0                                   g=1 [1, 16, 56, 56]      0.994705   1.149274     PASS
+features.2.block.0.0                                   g=1 [1, 72, 56, 56]      0.994171   3.657350     PASS
+features.2.block.1.0                                    DW [1, 72, 28, 28]      0.998170   1.317243     PASS
+features.2.block.2.0                                   g=1 [1, 24, 28, 28]      0.993967   3.390958     PASS
+features.3.block.0.0                                   g=1 [1, 88, 28, 28]      0.993426   3.753882     PASS
+features.3.block.1.0                                    DW [1, 88, 28, 28]      0.988600   0.776666     FAIL
+features.3.block.2.0                                   g=1 [1, 24, 28, 28]      0.991370   0.945845     PASS
+features.4.block.0.0                                   g=1 [1, 96, 28, 28]      0.991257   2.767936     PASS
+features.4.block.1.0                                    DW [1, 96, 14, 14]      0.998593   0.918517     PASS
+features.4.block.2.fc1                                 g=1 [1, 24, 1, 1]        1.000000   1.174724     PASS
+features.4.block.2.fc2                                 g=1 [1, 96, 1, 1]        1.000000   0.000000     PASS
+features.4.block.3.0                                   g=1 [1, 40, 14, 14]      0.992381   1.434175     PASS
+features.5.block.0.0                                   g=1 [1, 240, 14, 14]     0.992893   0.737014     PASS
+features.5.block.1.0                                    DW [1, 240, 14, 14]     0.969661   0.793811     FAIL
+features.5.block.2.fc1                                 g=1 [1, 64, 1, 1]        0.991728   0.362189     PASS
+features.5.block.2.fc2                                 g=1 [1, 240, 1, 1]       0.993065   2.509567     PASS
+features.5.block.3.0                                   g=1 [1, 40, 14, 14]      0.986770   0.218109     FAIL
+features.6.block.0.0                                   g=1 [1, 240, 14, 14]     0.993344   0.790922     PASS
+features.6.block.1.0                                    DW [1, 240, 14, 14]     0.991211   0.419515     PASS
+features.6.block.2.fc1                                 g=1 [1, 64, 1, 1]        0.987400   0.337595     FAIL
+features.6.block.2.fc2                                 g=1 [1, 240, 1, 1]       0.997544   0.459327     PASS
+features.6.block.3.0                                   g=1 [1, 40, 14, 14]      0.994796   0.214250     PASS
+features.7.block.0.0                                   g=1 [1, 120, 14, 14]     0.993638   1.844408     PASS
+features.7.block.1.0                                    DW [1, 120, 14, 14]     0.972826   2.589928     FAIL
+features.7.block.2.fc1                                 g=1 [1, 32, 1, 1]        0.975814   1.080451     FAIL
+features.7.block.2.fc2                                 g=1 [1, 120, 1, 1]       0.999163   0.587861     PASS
+features.7.block.3.0                                   g=1 [1, 48, 14, 14]      0.987067   1.376535     FAIL
+features.8.block.0.0                                   g=1 [1, 144, 14, 14]     0.996122   0.508445     PASS
+features.8.block.1.0                                    DW [1, 144, 14, 14]     0.986908   0.478932     FAIL
+features.8.block.2.fc1                                 g=1 [1, 40, 1, 1]        0.981983   0.536226     FAIL
+features.8.block.2.fc2                                 g=1 [1, 144, 1, 1]       0.999099   0.262515     PASS
+features.8.block.3.0                                   g=1 [1, 48, 14, 14]      0.993095   0.177617     PASS
+features.9.block.0.0                                   g=1 [1, 288, 14, 14]     0.995013   1.102938     PASS
+features.9.block.1.0                                    DW [1, 288, 7, 7]       0.999371   0.141262     PASS
+features.9.block.2.fc1                                 g=1 [1, 72, 1, 1]        0.981254   0.555178     FAIL
+features.9.block.2.fc2                                 g=1 [1, 288, 1, 1]       0.997916   0.487019     PASS
+features.9.block.3.0                                   g=1 [1, 96, 7, 7]        0.989700   0.248460     FAIL
+features.10.block.0.0                                  g=1 [1, 576, 7, 7]       0.994691   0.268652     PASS
+features.10.block.1.0                                   DW [1, 576, 7, 7]       0.991780   0.299834     PASS
+features.10.block.2.fc1                                g=1 [1, 144, 1, 1]       0.988897   0.398403     FAIL
+features.10.block.2.fc2                                g=1 [1, 576, 1, 1]       0.998677   0.879162     PASS
+features.10.block.3.0                                  g=1 [1, 96, 7, 7]        0.997698   0.089209     PASS
+features.11.block.0.0                                  g=1 [1, 576, 7, 7]       0.994455   0.382811     PASS
+features.11.block.1.0                                   DW [1, 576, 7, 7]       0.996400   0.118720     PASS
+features.11.block.2.fc1                                g=1 [1, 144, 1, 1]       0.994487   0.270370     PASS
+features.11.block.2.fc2                                g=1 [1, 576, 1, 1]       0.998709   0.864343     PASS
+features.11.block.3.0                                  g=1 [1, 96, 7, 7]        0.991511   0.068461     PASS
+features.12.0                                          g=1 [1, 576, 7, 7]       0.992498   0.556600     PASS
+------------------------------------------------------------------------------------------------------------
+
+Summary:
+  Total layers: 52
+  cos_sim >= 0.99: 40
+  Target: >=15 layers
+  Failed layers:
+    features.3.block.1.0: cos_sim=0.988600, max_err=0.776666
+    features.5.block.1.0: cos_sim=0.969661, max_err=0.793811
+    features.5.block.3.0: cos_sim=0.986770, max_err=0.218109
+    features.6.block.2.fc1: cos_sim=0.987400, max_err=0.337595
+    features.7.block.1.0: cos_sim=0.972826, max_err=2.589928
+    features.7.block.2.fc1: cos_sim=0.975814, max_err=1.080451
+    features.7.block.3.0: cos_sim=0.987067, max_err=1.376535
+    features.8.block.1.0: cos_sim=0.986908, max_err=0.478932
+    features.8.block.2.fc1: cos_sim=0.981983, max_err=0.536226
+    features.9.block.2.fc1: cos_sim=0.981254, max_err=0.555178
+  Overall: PASS (40/52)
+
+======================================================================
+Quantization
+======================================================================
+  Weights: INT4 per-block (group_size=128)
+  Activations: INT8 per-tensor symmetric
+  im2col: numpy (Python)
+  GEMM: GoldenMXU.matmul_int4_per_block (64x64 array)
