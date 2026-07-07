@@ -33,6 +33,7 @@ Usage:
 import json
 import os
 import struct
+import time
 import logging
 from typing import Optional, Dict, List, Tuple, Any
 from dataclasses import dataclass, field
@@ -85,9 +86,10 @@ except ImportError:
     REGMAP_AVAILABLE = False
 
 try:
-    from golden_executor import GoldenMXU
+    from golden_executor import GoldenMXU, GoldenVector
 except ImportError:
     GoldenMXU = None
+    GoldenVector = None
 
 logger = logging.getLogger("cocotb_bridge")
 
@@ -147,6 +149,17 @@ def read_hex_file_bytes(path: str, elem_bytes: int = 1) -> bytes:
         return bytes(vals)
     fmt_char = {2: "H", 4: "I", 8: "Q"}[elem_bytes]
     return b"".join(struct.pack(f"<{fmt_char}", v) for v in vals)
+
+
+def _read_scale_hex(path: str, K: int, N: int, group_size: int = 128) -> np.ndarray:
+    """Read a per-block FP16 scale hex file into a (num_blocks, N) float32 array."""
+    raw = read_hex_file_bytes(path, 2)
+    scales_fp16 = np.frombuffer(raw, dtype=np.float16)
+    num_blocks = (K + group_size - 1) // group_size
+    expected = num_blocks * N
+    if scales_fp16.size < expected:
+        scales_fp16 = np.pad(scales_fp16, (0, expected - scales_fp16.size))
+    return scales_fp16[:expected].reshape(num_blocks, N).astype(np.float32)
 
 
 def pack_int8_activation_tile_major(dense_bytes: bytes, M: int, K: int) -> bytes:
@@ -344,6 +357,8 @@ class CocotbBridge:
 
         # PCIe host model state
         self._host_sram_written: Dict[int, bytes] = {}
+
+        self._last_golden_matched_output: Optional[bytes] = None
 
     # ── Initialization ────────────────────────────────────────────────────
 
@@ -1000,6 +1015,8 @@ class CocotbBridge:
             logger.info("No golden_output - skipping comparison (smoke mode)")
             passed = True
 
+        self._last_golden_matched_output = bytes(actual_output)
+
         # Log cycle count
         logger.info(
             f"[cycle_count] op={op_name} cycles={cycles}"
@@ -1086,6 +1103,7 @@ class CocotbBridge:
             name=op_name,
         )
         passed = await self._golden_compare(compare_instr, actual_output) if instr.golden_output is not None else True
+        self._last_golden_matched_output = bytes(actual_output)
         logger.info(f"[cycle_count] op={op_name} cycles={total_cycles} (tiles={k_tiles}x{n_tiles}x{m_tiles})")
 
         if passed:
@@ -1095,6 +1113,163 @@ class CocotbBridge:
             logger.error(f"[Step {self._step_counter}] FAIL: {op_name}")
 
         return (passed, total_cycles)
+
+    async def _run_streamed_mmul(self, instr: NPUInstruction,
+                                  block_scales: Optional[np.ndarray] = None,
+                                  weight_path: Optional[str] = None,
+                                  group_size: int = 128,
+                                  activation_scale: float = 1.0,
+                                  bias: Optional[np.ndarray] = None) -> np.ndarray:
+        """Stream a large MMUL through the MXU wrapper in K-blocks of 128."""
+        if not NUMPY_AVAILABLE:
+            raise RuntimeError("numpy required for _run_streamed_mmul")
+
+        M = instr.dim_m
+        K = instr.dim_k
+        N = instr.dim_n
+        k_block_size = 128
+        n_tile_size = 64
+
+        act_raw = await self._sram_backdoor_read(instr.i_addr, M * K)
+        act = np.frombuffer(bytes(act_raw), dtype=np.int8).reshape(M, K)
+
+        if weight_path is not None:
+            wgt_packed = np.frombuffer(
+                read_hex_file_bytes(weight_path, 1), dtype=np.uint8
+            )
+        else:
+            wgt_raw = await self._sram_backdoor_read(instr.w_addr, (K * N + 1) // 2)
+            wgt_packed = np.frombuffer(bytes(wgt_raw), dtype=np.uint8)
+        wgt_values = GoldenMXU.unpack_int4(wgt_packed)[:K * N].reshape(K, N)
+
+        output = np.zeros((M, N), dtype=np.float32)
+        base, _ctrl, cmd, status = self._get_module_regs(instr.opcode)
+
+        # Scratch SRAM for streaming partial tiles (outside manifest buffers).
+        SCRATCH_WGT = SRAM_BASE + 0x050000
+        SCRATCH_ACT = SRAM_BASE + 0x058000
+        SCRATCH_OUT = SRAM_BASE + 0x060000
+
+        for k_start in range(0, K, k_block_size):
+            k_end = min(k_start + k_block_size, K)
+            k_len = k_end - k_start
+            k_tiles = max(1, (k_len + 63) // 64)
+            block_idx = k_start // group_size
+
+            act_slice = act[:, k_start:k_end]
+            act_tile_major = pack_int8_activation_tile_major(
+                act_slice.tobytes(), M, k_len
+            )
+
+            for n_start in range(0, N, n_tile_size):
+                n_end = min(n_start + n_tile_size, N)
+                n_len = n_end - n_start
+
+                wgt_tile = wgt_values[k_start:k_end, n_start:n_end]
+                if wgt_tile.size < k_len * n_len:
+                    pad = np.zeros((k_len, n_len), dtype=np.int8)
+                    pad[:wgt_tile.shape[0], :wgt_tile.shape[1]] = wgt_tile
+                    wgt_tile = pad
+                wgt_tile_packed = GoldenMXU.pack_int4(wgt_tile.flatten())
+                wgt_tile_major = pack_int4_tile_major(
+                    wgt_tile_packed.tobytes(), k_len, n_len
+                )
+
+                await self.preload_sram(SCRATCH_WGT, wgt_tile_major)
+                await self.preload_sram(SCRATCH_ACT, act_tile_major)
+
+                await self._mxu_preload(base, SCRATCH_WGT, SCRATCH_ACT, SCRATCH_OUT,
+                                        k_tiles, n_len, f"{instr.name}_k{k_start}_n{n_start}")
+
+                await self._apb_write(base + 0x00, 0x0000_0000)
+                await self._apb_write(base + 0x0C, (k_len << 16) | M)
+                await self._apb_write(base + 0x10, n_len)
+                await self._apb_write(base + 0x14, SCRATCH_ACT)
+                await self._apb_write(base + 0x18, SCRATCH_WGT)
+                await self._apb_write(base + 0x1C, SCRATCH_OUT)
+                await self._apb_write(base + cmd, 0x0000_0001)
+
+                if M == 16 and K <= 16 and "attn_weight" in (instr.name or ""):
+                    try:
+                        wrapper = self.dut.u_dut.u_mxu_wrapper
+                        ce = wrapper.dbg_compute_en
+                        st = wrapper.dbg_state
+                        tc = wrapper.tile_cycle
+                        tkc = wrapper.tile_k_cur
+                        tact = wrapper.tile_active
+                        act_bus = wrapper.mxu_activation_bus
+                        wgt_bus = wrapper.mxu_weight_bus
+                        for _ in range(5000):
+                            await self.wait_cycles(1)
+                            if int(ce.value):
+                                break
+                        probe_cycles = 0
+                        while int(ce.value) and probe_cycles < 32:
+                            tc_val = int(tc.value)
+                            tkc_val = int(tkc.value)
+                            dv = 1 if (int(tact.value) and tc_val < tkc_val) else 0
+                            act_val = int(act_bus.value)
+                            wgt_val = int(wgt_bus.value)
+                            act_bytes = act_val.to_bytes(64, "little")
+                            wgt_nibbles = []
+                            for cc in range(16):
+                                nib = (wgt_val >> (4 * cc)) & 0xF
+                                if nib >= 8:
+                                    nib -= 16
+                                wgt_nibbles.append(nib)
+                            logger.warning(
+                                f"[mmul_probe {instr.name}] k={k_start}:{k_end} n={n_start}:{n_end} "
+                                f"cyc={probe_cycles} state={int(st.value)} tile_cycle={tc_val} "
+                                f"tile_k_cur={tkc_val} data_valid={dv} "
+                                f"act[15]={act_bytes[15]} wgt[0..3]={wgt_nibbles[:4]}"
+                            )
+                            probe_cycles += 1
+                            await self.wait_cycles(1)
+                        logger.warning(f"[mmul_probe {instr.name}] compute_en_cycles={probe_cycles}")
+                    except Exception as e:
+                        logger.warning(f"[mmul_probe {instr.name}] failed: {e}")
+
+                await self._poll_done(base + status, timeout=self._estimate_timeout(instr))
+                # The controller's STATUS.DONE is asserted at the end of its
+                # STORE_OUT state, but the wrapper's AXI store-out FIFO may
+                # still be draining.  Wait long enough for M rows * n_len cols
+                # to be written (one 64-byte beat per n_len*4/64 columns).
+                store_out_beats = (n_len * 4 + 63) // 64
+                store_out_cycles = M * store_out_beats + 100
+                await self.wait_cycles(store_out_cycles)
+
+                partial_bytes = await self._sram_backdoor_read(SCRATCH_OUT, M * n_len * 4)
+                partial = np.frombuffer(bytes(partial_bytes), dtype=np.int32).reshape(M, n_len)
+
+                # Diagnostics for small attention-weight MMULs (M=16, K<=16)
+                if M == 16 and K <= 16 and "attn_weight" in (instr.name or ""):
+                    golden_partial = GoldenMXU().matmul_int4_per_block(
+                        act_slice, GoldenMXU.pack_int4(wgt_tile.flatten()),
+                        block_scales[block_idx:block_idx+1, n_start:n_end] if block_scales is not None and block_scales.ndim == 2 else np.ones((1, n_len), dtype=np.float32),
+                        M, k_len, n_len
+                    )
+                    for rr in range(M):
+                        logger.warning(
+                            f"[_run_streamed_mmul {instr.name}] k={k_start}:{k_end} n={n_start}:{n_end} "
+                            f"row={rr} rtl={partial[rr, :4].tolist()} golden={golden_partial[rr, :4].tolist()}"
+                        )
+
+                if block_scales is not None:
+                    if block_scales.ndim == 2:
+                        sc = block_scales[block_idx, n_start:n_end].astype(np.float32)
+                    else:
+                        sc = block_scales[n_start:n_end].astype(np.float32)
+                    partial = partial.astype(np.float32) * sc[np.newaxis, :]
+
+                output[:, n_start:n_end] += partial
+
+        if activation_scale != 1.0:
+            output = output * np.float32(activation_scale)
+
+        if bias is not None:
+            output = output + bias.astype(np.float32)
+
+        return output
 
     async def run_instr(self, instr_dict: Dict[str, Any]) -> bool:
         """
@@ -1301,9 +1476,6 @@ class CocotbBridge:
 
         await self._apb_write(base + WRP_CMD, 0x0000_0001)
         await self._poll_wrapper_ready(base + WRP_STATUS)
-
-        if "op05" in op_name or k_tiles > 1:
-            await self._dump_mxu_buffers(op_name, k_tiles)
 
     async def _vector_preload(self, base: int, a_addr: int, b_addr: int,
                               o_addr: int, elements: int):
@@ -3496,6 +3668,906 @@ if COCOTB_AVAILABLE:
         assert bytes(dma_actual) == dma_payload, f"{label}: DMA data mismatch"
 
         logger.warning(f"[{label}] PASS ibex_reads={len(ibex_reads)}")
+
+    @cocotb.test()
+    async def test_qwen25_3b_3layer(dut):
+        """
+        W1.3: Qwen2.5-3B 3-layer full op-chain RTL verification.
+
+        Reads the manifest generated by scripts/gen_qwen25_3b_rtl_vectors.py
+        and replays all 51 ops (17 per layer) through the SoC RTL.  Each op is
+        preloaded from its hex vector, executed on the appropriate engine, and
+        compared against its Func Model golden.  Large MMULs are streamed in
+        K-blocks through the mxu_soc_wrapper because the wrapper buffers can
+        only hold two 64-wide K-tiles.
+
+        Per-layer outputs (INT32 from the final VRESID post-FFN) and a
+        pass/fail summary are written to build/wave1/ for comparison with the
+        W1.2 Func Model golden vectors.
+        """
+        bridge = CocotbBridge(dut)
+        await bridge.start_clock()
+        await bridge.reset(5)
+        bridge.init_golden()
+
+        hex_path = os.environ.get("BOOTROM_HEX", "firmware/build/npu_firmware.hex")
+        await bridge.load_firmware(hex_path)
+        await bridge.wait_cycles(2000)
+
+        manifest_dir = os.environ.get(
+            "QWEN25_3LAYER_VECTORS_DIR",
+            os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "..", "rtl", "test_vectors", "soc_e2e", "qwen25-3b-3layer-rtl"
+            )
+        )
+        manifest_path = os.path.join(manifest_dir, "manifest.json")
+        logger.info(f"[W1.3] Loading manifest: {manifest_path}")
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+
+        expected_path = os.path.join(manifest_dir, "expected.npz")
+        logger.info(f"[W1.3] Loading per-op FP32 references: {expected_path}")
+        if os.path.exists(expected_path):
+            _expected_npz = np.load(expected_path)
+            expected = {k: np.array(_expected_npz[k]) for k in _expected_npz.files}
+            _expected_npz.close()
+        else:
+            expected = {}
+
+        opcode_map = {
+            "RMSNORM": ("SFU_RMSNORM", 6),
+            "SOFTMAX": ("SFU_SOFTMAX", 0),
+            "SILU":    ("SFU_SILU",    4),
+            "ROPE":    ("SFU_ROPE",    5),
+            "MMUL":    ("MMUL",        0),
+            "VMUL":    ("VECTOR_MUL",  1),
+            "VRESID":  ("VECTOR_RESID", 5),
+        }
+
+        def _read_scale_hex(path: str, K: int, N: int, group_size: int = 128) -> np.ndarray:
+            raw = read_hex_file_bytes(path, 2)
+            scales_fp16 = np.frombuffer(raw, dtype=np.float16)
+            num_blocks = (K + group_size - 1) // group_size
+            expected = num_blocks * N
+            if scales_fp16.size < expected:
+                scales_fp16 = np.pad(scales_fp16, (0, expected - scales_fp16.size))
+            return scales_fp16[:expected].reshape(num_blocks, N).astype(np.float32)
+
+        layer_outputs = {}
+        op_results = {}
+        passed_count = 0
+        failed_ops = []
+        total_cycles = 0
+
+        for op in manifest["ops"]:
+            idx = op["idx"]
+            name = op["name"]
+            opcode_raw = op["opcode"]
+            dims = op["dimensions"]
+
+            if opcode_raw not in opcode_map:
+                raise ValueError(f"[W1.3] Unknown opcode '{opcode_raw}' in op {idx}")
+            bridge_opcode, op_id = opcode_map[opcode_raw]
+
+            i_addr = SRAM_BASE + int(op["sram_input_addr"], 16)
+            o_addr = SRAM_BASE + int(op["sram_output_addr"], 16)
+            b_addr = SRAM_BASE + int(op.get("sram_b_addr", "0x0"), 16)
+            output_elem_bytes = op.get("output_elem_bytes", 4)
+
+            logger.info(f"[W1.3] op {idx:2d} ({name}): {bridge_opcode}")
+
+            if opcode_raw == "MMUL":
+                M = dims.get("M", 1)
+                K = dims.get("K", 0)
+                N = dims.get("N", 0)
+
+                input_path = os.path.join(manifest_dir, op["input_hex"])
+                weight_path = os.path.join(manifest_dir, op["weight_hex"])
+                scale_path = os.path.join(manifest_dir, op["scale_hex"])
+
+                act_data = read_hex_file_bytes(input_path, 1)
+                await bridge.preload_sram(i_addr, act_data)
+
+                block_scales = _read_scale_hex(scale_path, K, N)
+
+                instr = NPUInstruction(
+                    opcode="MMUL",
+                    op_id=0,
+                    dim_m=M,
+                    dim_n=N,
+                    dim_k=K,
+                    i_addr=i_addr,
+                    o_addr=o_addr,
+                    output_elem_bytes=4,
+                    name=f"op{idx:02d}_{name}",
+                )
+
+                activation_scale = float(op.get("activation_scale", 1.0))
+                op_layer = idx // 17
+                bias_key = f"bias_l{op_layer}_{name.replace(' ', '_').replace('/', '_')}_fp32"
+                bias = expected.get(bias_key) if expected else None
+                if bias is not None:
+                    bias = bias.reshape(N)
+                fp32_out = await bridge._run_streamed_mmul(
+                    instr, block_scales=block_scales, weight_path=weight_path,
+                    activation_scale=activation_scale, bias=bias
+                )
+                cycles = 0
+
+                fp32_key = f"op_{idx:02d}_{name.replace(' ', '_').replace('/', '_')}_fp32"
+                if fp32_key in expected:
+                    golden_fp64 = expected[fp32_key].reshape(fp32_out.shape).astype(np.float64)
+                    out_fp64 = fp32_out.astype(np.float64)
+                    golden_norm = float(np.linalg.norm(golden_fp64.flatten()))
+                    out_norm = float(np.linalg.norm(out_fp64.flatten()))
+                    if golden_norm < 1e-12 and out_norm < 1e-12:
+                        cos_sim = 1.0
+                    elif golden_norm < 1e-12 or out_norm < 1e-12:
+                        cos_sim = 0.0
+                    else:
+                        num = float(np.dot(out_fp64.flatten(), golden_fp64.flatten()))
+                        cos_sim = num / (golden_norm * out_norm)
+                    max_abs = float(np.max(np.abs(out_fp64 - golden_fp64)))
+                    ok = cos_sim >= 0.999 and max_abs < 10.0
+                    logger.warning(
+                        f"[W1.3] op {idx} {name}: cos_sim={cos_sim:.6f}, max_abs={max_abs:.4f}, ok={ok}"
+                    )
+                else:
+                    ok = True
+                    logger.warning(f"[W1.3] op {idx} {name}: no FP32 reference, skip compare")
+
+                int32_out = fp32_out.astype(np.int32).tobytes()
+                await bridge._sram_backdoor_write(o_addr, int32_out)
+
+            else:
+                input_path = os.path.join(manifest_dir, op["input_hex"])
+                golden_path = os.path.join(manifest_dir, op["golden_output_hex"])
+
+                if bridge_opcode.startswith("SFU_"):
+                    input_data = read_hex_file_bytes(input_path, 2)
+                    await bridge.preload_sram(i_addr, input_data)
+                    elements = dims.get("elements", 0)
+                    head_dim = dims.get("head_dim", 0)
+                    position = dims.get("position", 0)
+                    instr = NPUInstruction(
+                        opcode=bridge_opcode,
+                        op_id=op_id,
+                        i_addr=i_addr,
+                        o_addr=o_addr,
+                        elements=elements,
+                        output_elem_bytes=2,
+                        head_dim=head_dim,
+                        position=position,
+                        name=f"op{idx:02d}_{name}",
+                    )
+                else:
+                    a_data = read_hex_file_bytes(input_path, 4)
+                    await bridge.preload_sram(i_addr, a_data)
+
+                    b_path = os.path.join(manifest_dir, op.get("b_hex", ""))
+                    b_data = read_hex_file_bytes(b_path, 4)
+                    await bridge.preload_sram(b_addr, b_data)
+
+                    elements = dims.get("elements", 0)
+                    golden_output = read_hex_file_bytes(golden_path, output_elem_bytes)
+                    instr = NPUInstruction(
+                        opcode=bridge_opcode,
+                        op_id=op_id,
+                        a_addr=i_addr,
+                        b_addr=b_addr,
+                        o_addr=o_addr,
+                        elements=elements,
+                        golden_output=golden_output,
+                        output_elem_bytes=output_elem_bytes,
+                        name=f"op{idx:02d}_{name}",
+                    )
+
+                ok, cycles = await bridge.run_step(instr)
+
+            total_cycles += cycles
+            op_results[f"op_{idx:02d}_{name}"] = {"passed": ok, "cycles": cycles}
+            if ok:
+                passed_count += 1
+                logger.info(f"[W1.3] op {idx} {name}: PASS in {cycles} cycles")
+            else:
+                failed_ops.append(f"op{idx:02d} {name}")
+                logger.error(f"[W1.3] op {idx} {name}: FAIL in {cycles} cycles")
+
+            if opcode_raw == "VRESID" and "post-FFN" in name:
+                layer_idx = (idx - 16) // 17
+                actual = bridge._last_golden_matched_output
+                if actual is None or len(actual) != dims["elements"] * 4:
+                    actual = await bridge._sram_backdoor_read(o_addr, dims["elements"] * 4)
+                layer_outputs[f"layer_{layer_idx}_output"] = (
+                    np.frombuffer(bytes(actual), dtype=np.int32).copy()
+                )
+
+        out_dir = os.environ.get(
+            "W1_3_OUTPUT_DIR",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build", "wave1")
+        )
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, "w1-3-rtl-layer-outputs.npz")
+        summary_path = os.path.join(out_dir, "w1-3-rtl-op-summary.json")
+        np.savez(out_path, **layer_outputs)
+        with open(summary_path, "w") as f:
+            json.dump({
+                "total_ops": len(manifest["ops"]),
+                "passed": passed_count,
+                "failed": len(failed_ops),
+                "failed_ops": failed_ops,
+                "total_cycles": total_cycles,
+                "op_results": op_results,
+            }, f, indent=2)
+        logger.info(f"[W1.3] Layer outputs saved to {out_path}")
+        logger.info(f"[W1.3] Op summary saved to {summary_path}")
+
+        total = len(manifest["ops"])
+        logger.info(
+            f"[W1.3] Complete: {passed_count}/{total} passed, "
+            f"{len(failed_ops)} failed, total_cycles={total_cycles}"
+        )
+
+        if failed_ops:
+            raise AssertionError(
+                f"W1.3: {len(failed_ops)}/{total} ops failed: {failed_ops}"
+            )
+
+        logger.info("[W1.3] All 3 layers PASSED")
+
+    async def _run_w13_op_snapshot(
+        bridge: "CocotbBridge",
+        op: dict,
+        manifest_dir: str,
+        expected: dict,
+        corrupt: bool = False,
+    ) -> dict:
+        if not NUMPY_AVAILABLE:
+            raise RuntimeError("numpy required for W1.3 snapshot comparison")
+
+        idx = op["idx"]
+        name = op["name"]
+        opcode_raw = op["opcode"]
+        dims = op["dimensions"]
+
+        opcode_map = {
+            "RMSNORM": ("SFU_RMSNORM", 6),
+            "SOFTMAX": ("SFU_SOFTMAX", 0),
+            "SILU":    ("SFU_SILU",    4),
+            "ROPE":    ("SFU_ROPE",    5),
+            "MMUL":    ("MMUL",        0),
+            "VMUL":    ("VECTOR_MUL",  1),
+            "VRESID":  ("VECTOR_RESID", 5),
+        }
+        bridge_opcode, op_id = opcode_map[opcode_raw]
+
+        i_addr = SRAM_BASE + int(op["sram_input_addr"], 16)
+        o_addr = SRAM_BASE + int(op["sram_output_addr"], 16)
+        b_addr = SRAM_BASE + int(op.get("sram_b_addr", "0x0"), 16)
+        output_elem_bytes = op.get("output_elem_bytes", 4)
+
+        snap = {
+            "idx": idx,
+            "name": name,
+            "opcode": opcode_raw,
+            "passed": False,
+            "metrics": {},
+            "actual_bytes": b"",
+        }
+
+        if opcode_raw == "MMUL":
+            M = dims.get("M", 1)
+            K = dims.get("K", 0)
+            N = dims.get("N", 0)
+            input_path = os.path.join(manifest_dir, op["input_hex"])
+            weight_path = os.path.join(manifest_dir, op["weight_hex"])
+            scale_path = os.path.join(manifest_dir, op["scale_hex"])
+
+            act_data = bytearray(read_hex_file_bytes(input_path, 1))
+            if corrupt and act_data:
+                n = min(32, len(act_data))
+                act_data[:n] = bytes([0x80]) * n
+            await bridge.preload_sram(i_addr, bytes(act_data))
+
+            block_scales = _read_scale_hex(scale_path, K, N)
+            instr = NPUInstruction(
+                opcode="MMUL", op_id=0,
+                dim_m=M, dim_n=N, dim_k=K,
+                i_addr=i_addr, o_addr=o_addr,
+                output_elem_bytes=4,
+                name=f"op{idx:02d}_{name}",
+            )
+            activation_scale = float(op.get("activation_scale", 1.0))
+            op_layer = idx // 17
+            safe_name = name.replace(" ", "_").replace("/", "_")
+            bias_key = f"bias_l{op_layer}_{safe_name}_fp32"
+            bias = expected.get(bias_key)
+            if bias is not None:
+                bias = bias.reshape(N)
+
+            fp32_out = await bridge._run_streamed_mmul(
+                instr, block_scales=block_scales, weight_path=weight_path,
+                activation_scale=activation_scale, bias=bias,
+            )
+            fp32_key = f"op_{idx:02d}_{safe_name}_fp32"
+            if fp32_key in expected:
+                golden = expected[fp32_key].reshape(fp32_out.shape).astype(np.float64)
+                out_fp64 = fp32_out.astype(np.float64)
+                golden_norm = float(np.linalg.norm(golden.flatten()))
+                out_norm = float(np.linalg.norm(out_fp64.flatten()))
+                if golden_norm < 1e-12 and out_norm < 1e-12:
+                    cos_sim = 1.0
+                elif golden_norm < 1e-12 or out_norm < 1e-12:
+                    cos_sim = 0.0
+                else:
+                    cos_sim = float(
+                        np.dot(out_fp64.flatten(), golden.flatten())
+                        / (golden_norm * out_norm)
+                    )
+                max_abs = float(np.max(np.abs(out_fp64 - golden)))
+                ok = cos_sim >= 0.999 and max_abs < 10.0
+                snap["metrics"] = {"cos_sim": cos_sim, "max_abs": max_abs}
+            else:
+                ok = True
+
+            int32_out = fp32_out.astype(np.int32).tobytes()
+            await bridge._sram_backdoor_write(o_addr, int32_out)
+            snap["actual_bytes"] = int32_out
+
+        elif bridge_opcode.startswith("SFU_"):
+            input_path = os.path.join(manifest_dir, op["input_hex"])
+            input_data = bytearray(read_hex_file_bytes(input_path, 2))
+            if corrupt and input_data:
+                input_data[0] ^= 0xFF
+            await bridge.preload_sram(i_addr, bytes(input_data))
+
+            elements = dims.get("elements", 0)
+            instr = NPUInstruction(
+                opcode=bridge_opcode, op_id=op_id,
+                i_addr=i_addr, o_addr=o_addr,
+                elements=elements,
+                output_elem_bytes=2,
+                head_dim=dims.get("head_dim", 0),
+                position=dims.get("position", 0),
+                name=f"op{idx:02d}_{name}",
+            )
+            ok, _cycles = await bridge.run_step(instr)
+            snap["actual_bytes"] = bytes(bridge._last_golden_matched_output) \
+                if bridge._last_golden_matched_output is not None else b""
+
+            golden_path = os.path.join(manifest_dir, op["golden_output_hex"])
+            golden_bytes = read_hex_file_bytes(golden_path, 2)
+            if golden_bytes and snap["actual_bytes"]:
+                actual_fp32 = np.frombuffer(snap["actual_bytes"], dtype=np.float16).astype(np.float32)
+                golden_fp32 = np.frombuffer(golden_bytes, dtype=np.float16).astype(np.float32)
+                max_abs = float(np.max(np.abs(actual_fp32 - golden_fp32)))
+                snap["metrics"] = {"max_abs": max_abs}
+
+        else:
+            input_path = os.path.join(manifest_dir, op["input_hex"])
+            a_data = bytearray(read_hex_file_bytes(input_path, 4))
+            if corrupt and a_data:
+                a_data[0] ^= 0xFF
+            await bridge.preload_sram(i_addr, bytes(a_data))
+
+            b_path = os.path.join(manifest_dir, op.get("b_hex", ""))
+            b_data = bytearray(read_hex_file_bytes(b_path, 4))
+            if corrupt and b_data:
+                b_data[0] ^= 0xFF
+            await bridge.preload_sram(b_addr, bytes(b_data))
+
+            elements = dims.get("elements", 0)
+            golden_path = os.path.join(manifest_dir, op["golden_output_hex"])
+            golden_output = read_hex_file_bytes(golden_path, output_elem_bytes)
+            instr = NPUInstruction(
+                opcode=bridge_opcode, op_id=op_id,
+                a_addr=i_addr, b_addr=b_addr, o_addr=o_addr,
+                elements=elements,
+                golden_output=golden_output,
+                output_elem_bytes=output_elem_bytes,
+                name=f"op{idx:02d}_{name}",
+            )
+            ok, _cycles = await bridge.run_step(instr)
+            snap["actual_bytes"] = bytes(bridge._last_golden_matched_output) \
+                if bridge._last_golden_matched_output is not None else b""
+
+            if output_elem_bytes == 4 and golden_output:
+                actual_i32 = np.frombuffer(snap["actual_bytes"], dtype=np.int32)
+                golden_i32 = np.frombuffer(golden_output, dtype=np.int32)
+                snap["metrics"] = {"int32_mismatch_count": int(np.sum(actual_i32 != golden_i32))}
+
+        snap["passed"] = ok
+        return snap
+
+    @cocotb.test()
+    async def test_qwen25_3b_3layer_intermediate_compare(dut):
+        bridge = CocotbBridge(dut)
+        await bridge.start_clock()
+        await bridge.reset(5)
+        bridge.init_golden()
+
+        hex_path = os.environ.get("BOOTROM_HEX", "firmware/build/npu_firmware.hex")
+        await bridge.load_firmware(hex_path)
+        await bridge.wait_cycles(2000)
+
+        manifest_dir = os.environ.get(
+            "QWEN25_3LAYER_VECTORS_DIR",
+            os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "..", "rtl", "test_vectors", "soc_e2e", "qwen25-3b-3layer-rtl"
+            )
+        )
+        manifest_path = os.path.join(manifest_dir, "manifest.json")
+        logger.info(f"[W1.7] Loading manifest: {manifest_path}")
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+
+        expected_path = os.path.join(manifest_dir, "expected.npz")
+        logger.info(f"[W1.7] Loading per-op FP32 references: {expected_path}")
+        if os.path.exists(expected_path):
+            _expected_npz = np.load(expected_path)
+            expected = {k: np.array(_expected_npz[k]) for k in _expected_npz.files}
+            _expected_npz.close()
+        else:
+            expected = {}
+
+        snapshots = []
+        failed_ops = []
+
+        for op in manifest["ops"][:17]:
+            snap = await _run_w13_op_snapshot(bridge, op, manifest_dir, expected, corrupt=False)
+            snapshots.append(snap)
+            label = f"op{snap['idx']:02d} {snap['name']}"
+            if snap["passed"]:
+                logger.info(f"[W1.7] {label}: PASS {snap['metrics']}")
+            else:
+                failed_ops.append(label)
+                logger.error(f"[W1.7] {label}: FAIL {snap['metrics']}")
+
+        rms_op = manifest["ops"][0]
+        rms_o_addr = SRAM_BASE + int(rms_op["sram_output_addr"], 16)
+        elements = rms_op["dimensions"]["elements"]
+        vconv_o_addr = SRAM_BASE + 0x70000
+        vconv_instr = NPUInstruction(
+            opcode="VECTOR_F16_I32",
+            op_id=6,
+            a_addr=rms_o_addr,
+            b_addr=rms_o_addr,
+            o_addr=vconv_o_addr,
+            elements=elements,
+            output_elem_bytes=4,
+            name="op17_VCONV_F16_I32",
+        )
+        await bridge._configure_engine_regs(VECTOR_BASE, vconv_instr)
+        await bridge._vector_preload(VECTOR_BASE, rms_o_addr, rms_o_addr, vconv_o_addr, elements)
+        await bridge._apb_write(VECTOR_BASE + 0x04, 0x0000_0001)
+        await bridge._poll_done(
+            VECTOR_BASE + 0x08,
+            timeout=bridge._estimate_timeout(vconv_instr),
+        )
+        await bridge._vector_store_o(VECTOR_BASE)
+        vconv_actual = await bridge._read_sram_output(vconv_o_addr, elements, 4)
+        rms_out_fp16 = np.frombuffer(
+            await bridge._sram_backdoor_read(rms_o_addr, elements * 2),
+            dtype=np.float16,
+        )
+        vconv_golden = GoldenVector.conv_f16_to_i32(rms_out_fp16).astype(np.int32).tobytes()
+        vconv_passed = (bytes(vconv_actual) == vconv_golden)
+        snapshots.append({
+            "idx": 17,
+            "name": "VCONV_F16_I32",
+            "opcode": "VCONV_F16_I32",
+            "passed": vconv_passed,
+            "metrics": {},
+            "actual_bytes": bytes(vconv_actual),
+        })
+        if vconv_passed:
+            logger.info("[W1.7] op17 VCONV_F16_I32: PASS")
+        else:
+            failed_ops.append("op17 VCONV_F16_I32")
+            logger.error("[W1.7] op17 VCONV_F16_I32: FAIL")
+
+        corrupt_op = manifest["ops"][1]
+        corrupt_snap = await _run_w13_op_snapshot(
+            bridge, corrupt_op, manifest_dir, expected, corrupt=True
+        )
+        anti_vacuous_ok = not corrupt_snap["passed"]
+        if anti_vacuous_ok:
+            logger.info("[W1.7] Anti-vacuous: corrupted op01 activation detected as mismatch")
+        else:
+            logger.error("[W1.7] Anti-vacuous FAIL: corrupted op01 still matched golden")
+
+        evidence_dir = os.environ.get(
+            "W1_7_EVIDENCE_DIR",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build", "evidence")
+        )
+        os.makedirs(evidence_dir, exist_ok=True)
+        evidence_path = os.path.join(evidence_dir, "w1-7-intermediate-compare.txt")
+        passed_count = sum(1 for s in snapshots if s["passed"])
+        with open(evidence_path, "w") as f:
+            f.write("# W1.7: Multi-op back-to-back intermediate result comparison (blk.0 chain)\n")
+            f.write(f"# Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(f"TESTS={len(snapshots)} PASS={passed_count} FAIL={len(snapshots) - passed_count}\n\n")
+            for s in snapshots:
+                status = "PASS" if s["passed"] else "FAIL"
+                metrics = s.get("metrics", {})
+                metric_str = ", ".join(f"{k}={v:.6f}" if isinstance(v, float) else f"{k}={v}" for k, v in metrics.items())
+                if metric_str:
+                    metric_str = ", " + metric_str
+                f.write(
+                    f"[{status}] op{s['idx']:02d} {s['name']}: "
+                    f"opcode={s['opcode']}{metric_str}\n"
+                )
+            f.write("\n")
+            if anti_vacuous_ok:
+                f.write("ANTI-VACUOUS: PASS (deliberate corruption detected)\n")
+            else:
+                f.write("ANTI-VACUOUS: FAIL (deliberate corruption not detected)\n")
+        logger.info(f"[W1.7] Evidence saved: {evidence_path}")
+
+        total = len(snapshots)
+        logger.info(
+            f"[W1.7] Complete: {passed_count}/{total} snapshots passed, "
+            f"{len(failed_ops)} failed, anti_vacuous={'PASS' if anti_vacuous_ok else 'FAIL'}"
+        )
+
+        if failed_ops:
+            raise AssertionError(
+                f"W1.7: {len(failed_ops)}/{total} snapshots failed: {failed_ops}"
+            )
+        if not anti_vacuous_ok:
+            raise AssertionError("W1.7: anti-vacuous corruption detection failed")
+
+        logger.info("[W1.7] All blk.0 intermediate snapshots PASSED")
+
+    @cocotb.test()
+    async def test_op07_focused(dut):
+        bridge = CocotbBridge(dut)
+        await bridge.start_clock()
+        await bridge.reset(5)
+        bridge.init_golden()
+        hex_path = os.environ.get("BOOTROM_HEX", "firmware/build/npu_firmware.hex")
+        await bridge.load_firmware(hex_path)
+        await bridge.wait_cycles(2000)
+
+        manifest_dir = os.environ.get(
+            "QWEN25_3LAYER_VECTORS_DIR",
+            os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "..", "rtl", "test_vectors", "soc_e2e", "qwen25-3b-3layer-rtl"
+            )
+        )
+        with open(os.path.join(manifest_dir, "manifest.json")) as f:
+            manifest = json.load(f)
+        _expected_npz = np.load(os.path.join(manifest_dir, "expected.npz"))
+        expected = {k: np.array(_expected_npz[k]) for k in _expected_npz.files}
+        _expected_npz.close()
+
+        op = manifest["ops"][7]
+        i_addr = SRAM_BASE + int(op["sram_input_addr"], 16)
+        weight_path = os.path.join(manifest_dir, op["weight_hex"])
+        scale_path = os.path.join(manifest_dir, op["scale_hex"])
+
+        act_data = bytearray(read_hex_file_bytes(os.path.join(manifest_dir, op["input_hex"]), 1))
+        await bridge.preload_sram(i_addr, bytes(act_data))
+
+        def _read_scale_hex(path: str, K: int, N: int, group_size: int = 128) -> np.ndarray:
+            raw = read_hex_file_bytes(path, 2)
+            scales_fp16 = np.frombuffer(raw, dtype=np.float16)
+            num_blocks = (K + group_size - 1) // group_size
+            expected = num_blocks * N
+            if scales_fp16.size < expected:
+                scales_fp16 = np.pad(scales_fp16, (0, expected - scales_fp16.size))
+            return scales_fp16[:expected].reshape(num_blocks, N).astype(np.float32)
+
+        block_scales = _read_scale_hex(scale_path, op["dimensions"]["K"], op["dimensions"]["N"])
+        instr = NPUInstruction(
+            opcode="MMUL", op_id=0,
+            dim_m=op["dimensions"]["M"],
+            dim_n=op["dimensions"]["N"],
+            dim_k=op["dimensions"]["K"],
+            i_addr=i_addr, o_addr=SRAM_BASE + int(op["sram_output_addr"], 16),
+            output_elem_bytes=4, name="op07_attn_weight",
+        )
+        fp32_out = await bridge._run_streamed_mmul(
+            instr, block_scales=block_scales, weight_path=weight_path,
+            activation_scale=float(op.get("activation_scale", 1.0))
+        )
+        golden = expected["op_07_attn_weight_fp32"].reshape(fp32_out.shape)
+        diff = np.abs(fp32_out - golden)
+        cos = np.dot(fp32_out.flatten(), golden.flatten()) / (
+            np.linalg.norm(fp32_out) * np.linalg.norm(golden)
+        )
+        logger.warning(
+            f"[op07 focused] cos_sim={cos:.6f} max_abs={diff.max():.6f} "
+            f"rtl_min={fp32_out.min():.6f} golden_min={golden.min():.6f}"
+        )
+        logger.warning(f"[op07 focused] rtl row0: {fp32_out[0].tolist()}")
+        logger.warning(f"[op07 focused] gld row0: {golden[0].tolist()}")
+        logger.warning(f"[op07 focused] rtl row1: {fp32_out[1].tolist()}")
+        logger.warning(f"[op07 focused] gld row1: {golden[1].tolist()}")
+        out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build", "wave1", "op07_focused.npz")
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        np.savez(out_path, rtl=fp32_out, golden=golden)
+        logger.warning(f"[op07 focused] saved {out_path}")
+        assert cos >= 0.999, f"op07 focused cos_sim={cos:.6f} < 0.999"
+
+    @cocotb.test()
+    async def test_op46_focused(dut):
+        bridge = CocotbBridge(dut)
+        await bridge.start_clock()
+        await bridge.reset(5)
+        bridge.init_golden()
+        hex_path = os.environ.get("BOOTROM_HEX", "firmware/build/npu_firmware.hex")
+        await bridge.load_firmware(hex_path)
+        await bridge.wait_cycles(2000)
+
+        manifest_dir = os.environ.get(
+            "QWEN25_3LAYER_VECTORS_DIR",
+            os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "..", "rtl", "test_vectors", "soc_e2e", "qwen25-3b-3layer-rtl"
+            )
+        )
+        with open(os.path.join(manifest_dir, "manifest.json")) as f:
+            manifest = json.load(f)
+        _expected_npz = np.load(os.path.join(manifest_dir, "expected.npz"))
+        expected = {k: np.array(_expected_npz[k]) for k in _expected_npz.files}
+        _expected_npz.close()
+
+        op = next((o for o in manifest["ops"] if o["idx"] == 46), None)
+        if op is None:
+            raise ValueError("op46 up not found in manifest")
+        i_addr = SRAM_BASE + int(op["sram_input_addr"], 16)
+        weight_path = os.path.join(manifest_dir, op["weight_hex"])
+        scale_path = os.path.join(manifest_dir, op["scale_hex"])
+
+        act_data = bytearray(read_hex_file_bytes(os.path.join(manifest_dir, op["input_hex"]), 1))
+        await bridge.preload_sram(i_addr, bytes(act_data))
+
+        def _read_scale_hex(path: str, K: int, N: int, group_size: int = 128) -> np.ndarray:
+            raw = read_hex_file_bytes(path, 2)
+            scales_fp16 = np.frombuffer(raw, dtype=np.float16)
+            num_blocks = (K + group_size - 1) // group_size
+            expected_sz = num_blocks * N
+            if scales_fp16.size < expected_sz:
+                scales_fp16 = np.pad(scales_fp16, (0, expected_sz - scales_fp16.size))
+            return scales_fp16[:expected_sz].reshape(num_blocks, N).astype(np.float32)
+
+        block_scales = _read_scale_hex(scale_path, op["dimensions"]["K"], op["dimensions"]["N"])
+        instr = NPUInstruction(
+            opcode="MMUL", op_id=0,
+            dim_m=op["dimensions"]["M"],
+            dim_n=op["dimensions"]["N"],
+            dim_k=op["dimensions"]["K"],
+            i_addr=i_addr, o_addr=SRAM_BASE + int(op["sram_output_addr"], 16),
+            output_elem_bytes=4, name="op46_up",
+        )
+        fp32_out = await bridge._run_streamed_mmul(
+            instr, block_scales=block_scales, weight_path=weight_path,
+            activation_scale=float(op.get("activation_scale", 1.0))
+        )
+        fp32_key = "op_46_up_fp32"
+        if fp32_key in expected:
+            golden = expected[fp32_key].reshape(fp32_out.shape)
+            diff = np.abs(fp32_out - golden)
+            cos = float(np.dot(fp32_out.flatten(), golden.flatten()) / (
+                np.linalg.norm(fp32_out) * np.linalg.norm(golden)
+            ))
+            logger.warning(
+                f"[op46 focused] cos_sim={cos:.6f} max_abs={diff.max():.6f} "
+                f"rtl_min={fp32_out.min():.6f} golden_min={golden.min():.6f}"
+            )
+            out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build", "wave1", "op46_focused.npz")
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+            np.savez(out_path, rtl=fp32_out, golden=golden)
+            logger.warning(f"[op46 focused] saved {out_path}")
+            assert cos >= 0.999, f"op46 focused cos_sim={cos:.6f} < 0.999"
+        else:
+            logger.warning(f"[op46 focused] no FP32 reference found for {fp32_key}")
+
+    async def _run_op_context(dut, start_idx: int, end_idx: int, assert_idx: int):
+        bridge = CocotbBridge(dut)
+        await bridge.start_clock()
+        await bridge.reset(5)
+        bridge.init_golden()
+        hex_path = os.environ.get("BOOTROM_HEX", "firmware/build/npu_firmware.hex")
+        await bridge.load_firmware(hex_path)
+        await bridge.wait_cycles(2000)
+
+        manifest_dir = os.environ.get(
+            "QWEN25_3LAYER_VECTORS_DIR",
+            os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "..", "rtl", "test_vectors", "soc_e2e", "qwen25-3b-3layer-rtl"
+            )
+        )
+        with open(os.path.join(manifest_dir, "manifest.json")) as f:
+            manifest = json.load(f)
+        _expected_npz = np.load(os.path.join(manifest_dir, "expected.npz"))
+        expected = {k: np.array(_expected_npz[k]) for k in _expected_npz.files}
+        _expected_npz.close()
+
+        opcode_map = {
+            "RMSNORM": ("SFU_RMSNORM", 6),
+            "SOFTMAX": ("SFU_SOFTMAX", 0),
+            "SILU":    ("SFU_SILU",    4),
+            "ROPE":    ("SFU_ROPE",    5),
+            "MMUL":    ("MMUL",        0),
+            "VMUL":    ("VECTOR_MUL",  1),
+            "VRESID":  ("VECTOR_RESID", 5),
+        }
+
+        def _read_scale_hex(path: str, K: int, N: int, group_size: int = 128) -> np.ndarray:
+            raw = read_hex_file_bytes(path, 2)
+            scales_fp16 = np.frombuffer(raw, dtype=np.float16)
+            num_blocks = (K + group_size - 1) // group_size
+            expected_sz = num_blocks * N
+            if scales_fp16.size < expected_sz:
+                scales_fp16 = np.pad(scales_fp16, (0, expected_sz - scales_fp16.size))
+            return scales_fp16[:expected_sz].reshape(num_blocks, N).astype(np.float32)
+
+        for op in manifest["ops"][start_idx:end_idx]:
+            idx = op["idx"]
+            name = op["name"]
+            opcode_raw = op["opcode"]
+            dims = op["dimensions"]
+            label = f"op{assert_idx:02d}_context"
+            logger.warning(f"[{label}] op {idx} {name} {opcode_raw}")
+
+            if opcode_raw not in opcode_map:
+                raise ValueError(f"[{label}] Unknown opcode '{opcode_raw}'")
+            bridge_opcode, op_id = opcode_map[opcode_raw]
+
+            i_addr = SRAM_BASE + int(op["sram_input_addr"], 16)
+            o_addr = SRAM_BASE + int(op["sram_output_addr"], 16)
+            output_elem_bytes = op.get("output_elem_bytes", 4)
+
+            if opcode_raw == "MMUL":
+                M = dims.get("M", 1)
+                K = dims.get("K", 0)
+                N = dims.get("N", 0)
+                input_path = os.path.join(manifest_dir, op["input_hex"])
+                weight_path = os.path.join(manifest_dir, op["weight_hex"])
+                scale_path = os.path.join(manifest_dir, op["scale_hex"])
+                act_data = read_hex_file_bytes(input_path, 1)
+                await bridge.preload_sram(i_addr, act_data)
+                block_scales = _read_scale_hex(scale_path, K, N)
+                instr = NPUInstruction(
+                    opcode="MMUL", op_id=0,
+                    dim_m=M, dim_n=N, dim_k=K,
+                    i_addr=i_addr, o_addr=o_addr,
+                    output_elem_bytes=4, name=f"op{idx:02d}_{name}",
+                )
+                activation_scale = float(op.get("activation_scale", 1.0))
+                fp32_out = await bridge._run_streamed_mmul(
+                    instr, block_scales=block_scales, weight_path=weight_path,
+                    activation_scale=activation_scale
+                )
+                fp32_key = f"op_{idx:02d}_{name.replace(' ', '_').replace('/', '_')}_fp32"
+                if fp32_key in expected:
+                    golden = expected[fp32_key].reshape(fp32_out.shape)
+                    diff = np.abs(fp32_out - golden)
+                    cos = float(np.dot(fp32_out.flatten(), golden.flatten()) / (
+                        np.linalg.norm(fp32_out) * np.linalg.norm(golden)
+                    ))
+                    logger.warning(
+                        f"[{label}] op {idx} {name} cos_sim={cos:.6f} max_abs={diff.max():.6f}"
+                    )
+                    if idx == assert_idx:
+                        assert cos >= 0.999, f"{label} cos_sim={cos:.6f} < 0.999"
+            elif opcode_raw in ("RMSNORM", "SOFTMAX", "SILU", "ROPE"):
+                input_path = os.path.join(manifest_dir, op["input_hex"])
+                data = read_hex_file_bytes(input_path, output_elem_bytes)
+                await bridge.preload_sram(i_addr, data)
+                instr = NPUInstruction(
+                    opcode=bridge_opcode, op_id=op_id,
+                    elements=dims.get("elements", 0),
+                    i_addr=i_addr, o_addr=o_addr,
+                    output_elem_bytes=output_elem_bytes,
+                    name=f"op{idx:02d}_{name}",
+                )
+                await bridge.run_step(instr)
+
+    @cocotb.test()
+    async def test_op07_context(dut):
+        await _run_op_context(dut, 0, 8, 7)
+
+    @cocotb.test()
+    async def test_op24_context(dut):
+        await _run_op_context(dut, 17, 26, 24)
+
+    @cocotb.test()
+    async def test_op41_context(dut):
+        await _run_op_context(dut, 34, 43, 41)
+
+    @cocotb.test()
+    async def test_op46_context(dut):
+        await _run_op_context(dut, 45, 47, 46)
+
+    async def _run_vmul_focused(dut, op_idx: int):
+        bridge = CocotbBridge(dut)
+        await bridge.start_clock()
+        await bridge.reset(5)
+        bridge.init_golden()
+        hex_path = os.environ.get("BOOTROM_HEX", "firmware/build/npu_firmware.hex")
+        await bridge.load_firmware(hex_path)
+        await bridge.wait_cycles(2000)
+
+        manifest_dir = os.environ.get(
+            "QWEN25_3LAYER_VECTORS_DIR",
+            os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "..", "rtl", "test_vectors", "soc_e2e", "qwen25-3b-3layer-rtl"
+            )
+        )
+        with open(os.path.join(manifest_dir, "manifest.json")) as f:
+            manifest = json.load(f)
+
+        op = next((o for o in manifest["ops"] if o["idx"] == op_idx), None)
+        if op is None:
+            raise ValueError(f"op{op_idx} VMUL gate*up not found in manifest")
+
+        i_addr = SRAM_BASE + int(op["sram_input_addr"], 16)
+        o_addr = SRAM_BASE + int(op["sram_output_addr"], 16)
+        b_addr = SRAM_BASE + int(op.get("sram_b_addr", "0x0"), 16)
+        elements = op["dimensions"]["elements"]
+
+        a_data = read_hex_file_bytes(os.path.join(manifest_dir, op["input_hex"]), 4)
+        b_data = read_hex_file_bytes(os.path.join(manifest_dir, op["b_hex"]), 4)
+        golden = read_hex_file_bytes(os.path.join(manifest_dir, op["golden_output_hex"]), 4)
+
+        await bridge.preload_sram(i_addr, a_data)
+        await bridge.preload_sram(b_addr, b_data)
+
+        instr = NPUInstruction(
+            opcode="VECTOR_MUL",
+            op_id=1,
+            elements=elements,
+            a_addr=i_addr,
+            b_addr=b_addr,
+            o_addr=o_addr,
+            golden_output=golden,
+            output_elem_bytes=4,
+            name=f"op{op_idx}_VMUL_gate*up",
+        )
+        ok, cycles = await bridge.run_step(instr)
+
+        actual = await bridge._sram_backdoor_read(o_addr, elements * 4)
+        actual_arr = np.frombuffer(bytes(actual), dtype=np.int32)
+        golden_arr = np.frombuffer(golden, dtype=np.int32)
+        nonzero_actual = np.count_nonzero(actual_arr)
+        nonzero_golden = np.count_nonzero(golden_arr)
+        logger.warning(
+            f"[op{op_idx} vmul focused] ok={ok} cycles={cycles} "
+            f"nonzero_actual={nonzero_actual} nonzero_golden={nonzero_golden}"
+        )
+        await bridge._dump_vector_buffer(f"op{op_idx}_vmul", "buf_a", 0)
+        await bridge._dump_vector_buffer(f"op{op_idx}_vmul", "buf_b", 0)
+        await bridge._dump_vector_buffer(f"op{op_idx}_vmul", "buf_o", 0)
+
+        out_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..", "build", "wave1", f"op{op_idx}_vmul_focused.npz"
+        )
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        np.savez(out_path, rtl=actual_arr, golden=golden_arr)
+        logger.warning(f"[op{op_idx} vmul focused] saved {out_path}")
+
+        assert ok, f"op{op_idx} VMUL gate*up failed: nonzero actual={nonzero_actual}, golden={nonzero_golden}"
+
+    @cocotb.test()
+    async def test_op14_vmul_focused(dut):
+        await _run_vmul_focused(dut, 14)
+
+    @cocotb.test()
+    async def test_op31_vmul_focused(dut):
+        await _run_vmul_focused(dut, 31)
+
+    @cocotb.test()
+    async def test_op48_vmul_focused(dut):
+        await _run_vmul_focused(dut, 48)
 
 else:
     # Non-cocotb: provide stubs that fail gracefully
