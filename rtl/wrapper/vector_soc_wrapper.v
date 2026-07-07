@@ -47,9 +47,9 @@ module vector_soc_wrapper #(
     parameter integer NUM_LANES      = 128,
     parameter integer DATA_W         = 32,
     // Maximum chunks per operand (128 elements = 1 chunk).
-    // Qwen blk.0 largest VECTOR op is VMUL with 9728 elements => 76 chunks.
-    // Round up and add margin to cover all vector ops in the manifest.
-    parameter integer CHUNKS_MAX     = 80
+    // Qwen2.5-3B VMUL has 11008 elements => 86 chunks.
+    // Round up to the next power of two to cover all vector ops in the manifest.
+    parameter integer CHUNKS_MAX     = 128
 ) (
     input  wire        clk,
     input  wire        rst_n,
@@ -442,7 +442,38 @@ module vector_soc_wrapper #(
     // Slice the 4096-bit buffer into 512-bit beats
     wire [VECTOR_W-1:0] cur_o_buf = buf_o[seq_chunk];
     assign m_axi_wdata  = cur_o_buf[seq_beat * AXI_DATA_WIDTH +: AXI_DATA_WIDTH];
-    assign m_axi_wstrb  = {AXI_DATA_WIDTH/8{1'b1}};
+
+    // Mask write strobes on the final chunk so only valid bytes are written.
+    // Each INT32 element occupies 4 bytes.  Full chunks keep all-ones strobe.
+    wire [31:0] valid_bytes_total       = wrp_len_eff * 32'd4;
+    wire [31:0] valid_bytes_final_chunk = valid_bytes_total -
+                                          ((wrp_chunks - 8'd1) * CHUNK_BYTES);
+    wire [2:0]  full_beats_final_chunk  = valid_bytes_final_chunk[8:6];
+    wire [5:0]  partial_bytes_final_chunk = valid_bytes_final_chunk[5:0];
+    wire        final_chunk_is_full     = (valid_bytes_final_chunk == CHUNK_BYTES);
+
+    always @(*) begin
+        if (seq_chunk != (wrp_chunks - 8'd1)) begin
+            // Not the final chunk: every byte in the burst is valid
+            seq_wstrb = {AXI_DATA_WIDTH/8{1'b1}};
+        end else if (final_chunk_is_full) begin
+            // Final chunk happens to be a complete 512-byte chunk
+            seq_wstrb = {AXI_DATA_WIDTH/8{1'b1}};
+        end else if (seq_beat < full_beats_final_chunk) begin
+            // Final chunk, fully-valid beat
+            seq_wstrb = {AXI_DATA_WIDTH/8{1'b1}};
+        end else if ((seq_beat == full_beats_final_chunk) &&
+                     (partial_bytes_final_chunk != 0)) begin
+            // Final chunk, final partial beat
+            seq_wstrb = ({AXI_DATA_WIDTH/8{1'b1}} >>
+                         (32'd64 - partial_bytes_final_chunk));
+        end else begin
+            // Beyond the valid byte range of the final chunk
+            seq_wstrb = {AXI_DATA_WIDTH/8{1'b0}};
+        end
+    end
+
+    assign m_axi_wstrb  = seq_wstrb;
     assign m_axi_wlast  = (seq_beat == BEATS_PER_CHUNK - 1);
     assign m_axi_wvalid = (seq_state == SEQ_STORE_W);
 

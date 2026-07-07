@@ -887,7 +887,7 @@ module caduceus_pcie_mixed_dut #(
     wire vec_irq;
 `ifdef USE_RTL_VECTOR
     vector_soc_wrapper #(
-        .CHUNKS_MAX(80)
+        .CHUNKS_MAX(128)
     ) u_vector_wrapper (
         .clk           (clk),
         .rst_n         (rst_n),

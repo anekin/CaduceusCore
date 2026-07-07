@@ -445,23 +445,26 @@ module mxu_soc_wrapper #(
         end
     end
 
-    // tile_cycle is registered and lags compute_en by one cycle, so the first
-    // compute cycle must be handled combinationally.  data_cycle is the actual
-    // K-index within the tile; data_valid is high while that K-index is valid.
-    wire        first_cycle = compute_en_rising;
-    wire [13:0] data_cycle  = first_cycle ? 14'd0 : (tile_cycle + 14'd1);
-    wire        data_valid  = first_cycle ||
-                              (tile_active && ((tile_cycle + 14'd1) < {7'd0, tile_k_cur}));
+    // tile_cycle tracks the current compute cycle.  The broadcast buses are
+    // driven combinationally: on cycle N, tile_cycle == N and the bus presents
+    // data[N] so the PE grid samples the new K-index on the same positive edge.
+    // This matches the original tb_mxu.v timing where the broadcast data was
+    // stable before the sampling edge and the controller's K+2 compute cycles
+    // are sufficient to flush the MAC pipeline.
+    wire [13:0] data_cycle  = tile_cycle;
+    wire        data_valid  = tile_active && (tile_cycle < {7'd0, tile_k_cur});
     wire [15:0] act_buf_idx = ({2'd0, burst_cnt} * ACT_BEATS_PER_K) + data_cycle;
     wire [15:0] w_buf_idx   = ({2'd0, burst_cnt} * WEIGHT_BEATS_PER_K) + data_cycle[13:1];
     wire        w_use_hi    = data_cycle[0];
 
-    assign mxu_weight_bus = data_valid ?
+    wire [255:0] mxu_weight_bus_comb = data_valid ?
         (w_use_hi ? weight_buf[w_buf_idx][511:256] : weight_buf[w_buf_idx][255:0]) :
         256'd0;
-
-    assign mxu_activation_bus = data_valid ?
+    wire [511:0] mxu_activation_bus_comb = data_valid ?
         activation_buf[act_buf_idx[13:0]] : 512'd0;
+
+    assign mxu_weight_bus     = mxu_weight_bus_comb;
+    assign mxu_activation_bus = mxu_activation_bus_comb;
 
     //=========================================================================
     // AXI4 Store-Out Sequencer

@@ -222,8 +222,9 @@ module controller (
                     status_busy       <= 1'b1;
                     activation_load_en <= 1'b1;
 
-                    // compute_timer = k_cur + 1; counts down to 0 → k_cur+2 cycles
-                    compute_timer <= k_cur + 7'd1;
+                    // compute_timer = k_cur + 2; counts down to 0 → k_cur+3 cycles
+                    // (the SoC wrapper broadcast path needs one extra flush cycle)
+                    compute_timer <= k_cur + 7'd2;
 
                     if (cmd_abort) begin
                         state       <= S_IDLE;

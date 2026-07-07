@@ -496,6 +496,9 @@ module tb_vector;
                         op_code = 32'd4; op_name = "CONV";
                     end else if (val_len == 5 && val_buf[0] == "R" && val_buf[1] == "E" && val_buf[2] == "S" && val_buf[3] == "I" && val_buf[4] == "D") begin
                         op_code = 32'd5; op_name = "RESID";
+                    end else if (val_len == 7 && val_buf[0] == "F" && val_buf[1] == "1" && val_buf[2] == "6" && val_buf[3] == "_" &&
+                                          val_buf[4] == "I" && val_buf[5] == "3" && val_buf[6] == "2") begin
+                        op_code = 32'd6; op_name = "F16_I32";
                     end else begin
                         $display("[TB] ERROR: unknown OP name");
                         for (vi = 0; vi < val_len; vi = vi + 1)
