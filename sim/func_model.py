@@ -5,6 +5,7 @@ Func Model 主入口 — RISC-V 固件 + MMIO Bridge + Golden Executor 集成。
 Phase 2: Python 固件模拟器（riscv-gcc 就绪后切换 Spike + 真实 ELF）
 """
 
+import hashlib
 import os
 from typing import Optional
 
@@ -323,3 +324,109 @@ if __name__ == "__main__":
         print("Phase 2 smoke test: ✅ PASS")
     else:
         print("Phase 2 smoke test: ❌ FAIL")
+
+
+class DualPathChecker:
+    """Dual-path readback verifier for blk.0 chain results.
+
+    Reads SRAM output data via two independent paths:
+      1. Backdoor (bk): direct bytearray slice of model.sram
+      2. PCIe TLP (pcie): model.pcie.tlp_read() through crossbar routing
+
+    Compares both against a golden reference and asserts they match.
+    Supports anti-vacuous PCIe corruption to prove the check is genuine.
+
+    Typical usage::
+
+        checker = DualPathChecker(model)
+        res = checker.verify(sram_offset=0x280000, size=N*4,
+                             golden=np.array([...], dtype=np.int32),
+                             dtype="int32")
+        assert res["bk_match"]
+        assert res["pcie_match"]
+    """
+
+    def __init__(self, model: FuncModel):
+        self.model = model
+
+    @staticmethod
+    def _read_backdoor(model: FuncModel, sram_offset: int, size: int) -> bytes:
+        """Direct SRAM bytearray slice (backdoor path)."""
+        return bytes(model.sram[sram_offset:sram_offset + size])
+
+    @staticmethod
+    def _read_pcie(model: FuncModel, sram_offset: int, size: int) -> bytes:
+        """PCIe TLP read through crossbar routing."""
+        from sim.regmap import Addr
+        phys_addr = Addr.SRAM_BASE + sram_offset
+        return model.pcie.tlp_read(phys_addr, size)
+
+    @staticmethod
+    def _compare(got: bytes, golden: np.ndarray, dtype: str) -> bool:
+        """Compare readback bytes against golden ndarray.
+
+        dtype="int32" — exact comparison
+        dtype="fp16"  — tolerance-based (abs=2e-3, rel=1e-2), OR logic
+                     matching GoldenSFU.compare_hw_vs_ref behaviour.
+        """
+        if dtype == "int32":
+            actual = np.frombuffer(got, dtype=np.int32)
+            if actual.shape != golden.shape:
+                actual = actual.reshape(golden.shape)
+            return bool(np.array_equal(actual, golden))
+        elif dtype == "fp16":
+            actual = np.frombuffer(got, dtype=np.float16).astype(np.float32)
+            golden_f32 = golden.astype(np.float32).flatten()
+            if actual.shape != golden_f32.shape:
+                return False
+            abs_diff = np.abs(actual - golden_f32)
+            rel_diff = abs_diff / (np.abs(golden_f32) + 1e-12)
+            return bool(np.all(abs_diff < 2e-3) or np.all(rel_diff < 1e-2))
+        else:
+            raise ValueError(f"Unsupported dtype for comparison: {dtype}")
+
+    def verify(self, sram_offset: int, size: int,
+               golden: np.ndarray, dtype: str = "int32") -> dict:
+        """Run dual-path readback and compare both against golden.
+
+        Returns:
+            dict with keys: bk_match, pcie_match, bk_data, pcie_data, bk_hash, pcie_hash
+        """
+        bk_bytes = self._read_backdoor(self.model, sram_offset, size)
+        pcie_bytes = self._read_pcie(self.model, sram_offset, size)
+
+        bk_match = self._compare(bk_bytes, golden, dtype)
+        pcie_match = self._compare(pcie_bytes, golden, dtype)
+
+        return {
+            "bk_match": bk_match,
+            "pcie_match": pcie_match,
+            "bk_data": bk_bytes,
+            "pcie_data": pcie_bytes,
+            "bk_hash": hashlib.md5(bk_bytes).hexdigest()[:8],
+            "pcie_hash": hashlib.md5(pcie_bytes).hexdigest()[:8],
+        }
+
+    @staticmethod
+    def corrupt_pcie_read(model: FuncModel) -> None:
+        """Inject corruption into the PCIe read path for anti-vacuous testing.
+
+        Monkey-patches pcie.tlp_read so that every read returns garbage
+        (byte-values shifted by +1 modulo 256).  Caller must restore the
+        original method after verification.
+        """
+        original_read = model.pcie.tlp_read
+
+        def corrupted_tlp_read(addr: int, size: int) -> bytes:
+            real = original_read(addr, size)
+            return bytes((b + 1) & 0xFF for b in real)
+
+        model.pcie._original_tlp_read = original_read  # keep reference
+        model.pcie.tlp_read = corrupted_tlp_read  # type: ignore[method-assign]
+
+    @staticmethod
+    def restore_pcie_read(model: FuncModel) -> None:
+        """Restore original pcie.tlp_read after corruption injection."""
+        if hasattr(model.pcie, "_original_tlp_read"):
+            model.pcie.tlp_read = model.pcie._original_tlp_read  # type: ignore[method-assign]
+            del model.pcie._original_tlp_read

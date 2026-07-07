@@ -1,0 +1,42 @@
+============================================================
+W3.2 Dual-Path Verification — blk.0 17-op chain
+============================================================
+Manifest: /home/prj/zhengs/caduceuscore/CaduceusCore/rtl/test_vectors/qwen_blk0/blk0_manifest.json
+Total ops: 17
+
+    Op                      Name    bk_match  pcie_match    bk==pcie   Route
+--------------------------------------------------------------------------------
+op00          RMSNORM pre-attn        True        True        True  clean
+op01               Q_proj MMUL        True        True        True  clean
+op02               K_proj MMUL        True        True        True  clean
+op03               V_proj MMUL        True        True        True  clean
+op04                      ROPE        True        True        True  clean
+op05           attn_score MMUL        True        True        True  clean
+op06      attn_softmax SOFTMAX        True        True        True  clean
+op07          attn_weight MMUL        True        True        True  clean
+op08               O_proj MMUL        True        True        True  clean
+op09                    VRESID        True        True        True  clean
+op10         RMSNORM post-attn        True        True        True  clean
+op11                 gate MMUL        True        True        True  clean
+op12                   up MMUL        True        True        True  clean
+op13                      SILU        True        True        True  clean
+op14              VMUL gate*up        True        True        True  clean
+op15                 down MMUL        True        True        True  clean
+op16                    VRESID        True        True        True  clean
+--------------------------------------------------------------------------------
+ALL 17 OPS: bk_match=True pcie_match=True
+
+============================================================
+W3.2 Anti-Vacuous — PCIe Corruption Test
+============================================================
+Target op: op02 K_proj MMUL (MMUL)
+
+Phase 1 (clean):     bk_match=True  pcie_match=True
+Phase 2 (corrupted): bk_match=True  pcie_match=False
+Phase 3 (restored):  bk_match=True  pcie_match=True
+
+Corrupt bk hash:  e4f0b67b
+Corrupt pcie hash: be6e830e
+Bk == Pcie (corrupt): False
+
+ANTI-VACUOUS: PASS — PCIe corruption detected (pcie_match=False, bk_match=True)
