@@ -1,0 +1,67 @@
+# R1 — Wave 1 Func Model Review Gate Audit
+
+Plan: pcie-dma-implementation
+Date: 2026-07-06
+Auditor: Atlas
+Verdict: APPROVE
+
+## Evidence Reviewed
+
+1. `sim/models/pcie.py` — DmaEngine class added (~620 lines)
+2. `sim/tests/test_pcie_dma_fm.py` — 7 TCs + 1 enum sanity test
+3. `.omo/evidence/fm_pcie_dma.log` — pytest output
+4. `docs/bugs/bugs-pcie-dma.md` — known uncovered tracking
+5. `rtl/ip/verilog-pcie/pcie_axi_master.v` lines 158-163 — TLP Fmt+Type reference
+6. `git diff --name-only origin/main..feat_pcie | grep 'rtl/ip/verilog-pcie/'` — vendored gate
+
+## Acceptance Criteria
+
+### Func Model 7 TCs PASS
+- `bash scripts/run_fm_pcie_dma.sh` → 8 passed in 0.08s
+  - test_tc1_single_mwr_256: PASS
+  - test_tc2_mrd_split_completion: PASS
+  - test_tc3_unaligned_transfer: PASS
+  - test_tc4_max_length_4096: PASS
+  - test_tc5_concurrent_read_write: PASS
+  - test_tc6_completion_error_ur: PASS
+  - test_tc7_axi_dec_error: PASS
+  - test_tag_enums_distinct: PASS (bonus)
+
+### Golden Reference Sufficiency Check
+
+1. TLP header format: 3-DW vs 4-DW
+   - Status: PASS
+   - Evidence: TC1 asserts 3-DW MWr header (0x40); TC2/TC4 assert MRd 3-DW (0x00);
+     smoke assertion 2 asserts 4-DW MWr (0x60). Matches `pcie_axi_master.v:159-160`
+     (`010_00000` / `011_00000` for 3-DW/4-DW data TLPs).
+
+2. Max payload splitting
+   - Status: PASS
+   - Evidence: TC4 writes 4096 bytes and verifies 16 TLPs at 256 bytes each.
+
+3. Tag lifecycle
+   - Status: PASS
+   - Evidence: DmaEngine smoke assertion 6 allocates 256 tags then reuses;
+     TC5 uses tags 5 and 42 concurrently without interference.
+
+4. Completion errors (UR/CA)
+   - Status: PASS
+   - Evidence: TC6 injects UR and verifies `DESC_ERR_UR`; DmaEngine also supports CA.
+
+5. Known uncovered recorded
+   - Status: PASS
+   - Evidence: `docs/bugs/bugs-pcie-dma.md` lists 4 uncovered items
+     (completion timeout recovery, multi-function RC model, AER error reporting,
+     AXI DECERR response).
+
+### Vendored File Gate
+- Status: PASS
+- Evidence: `git diff --name-only origin/main..feat_pcie | grep 'rtl/ip/verilog-pcie/'` returns empty.
+
+## Conclusion
+
+Wave 1 Func Model Foundation is ready. The DmaEngine golden reference implements
+all required behaviors, the pytest suite provides bit-exact verification, and
+no vendored source was modified.
+
+Next: Wave 2 RTL DMA Engine Standalone.
