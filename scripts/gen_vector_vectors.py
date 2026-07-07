@@ -111,6 +111,21 @@ def vector_conv_i32_to_f16(arr: np.ndarray) -> np.ndarray:
     return f32.astype(np.float16)
 
 
+def vector_conv_f16_to_i32(arr: np.ndarray) -> np.ndarray:
+    """FP16 -> INT32 with round-toward-zero, subnormal flush, and saturation."""
+    f32 = arr.astype(np.float32)
+    tiny = np.finfo(np.float16).tiny
+    f32[np.abs(f32) < tiny] = 0.0
+    sign = np.signbit(f32)
+    is_special = ~np.isfinite(f32)
+    out = np.empty(f32.shape, dtype=np.int32)
+    out[is_special & ~sign] = INT32_MAX
+    out[is_special & sign] = INT32_MIN
+    finite = ~is_special
+    out[finite] = f32[finite].astype(np.int32)
+    return out
+
+
 def vector_residual_add(original: np.ndarray, delta: np.ndarray) -> np.ndarray:
     return _saturate_i32(original.astype(np.int64) + delta.astype(np.int64))
 
@@ -191,6 +206,23 @@ def generate_conv(out_dir: Path, name: str, N: int, seed: int):
     write_manifest(scenario_dir / "manifest.json", name, (N,), sfu_op=True)
 
 
+def generate_f16_i32(out_dir: Path, name: str, N: int, seed: int):
+    rng = np.random.default_rng(seed)
+    x = rng.uniform(-1000.0, 1000.0, size=N).astype(np.float16)
+    boundary = np.array([
+        0.0, -0.0, 1.0, -1.0, 1.5, -1.5,
+        np.float16(65504.0), np.float16(-65504.0),
+        np.float16("inf"), np.float16("-inf"), np.float16("nan"),
+    ], dtype=np.float16)
+    x[:len(boundary)] = boundary
+    golden = vector_conv_f16_to_i32(x)
+    scenario_dir = _make_out_dir(out_dir, name)
+    write_fp16_hex(scenario_dir / "x.hex", x)
+    write_int32_hex(scenario_dir / "golden_output.hex", golden)
+    write_params(scenario_dir / "params.txt", "F16_I32", N)
+    write_manifest(scenario_dir / "manifest.json", name, (N,))
+
+
 def generate_resid_add(out_dir: Path, name: str, N: int, seed: int):
     rng = np.random.default_rng(seed)
     original = _generate_int32_inputs(rng, N, wide=True)
@@ -206,12 +238,13 @@ def generate_resid_add(out_dir: Path, name: str, N: int, seed: int):
 
 # Map op symbol → (generator, base_seed)
 VECTOR_OP_GENERATORS: Dict[str, Tuple[Callable, int]] = {
-    "ADD":   (generate_add, 10000),
-    "MUL":   (generate_mul, 11000),
-    "MAX":   (generate_max_reduce, 12000),
-    "SUM":   (generate_sum_reduce, 13000),
-    "CONV":  (generate_conv, 14000),
-    "RESID": (generate_resid_add, 15000),
+    "ADD":     (generate_add, 10000),
+    "MUL":     (generate_mul, 11000),
+    "MAX":     (generate_max_reduce, 12000),
+    "SUM":     (generate_sum_reduce, 13000),
+    "CONV":    (generate_conv, 14000),
+    "RESID":   (generate_resid_add, 15000),
+    "F16_I32": (generate_f16_i32, 16000),
 }
 
 
@@ -246,6 +279,8 @@ NAMED_SCENARIOS = [
     ("conv_4096", generate_conv, 4096, 20009),
     ("resid_add_128", generate_resid_add, 128, 20010),
     ("resid_add_4096", generate_resid_add, 4096, 20011),
+    ("vconv_f16_i32_smoke", generate_f16_i32, 128, 20012),
+    ("vconv_f16_i32_4096", generate_f16_i32, 4096, 20013),
 ]
 
 
