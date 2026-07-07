@@ -319,15 +319,59 @@ run_e2e_blk0: $(SOC_SIMV_COCOTB)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# run_qwen25_3b_3layer — W1.3: 3-layer 17-op full-chain RTL forward pass
+# ═══════════════════════════════════════════════════════════════════════════
+
+.PHONY: run_qwen25_3b_3layer
+run_qwen25_3b_3layer: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[W1.3] Running Qwen2.5-3B 3-layer RTL verification...$(NC)"
+	@echo "$(YELLOW)[W1.3] Using cocotb env: $(COCOTB_PY_ENV)$(NC)"
+	cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_qwen25_3b_3layer \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen25_3b_3layer_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen25_3b_3layer.log
+	@grep -q "W1.3.*All 3 layers PASSED\|test_qwen25_3b_3layer.*PASS" $(REPO_ROOT)/sim/regression/qwen25_3b_3layer.log && \
+		echo "$(GREEN)W1.3: PASS$(NC)" || \
+		(echo "$(RED)W1.3: FAIL$(NC)" && exit 1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# run_w17_intermediate_compare — W1.7: per-op intermediate snapshot compare
+# ═══════════════════════════════════════════════════════════════════════════
+
+.PHONY: run_w17_intermediate_compare
+run_w17_intermediate_compare: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[W1.7] Running per-op intermediate compare...$(NC)"
+	@echo "$(YELLOW)[W1.7] Using cocotb env: $(COCOTB_PY_ENV)$(NC)"
+	cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_qwen25_3b_3layer_intermediate_compare \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen25_3b_3layer_intermediate_compare_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen25_3b_3layer_intermediate_compare.log
+	@grep -q "W1.7.*Complete\|test_qwen25_3b_3layer_intermediate_compare.*PASS" $(REPO_ROOT)/sim/regression/qwen25_3b_3layer_intermediate_compare.log && \
+		echo "$(GREEN)W1.7: PASS$(NC)" || \
+		(echo "$(RED)W1.7: FAIL$(NC)" && exit 1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Per-op e2e targets for isolated P0 debugging
 # ═══════════════════════════════════════════════════════════════════════════
 
 .PHONY: run_e2e_rmsnorm run_e2e_softmax run_e2e_rope run_e2e_silu \
         run_e2e_mxu_single run_e2e_mxu_multi run_e2e_attn_score \
         run_e2e_mxu_op05 run_e2e_mxu_op07 \
+        run_op07_context run_op24_context run_op41_context \
         run_e2e_vresid run_e2e_vmul run_e2e_sfu_rmsnorm_post \
         run_e2e_intc_irq run_e2e_status_prop run_e2e_abort run_e2e_multi_irq \
-        run_e2e_dma_load run_e2e_dma_concurrent run_e2e_crossbar_stress
+        run_e2e_dma_load run_e2e_dma_concurrent run_e2e_crossbar_stress \
+        run_vector_vconv_f16_i32 run_w17_intermediate_compare
 
 run_e2e_rmsnorm: $(SOC_SIMV_COCOTB)
 	@echo "$(YELLOW)[E2E_RMSNORM] Running single-op cocotb test test_e2e_sfu_rmsnorm...$(NC)"
@@ -412,6 +456,105 @@ run_e2e_mxu_multi: $(SOC_SIMV_COCOTB)
 	@grep -q "test_e2e_mxu_multi_tile.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_mxu_multi.log && \
 		echo "$(GREEN)E2E_MXU_MULTI: PASS$(NC)" || \
 		(echo "$(RED)E2E_MXU_MULTI: FAIL$(NC)" && exit 1)
+
+run_op07_focused: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[OP07_FOCUSED] Running diagnostic cocotb test test_op07_focused...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_op07_focused \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/op07_focused_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/op07_focused.log
+
+run_op46_focused: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[OP46_FOCUSED] Running diagnostic cocotb test test_op46_focused...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_op46_focused \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/op46_focused_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/op46_focused.log
+
+run_op14_vmul_focused: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[OP14_VMUL_FOCUSED] Running diagnostic cocotb test test_op14_vmul_focused...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_op14_vmul_focused \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/op14_vmul_focused_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/op14_vmul_focused.log
+
+run_op31_vmul_focused: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[OP31_VMUL_FOCUSED] Running diagnostic cocotb test test_op31_vmul_focused...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_op31_vmul_focused \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/op31_vmul_focused_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/op31_vmul_focused.log
+
+run_op48_vmul_focused: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[OP48_VMUL_FOCUSED] Running diagnostic cocotb test test_op48_vmul_focused...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_op48_vmul_focused \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/op48_vmul_focused_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/op48_vmul_focused.log
+
+run_op07_context: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[OP07_CONTEXT] Running diagnostic cocotb test test_op07_context...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_op07_context \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/op07_context_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/op07_context.log
+
+run_op24_context: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[OP24_CONTEXT] Running diagnostic cocotb test test_op24_context...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_op24_context \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/op24_context_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/op24_context.log
+
+run_op41_context: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[OP41_CONTEXT] Running diagnostic cocotb test test_op41_context...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_op41_context \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/op41_context_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/op41_context.log
+
+run_op46_context: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[OP46_CONTEXT] Running diagnostic cocotb test test_op46_context...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_op46_context \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/op46_context_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/op46_context.log
 
 run_e2e_attn_score: $(SOC_SIMV_COCOTB)
 	@echo "$(YELLOW)[E2E_ATTN_SCORE] Running single-op cocotb test test_e2e_attn_score...$(NC)"
@@ -598,6 +741,35 @@ run_e2e_crossbar_stress: $(SOC_SIMV_COCOTB)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Module-level Vector target for VCONV_F16_I32
+# ═══════════════════════════════════════════════════════════════════════════
+
+VECTOR_SIMV := simv_tb_vector
+VECTOR_SCENARIO_DIR := $(REPO_ROOT)/rtl/test_vectors/vector/vconv_f16_i32_smoke
+VECTOR_SRC := $(REPO_ROOT)/rtl/tb/tb_vector.v $(wildcard $(REPO_ROOT)/rtl/vector/*.v)
+
+$(VECTOR_SIMV): $(VECTOR_SRC) $(PLI_TAB)
+	@echo "$(YELLOW)[VECTOR] Compiling tb_vector + vector RTL...$(NC)"
+	cd $(REPO_ROOT) && $(VCS) $(VCS_COMMON) -top tb_vector \
+		rtl/tb/tb_vector.v rtl/vector/*.v \
+		-o sim/regression/$(VECTOR_SIMV) \
+		-l sim/regression/vector_compile.log
+
+.PHONY: run_vector_vconv_f16_i32
+run_vector_vconv_f16_i32: $(VECTOR_SIMV)
+	@echo "$(YELLOW)[VECTOR_F16_I32] Generating vconv_f16_i32_smoke vectors...$(NC)"
+	cd $(REPO_ROOT) && python3 scripts/gen_vector_vectors.py --scenario vconv_f16_i32_smoke
+	@echo "$(YELLOW)[VECTOR_F16_I32] Running vconv_f16_i32_smoke scenario...$(NC)"
+	cd $(REPO_ROOT) && ./sim/regression/$(VECTOR_SIMV) \
+		+testdir=$(VECTOR_SCENARIO_DIR) \
+		+scenario=vconv_f16_i32_smoke \
+		2>&1 | tee sim/regression/vector_vconv_f16_i32.log
+	@grep -q "PASS" $(REPO_ROOT)/sim/regression/vector_vconv_f16_i32.log && \
+		echo "$(GREEN)VECTOR_F16_I32: PASS$(NC)" || \
+		(echo "$(RED)VECTOR_F16_I32: FAIL$(NC)" && exit 1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Func Model SoC Case Targets (Todo 3: RTL SoC e2e test execution)
 # ═══════════════════════════════════════════════════════════════════════════
 #
@@ -735,6 +907,7 @@ help:
 	@echo "  run_e2e_dma_load    — Cocotb E2E-10 DMA load->compute->store"
 	@echo "  run_e2e_dma_concurrent — Cocotb E2E-11 DMA+MXU concurrent"
 	@echo "  run_e2e_crossbar_stress — Cocotb E2E-12 6-master crossbar stress"
+	@echo "  run_vector_vconv_f16_i32 — Module-level Vector FP16→INT32 smoke test"
 	@echo "  run_fm_soc_case CASE_ID=<id> — Run one FM-SOC-NNN case (default: FM-SOC-001)"
 	@echo "  run_fm_soc_001 ... run_fm_soc_008 — P0 cases FM-SOC-001 through FM-SOC-008"
 	@echo "    EXTRA_DEFINES=+define+USE_RTL_PCIE   — optional mixed-mode defines"
