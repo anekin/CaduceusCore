@@ -178,6 +178,40 @@ FM-SOC-027 在 P2+P3 回归中 PASS；P2+P3 全部 10 个 active cases PASS（10
 
 ---
 
+### BUG-RTL-SOC-005 — vector_soc_wrapper writes fixed 512-byte chunks and corrupts adjacent SRAM
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-07 |
+| **Block** | Phase 5 W1.3 |
+| **Case** | W1.3 3-layer full chain (FM-SOC-027 workaround失效) |
+| **Severity** | Critical |
+| **Type** | RTL (Vector wrapper) |
+| **Status** | Fixed |
+
+#### Symptom
+
+3-layer W1.3 forward pass fails on the three `VMUL gate*up` ops (op14 / op31 / op48). The wrapper had been passing FM-SOC-027 only because the runner manually spaced every Vector buffer by ≥ 0x800 bytes; when the 3-layer runner uses dense automatic address assignment, the fixed 512-byte store overruns the actual element count and pollutes the next Vector op's input SRAM.
+
+#### Root Cause
+
+`rtl/wrapper/vector_soc_wrapper.v` transferred a hard-coded `CHUNKS_MAX` number of 512-byte chunks for every LOAD/STORE and drove `m_axi_wstrb` all-ones on every beat. When `elements` was not a multiple of 128, the tail bytes of the final chunk contained uninitialized data. With dense SRAM layout this garbage overwrote neighboring buffers.
+
+#### Fix
+
+- Compute `wrp_chunks` from the `WRP_LEN` MMIO register (`ceil(elements/128)`) so exactly the required chunks are transferred.
+- Mask `m_axi_wstrb` on the final chunk: full beats keep all byte lanes enabled, the final partial beat enables only the valid bytes, and any beats beyond the valid range are forced to zero.
+- Raise `CHUNKS_MAX` parameter to 128 to cover the largest Vector op in the manifest (Qwen2.5-3B VMUL = 11008 elements = 86 chunks) without affecting buffer indexing.
+
+File changed: `rtl/wrapper/vector_soc_wrapper.v`
+
+#### Verification
+
+- FM-SOC-027 module-level sanity (`run_e2e_blk0`): PASS.
+- Focused VMUL regression: `run_op14_vmul_focused`, `run_op31_vmul_focused`, `run_op48_vmul_focused` all PASS.
+
+---
+
 ## BUG-RTL-SOC-006 — SFU wrapper start_hold blocks CMD.START when I_ADDR prefetch in progress; npu_wait_done returns immediately on idle engine
 
 | Field | Value |
