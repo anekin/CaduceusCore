@@ -232,7 +232,7 @@ Evidence: `.omo/evidence/task-7-p1-full-rtl.txt`, `CaduceusCore/build/p1_full_rt
 | **ID** | BUG-RTL-SOC-005 |
 | **Severity** | Major |
 | **Type** | RTL (SFU/Vector wrapper) + Firmware workaround |
-| **Status** | Worked around in firmware; RTL root cause to be fixed in Phase 5 |
+| **Status** | Re-opened / Must fix in Phase 5 |
 
 #### Symptom
 
@@ -255,15 +255,28 @@ Firmware now DMA-copies SFU/Vector inputs and outputs to/from dedicated **SRAM s
 
 The DMA copies only the exact logical byte count, so the wrappers only touch valid initialized SRAM bytes. SRAM is also fully written by `_preload_rtl()` to remove residual `X`.
 
-#### Impact
+#### Impact (Phase 4 — workaround in effect)
 
 - P0–P3 regression still PASS (scratch buffers not used for simple synthetic cases).
 - P4 FM-SOC-032 28-block chain PASS.
 - P4 FM-SOC-10X full E2E chain PASS.
 
+#### 3-Layer re-exposure (W1.3)
+
+The Phase 5 W1.3 3-layer forward pass (51 ops) exposed that the SRAM scratch-buffer workaround breaks at scale. The workaround relied on manually assigning non-overlapping SRAM addresses per op — feasible for 17 ops (FM-SOC-027), impossible for 51 ops. The 3-layer runner uses automatically allocated addresses, causing Vector operand regions to overlap across layers and triggering the same 512-byte fixed-write corruption that the workaround was designed to avoid.
+
+**Failing ops (VMUL gate\*up):** op14 (layer 0), op31 (layer 1), op48 (layer 2)
+- Each reports `cycles=23814` (execution completed, result incorrect).
+- Evidence: `build/wave1/w1-3-rtl-op-summary.json` (45/51 PASS, 6 FAIL).
+- Detail report: `docs/vector-workaround-3layer-issue.md`.
+
+**Why 3-layer exposes the gap:** 3 × 17 = 51 ops share the SRAM address space. Manual isolation (0x800 spacing per Vector op) is not practical at 51-op scale. This proves the workaround is not a viable long-term strategy.
+
 #### Verification
 
-FM-SOC-032 与 FM-SOC-10X 在 P4 回归中 PASS（2/2 active, 3/3 SKIP）；`run_p4_full_rtl.sh` 报告 `PASS:2 SKIP:3 FAIL:0`。
+- Phase 4: FM-SOC-032 / FM-SOC-10X P4 regression PASS (2/2 active, 3/3 SKIP).
+- Phase 5 W1.3: VMUL gate\*up (op14/31/48) FAIL in 3-layer forward pass.
+- **Path to close**: Fix `vector_top.v` or `vector_soc_wrapper.v` store-beat masking per `elements` byte count (see `docs/vector-workaround-3layer-issue.md` §4.1), then re-run W1.3 3-layer forward pass. Expected: all 3 VMUL ops PASS.
 
 ---
 
@@ -282,15 +295,54 @@ no additional RTL bug work.
 
 ---
 
-## Final Bug Statistics (2026-07-06)
+### BUG-RTL-SOC-007 — attn_weight op dispatch failure (cycles=0) in 3-layer forward pass
 
-### Total: 6 bugs (BUG-RTL-SOC-001 through BUG-RTL-SOC-006)
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-07 |
+| **Block** | W1.3 |
+| **Case** | 3-layer forward pass (51 ops, Qwen2.5-3B blk.0/1/2) |
+| **Severity** | Critical / Major |
+| **Type** | RTL / Firmware / Runner — under investigation |
+| **Status** | Open |
+
+#### Symptom
+
+In the W1.3 3-layer forward pass, three `attn_weight` ops (op07 layer 0, op24 layer 1, op41 layer 2) all report `cycles=0`, meaning the op never executed. The MMU configuration completed, CMD.START was written, but STATUS.BUSY was never asserted. Output at DRAM is either stale or zero. All other 48 ops in the forward pass (including MMUL, SFU softmax/RoPE/RMSNorm, Vector VRESID, DMA copies) execute correctly.
+
+Evidence:
+- `build/wave1/w1-3-rtl-op-summary.json`: op07/24/41 `"passed": false, "cycles": 0`
+- `docs/vector-workaround-3layer-issue.md` §2.3
+
+#### Root Cause — Under Investigation
+
+Three working hypotheses, not yet resolved:
+
+1. **Firmware ring buffer overflow**: The 51-op dispatch may overflow the 32-entry firmware command ring buffer. When the ring wraps, `attn_weight` commands (which arrive later in the per-layer sequence) may be silently dropped or written to a corrupted slot. The fact that all three `attn_weight` ops (one per layer, same position in the 17-op chain) fail identically is consistent with a deterministic ring-wrap collision.
+
+2. **Weight preload address out of bounds**: `attn_weight` reads a Q/K/V score tile from SRAM. The 3-layer runner's automatic SRAM/DRAM address allocation may place the weight pointer or operand address for `attn_weight` outside the valid range (e.g., overlapping with MMUL scratch space or exceeding the 4 MB SRAM window), causing the AXI read to return X or hang.
+
+3. **MMU CMD.START blocked**: A race condition similar to BUG-RTL-SOC-006's `start_hold` may block `CMD.START` from reaching the engine. The `attn_weight` op reuses the MXU datapath; if the MXU wrapper's START gating logic has a corner case for zero-cycle MMULs (score computation is a small K-dim matmul that may complete in a single tile), the START write may be swallowed.
+
+#### Fix
+
+**TBD** — root cause not yet identified.
+
+#### Verification
+
+**TBD** — depends on root cause. Expected: re-run W1.3 3-layer forward pass after fix, verify all 3 `attn_weight` ops report `cycles > 0` and outputs match Func Model golden.
+
+---
+
+## Final Bug Statistics (2026-07-07)
+
+### Total: 7 bugs (BUG-RTL-SOC-001 through BUG-RTL-SOC-007)
 
 ### By Severity
 
 | Severity | Count | Bug IDs |
 |----------|:-----:|---------|
-| Critical | 2 | BUG-RTL-SOC-001 (GLIBC ABI — Spike plugin), BUG-RTL-SOC-003 (missing `cb_m_arvalid` — SoC integration) |
+| Critical | 3 | BUG-RTL-SOC-001 (GLIBC ABI — Spike plugin), BUG-RTL-SOC-003 (missing `cb_m_arvalid` — SoC integration), BUG-RTL-SOC-007 (attn_weight dispatch — op never executes) |
 | Major | 4 | BUG-RTL-SOC-002 (DRAM 8 MB window), BUG-RTL-SOC-004 (SFU prefetch dropped), BUG-RTL-SOC-005 (X-prop from DRAM padding), BUG-RTL-SOC-006 (SFU start_hold race) |
 
 ### By Status
@@ -298,8 +350,8 @@ no additional RTL bug work.
 | Status | Count | Bug IDs |
 |--------|:-----:|---------|
 | Fixed | 4 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-006 |
-| Open | 1 | BUG-RTL-SOC-002 (DRAM 8 MB window — current cases avoid the region) |
-| Worked around | 1 | BUG-RTL-SOC-005 (SRAM scratch buffers + full SRAM/DRAM preload) |
+| Open | 2 | BUG-RTL-SOC-002 (DRAM 8 MB window — current cases avoid the region), BUG-RTL-SOC-007 (attn_weight dispatch — under investigation) |
+| Re-opened | 1 | BUG-RTL-SOC-005 (X-prop from DRAM padding — workaround broke at 51-op scale) |
 
 ### By Module
 
@@ -309,14 +361,16 @@ no additional RTL bug work.
 | RTL: SoC integration (`caduceus_soc_spike_top.v`) | 1 | BUG-RTL-SOC-003 |
 | RTL: SFU wrapper (`sfu_soc_wrapper.v`) | 2 | BUG-RTL-SOC-004, BUG-RTL-SOC-006 |
 | RTL: SFU/Vector wrapper X-propagation | 1 | BUG-RTL-SOC-005 |
+| RTL: Vector wrapper / Firmware dispatch | 1 | BUG-RTL-SOC-007 |
 
 ### Quality Metrics
 
 | Metric | Value |
 |--------|:-----:|
-| Total RTL bugs found during substitution | 6 |
-| Bugs fixed in RTL source | 4 (66.7%) |
-| Bugs with firmware/environment workarounds | 2 (33.3%) |
+| Total RTL bugs found during substitution | 7 |
+| Bugs fixed in RTL source | 4 (57.1%) |
+| Bugs with firmware/environment workarounds | 1 (14.3%) |
+| Open / under investigation | 1 (14.3%) |
 | Ibex-specific bugs (full RTL CPU replacement) | 0 |
 | Regressions after fixes | 0 (27/27 active PASS on Spike, 33/33 PASS on Ibex) |
-| Re-opened bugs | 0 |
+| Re-opened bugs | 1 — BUG-RTL-SOC-005 (workaround broke at 51-op scale) |
