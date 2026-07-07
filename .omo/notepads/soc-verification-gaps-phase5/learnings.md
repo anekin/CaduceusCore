@@ -736,3 +736,11 @@ through the im2col→INT4-per-block GEMM path.
 ### Regression
 - `PYTHONPATH=sim python -m pytest sim/tests/test_cv_mobilenetv3.py -v`: 1 passed
 - Full test suite (673 passed, excluding pre-existing test_engines.py failure): no regressions
+
+## [2026-07-07] Lesson: Workaround today costs more debug tomorrow
+
+**Observation**: In Phase 4 (single-layer FM-SOC-027), the Vector wrapper's fixed 512-byte write corruption was masked by manually spacing SRAM addresses 0x800 apart. The case "passed" and we moved on. In Phase 5 W1.3 (3-layer, 51 ops), the same root cause resurfaced because automatic address allocation at 51-op scale makes manual isolation impossible. The price: re-debugging the same symptom, re-generating vectors, re-running hour-long VCS simulations, and now fixing the RTL under schedule pressure.
+
+**Rule**: If a failure is traced to an RTL bug (not a testbench or environment issue), do **not** close the task with a firmware/runner workaround. Workarounds are acceptable only as a temporary bridge while an RTL fix is in flight, and must be tracked as an open bug with a committed fix date.
+
+**Action**: BUG-RTL-SOC-005 was re-opened and must be fixed in `rtl/wrapper/vector_soc_wrapper.v` / `rtl/vector/vector_top.v` store-beat masking before W1.3 can be declared complete.

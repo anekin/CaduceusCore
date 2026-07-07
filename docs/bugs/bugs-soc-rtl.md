@@ -272,6 +272,8 @@ The Phase 5 W1.3 3-layer forward pass (51 ops) exposed that the SRAM scratch-buf
 
 **Why 3-layer exposes the gap:** 3 × 17 = 51 ops share the SRAM address space. Manual isolation (0x800 spacing per Vector op) is not practical at 51-op scale. This proves the workaround is not a viable long-term strategy.
 
+**Lesson learned**: A layer-1 workaround that "passes" the immediate case but leaves the RTL root cause unfixed will be paid back with interest at layer 3. Once an RTL root cause is identified, the default path is to fix the RTL; firmware/runner workarounds are only acceptable as a temporary bridge with an open bug and committed fix date.
+
 #### Verification
 
 - Phase 4: FM-SOC-032 / FM-SOC-10X P4 regression PASS (2/2 active, 3/3 SKIP).
