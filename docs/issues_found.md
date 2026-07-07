@@ -307,12 +307,12 @@ All test results and evidence files are in `logs/` and `.omo/evidence/`.
 
 | Date | Entry | Description | Reference | Status |
 |------|-------|-------------|-----------|--------|
-| 2026-07-06 | **RELU not handled in GoldenExecutor.step()** | RELU (OpCode 0x04) is defined in `isa.py` and routed through the SFU timing model in `npu_sim.py`, but `GoldenExecutor.step()` has no RELU branch. Calling step() with RELU raises `ValueError`. SFU RTL has a RELU op (SFU_OP_RELU=3 in `npu-regmap.h`) but no Func Model golden to compare against. | `sim/engine/isa.py` L18; `sim/golden_executor.py` L1355-1356; `firmware/npu-regmap.h` L54 | OPEN |
-| 2026-07-06 | **AVGPOOL not handled in GoldenExecutor.step()** | AVGPOOL (OpCode 0x08) defined in ISA, used in CV models (downsampling), but not implemented in `GoldenExecutor.step()`. No golden reference for 2x2 average pooling exists. | `sim/engine/isa.py` L22; `sim/golden_executor.py` L1355-1356; `docs/NPU硬件详细架构设计v0.1.md` §指令集 | OPEN |
-| 2026-07-06 | **MAXPOOL not handled in GoldenExecutor.step()** | MAXPOOL (OpCode 0x07) defined in ISA for CV downsampling, but not implemented in `GoldenExecutor.step()`. No golden reference for 2x2 max pooling. RTL also lacks MAXPOOL verification. | `sim/engine/isa.py` L21; `sim/golden_executor.py` L1355-1356; `docs/NPU硬件详细架构设计v0.1.md` §指令集 | OPEN |
-| 2026-07-06 | **20/23 opcodes handled — 3 missing for CV E2E** | Overall ISA status: 20 of 23 total opcodes handled in `GoldenExecutor.step()`. The 3 missing (RELU, AVGPOOL, MAXPOOL) are all CV-specific operators. LLM-only workloads (MMUL + SFU + Vector + DMA) are fully covered. | `docs/rtl_development_plan.md` §8; `sim/engine/isa.py` L12-L39 | OPEN — LLM path complete, CV path blocked |
+| 2026-07-06 | **RELU not handled in GoldenExecutor.step()** | RELU (OpCode 0x04) is defined in `isa.py` and routed through the SFU timing model in `npu_sim.py`, but `GoldenExecutor.step()` has no RELU branch. Calling step() with RELU raises `ValueError`. SFU RTL has a RELU op (SFU_OP_RELU=3 in `npu-regmap.h`) but no Func Model golden to compare against. | `sim/engine/isa.py` L18; `sim/golden_executor.py` L1355-1356; `firmware/npu-regmap.h` L54 | **RESOLVED (W5.4)** — `GoldenSFU.relu_hw()` implemented; 5 RELU pytest cases pass |
+| 2026-07-06 | **AVGPOOL not handled in GoldenExecutor.step()** | AVGPOOL (OpCode 0x08) defined in ISA, used in CV models (downsampling), but not implemented in `GoldenExecutor.step()`. No golden reference for 2x2 average pooling exists. | `sim/engine/isa.py` L22; `sim/golden_executor.py` L1355-1356; `docs/NPU硬件详细架构设计v0.1.md` §指令集 | **RESOLVED (W5.4)** — `GoldenExecutor.step()` handles OP_AVGPOOL; 6 AVGPOOL pytest cases pass |
+| 2026-07-06 | **MAXPOOL not handled in GoldenExecutor.step()** | MAXPOOL (OpCode 0x07) defined in ISA for CV downsampling, but not implemented in `GoldenExecutor.step()`. No golden reference for 2x2 max pooling. RTL also lacks MAXPOOL verification. | `sim/engine/isa.py` L21; `sim/golden_executor.py` L1355-1356; `docs/NPU硬件详细架构设计v0.1.md` §指令集 | **RESOLVED (W5.4)** — `GoldenExecutor.step()` handles OP_MAXPOOL; 4 MAXPOOL pytest cases pass |
+| 2026-07-06 | **20/23 opcodes handled — 3 missing for CV E2E** | Overall ISA status: 20 of 23 total opcodes handled in `GoldenExecutor.step()`. The 3 missing (RELU, AVGPOOL, MAXPOOL) are all CV-specific operators. LLM-only workloads (MMUL + SFU + Vector + DMA) are fully covered. | `docs/rtl_development_plan.md` §8; `sim/engine/isa.py` L12-L39 | **RESOLVED (W5.4)** now 23/23 opcodes handled in `GoldenExecutor.step()`; `sim/tests/test_pool_relu_opcodes.py` passes 15/15 |
 
-<!-- Updated after W3 or W5 ISA gap closure -->
+<!-- Updated after W5.4 — all 4 entries resolved; 23/23 ISA opcodes handled in GoldenExecutor.step(); sim/tests/test_pool_relu_opcodes.py passes 15/15 -->
 
 ### PCIe TLP Limitation
 
@@ -341,7 +341,7 @@ All test results and evidence files are in `logs/` and `.omo/evidence/`.
 | Section | Total Items | LLM Path Blocked | CV Path Blocked | Depends On |
 |---------|:-----------:|:----------------:|:----------------:|------------|
 | CV Model Gaps | 5 | No | Yes | W3 (MobileNet E2E), W5 (pooling ops) |
-| ISA Opcode Gaps | 4 | No (20/20 LLM ops handled) | Yes (3 CV ops missing) | W5 T30 (GoldenExecutor pool/relu) |
+| ISA Opcode Gaps | 4 | No (20/20 LLM ops handled) | No (resolved W5.4, now 23/23 handled) | W5.4 (GoldenExecutor pool/relu impl + 15/15 pytest) |
 | PCIe TLP Limitation | 4 | Partial (TC2 blocks PCIe read verification) | Partial | W3 T16 (TC2 fix) |
 | SRAM Peak Concerns | 4 | Partial (tile streaming not stress-tested) | Yes | W1 (36-layer), W4 (perf) |
 | **Total** | **17** | **2 blocked** | **12 blocked** | — |
