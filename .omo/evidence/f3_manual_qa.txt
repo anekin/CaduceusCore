@@ -1,0 +1,73 @@
+============================================================
+CaduceusCore — Final Verification Wave F3: Manual QA Report
+============================================================
+Timestamp: 2026-07-07 08:07 UTC
+Branch:    feat_pcie
+Server:    sz0002 (func model), sz0001 (cocotb/VCS)
+============================================================
+
+1. COMMANDS RUN
+============================================================
+
+A. Func Model PCIe DMA pytest (sz0002, pure Python):
+   cd /home/prj/zhengs/wa2_caduceuscore/CaduceusCore
+   PYTHONPATH=sim python3 -m pytest sim/tests/test_pcie_dma_fm.py -v 2>&1 \
+     | tee .omo/evidence/fm_pcie_dma.log
+
+B. Cocotb PCIe DMA E2E (sz0001, VCS + cocotb):
+   ssh sz0001
+   cd /home/prj/zhengs/wa2_caduceuscore/CaduceusCore
+   source /NAS/Tools/EDA/env/modules.bash
+   module load vcs/vcs_2023.12sp2
+   cd sim/regression
+   COCOTB_PY_ENV=/NAS/Tools/anaconda3/envs/py3.11 make run_pcie_dma_e2e 2>&1 \
+     | tee /home/prj/zhengs/wa2_caduceuscore/CaduceusCore/.omo/evidence/cocotb_e2e.log
+
+Note: Func model test run on sz0002 (pytest not available on offline sz0001).
+      Both servers share the same repo via NFS. Test is pure Python — no
+      EDA dependency. Cocotb tests require VCS and run on sz0001.
+
+2. RESULTS
+============================================================
+
+A. Func Model PCIe DMA pytest: 8/8 PASSED (0.07s)
+   test_tc1_single_mwr_256            PASS
+   test_tc2_mrd_split_completion      PASS
+   test_tc3_unaligned_transfer        PASS
+   test_tc4_max_length_4096           PASS
+   test_tc5_concurrent_read_write     PASS
+   test_tc6_completion_error_ur       PASS
+   test_tc7_axi_dec_error             PASS
+   test_tag_enums_distinct            PASS
+
+B. Cocotb PCIe DMA E2E: 6/6 PASSED
+   test_tc_soc1_pcie_dma_read         PASS — DMA read OK (backdoor=True, cpld=True)
+   test_tc_soc2_pcie_dma_write        PASS — DMA write OK (backdoor=True, tlp=True)
+   test_tc_soc3_concurrent_bridge_dma PASS — concurrent DMA+crossbar OK
+   test_tc_soc4_invalid_descriptor    PASS — invalid descriptor detected
+   test_tc_soc5_host_ur_response      PASS — UR response detected
+   test_tc_soc6_dma_irq               PASS — DMA IRQ asserted (PENDING=0x0080)
+
+   XML verification (all 6 result files):
+   - Each <testcase> present: YES
+   - <failure> or <error> tags: 0/6 (none)
+   - Results files:
+     sim/regression/pcie_dma_test_tc_soc1_pcie_dma_read_results.xml
+     sim/regression/pcie_dma_test_tc_soc2_pcie_dma_write_results.xml
+     sim/regression/pcie_dma_test_tc_soc3_concurrent_bridge_dma_results.xml
+     sim/regression/pcie_dma_test_tc_soc4_invalid_descriptor_results.xml
+     sim/regression/pcie_dma_test_tc_soc5_host_ur_response_results.xml
+     sim/regression/pcie_dma_test_tc_soc6_dma_irq_results.xml
+
+3. TOTAL: 14/14 tests PASSED (8 func model + 6 cocotb E2E)
+============================================================
+
+4. VERDICT: APPROVE
+============================================================
+All tests pass with zero failures. No modification needed.
+Func model covers PCIe TLP generation, DMA descriptor chain,
+completion handling, error detection, and AXI protocol.
+Cocotb E2E validates the same paths through the RTL SoC
+with full PCIe EP wrapper, AXI crossbar, DMA engine, and
+INTC interrupt controller in the loop.
+============================================================

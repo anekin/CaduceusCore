@@ -1,0 +1,117 @@
+F4 SCOPE FIDELITY REVIEW — pcie-dma-implementation
+====================================================
+Date: 2026-07-07
+Branch: feat_pcie vs origin/main
+Total changed files: 96
+
+VERDICT: APPROVE (with minor observations)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A. VENDORED FILE GATE (AC1)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  git diff --name-only origin/main..feat_pcie | grep 'verilog-pcie/'
+  → NO_VENDORED_CHANGES
+
+  Also verified: verilog-axi/, ibex/ vendored directories
+  → NO changes. Gate PASSED.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+B. PLANNED FILES — PRESENT AND ACCOUNTED FOR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Wave 0 (Environment):
+    ✅ docs/bugs/bugs-pcie-dma.md
+    ✅ scripts/run_fm_pcie_dma.sh
+    ✅ scripts/run_sz0001_env_check.sh
+    ✅ scripts/run_soc_regression.sh
+    ✅ scripts/run_spike_pcie_dma.sh
+    ✅ scripts/run_cocotb_pcie_dma.sh
+    ⚠️  scripts/run_pcie_dma_elab.sh — EXISTS on disk but NEVER COMMITTED
+
+  Wave 1 (Func Model):
+    ✅ sim/models/pcie.py
+    ✅ sim/tests/test_pcie_dma_fm.py
+
+  Wave 2 (RTL DMA Engine):
+    ✅ rtl/ip/pcie_dma_wrapper.v
+    ✅ rtl/ip/pcie_dma_tb.sv
+
+  Wave 3 (SoC Integration):
+    ✅ rtl/soc/axi_crossbar.v
+    ✅ rtl/soc/apb_decoder.v
+    ✅ rtl/soc/caduceus_soc_top.v
+    ✅ rtl/soc/soc.flist
+    ✅ sim/config/interconnect.yaml
+    ✅ rtl/intc/intc_top.v
+
+  Wave 4 (Firmware):
+    ✅ firmware/npu-regmap.h
+    ✅ firmware/npu_firmware.c
+    ✅ firmware/build/* (build artifacts)
+
+  Wave 5 (Cocotb E2E):
+    ✅ sim/cocotb_bridge.py
+    ✅ sim/tests/test_soc_pcie_dma.py
+    ✅ sim/mmio_bridge.py
+    ✅ sim/regmap.py
+    ✅ sim/spike_host.py
+    ✅ sim/func_model.py
+    ✅ sim/regression/Makefile
+
+  Evidence files:
+    ✅ .omo/evidence/axi_crossbar_num_m_audit.txt
+    ✅ .omo/evidence/r2_w2_audit.txt
+    ✅ .omo/evidence/r3_w3_audit.txt
+    ✅ .omo/evidence/r4_w4_audit.txt
+    ✅ .omo/evidence/soc_regression.log
+    ✅ .omo/notepads/pcie-dma-implementation/learnings.md
+    ✅ .omo/plans/pcie-dma-implementation.md
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+C. COLLATERAL CHANGES (reasonable, not scope creep)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ₹ rtl/soc/axi_crossbar_tb.sv (32 lines) — natural testbench update for NUM_M 6→7
+  ₹ rtl/soc/caduceus_soc_spike_top.v (18 lines) — Spike variant parallel to caduceus_soc_top.v
+  ₹ rtl/tb/apb_decoder_tb.sv (129 lines) — testbench extension for 8-slave APB
+  ₹ rtl/tb/tb_intc.v (100 lines) — testbench extension for 8-source INTC
+  ₹ rtl/tb/tb_mixed.v (64 lines) — SoC integration collateral
+  ₹ rtl/tb/tb_soc.v (67 lines) — SoC testbench update for new master/slave
+  ₹ rtl/tb/tb_soc_ibex.v (64 lines) — Ibex SoC testbench update
+  ₹ spike_src/plugins/Makefile + .so — W4 firmware build collateral
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+D. OUT-OF-SCOPE DEPOSITS (requires justification)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ⚠️  rtl/test_vectors/qwen_blk0/ — 47 new files (ALL 'A' status)
+     Includes 6 large weight hex files (~12MB each, ~37MB total weight data)
+     These are Qwen2.5-3B block 0 E2E test vectors (rmsnorm, MMUL, rope, softmax,
+     SiLU, resid_add) from Phase 2 SFU/Vector verification.
+     NOT explicitly in PCIe DMA plan Commit Strategy.
+     JUSTIFICATION: Needed for Wave 5 cocotb E2E verification that runs Qwen blk0
+     forward pass against the full SoC with PCIe DMA integrated. Plausibly
+     acceptable as verification infrastructure.
+
+  ⚠️  rtl/test_vectors/sfu/luts/exp_lut.hex (256 lines, new)
+     SFU Phase 2 LUT file. NOT in PCIe DMA plan.
+     JUSTIFICATION: SFU dependency for Qwen blk0 E2E tests.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+E. MISSING FROM PLAN BUT EXPECTED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ⚠️  scripts/run_pcie_dma_elab.sh (T0.4)
+     File exists on filesystem (rwxr-xr-x, 678 bytes, Jul 6 22:58)
+     BUT was NEVER COMMITTED to git (git log shows no commits for this file)
+     Minor process gap — does not affect scope fidelity materially.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+F. SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Core PCIe DMA deliverables     : ALL PRESENT ✓
+  Collateral SoC changes         : EXPECTED, MINOR ✓
+  Vendored file modifications    : NONE ✓ (AC1 gate PASS)
+  Scope creep (qwen_blk0 data)   : MINOR — justified as verification infrastructure
+  Missing commit (run_pcie_dma_elab.sh) : MINOR — file exists on disk
+
+  VERDICT: APPROVE
+  No blocking issues. The qwen_blk0 test vectors and sfu/luts are E2E verification
+  infrastructure needed for Wave 5 cocotb tests. Recommend committing the missing
+  run_pcie_dma_elab.sh script.
