@@ -1,0 +1,55 @@
+=== Firmware Hex Fix — Evidence ===
+Date: 2026-07-06T07:01:32Z
+
+--- First 8 words at offset 0x00 (vectors trap table, zero-padded) ---
+00000000
+00000000
+00000000
+00000000
+00000000
+00000000
+00000000
+00000000
+
+--- First 8 words at offset 0x80 (firmware _start code) ---
+00010297
+f8028293
+00010317
+f7830313
+00001397
+a8838393
+0062dc63
+0003ae03
+
+--- Disassembly of _start at 0x80 ---
+00000080 <_start>:
+  80:	00010297          	auipc	t0,0x10
+  84:	f8028293          	addi	t0,t0,-128 # 10000 <g_cmd_count>
+  88:	00010317          	auipc	t1,0x10
+  8c:	f7830313          	addi	t1,t1,-136 # 10000 <g_cmd_count>
+  90:	00001397          	auipc	t2,0x1
+  94:	a8838393          	addi	t2,t2,-1400 # b18 <_data_lma>
+  98:	0062dc63          	bge	t0,t1,b0 <_start+0x30>
+  9c:	0003ae03          	lw	t3,0(t2)
+  a0:	01c2a023          	sw	t3,0(t0)
+  a4:	00428293          	addi	t0,t0,4
+  a8:	00438393          	addi	t2,t2,4
+  ac:	fedff06f          	j	98 <_start+0x18>
+  b0:	00010297          	auipc	t0,0x10
+  b4:	f5028293          	addi	t0,t0,-176 # 10000 <g_cmd_count>
+  b8:	00010317          	auipc	t1,0x10
+  bc:	f4c30313          	addi	t1,t1,-180 # 10004 <__bss_end>
+  c0:	0062d863          	bge	t0,t1,d0 <_start+0x50>
+  c4:	0002a023          	sw	zero,0(t0)
+  c8:	00428293          	addi	t0,t0,4
+
+--- Pytest result ---
+.                                                                        [100%]
+1 passed in 0.10s
+
+--- Root Cause ---
+The hex file was valid all along. The linker script (firmware/link.ld)
+reserves 0x00-0x7f for a RISC-V vectored trap table (FILL(0x00)), placing
+_start at 0x80. The Ibex reset vector is at boot_addr + 0x80. The test
+asserted at 0x0, missing the 0x80 offset. Fix: test now checks 0x0 for
+trap table zeros and 0x80 for first non-zero instruction.

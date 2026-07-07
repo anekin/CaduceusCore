@@ -1,0 +1,8 @@
+# W1.3: Qwen2.5-3B 3-Layer SoC RTL Forward Pass
+# Generated: 2026-07-08 04:23:48
+
+TESTS=3 PASS=3 FAIL=0
+
+[PASS] Layer 0: cos_sim=1.000000, max_rel_err=0.00e+00, max_abs_err=0.00e+00, max_abs_err_vs_rounded=5.00e-01
+[PASS] Layer 1: cos_sim=1.000000, max_rel_err=0.00e+00, max_abs_err=0.00e+00, max_abs_err_vs_rounded=5.00e-01
+[PASS] Layer 2: cos_sim=1.000000, max_rel_err=0.00e+00, max_abs_err=0.00e+00, max_abs_err_vs_rounded=5.00e-01

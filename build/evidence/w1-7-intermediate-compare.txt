@@ -1,0 +1,25 @@
+# W1.7: Multi-op back-to-back intermediate result comparison (blk.0 chain)
+# Generated: 2026-07-08 05:27:16
+
+TESTS=18 PASS=18 FAIL=0
+
+[PASS] op00 RMSNorm pre-attn: opcode=RMSNORM, max_abs=2.266602
+[PASS] op01 Q_proj: opcode=MMUL, cos_sim=1.000000, max_abs=0.000992
+[PASS] op02 K_proj: opcode=MMUL, cos_sim=1.000000, max_abs=0.000661
+[PASS] op03 V_proj: opcode=MMUL, cos_sim=1.000000, max_abs=0.000154
+[PASS] op04 RoPE: opcode=ROPE, max_abs=0.031250
+[PASS] op05 attn_score: opcode=MMUL, cos_sim=1.000000, max_abs=0.603516
+[PASS] op06 attn_softmax: opcode=SOFTMAX, max_abs=0.000068
+[PASS] op07 attn_weight: opcode=MMUL, cos_sim=1.000000, max_abs=0.000326
+[PASS] op08 O_proj: opcode=MMUL, cos_sim=1.000000, max_abs=0.000428
+[PASS] op09 VRESID pre-attn: opcode=VRESID, int32_mismatch_count=0
+[PASS] op10 RMSNorm post-attn: opcode=RMSNORM, max_abs=28.273926
+[PASS] op11 gate: opcode=MMUL, cos_sim=1.000000, max_abs=0.000557
+[PASS] op12 up: opcode=MMUL, cos_sim=1.000000, max_abs=0.000509
+[PASS] op13 SiLU: opcode=SILU, max_abs=0.000977
+[PASS] op14 VMUL gate*up: opcode=VMUL, int32_mismatch_count=0
+[PASS] op15 down: opcode=MMUL, cos_sim=1.000000, max_abs=0.000251
+[PASS] op16 VRESID post-FFN: opcode=VRESID, int32_mismatch_count=0
+[PASS] op17 VCONV_F16_I32: opcode=VCONV_F16_I32
+
+ANTI-VACUOUS: PASS (deliberate corruption detected)

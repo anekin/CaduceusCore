@@ -1,0 +1,22 @@
+==================================================
+Func Model L2 Signoff — Dtype Closure Matrix + True Op Chains
+Host: sz0001
+Date: 2026-07-08T00:24:43+0800
+Commit: a084bfe
+==================================================
+
+============================= test session starts ==============================
+platform linux -- Python 3.12.4, pytest-7.4.4, pluggy-1.0.0 -- /NAS/Tools/anaconda3/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.2.0
+collecting ... collected 4 items
+
+sim/tests/test_op_dtype_chains.py::TestChainInt32ToFp16::test_mmul_softmax_chain PASSED [ 25%]
+sim/tests/test_op_dtype_chains.py::TestChainFp16ToInt32::test_softmax_vresid_chain PASSED [ 50%]
+sim/tests/test_op_dtype_chains.py::TestChainFp16ToInt8::test_gelu_mmul_chain PASSED [ 75%]
+sim/tests/test_op_dtype_chains.py::TestChainNoConversionWhenDtypesMatch::test_gelu_softmax_chain PASSED [100%]
+
+============================== 4 passed in 0.10s ===============================
+
+VERDICT: PASS — all dtype-chain cases passed.

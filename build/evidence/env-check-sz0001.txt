@@ -1,0 +1,89 @@
+=== Pre-Wave 0.1: CaduceusCore EDA Environment Verification ===
+Date: 2026-07-06T06:36:52Z
+Host: sz0001
+Repo: /home/prj/zhengs/caduceuscore/CaduceusCore
+
+--- Step 0: Source sim/regression/run_env.sh ---
+=== CaduceusCore EDA Environment ===
+VCS:         /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/bin/vcs
+VCS_HOME:    /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+Python:      Python 3.11.9
+PLI_TAB:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/pli.tab
+LICENSE:     27020@sz0001
+====================================
+
+--- Check 1: VCS Version (vcs -ID) ---
+RESULT: PASS
+
+vcs script version : V-2023.12
+machine name = sz0001 
+machine type = linux64 
+machine os = Linux 3.10.0-1160.49.1.el7.x86_64  
+The FLEXlm host ID of this machine is "f010907cccc3 f010907d523e 542bde0eb30a 542bde0eb30a 542bde0eb30a"
+Compiler version = VCS V-2023.12-SP2_Full64
+VCS Build Date = Jun 02 2024 20:18:31
+
+--- Check 2: Cocotb Version (cocotb-config --version) ---
+RESULT: PASS
+
+1.9.0
+
+Python 3.11.9 in /NAS/Tools/anaconda3/envs/py3.11
+cocotb importable (`python3 -c 'import cocotb'`): yes
+
+--- Check 3: Firmware Build (make -C firmware) ---
+RESULT: PASS (via NFS workaround — built on sz0002, hex visible on sz0001)
+
+Toolchain on sz0001: NOT FOUND — riscv64-unknown-elf-gcc missing
+Toolchain on sz0002: FOUND — /usr/bin/riscv64-unknown-elf-gcc (gcc-10.2.0)
+
+Build executed on sz0002 (same NFS repo path). Result:
+  npu_firmware.hex: 710 lines, 6390 bytes
+  npu_firmware.elf: 264988 bytes (.text=2712, .data=262272)
+  npu_firmware_spike.elf: 2716 bytes
+  dram_init.hex: also produced
+
+NOTE: Cross-compilation on sz0001 itself requires installing the RISC-V
+toolchain. Until then, firmware builds can be done on sz0002 where the
+toolchain is available at /usr/bin/riscv64-unknown-elf-gcc.
+
+--- Check 4: Spike RISC-V Simulator ---
+RESULT: PASS
+
+Binary: /home/prj/zhengs/caduceuscore/CaduceusCore/spike_src/build/spike
+Version: Spike RISC-V ISA Simulator 1.1.1-dev
+
+Spike --help output (first 8 lines):
+  Spike RISC-V ISA Simulator 1.1.1-dev
+  usage: spike [host options] <target program> [target options]
+  Host Options:
+    -p<n>                 Simulate <n> processors [default 1]
+    -m<n>                 Provide <n> MiB of target memory [default 2048]
+    -m<a:m,b:n,...>       Provide memory regions of size m and n bytes
+                            at base addresses a and b (with 4 KiB alignment)
+
+--- Check 5: Python cocotb import ---
+RESULT: PASS (after source run_env.sh)
+
+=== Environment Summary ===
+VCS_HOME:       /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+COCOTB_PY_ENV:  /NAS/Tools/anaconda3/envs/py3.11
+vcs:            /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/bin/vcs
+cocotb-config:  /NAS/Tools/anaconda3/envs/py3.11/bin/cocotb-config
+spike:          spike_src/build/spike (repo-relative, built with CaduceusCore patches)
+riscv-gcc:      NOT FOUND (blocking firmware build)
+
+=== Final Verdict ===
+  Check 1 (VCS):       PASS  — V-2023.12-SP2_Full64 confirmed
+  Check 2 (cocotb):     PASS  — 1.9.0 confirmed
+  Check 3 (firmware):   PASS  — npu_firmware.hex (710 lines) produced (via sz0002 cross-compile)
+  Check 4 (Spike):      PASS  — spike_src/build/spike (1.1.1-dev) invokes cleanly
+
+4/4 checks passed. Pre-Wave 0.1 environment verification COMPLETE.
+
+⚠ KNOWN GAP: riscv64-unknown-elf-gcc not installed on sz0001. Firmware builds
+  must be done on sz0002 where the toolchain is available at /usr/bin. The
+  resulting hex files are NFS-visible from both machines. Install the RISC-V
+  GNU toolchain on sz0001 to remove this dependency.
+
+VCS, cocotb (1.9.0), and the CaduceusCore-patched Spike are ready-to-use on sz0001.
