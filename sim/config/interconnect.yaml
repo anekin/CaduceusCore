@@ -9,7 +9,7 @@
 # or other).
 #
 # Port numbering matches the crossbar instantiation order:
-#   Masters: Ibex(0) / MXU(1) / SFU(2) / Vector(3) / DMA(4) / PCIe(5)
+#   Masters: Ibex(0) / MXU(1) / SFU(2) / Vector(3) / DMA(4) / PCIe(5) / PCIe_DMA(6)
 #   Slaves:  SRAM(0) / DRAM(1)
 #
 # Address space (unified, from SoC plan):
@@ -34,7 +34,7 @@ interconnect:
   addr_width: 32             # Address bus width in bits
   m_id_width: 6              # Per-master AXI ID width (bits)
   msel_width: 3              # Master-select field width (ceil(log2(NUM_M)))
-  num_masters: 6             # Number of AXI4 master ports
+  num_masters: 7             # Number of AXI4 master ports
   num_slaves: 2              # Number of AXI4 slave ports
 
   # ── Slave ports ────────────────────────────────────────────────────────────
@@ -104,6 +104,14 @@ interconnect:
       data_width: 512
       axi_id_width: 6
       priority: 1
+      intended_slaves: [SRAM, DRAM]
+
+    - id: 6
+      name: PCIe_DMA
+      description: "PCIe DMA engine (NPU→host autonomous descriptor-based DMA)"
+      data_width: 512
+      axi_id_width: 6
+      priority: 2
       intended_slaves: [SRAM, DRAM]
 
   # ── Address routing table ──────────────────────────────────────────────────

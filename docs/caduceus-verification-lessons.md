@@ -1,3 +1,4 @@
+> **补充**: 见 [PCIe DMA 规划增量经验](pcie-dma-planning-lessons.md)（2026-07, 7 条新原则）
 # 芯片验证设计原则 — 来自 CaduceusCore 的 14 条经验
 
 > **版本**: v5 | **日期**: 2026-07-05

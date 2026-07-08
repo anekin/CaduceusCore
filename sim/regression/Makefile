@@ -8,7 +8,7 @@
 #
 # Targets:
 #   all               — Run all regression tests
-#   run_apb_smoke     — APB decoder smoke test (7-slave select + pslverr)
+#   run_apb_smoke     — APB decoder smoke test (8-slave select + pslverr)
 #   run_intc_test     — INTC 7-source interrupt controller test
 #   run_dma_test      — DMA wrapper transfer test
 #   run_crossbar_stress — AXI4 crossbar concurrent stress (≥10k cycles)
@@ -123,7 +123,7 @@ all: run_apb_smoke run_intc_test run_dma_test run_crossbar_stress \
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# run_apb_smoke — APB Decoder (7-slave select + pslverr)
+# run_apb_smoke — APB Decoder (8-slave select + pslverr)
 # ═══════════════════════════════════════════════════════════════════════════
 
 APB_SRC := $(SOC_DIR)/apb_decoder.v $(TB_DIR)/apb_decoder_tb.sv
@@ -768,6 +768,58 @@ run_vector_vconv_f16_i32: $(VECTOR_SIMV)
 		echo "$(GREEN)VECTOR_F16_I32: PASS$(NC)" || \
 		(echo "$(RED)VECTOR_F16_I32: FAIL$(NC)" && exit 1)
 
+# ═══════════════════════════════════════════════════════════════════════════
+# run_pcie_dma_e2e — Cocotb PCIe DMA E2E Tests (T5.2)
+# ═══════════════════════════════════════════════════════════════════════════
+
+.PHONY: run_pcie_dma_e2e
+run_pcie_dma_e2e: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[PCIE_DMA_E2E] Running PCIe DMA E2E tests (6 TCs)...$(NC)"
+	@echo "$(YELLOW)[PCIE_DMA_E2E] Using cocotb env: $(COCOTB_PY_ENV)$(NC)"
+	@FAILED=0; \
+	PASSED=0; \
+	TOTAL=0; \
+	EVIDENCE_DIR="$(REPO_ROOT)/.omo/evidence"; \
+	mkdir -p "$$EVIDENCE_DIR"; \
+	LOG_FILE="$$EVIDENCE_DIR/cocotb_e2e.log"; \
+	for tc in test_tc_soc1_pcie_dma_read test_tc_soc2_pcie_dma_write \
+	         test_tc_soc3_concurrent_bridge_dma test_tc_soc4_invalid_descriptor \
+	         test_tc_soc5_host_ur_response test_tc_soc6_dma_irq; do \
+	    TOTAL=$$((TOTAL + 1)); \
+	    echo "$(YELLOW)[PCIE_DMA_E2E] Running $$tc...$(NC)"; \
+	    TMPLOG=$$(mktemp); \
+	    cd $(REPO_ROOT)/.. && \
+	        LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+	        PYTHONPATH=$(REPO_ROOT) MODULE=sim.tests.test_soc_pcie_dma TESTCASE=$$tc \
+	        BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex \
+	        TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+	        PYTHONIOENCODING=utf-8 \
+	        COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/pcie_dma_$${tc}_results.xml \
+	        ./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
+	        +BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee "$$TMPLOG" ; \
+	    cat "$$TMPLOG" >> "$$LOG_FILE" ; \
+	    XML_FILE="$(REPO_ROOT)/sim/regression/pcie_dma_$${tc}_results.xml" ; \
+	    if [ -f "$$XML_FILE" ]; then \
+	        if grep -q '<testcase' "$$XML_FILE" && ! grep -q '<failure\|<error' "$$XML_FILE"; then \
+	            echo "$(GREEN)[PCIE_DMA_E2E] $$tc: PASS$(NC)" ; \
+	            PASSED=$$((PASSED + 1)) ; \
+	        else \
+	            echo "$(RED)[PCIE_DMA_E2E] $$tc: FAIL (cocotb XML reports failure)$(NC)" ; \
+	            FAILED=$$((FAILED + 1)) ; \
+	        fi ; \
+	    else \
+	        echo "$(RED)[PCIE_DMA_E2E] $$tc: FAIL (no results XML file)$(NC)" ; \
+	        FAILED=$$((FAILED + 1)) ; \
+	    fi ; \
+	    rm -f "$$TMPLOG" ; \
+	done ; \
+	echo "" ; \
+	if [ $$FAILED -eq 0 ]; then \
+	    echo "$(GREEN)PCIE_DMA_E2E: PASS — all $$PASSED/$$TOTAL tests passed$(NC)" ; \
+	else \
+	    echo "$(RED)PCIE_DMA_E2E: FAIL — $$PASSED/$$TOTAL passed, $$FAILED failed$(NC)" && exit 1 ; \
+	fi
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Func Model SoC Case Targets (Todo 3: RTL SoC e2e test execution)
@@ -895,7 +947,7 @@ help:
 	@echo ""
 	@echo "Primary targets:"
 	@echo "  all                 — Run all regression tests"
-	@echo "  run_apb_smoke       — APB decoder (7-slave select)"
+	@echo "  run_apb_smoke       — APB decoder (8-slave select)"
 	@echo "  run_intc_test       — INTC 7-source controller"
 	@echo "  run_dma_test        — DMA wrapper transfer"
 	@echo "  run_crossbar_stress — AXI crossbar concurrent (>=10k cycles)"
@@ -908,6 +960,7 @@ help:
 	@echo "  run_e2e_dma_concurrent — Cocotb E2E-11 DMA+MXU concurrent"
 	@echo "  run_e2e_crossbar_stress — Cocotb E2E-12 6-master crossbar stress"
 	@echo "  run_vector_vconv_f16_i32 — Module-level Vector FP16→INT32 smoke test"
+	@echo "  run_pcie_dma_e2e     — Cocotb PCIe DMA E2E (6 tests: read/write/concurrent/error/UR/IRQ)"
 	@echo "  run_fm_soc_case CASE_ID=<id> — Run one FM-SOC-NNN case (default: FM-SOC-001)"
 	@echo "  run_fm_soc_001 ... run_fm_soc_008 — P0 cases FM-SOC-001 through FM-SOC-008"
 	@echo "    EXTRA_DEFINES=+define+USE_RTL_PCIE   — optional mixed-mode defines"

@@ -10,7 +10,7 @@
 //        for ≥10k cycles. All data correct, 0 timeout.
 //        Each master writes unique patterns to its own address region,
 //        then reads back and verifies. Repeats until ≥10k cycles elapsed.
-//   TC5: Round-robin fairness — all 6 masters queue for SRAM, verify all
+//   TC5: Round-robin fairness — all 7 masters queue for SRAM, verify all
 //        complete in bounded time (no starvation).
 //
 // Usage:
@@ -33,7 +33,7 @@ module axi_crossbar_tb;
     localparam int unsigned ADDR_WIDTH  = 32;
     localparam int unsigned M_ID_WIDTH  = 6;
     localparam int unsigned MSEL_WIDTH  = 3;
-    localparam int unsigned NUM_M       = 6;
+    localparam int unsigned NUM_M       = 7;
     localparam int unsigned NUM_S       = 2;
     localparam int unsigned S_ID_WIDTH  = M_ID_WIDTH + MSEL_WIDTH;  // 9
     localparam CLK_HALF = 5;  // 100 MHz, 10ns period
@@ -519,7 +519,8 @@ module axi_crossbar_tb;
     // Stress test region definitions (each master gets 64 entries × 64B = 4KB)
     localparam [ADDR_WIDTH-1:0] MXU_REGION  = SRAM_BASE + 32'h0000_0000;  // master 1
     localparam [ADDR_WIDTH-1:0] DMA_REGION  = SRAM_BASE + 32'h0000_1000;  // master 4
-    localparam [ADDR_WIDTH-1:0] PCIE_REGION = SRAM_BASE + 32'h0000_2000;  // master 5
+    localparam [ADDR_WIDTH-1:0] PCIE_REGION     = SRAM_BASE + 32'h0000_2000;  // master 5
+localparam [ADDR_WIDTH-1:0] PCIE_DMA_REGION = SRAM_BASE + 32'h0000_5000;  // master 6
     localparam [ADDR_WIDTH-1:0] IBEX_REGION = SRAM_BASE + 32'h0000_3000;  // master 0
     localparam [ADDR_WIDTH-1:0] TC2_REGION  = SRAM_BASE + 32'h0000_4000;  // TC2 test (non-overlapping)
     localparam int unsigned      REGION_SIZE = 64;  // number of 64B words
@@ -560,7 +561,7 @@ module axi_crossbar_tb;
     initial begin
         $display("============================================================");
         $display("[TB] AXI4 Crossbar Stress Testbench");
-        $display("[TB] M=6, S=2, round-robin, DATA_WIDTH=512");
+        $display("[TB] M=7, S=2, round-robin, DATA_WIDTH=512");
         $display("============================================================");
 
         init_signals();
@@ -783,21 +784,22 @@ module axi_crossbar_tb;
         $display("");
 
         // =====================================================================
-        // TC5: Round-robin fairness — all 6 masters sequentially access SRAM
+        // TC5: Round-robin fairness — all 7 masters sequentially access SRAM
         // =====================================================================
-        $display("--- TC5: Round-robin fairness (all 6 masters → SRAM) ---");
+        $display("--- TC5: Round-robin fairness (all 7 masters → SRAM) ---");
 
-        // Write 1 beat each from masters 0-5, verify round-robin works
-        for (j = 0; j < 6; j = j + 1) begin
+        // Write 1 beat each from masters 0-6, verify round-robin works
+        for (j = 0; j < NUM_M; j = j + 1) begin
             automatic integer m = j;
             automatic reg [ADDR_WIDTH-1:0] taddr;
             case (m)
-                0: taddr = IBEX_REGION + 32'h000;
-                1: taddr = MXU_REGION  + 32'h600;
-                2: taddr = SRAM_BASE   + 32'h5000;
-                3: taddr = SRAM_BASE   + 32'h6000;
-                4: taddr = DMA_REGION  + 32'h600;
-                5: taddr = PCIE_REGION + 32'h600;
+                0: taddr = IBEX_REGION     + 32'h000;
+                1: taddr = MXU_REGION      + 32'h600;
+                2: taddr = SRAM_BASE       + 32'h5000;
+                3: taddr = SRAM_BASE       + 32'h6000;
+                4: taddr = DMA_REGION      + 32'h600;
+                5: taddr = PCIE_REGION     + 32'h600;
+                6: taddr = PCIE_DMA_REGION + 32'h600;
             endcase
             wdata_dyn = new[1];
             wdata_dyn[0] = gen_data(32'hF000 + m * 32'h100);
@@ -815,7 +817,7 @@ module axi_crossbar_tb;
                 end
             end
         end
-        $display("  PASS: All 6 masters completed write+read, round-robin exercised");
+        $display("  PASS: All 7 masters completed write+read, round-robin exercised");
         tc_pass = tc_pass + 1;
         $display("");
 

@@ -17,8 +17,8 @@ from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector, GoldenDMA
 from sim.mmio_bridge import MMIOBridge
 from sim.miniv import RISCVMini, NPUFirmware, BOOT_ROM_SIZE, BOOT_ROM_BASE
 from sim.axi_tracer import AXITracer
-from models.pcie import PCIeModel
-from models.crossbar import CrossbarModel
+from sim.models.pcie import PCIeModel, DmaEngine
+from sim.models.crossbar import CrossbarModel
 
 
 class FuncModel:
@@ -32,6 +32,7 @@ class FuncModel:
 
         self.crossbar = CrossbarModel(sram=self.sram, dram=self.dram)
         self.pcie = PCIeModel(crossbar=self.crossbar)
+        self.pcie_dma = DmaEngine(crossbar=self.crossbar)
 
         # Compute modules
         self.mxu = GoldenMXU()
@@ -42,6 +43,7 @@ class FuncModel:
         self.bridge = MMIOBridge(modules={
             'mxu': self.mxu, 'sfu': self.sfu,
             'vector': self.vector, 'dma': self.dma_engine,
+            'pcie_dma': self.pcie_dma,
             'crossbar': self.crossbar,
             'dram': self.dram, 'sram': self.sram,
         })
@@ -49,6 +51,7 @@ class FuncModel:
         sim_modules = {
             'mxu': self.mxu, 'sfu': self.sfu,
             'vector': self.vector, 'dma': self.dma_engine,
+            'pcie_dma': self.pcie_dma,
             'crossbar': self.crossbar,
             'dram': self.dram, 'sram': self.sram,
         }

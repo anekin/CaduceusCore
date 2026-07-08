@@ -85,6 +85,16 @@ typedef struct __attribute__((packed)) {
     uint32_t _pad[5];
 } dma_copy_desc_t;
 
+/* 操作描述符 — PCIe DMA */
+typedef struct __attribute__((packed)) {
+    uint32_t pcie_addr_lo;   /* PCIe target address [31:0] */
+    uint32_t pcie_addr_hi;   /* PCIe target address [63:32] */
+    uint32_t axi_addr;       /* Local AXI source/destination */
+    uint32_t len;            /* Transfer bytes */
+    uint32_t direction;      /* 0=host→NPU (read), 1=NPU→host (write) */
+    uint32_t _pad[1];
+} pcie_dma_desc_t;
+
 /* 完成条目 */
 typedef struct __attribute__((packed)) {
     uint32_t cmd_id;
@@ -130,6 +140,40 @@ static void dma_copy(uint32_t src, uint32_t dst, uint32_t size,
     }
     npu_start(&dma->CMD);
     npu_wait_done(&dma->STATUS);
+}
+
+static uint32_t pcie_dma_exec(uint32_t desc_sram_addr) {
+    volatile uint32_t *src = (volatile uint32_t *)(uintptr_t)desc_sram_addr;
+    pcie_dma_desc_t desc;
+    desc.pcie_addr_lo = src[0];
+    desc.pcie_addr_hi = src[1];
+    desc.axi_addr     = src[2];
+    desc.len          = src[3];
+    desc.direction    = src[4];
+
+    npu_pcie_dma_t *pcie = NPU_PCIE_DMA;
+    pcie->PCIE_CTRL     = 0;
+    pcie->PCIE_ADDR_LO  = desc.pcie_addr_lo;
+    pcie->PCIE_ADDR_HI  = desc.pcie_addr_hi;
+    pcie->AXI_ADDR      = desc.axi_addr;
+    pcie->LEN           = desc.len;
+    pcie->TAG           = 0;
+
+    uint32_t start_bit = (desc.direction == 0) ? PCIE_DMA_CTRL_START_RD
+                                               : PCIE_DMA_CTRL_START_WR;
+    pcie->PCIE_CTRL = PCIE_DMA_CTRL_IRQ_EN | start_bit;
+
+    uint32_t done_bit = (desc.direction == 0) ? PCIE_DMA_STATUS_RD_DONE
+                                              : PCIE_DMA_STATUS_WR_DONE;
+    uint32_t timeout = 1000000;
+    while (timeout--) {
+        uint32_t status = pcie->PCIE_STATUS;
+        if (status & PCIE_DMA_STATUS_ERROR)
+            return 1;
+        if (status & done_bit)
+            return 0;
+    }
+    return 1;  /* timeout */
 }
 
 static void mxu_wrapper_preload(uint32_t w_addr, uint32_t i_addr,
@@ -437,6 +481,8 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
         uint32_t hw_op = op - 0x0F;  /* 0x0F..0x14 -> 0..5 */
         vector_start(hw_op, desc.a_addr, desc.b_addr, desc.o_addr, desc.dim);
         status = 0;
+    } else if (op == 7) {  /* PCIe_DMA */
+        status = pcie_dma_exec(cmd->desc_addr);
     } else if (op == 9 || op == 10 || op == 0x15 || op == 0x16) {  /* DMA_COPY */
         dma_copy_desc_t desc;
         read_dma_copy_desc(cmd->desc_addr, &desc);

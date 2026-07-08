@@ -3,13 +3,14 @@
 // CaduceusCore SoC Phase 3-4 / Task 6
 //
 // Tests:
-//   TC1: APB write ENABLE=0x7F → readback = 0x7F
+//   TC1: APB write ENABLE=0xFF → readback = 0xFF
 //   TC2: APB write THRESHOLD=2 → readback = 2
 //   TC3: mxu_irq=1, ENABLE=0x01 → cpu_irq=1, PENDING[0]=1
 //   TC4: ACK=0x01 (source low) → PENDING[0]=0, cpu_irq=0
 //   TC5: ENABLE=0x00 → cpu_irq=0 (mask blocks irq)
 //   TC6: THRESHOLD gate — threshold=2, only 1 src → cpu_irq=0
 //   TC7: Multiple irq sources (mxu+sfu+vector+dma) → popcount=4 ≥ threshold=3 → cpu_irq=1
+//   TC8: pcie_dma_irq (source 7) — PENDING[7], ENABLE[7], cpu_irq, ACK[7] clear
 //
 // Usage:
 //   vcs -full64 -sverilog -timescale=1ns/1ps -top tb_intc \
@@ -41,6 +42,7 @@ module tb_intc;
     reg         pcie_irq;
     reg         host_irq;
     reg         timer_irq;
+    reg         pcie_dma_irq;
 
     reg         psel;
     reg         penable;
@@ -66,6 +68,7 @@ module tb_intc;
         .pcie_irq    (pcie_irq),
         .host_irq    (host_irq),
         .timer_irq   (timer_irq),
+        .pcie_dma_irq(pcie_dma_irq),
         .psel        (psel),
         .penable     (penable),
         .pwrite      (pwrite),
@@ -103,6 +106,7 @@ module tb_intc;
         pcie_irq = 1'b0;
         host_irq = 1'b0;
         timer_irq = 1'b0;
+        pcie_dma_irq = 1'b0;
         psel     = 1'b0;
         penable  = 1'b0;
         pwrite   = 1'b0;
@@ -126,6 +130,7 @@ module tb_intc;
         tc5_enable_mask_blocks_irq();
         tc6_threshold_gate();
         tc7_multi_source_popcount();
+        tc8_pcie_dma_irq_source7();
 
         // Summary
         $display("\n========================================");
@@ -201,13 +206,13 @@ module tb_intc;
         reg [31:0] rd;
         begin
             $display("\n-- TC1: ENABLE RW --");
-            apb_write(12'h004, 32'h0000_007F);
+            apb_write(12'h004, 32'h0000_00FF);
             apb_read (12'h004, rd);
-            if (rd[6:0] === 7'h7F) begin
+            if (rd[7:0] === 8'hFF) begin
                 $display("  [PASS] ENABLE readback = 0x%08x", rd);
                 pass_cnt = pass_cnt + 1;
             end else begin
-                $display("  [FAIL] ENABLE readback = 0x%08x (expected 0x0000007F)", rd);
+                $display("  [FAIL] ENABLE readback = 0x%08x (expected 0x000000FF)", rd);
                 fail_cnt = fail_cnt + 1;
             end
         end
@@ -300,7 +305,7 @@ module tb_intc;
             apb_write(12'h008, 32'h0000_0001);
             mxu_irq = 1'b0;
             wait_clks(2);
-            apb_write(12'h00C, 32'h0000_007F);
+            apb_write(12'h00C, 32'h0000_00FF);
             wait_clks(2);
 
             mxu_irq = 1'b1;
@@ -325,7 +330,7 @@ module tb_intc;
 
             // Cleanup
             mxu_irq = 1'b0;
-            apb_write(12'h00C, 32'h0000_007F);
+            apb_write(12'h00C, 32'h0000_00FF);
             wait_clks(2);
         end
     endtask
@@ -336,9 +341,9 @@ module tb_intc;
             $display("\n-- TC6: THRESHOLD gate (threshold=2, 1 src) --");
             mxu_irq = 1'b0;
             sfu_irq = 1'b0;
-            apb_write(12'h00C, 32'h0000_007F);
+            apb_write(12'h00C, 32'h0000_00FF);
             wait_clks(2);
-            apb_write(12'h004, 32'h0000_007F);
+            apb_write(12'h004, 32'h0000_00FF);
             apb_write(12'h008, 32'h0000_0002);
 
             mxu_irq = 1'b1;
@@ -364,7 +369,7 @@ module tb_intc;
             // Cleanup
             mxu_irq = 1'b0;
             sfu_irq = 1'b0;
-            apb_write(12'h00C, 32'h0000_007F);
+            apb_write(12'h00C, 32'h0000_00FF);
             wait_clks(2);
         end
     endtask
@@ -374,11 +379,11 @@ module tb_intc;
         reg [31:0] rd;
         begin
             $display("\n-- TC7: multi-source (4 irqs, threshold=3) --");
-            apb_write(12'h004, 32'h0000_007F);
+            apb_write(12'h004, 32'h0000_00FF);
             apb_write(12'h008, 32'h0000_0003);
             mxu_irq = 1'b0; sfu_irq = 1'b0; vector_irq = 1'b0;
             dma_irq = 1'b0; pcie_irq = 1'b0;
-            apb_write(12'h00C, 32'h0000_007F);
+            apb_write(12'h00C, 32'h0000_00FF);
             wait_clks(2);
 
             mxu_irq    = 1'b1;
@@ -419,7 +424,78 @@ module tb_intc;
             // Cleanup
             mxu_irq = 1'b0; sfu_irq = 1'b0; vector_irq = 1'b0;
             dma_irq = 1'b0; pcie_irq = 1'b0;
-            apb_write(12'h00C, 32'h0000_007F);
+            apb_write(12'h00C, 32'h0000_00FF);
+            wait_clks(2);
+        end
+    endtask
+
+    // TC8: pcie_dma_irq (source 7) — PENDING[7] set, ENABLE[7], cpu_irq, ACK clear
+    task tc8_pcie_dma_irq_source7;
+        reg [31:0] rd;
+        begin
+            $display("\n-- TC8: pcie_dma_irq (source 7) --");
+            // Reset state — clear all sources, ACK all
+            mxu_irq = 1'b0; sfu_irq = 1'b0; vector_irq = 1'b0;
+            dma_irq = 1'b0; pcie_irq = 1'b0; host_irq = 1'b0;
+            timer_irq = 1'b0; pcie_dma_irq = 1'b0;
+            apb_write(12'h00C, 32'h0000_00FF);
+            wait_clks(2);
+
+            // Enable only bit 7 (pcie_dma_irq), threshold=1
+            apb_write(12'h004, 32'h0000_0080);
+            apb_write(12'h008, 32'h0000_0001);
+
+            // Assert pcie_dma_irq
+            pcie_dma_irq = 1'b1;
+            wait_clks(2);
+
+            // Check PENDING[7] = 1
+            apb_read(12'h000, rd);
+            if (rd[7] === 1'b1) begin
+                $display("  [PASS] PENDING[7] = 1, PENDING=0x%08x", rd);
+                pass_cnt = pass_cnt + 1;
+            end else begin
+                $display("  [FAIL] PENDING[7] = %0b, PENDING=0x%08x", rd[7], rd);
+                fail_cnt = fail_cnt + 1;
+            end
+
+            // Check cpu_irq fires (1 source >= threshold=1, enabled)
+            if (cpu_irq === 1'b1) begin
+                $display("  [PASS] cpu_irq = 1 (src 7 enabled), cpu_irq=%0b", cpu_irq);
+                pass_cnt = pass_cnt + 1;
+            end else begin
+                $display("  [FAIL] cpu_irq = %0b (expected 1)", cpu_irq);
+                fail_cnt = fail_cnt + 1;
+            end
+
+            // Deassert source, ACK bit 7
+            pcie_dma_irq = 1'b0;
+            wait_clks(2);
+            apb_write(12'h00C, 32'h0000_0080);
+            wait_clks(2);
+
+            // Check PENDING[7] cleared
+            apb_read(12'h000, rd);
+            if (rd[7] === 1'b0) begin
+                $display("  [PASS] PENDING[7] = 0 after ACK, PENDING=0x%08x", rd);
+                pass_cnt = pass_cnt + 1;
+            end else begin
+                $display("  [FAIL] PENDING[7] = %0b after ACK, PENDING=0x%08x", rd[7], rd);
+                fail_cnt = fail_cnt + 1;
+            end
+
+            // Check cpu_irq de-asserted (no pending sources)
+            if (cpu_irq === 1'b0) begin
+                $display("  [PASS] cpu_irq = 0 after ACK, cpu_irq=%0b", cpu_irq);
+                pass_cnt = pass_cnt + 1;
+            end else begin
+                $display("  [FAIL] cpu_irq = %0b after ACK (expected 0)", cpu_irq);
+                fail_cnt = fail_cnt + 1;
+            end
+
+            // Cleanup
+            apb_write(12'h004, 32'h0000_0000);
+            apb_write(12'h00C, 32'h0000_00FF);
             wait_clks(2);
         end
     endtask

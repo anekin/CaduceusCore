@@ -11,8 +11,8 @@ from typing import Any, Callable, Dict, Optional
 import numpy as np
 
 from sim.golden_executor import GoldenSFU, GoldenVector
-from models.crossbar import CrossbarModel
-from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
+from sim.models.crossbar import CrossbarModel
+from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, PCIE_DMA, DOORBELL, INTC
 
 
 @dataclass
@@ -63,6 +63,8 @@ class MMIOBridge:
             return self._handle_vector(rw, addr, value)
         elif base == DMA.BASE:
             return self._handle_dma(rw, addr, value)
+        elif base == PCIE_DMA.BASE:
+            return self._handle_pcie_dma(rw, addr, value)
         elif base == DOORBELL.BASE:
             return self._handle_doorbell(rw, addr, value)
         elif base == INTC.BASE:
@@ -452,6 +454,49 @@ class MMIOBridge:
         dst_off = self._translate_addr(dst_addr)
         if src_mem is not None and dst_mem is not None:
             dst_mem[dst_off:dst_off + size] = src_mem[src_off:src_off + size]
+
+    # ── PCIE_DMA ────────────────────────────────────────────────────
+
+    def _handle_pcie_dma(self, rw: str, addr: int, value: int) -> int:
+        off = addr - PCIE_DMA.BASE
+        engine = self.modules.get('pcie_dma')
+
+        if rw == 'write':
+            if off == PCIE_DMA.CTRL and (value & 0x3):
+                self._status[PCIE_DMA.BASE + PCIE_DMA.STATUS] = 0
+                direction = value & 0x3
+                pcie_lo = self._status.get(PCIE_DMA.BASE + PCIE_DMA.PCIE_ADDR_LO, 0)
+                pcie_hi = self._status.get(PCIE_DMA.BASE + PCIE_DMA.PCIE_ADDR_HI, 0)
+                axi_addr = self._status.get(PCIE_DMA.BASE + PCIE_DMA.AXI_ADDR, 0)
+                length = self._status.get(PCIE_DMA.BASE + PCIE_DMA.LEN, 0)
+                tag = self._status.get(PCIE_DMA.BASE + PCIE_DMA.TAG, 0)
+                pcie_addr = (pcie_hi << 32) | pcie_lo
+
+                irq_en = bool(value & 0x8)
+                error_code = 0
+
+                if engine is not None and length > 0:
+                    if direction == 0x1:
+                        engine.submit_read_desc(pcie_addr, axi_addr, length, tag)
+                    elif direction == 0x2:
+                        engine.submit_write_desc(pcie_addr, axi_addr, length, tag)
+                    statuses = engine.desc_status
+                    if statuses:
+                        _, error_code = statuses[-1]
+
+                status = 0x4 if direction == 0x1 else 0x8
+                if error_code:
+                    status |= 0x10
+                    err_reg = PCIE_DMA.RD_ERR_CODE if direction == 0x1 else PCIE_DMA.WR_ERR_CODE
+                    self._status[PCIE_DMA.BASE + err_reg] = error_code
+                self._status[PCIE_DMA.BASE + PCIE_DMA.STATUS] = status
+
+                if irq_en and error_code == 0:
+                    self._set_irq(7)
+            else:
+                self._status[addr & 0xFFFFFFFC] = value
+
+        return self._status.get(addr & 0xFFFFFFFC, 0)
 
     # ── Doorbell ────────────────────────────────────────────────────
 

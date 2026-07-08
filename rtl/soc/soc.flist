@@ -28,6 +28,7 @@ rtl/intc/intc_top.v
 
 # ── IP Wrappers ───────────────────────────────────────────────────
 rtl/ip/pcie_ep_wrapper.v
+rtl/ip/pcie_dma_wrapper.v
 rtl/ip/dram_model.v
 rtl/ip/dma_wrapper.v
 

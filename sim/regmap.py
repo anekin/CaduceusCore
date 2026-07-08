@@ -20,6 +20,7 @@ class Addr:
     VECTOR_BASE  = 0x4000_2000
     DMA_BASE     = 0x4000_3000
     PCIE_BASE    = 0x4000_4000
+    PCIE_DMA_BASE= 0x4000_7000
     DOORBELL     = 0x4000_5000
     INTC_BASE    = 0x4000_6000
     DRAM_BASE    = 0x8000_0000   # DDR start
@@ -80,6 +81,24 @@ class VECTOR:
     O_ADDR  = 0x14   # R/W: SRAM 中输出地址
     DIM     = 0x18   # R/W: [15:0]=elements
     IRQ_EN  = 0x1C   # R/W: bit[0]=完成中断使能
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PCIE_DMA — PCIe DMA Engine  (0x4000_7000)
+# ══════════════════════════════════════════════════════════════════════
+
+class PCIE_DMA:
+    BASE = Addr.PCIE_DMA_BASE
+
+    CTRL        = 0x00  # R/W: bit[0]=start_rd, [1]=start_wr, [2]=abort, [3]=irq_en
+    STATUS      = 0x04  # R:   bit[0]=rd_busy, [1]=wr_busy, [2]=rd_done, [3]=wr_done, [4]=error
+    PCIE_ADDR_LO= 0x08  # R/W: host PCIe address [31:0]
+    PCIE_ADDR_HI= 0x0C  # R/W: host PCIe address [63:32]
+    AXI_ADDR    = 0x10  # R/W: NPU AXI address
+    LEN         = 0x14  # R/W: transfer length in bytes
+    TAG         = 0x18  # R/W: descriptor tag
+    RD_ERR_CODE = 0x1C  # R:   read descriptor error code
+    WR_ERR_CODE = 0x20  # R:   write descriptor error code
 
 
 # ══════════════════════════════════════════════════════════════════════

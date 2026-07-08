@@ -1,9 +1,9 @@
 //=============================================================================
-// intc_top — 7-source interrupt controller with APB slave interface
+// intc_top — 8-source interrupt controller with APB slave interface
 //=============================================================================
 // CaduceusCore SoC Phase 3-4 / Task 6
 //
-// Collects up to 7 level-sensitive interrupt sources and produces a single
+// Collects up to 8 level-sensitive interrupt sources and produces a single
 // cpu_irq to the Ibex RISC-V core.  The cpu_irq is asserted when:
 //   - At least one enabled source is pending, AND
 //   - The number of enabled pending sources (popcount) meets THRESHOLD.
@@ -16,6 +16,7 @@
 //   bit4 = pcie        (PCIe EP)
 //   bit5 = host        (Host doorbell)
 //   bit6 = timer_irq   (Timer)
+//   bit7 = pcie_dma_irq (PCIe DMA)
 //
 // Registers (APB slave at 0x4000_6000, 4 KB window):
 //   Offset  Access  Name         Description
@@ -39,6 +40,7 @@ module intc_top (
     input  wire        pcie_irq,
     input  wire        host_irq,
     input  wire        timer_irq,
+    input  wire        pcie_dma_irq,
 
     // ── APB slave interface (to apb_decoder port 6) ───────────────────────
     input  wire        psel,
@@ -57,22 +59,22 @@ module intc_top (
     //=========================================================================
     // Local signals
     //=========================================================================
-    wire [6:0] irq_src;         // packed interrupt source vector
+    wire [7:0] irq_src;         // packed interrupt source vector
     wire       apb_write;       // APB write strobe (access phase)
     wire       sel_pending;     // address decode — PENDING
     wire       sel_enable;      // address decode — ENABLE
     wire       sel_threshold;   // address decode — THRESHOLD
     wire       sel_ack;         // address decode — ACK
-    wire [6:0] ack_clear;       // per-bit ACK clear strobe
-    wire [6:0] enabled_pending; // PENDING & ENABLE
-    wire [2:0] pcnt;            // popcount(enabled_pending)
+    wire [7:0] ack_clear;       // per-bit ACK clear strobe
+    wire [7:0] enabled_pending; // PENDING & ENABLE
+    wire [3:0] pcnt;            // popcount(enabled_pending)
 
     //=========================================================================
     // Interrupt source packing
     //=========================================================================
-    // bit6=MSB (timer), bit0=LSB (mxu) — see bit mapping above.
-    assign irq_src = {timer_irq, host_irq, pcie_irq, dma_irq,
-                      vector_irq, sfu_irq, mxu_irq};
+    // bit7=MSB (pcie_dma), bit0=LSB (mxu) — see bit mapping above.
+    assign irq_src = {pcie_dma_irq, timer_irq, host_irq, pcie_irq, dma_irq,
+                       vector_irq, sfu_irq, mxu_irq};
 
     //=========================================================================
     // APB control and address decode
@@ -91,13 +93,13 @@ module intc_top (
     // high after the ACK, the bit re-sets on the next cycle.
     //
     // Equivalent:  pending_reg <= (pending_reg & ~ack_clear) | irq_src
-    reg [6:0] pending_reg;
+    reg [7:0] pending_reg;
 
-    assign ack_clear = (apb_write && sel_ack) ? pwdata[6:0] : 7'h0;
+    assign ack_clear = (apb_write && sel_ack) ? pwdata[7:0] : 8'h0;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            pending_reg <= 7'h0;
+            pending_reg <= 8'h0;
         end else begin
             pending_reg <= (pending_reg & ~ack_clear) | irq_src;
         end
@@ -106,29 +108,29 @@ module intc_top (
     //=========================================================================
     // ENABLE register — Read/Write
     //=========================================================================
-    reg [6:0] enable_reg;
+    reg [7:0] enable_reg;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            enable_reg <= 7'h0;
+            enable_reg <= 8'h0;
         end else if (apb_write && sel_enable) begin
-            enable_reg <= pwdata[6:0];
+            enable_reg <= pwdata[7:0];
         end
     end
 
     //=========================================================================
     // THRESHOLD register — Read/Write
     //=========================================================================
-    // Holds a 3-bit count threshold (0-7).  Default = 1 so a single enabled
+    // Holds a 4-bit count threshold (0-8).  Default = 1 so a single enabled
     // pending source fires cpu_irq.  Writing 0 effectively disables the
     // threshold gate (popcount >= 0 always true).
-    reg [2:0] threshold_reg;
+    reg [3:0] threshold_reg;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            threshold_reg <= 3'd1;
+            threshold_reg <= 4'd1;
         end else if (apb_write && sel_threshold) begin
-            threshold_reg <= pwdata[2:0];
+            threshold_reg <= pwdata[3:0];
         end
     end
 
@@ -137,14 +139,14 @@ module intc_top (
     //=========================================================================
     assign enabled_pending = pending_reg & enable_reg;
 
-    // Popcount of 7-bit vector (combinational)
-    function [2:0] popcount;
-        input [6:0] in;
+    // Popcount of 8-bit vector (combinational)
+    function [3:0] popcount;
+        input [7:0] in;
         integer i;
         begin
-            popcount = 3'd0;
-            for (i = 0; i < 7; i = i + 1) begin
-                popcount = popcount + {2'd0, in[i]};
+            popcount = 4'd0;
+            for (i = 0; i < 8; i = i + 1) begin
+                popcount = popcount + {3'd0, in[i]};
             end
         end
     endfunction
@@ -170,11 +172,11 @@ module intc_top (
 
     always @(*) begin
         if (sel_pending)
-            prdata_reg = {25'h0, pending_reg};
+            prdata_reg = {24'h0, pending_reg};
         else if (sel_enable)
-            prdata_reg = {25'h0, enable_reg};
+            prdata_reg = {24'h0, enable_reg};
         else if (sel_threshold)
-            prdata_reg = {29'h0, threshold_reg};
+            prdata_reg = {28'h0, threshold_reg};
         else
             prdata_reg = 32'h0;
     end

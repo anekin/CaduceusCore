@@ -1,8 +1,8 @@
 //=============================================================================
-// axi_crossbar.v — AXI4 Crossbar (M=6, S=2, round-robin arbitration)
+// axi_crossbar.v — AXI4 Crossbar (M=7, S=2, round-robin arbitration)
 // CaduceusCore SoC Phase 3-4 / Task 7
 //
-// Masters (M=6): Ibex(0) / MXU(1) / SFU(2) / Vector(3) / DMA(4) / PCIe(5)
+// Masters (M=7): Ibex(0) / MXU(1) / SFU(2) / Vector(3) / DMA(4) / PCIe(5) / PCIe_DMA(6)
 // Slaves  (S=2): SRAM(0) / DRAM(1)
 //
 // Features:
@@ -22,7 +22,7 @@
 //   ADDR_WIDTH  = 32    (address bus width)
 //   M_ID_WIDTH  = 6     (per-master AXI ID width)
 //   MSEL_WIDTH  = 3     (log2(NUM_M))
-//   NUM_M       = 6     (number of master ports)
+//   NUM_M       = 7     (number of master ports)
 //   NUM_S       = 2     (number of slave ports)
 //
 // References: AMBA AXI4 spec, CaduceusCore/rtl/soc/sram_ctrl.v
@@ -33,14 +33,14 @@ module axi_crossbar #(
     parameter int unsigned ADDR_WIDTH  = 32,
     parameter int unsigned M_ID_WIDTH  = 6,
     parameter int unsigned MSEL_WIDTH  = 3,
-    parameter int unsigned NUM_M       = 6,
+    parameter int unsigned NUM_M       = 7,
     parameter int unsigned NUM_S       = 2,
     parameter int unsigned S_ID_WIDTH  = M_ID_WIDTH + MSEL_WIDTH  // derived
 ) (
     input  wire                                 clk,
     input  wire                                 rst_n,
 
-    // ── Master ports (M=6) — AXI4 slave interfaces facing masters ──────────
+    // ── Master ports (M=7) — AXI4 slave interfaces facing masters ──────────
     input  wire [NUM_M-1:0][M_ID_WIDTH-1:0]     m_awid_i,
     input  wire [NUM_M-1:0][ADDR_WIDTH-1:0]     m_awaddr_i,
     input  wire [NUM_M-1:0][7:0]                m_awlen_i,
