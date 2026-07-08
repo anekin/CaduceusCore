@@ -22,14 +22,19 @@ class VectorModel:
         self.freq_mhz = int(config.get("mxu", {}).get("frequency_mhz", 1000))
 
         # Latency per batch: how many cycles to flush a full-width batch
+        ops = vec.get("ops", {})
         self.op_latency = {
-            "add": 1,      # element-wise add
-            "mul": 1,      # element-wise multiply
-            "scale": 1,    # scalar broadcast multiply
-            "bias": 1,     # element-wise add bias
-            "relu": 1,     # max(0, x)
-            "mask": 1,     # boolean mask select
-            "multiply_broadcast": 1,  # SE block Mul: scalar broadcast
+            "add": int(ops.get("add", 1)),      # element-wise add
+            "mul": int(ops.get("mul", 1)),      # element-wise multiply
+            "scale": int(ops.get("scale", 1)),  # scalar broadcast multiply
+            "bias": int(ops.get("bias", 1)),    # element-wise add bias
+            "relu": int(ops.get("relu", 1)),    # max(0, x)
+            "mask": int(ops.get("mask", 1)),    # boolean mask select
+            "max": int(ops.get("max", 12)),     # reduce_tree: element-wise max
+            "sum": int(ops.get("sum", 12)),     # reduce_tree: sum reduce
+            "reduce": int(ops.get("reduce", 12)),  # generic reduce_tree path
+            "conv_f16_i32": int(ops.get("conv_f16_i32", 260)),  # type_convert: INT32→FP16
+            "resid": int(ops.get("resid", 5)),  # residual add
         }
 
         # DMA bandwidth shared with MXU (SRAM ↔ Vector)
@@ -58,9 +63,9 @@ class VectorModel:
         """
         batches = (num_elements + self.width - 1) // self.width
         return {
-            "max_reduce": batches * 3,   # tree reduction ~ log2(width) steps
-            "scale_sub": batches * 1,    # subtract max
-            "sum_reduce": batches * 3,   # tree reduction
+            "max_reduce": batches * self.op_latency["max"],   # tree reduction
+            "scale_sub": batches * self.op_latency["scale"],  # subtract max
+            "sum_reduce": batches * self.op_latency["sum"],   # tree reduction
         }
 
     def estimate_residual_add(self, num_elements: int) -> int:

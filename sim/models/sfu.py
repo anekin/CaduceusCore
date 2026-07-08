@@ -36,6 +36,7 @@ class SFUModel:
             "gelu": int(sfu.get("pipeline_cycles", {}).get("gelu", 4)),
             "silu": int(sfu.get("pipeline_cycles", {}).get("silu", 4)),
             "layernorm": int(sfu.get("pipeline_cycles", {}).get("layernorm", 6)),
+            "rmsnorm": int(sfu.get("pipeline_cycles", {}).get("rmsnorm", 6)),
             "rope": int(sfu.get("pipeline_cycles", {}).get("rope", 12)),
             # unified softmax (kept for backward compat)
             "softmax": int(sfu.get("pipeline_cycles", {}).get("softmax", 8)),

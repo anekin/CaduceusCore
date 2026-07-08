@@ -30,29 +30,35 @@ sram:
 sfu:
   width: 128                    # 每 cycle 处理 128 个元素
   pipeline_cycles:
-    softmax: 8                  # legacy（向后兼容）
-    exp: 12                     # exponential
-    div: 16                     # division
-    sqrt: 20                    # square root
-    log: 18                     # natural log
-    tanh: 14                    # hyperbolic tangent
-    layernorm: 6
-    gelu: 4
+    softmax: 227                # P0 measured (dim=64, 1 batch)
+    exp: 66                     # P0-calibrated: RUN state split
+    div: 161                    # P0-calibrated: FLUSH state split
+    sqrt: 20                    # square root (kept theoretical, no P0 data)
+    log: 18                     # natural log (kept theoretical, no P0 data)
+    tanh: 14                    # hyperbolic tangent (kept theoretical, no P0 data)
+    layernorm: 210              # P0 measured (dim=64, 1 batch)
+    rmsnorm: 150                # P0 measured (dim=64, 1 batch)
+    gelu: 71                    # P0 measured (dim=64, 1 batch)
     relu: 1
-    silu: 4
-    rope: 12
-    maxpool: 3
-    avgpool: 3
+    silu: 72                    # P0 measured (dim=64, 1 batch)
+    rope: 82                    # P0 measured (dim=64, 1 batch)
+    maxpool: 71                 # P0-calibrated: same as gelu for now
+    avgpool: 71                 # P0-calibrated: same as gelu for now
 
 vector:
   width: 128                    # SIMD width (elements/cycle), INT8=256, FP16=128
   ops:
-    add: 1                      # element-wise
-    mul: 1
-    scale: 1                    # scalar broadcast
-    bias: 1
-    relu: 1
-    mask: 1
+    add: 5                      # P0 measured (dim=128, 1 batch)
+    mul: 5                      # P0 measured (dim=128, 1 batch)
+    scale: 5                    # P0-calibrated: same SIMD path as add/mul
+    bias: 5                     # P0-calibrated: same SIMD path as add/mul
+    relu: 5                     # P0-calibrated: same SIMD path as add/mul
+    mask: 5                     # P0-calibrated: same SIMD path as add/mul
+    max: 12                     # P0 measured (dim=128, 1 batch, reduce_tree path)
+    sum: 12                     # P0 measured (dim=128, 1 batch, reduce_tree path)
+    reduce: 12                  # P0-calibrated: same reduce_tree path as max/sum
+    conv_f16_i32: 260           # P0 measured (dim=128, 1 batch, type_convert path)
+    resid: 5                    # P0 measured (dim=128, 1 batch, same as add)
 
 kv_cache:
   sram_kb: 256
