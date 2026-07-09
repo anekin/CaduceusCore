@@ -29,8 +29,8 @@ Expect 210 passed (fewer without dtc/spike/firmware; sim/timing tests are self-c
 
 **Performance benchmark:**
 ```bash
-PYTHONPATH=sim python sim/timing/benchmark.py --alias qwen25-3b
-PYTHONPATH=sim python sim/timing/benchmark.py --alias mobilenetv3
+PYTHONPATH=sim python -m sim.timing.benchmark --model qwen2.5-3b --output results/timing
+PYTHONPATH=sim python -m sim.timing.benchmark --model mobilenetv3 --output results/timing
 ```
 
 **RTL verification (optional, requires Synopsys VCS):** See `rtl/mxu/README.md`.
