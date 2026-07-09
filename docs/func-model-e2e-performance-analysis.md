@@ -749,6 +749,53 @@ The key invariant: **the timeline never changes**. Only the `mxu_cycles` paramet
 
 ---
 
+## 12. Batch Size Scaling (Time-Multiplexed Decode)
+
+### 12.1 uArch Decision
+
+Explain the time-multiplexed approach: weights loaded once from DDR, M sequential compute passes through the array (one per token, accumulator reset between). This is a uArch-level decision. No spatial parallelism (no multi-accumulator per PE).
+
+### 12.2 Scaling Results
+
+Create a table with actual measured data:
+
+| M | Raw TPS (batch/s) | Effective TPS (tok/s) | Eff/M=1 | MXU% | DDR util% | gate+up bottleneck | FFN_down bottleneck |
+|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| 1 | 22.78 | 22.78 | 1.00x | 98.3% | 67.6% | DMA | DMA |
+| 2 | 14.78 | 29.55 | 1.30x | 97.9% | 43.8% | DMA | compute |
+| 4 | 8.57 | 34.29 | 1.51x | 97.6% | 25.4% | DMA | compute |
+| 8 | 4.66 | 37.28 | 1.64x | 97.4% | 13.8% | DMA | compute |
+
+Raw TPS = batch-requests per second. Effective TPS = Raw TPS x M (each request produces M tokens sharing the same weights).
+
+### 12.3 Analysis
+
+- **Diminishing returns**: M=2->4 adds +4.7 eff TPS, M=4->8 adds only +3.0. Beyond M=4, incremental gain shrinks.
+- **Bottleneck shift**: FFN_down flips from DMA->compute at M=2 and stays compute-bound thereafter. gate+up remains DMA-bound at all M. Q/K/V/O are compute-bound throughout.
+- **DDR utilization paradox**: DDR util DROPS with larger M (67.6%->43.8%->25.4%->13.8%) because compute cycles scale linearly while weight bytes stay constant. The DDR is LESS utilized, not more. This is expected for time-multiplexed batch. DDR is not the bottleneck. Compute is.
+- **Optimal batch**: M=4 gives 1.51x effective throughput at 25.4% DDR utilization. Increasing to M=8 adds only +8% for 2x the per-request latency.
+
+### 12.4 RTL Implementation Note
+
+Time-multiplexed M=2,4,8 requires only controller FSM changes (token inner loop + mac_reset_acc between tokens). No mac_array or SRAM changes needed. Estimated cost: ~20 lines of Verilog in controller.v.
+
+### 12.5 Effective TPS vs M Chart (ASCII)
+
+```
+Effective TPS
+  40 |                                    .- 37.28 (M=8)
+     |                          .- 34.29 (M=4)
+  30 |                .- 29.55 (M=2)
+     |    .- 22.78 (M=1)
+  20 |    |
+     |    |
+  10 |    |
+     +----+----------------------------+----------------------------
+         1             2            4            8    M
+```
+
+---
+
 ## Appendix A: Derived Numbers
 
 ### A.1 Wall Clock Derivation
