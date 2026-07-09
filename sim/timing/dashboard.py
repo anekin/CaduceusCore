@@ -128,6 +128,13 @@ class Dashboard:
             (dma_weight + dma_effective) / total_cycles * 100.0
             if total_cycles else 0.0, 2
         )
+        # Real bandwidth utilization: accounts for dma_bw_multiplier
+        # Each DMA cycle at eff_bw = bw_raw * dram_eff * bw_mult transfers
+        # bw_raw * dram_eff * bw_mult bytes. Peak base BW = bw_raw * dram_eff.
+        # real_bw_pct = (dma_total * eff_bw) / (total_cycles * peak_base_bw) * 100
+        #            = bandwidth_pct * dma_bw_multiplier
+        bw_mult = float(engine_config.get("optimizations", {}).get("dma_bw_multiplier", 1.0)) if engine_config else 1.0
+        real_bw_pct = round(bandwidth_pct * bw_mult, 2)
         dma_overlap = round(
             dma_effective / dma_weight if dma_weight > 0 else 0.0, 2
         )
@@ -181,6 +188,7 @@ class Dashboard:
             "noc_mesh_rows": noc_mesh_rows,
             "noc_mesh_cols": noc_mesh_cols,
             "bandwidth_utilization_pct": bandwidth_pct,
+            "real_bw_utilization_pct": real_bw_pct,
             "dma_overlap_ratio": dma_overlap,
             "total_cycles": total_cycles,
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -239,8 +247,8 @@ class Dashboard:
         summary_keys = ["tps", "fps", "ttft_ms", "tpot_us", "prefill_ms",
                         "decode_per_token_us", "inference_latency_us",
                         "itl_us_p50", "itl_us_p90", "itl_us_p99",
-                        "bandwidth_utilization_pct", "dma_overlap_ratio",
-                        "total_cycles"]
+                        "bandwidth_utilization_pct", "real_bw_utilization_pct",
+                        "dma_overlap_ratio", "total_cycles"]
 
         for key in summary_keys:
             if key in json_data:

@@ -35,29 +35,29 @@ from engine.multicore import MultiCoreTimeline, FIFOConfig, CrossbarConfig
 
 # ── Default 3B model trace ──────────────────────────────────────────
 # Each GEMM: (M, K, N, layer, op_name)
-# Derived from Qwen2.5-3B config (28 layers, hidden=2560, intermediate=9728)
+# Derived from Qwen2.5-3B config (36 layers, hidden=2048, intermediate=11008)
 # Decode: M=1 (single token), Prefill: M=128
 
 def generate_qwen3b_trace(prompt_len: int = 128) -> List[Tuple[int, int, int, int, str]]:
     """Generate GEMM trace from Qwen2.5-3B architecture.
 
     Each transformer layer has 7 matmuls:
-    - Q projection: (M, 2560, 2560/32*32) — Q full heads
-    - K projection: (M, 2560, 128*2) — KV heads only (GQA=2)
-    - V projection: (M, 2560, 128*2)
-    - O projection: (M, 2560, 2560)
-    - FFN gate: (M, 2560, 9728) — SiLU gate
-    - FFN up: (M, 2560, 9728)
-    - FFN down: (M, 9728, 2560)
+    - Q projection: (M, 2048, 2048) — Q full heads
+    - K projection: (M, 2048, 2048) — KV heads (GQA=16)
+    - V projection: (M, 2048, 2048)
+    - O projection: (M, 2048, 2048)
+    - FFN gate: (M, 2048, 11008) — SiLU gate
+    - FFN up: (M, 2048, 11008)
+    - FFN down: (M, 11008, 2048)
     """
-    HIDDEN = 2560
-    INTERMEDIATE = 9728
-    NUM_LAYERS = 28
-    NUM_HEADS = 32
-    NUM_KV_HEADS = 2
+    HIDDEN = 2048
+    INTERMEDIATE = 11008
+    NUM_LAYERS = 36
+    NUM_HEADS = 16
+    NUM_KV_HEADS = 16
     HEAD_DIM = 128
-    QKV_DIM = NUM_HEADS * HEAD_DIM   # 32 * 128 = 4096
-    KV_DIM = NUM_KV_HEADS * HEAD_DIM # 2 * 128 = 256
+    QKV_DIM = NUM_HEADS * HEAD_DIM   # 16 * 128 = 2048
+    KV_DIM = NUM_KV_HEADS * HEAD_DIM # 16 * 128 = 2048
 
     trace = []
     for layer in range(NUM_LAYERS):
@@ -93,7 +93,7 @@ class NPUSimulator:
 
         # Configure KV cache for Qwen2.5-3B
         self.kv.configure_for_model(
-            num_kv_heads=2, head_dim=128, num_layers=28, max_context=2048
+            num_kv_heads=16, head_dim=128, num_layers=36, max_context=2048
         )
 
     def simulate_decode(self, trace: List[Tuple[int, int, int, int, str]]) -> SimulationReport:
@@ -114,6 +114,8 @@ class NPUSimulator:
         opts = self.config.get("optimizations", {})
         weight_cache_enabled = opts.get("weight_cache", False)
 
+        debug_enabled = False  # Set True for per-op wall-clock tracing
+
         # Pre-process: merge gate+up pairs if weight_cache enabled
         i = 0
         while i < len(trace):
@@ -121,9 +123,12 @@ class NPUSimulator:
 
             if layer not in layer_data:
                 layer_data[layer] = LayerBreakdown(layer=layer)
+                _prev_cycle = timeline._current_cycle
                 kv_switch = self.kv.layer_switch_cost()
                 timeline.add_kv("layer_switch", kv_switch, layer)
                 layer_data[layer].kv_cache += kv_switch
+                if debug_enabled:
+                    print(f"[DEBUG L{layer}/layer_switch] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
             # ── Weight Cache: merge FFN_gate + FFN_up ──
             if (weight_cache_enabled and op_name == "FFN_gate"
@@ -132,6 +137,7 @@ class NPUSimulator:
                 if (next_op == "FFN_up" and next_M == M
                         and next_K == K and next_layer == layer):
                     # Merged estimation
+                    _prev_cycle = timeline._current_cycle
                     mxu_result = self.mxu.estimate_weight_cache_pair(M, K, N)
                     mxu_cycles = mxu_result.total_cycles
                     timeline.add_mxu(
@@ -140,6 +146,8 @@ class NPUSimulator:
                         mxu_cycles, layer)
                     layer_data[layer].mxu += mxu_cycles
                     total_weight_bytes += mxu_result.weight_bytes
+                    if debug_enabled:
+                        print(f"[DEBUG L{layer}/Gate+Up_cache] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
                     # DMA: merged weight pair event for breakdown tracking
                     mxu_end = timeline._current_cycle
@@ -148,10 +156,10 @@ class NPUSimulator:
                         mxu_result.dma_cycles, layer)
                     timeline._current_cycle = mxu_end
 
-                    hidden, effective = self.dma.estimate_effective(
+                    effective, hidden = self.dma.estimate_effective(
                         mxu_result.dma_cycles, mxu_result.compute_cycles)
-                    layer_data[layer].dma_weight += hidden
                     layer_data[layer].dma_effective += effective
+                    layer_data[layer].dma_weight += hidden
 
                     # NoC: merged weight pair transfer over interconnect (breakdown only)
                     noc_cycles = self.noc.estimate_transfer(
@@ -163,14 +171,18 @@ class NPUSimulator:
                     layer_data[layer].noc_latency += noc_cycles
 
                     # KV access (once for the pair)
+                    _prev_cycle = timeline._current_cycle
                     kv_cycles = self.kv.estimate_per_decode(total_tokens, total_tokens)
                     timeline.add_kv("kv_access", kv_cycles, layer)
                     layer_data[layer].kv_cache += kv_cycles
+                    if debug_enabled:
+                        print(f"[DEBUG L{layer}/kv_cache_pair] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
                     i += 2  # skip both gate and up
                     continue
 
             # ── Standard single GEMM ──
+            _prev_cycle = timeline._current_cycle
             mxu_result = self.mxu.estimate(M, K, N)
             mxu_cycles = mxu_result.total_cycles
             timeline.add_mxu(
@@ -178,6 +190,8 @@ class NPUSimulator:
                 mxu_cycles, layer)
             layer_data[layer].mxu += mxu_cycles
             total_weight_bytes += mxu_result.weight_bytes
+            if debug_enabled:
+                print(f"[DEBUG L{layer}/{op_name}] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
             # DMA: weight streaming event for breakdown tracking.
             # Engine total_cycles already accounts for DMA stall, so we
@@ -188,10 +202,10 @@ class NPUSimulator:
                 mxu_result.dma_cycles, layer)
             timeline._current_cycle = mxu_end
 
-            hidden, effective = self.dma.estimate_effective(
+            effective, hidden = self.dma.estimate_effective(
                 mxu_result.dma_cycles, mxu_result.compute_cycles)
-            layer_data[layer].dma_weight += hidden
             layer_data[layer].dma_effective += effective
+            layer_data[layer].dma_weight += hidden
 
             # NoC: weight transfer over interconnect (breakdown only)
             noc_cycles = self.noc.estimate_transfer(
@@ -205,36 +219,51 @@ class NPUSimulator:
             # ── SFU + Vector: decomposed softmax ──
             if op_name in ("O_proj",):
                 # Softmax decomposition: Vector(max_reduce, sub) → SFU(exp) → Vector(sum_reduce) → SFU(div)
-                HIDDEN = 2560
+                HIDDEN = 2048
                 vec_softmax = self.vector.estimate_softmax_vector_parts(HIDDEN)
                 sfu_softmax = self.sfu.estimate_softmax_decomposed(HIDDEN)
 
                 sfu_cycles = vec_softmax["max_reduce"] + sfu_softmax["exp"] + vec_softmax["sum_reduce"] + sfu_softmax["div"]
                 sfu_cycles += self.sfu.estimate("layernorm", HIDDEN)
                 sfu_cycles += self.sfu.estimate("rope", HIDDEN * 2)
+                _prev_cycle = timeline._current_cycle
                 timeline.add_sfu("attn_sfu (exp+div+ln+rope)", sfu_cycles, layer)
                 layer_data[layer].sfu += sfu_cycles
+                if debug_enabled:
+                    print(f"[DEBUG L{layer}/attn_sfu] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
                 vec_cycles = vec_softmax["scale_sub"] + self.vector.estimate_residual_add(HIDDEN)
+                _prev_cycle = timeline._current_cycle
                 timeline.add_vector("attn_vec (sub+residual)", vec_cycles, layer)
                 layer_data[layer].vector += vec_cycles
+                if debug_enabled:
+                    print(f"[DEBUG L{layer}/attn_vec] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
             elif op_name in ("FFN_down",):
-                INTERMEDIATE = 9728
-                HIDDEN = 2560
+                INTERMEDIATE = 11008
+                HIDDEN = 2048
                 sfu_cycles = self.sfu.estimate("gelu", INTERMEDIATE)
                 sfu_cycles += self.sfu.estimate("layernorm", HIDDEN)
+                _prev_cycle = timeline._current_cycle
                 timeline.add_sfu("ffn_sfu (gelu+ln)", sfu_cycles, layer)
                 layer_data[layer].sfu += sfu_cycles
+                if debug_enabled:
+                    print(f"[DEBUG L{layer}/ffn_sfu] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
                 vec_cycles = self.vector.estimate_residual_add(HIDDEN)
+                _prev_cycle = timeline._current_cycle
                 timeline.add_vector("ffn_vec (residual)", vec_cycles, layer)
                 layer_data[layer].vector += vec_cycles
+                if debug_enabled:
+                    print(f"[DEBUG L{layer}/ffn_vec] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
             # KV Cache: per-GEMM access
+            _prev_cycle = timeline._current_cycle
             kv_cycles = self.kv.estimate_per_decode(total_tokens, total_tokens)
             timeline.add_kv("kv_access", kv_cycles, layer)
             layer_data[layer].kv_cache += kv_cycles
+            if debug_enabled:
+                print(f"[DEBUG L{layer}/kv_access] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
             # Update layer total
             layer_data[layer].total = (layer_data[layer].mxu + layer_data[layer].sfu
@@ -245,8 +274,11 @@ class NPUSimulator:
 
         # Add DRAM refresh overhead (proportional to total)
         total_cycles_before = timeline.total_cycles
+        _prev_cycle = timeline._current_cycle
         refresh_cycles = self.dram.add_refresh_overhead(total_cycles_before)
         timeline.add_kv("dram_refresh", refresh_cycles, -1)
+        if debug_enabled:
+            print(f"[DEBUG SYSTEM/dram_refresh] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
         total_cycles = timeline.total_cycles
         decode_us = total_cycles / self.f_mhz
@@ -257,7 +289,7 @@ class NPUSimulator:
         # Build report
         report = SimulationReport(
             model_name="Qwen2.5-3B",
-            num_layers=28,
+            num_layers=36,
             array_height=int(self.config.get("mxu", {}).get("array_height", 128)),
             array_width=int(self.config.get("mxu", {}).get("array_width", 128)),
             weight_bits=int(self.config.get("mxu", {}).get("weight_precision_bits", 4)),
@@ -295,9 +327,9 @@ class NPUSimulator:
                 continue
 
             if op == OpCode.MMUL:
-                N = ops.get("N", 2560)
+                N = ops.get("N", 2048)
                 M = 1  # decode mode
-                K = 2560  # hidden_size
+                K = 2048  # hidden_size
                 mxu_result = self.mxu.estimate(M, K, N)
                 timeline.add_mxu(f"MMUL N={N}", mxu_result.total_cycles, current_layer)
                 if current_layer not in layer_data:
@@ -316,7 +348,7 @@ class NPUSimulator:
 
             elif op in (OpCode.SOFTMAX, OpCode.LAYERNORM, OpCode.GELU, OpCode.RELU,
                         OpCode.SILU, OpCode.MAXPOOL, OpCode.AVGPOOL, OpCode.ROPE):
-                length = ops.get("len", 2560)
+                length = ops.get("len", 2048)
                 op_name = op.name.lower()
                 sfu_cycles = self.sfu.estimate(op_name, length)
                 timeline.add_sfu(op_name, sfu_cycles, current_layer)
@@ -340,7 +372,7 @@ class NPUSimulator:
 
         return SimulationReport(
             model_name="Qwen2.5-3B",
-            num_layers=28,
+            num_layers=36,
             array_height=int(self.config.get("mxu", {}).get("array_height", 128)),
             array_width=int(self.config.get("mxu", {}).get("array_width", 128)),
             weight_bits=int(self.config.get("mxu", {}).get("weight_precision_bits", 4)),
@@ -379,10 +411,10 @@ class NPUSimulator:
                 mxu_result.dma_cycles, layer)
             timeline._current_cycle = mxu_end
 
-            hidden, effective = self.dma.estimate_effective(
+            effective, hidden = self.dma.estimate_effective(
                 mxu_result.dma_cycles, mxu_result.compute_cycles)
-            layer_data[layer].dma_weight += hidden
             layer_data[layer].dma_effective += effective
+            layer_data[layer].dma_weight += hidden
 
             # NoC: weight transfer over interconnect (breakdown only)
             noc_cycles = self.noc.estimate_transfer(
@@ -394,14 +426,14 @@ class NPUSimulator:
             layer_data[layer].noc_latency += noc_cycles
 
             if op_name in ("O_proj",):
-                sfu_cycles = self.sfu.estimate("softmax", 2560 * prompt_len)
-                sfu_cycles += self.sfu.estimate("layernorm", 2560 * prompt_len)
-                sfu_cycles += self.sfu.estimate("rope", 2560 * 2 * prompt_len)
+                sfu_cycles = self.sfu.estimate("softmax", 2048 * prompt_len)
+                sfu_cycles += self.sfu.estimate("layernorm", 2048 * prompt_len)
+                sfu_cycles += self.sfu.estimate("rope", 2048 * 2 * prompt_len)
                 timeline.add_sfu("attn_sfu", sfu_cycles, layer)
                 layer_data[layer].sfu += sfu_cycles
             elif op_name in ("FFN_down",):
-                sfu_cycles = self.sfu.estimate("gelu", 9728 * prompt_len)
-                sfu_cycles += self.sfu.estimate("layernorm", 2560 * prompt_len)
+                sfu_cycles = self.sfu.estimate("gelu", 11008 * prompt_len)
+                sfu_cycles += self.sfu.estimate("layernorm", 2048 * prompt_len)
                 timeline.add_sfu("ffn_sfu", sfu_cycles, layer)
                 layer_data[layer].sfu += sfu_cycles
 
@@ -426,7 +458,7 @@ class NPUSimulator:
 
         report = SimulationReport(
             model_name="Qwen2.5-3B",
-            num_layers=28,
+            num_layers=36,
             prefill_prompt_len=prompt_len,
             prefill_total_ms=prefill_ms,
             prefill_breakdown={k: v / self.f_mhz / 1000 for k, v in breakdown.items()},

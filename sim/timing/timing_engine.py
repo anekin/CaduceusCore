@@ -85,17 +85,35 @@ def _report_to_token_timing(
     token_idx: int,
     phase: str,
 ) -> TokenTiming:
-    """Convert a SimulationReport into a TokenTiming."""
+    """Convert a SimulationReport into a TokenTiming.
+
+    Wall-clock total is computed from events that actually advance the timeline
+    (mxu + sfu + vector + kv).  DMA and NoC events are breakdown-only and are
+    explicitly excluded so that their cycle counts are not double-counted — the
+    MXU ``total_cycles`` already accounts for any DMA stall.
+    """
     if report.layer_breakdowns:
         mb = _aggregate_layer_breakdowns(report)
     else:
         mb = _aggregate_events(report)
 
-    total_cycles = sum(mb.cycles.values())
+    # Wall-clock advancing modules: MXU, SFU, Vector, KV Cache.
+    # DMA (effective/hidden) and NoC (latency/contention) are breakdown-only.
+    wall_keys = ("mxu", "sfu", "vector", "kv_cache")
+    wall_cycles = sum(mb.cycles.get(k, 0) for k in wall_keys)
+
+    # kv_cache from layer_breakdowns excludes the global DRAM refresh event
+    # (layer=-1).  Add it back from the event list.
+    if report.layer_breakdowns:
+        for ev in report.events:
+            if ev.module == "kv" and "dram_refresh" in ev.op:
+                wall_cycles += ev.end_cycle - ev.start_cycle
+                break
+
     return TokenTiming(
         token_idx=token_idx,
         phase=phase,
-        total_cycles=total_cycles,
+        total_cycles=wall_cycles,
         module_breakdown=mb,
     )
 

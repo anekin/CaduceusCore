@@ -25,7 +25,7 @@ class ModelSpec:
 
 MODELS = {
     "qwen2.5-1.5b": ModelSpec("qwen2.5-1.5b", 1536, 1536, 8960, 28, 12, 2, head_dim=128),
-    "qwen2.5-3b":   ModelSpec("qwen2.5-3b",   4096, 2560, 9728, 28, 32, 2, head_dim=128),
+    "qwen2.5-3b":   ModelSpec("qwen2.5-3b",   2048, 2048, 11008, 36, 16, 16, head_dim=128),
     "qwen2.5-7b":   ModelSpec("qwen2.5-7b",   3584, 3584, 18944, 28, 28, 4, head_dim=128),
     "qwen3-8b":     ModelSpec("qwen3-8b",     4096, 4096, 12288, 32, 32, 4, head_dim=128),
     "gemma-4-12b":  ModelSpec("gemma-4-12b",  4096, 4096, 16384, 40, 16, 8, head_dim=256),
