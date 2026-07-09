@@ -315,6 +315,11 @@ Phase 6 (deferred, FPGA stage):
     **QA fail**: if any dim=16 point crashes (min-size boundary) → fix testbench/runner corner case; if any dim=4096 point times out → document max testable dim
     **Commit**: `[Perf][SFU] P1 sweep: 8 ops × 9 dims parameterized cycles measured`
     **Evidence**: `build/wave2/testcase-list.md` updated; `build/evidence/sfv-P1-sweep-summary.json`
+    **Cross-cut checks (from rtl-update-plan lessons)**:
+    - [ ] **Stale binary**: 执行 sweep 前 `rm -f build/simv_tb_sfu_perf` 强制重编（避免 flist 内部依赖未追踪导致跑旧二进制 — Lesson: `simv_soc_cocotb` stale 问题）
+    - [ ] **No /tmp paths**: `grep '/tmp/' scripts/run_sfu_perf_case.py scripts/analyze_sfu_perf.py` → 0 结果（Lesson: F3 Security HIGH `/tmp` finding）
+    - [ ] **CWD for LUT paths**: SFU 仿真从 `$(REPO_ROOT)/..` 启动，确认无 `Cannot open file` LUT 警告（Lesson: LUT 相对路径依赖 parent directory）
+    - [ ] **Anti-vacuous**: 注入一个故意错误的 dim（如 dim=0 或 N=999999），确认 sweep 框架产生 FAIL 而非 silent-pass（Lesson: anti-vacuous 必须 genuine）
 
 2.6 [ ] Vector P1 parameter sweep (SFV-P20..P22) — PENDING (Phase 5)
     **Refs**: W2.4 P0 baselines; SFV-P20..P22; VCONV_F16_I32 dry-run from 2.5 prereq
@@ -324,6 +329,10 @@ Phase 6 (deferred, FPGA stage):
     **QA fail**: if any op N-sweep fails → root-cause → fix or document
     **Commit**: `[Perf][Vector] P1 sweep: 8 ops × 9 dims parameterized cycles measured`
     **Evidence**: `build/evidence/sfv-P1-vector-sweep-summary.json`
+    **Cross-cut checks (from rtl-update-plan lessons)**:
+    - [ ] **Stale binary**: 执行前 `rm -f build/simv_tb_vector_perf` 强制重编（Lesson: stale binary）
+    - [ ] **No /tmp paths**: `grep '/tmp/' scripts/run_vector_perf_case.py scripts/analyze_vector_perf.py` → 0 结果（Lesson: /tmp security）
+    - [ ] **Anti-vacuous**: 注入 dim=0，确认 sweep 框架正确处理异常输入（Lesson: anti-vacuous genuine）
 
 2.7 [ ] SFU+Vector P2 back-to-back + Func Model calibration (SFV-P23..P28) — PENDING (Phase 5)
     **Refs**: P1 results from 2.5 2.6; SFV-P23..P28
@@ -333,6 +342,11 @@ Phase 6 (deferred, FPGA stage):
     **QA fail**: if any sequence shows inter-op gap > 100 cycles cross-engine → flag as potential NoC/arbitration bottleneck → document
     **Commit**: `[Perf][SFU+Vector] P2 back-to-back: inter-op pipeline overlap measured`
     **Evidence**: `build/evidence/sfv-P2-back-to-back-summary.json`
+    **Cross-cut checks (from rtl-update-plan lessons)**:
+    - [ ] **Stale binary**: 执行前强制重编（2.5/2.6 同）
+    - [ ] **APB timing 验证**: back-to-back 中的 MMIO 寄存器写入路径经过 `apb_to_mmio.v`（`cs = psel && penable`），确认无 double-latch 导致的跨 engine 状态异常（Lesson: APB bridge 单周期 latch fix）
+    - [ ] **Workaround 禁止**: 如发现任何 cycle 异常，禁止通过调整 test parameter "pass"——必须 root-cause 到 RTL/脚本并修复，不在 Phase 5 留下 workaround 债（Lesson: workaround today costs more debug tomorrow）
+    - [ ] **Anti-vacuous**: 在一条 chain 中注入错误的中间 op 输出，确认 gap measurement 检测到异常
 
 2.8 [ ] SFU+Vector P3 edge cases (SFV-P29..P34) — PENDING (Phase 5)
     **Refs**: SFV-P29..P34 defined in `rtl/testcase-list-sfu-vector-perf.md`
@@ -342,6 +356,10 @@ Phase 6 (deferred, FPGA stage):
     **QA fail**: if dim=1 produces unreasonable overhead (>10× per-element)
     **Commit**: `[Perf][SFU+Vector] P3 edge cases: min/max/zero/maxval/sparse/repeated boundary verified`
     **Evidence**: `build/evidence/sfv-P3-edge-cases-summary.json`
+    **Cross-cut checks (from rtl-update-plan lessons)**:
+    - [ ] **Parent-directory run variant**: 对 SFU edge case 增加从 `$(REPO_ROOT)/..` 运行的子场景，确认 LUT 路径在不同 CWD 下均正确解析（Lesson: run command CWD matters）
+    - [ ] **Anti-vacuous**: 对 dim=1 的 case，注入一个预期外的大 dim 值，确认框架检测到 cycle 异常
+    - [ ] **Workaround 禁止**: 同 2.7（Lesson: fix at source, not workaround）
 
 2.9 [ ] Review Gate: Atlas audit of Wave 2 evidence
     **Prerequisite**: 2.5-2.8 all [x]; W2 evidence files populated; anti-vacuous assertion fix (W2 P0 sram_a_en toggle) verified
@@ -482,6 +500,8 @@ Phase 6 (deferred, FPGA stage):
 
 ## Final verification wave (Phase 5)
 
+> **Review pattern**: 沿用 rtl-update-plan 验证有效的五审并行模式 — F1 Goal + F2 Code Quality + F3 Security + F4 Context Mining + QA，全部 APPROVE 后方可 commit。任一 REJECT → 修复 → re-run 该路 reviewer，直到全部 APPROVE。
+>
 > **Note**: Phase 5.5 readiness todo (below) gates Phase 6 transition. W3-RTL, W4, and 36-layer RTL are deferred until FPGA platform is inventoried and VCS co-sim path confirmed.
 
 F0. [ ] ⏭️ **Phase 5.5 — Phase 6 FPGA readiness inventory and decision gate**
@@ -493,11 +513,19 @@ F0. [ ] ⏭️ **Phase 5.5 — Phase 6 FPGA readiness inventory and decision gat
 F1. [ ] Plan compliance audit: W1/W2/W3-FM/W5 Waves have Review Gate approved; all Phase 5 todos completed; W3-RTL + W4 deferral documented; evidence consistent
      **Acceptance**: Atlas full-plan review → approve
      **Commit**: `[Verify] Full plan compliance audit`
+     **Cross-cut checks (from rtl-update-plan lessons)**:
+     - [ ] **Anti-vacuous 逐波审核**: 确认 W1、W2、W3-FM、W5 每个 Wave 都有 genuine anti-vacuous evidence（不是 trivial pass）— Lesson: per-op PASS ≠ E2E PASS
+     - [ ] **Workaround 债清理**: 确认 Phase 5 中所有已知 workaround（如 BUG-RTL-SOC-005 wstrb fix、W1.3 generator fix）已关闭或显式 defer 到 Phase 6 — Lesson: workaround today costs more debug tomorrow
+     - [ ] **Learnings 传播**: 确认 rtl-update-plan 的关键教训（stale binary、/tmp paths、CWD、help text、clean targets）已反映到本 plan 的 task acceptance 中
 
 F2. [ ] Regression baseline: pytest 210/210, FM-SOC 33 original + 5 new (FM-SOC-036 36-layer golden=1 batch, FM-SOC-037 3-layer forward=1, FM-SOC-038 dual-path FM=1, FM-SOC-039 MobileNetV3 FM=1, ISA-opcode AVGPOOL/MAXPOOL/RELU pytest cases=1) = 38 FM-SOC-equivalent items total; module-level API regression (MXU 9/9, SFU 319/319, Vector 63/63)
      **Acceptance**: All regression suites PASS; no degradation from baseline; exact new case IDs: FM-SOC-036, FM-SOC-037, FM-SOC-038, FM-SOC-039, pytest test_pool_relu_opcodes.py locked in `build/evidence/final-regression-summary.md`
      **QA fail**: if any baseline suite regresses → identify breaking change from git log → root-cause per Wave → fix or document as expected change → re-run affected suite
      **Commit**: `[Verify] Full regression baseline confirmed`
+     **Cross-cut checks (from rtl-update-plan lessons)**:
+     - [ ] **区分 pre-existing failures**: pytest 全量有 ~9 个已知的 engine-model calibration drift 失败（`test_engines.py` + `test_arc_model.py`），这些 **不算回归**。回归报告必须显式标注 "pre-existing: N failures, new: 0 failures"（Lesson: 700/9 passed/failed pattern）
+     - [ ] **Stale binary**: 回归执行前 `rm -f simv_*` 或 `touch pli.tab` 确保 SoC simv 重编（Lesson: Makefile 依赖不追踪 flist 内部文件）
+     - [ ] **Help text + clean**: `make help` 包含所有新增 target；`make clean` 清理所有新增日志和 daidir（Lesson: F2 Code Quality REJECT — missing help text）
 
 F3. [ ] Known gaps update: `docs/issues_found.md` reflects post-Phase-5 state; W3 RTL + W4 deferral gaps explicitly listed with Phase 6 target; 14-lesson checklist fully audited; remaining gaps explicitly listed with rationale
      **Commit**: `[Doc] Final issues_found.md update`
@@ -505,6 +533,9 @@ F3. [ ] Known gaps update: `docs/issues_found.md` reflects post-Phase-5 state; W
 F4. [ ] Scope fidelity: Must NOT Have paths (INT8 datapath, BF16 datapath, 综合/物理设计, 新引擎架构) verified unchanged; Phase 5 scope boundaries respected
      **Acceptance**: (a) `git diff --stat` shows only planned files; (b) `find rtl -name "*bf16*" -o -name "*int8_datapath*" | wc -l` returns 0; (c) each wave lead validates no out-of-scope work started; (d) `docs/issues_found.md` updated with any residual scope observations
      **Commit**: `[Verify] Scope fidelity confirmed`
+     **Cross-cut checks (from rtl-update-plan lessons)**:
+     - [ ] **No /tmp in changed files**: `grep -r '/tmp/' scripts/ sim/regression/Makefile` → 0 结果（Lesson: F3 Security HIGH finding）
+     - [ ] **No unintended RTL modifications**: `git diff --stat -- rtl/` 仅包含本 plan 允许范围内的文件（`rtl/wrapper/`, `rtl/tb/`, `rtl/mxu/README.md` 等）
 
 ## Commit strategy
 

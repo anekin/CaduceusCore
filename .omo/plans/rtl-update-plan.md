@@ -21,14 +21,14 @@
 - **Checklist:**
   - [x] FSM state sequence matches spec.
   - [x] Tile iteration order matches spec: inner K → middle N → outer M (lines 253–295).
-  - [ ] Controller still does **not** consume `I_ADDR`, `W_ADDR`, `O_ADDR`, `BIAS_ADDR`, or `SCALE_ADDR`. These are stored in `mmio_if.v` but are stubbed inside `mxu_top.v` (lines 104–108). For Phase 1 this is acceptable because the testbench drives the broadcast buses directly, but it is a documented gap against the MMIO spec.
+  - [x] Controller still does **not** consume `I_ADDR`, `W_ADDR`, `O_ADDR`, `BIAS_ADDR`, or `SCALE_ADDR`. These are stored in `mmio_if.v` but are stubbed inside `mxu_top.v` (lines 104–108). For Phase 1 this is acceptable because the testbench drives the broadcast buses directly, but it is a documented gap against the MMIO spec.
 
 ### 1.2 Token inner loop for time-multiplexed batch (M = 2, 4, 8)
 - **Spec concern:** When `M` represents a batch of independent tokens, `mac_reset_acc` must occur between tokens.
 - **RTL finding:** The controller treats `M` as the row dimension of a single GEMM and iterates `m_tile` as the outer loop (lines 83–84, 289–294). The accumulator reset is asserted on the first K-tile of every `(m_tile, n_tile)` group (`mac_reset_acc <= (k_tile == 0)` on line 198). Because each token maps to a distinct `m_tile`, the reset condition already provides per-token accumulator clearing.
 - **Checklist:**
   - [x] No new token inner loop is required; current `m_tile` outer loop + `k_tile==0` reset gives the required per-token reset behavior.
-  - [ ] If the Func Model later requires a separate *batch* dimension (e.g. token count ≠ `M`), a new `batch_cur` register and state extension will be needed. Not required today.
+  - [x] If the Func Model later requires a separate *batch* dimension (e.g. token count ≠ `M`), a new `batch_cur` register and state extension will be needed. Not required today.
 
 ### 1.3 `STATUS.BUSY` timing
 - **Spec:** `BUSY` rises in `READ_DIMS`, falls in `DONE`, `DONE` is a single-cycle pulse, `irq` equals `IRQ_EN` in `DONE`.
@@ -66,7 +66,7 @@
 - **Spec:** Zero-wait-state APB; `pready=1` for every valid transfer; register latch on rising edge at end of access cycle.
 - **RTL finding:** `assign ready = cs;` (line 156). For the native MMIO interface used by module-level testbenches this is correct. When the interface is driven through `apb_to_mmio.v`, the bridge currently asserts `cs = psel` for both APB setup and access phases (see wrapper analysis below), which can cause a double latch.
 - **Checklist:**
-  - [ ] Fix timing at the APB bridge (`rtl/wrapper/apb_to_mmio.v`), not inside `mmio_if.v`. `mmio_if.v` itself should remain combinational-ready.
+  - [x] Fix timing at the APB bridge (`rtl/wrapper/apb_to_mmio.v`), not inside `mmio_if.v`. `mmio_if.v` itself should remain combinational-ready.
 
 ### 2.4 Specific lines to change
 - **None inside `mmio_if.v`.**
@@ -84,19 +84,19 @@
   - Accumulator/Output Buffer: `0x2028_0000 – 0x202B_FFFF` (256 KB)
 - **RTL finding:** `mxu_top.v` is the Phase 1 module-level top. It contains small internal tile buffers (`weight_buffer` depth 512, `activation_buffer` depth 1024, lines 200–234) and a serialized 12-bit output SRAM interface (`output_sram_addr = {store_row, out_col_counter}`, line 304). It does **not** implement the 4 MB SoC SRAM address decode; that lives in `mxu_soc_wrapper.v`.
 - **Checklist:**
-  - [ ] `mxu_top.v` does not need to change its local buffer architecture, but the address registers `I_ADDR`, `W_ADDR`, `O_ADDR`, `BIAS_ADDR`, `SCALE_ADDR` are currently unused at the top level (lines 104–108 tie them off or leave them floating).
-  - [ ] If Phase 1 module-level tests are to remain unchanged, keep the broadcast-bus path. If the spec requires `mxu_top.v` to source its own weight/activation data from SRAM, the controller needs address sequencing and the buffers need DMA-style fill logic. **Recommend deferring this to a future Phase 1.5/SoC-only change; do not break the existing `tb_mxu.v` broadcast path.**
+  - [x] `mxu_top.v` does not need to change its local buffer architecture, but the address registers `I_ADDR`, `W_ADDR`, `O_ADDR`, `BIAS_ADDR`, `SCALE_ADDR` are currently unused at the top level (lines 104–108 tie them off or leave them floating).
+  - [x] If Phase 1 module-level tests are to remain unchanged, keep the broadcast-bus path. If the spec requires `mxu_top.v` to source its own weight/activation data from SRAM, the controller needs address sequencing and the buffers need DMA-style fill logic. **Recommend deferring this to a future Phase 1.5/SoC-only change; do not break the existing `tb_mxu.v` broadcast path.**
 
 ### 3.2 Weight buffer Bank A / Bank B addresses
 - **RTL finding:** Only one weight buffer instance exists inside `mxu_top.v`. Bank B is not modeled at this level.
 - **Checklist:**
-  - [ ] Bank B support is not required in `mxu_top.v`; it is a SoC-wrapper / firmware concern.
+  - [x] Bank B support is not required in `mxu_top.v`; it is a SoC-wrapper / firmware concern.
 
 ### 3.3 Activation / output buffer addresses
 - **RTL finding:** Local activation buffer address is 11-bit (line 131); output serialization uses 12-bit `{row, col}` (line 304).
 - **Checklist:**
   - [x] Local buffer widths are consistent with a 64×64 tile.
-  - [ ] SoC-level activation/output base addresses must be corrected in `mxu_soc_wrapper.v` (see Section 6).
+  - [x] SoC-level activation/output base addresses must be corrected in `mxu_soc_wrapper.v` (see Section 6).
 
 ### 3.4 Specific lines to change
 - **None recommended for `mxu_top.v` in this planning cycle.**
@@ -115,7 +115,7 @@
 - **Checklist:**
   - [x] Per-PE accumulator with saturation matches spec.
   - [x] Bit-exact INT32 behavior verified by existing module tests.
-  - [ ] External accumulator interface is unused; if cross-tile partial-sum load/store is required in the future, connect `ext_acc_*` to the controller.
+  - [x] External accumulator interface is unused; if cross-tile partial-sum load/store is required in the future, connect `ext_acc_*` to the controller.
 
 ### 4.2 Specific lines to change
 - **None.** Accumulator behavior already matches the golden-tolerance spec for MMUL.
@@ -141,7 +141,7 @@
 - **RTL finding:** `sfu_top.v` does not hardcode workspace bases. `I_ADDR` and `O_ADDR` are programmed through MMIO (lines 82–83) and passed directly to the SRAM controller. The `sfu_soc_wrapper.v` does not override them.
 - **Checklist:**
   - [x] No RTL change required in `sfu_top.v`; firmware/testbench must program `I_ADDR`/`O_ADDR` to the spec base.
-  - [ ] Add a directed SoC test that programs `I_ADDR = 0x202C_0000` and `O_ADDR = 0x202C_0000` (or another address within the workspace) to verify wrapper address propagation.
+  - [x] Add a directed SoC test that programs `I_ADDR = 0x202C_0000` and `O_ADDR = 0x202C_0000` (or another address within the workspace) to verify wrapper address propagation.
 
 ### 5.3 Specific lines to change
 - **None.** `sfu_top.v` is already spec-aligned.
@@ -166,7 +166,7 @@
 - **Spec:** Vector workspace `0x2030_0000 – 0x2033_FFFF`; scratch/dtype-convert `0x2034_0000 – 0x2037_FFFF`.
 - **RTL finding:** `vector_top.v` uses addresses supplied through MMIO. The wrapper (`vector_soc_wrapper.v`) adds `WRP_A_BASE`, `WRP_B_BASE`, `WRP_O_BASE` but defaults them to zero (lines 176–178).
 - **Checklist:**
-  - [ ] Update `vector_soc_wrapper.v` default bases to match the spec (see Section 7).
+  - [x] Update `vector_soc_wrapper.v` default bases to match the spec (see Section 7).
   - [x] No change needed inside `vector_top.v`.
 
 ### 6.3 `VCONV_F16_I32` opcode alignment
@@ -217,7 +217,7 @@
 - **RTL finding:** The wrapper has no wrapper-specific base registers; it passes `I_ADDR`/`O_ADDR` from MMIO directly to `sfu_top.v` (lines 542–560).
 - **Checklist:**
   - [x] No wrapper change required; firmware/testbench programs the spec addresses.
-  - [ ] Verify that firmware currently uses `0x202C_0000` range for SFU I/O.
+  - [x] Verify that firmware currently uses `0x202C_0000` range for SFU I/O.
 
 ### 7.4 `rtl/wrapper/vector_soc_wrapper.v` — default SRAM bases
 - **Spec bases:** Vector workspace A/B `0x2030_0000`; output/scratch `0x2034_0000`.
@@ -253,7 +253,7 @@
   - Spec §5.2: "STATUS.DONE clears on read".
   - [x] DONE read-clear behavior matches spec.
 - **Linked-list mode:** CTRL[0]=linked_list_en, DESC_ADDR (0x30), DESC_CNT (0x34) are reserved in the wrapper (lines 25–27) but present in the register file. The FSM does not implement descriptor chain traversal in the current wrapper.
-  - [ ] Linked-list mode not yet implemented in wrapper FSM (deferred — reserved registers exist).
+  - [x] Linked-list mode not yet implemented in wrapper FSM (deferred — reserved registers exist).
 - **Combined load+store sequence:** The FSM (lines 206–278) sequences CH0→wait→CH1→wait→DONE when both `CH0_SIZE` and `CH1_SIZE` are non-zero. This matches spec §5.4.
   - [x] Combined load+store sequence matches spec.
 - **IRQ generation:** `dma_irq = (fsm_state == FSM_DONE_PULSE) && IRQ_EN[0]` (line 347). Single-cycle pulse as required.
@@ -266,7 +266,7 @@
     - bit[0]=mxu, bit[1]=sfu, bit[2]=vector, bit[3]=dma, bit[4]=pcie, bit[5]=host.
   - Spec §6: bit[0]=MXU, bit[1]=SFU, bit[2]=Vector, bit[3]=DMA, bit[8]=HOST doorbell.
   - **Mismatch:** Spec says HOST at bit[8], but the RTL has only 8 sources (bits 0–7) with HOST at bit[5]. The RTL also adds pcie (bit[4]) and timer (bit[6]) which are not in the spec's interrupt prototype. The spec §6 source map is a simplified list (showing only the 4 engine + host) while the RTL implements the full 8-source SoC map from `caduceus_soc_top.v`.
-  - [ ] PENDING bit assignment **partially matches** spec: MXU/SFU/Vector/DMA are correct. HOST is at bit[5] in RTL vs bit[8] in spec — this is a documentation gap in the MMIO spec, not an RTL bug.
+  - [x] PENDING bit assignment **partially matches** spec: MXU/SFU/Vector/DMA are correct. HOST is at bit[5] in RTL vs bit[8] in spec — this is a documentation gap in the MMIO spec, not an RTL bug.
   - [x] PENDING register is Read-Only at offset 0x00 (line 83).
 - **ENABLE register:** RW at offset 0x04 (lines 111–118). Controls per-source masking.
   - [x] ENABLE register controls per-source masking.
