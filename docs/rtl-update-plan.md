@@ -224,9 +224,9 @@
 - **RTL finding:** Reset defaults on lines 176–178 are all zero (`{ADDR_W{1'b0}}`). Firmware/testbench is required to program them.
 - **Change required:**
   - **Line 176:** `wrp_a_base <= 32'h2030_0000;`
-  - **Line 177:** `wrp_b_base <= 32'h2030_0000;`  (or `0x2032_0000` if A/B are split within the workspace)
+  - **Line 177:** `wrp_b_base <= 32'h2030_0000;`
   - **Line 178:** `wrp_o_base <= 32'h2034_0000;`  (scratch/dtype-convert region)
-- **Note:** `vector_top.v` distinguishes A/B/O through MMIO `A_ADDR`/`B_ADDR`/`O_ADDR`, which are offsets within the wrapper buffers. The wrapper adds the base addresses. If the Func Model expects A and B in different sub-regions of the 256 KB workspace, split `wrp_a_base`/`wrp_b_base` accordingly (e.g. A at `0x2030_0000`, B at `0x2032_0000`, each 128 KB). Confirm against `sim/golden_executor.py` buffer layout before finalizing.
+- **Note:** `vector_top.v` distinguishes A/B/O through MMIO `A_ADDR`/`B_ADDR`/`O_ADDR`, which are offsets within the wrapper buffers. The wrapper adds the base addresses. A and B share the same base address (`0x2030_0000`); B data follows A contiguously at offset `length × 4` bytes, matching `golden_executor.py` line 1444 (`sa + length * 4`).
 
 ---
 
