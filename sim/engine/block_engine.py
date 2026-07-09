@@ -96,16 +96,17 @@ class BlockEngine(MACEngine):
                 },
             )
 
-        # ── External DRAM: K-tiling required ──
+        # ── External DRAM: time-multiplexed M ──
+        # M tokens processed sequentially (M passes) sharing one weight load.
+        M_tiles = math.ceil(M / self.H)   # M≤H → M_tiles=1 (one weight load pass)
         K_tiles = math.ceil(K / self.H)
-        total_tiles = K_tiles * N_tiles
+        N_tiles = math.ceil(N / self.W)
+        per_pass_tiles = K_tiles * N_tiles   # tiles per single-token pass
 
-        # Per-tile data
+        # Per-tile weight (for reporting only)
         tile_weight_bytes = math.ceil(self.H * self.W * self.w_bits / 8)
-        # Activations: M×K total, loaded once per K-tile, broadcast across N-tiles
-        act_bytes = M * K * self.a_bits // 8
 
-        # Total weight for this matmul
+        # Total weight for this matmul (loaded once per M-tile)
         total_weight_bytes = K * N * self.w_bits // 8
 
         # SRAM efficiency
@@ -115,17 +116,20 @@ class BlockEngine(MACEngine):
         else:
             weight_dma_cycles = total_weight_bytes / (self.eff_bw * weight_dram_eff)
 
-        act_dma_cycles = act_bytes / self.eff_bw
-        total_dma_cycles = weight_dma_cycles + act_dma_cycles
+        # Activation DMA: per-token (one activation load per M pass)
+        act_bytes_per_token = K * self.a_bits // 8
+        act_dma_cycles = M * act_bytes_per_token / self.eff_bw
 
-        # Compute: broadcast pipeline with K-reduction depth
-        # Each PE does H MACs along K dimension (1 MAC/cycle in fully-pipelined block)
+        total_dma_cycles = M_tiles * weight_dma_cycles + act_dma_cycles
+
+        # Compute: M sequential passes, each processing one token
         per_tile_compute = self.H + BROADCAST_SYNC_CYCLES + \
             _accumulate_cycles(self.w_bits, self.a_bits)
-        total_compute = per_tile_compute * total_tiles
+        total_compute = M * per_tile_compute * per_pass_tiles
 
         total_cycles = max(total_compute, total_dma_cycles)
         total_macs = M * K * N
+        total_tiles = M * per_pass_tiles   # total tiles across all passes
 
         ideal = math.ceil(total_macs / self.peak_macs_per_cycle)
         util = ideal / total_cycles if total_cycles > 0 else 0.0
@@ -140,66 +144,69 @@ class BlockEngine(MACEngine):
             weight_bytes=int(total_weight_bytes),
             bottleneck="dma" if total_dma_cycles > total_compute else "compute",
             details={
-                "K_tiles": K_tiles, "N_tiles": N_tiles,
+                "M_tiles": M_tiles, "K_tiles": K_tiles, "N_tiles": N_tiles,
                 "per_tile_compute": per_tile_compute,
                 "weight_dram_eff": round(weight_dram_eff, 3),
+                "token_multiplex": True,
             },
         )
 
     def estimate_weight_cache_pair(self, M: int, K: int, N: int) -> EngineResult:
-        """Gate+Up with block-engine weight cache.
+        """Gate+Up with block-engine weight cache, time-multiplexed M.
 
-        Block engine supports dual weight registers so gate and up tiles
-        sharing the same (M,K) activation can be processed back-to-back.
-        The main benefit is avoiding the second activation broadcast: only
-        one set of activations is loaded per tile, while both gate and up
-        weights are fetched together.
+        Time-multiplexed dataflow: weights (gate+up) loaded ONCE from DRAM,
+        then M sequential compute passes through the array (one per token).
+        Each pass processes both gate and up tiles with accumulator reset
+        between tokens.  Activation is loaded per-token, not batched.
         """
+        M_tiles = math.ceil(M / self.H)   # M≤H → one weight load
         K_tiles = math.ceil(K / self.H)
         N_tiles = math.ceil(N / self.W)
-        total_tiles = K_tiles * N_tiles
+        per_pass_tiles = K_tiles * N_tiles
+        total_tiles = M * per_pass_tiles  # for reporting
 
         tile_weight_bytes = math.ceil(self.H * self.W * self.w_bits / 8)
-        tile_act_bytes = math.ceil(M * self.H * self.a_bits / 8)
-
-        # With weight cache: load both gate and up weights, but one activation.
         dual_weight_bytes = 2 * tile_weight_bytes
-        per_tile_dma = (dual_weight_bytes + tile_act_bytes) / self.eff_bw
 
-        # Compute gate then up sequentially on the same PE array.
+        # Per-token activation per tile
+        tile_act_per_token = math.ceil(self.H * self.a_bits / 8)
+
+        # Weight cache: load gate+up weights once per M-tile
+        total_weight_bytes = per_pass_tiles * dual_weight_bytes
+        total_act_bytes = M * per_pass_tiles * tile_act_per_token
+
+        # DMA: weight loaded once, activation loaded per token
+        weight_dma_cycles = total_weight_bytes / self.eff_bw
+        act_dma_cycles = total_act_bytes / self.eff_bw
+        total_dma_cycles = M_tiles * weight_dma_cycles + act_dma_cycles
+
+        # Compute: M sequential passes, each processing gate+up
         per_tile_compute = 2 * (BROADCAST_SYNC_CYCLES +
                                 _accumulate_cycles(self.w_bits, self.a_bits))
+        total_compute = M * per_tile_compute * per_pass_tiles
 
-        # Double-buffering overlap, same shape as single estimate.
-        bottleneck = max(per_tile_compute, per_tile_dma)
-        first_cold = per_tile_dma + per_tile_compute
-
-        if total_tiles > 1:
-            total = int(first_cold + (total_tiles - 1) * bottleneck)
-        else:
-            total = int(first_cold)
-
+        total_cycles = max(total_compute, total_dma_cycles)
         total_macs = M * K * N * 2
-        total_weight_bytes = total_tiles * (dual_weight_bytes + tile_act_bytes)
-        ideal = math.ceil(total_macs / self.peak_macs_per_cycle)
-        util = ideal / total if total > 0 else 0.0
 
-        # Activation re-broadcast savings vs two separate estimates.
-        activation_savings = total_tiles * tile_act_bytes / self.eff_bw
+        ideal = math.ceil(total_macs / self.peak_macs_per_cycle)
+        util = ideal / total_cycles if total_cycles > 0 else 0.0
+
+        # Savings: one activation load saved per token (no separate gate+up loads).
+        activation_savings = M * per_pass_tiles * tile_act_per_token / self.eff_bw
 
         return EngineResult(
-            compute_cycles=int(per_tile_compute * total_tiles),
-            dma_cycles=int(total - per_tile_compute * total_tiles),
-            total_cycles=total,
+            compute_cycles=int(total_compute),
+            dma_cycles=int(total_dma_cycles),
+            total_cycles=int(total_cycles),
             utilization=util,
             ops=total_macs,
             num_tiles=total_tiles,
-            weight_bytes=total_weight_bytes,
-            bottleneck="dma" if per_tile_dma > per_tile_compute else "compute",
+            weight_bytes=int(total_weight_bytes),
+            bottleneck="dma" if total_dma_cycles > total_compute else "compute",
             details={
-                "K_tiles": K_tiles, "N_tiles": N_tiles,
-                "per_tile_dma": round(per_tile_dma, 1),
+                "M_tiles": M_tiles, "K_tiles": K_tiles, "N_tiles": N_tiles,
                 "per_tile_compute": per_tile_compute,
                 "weight_cache_savings": int(activation_savings),
+                "token_multiplex": True,
             },
         )
