@@ -1560,7 +1560,7 @@ class GoldenExecutor:
         return ops.get("len", 0)
 
     def _insert_dtype_converters(self, program: List[NPUInstruction],
-                                 scratch_base: int = 0x380000) -> List[Any]:
+                                 scratch_base: int = 0x340000) -> List[Any]:
         """Expand *program* by inserting VCONV/VCONV_F16_I32 between mismatched ops.
 
         For FP16 -> INT8 transitions an explicit INT32 -> INT8 clip/rewrite is
@@ -1631,7 +1631,7 @@ class GoldenExecutor:
         return expanded
 
     def run_op_chain(self, program: List[NPUInstruction],
-                     scratch_base: int = 0x380000) -> List[ExecutorState]:
+                     scratch_base: int = 0x340000) -> List[ExecutorState]:
         """Execute a program with automatic dtype-converter insertion.
 
         Adjacent ops whose output/input dtypes differ receive an implicit
