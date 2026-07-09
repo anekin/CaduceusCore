@@ -32,3 +32,28 @@ vc_hdrs.h
 firmware/build/*.bin
 firmware/build/*.tmp
 firmware/build/*.host.elf
+
+# Tracked compiled binary (source .cpp and Makefile remain tracked)
+llama_ref/dump_hidden_states
+llama_ref/dump_hidden_states.*
+
+# VCS build artifacts
+build/ibex_full_rtl/
+build/p1_full_rtl/
+build/p2p3_full_rtl/
+build/p4_full_rtl/
+build/run/
+build/wave1/
+
+# Generated benchmark output
+results/
+
+# Regression outputs
+sim/regression/*.xml
+sim/regression/*.json
+
+# Local config and state
+.opencode/
+.omo/boulder.json
+.omo/run-continuation/
+opencode_wa/
