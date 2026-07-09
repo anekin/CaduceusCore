@@ -1,48 +1,49 @@
 # Performance Dashboard — qwen2.5-3b
 
 **Engine**: CaduceusCore TimingEngine
-**Timestamp**: 2026-07-08T03:24:58.293453+00:00
+**Timestamp**: 2026-07-09T09:15:56.032785+00:00
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Tps | 8.41 |
-| Ttft Ms | 335.83 |
-| Tpot Us | 118905.11 |
-| Prefill Ms | 216.92 |
-| Decode Per Token Us | 118905.11 |
-| Itl Us P50 | 118905.11 |
-| Itl Us P90 | 118905.11 |
-| Itl Us P99 | 118905.11 |
-| Bandwidth Utilization Pct | 30.7 |
-| Dma Overlap Ratio | 1.55 |
-| Total Cycles | 118905108 |
+| Tps | 21.59 |
+| Ttft Ms | 196.09 |
+| Tpot Us | 0.0 |
+| Prefill Ms | 149.76 |
+| Decode Per Token Us | 46326.69 |
+| Itl Us P50 | 0.0 |
+| Itl Us P90 | 0.0 |
+| Itl Us P99 | 0.0 |
+| Bandwidth Utilization Pct | 30.36 |
+| Real Bw Utilization Pct | 30.36 |
+| Dma Overlap Ratio | 0.7 |
+| Total Cycles | 131869296 |
 
 ## Per-Module Cycles
 
 | Module | Cycles |
 |--------|--------|
-| mxu | 38948252 |
-| sfu | 618688 |
-| vector | 8400 |
-| dma_weight | 14290332 |
-| dma_effective | 22216348 |
-| kv_cache | 46368 |
-| noc_latency | 42776720 |
+| mxu | 43138332 |
+| sfu | 700776 |
+| vector | 8640 |
+| dma_weight | 23563152 |
+| dma_effective | 16467228 |
+| kv_cache | 111888 |
+| noc_latency | 47879280 |
 | noc_contention | 0 |
 
 ## Module Utilization
 
 | Module | % |
 |--------|---|
-| mxu | 32.76 |
-| sfu | 0.52 |
+| mxu | 32.71 |
+| sfu | 0.53 |
 | vector | 0.01 |
-| dma_weight | 12.02 |
-| dma_effective | 18.68 |
-| kv_cache | 0.04 |
-| noc_latency | 35.98 |
+| dma_weight | 17.87 |
+| dma_effective | 12.49 |
+| kv_cache | 0.08 |
+| noc_latency | 36.31 |
 | noc_contention | 0.0 |
 
 ## NoC
@@ -51,23 +52,8 @@
 |--------|-------|
 | Topology | crossbar |
 | Ports | 4 |
-| Latency (us) | 42776.72 |
+| Latency (us) | 47879.28 |
 | Contention (%) | 0.0 |
-
-## ITL Distribution (ASCII histogram)
-
-```
-  118905.1 - 118906.1 us: ######################################## (127)
-  118906.1 - 118907.1 us: # (0)
-  118907.1 - 118908.1 us: # (0)
-  118908.1 - 118909.1 us: # (0)
-  118909.1 - 118910.1 us: # (0)
-  118910.1 - 118911.1 us: # (0)
-  118911.1 - 118912.1 us: # (0)
-  118912.1 - 118913.1 us: # (0)
-  118913.1 - 118914.1 us: # (0)
-  118914.1 - 118915.1 us: # (0)
-```
 
 ## Configuration
 
