@@ -96,9 +96,10 @@ class BlockEngine(MACEngine):
                 },
             )
 
-        # ── External DRAM: K-tiling required ──
+        # ── External DRAM: K-tiling required, per-M-tile weight reload ──
+        M_tiles = math.ceil(M / self.H)
         K_tiles = math.ceil(K / self.H)
-        total_tiles = K_tiles * N_tiles
+        total_tiles = M_tiles * K_tiles * N_tiles
 
         # Per-tile data
         tile_weight_bytes = math.ceil(self.H * self.W * self.w_bits / 8)
@@ -113,7 +114,7 @@ class BlockEngine(MACEngine):
         if weight_dram_eff <= 0:
             weight_dma_cycles = 0
         else:
-            weight_dma_cycles = total_weight_bytes / (self.eff_bw * weight_dram_eff)
+            weight_dma_cycles = M_tiles * total_weight_bytes / (self.eff_bw * weight_dram_eff)
 
         act_dma_cycles = act_bytes / self.eff_bw
         total_dma_cycles = weight_dma_cycles + act_dma_cycles
@@ -140,7 +141,7 @@ class BlockEngine(MACEngine):
             weight_bytes=int(total_weight_bytes),
             bottleneck="dma" if total_dma_cycles > total_compute else "compute",
             details={
-                "K_tiles": K_tiles, "N_tiles": N_tiles,
+                "M_tiles": M_tiles, "K_tiles": K_tiles, "N_tiles": N_tiles,
                 "per_tile_compute": per_tile_compute,
                 "weight_dram_eff": round(weight_dram_eff, 3),
             },
@@ -155,9 +156,10 @@ class BlockEngine(MACEngine):
         one set of activations is loaded per tile, while both gate and up
         weights are fetched together.
         """
+        M_tiles = math.ceil(M / self.H)
         K_tiles = math.ceil(K / self.H)
         N_tiles = math.ceil(N / self.W)
-        total_tiles = K_tiles * N_tiles
+        total_tiles = M_tiles * K_tiles * N_tiles
 
         tile_weight_bytes = math.ceil(self.H * self.W * self.w_bits / 8)
         tile_act_bytes = math.ceil(M * self.H * self.a_bits / 8)
@@ -197,7 +199,7 @@ class BlockEngine(MACEngine):
             weight_bytes=total_weight_bytes,
             bottleneck="dma" if per_tile_dma > per_tile_compute else "compute",
             details={
-                "K_tiles": K_tiles, "N_tiles": N_tiles,
+                "M_tiles": M_tiles, "K_tiles": K_tiles, "N_tiles": N_tiles,
                 "per_tile_dma": round(per_tile_dma, 1),
                 "per_tile_compute": per_tile_compute,
                 "weight_cache_savings": int(activation_savings),
