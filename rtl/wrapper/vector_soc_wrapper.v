@@ -173,9 +173,9 @@ module vector_soc_wrapper #(
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            wrp_a_base <= {ADDR_W{1'b0}};
-            wrp_b_base <= {ADDR_W{1'b0}};
-            wrp_o_base <= {ADDR_W{1'b0}};
+            wrp_a_base <= 32'h2030_0000;
+            wrp_b_base <= 32'h2030_0000;
+            wrp_o_base <= 32'h2034_0000;
             wrp_len    <= WRP_LEN_DEFAULT[15:0];
         end else if (wrp_cs && pwrite) begin
             case (paddr)

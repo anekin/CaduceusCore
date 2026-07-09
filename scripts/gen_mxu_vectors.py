@@ -253,6 +253,7 @@ SCENARIOS: dict[str, dict] = {
     "partial_tile_K":   {"M": 64,  "K": 33,  "N": 64},
     "partial_tile_N":   {"M": 64,  "K": 64,  "N": 33},
     "partial_tile_M":   {"M": 33,  "K": 64,  "N": 64},
+    "multi_token_m8":   {"M": 8,   "K": 64,  "N": 64},
 }
 
 

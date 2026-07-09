@@ -389,6 +389,35 @@ All engines share the same completion-interrupt protocol:
 
 ---
 
+## 7. Errata / Known Gaps
+
+### 7.1 INTC HOST Doorbell Bit Position
+
+**Spec says**: Section 6 lists HOST doorbell at `PENDING` bit[8].
+
+**RTL implements** (`rtl/intc/intc_top.v` lines 76-77): The 8-source SoC interrupt map packs HOST doorbell at bit[5]:
+```
+assign irq_src = {pcie_dma_irq, timer_irq, host_irq, pcie_irq, dma_irq,
+                  vector_irq, sfu_irq, mxu_irq};
+```
+- bit[5] = host_irq (HOST doorbell)
+- bit[4] = pcie_irq
+- bit[3] = dma_irq
+- bit[6] = timer_irq
+- bit[7] = pcie_dma_irq
+
+**Status**: Documentation gap in the spec. The RTL correctly implements the full 8-source SoC map that includes PCIe and timer sources (bits 4, 6, 7 not listed in spec §6). The spec bit map in Section 6 should be updated to match `intc_top.v` bit allocation, and the doorbell address map should note that bit[5] (not bit[8]) is the HOST doorbell.
+
+### 7.2 MXU BIAS/SCALE Unimplemented in Phase 1
+
+**Spec says**: Section 2.1 defines `BIAS_ADDR` (offset `0x20`) and `SCALE_ADDR` (offset `0x24`) as active R/W registers in the MXU register map. Section 2.2 includes them in the MMUL register write sequence.
+
+**RTL implements** (`rtl/mxu/mxu_top.v` lines 104-108): `bias_addr_o` and `scale_addr_o` are declared as outputs from `mmio_if` but annotated "unused (stubbed)" at the MXU top level. The controller FSM does not consume these values in Phase 1.
+
+**Status**: Documented Phase 1 gap. The MMIO registers exist and are writable (`rtl/mxu/mmio_if.v` offsets `0x20`/`0x24`), but no functional path uses them. This is acceptable for Phase 1 because module-level testbenches drive broadcast buses directly and bypass the MMIO path. BIAS/SCALE consumption will be wired in a future phase when the controller sequences weight scale and bias application during the compute loop.
+
+---
+
 ## 8. References
 
 - Register offsets and fields: `sim/regmap.py`

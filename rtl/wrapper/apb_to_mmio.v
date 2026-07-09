@@ -53,9 +53,10 @@ module apb_to_mmio (
     //=========================================================================
     // MMIO drive — feed APB control signals directly to MMIO
     //=========================================================================
-    // cs is asserted during both setup and access phases (psel=1).
+    // cs is asserted only during the access phase (psel && penable),
+    // preventing double-latch on the MMIO slave.
     // MMIO slaves use cs as their ready indication: ready = cs.
-    assign cs    = psel;
+    assign cs    = psel && penable;
     assign we    = pwrite;
     assign addr  = paddr;
     assign wdata = pwdata;

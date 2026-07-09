@@ -115,7 +115,7 @@ $(SOC_SIMV_COCOTB): $(SOC_SRC) $(SOC_FLIST) $(PLI_TAB)
 
 .PHONY: all
 all: run_apb_smoke run_intc_test run_dma_test run_crossbar_stress \
-     run_pcie_test run_dram_test
+     run_pcie_test run_dram_test run_sfu_addr_check
 	@echo ""
 	@echo "$(GREEN)========================================$(NC)"
 	@echo "$(GREEN)  All SoC Regression Tests Complete$(NC)"
@@ -911,6 +911,36 @@ run_fm_soc_007:
 run_fm_soc_008:
 	@$(MAKE) run_fm_soc_case CASE_ID=FM-SOC-008
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# run_sfu_addr_check — Directed SFU wrapper I_ADDR/O_ADDR propagation test
+# ═══════════════════════════════════════════════════════════════════════════
+
+SFU_ADDR_TB   := $(REPO_ROOT)/sim/regression/tb_sfu_addr_check.v
+SFU_ADDR_RTL  := $(REPO_ROOT)/rtl/wrapper/sfu_soc_wrapper.v \
+                 $(REPO_ROOT)/rtl/wrapper/apb_to_mmio.v \
+                 $(wildcard $(REPO_ROOT)/rtl/sfu/*.v)
+SFU_ADDR_SIMV := simv_sfu_addr_check
+SFU_ADDR_LOG  := $(REPO_ROOT)/sim/regression/sfu_addr_check.log
+SFU_ADDR_COMPILE_LOG := $(REPO_ROOT)/sim/regression/sfu_addr_check_compile.log
+
+.PHONY: run_sfu_addr_check
+run_sfu_addr_check: $(SFU_ADDR_SIMV)
+	@echo "$(YELLOW)[SFU_ADDR_CHECK] Running directed address-propagation test...$(NC)"
+	@cd $(REPO_ROOT)/.. && $(REPO_ROOT)/$(SFU_ADDR_SIMV) 2>&1 | tee $(SFU_ADDR_LOG)
+	@grep -q "RESULT: SFU_ADDR_CHECK PASS" $(SFU_ADDR_LOG) && \
+		echo "$(GREEN)SFU_ADDR_CHECK: PASS$(NC)" || \
+		(echo "$(RED)SFU_ADDR_CHECK: FAIL$(NC)" && exit 1)
+
+$(SFU_ADDR_SIMV): $(SFU_ADDR_TB) $(SFU_ADDR_RTL)
+	@echo "$(YELLOW)[SFU_ADDR_CHECK] Compiling tb_sfu_addr_check...$(NC)"
+	@cd $(REPO_ROOT) && $(VCS) $(VCS_COMMON) \
+		-top tb_sfu_addr_check \
+		$(SFU_ADDR_TB) $(SFU_ADDR_RTL) \
+		-o $(SFU_ADDR_SIMV) \
+		-l $(SFU_ADDR_COMPILE_LOG)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Clean Targets
 # ═══════════════════════════════════════════════════════════════════════════
@@ -924,6 +954,8 @@ clean:
 	@rm -f crossbar_stress.log pcie_test.log dram_test.log
 	@rm -f soc_elab.log qwen_e2e_elab.log qwen_e2e.log
 	@rm -f qwen_blk0_elab.log qwen_blk0.log pli.tab
+	@rm -f sfu_addr_check.log sfu_addr_check_compile.log
+	@rm -rf simv_sfu_addr_check.daidir
 	@rm -f qwen_e2e_results.xml qwen_blk0_results.xml
 	@rm -f qwen_e2e_*.log qwen_e2e_*_results.xml
 	@rm -rf simv_*.daidir
@@ -963,6 +995,7 @@ help:
 	@echo "  run_pcie_dma_e2e     — Cocotb PCIe DMA E2E (6 tests: read/write/concurrent/error/UR/IRQ)"
 	@echo "  run_fm_soc_case CASE_ID=<id> — Run one FM-SOC-NNN case (default: FM-SOC-001)"
 	@echo "  run_fm_soc_001 ... run_fm_soc_008 — P0 cases FM-SOC-001 through FM-SOC-008"
+	@echo "  run_sfu_addr_check  — Directed SFU wrapper I_ADDR/O_ADDR AXI4 propagation"
 	@echo "    EXTRA_DEFINES=+define+USE_RTL_PCIE   — optional mixed-mode defines"
 	@echo ""
 	@echo "Maintenance:"

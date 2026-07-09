@@ -176,8 +176,8 @@ module mxu_soc_wrapper #(
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             wrp_weight_base <= 32'h2000_0000;
-            wrp_act_base    <= 32'h2000_1000;
-            wrp_out_base    <= 32'h2000_2000;
+            wrp_act_base    <= 32'h2020_0000;
+            wrp_out_base    <= 32'h2028_0000;
             wrp_k_tiles     <= 16'd1;
             wrp_n           <= 16'd64;
         end else if (wrp_cs && pwrite) begin
