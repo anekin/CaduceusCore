@@ -271,7 +271,7 @@ CaduceusCore 的开发遵循严格的三阶段流程：
                                  逐比特对比验证
 ```
 
-**模型即 Spec**：Arc Model 选定的配置是唯一标准。Func Model 照此实现 golden reference。RTL 照 Func Model 接口写，Func Model 输出做 RTL 验证的 bit-exact 参考数据。
+**模型即 Spec**：Arc Model 产出 architecture candidate，不直接作为 RTL spec。Arc 结果必须先落成 Architecture Contract，并由 Func Model 实现为 executable spec / golden reference；RTL 照 Func Model 接口写，Func Model 输出做 RTL 验证的 bit-exact 参考数据。
 
 ## RTL Phase 1 — 64×64 Broadcast MAC
 
@@ -480,11 +480,10 @@ make -j4 all             # All tests parallel
 
 ## Func Model — 三重角色
 
-> **当前定位**：Arc Model DSE 覆盖了完整设计空间，产出三场景两芯片方案（S1 FSA 128×256 / S2+S3 block 80×1536）。  
-> **Func Model 目前只细化了其中一个起点** — 64×64 Broadcast MAC 阵列 + SFU + Vector Engine。  
-> 这是项目的 bootstrap 配置，用于建立 RTL 开发流程、验证工具链、和 bit-exact 对比方法论。  
-> 它**不是** Arc DSE 推荐架构（FSA 或 block）的直接实现，而是先跑通全流程的最小可行硬件。  
-> 后续 Func Model 会按 DSE 结论切换到推荐引擎（FSA / block），届时重新生成 golden reference。
+> **当前定位**：Arc Model v1 选出的方向是 Block Engine，Func Model/当前 RTL bootstrap 按这条 v1 链路建立了接口、验证工具链和 bit-exact 对比方法论。
+> **Arc Model v2+ 后续引入 FSA**，并在完整 DSE 中产出三场景两芯片方案（S1 FSA 128×256 / S2+S3 block 80×1536）。
+> 因此当前 Func Model/RTL 验证的是 v1 Block/bootstrap 链路，不能直接宣称已经验证 v2+ 的 FSA 推荐架构。
+> 后续若采用 FSA，需要先生成 FSA Architecture Contract，再实现 Func Model v2 并重新生成 golden reference。
 
 1. **RTL 开发的 Spec**：RTL 开发者只需看 Func Model 定义的接口和行为，
    不需要了解 Arc Model 的几百种配置。模块划分、寄存器布局、ISA 指令集
@@ -893,8 +892,7 @@ CaduceusCore/
 
 ## 设计理念
 
-**模型即 Spec**：Python 性能模拟器是唯一事实来源。RTL 照着 simulator 的接口写，
-simulator 的 functional mode 做 golden reference 验证。详见上方"开发工作流"和"验证体系"。
+**模型即 Spec**：Func Model 是 RTL 的 executable spec 和 golden reference。Arc Model 负责架构候选筛选；只有完成 Architecture Contract 并由 Func Model 实现后的候选，才进入 RTL 实现。详见上方"开发工作流"和"验证体系"。
 
 ## 量化方案
 
