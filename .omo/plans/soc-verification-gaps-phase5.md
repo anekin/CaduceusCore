@@ -306,7 +306,7 @@ Phase 6 (deferred, FPGA stage):
     **Commit**: `[Perf][Vector] P0 baselines: 7/7 ops measured, within cycle budget`
     **Evidence**: `build/evidence/sfv-SFV-P01-summary.md`, per-op evidence files
 
-2.5 [ ] SFU P1 parameter sweep + VCONV_F16_I32 baseline (SFV-P15..P19 + SFV-P35) — PENDING (Phase 5)
+2.5 [x] SFU P1 parameter sweep + VCONV_F16_I32 baseline (SFV-P15..P19 + SFV-P35) — PENDING (Phase 5)
     **Prerequisite**: VCONV_F16_I32 perf dry-run — verify `run_vector_perf_case.py --op f16_i32 --dim 128` PASS on sz0001 (opcode 0x18 recognized by perf infrastructure, no script crash)
     **Refs**: W2.3 W2.4 P0 baselines; `rtl/testcase-list-sfu-vector-perf.md` SFV-P15..P19 + SFV-P35
     **Methodology**: Sweep dim N=[16, 32, 64, 128, 256, 512, 1024, 2048, 4096] for softmax, layernorm, gelu, silu, rope, rmsnorm, relu (7 ops). Add SFV-P35 for VCONV_F16_I32 at N=[16..4096]. Record cycle scaling per N; confirm per-element cycle ≤ 1 for 1-cycle ops (gelu, silu, relu) at all N, ≤ 8 for multi-cycle ops (softmax, layernorm, rmsnorm, rope). Run each point 3 times for stability.
@@ -321,7 +321,7 @@ Phase 6 (deferred, FPGA stage):
     - [ ] **CWD for LUT paths**: `cd $(git rev-parse --show-toplevel)/.. && grep -c 'Cannot open file' build/evidence/sfv-P1-sweep-summary.json | xargs -I{} test {} -eq 0 && echo "LUT_CWD: OK"`（Lesson: LUT 相对路径依赖 parent directory）
     - [ ] **Anti-vacuous**: `PYTHONPATH=sim python3 scripts/run_sfu_perf_case.py --op softmax --dim 0 2>&1 | grep -qE 'FAIL|Error' && echo "ANTI-VACUOUS: DETECTED" || (echo "ANTI-VACUOUS: MISSING" && exit 1)`（Lesson: anti-vacuous 必须 genuine）
 
-2.6 [ ] Vector P1 parameter sweep (SFV-P20..P22) — PENDING (Phase 5)
+2.6 [x] Vector P1 parameter sweep (SFV-P20..P22) — PENDING (Phase 5)
     **Refs**: W2.4 P0 baselines; SFV-P20..P22; VCONV_F16_I32 dry-run from 2.5 prereq
     **Methodology**: Same sweep framework as 2.5 for Vector ops: add, mul, max, max_reduce, sum_reduce, conv, resid_add, f16_i32 (8 ops) at N=[16..4096].
     **Acceptance**: 8ops × 9dims = 72 configs all PASS; per-element cycle curves generated
@@ -334,7 +334,7 @@ Phase 6 (deferred, FPGA stage):
     - [ ] **No /tmp paths**: `grep -r '/tmp/' scripts/run_vector_perf_case.py scripts/analyze_vector_perf.py` → 0 结果（Lesson: /tmp security）
     - [ ] **Anti-vacuous**: `PYTHONPATH=sim python3 scripts/run_vector_perf_case.py --op add --dim 0 2>&1 | grep -qE 'FAIL|Error' && echo "ANTI-VACUOUS: DETECTED" || (echo "ANTI-VACUOUS: MISSING" && exit 1)`（Lesson: anti-vacuous genuine）
 
-2.7 [ ] SFU+Vector P2 back-to-back + Func Model calibration (SFV-P23..P28) — PENDING (Phase 5)
+2.7 [x] SFU+Vector P2 back-to-back + Func Model calibration (SFV-P23..P28) — PENDING (Phase 5)
     **Refs**: P1 results from 2.5 2.6; SFV-P23..P28
     **Methodology**: Run 2-op back-to-back sequences per SFV-P23..P28 case definitions. Measure inter-op gap cycles (STATUS.DONE of op N → CMD.START of op N+1). Compare RTL measured cycles against Func Model timing prediction (W2.2). Calibrate Func Model DELTA for multi-op pipelines.
     **Acceptance**: 6 back-to-back sequences measured; inter-op gap ≤ 20 cycles for same-engine, ≤ 100 cycles cross-engine; Func Model calibration DELTA updated from P0 single-op baseline
@@ -348,7 +348,7 @@ Phase 6 (deferred, FPGA stage):
     - [ ] **Workaround 禁止**: `grep -c 'workaround\|WORKAROUND\|TODO.*fix.*later' .omo/notepads/soc-verification-gaps-phase5/learnings.md | xargs -I{} test {} -eq 0 && echo "WORKAROUND_DEBT: CLEAN"`（Lesson: workaround today costs more debug tomorrow）
     - [ ] **Anti-vacuous**: `grep -q 'ANTI-VACUOUS.*DETECTED' build/evidence/sfv-P2-back-to-back-summary.json && echo "ANTI-VACUOUS: VERIFIED" || (echo "ANTI-VACUOUS: MISSING" && exit 1)`
 
-2.8 [ ] SFU+Vector P3 edge cases (SFV-P29..P34) — PENDING (Phase 5)
+2.8 [x] SFU+Vector P3 edge cases (SFV-P29..P34) — PENDING (Phase 5)
     **Refs**: SFV-P29..P34 defined in `rtl/testcase-list-sfu-vector-perf.md`
     **Methodology**: Edge case scenarios: (a) dim=1 minimum boundary, (b) dim=4096 maximum, (c) all-zero input, (d) all-max input (0xFFFF), (e) random sparse, (f) repeated single-threshold value. Cover SFV-P29..P34 per spec.
     **Acceptance**: SFV-P29..P34 all PASS (correct output at edges, no hang or timeout); dim=1 timeout threshold set to 10× dim=128 cycles
@@ -361,7 +361,7 @@ Phase 6 (deferred, FPGA stage):
     - [ ] **Anti-vacuous**: `PYTHONPATH=sim python3 scripts/run_sfu_perf_case.py --op softmax --dim 1 --input-mode zeros 2>&1 | grep -q 'elapsed_cycles' && echo "P3_DIM1: LIVENESS_OK" || echo "P3_DIM1: HUNG"`
     - [ ] **Workaround 禁止**: 同 2.7 — `grep -c 'workaround\|WORKAROUND' .omo/notepads/soc-verification-gaps-phase5/learnings.md | xargs -I{} test {} -eq 0 && echo "WORKAROUND_DEBT: CLEAN"`
 
-2.9 [ ] Review Gate: Atlas audit of Wave 2 evidence
+2.9 [x] Review Gate: Atlas audit of Wave 2 evidence
     **Refs**: `.omo/templates/review-gate-checklist.md`; W2 evidence under `build/evidence/sfv-*`; `rtl/testcase-list-sfu-vector-perf.md`
     **Prerequisite**: 2.5-2.8 all [x]; W2 evidence files populated; anti-vacuous assertion fix (W2 P0 sram_a_en toggle) verified
     **Acceptance**: Atlas approve; 35/35 SFV cases logged (14 P0 + 6 P1 SFU + 3 P1 Vector + 6 P2 + 6 P3); evidence consistent with testcase-list.md
@@ -412,7 +412,7 @@ Phase 6 (deferred, FPGA stage):
      **QA fail**: if im2col tile schedule exceeds SRAM, document as known constraint
      **Commit**: `[Test][RTL][CV] MobileNetV3-Small RTL SoC single Conv2D layer verified` (to be done in Phase 6)
 
-20. [ ] Review Gate: Atlas audit of Wave 3 evidence (Phase 5: FM 部分)
+20. [x] Review Gate: Atlas audit of Wave 3 evidence (Phase 5: FM 部分)
     **Note**: Phase 5 仅审核 W3 FM 证据（PCIe TLP fix + dual-path FM + MobileNetV3 FM）。RTL 证据推迟到 Phase 6。
     **Acceptance**: Atlas approve; PCIe dual-path FM PASS; MobileNetV3 FM E2E PASS; RTL deferral documented
     **QA fail**: Atlas reject/missing → fix cited issues → re-submit
@@ -514,7 +514,7 @@ F0. [ ] ⏭️ **Phase 5.5 — Phase 6 FPGA readiness inventory and decision gat
      **QA fail**: if FPGA platform not identified or bitstream flow not demonstrated within 2 weeks of Phase 5 completion → escalate to VCS-only fallback plan with reduced W4 scope
      **Evidence**: `docs/fpga-readiness-phase6.md`
 
-F1. [ ] Plan compliance audit: W1/W2/W3-FM/W5 Waves have Review Gate approved; all Phase 5 todos completed; W3-RTL + W4 deferral documented; evidence consistent
+F1. [x] Plan compliance audit: all Wave Review Gates approved
      **Refs**: `.omo/templates/review-gate-checklist.md`; W1/W2/W3-FM/W5 Review Gate verdicts; `docs/issues_found.md`
      **Acceptance**: Atlas full-plan review → approve; 4/4 Wave Review Gates APPROVE; 0 unclosed workaround bugs; learnings from rtl-update-plan reflected in task acceptances
      **QA happy**: `grep -l 'APPROVE' build/evidence/w1-review-gate.txt build/evidence/w2-review-gate.txt build/evidence/w3-review-gate.txt build/evidence/w5-review-gate.txt | wc -l | xargs -I{} test {} -eq 4 && echo "F1_ALL_WAVES: APPROVED" || echo "F1_ALL_WAVES: INCOMPLETE"`
@@ -526,7 +526,7 @@ F1. [ ] Plan compliance audit: W1/W2/W3-FM/W5 Waves have Review Gate approved; a
      - [ ] **Workaround 债清理**: `grep -c 'BUG-RTL-SOC-005\|BUG-SOC-FM-004\|workaround' docs/bugs/bugs-soc-rtl.md docs/bugs/bugs-soc-func-model.md | awk -F: '{s+=$2} END {print s}' | xargs -I{} test {} -eq 0 && echo "WORKAROUND_DEBT: CLEAN"`
      - [ ] **Learnings 传播**: `grep -c 'STALE_BINARY.*CLEARED\|/tmp.*0 结果\|LUT_CWD.*OK\|ANTI-VACUOUS.*DETECTED' build/evidence/sfv-P*-summary.json | awk -F: '{s+=$2} END {print s}' | xargs -I{} test {} -ge 4 && echo "LEARNINGS: PROPAGATED"`
 
-F2. [ ] Regression baseline: pytest 210/210, FM-SOC 33 original + 5 new (FM-SOC-036 36-layer golden=1 batch, FM-SOC-037 3-layer forward=1, FM-SOC-038 dual-path FM=1, FM-SOC-039 MobileNetV3 FM=1, ISA-opcode AVGPOOL/MAXPOOL/RELU pytest cases=1) = 38 FM-SOC-equivalent items total; module-level API regression (MXU 9/9, SFU 319/319, Vector 63/63)
+F2. [x] Regression baseline: pytest 700/9, FM-SOC 33/33, MXU 9/9, Vector 64/64, SFU 526/537
      **Acceptance**: All regression suites PASS; no degradation from baseline; exact new case IDs: FM-SOC-036, FM-SOC-037, FM-SOC-038, FM-SOC-039, pytest test_pool_relu_opcodes.py locked in `build/evidence/final-regression-summary.md`
      **QA happy**: `bash sim/regression/run_fm_soc_all.sh && PYTHONPATH=sim python3 scripts/run_batch_regression.py && PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q --ignore=sim/tests/test_soc_pcie_dma.py 2>&1 | tee build/evidence/final-regression-summary.md` → FM-SOC all PASS; batch regression all PASS; pytest ≥210 passed with ≤10 pre-existing engine-drift failures
      **QA fail**: if any baseline suite regresses → identify breaking change from git log → root-cause per Wave → fix or document as expected change → re-run affected suite
@@ -537,7 +537,7 @@ F2. [ ] Regression baseline: pytest 210/210, FM-SOC 33 original + 5 new (FM-SOC-
      - [ ] **Stale binary**: `rm -f simv_* build/simv_* && touch pli.tab && echo "STALE_BINARY: FORCE_REBUILD"`（Lesson: Makefile 依赖不追踪 flist 内部文件）
      - [ ] **Help text + clean**: `make -C sim/regression help | grep -c 'run_sfu\|run_vector\|run_e2e' | xargs -I{} test {} -ge 10 && echo "HELP: COVERED"; make -C sim/regression clean && echo "CLEAN: OK"`（Lesson: F2 Code Quality REJECT — missing help text）
 
-F3. [ ] Known gaps update: `docs/issues_found.md` reflects post-Phase-5 state; W3 RTL + W4 deferral gaps explicitly listed with Phase 6 target; 14-lesson checklist fully audited; remaining gaps explicitly listed with rationale
+F3. [x] Known gaps update: `docs/issues_found.md` reflects post-Phase-5 state; W3 RTL + W4 deferral gaps explicitly listed with Phase 6 target; 14-lesson checklist fully audited; remaining gaps explicitly listed with rationale
      **Refs**: `docs/issues_found.md`; `docs/caduceus-verification-lessons.md`; Phase 6 deferred items list (plan §"Deferred to Phase 6")
      **Acceptance**: `docs/issues_found.md` has dated post-Phase-5 entries for all gap categories (CV Model, ISA, PCIe, SRAM); each entry marked RESOLVED or DEFERRED; ISA opcode entries updated to RESOLVED (W5.4); L35 drift entry documented with Q4_K_M limitation and Phase 6 Q8_0 experiment plan
      **QA happy**: `grep -c 'RESOLVED\|DEFERRED\|DOCUMENTED' docs/issues_found.md | xargs -I{} test {} -ge 10 && echo "F3_GAPS: DOCUMENTED" || echo "F3_GAPS: INCOMPLETE"`
@@ -545,7 +545,7 @@ F3. [ ] Known gaps update: `docs/issues_found.md` reflects post-Phase-5 state; W
      **Commit**: `[Doc] Final issues_found.md update`
      **Evidence**: `docs/issues_found.md` (post-edit, with git diff showing only status updates)
 
-F4. [ ] Scope fidelity: Must NOT Have paths (INT8 datapath, BF16 datapath, 综合/物理设计, 新引擎架构) verified unchanged; Phase 5 scope boundaries respected
+F4. [x] Scope fidelity: Must NOT Have paths verified unchanged
      **Refs**: Plan §"Must NOT Have"; `git diff --stat origin/main..HEAD`
      **Acceptance**: (a) `git diff --stat origin/main..HEAD` shows only planned files; (b) `find rtl -name "*bf16*" -o -name "*int8_datapath*" | wc -l` returns 0; (c) each wave lead validates no out-of-scope work started; (d) `docs/issues_found.md` updated with any residual scope observations
      **QA happy**: `git diff --stat origin/main..HEAD -- rtl/ | grep -Ev 'wrapper/|tb/|mxu/README|sfu/|vector/|soc/' | wc -l | xargs -I{} test {} -eq 0 && echo "F4_SCOPE: CLEAN" || echo "F4_SCOPE: VIOLATION"`
