@@ -10,6 +10,27 @@ CaduceusCore 是一颗 **通用 NPU 协处理器**，同时面向 **CV（YOLOv8/
 >
 > S2 和 S3 共享同一颗 die。两颗芯片覆盖三个产品线。面积模型经 TPUv1 ISCA 2017 die-shot 校准，BW 采用 area×7.5 GB/s/mm² 耦合模型。
 
+## 文档索引
+
+优先按要回答的问题选文档。`docs/` 放设计、验证、软件和经验文档；`reports/` 放 Arc/DSE 架构报告和专项分析。
+
+| 你要了解 | 先读 | 继续读 |
+|----------|------|--------|
+| 产品需求和目标约束 | [端侧 NPU 产品方案](<docs/端侧NPU协处理器产品需求方案v0.1.md>) | [Edge NPU 架构建议](docs/Edge_NPU_Architecture_Proposal.md) |
+| 总体设计方法学 | [设计方法论](docs/design-methodology.md) | [Arc vs Func 分工](docs/arc_vs_func.md), [验证方法论](docs/verification_methodology.md) |
+| Arc Model / DSE 结论 | [三场景 DSE 报告](reports/arch-dse-three-scenarios.md) | [LPDDR5 3B 报告](reports/arch-report-A-lpddr5-3b.md), [3D DRAM 7B 报告](reports/arch-report-B-3ddram-7b.md) |
+| DSE 模型演进和专项分析 | [统一 SRAM DSE v2](reports/dse-v2-unified-sram-2026-06-29.md) | [FSA DSE 评估](reports/dse-fsa-eval-2026-06-27.md), [7B + 3D DRAM 分析](reports/dse-7b-3d-dram-2026-06-29.md) |
+| 引擎架构选择 | [NPU 引擎架构全景](docs/NPU_Engines_Architecture_Guide.md) | [硬件详细架构](docs/NPU硬件详细架构设计v0.1.md) |
+| Func Model 架构和计划 | [Func Model 架构](docs/func_model_architecture.md) | [Func Model 集成计划](docs/func-model-plan.md), [系统级模拟器方案](docs/NPU系统级模拟器方案v0.1.md) |
+| Func Model 性能 | [Qwen2.5-3B 性能分析](docs/func_model_performance_analysis.md) | [E2E 性能分析](docs/func-model-e2e-performance-analysis.md), [TTFT Gantt](docs/ttft_gantt.md), [Pipeline Gantt](docs/func-model-pipeline-gantt.md) |
+| Func/RTL 接口规格 | [MMIO timing spec](docs/func-model-mmio-spec.md) | [SRAM map](docs/func-model-sram-map.md), [Golden tolerance](docs/func-model-golden-tolerance.md), [dtype closure](docs/func-model-dtype-closure-matrix.md) |
+| RTL 开发与验证 | [RTL 开发计划](docs/rtl_development_plan.md) | [SoC FM gap spec](docs/soc-fm-gap-spec.md), [SoC perf report](docs/soc-perf-report.md), [MXU RTL 校准](docs/mxu-perf-calibration.md) |
+| E2E / Spike / 真实模型 | [Spike 集成](docs/spike-integration.md) | [Qwen2.5-3B forward spec](docs/qwen25-3b-forward-spec.md), [Model Zoo](docs/model_zoo.md), [Model Zoo 路线图](<docs/CaduceusCore Model Zoo 实施路线图.md>) |
+| 软件栈和 PCIe DMA | [软件架构 v0.2](docs/NPU软件架构方案v0.2.md) | [软件架构 v0.1](docs/NPU软件架构方案v0.1.md), [PCIe DMA 数据流](docs/pcie-dma-data-flow.md), [PCIe DMA lessons](docs/pcie-dma-planning-lessons.md) |
+| CV 工作负载 | [CV Gantt](docs/cv_gantt.md) | [Model Zoo](docs/model_zoo.md) |
+| 测试方法和经验复盘 | [testcase-list 方法论](docs/testcase-list_methodology.md) | [验证 lessons](docs/caduceus-verification-lessons.md), [lessons audit](docs/lessons-audit.md), [issues found](docs/issues_found.md) |
+| Bug 和已知问题 | [SoC RTL bugs](docs/bugs/bugs-soc-rtl.md) | [SoC Func Model bugs](docs/bugs/bugs-soc-func-model.md), [module-level bugs](docs/bugs/bugs-module-level.md), [PCIe DMA bugs](docs/bugs/bugs-pcie-dma.md) |
+
 ## Quick Start
 
 **Prerequisites:** Python 3.10+, pip, git. For full pytest: `dtc_src/` at REPO_ROOT parent (see docs/spike-integration.md), built Spike binary and firmware ELF. Core sim/model tests work with just Python deps.
