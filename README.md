@@ -18,7 +18,7 @@ CaduceusCore 是一颗 **通用 NPU 协处理器**，同时面向 **CV（YOLOv8/
 |----------|------|--------|
 | 产品需求和目标约束 | [端侧 NPU 产品方案](<docs/端侧NPU协处理器产品需求方案v0.1.md>) | [Edge NPU 架构建议](docs/Edge_NPU_Architecture_Proposal.md) |
 | 总体设计方法学 | [设计方法论](docs/design-methodology.md) | [Arc vs Func 分工](docs/arc_vs_func.md), [验证方法论](docs/verification_methodology.md) |
-| Arc Model / DSE 结论 | [三场景 DSE 报告](reports/arch-dse-three-scenarios.md) | [LPDDR5 3B 报告](reports/arch-report-A-lpddr5-3b.md), [3D DRAM 7B 报告](reports/arch-report-B-3ddram-7b.md) |
+| Arc Model / DSE 结论 | [三场景 DSE 报告](reports/arch-dse-three-scenarios.md) | [Arc Model v3 改进计划](docs/arc-model-v3-improvement-plan.md), [LPDDR5 3B 报告](reports/arch-report-A-lpddr5-3b.md), [3D DRAM 7B 报告](reports/arch-report-B-3ddram-7b.md) |
 | DSE 模型演进和专项分析 | [统一 SRAM DSE v2](reports/dse-v2-unified-sram-2026-06-29.md) | [FSA DSE 评估](reports/dse-fsa-eval-2026-06-27.md), [7B + 3D DRAM 分析](reports/dse-7b-3d-dram-2026-06-29.md) |
 | 引擎架构选择 | [NPU 引擎架构全景](docs/NPU_Engines_Architecture_Guide.md) | [硬件详细架构](docs/NPU硬件详细架构设计v0.1.md) |
 | Func Model 架构和计划 | [Func Model 架构](docs/func_model_architecture.md) | [Func Model 集成计划](docs/func-model-plan.md), [系统级模拟器方案](docs/NPU系统级模拟器方案v0.1.md) |
