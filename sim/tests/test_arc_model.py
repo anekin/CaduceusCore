@@ -22,15 +22,13 @@ def test_qkv_dimension_1_5b():
 
 
 def test_qkv_dimension_3b():
-    """3B: hidden=2560, num_heads=32 → qkv should be 4096, code gives 2560. RED."""
     spec = ArcModel.MODELS["qwen2.5-3b"]
-    num_heads = 32
-    expected_qkv = num_heads * HEAD_DIM  # 4096
-    actual_qkv = spec[0]  # BUG: spec[0] is hidden (2560), not num_heads * head_dim
+    num_heads = spec.num_heads
+    expected_qkv = num_heads * spec.head_dim
+    actual_qkv = spec[0]
     assert actual_qkv == expected_qkv, (
         f"QKV dimension mismatch: got {actual_qkv}, expected {expected_qkv} "
-        f"(num_heads={num_heads} * head_dim={HEAD_DIM}). "
-        f"Bug: code uses spec[0]={actual_qkv} (hidden) instead of num_heads * head_dim."
+        f"(num_heads={num_heads} * head_dim={spec.head_dim})."
     )
 
 

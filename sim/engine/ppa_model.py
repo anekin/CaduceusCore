@@ -15,6 +15,7 @@ class PPA:
     config_label: str = ""
     sram_spill_mb: float = 0.0
     depthwise_util_pct: float = 0.0
+    config: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         self.efficiency_tok_per_watt = self.tok_s / max(self.power_w, 0.1)
