@@ -52,8 +52,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Vector module-level performance case runner (one command, one PASS/FAIL).",
     )
-    parser.add_argument("--case", required=True, help="Case ID, e.g. SFV-P08")
-    parser.add_argument("--op", required=True, help="Vector operation: add, mul, max, sum, conv, resid")
+    parser.add_argument("--case", default="SFV-DRY", help="Case ID, e.g. SFV-P08 (default: SFV-DRY)")
+    parser.add_argument("--op", required=True, help="Vector operation: add, mul, max, sum, conv, resid, f16_i32")
     parser.add_argument("--dim", type=int, required=True, help="Element dimension")
     parser.add_argument("--repeat", type=int, default=1, help="Back-to-back CMD loop count (default: 1)")
     parser.add_argument("--simv", default=str(DEFAULT_SIMV), help=f"VCS simv binary path (default: {DEFAULT_SIMV})")

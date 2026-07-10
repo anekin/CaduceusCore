@@ -37,12 +37,13 @@ module tb_vector_perf;
     localparam ADDR_W        = 32;
 
     // Vector OP encoding (from vector_top.v)
-    localparam [3:0] OP_ADD   = 4'd0;
-    localparam [3:0] OP_MUL   = 4'd1;
-    localparam [3:0] OP_MAX   = 4'd2;
-    localparam [3:0] OP_SUM   = 4'd3;
-    localparam [3:0] OP_CONV  = 4'd4;
-    localparam [3:0] OP_RESID = 4'd5;
+    localparam [3:0] OP_ADD      = 4'd0;
+    localparam [3:0] OP_MUL      = 4'd1;
+    localparam [3:0] OP_MAX      = 4'd2;
+    localparam [3:0] OP_SUM      = 4'd3;
+    localparam [3:0] OP_CONV     = 4'd4;
+    localparam [3:0] OP_RESID    = 4'd5;
+    localparam [3:0] OP_F16_I32  = 4'd6;
 
     // FSM state encoding (from vector_top.v)
     localparam ST_IDLE         = 4'd0;
@@ -56,8 +57,11 @@ module tb_vector_perf;
     localparam ST_CONV_FEED    = 4'd8;
     localparam ST_CONV_CAPTURE = 4'd9;
     localparam ST_CONV_WRITE   = 4'd10;
-    localparam ST_DONE         = 4'd11;
-    localparam ST_LATCH        = 4'd12;
+    localparam ST_DONE            = 4'd11;
+    localparam ST_LATCH           = 4'd12;
+    localparam ST_F16_I32_FEED    = 4'd13;
+    localparam ST_F16_I32_CAPT    = 4'd14;
+    localparam ST_F16_I32_WRITE   = 4'd15;
 
     //=========================================================================
     // DUT Signals
@@ -189,6 +193,9 @@ module tb_vector_perf;
     reg [31:0]  cnt_CONV_FEED;
     reg [31:0]  cnt_CONV_CAPTURE;
     reg [31:0]  cnt_CONV_WRITE;
+    reg [31:0]  cnt_F16_I32_FEED;
+    reg [31:0]  cnt_F16_I32_CAPT;
+    reg [31:0]  cnt_F16_I32_WRITE;
     reg [31:0]  cnt_DONE;
     reg [31:0]  cnt_LATCH;
 
@@ -228,6 +235,9 @@ module tb_vector_perf;
             cnt_CONV_FEED         <= 32'd0;
             cnt_CONV_CAPTURE      <= 32'd0;
             cnt_CONV_WRITE        <= 32'd0;
+            cnt_F16_I32_FEED      <= 32'd0;
+            cnt_F16_I32_CAPT      <= 32'd0;
+            cnt_F16_I32_WRITE     <= 32'd0;
             cnt_DONE              <= 32'd0;
             cnt_LATCH             <= 32'd0;
             cnt_TOTAL             <= 32'd0;
@@ -260,6 +270,9 @@ module tb_vector_perf;
                 cnt_CONV_FEED         <= 32'd0;
                 cnt_CONV_CAPTURE      <= 32'd0;
                 cnt_CONV_WRITE        <= 32'd0;
+                cnt_F16_I32_FEED      <= 32'd0;
+                cnt_F16_I32_CAPT      <= 32'd0;
+                cnt_F16_I32_WRITE     <= 32'd0;
                 cnt_DONE              <= 32'd0;
                 cnt_LATCH             <= 32'd0;
                 cnt_TOTAL             <= 32'd0;
@@ -299,6 +312,8 @@ module tb_vector_perf;
                 cnt_chunks_processed <= cnt_chunks_processed + 32'd1;
             else if (fsm_state == ST_CONV_FEED && state_prev == ST_READ)
                 cnt_chunks_processed <= cnt_chunks_processed + 32'd1;
+            else if (fsm_state == ST_F16_I32_FEED && state_prev == ST_READ)
+                cnt_chunks_processed <= cnt_chunks_processed + 32'd1;
 
             // ── Status BUSY ────────────────────────────────────────────
             status_busy_av <= (fsm_state != ST_IDLE && fsm_state != ST_DONE);
@@ -337,6 +352,9 @@ module tb_vector_perf;
                     ST_CONV_FEED:    cnt_CONV_FEED    <= cnt_CONV_FEED    + 32'd1;
                     ST_CONV_CAPTURE: cnt_CONV_CAPTURE <= cnt_CONV_CAPTURE + 32'd1;
                     ST_CONV_WRITE:   cnt_CONV_WRITE   <= cnt_CONV_WRITE   + 32'd1;
+                    ST_F16_I32_FEED: cnt_F16_I32_FEED <= cnt_F16_I32_FEED + 32'd1;
+                    ST_F16_I32_CAPT: cnt_F16_I32_CAPT <= cnt_F16_I32_CAPT + 32'd1;
+                    ST_F16_I32_WRITE:cnt_F16_I32_WRITE<= cnt_F16_I32_WRITE+ 32'd1;
                     ST_LATCH:        cnt_LATCH        <= cnt_LATCH        + 32'd1;
                 endcase
             end
@@ -406,16 +424,19 @@ module tb_vector_perf;
         input [127:0] token;
         reg [31:0] lower3, lower4;
         reg [63:0] lower5;
+        reg [55:0] lower7;
         begin
             // $value$plusargs stores the string bytes at LSB:
             // "mul"  → token[23:16]='m', [15:8]='u', [7:0]='l'
             // "conv" → token[31:24]='c', [23:16]='o', [15:8]='n', [7:0]='v'
             // "resid"→ token[39:32]='r', [31:24]='e', etc.
+            // "f16_i32"→ token[55:0] = "f16_i32", token[63:56]=0
             // Case-insensitive comparison: OR 0x20 with each byte.
 
             lower3 = token[23:0] | 24'h20_20_20;
             lower4 = token[31:0] | 32'h20_20_20_20;
             lower5 = token[39:0] | 40'h20_20_20_20_20;
+            lower7 = token[55:0] | 56'h20_20_20_20_20_20_20;
 
             // 3-char ops: byte 3 (token[31:24]) must be zero
             if (token[31:24] == 8'h00) begin
@@ -441,6 +462,13 @@ module tb_vector_perf;
                 else
                     op_token_to_code = OP_ADD;
             end
+            // 7-char op: f16_i32
+            else if (token[63:56] == 8'h00) begin
+                if (lower7 == 56'h66_31_36_7F_69_33_32) // "f16_i32" (underscore|0x20=0x7f)
+                    op_token_to_code = OP_F16_I32;
+                else
+                    op_token_to_code = OP_ADD;
+            end
             else begin
                 op_token_to_code = OP_ADD;
             end
@@ -455,9 +483,10 @@ module tb_vector_perf;
                 OP_MUL:   op_code_to_str = "mul";
                 OP_MAX:   op_code_to_str = "max";
                 OP_SUM:   op_code_to_str = "sum";
-                OP_CONV:  op_code_to_str = "conv";
-                OP_RESID: op_code_to_str = "resid";
-                default:  op_code_to_str = "unknown";
+                OP_CONV:   op_code_to_str = "conv";
+                OP_RESID:  op_code_to_str = "resid";
+                OP_F16_I32:op_code_to_str = "f16_i32";
+                default:   op_code_to_str = "unknown";
             endcase
         end
     endfunction
@@ -509,6 +538,9 @@ module tb_vector_perf;
         emit_perf("CONV_FEED",    cnt_CONV_FEED);
         emit_perf("CONV_CAPTURE", cnt_CONV_CAPTURE);
         emit_perf("CONV_WRITE",   cnt_CONV_WRITE);
+        emit_perf("F16_I32_FEED", cnt_F16_I32_FEED);
+        emit_perf("F16_I32_CAPT", cnt_F16_I32_CAPT);
+        emit_perf("F16_I32_WRITE",cnt_F16_I32_WRITE);
         emit_perf("TOTAL",        cnt_TOTAL);
         emit_perf("CHUNKS",       cnt_chunks_processed);
     end
@@ -670,7 +702,7 @@ module tb_vector_perf;
 
         if (!$value$plusargs("op=%s", op_token)) begin
             $display("[TB] ERROR: +op= plusarg not provided");
-            $display("[TB] Usage: +op=add|mul|max|sum|conv|resid [+dim=N]");
+            $display("[TB] Usage: +op=add|mul|max|sum|conv|resid|f16_i32 [+dim=N]");
             $display("FAIL");
             $finish;
         end
