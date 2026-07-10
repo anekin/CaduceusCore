@@ -62,11 +62,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="SFU module-level performance case runner (one command, one PASS/FAIL).",
     )
-    parser.add_argument("--case", required=True, help="Case ID, e.g. SFV-P01")
+    parser.add_argument("--case", default="SFV-DRY", help="Case ID, e.g. SFV-P01 (default: SFV-DRY)")
     parser.add_argument("--op", required=True, help="SFU operation: softmax, layernorm, gelu, silu, rope, rmsnorm")
     parser.add_argument("--dim", type=int, required=True, help="Element dimension")
     parser.add_argument("--pos", type=int, default=0, help="Position for RoPE (default: 0)")
     parser.add_argument("--repeat", type=int, default=1, help="Back-to-back CMD loop count (default: 1)")
+    parser.add_argument("--input-mode", default="random",
+                        help="Input stimulus mode: random, zeros, maxval, sparse, repeated (default: random)")
     parser.add_argument("--simv", default=str(DEFAULT_SIMV), help=f"VCS simv binary path (default: {DEFAULT_SIMV})")
     parser.add_argument("--rebuild", action="store_true", help="Force VCS recompile")
     parser.add_argument("--eda-server", default=DEFAULT_EDA_SERVER, help=f"EDA server SSH target (default: {DEFAULT_EDA_SERVER})")
@@ -188,13 +190,13 @@ def step_run_simulation(
     dim: int,
     pos: int,
     repeat: int,
+    input_mode: str,
+    sim_log_remote: Path,
 ) -> Path:
     """Run the compiled simv on the EDA server."""
-    sim_log_remote = Path(f"{simv}.{case_id}.log")
-
     setup = VCS_SETUP.format(vcs_module=shlex.quote(vcs_module))
     op_code = OP_CODE_MAP.get(op.lower(), 0)
-    plusargs = f"+case={case_id} +op_code={op_code} +dim={dim}"
+    plusargs = f"+case={case_id} +op_code={op_code} +dim={dim} +input_mode={input_mode}"
     if op.lower() == "rope":
         plusargs += f" +pos={pos}"
     if repeat > 1:
@@ -269,6 +271,7 @@ def main() -> int:
     dim: int = args.dim
     pos: int = args.pos
     repeat: int = args.repeat
+    input_mode: str = getattr(args, "input_mode")
     simv = Path(args.simv).resolve()
     eda_server: str = args.eda_server
     vcs_module: str = args.vcs_module
@@ -277,9 +280,12 @@ def main() -> int:
 
     evidence_dir.mkdir(parents=True, exist_ok=True)
     repeat_suffix = f"_r{repeat}" if repeat > 1 else ""
-    evidence_file = evidence_dir / f"sfv-{case_id}{repeat_suffix}-summary.md"
-    compile_log_local = evidence_dir / f"sfv-{case_id}{repeat_suffix}_compile.log"
-    sim_log_local = evidence_dir / f"sfv-{case_id}{repeat_suffix}_sim.log"
+    mode_suffix = f"_m{input_mode}" if input_mode != "random" else ""
+    run_tag = f"{case_id}-{op}-{dim}{mode_suffix}{repeat_suffix}"
+    evidence_file = evidence_dir / f"sfv-{run_tag}-summary.md"
+    compile_log_local = evidence_dir / f"sfv-{run_tag}_compile.log"
+    sim_log_local = evidence_dir / f"sfv-{run_tag}_sim.log"
+    sim_log_remote = Path(f"{simv}.{run_tag}.log")
 
     command_used = " ".join(sys.argv)
 
@@ -289,6 +295,7 @@ def main() -> int:
         f"- **Op**: {op}",
         f"- **Dim**: {dim}",
         f"- **Pos**: {pos}",
+        f"- **Input Mode**: {input_mode}",
         f"- **Command**: `{command_used}`",
         f"",
     ]
@@ -330,7 +337,8 @@ def main() -> int:
 
         # ── Run simulation ───────────────────────────────────────────────
         sim_log_remote = step_run_simulation(
-            eda_server, vcs_module, simv, case_id, op, dim, pos, repeat
+            eda_server, vcs_module, simv, case_id, op, dim, pos, repeat,
+            input_mode, sim_log_remote,
         )
         scp_from_remote(eda_server, sim_log_remote, sim_log_local)
 
@@ -383,6 +391,9 @@ def main() -> int:
         append_learning(case_id, op, dim, passed=analyze_pass)
         print(f"[evidence] wrote {evidence_file}")
         print(f"[verdict] {'PASS' if analyze_pass else 'FAIL'}")
+        m = re.search(r"measured=(\d+)", analyze_stdout)
+        if m:
+            print(f"elapsed_cycles={m.group(1)}")
         return 0 if analyze_pass else 1
 
     except subprocess.CalledProcessError as exc:

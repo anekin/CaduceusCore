@@ -202,6 +202,9 @@ module tb_vector_perf;
     // TOTAL counter
     reg [31:0]  cnt_TOTAL;
 
+    // Back-to-back gap measurement: cycle of last STATUS.DONE detection
+    reg [31:0]  last_done_cycle;
+
     // Block/chunk loop counter
     reg [31:0]  cnt_chunks_processed;
     reg         chunk_start_trig;
@@ -322,6 +325,7 @@ module tb_vector_perf;
             if (fsm_state != state_prev) begin
                 if (fsm_state == ST_DONE && state_prev != ST_DONE) begin
                     cnt_done_pulses <= cnt_done_pulses + 32'd1;
+                    last_done_cycle <= cycle_cnt;
                     perf_counting <= 1'b0;  // Stop TOTAL counting at DONE
                 end
 
@@ -411,11 +415,20 @@ module tb_vector_perf;
     reg [15:0]   dim_val;
     reg [31:0]   repeat_count;
     reg [255:0]  shape_str;
+    reg [127:0]  input_mode;
 
     reg          is_binary;
     reg          is_reduce;
     reg          is_conv;
     integer      i;
+
+    // Multi-op sequence support (back-to-back different ops)
+    reg [31:0]   op_seq_len;
+    reg [3:0]    op_seq [0:7];
+    reg [15:0]   dim_seq [0:7];
+    reg [31:0]   total_ops;
+    reg [31:0]   seq_idx;
+    reg [15:0]   dim_val_default;
 
     //=========================================================================
     // OP token helpers
@@ -512,13 +525,38 @@ module tb_vector_perf;
     endtask
 
     //=========================================================================
-    // Perf Counter Reset
+    // Perf Counter Reset (zero-time, preserves last_done_cycle)
     //=========================================================================
     task reset_perf_counters;
     begin
-        perf_rst = 1'b1;
-        @(negedge clk);
-        @(negedge clk);
+        cnt_IDLE               = 32'd0;
+        cnt_READ               = 32'd0;
+        cnt_BIN_EXEC           = 32'd0;
+        cnt_BIN_WRITE          = 32'd0;
+        cnt_REDUCE_FEED        = 32'd0;
+        cnt_REDUCE_WAIT        = 32'd0;
+        cnt_REDUCE_ACC         = 32'd0;
+        cnt_REDUCE_WRITE       = 32'd0;
+        cnt_CONV_FEED          = 32'd0;
+        cnt_CONV_CAPTURE       = 32'd0;
+        cnt_CONV_WRITE         = 32'd0;
+        cnt_F16_I32_FEED       = 32'd0;
+        cnt_F16_I32_CAPT       = 32'd0;
+        cnt_F16_I32_WRITE      = 32'd0;
+        cnt_DONE               = 32'd0;
+        cnt_LATCH              = 32'd0;
+        cnt_TOTAL              = 32'd0;
+        cnt_chunks_processed   = 32'd0;
+        chunk_start_trig       = 1'b0;
+        cnt_sram_a_en_toggles  = 32'd0;
+        cnt_sram_o_wen_toggles = 32'd0;
+        cnt_done_pulses        = 32'd0;
+        sram_a_en_prev         = 1'b0;
+        sram_o_wen_prev        = 1'b0;
+        status_busy_av         = 1'b0;
+        busy_rose_in_2         = 1'b0;
+        busy_check_cnt         = 2'd0;
+        perf_counting          = 1'b0;
     end
     endtask
 
@@ -556,6 +594,11 @@ module tb_vector_perf;
         reg [31:0] expected_o_wen;
     begin
         fail_cnt = 0;
+
+        // Recompute op-category flags because op_code may change per iteration
+        is_binary = (op_code == OP_ADD || op_code == OP_MUL || op_code == OP_RESID);
+        is_reduce = (op_code == OP_MAX || op_code == OP_SUM);
+        is_conv   = (op_code == OP_CONV);
 
         // Compute expected chunk count
         expected_a_en = (dim_val + NUM_LANES - 1) / NUM_LANES + 1;
@@ -605,21 +648,81 @@ module tb_vector_perf;
     endtask
 
     //=========================================================================
+    // Input-mode helper: compare first `len` bytes of input_mode with ref_str
+    //=========================================================================
+    function automatic input_mode_eq;
+        input [127:0] mode;
+        input [63:0]  ref_str;
+        input integer len;
+        integer i;
+        reg match;
+        begin
+            match = 1'b1;
+            for (i = 0; i < len; i = i + 1) begin
+                if (mode[i*8 +: 8] != ref_str[i*8 +: 8])
+                    match = 1'b0;
+            end
+            input_mode_eq = match;
+        end
+    endfunction
+
+    //=========================================================================
     // Initialize SRAM with synthetic test data
     //=========================================================================
     task init_sram_data;
         integer ei;
+        reg is_zeros;
+        reg is_maxval;
+        reg is_sparse;
+        reg is_repeated;
     begin
-        for (ei = 0; ei < MAX_ELEMENTS * 2; ei = ei + 1)
-            sram_mem[ei] = $random;
+        is_zeros    = input_mode_eq(input_mode, "zeros",    5);
+        is_maxval   = input_mode_eq(input_mode, "maxval",   6);
+        is_sparse   = input_mode_eq(input_mode, "sparse",   6);
+        is_repeated = input_mode_eq(input_mode, "repeated", 8);
 
-        // Keep values in reasonable INT32 range for non-overflow ops
+        for (ei = 0; ei < MAX_ELEMENTS * 2; ei = ei + 1)
+            sram_mem[ei] = 32'd0;
+
         for (ei = 0; ei < dim_val; ei = ei + 1) begin
-            // Clamp to [-2^20, 2^20] range for safe arithmetic
-            if (sram_mem[ei][31:20] != 12'd0 && !sram_mem[ei][31])
-                sram_mem[ei] = {12'd0, sram_mem[ei][19:0]};
-            else if (sram_mem[ei][31])
-                sram_mem[ei] = {12'hFFF, sram_mem[ei][19:0]};
+            if (is_zeros)
+                sram_mem[ei] = 32'd0;
+            else if (is_maxval)
+                sram_mem[ei] = 32'h0000FFFF;
+            else if (is_repeated)
+                sram_mem[ei] = 32'h00007BFF; // threshold near FP16 max normal
+            else if (is_sparse)
+                sram_mem[ei] = ((ei % 16) == 0) ? 32'h00007BFF : 32'd0;
+            else begin
+                // random with clamp to [-2^20, 2^20]
+                sram_mem[ei] = $random;
+                if (sram_mem[ei][31:20] != 12'd0 && !sram_mem[ei][31])
+                    sram_mem[ei] = {12'd0, sram_mem[ei][19:0]};
+                else if (sram_mem[ei][31])
+                    sram_mem[ei] = {12'hFFF, sram_mem[ei][19:0]};
+            end
+        end
+
+        // For binary ops, also fill operand B with the same pattern at a
+        // fixed offset.  The testbench already configures B base address
+        // separately; this keeps B identical to A for deterministic edge
+        // behaviour without requiring extra MMIO plumbing.
+        for (ei = 0; ei < dim_val; ei = ei + 1) begin
+            if (is_zeros)
+                sram_mem[(32'h0001_0000 >> 2) + ei] = 32'd0;
+            else if (is_maxval)
+                sram_mem[(32'h0001_0000 >> 2) + ei] = 32'h0000FFFF;
+            else if (is_repeated)
+                sram_mem[(32'h0001_0000 >> 2) + ei] = 32'h00007BFF;
+            else if (is_sparse)
+                sram_mem[(32'h0001_0000 >> 2) + ei] = ((ei % 16) == 0) ? 32'h00007BFF : 32'd0;
+            else begin
+                sram_mem[(32'h0001_0000 >> 2) + ei] = $random;
+                if (sram_mem[(32'h0001_0000 >> 2) + ei][31:20] != 12'd0 && !sram_mem[(32'h0001_0000 >> 2) + ei][31])
+                    sram_mem[(32'h0001_0000 >> 2) + ei] = {12'd0, sram_mem[(32'h0001_0000 >> 2) + ei][19:0]};
+                else if (sram_mem[(32'h0001_0000 >> 2) + ei][31])
+                    sram_mem[(32'h0001_0000 >> 2) + ei] = {12'hFFF, sram_mem[(32'h0001_0000 >> 2) + ei][19:0]};
+            end
         end
     end
     endtask
@@ -639,6 +742,11 @@ module tb_vector_perf;
 
         // Reset perf counters
         reset_perf_counters;
+
+        // Emit inter-op gap for all ops after the first
+        if (op_idx > 0) begin
+            emit_perf_gap(op_idx, cycle_cnt - last_done_cycle);
+        end
 
         // Write CMD=START
         mmio_write(12'h04, 32'd1);
@@ -672,7 +780,7 @@ module tb_vector_perf;
             return;
         end
 
-        repeat(3) @(posedge clk);
+        // Note: repeat(3) removed for tight back-to-back gap measurement.
 
         // ── Emit PERF lines ─────────────────────────────────────────────
         emit_all_perf;
@@ -717,6 +825,69 @@ module tb_vector_perf;
         repeat_count = 32'd1;
         $value$plusargs("repeat=%d", repeat_count);
 
+        input_mode = "random";
+        $value$plusargs("input_mode=%s", input_mode);
+        $display("[TB] input_mode = %0s", input_mode);
+
+        // Default first sequence entry from legacy +op/+dim
+        op_seq[0] = op_code;
+        dim_seq[0] = dim_val;
+        dim_val_default = dim_val;
+        for (i = 1; i < 8; i = i + 1) begin
+            op_seq[i]  = 4'd0;
+            dim_seq[i] = 16'd0;
+        end
+
+        // ── Back-to-back alias parsing: +op1=X +op2=Y ... (numeric or name)
+        op_seq_len = 32'd0;
+        begin
+            reg [31:0] tmp_code;
+            if ($value$plusargs("op1=%d", tmp_code)) begin
+                op_seq[1] = tmp_code[3:0];
+                if (op_seq_len < 2) op_seq_len = 32'd2;
+            end else if ($value$plusargs("op1=%s", op_token)) begin
+                op_seq[1] = op_token_to_code(op_token);
+                if (op_seq_len < 2) op_seq_len = 32'd2;
+            end
+            if ($value$plusargs("op2=%d", tmp_code)) begin
+                op_seq[2] = tmp_code[3:0];
+                if (op_seq_len < 3) op_seq_len = 32'd3;
+            end else if ($value$plusargs("op2=%s", op_token)) begin
+                op_seq[2] = op_token_to_code(op_token);
+                if (op_seq_len < 3) op_seq_len = 32'd3;
+            end
+            if ($value$plusargs("op3=%d", tmp_code)) begin
+                op_seq[3] = tmp_code[3:0];
+                if (op_seq_len < 4) op_seq_len = 32'd4;
+            end else if ($value$plusargs("op3=%s", op_token)) begin
+                op_seq[3] = op_token_to_code(op_token);
+                if (op_seq_len < 4) op_seq_len = 32'd4;
+            end
+            if ($value$plusargs("op4=%d", tmp_code)) begin
+                op_seq[4] = tmp_code[3:0];
+                if (op_seq_len < 5) op_seq_len = 32'd5;
+            end else if ($value$plusargs("op4=%s", op_token)) begin
+                op_seq[4] = op_token_to_code(op_token);
+                if (op_seq_len < 5) op_seq_len = 32'd5;
+            end
+            if ($value$plusargs("op5=%d", tmp_code)) begin
+                op_seq[5] = tmp_code[3:0];
+                if (op_seq_len < 6) op_seq_len = 32'd6;
+            end else if ($value$plusargs("op5=%s", op_token)) begin
+                op_seq[5] = op_token_to_code(op_token);
+                if (op_seq_len < 6) op_seq_len = 32'd6;
+            end
+            if ($value$plusargs("dim1=%d", dim_seq[1]));
+            if ($value$plusargs("dim2=%d", dim_seq[2]));
+            if ($value$plusargs("dim3=%d", dim_seq[3]));
+            if ($value$plusargs("dim4=%d", dim_seq[4]));
+            if ($value$plusargs("dim5=%d", dim_seq[5]));
+            if (op_seq_len > 0)
+                $display("[TB] op_seq_len = %0d", op_seq_len);
+        end
+
+        total_ops = (op_seq_len > 0) ? (repeat_count * op_seq_len) : repeat_count;
+
         is_binary  = (op_code == OP_ADD || op_code == OP_MUL || op_code == OP_RESID);
         is_reduce  = (op_code == OP_MAX || op_code == OP_SUM);
         is_conv    = (op_code == OP_CONV);
@@ -732,31 +903,47 @@ module tb_vector_perf;
         $display("[TB] Reset released at %0t", $time);
 
         // ── Configure MMIO registers (once) ────────────────────────────────
+        // Use fixed, non-overlapping addresses so mixed unary/binary sequences
+        // can switch op codes without reconfiguring base addresses.
+        mmio_write(12'h0C, 32'd0);          // i_addr
+        mmio_write(12'h10, 32'h0001_0000);  // b_addr (harmless for unary ops)
+        mmio_write(12'h14, 32'h0002_0000);  // o_addr
+        mmio_write(12'h18, {16'd0, dim_val});
+        mmio_write(12'h1C, 32'd1);          // irq_en
         mmio_write(12'h00, op_code);
         $display("[TB] Wrote CTRL=%0d (%0s)", op_code, op_str);
-
-        mmio_write(12'h0C, 32'd0);
-        if (is_binary)
-            mmio_write(12'h10, 32'h0001_0000);
-        else
-            mmio_write(12'h10, 32'd0);
-        mmio_write(12'h18, {16'd0, dim_val});
-        mmio_write(12'h1C, 32'd1);
-
-        if (is_binary)
-            mmio_write(12'h14, 32'h0002_0000);
-        else
-            mmio_write(12'h14, 32'h0000_8000);
 
         $display("[TB] MMIO configured");
 
         // ── Back-to-back CMD loop ──────────────────────────────────────────
         begin : loop_btb_block
             reg [31:0] op_index;
-            for (op_index = 0; op_index < repeat_count; op_index = op_index + 1) begin : loop_btb
-                $display("[TB] === CMD loop iteration %0d / %0d ===", op_index, repeat_count);
+            for (op_index = 0; op_index < total_ops; op_index = op_index + 1) begin : loop_btb
+                seq_idx = (op_seq_len > 0) ? (op_index % op_seq_len) : 32'd0;
 
-                init_sram_data;
+                if (op_seq_len > 0) begin
+                    op_code = op_seq[seq_idx];
+                    dim_val = (dim_seq[seq_idx] > 0) ? dim_seq[seq_idx] : dim_val_default;
+                end
+
+                op_str  = op_code_to_str(op_code);
+                is_binary = (op_code == OP_ADD || op_code == OP_MUL || op_code == OP_RESID);
+                is_reduce = (op_code == OP_MAX || op_code == OP_SUM);
+                is_conv   = (op_code == OP_CONV);
+                $sformat(shape_str, "op=%0s,dim=%0d", op_str, dim_val);
+
+                $display("[TB] === CMD loop iteration %0d / %0d (op=%0s, dim=%0d) ===",
+                         op_index, total_ops, op_str, dim_val);
+
+                // Reconfigure op-dependent MMIO registers
+                mmio_write(12'h00, op_code);
+                if (dim_seq[seq_idx] > 0)
+                    mmio_write(12'h18, {16'd0, dim_val});
+
+                // Initialize SRAM only for single-op runs to keep mixed-sequence
+                // inter-op gaps bounded by control-path idle time.
+                if (op_seq_len <= 1)
+                    init_sram_data;
 
                 drive_one_cmd(op_index);
 
@@ -767,7 +954,7 @@ module tb_vector_perf;
             end
         end
 
-        $display("[TB] All %0d CMD operations complete.", repeat_count);
+        $display("[TB] All %0d CMD operations complete.", total_ops);
         $display("PASS");
         $finish;
     end

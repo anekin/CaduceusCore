@@ -153,6 +153,9 @@ module tb_sfu_perf;
     // TOTAL counter
     reg [31:0]  cnt_TOTAL;
 
+    // Back-to-back gap measurement: cycle of last STATUS.DONE detection
+    reg [31:0]  last_done_cycle;
+
     // Anti-vacuous check registers
     reg [31:0]  cnt_sram_ren_toggles;
     reg [31:0]  cnt_sram_wen_toggles;
@@ -182,6 +185,7 @@ module tb_sfu_perf;
             status_busy          <= 1'b0;
             busy_rose_in_2       <= 1'b0;
             busy_check_cnt       <= 2'd0;
+            last_done_cycle      <= 32'd0;
         end else begin
             // ── Increment local cycle counter ────────────────────────────
             perf_cycle <= perf_cycle + 32'd1;
@@ -203,6 +207,7 @@ module tb_sfu_perf;
                 status_busy          <= 1'b0;
                 busy_rose_in_2       <= 1'b0;
                 busy_check_cnt       <= 2'd0;
+                last_done_cycle      <= 32'd0;
             end
 
             // ── SRAM toggle counters (anti-vacuous) ─────────────────────
@@ -221,8 +226,10 @@ module tb_sfu_perf;
             // ── State tracking ──────────────────────────────────────────
             if (fsm_state != state_prev) begin
                 // DONE detection
-                if (fsm_state == ST_DONE && state_prev != ST_DONE)
+                if (fsm_state == ST_DONE && state_prev != ST_DONE) begin
                     cnt_done_pulses <= cnt_done_pulses + 32'd1;
+                    last_done_cycle <= cycle_cnt;
+                end
 
                 // Leaving ST_IDLE → operation starts
                 if (state_prev == ST_IDLE && fsm_state != ST_IDLE) begin
@@ -301,9 +308,18 @@ module tb_sfu_perf;
     reg [1023:0] op_str;
     reg [3:0]    op_code;
     reg [15:0]   dim_val;
+    reg [15:0]   dim_val_default;
     reg [15:0]   pos_val;
     reg [31:0]   repeat_count;
     reg [255:0]  shape_str;
+    reg [127:0]  input_mode;
+
+    // Multi-op sequence support (for mixed back-to-back sequences)
+    reg [31:0]   op_seq_len;
+    reg [3:0]    op_seq [0:7];
+    reg [15:0]   dim_seq [0:7];
+    reg [31:0]   total_ops;
+    reg [31:0]   seq_idx;
 
     reg          is_rope;
     reg [31:0]   input_words;
@@ -383,13 +399,26 @@ module tb_sfu_perf;
     endtask
 
     //=========================================================================
-    // Perf Counter Reset
+    // Perf Counter Reset (zero-time, for tight back-to-back gaps)
+    // Only the active counters are reset; last_done_cycle is preserved so the
+    // next GAP measurement covers the real reconfiguration idle time.
     //=========================================================================
     task reset_perf_counters;
     begin
-        perf_rst = 1'b1;
-        @(negedge clk);
-        @(negedge clk);
+        cnt_IDLE             = 32'd0;
+        cnt_READ_INIT        = 32'd0;
+        cnt_RUN              = 32'd0;
+        cnt_FLUSH            = 32'd0;
+        cnt_DONE             = 32'd0;
+        cnt_TOTAL            = 32'd0;
+        cnt_sram_ren_toggles = 32'd0;
+        cnt_sram_wen_toggles = 32'd0;
+        cnt_done_pulses      = 32'd0;
+        sram_ren_prev        = 1'b0;
+        sram_wen_prev        = 1'b0;
+        status_busy          = 1'b0;
+        busy_rose_in_2       = 1'b0;
+        busy_check_cnt       = 2'd0;
     end
     endtask
 
@@ -468,30 +497,77 @@ module tb_sfu_perf;
     endtask
 
     //=========================================================================
+    // Input-mode helper: compare first `len` bytes of input_mode with ref_str
+    //=========================================================================
+    function automatic input_mode_eq;
+        input [127:0] mode;
+        input [63:0]  ref_str;
+        input integer len;
+        integer i;
+        reg match;
+        begin
+            match = 1'b1;
+            for (i = 0; i < len; i = i + 1) begin
+                if (mode[i*8 +: 8] != ref_str[i*8 +: 8])
+                    match = 1'b0;
+            end
+            input_mode_eq = match;
+        end
+    endfunction
+
+    //=========================================================================
     // Initialize SRAM with synthetic test data
     //=========================================================================
     task init_sram_data;
         integer wi, ei;
-        reg [15:0] rnd_val;
+        reg [15:0] val;
+        reg is_zeros;
+        reg is_maxval;
+        reg is_sparse;
+        reg is_repeated;
     begin
-        // Generate deterministic but varied FP16 values
+        is_zeros    = input_mode_eq(input_mode, "zeros",    5);
+        is_maxval   = input_mode_eq(input_mode, "maxval",   6);
+        is_sparse   = input_mode_eq(input_mode, "sparse",   6);
+        is_repeated = input_mode_eq(input_mode, "repeated", 8);
+
+        // Clear all SRAM words first
         for (wi = 0; wi < SRAM_WORDS; wi = wi + 1)
             sram_mem[wi] = 32'd0;
 
         if (is_rope) begin
             // RoPE: pairs of (x, y) packed as {y, x} in each word
             for (ei = 0; ei < dim_val; ei = ei + 1) begin
-                rnd_val = $random & 16'h07FF;
-                sram_mem[ei] = {rnd_val, rnd_val};
+                if (is_zeros)
+                    val = 16'd0;
+                else if (is_maxval)
+                    val = 16'hFFFF;
+                else if (is_repeated)
+                    val = 16'h3C00; // FP16 1.0
+                else if (is_sparse)
+                    val = ((ei % 16) == 0) ? (16'h3C00) : 16'd0;
+                else
+                    val = $random & 16'h07FF;
+                sram_mem[ei] = {val, val};
             end
         end else begin
             // Normal FP16: two elements per word, packed as {elem[i+1], elem[i]}
             for (ei = 0; ei < dim_val; ei = ei + 2) begin
-                rnd_val = $random & 16'h07FF;
-                if (ei + 1 < dim_val)
-                    sram_mem[ei >> 1] = {rnd_val, rnd_val};
+                if (is_zeros)
+                    val = 16'd0;
+                else if (is_maxval)
+                    val = 16'hFFFF;
+                else if (is_repeated)
+                    val = 16'h3C00; // FP16 1.0
+                else if (is_sparse)
+                    val = ((ei % 32) == 0) ? (16'h3C00) : 16'd0;
                 else
-                    sram_mem[ei >> 1] = {16'd0, rnd_val};
+                    val = $random & 16'h07FF;
+
+                if (ei + 1 < dim_val)
+                    sram_mem[ei >> 1] = {val, val};
+                else
+                    sram_mem[ei >> 1] = {16'd0, val};
             end
         end
     end
@@ -504,21 +580,16 @@ module tb_sfu_perf;
         input [31:0] op_idx;
         reg [31:0] stat_val;
         reg timed_out;
-        reg [31:0] prev_cycle;
     begin
         timed_out = 1'b0;
-        prev_cycle = cycle_cnt;
 
         // Reset perf counters
         reset_perf_counters;
 
-        // Emit GAP event for ops after the first
+        // Emit GAP event for ops after the first (STATUS.DONE -> next CMD.START)
         if (op_idx > 0) begin
-            emit_perf_gap(op_idx, cycle_cnt - prev_cycle);
+            emit_perf_gap(op_idx, cycle_cnt - last_done_cycle);
         end
-
-        // Reset DUT internal state by asserting rst_n briefly
-        // (perf counters already reset; DUT reset keeps internal regs clean)
 
         // Write CMD=START
         mmio_write(OFF_CMD, 32'd1);
@@ -551,7 +622,7 @@ module tb_sfu_perf;
             return;
         end
 
-        repeat(3) @(posedge clk);
+        // Note: repeat(3) removed for tight back-to-back gap measurement.
 
         // ── Emit PERF lines for this CMD ────────────────────────────────
         emit_all_perf;
@@ -594,7 +665,16 @@ module tb_sfu_perf;
 
         dim_val = 16'd64;
         $value$plusargs("dim=%d", dim_val);
+        dim_val_default = dim_val;
         $display("[TB] dim = %0d", dim_val);
+
+        // Default first sequence entry to the legacy +op/+dim values
+        op_seq[0] = op_code;
+        dim_seq[0] = dim_val;
+        for (i = 1; i < 8; i = i + 1) begin
+            op_seq[i]  = 4'd0;
+            dim_seq[i] = 16'd0;
+        end
 
         pos_val = 16'd0;
         $value$plusargs("pos=%d", pos_val);
@@ -603,7 +683,84 @@ module tb_sfu_perf;
         repeat_count = 32'd1;
         $value$plusargs("repeat=%d", repeat_count);
 
-        // ── Set shape string for PERF ──────────────────────────────────────
+        input_mode = "random";
+        $value$plusargs("input_mode=%s", input_mode);
+        $display("[TB] input_mode = %0s", input_mode);
+
+        // ── Multi-op sequence parsing ──────────────────────────────────────
+        op_seq_len = 32'd0;
+        $value$plusargs("op_seq_len=%d", op_seq_len);
+        if (op_seq_len > 0) begin
+            $value$plusargs("op0=%d", op_seq[0]);
+            $value$plusargs("op1=%d", op_seq[1]);
+            $value$plusargs("op2=%d", op_seq[2]);
+            $value$plusargs("op3=%d", op_seq[3]);
+            $value$plusargs("op4=%d", op_seq[4]);
+            $value$plusargs("op5=%d", op_seq[5]);
+            $value$plusargs("op6=%d", op_seq[6]);
+            $value$plusargs("op7=%d", op_seq[7]);
+            $value$plusargs("dim0=%d", dim_seq[0]);
+            $value$plusargs("dim1=%d", dim_seq[1]);
+            $value$plusargs("dim2=%d", dim_seq[2]);
+            $value$plusargs("dim3=%d", dim_seq[3]);
+            $value$plusargs("dim4=%d", dim_seq[4]);
+            $value$plusargs("dim5=%d", dim_seq[5]);
+            $value$plusargs("dim6=%d", dim_seq[6]);
+            $value$plusargs("dim7=%d", dim_seq[7]);
+            $display("[TB] op_seq_len = %0d", op_seq_len);
+        end
+
+        // Back-to-back alias: +op1=X +op2=Y (numeric code or op name)
+        // If used, op_seq_len is inferred from the highest opN provided.
+        begin
+            reg [31:0] tmp_code;
+            if ($value$plusargs("op1=%d", tmp_code)) begin
+                op_seq[1] = tmp_code[3:0];
+                if (op_seq_len < 2) op_seq_len = 32'd2;
+            end else if ($value$plusargs("op1=%s", op_token)) begin
+                op_seq[1] = op_token_to_code(op_token);
+                if (op_seq_len < 2) op_seq_len = 32'd2;
+            end
+            if ($value$plusargs("op2=%d", tmp_code)) begin
+                op_seq[2] = tmp_code[3:0];
+                if (op_seq_len < 3) op_seq_len = 32'd3;
+            end else if ($value$plusargs("op2=%s", op_token)) begin
+                op_seq[2] = op_token_to_code(op_token);
+                if (op_seq_len < 3) op_seq_len = 32'd3;
+            end
+            if ($value$plusargs("op3=%d", tmp_code)) begin
+                op_seq[3] = tmp_code[3:0];
+                if (op_seq_len < 4) op_seq_len = 32'd4;
+            end else if ($value$plusargs("op3=%s", op_token)) begin
+                op_seq[3] = op_token_to_code(op_token);
+                if (op_seq_len < 4) op_seq_len = 32'd4;
+            end
+            if ($value$plusargs("op4=%d", tmp_code)) begin
+                op_seq[4] = tmp_code[3:0];
+                if (op_seq_len < 5) op_seq_len = 32'd5;
+            end else if ($value$plusargs("op4=%s", op_token)) begin
+                op_seq[4] = op_token_to_code(op_token);
+                if (op_seq_len < 5) op_seq_len = 32'd5;
+            end
+            if ($value$plusargs("op5=%d", tmp_code)) begin
+                op_seq[5] = tmp_code[3:0];
+                if (op_seq_len < 6) op_seq_len = 32'd6;
+            end else if ($value$plusargs("op5=%s", op_token)) begin
+                op_seq[5] = op_token_to_code(op_token);
+                if (op_seq_len < 6) op_seq_len = 32'd6;
+            end
+            if ($value$plusargs("dim1=%d", dim_seq[1]));
+            if ($value$plusargs("dim2=%d", dim_seq[2]));
+            if ($value$plusargs("dim3=%d", dim_seq[3]));
+            if ($value$plusargs("dim4=%d", dim_seq[4]));
+            if ($value$plusargs("dim5=%d", dim_seq[5]));
+            if (op_seq_len > 0)
+                $display("[TB] op_seq_len (alias) = %0d", op_seq_len);
+        end
+
+        total_ops = (op_seq_len > 0) ? (repeat_count * op_seq_len) : repeat_count;
+
+        // ── Set shape string for PERF (updated per-op inside the loop) ───────
         if (is_rope)
             $sformat(shape_str, "op=%0s,dim=%0d,pos=%0d", op_str, dim_val, pos_val);
         else
@@ -616,39 +773,54 @@ module tb_sfu_perf;
         @(posedge clk);
         $display("[TB] Reset released at %0t", $time);
 
-        // ── Configure MMIO registers (once) ────────────────────────────────
-        mmio_write(OFF_CTRL,   {28'd0, op_code});
+        // ── Configure common MMIO registers (once) ─────────────────────────
         mmio_write(OFF_I_ADDR, 32'd0);
         mmio_write(OFF_O_ADDR, 32'd10000);
-        mmio_write(OFF_DIM,    {16'd0, dim_val});
-        if (is_rope)
-            mmio_write(OFF_POS, pos_val);
         mmio_write(OFF_IRQ_EN, 32'd1);
-        $display("[TB] MMIO configured");
 
         // ── Back-to-back CMD loop ──────────────────────────────────────────
         begin : loop_btb_block
             reg [31:0] op_index;
-            reg [31:0] prev_done_cycle;
-            prev_done_cycle = cycle_cnt;
 
-            for (op_index = 0; op_index < repeat_count; op_index = op_index + 1) begin : loop_btb
-                $display("[TB] === CMD loop iteration %0d / %0d ===", op_index, repeat_count);
+            for (op_index = 0; op_index < total_ops; op_index = op_index + 1) begin : loop_btb
+                seq_idx = (op_seq_len > 0) ? (op_index % op_seq_len) : 32'd0;
 
-                // Initialize SRAM with fresh random data for each op
-                init_sram_data;
+                if (op_seq_len > 0) begin
+                    op_code = op_seq[seq_idx];
+                    dim_val = (dim_seq[seq_idx] > 0) ? dim_seq[seq_idx] : dim_val_default;
+                end
+
+                op_str  = op_code_to_str(op_code);
+                is_rope = (op_code == OP_ROPE);
+                if (is_rope)
+                    $sformat(shape_str, "op=%0s,dim=%0d,pos=%0d", op_str, dim_val, pos_val);
+                else
+                    $sformat(shape_str, "op=%0s,dim=%0d", op_str, dim_val);
+
+                $display("[TB] === CMD loop iteration %0d / %0d (op=%0s, dim=%0d) ===",
+                         op_index, total_ops, op_str, dim_val);
+
+                // Reconfigure op-dependent MMIO registers
+                mmio_write(OFF_CTRL, {28'd0, op_code});
+                mmio_write(OFF_DIM,  {16'd0, dim_val});
+                if (is_rope)
+                    mmio_write(OFF_POS, pos_val);
+
+                // Initialize SRAM with fresh random data for single-op runs.
+                // Skip re-initialization during mixed back-to-back sequences so
+                // the inter-op gap reflects only control-path idle time.
+                if (op_seq_len <= 1)
+                    init_sram_data;
 
                 // Drive one CMD (includes perf counter reset, wait, PERF emission)
                 drive_one_cmd(op_index);
-
-                prev_done_cycle = cycle_cnt;
 
                 // Clear SRAM output region between ops
                 // (SRAM write captures from previous op are still in sram_mem)
             end
         end
 
-        $display("[TB] All %0d CMD operations complete.", repeat_count);
+        $display("[TB] All %0d CMD operations complete.", total_ops);
         $display("PASS");
         $finish;
     end

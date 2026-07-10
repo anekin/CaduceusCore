@@ -8,7 +8,7 @@ measured cycles against expected formulas derived from Vector RTL FSM.
 Expected cycle formulas (from rtl/testcase-list-sfu-vector-perf.md §4):
     ADD/MUL/MAX/RESID: ceil(N/128) * 4 + 2
     SUM:               ceil(N/128) * 10 + 2
-    CONV:              ceil(N/128) * 132 + 2
+    CONV/F16_I32:      2*N + 3*ceil(N/128) + 1
 
 Tolerances:
     All ops: |delta| <= 1
@@ -38,8 +38,8 @@ VECTOR_FORMULAS: dict[str, str] = {
     "max":     "ceil(N/128) * 10 + 2",  # MAX routes through reduce_tree, not ALU
     "resid":   "ceil(N/128) * 4 + 2",
     "sum":     "ceil(N/128) * 10 + 2",
-    "conv":    "ceil(N/128) * 259 + 2", # CONV_FEED(N) + CONV_CAPTURE(N) = 2N, not N
-    "f16_i32": "ceil(N/128) * 259 + 2", # same sequential 2-cycle/element pattern as CONV
+    "conv":    "2*N + 3*ceil(N/128) + 1",
+    "f16_i32": "2*N + 3*ceil(N/128) + 1",
 }
 
 
@@ -53,8 +53,8 @@ def expected_cycles(op: str, dim: int) -> int:
         "max":     chunks * 10 + 2,   # MAX routes through reduce_tree, not ALU
         "resid":   chunks * 4 + 2,
         "sum":     chunks * 10 + 2,
-        "conv":    chunks * 259 + 2,  # CONV_FEED(N) + CONV_CAPTURE(N) sequential
-        "f16_i32": chunks * 259 + 2,  # same sequential 2-cycle/element pattern as CONV
+        "conv":    2 * dim + 3 * chunks + 1,
+        "f16_i32": 2 * dim + 3 * chunks + 1,
     }
     result = formulas.get(op.lower())
     if result is None:
