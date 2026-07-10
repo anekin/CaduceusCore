@@ -12,25 +12,32 @@ Arc Model v3 不直接生成 RTL spec。它的目标是：
 
 v3 完成后，README 中的三场景 DSE 结论应该能由一组命令复现，而不是只存在于手写报告里。
 
-## 当前问题
+## 当前基线
 
-### P0: 复现性和版本基线
+当前分支：`feat_arc_model`
 
-- 当前 `design_space_explorer.py` 没有 `--scenario`，主流程不会从 `sim/config/scenarios.yaml` 驱动搜索空间、约束和内存组件。
-- `scenarios.yaml` 已有 `lpddr5_3b` / `onchip_7b` / `onchip_7b_chat`，但 DSE 入口仍用固定 sweep。
-- 报告推荐了 `block 80x1536`，当前 sweep 维度没有覆盖这类宽阵列。
-- README/报告存在 Arc 版本命名不一致风险。v3 应统一文档版本：Arc v1=Block 路线，Arc v2=引入 FSA，Arc v3=场景驱动和 contract 化。
-- Arc 相关 pytest 当前不绿：`test_qkv_dimension_3b` 仍按旧 Qwen2.5-3B 参数断言。
+已完成的 v3.0 baseline：
 
-### P0: 搜索目标不是产品约束驱动
+1. `sim/design_space_explorer.py` 已支持 `--scenario`。
+2. `lpddr5_3b` / `onchip_7b` / `onchip_7b_chat` 可从 `sim/config/scenarios.yaml` 注入内存、工艺和约束。
+3. on-chip 3D DRAM 场景的搜索空间已覆盖 `80x1536` 这类宽阵列。
+4. `tok_s_from_layer()` 已按配置频率计算，不再写死 1000MHz。
+5. 主 sweep 不再静默吞掉 invalid config，并在 JSON 里输出 `invalid_configs`。
+6. DSE 输出已带基础 `config` 结构，含 scenario、engine、array、precision、frequency、memory、SRAM 等字段。
+7. Arc 相关基础测试已恢复通过。
 
-- Pareto 只按 `max tok/s / min area`，没有把功耗、TTFT、内存形态、精度门禁和产品线约束作为硬过滤。
-- 输出的 `PPA` 只有 `tok_s / area / power / label`，缺少 `pass/fail reasons`、TTFT、带宽利用率、TOPS、memory feasibility。
-- 结果结构依赖 `config_label` 字符串，敏感性分析再反解析 label，容易遗漏 SRAM、on-chip memory、scenario 等关键维度。
+v3.0 仍只是 baseline，不代表 Arc Model v3 完成。后续开发重点是把 DSE 从“能跑 scenario”升级成“产品约束驱动、可审计、可生成 Architecture Contract”。
+
+## 剩余问题
+
+### P0: 产品约束尚未完全进入 DSE 闭环
+
+- Pareto 仍主要按 `max tok/s / min area`，还没有把功耗、TTFT、内存形态、精度门禁和产品线约束作为完整 hard filter。
+- 输出还缺少完整的 `pass/fail reasons`、TTFT、带宽利用率、TOPS、memory feasibility。
+- 部分敏感性分析仍依赖 `config_label` 字符串反解析，容易遗漏 SRAM、on-chip memory、scenario 等关键维度。
 
 ### P0: 性能模型关键路径缺口
 
-- 频率 sweep 存在实质错误：配置扫 800/1000/1200MHz，但 `tok_s_from_layer()` 写死 1000MHz。
 - Decode trace 只覆盖 Q/K/V/O 和 FFN GEMM，prefill attention 的 `QK^T`、softmax、`PV` 未进入主 DSE trace。
 - FSA 的 `estimate_attention()` 已存在，但主 `simulate_layer()` 没有调用，导致 FSA 的核心优势没有通过统一路径建模。
 - `batch_m > 1` 时 KV cache cycles 直接返回 0，不足以支撑 TTFT/prefill 结论。
@@ -49,9 +56,9 @@ v3 完成后，README 中的三场景 DSE 结论应该能由一组命令复现�
 
 ### P2: 工程质量和可观测性
 
-- 主 sweep 中 `except Exception: pass` 会静默丢掉配置，导致 DSE 结果不可审计。
-- “Best per engine type” 文案写了 DRAM 约束，但过滤条件没有按 DRAM 约束执行。
-- cross-validation 用固定 `tops_int8`，没有从实际 H/W/frequency/ops_per_mac 推导。
+- `sim/design_space_explorer.py` 已经承担搜索空间、仿真、敏感性、CLI、报告、交叉校验等多个职责，需要拆分。
+- JSON 结构仍不够稳定，后续 Func Model / report generator 不应依赖临时字段。
+- 三场景报告中的历史结论和当前代码可复现结果需要明确区分。
 
 ## v3 设计方案
 
@@ -164,59 +171,146 @@ Arc v3 输出需要和 Func Model / RTL 建立校准字段：
 
 Func Model 还未实现 FSA 前，Arc v3 的 FSA 结果只能标记为 `architecture_candidate`，不能标记为 `func_verified`。
 
-## 实施优先级
+## 开发计划
+
+### 总体节奏
+
+Arc Model v3 按 5 个增量版本推进：
+
+| 版本 | 目标 | 主要产物 | 合并门槛 |
+|------|------|----------|----------|
+| v3.1 | 约束闭环和结果结构稳定 | `DSEPoint`/constraint schema、pass/fail reasons、scenario hard filter | 三个 scenario 均能输出可审计 JSON |
+| v3.2 | TTFT/prefill/FSA 建模闭环 | decode/prefill trace、FSA attention path、TTFT breakdown | Block 与 Func Model baseline 可对比，FSA 走真实 attention 估算路径 |
+| v3.3 | Memory/PPA 产品化校准 | 3D DRAM stack model、area/power breakdown、calibration notes | S2/S3 宽阵列候选 area/BW/power 可解释 |
+| v3.4 | 报告和 Architecture Contract 生成 | JSON + Markdown + YAML contract 输出 | Func Model 能按 contract 启动 v2 建模 |
+| v3.5 | 工程拆分和长期维护 | `sim/dse/` 模块化、CLI wrapper、回归测试 | `design_space_explorer.py` 只保留 CLI 和编排 |
+
+开发默认继续在 `/home/prj/zhengs/codex/CaduceusCore` 的 `feat_arc_model` 分支上进行。每个版本都应保持命令行兼容：已有 `--quick`、`--top`、`--output`、`--model-spec`、`--batch-m`、`--cv-model` 不应被破坏。
 
 ### v3.0 Baseline Fix
 
 目标：让现有 Arc 结果可信、测试基线干净。
 
+状态：已完成。
+
+已交付：
+
 1. 统一 Qwen2.5-3B 模型规格和测试。
 2. 修正 frequency sweep 写死 1000MHz。
 3. 移除 silent exception，输出 invalid config 列表。
-4. 输出 structured JSON，先不重构所有模块。
+4. 增加 `--scenario` baseline。
+5. 输出基础 structured config JSON，先不重构所有模块。
 
 验收：
 
 ```bash
-PYTHONPATH=sim python3 -m pytest sim/tests/test_arc_model.py sim/tests/test_arc_precision.py -q
+PYTHONPATH=sim python3 -m pytest sim/tests/test_arc_model.py sim/tests/test_arc_precision.py sim/tests/test_design_space_explorer.py -q
 PYTHONPATH=sim python3 sim/design_space_explorer.py --quick --output results/dse/quick.json
 ```
 
-### v3.1 Scenario-driven Search
+### v3.1 Constraint and Result Schema Closure
 
-目标：一条命令复现每个产品场景。
+目标：一条命令输出每个产品场景的可审计候选集，并能解释每个候选为什么通过或失败。
 
-1. 加 `--scenario`。
-2. 根据 `scenarios.yaml` 生成搜索空间。
-3. 把 scenario constraints 变成 hard filter。
-4. 增加 `pass/fail reasons`。
+开发项：
+
+1. 引入稳定结果结构：
+   - `DSEConfig`
+   - `DSEMetrics`
+   - `ConstraintResult`
+   - `DSEPoint`
+2. 把 scenario constraints 变成 hard filter：
+   - `tps_min`
+   - `ttft_ms_max`
+   - `area_mm2_max`
+   - `power_w_max`，如果 scenario 未显式提供则输出 warning，不静默通过
+   - required/excluded memory components
+3. JSON 输出增加：
+   - `passed_results`
+   - `rejected_results`
+   - `failed_reasons`
+   - `warnings`
+   - `scenario_hash`
+   - `config_hash`
+4. Pareto 和 sensitivity analysis 改为读取结构化字段，不再反解析 `config_label`。
+5. 保留 `config_label` 作为展示字段，但禁止作为计算输入。
 
 验收：
 
 ```bash
 PYTHONPATH=sim python3 sim/design_space_explorer.py --scenario lpddr5_3b --output results/dse/lpddr5_3b.json
 PYTHONPATH=sim python3 sim/design_space_explorer.py --scenario onchip_7b --output results/dse/onchip_7b.json
+PYTHONPATH=sim python3 sim/design_space_explorer.py --scenario onchip_7b_chat --output results/dse/onchip_7b_chat.json
 ```
+
+JSON 验收点：
+
+- 每个 scenario 都有 `passed_results` 和 `rejected_results`。
+- 每个 rejected point 至少有一个 `failed_reasons`。
+- 每个 passed point 都有 scenario、engine、array、precision、frequency、memory、area、power、tok/s。
+- 若没有 `power_w_max`，输出 warning，而不是隐式忽略功耗约束。
 
 ### v3.2 TTFT / FSA Model Closure
 
 目标：FSA 和 block 在同一 prefill/decode 模型下公平比较。
 
-1. 建 prefill trace。
-2. 接入 `FSAEngine.estimate_attention()`。
-3. 输出 TTFT breakdown。
-4. 对比 Func Model `docs/func_model_performance_analysis.md` 里的 Block 64x64 基线。
+开发项：
 
-验收：Arc 对 Block 64x64 的 TTFT/TPS 与 Func Model 误差在预设范围内，并解释差异来源。
+1. 把 workload 拆成 decode trace 和 prefill trace。
+2. prefill trace 至少覆盖：
+   - Q/K/V/O projection
+   - QK^T
+   - softmax
+   - PV
+   - FFN gate/up/down
+   - RMSNorm/RoPE/SiLU 等 SFU/Vector 开销
+   - DMA/NoC/SRAM overlap
+3. 非 FSA 引擎使用 `QK^T + softmax + PV` attention 模型。
+4. FSA 引擎必须通过 `FSAEngine.estimate_attention()` 建模 attention。
+5. `batch_m > 1` 的 KV path 要显式建模 KV write/read，不再用 0 占位支撑结论。
+6. 输出：
+   - `decode_tok_s`
+   - `prefill_ms`
+   - `ttft_ms`
+   - `cycle_breakdown.compute`
+   - `cycle_breakdown.dma`
+   - `cycle_breakdown.attention`
+   - `cycle_breakdown.sfu_vector`
+
+验收：
+
+- Arc 对 Block 64x64 的 decode TPS 与 `docs/func_model_performance_analysis.md` 中 Func Model baseline 可对比，并解释差异来源。
+- FSA scenario 结果中能证明 attention path 调用了 FSA 模型，而不是普通 GEMM 近似。
+- `ttft_ms` 不是空字段或常数占位。
 
 ### v3.3 Memory / PPA Calibration
 
 目标：on-chip 3D DRAM 方案可用于产品讨论。
 
-1. 显式 memory stack model。
-2. on-chip area/power/cost 拆分。
-3. cross-validation 从实际 config 推导 TOPS。
-4. 增加产品数据库和来源字段。
+开发项：
+
+1. 显式 memory stack model：
+   - `ExternalLPDDR5`
+   - `OnChip3DMemory`
+   - `HBM`
+2. on-chip 3D DRAM 需要结构化建模：
+   - capacity
+   - bandwidth
+   - bandwidth per mm2
+   - stack area
+   - TSV overhead
+   - package overhead
+   - stack power
+3. external DRAM 和 on-chip memory 的 power model 分离。
+4. area/power 输出拆分为：
+   - compute
+   - SRAM
+   - memory PHY or memory stack
+   - DMA/NoC
+   - PCIe
+   - overhead
+5. cross-validation TOPS 从实际 `H * W * ops_per_mac * frequency` 推导。
+6. 产品数据库来源字段进入 output，不把 benchmark 口径混进自研估算。
 
 验收：S2/S3 的 `80x1536` 候选能由 scenario sweep 生成，且 area/BW/power 组成可解释。
 
@@ -234,6 +328,49 @@ Contract 必须标注：
 
 - `status: architecture_candidate`
 - `func_verified: false`，除非已有 Func Model v2 对应实现和验证证据。
+- `arc_version: v3`
+- `scenario`
+- `model`
+- `engine`
+- `array`
+- `memory`
+- `precision`
+- `constraints`
+- `metrics`
+- `assumptions`
+- `source_commit`
+
+验收：
+
+```bash
+PYTHONPATH=sim python3 sim/design_space_explorer.py --scenario lpddr5_3b --report --contract
+```
+
+应生成：
+
+- `results/dse/lpddr5_3b.json`
+- `reports/arc-v3-lpddr5_3b.md`
+- `contracts/architecture/lpddr5_3b.yaml`
+
+### v3.5 Modularization
+
+目标：降低 Arc Model v3 后续演进成本，避免 DSE 主文件继续膨胀。
+
+开发项：
+
+1. 按下表拆分 `sim/design_space_explorer.py`。
+2. CLI wrapper 只负责解析参数、调用 evaluator、写输出。
+3. 新模块都需要有局部单元测试。
+4. 保持现有 CLI 行为兼容。
+
+验收：
+
+```bash
+PYTHONPATH=sim python3 -m pytest sim/tests/test_arc_model.py sim/tests/test_arc_precision.py sim/tests/test_design_space_explorer.py -q
+PYTHONPATH=sim python3 sim/design_space_explorer.py --quick --top 5 --output /tmp/caduceus_quick.json
+PYTHONPATH=sim python3 sim/design_space_explorer.py --quick --scenario lpddr5_3b --top 5 --output /tmp/caduceus_lpddr5_3b.json
+PYTHONPATH=sim python3 sim/design_space_explorer.py --quick --scenario onchip_7b --top 5 --output /tmp/caduceus_onchip_7b.json
+```
 
 ## 建议的文件拆分
 
@@ -252,19 +389,31 @@ Contract 必须标注：
 
 ## 当前验证证据
 
-本次复核运行：
+v3.0 baseline 已验证：
 
 ```bash
-PYTHONPATH=sim python3 sim/design_space_explorer.py --quick --top 10
+PYTHONPATH=sim python3 -m pytest sim/tests/test_arc_model.py sim/tests/test_arc_precision.py sim/tests/test_design_space_explorer.py -q
 ```
 
-结果：36 configs valid，但 quick 模式不包含 FSA，且输出和三场景报告不可直接复现。
+结果：7 passed。
 
 ```bash
-PYTHONPATH=sim python3 -m pytest sim/tests/test_arc_model.py sim/tests/test_arc_precision.py -q
+PYTHONPATH=sim python3 sim/design_space_explorer.py --quick --top 5 --output /tmp/caduceus_quick.json
+PYTHONPATH=sim python3 sim/design_space_explorer.py --quick --scenario lpddr5_3b --top 5 --output /tmp/caduceus_lpddr5_3b.json
+PYTHONPATH=sim python3 sim/design_space_explorer.py --quick --scenario onchip_7b --top 5 --output /tmp/caduceus_onchip_7b.json
 ```
 
-结果：5 项中 1 项失败，失败点是 `test_qkv_dimension_3b` 使用旧 Qwen2.5-3B 规格。
+结果：
+
+- default quick：36 valid configs。
+- `lpddr5_3b` quick：18 valid configs。
+- `onchip_7b` quick：26 valid configs。
+
+限制：
+
+- quick 模式仍不是三场景报告的完整复现。
+- `ttft_ms`、prefill attention、FSA attention path、memory stack PPA 仍待 v3.2/v3.3 完成。
+- FSA 候选在 Func Model v2 未实现前只能标注为 `architecture_candidate`。
 
 ## v3 完成定义
 
