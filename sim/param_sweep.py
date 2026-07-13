@@ -130,7 +130,7 @@ class ParamSweeper:
             "power_w": round(power_w, 1),
             "decode_tok_per_s": round(decode_tok_per_s, 0),
             "decode_us": round(decode_us, 1),
-            "meets_target": decode_tok_per_s >= 25,
+            "meets_target": decode_tok_per_s >= 21,  # matches overnight_loop.py TARGET_TOK_S=21
         }
 
     def _add_multicore(self, results: List[Dict], num_cores: List[int]):
@@ -155,7 +155,7 @@ def main():
 
     # Pareto summary
     print(f"\n{'='*70}")
-    print(f"  PARETO FRONTIER: meets 25 tok/s target, sorted by area")
+    print(f"  PARETO FRONTIER: meets 21 tok/s target, sorted by area")
     print(f"{'='*70}")
     print(f"{'MXU':>8s} {'MHz':>5s} {'L2':>4s} {'Area':>6s} {'Power':>6s} {'Decode':>8s} {'2c':>8s} {'4c':>8s}")
     print(f"{'─'*60}")

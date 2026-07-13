@@ -13,8 +13,8 @@ import struct
 
 import pytest
 
-from sim.models.crossbar import CrossbarModel
-from sim.models.pcie import DmaEngine
+from models.crossbar import CrossbarModel
+from models.pcie import DmaEngine
 
 
 # ═══════════════════════════════════════════════════════════════════════════

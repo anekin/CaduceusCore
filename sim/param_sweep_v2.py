@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NPU 参数扫描 v2 — 探索设计空间达到 25 tok/s"""
+"""NPU 参数扫描 v2 — 探索设计空间达到 24 tok/s (DRAM BW bounded)"""
 
 import sys, math, json, copy
 from pathlib import Path
@@ -74,7 +74,7 @@ def main():
     print(f"\n{'='*60}")
     print(f"{'Config':<25} {'tok/s':>8} {'Area':>8} {'Cost/tok':>10}")
     print(f"{'-'*60}")
-    target = 25
+    target = 21  # M=1 decode DRAM BW bounded target (matches overnight_loop.py TARGET_TOK_S=21; .0f rounds to 22)
     for r in sorted(results, key=lambda x: x["tok_s"], reverse=True):
         cost_per_tok = r["area_mm2"] / r["tok_s"] if r["tok_s"] > 0 else 999
         flag = "✅" if r["tok_s"] >= target else "  "
