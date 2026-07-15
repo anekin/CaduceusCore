@@ -115,7 +115,7 @@ FM-4. [ ] Review Gate: Atlas audit of FM-Enhance evidence
 ### W3-RTL: PCIe + CV RTL（Phase 5 推迟，VCS sz0001）
 
 > **Pre-Wave Gate (VCS readiness)**: 开始 W3-RTL 前确认：
-> 1. [ ] `simv_soc_spike` / `simv_soc_ibex` 可编译（`make -C sim/regression simv_soc_spike` 返回 0）
+> 1. [ ] `simv_soc_spike` / `simv_soc_ibex` 可编译（`bash sim/regression/run_p0_full_rtl.sh` 返回 0；`bash sim/regression/run_ibex_full_rtl.sh` 返回 0）
 > 2. [ ] VCS license 可用（`vcs -ID` 输出 V-2023.12-SP2）
 > 3. [ ] `firmware/build/npu_firmware.hex` 存在且非空
 > 4. [ ] Phase 5 证据文件存在（`build/evidence/sfv-P2-back-to-back-summary.json` 等）
@@ -271,7 +271,7 @@ F4. [ ] Scope fidelity: Must NOT Have paths verified; Phase 6 scope boundaries r
 ## 回归基线 (Phase 6)
 
 Phase 6 完成后必须保持：
-- Phase 5 基线无退化（pytest 210+、FM-SOC 33/33、MXU 9/9、SFU 319/319、Vector 63/63）
+- Phase 5 基线无退化（pytest ≥700（≤10 engine-drift）、FM-SOC 33/33、MXU 9/9、SFU 526/537、Vector 64/64）
 - W3-RTL dual-path + CV Conv2D PASS
 - W4 PERF-01..P20 全量测量（代表性配置）
 - 36-layer VCS checkpoint forward pass 验证
