@@ -1,0 +1,71 @@
+# W1.6b: Qwen2.5-3B 36-Layer Func Model Q8_0 Control Experiment
+# Generated: 2026-07-15 18:28:25
+# Host: sz0002
+# Model: /home/zhengs/models/qwen2.5-3b-instruct-q8_0.gguf
+# Status: BLOCKED — Q8_0 GGUF asset not available
+#
+# Purpose: Confirm whether the L35 drift seen with Q4_K_M
+#          (Phase 5 FM baseline value=0.998278) is caused by the
+#          Q4_K_M quantization by re-running the 36-layer signoff
+#          with Q8_0 weights.
+
+SUMMARY: TESTS=36 PASS=0 FAIL=36 (blocked by missing Q8_0 GGUF)
+Drift analysis: N/A (blocked)
+Worst layer: N/A
+
+## Phase 5 FM L35 baseline
+  value=0.998278 (tolerance ±0.001)
+  consistency_window=[0.997278, 0.999278]
+
+## Per-layer similarity
+  Layer 0: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 1: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 2: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 3: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 4: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 5: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 6: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 7: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 8: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 9: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 10: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 11: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 12: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 13: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 14: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 15: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 16: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 17: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 18: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 19: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 20: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 21: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 22: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 23: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 24: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 25: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 26: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 27: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 28: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 29: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 30: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 31: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 32: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 33: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 34: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing
+  Layer 35: cos_sim=N/A, max_rel_err=N/A, max_abs_err=N/A, note=Q8_0 model missing; Phase 5 L35 baseline=0.998278 ±0.001
+
+## Drift analysis
+  linear_slope=N/A
+  max_sequential_drop=N/A
+  avg_negative_drop=N/A
+  slope_pass=N/A
+  drop_pass=N/A
+  drift_verdict=N/A
+
+## Asset check
+  path=/home/zhengs/models/qwen2.5-3b-instruct-q8_0.gguf
+  exists=False
+  checked_hosts=sz0002(local), sz0001(192.168.0.11)
+  note=Official Q8_0 GGUF is not present; re-quantizing the existing Q4_K_M file
+       would not isolate Q4_K_M quantization error and is therefore not a valid control.
