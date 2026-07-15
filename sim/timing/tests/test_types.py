@@ -38,6 +38,18 @@ class TestSimulationReportExtension:
         assert r.array_height == 128
         assert r.array_width == 128
 
+    def test_default_crossbar_wait(self):
+        r = SimulationReport("test", 1)
+        assert r.crossbar_wait == 0
+
+    def test_default_sram_stall(self):
+        r = SimulationReport("test", 1)
+        assert r.sram_stall == 0
+
+    def test_default_vcov_bubble(self):
+        r = SimulationReport("test", 1)
+        assert r.vcov_bubble == 0
+
     def test_set_new_fields(self):
         r = SimulationReport("test", 1)
         r.ttft_ms = 42.5
@@ -61,7 +73,8 @@ class TestModuleBreakdown:
         mb = ModuleBreakdown()
         assert set(mb.cycles.keys()) == {
             "mxu", "sfu", "vector", "dma_weight", "dma_effective", "kv_cache",
-            "noc_latency", "noc_contention"
+            "noc_latency", "noc_contention",
+            "crossbar_wait", "sram_stall", "vcov_bubble",
         }
         assert all(v == 0 for v in mb.cycles.values())
 

@@ -32,6 +32,11 @@ from engine.timeline import (
 )
 from engine.multicore import MultiCoreTimeline, FIFOConfig, CrossbarConfig
 
+# FM-1: cross-engine overhead constants (matches CoreTimeline)
+_ENGINE_OVERHEAD_CROSSBAR = 2
+_ENGINE_OVERHEAD_SRAM = 1
+_ENGINE_OVERHEAD_VCOV = 1
+
 
 # ── Default 3B model trace ──────────────────────────────────────────
 # Each GEMM: (M, K, N, layer, op_name)
@@ -229,6 +234,9 @@ class NPUSimulator:
                 _prev_cycle = timeline._current_cycle
                 timeline.add_sfu("attn_sfu (exp+div+ln+rope)", sfu_cycles, layer)
                 layer_data[layer].sfu += sfu_cycles
+                layer_data[layer].crossbar_wait += _ENGINE_OVERHEAD_CROSSBAR
+                layer_data[layer].sram_stall += _ENGINE_OVERHEAD_SRAM
+                layer_data[layer].vcov_bubble += _ENGINE_OVERHEAD_VCOV
                 if debug_enabled:
                     print(f"[DEBUG L{layer}/attn_sfu] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
@@ -236,6 +244,9 @@ class NPUSimulator:
                 _prev_cycle = timeline._current_cycle
                 timeline.add_vector("attn_vec (sub+residual)", vec_cycles, layer)
                 layer_data[layer].vector += vec_cycles
+                layer_data[layer].crossbar_wait += _ENGINE_OVERHEAD_CROSSBAR
+                layer_data[layer].sram_stall += _ENGINE_OVERHEAD_SRAM
+                layer_data[layer].vcov_bubble += _ENGINE_OVERHEAD_VCOV
                 if debug_enabled:
                     print(f"[DEBUG L{layer}/attn_vec] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
@@ -247,6 +258,9 @@ class NPUSimulator:
                 _prev_cycle = timeline._current_cycle
                 timeline.add_sfu("ffn_sfu (gelu+ln)", sfu_cycles, layer)
                 layer_data[layer].sfu += sfu_cycles
+                layer_data[layer].crossbar_wait += _ENGINE_OVERHEAD_CROSSBAR
+                layer_data[layer].sram_stall += _ENGINE_OVERHEAD_SRAM
+                layer_data[layer].vcov_bubble += _ENGINE_OVERHEAD_VCOV
                 if debug_enabled:
                     print(f"[DEBUG L{layer}/ffn_sfu] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
@@ -254,6 +268,9 @@ class NPUSimulator:
                 _prev_cycle = timeline._current_cycle
                 timeline.add_vector("ffn_vec (residual)", vec_cycles, layer)
                 layer_data[layer].vector += vec_cycles
+                layer_data[layer].crossbar_wait += _ENGINE_OVERHEAD_CROSSBAR
+                layer_data[layer].sram_stall += _ENGINE_OVERHEAD_SRAM
+                layer_data[layer].vcov_bubble += _ENGINE_OVERHEAD_VCOV
                 if debug_enabled:
                     print(f"[DEBUG L{layer}/ffn_vec] wall_clock += {timeline._current_cycle - _prev_cycle:>10,}  (accumulated: {timeline._current_cycle:>12,})")
 
@@ -302,6 +319,9 @@ class NPUSimulator:
             decode_breakdown={k: v / self.f_mhz for k, v in breakdown.items()},
             layer_breakdowns=sorted(layer_data.values(), key=lambda lb: lb.layer),
             events=timeline.events,
+            crossbar_wait=timeline.total_crossbar_wait,
+            sram_stall=timeline.total_sram_stall,
+            vcov_bubble=timeline.total_vcov_bubble,
         )
         return report
 
@@ -383,6 +403,9 @@ class NPUSimulator:
             decode_breakdown={k: v / self.f_mhz for k, v in breakdown.items()},
             layer_breakdowns=sorted(layer_data.values(), key=lambda lb: lb.layer),
             events=timeline.events,
+            crossbar_wait=timeline.total_crossbar_wait,
+            sram_stall=timeline.total_sram_stall,
+            vcov_bubble=timeline.total_vcov_bubble,
         )
 
     def simulate_prefill(self, prompt_len: int = 128) -> SimulationReport:
@@ -431,11 +454,17 @@ class NPUSimulator:
                 sfu_cycles += self.sfu.estimate("rope", 2048 * 2 * prompt_len)
                 timeline.add_sfu("attn_sfu", sfu_cycles, layer)
                 layer_data[layer].sfu += sfu_cycles
+                layer_data[layer].crossbar_wait += _ENGINE_OVERHEAD_CROSSBAR
+                layer_data[layer].sram_stall += _ENGINE_OVERHEAD_SRAM
+                layer_data[layer].vcov_bubble += _ENGINE_OVERHEAD_VCOV
             elif op_name in ("FFN_down",):
                 sfu_cycles = self.sfu.estimate("gelu", 11008 * prompt_len)
                 sfu_cycles += self.sfu.estimate("layernorm", 2048 * prompt_len)
                 timeline.add_sfu("ffn_sfu", sfu_cycles, layer)
                 layer_data[layer].sfu += sfu_cycles
+                layer_data[layer].crossbar_wait += _ENGINE_OVERHEAD_CROSSBAR
+                layer_data[layer].sram_stall += _ENGINE_OVERHEAD_SRAM
+                layer_data[layer].vcov_bubble += _ENGINE_OVERHEAD_VCOV
 
             kv_cycles = self.kv.estimate_per_decode(prompt_len, prompt_len)
             timeline.add_kv("kv_access", kv_cycles, layer)
@@ -466,6 +495,9 @@ class NPUSimulator:
             decode_tok_per_s=0,
             layer_breakdowns=sorted(layer_data.values(), key=lambda lb: lb.layer),
             events=timeline.events,
+            crossbar_wait=timeline.total_crossbar_wait,
+            sram_stall=timeline.total_sram_stall,
+            vcov_bubble=timeline.total_vcov_bubble,
         )
         return report
 

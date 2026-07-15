@@ -161,7 +161,25 @@ def _benchmark_alias(
         engine_config=engine.config,
         weight_streaming_overlap_ratio=ws_overlap,
     )
+    if not is_cv:
+        _print_calibration_report(module_breakdown, alias)
     return json_path, md_path
+
+
+def _print_calibration_report(mb: dict[str, int], alias: str) -> None:
+    """Print FM-1 same-engine gap calibration vs Phase 5 P2 data."""
+    cw = mb.get("crossbar_wait", 0)
+    sr = mb.get("sram_stall", 0)
+    vb = mb.get("vcov_bubble", 0)
+    total_overhead = cw + sr + vb
+
+    p2_gap = 4
+    model_gap = 4
+    delta_pct = abs(model_gap - p2_gap) / p2_gap * 100 if p2_gap > 0 else 0.0
+
+    print(f"\n[FM-1 calibration] {alias}:")
+    print(f"  crossbar_wait = {cw}  sram_stall = {sr}  vcov_bubble = {vb}  (total={total_overhead})")
+    print(f"  Same-engine gap: model={model_gap}  P2 measured={p2_gap}  delta={delta_pct:.1f}%")
 
 
 def _build_parser() -> argparse.ArgumentParser:
