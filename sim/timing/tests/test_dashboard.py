@@ -51,7 +51,8 @@ class TestGenerateJsonRequiredKeys:
         "model", "engine", "config", "ttft_ms", "tps", "tpot_us",
         "itl_us_p50", "itl_us_p90", "itl_us_p99", "prefill_ms",
         "decode_per_token_us", "module_breakdown", "module_utilization_pct",
-        "bandwidth_utilization_pct", "dma_overlap_ratio", "total_cycles",
+        "bandwidth_utilization_pct", "dma_overlap_ratio",
+        "weight_streaming_overlap_ratio", "total_cycles",
         "timestamp",
     }
 
@@ -59,7 +60,8 @@ class TestGenerateJsonRequiredKeys:
         "model", "engine", "config", "fps", "inference_latency_us",
         "itl_us_p50", "itl_us_p90", "itl_us_p99",
         "module_breakdown", "module_utilization_pct",
-        "bandwidth_utilization_pct", "dma_overlap_ratio", "total_cycles",
+        "bandwidth_utilization_pct", "dma_overlap_ratio",
+        "weight_streaming_overlap_ratio", "total_cycles",
         "timestamp",
     }
 
@@ -157,6 +159,45 @@ class TestGenerateJsonNoNanInf:
             if isinstance(val, float):
                 assert not math.isnan(val), f"NaN at {key}"
                 assert not math.isinf(val), f"Inf at {key}"
+
+    def test_weight_streaming_overlap_ratio_in_range(self):
+        result = Dashboard.generate_json(
+            model_name="test",
+            request_metrics=_make_llm_request_metrics(),
+            module_breakdown=_make_module_breakdown(),
+            freq_mhz=800,
+            is_cv=False,
+        )
+        ws = result["weight_streaming_overlap_ratio"]
+        assert isinstance(ws, (int, float)), f"Expected numeric, got {type(ws)}"
+        assert not math.isnan(ws), "weight_streaming_overlap_ratio is NaN"
+        assert not math.isinf(ws), "weight_streaming_overlap_ratio is Inf"
+        assert 0.0 <= ws <= 1.0, (
+            f"weight_streaming_overlap_ratio={ws} not in [0, 1]"
+        )
+
+    def test_weight_streaming_overlap_ratio_explicit_non_none(self):
+        # When explicitly provided, the value should match (within rounding)
+        result = Dashboard.generate_json(
+            model_name="test",
+            request_metrics=_make_llm_request_metrics(),
+            module_breakdown=_make_module_breakdown(),
+            freq_mhz=800,
+            is_cv=False,
+            weight_streaming_overlap_ratio=0.8765,
+        )
+        assert result["weight_streaming_overlap_ratio"] == 0.88
+
+    def test_weight_streaming_overlap_ratio_fallback_zero(self):
+        # Empty breakdown → fallback should yield 0.0
+        result = Dashboard.generate_json(
+            model_name="test",
+            request_metrics=RequestMetrics(),
+            module_breakdown={},
+            freq_mhz=800,
+            is_cv=False,
+        )
+        assert result["weight_streaming_overlap_ratio"] == 0.0
 
 
 class TestGenerateMarkdownContainsSections:

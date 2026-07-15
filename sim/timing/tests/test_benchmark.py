@@ -49,7 +49,28 @@ def test_unsupported_alias_exits_nonzero() -> None:
 
 class _FakeTimingEngine:
     def __init__(self, config_path: str) -> None:
-        self.config = {"test": True}
+        self.config = {
+            "test": True,
+            "dma": {
+                "burst_size_bytes": 256,
+                "descriptor_overhead_cycles": 5,
+                "num_channels": 2,
+                "per_channel_fifo_depth": 64,
+                "max_burst_length": 8,
+                "multi_block_mode": "linked_list",
+                "ll_prefetch_en": True,
+                "arbitration": "round_robin",
+            },
+            "memory": {
+                "bandwidth_bytes_per_cycle": 51.2,
+            },
+            "mxu": {
+                "array_height": 64,
+                "array_width": 64,
+                "weight_precision_bits": 4,
+                "activation_precision_bits": 8,
+            },
+        }
         self.freq_mhz = 1000
 
     def simulate_request(

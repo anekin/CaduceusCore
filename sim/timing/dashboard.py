@@ -99,6 +99,7 @@ class Dashboard:
         freq_mhz: int,
         is_cv: bool = False,
         engine_config: dict[str, Any] | None = None,
+        weight_streaming_overlap_ratio: float | None = None,
     ) -> dict[str, Any]:
         """Generate a complete JSON metrics dict.
 
@@ -109,6 +110,8 @@ class Dashboard:
             freq_mhz: Clock frequency in MHz.
             is_cv: If True, emit FPS / inference_latency_us instead of TPS / TTFT.
             engine_config: Optional engine metadata dict.
+            weight_streaming_overlap_ratio: Pre-computed tile-level double-buffering
+                overlap ratio, or None to derive from module_breakdown (fallback).
 
         Returns:
             Deterministically ordered dict with all required keys and 2-dp float
@@ -167,6 +170,17 @@ class Dashboard:
         itl_p90 = round(_percentile(itl_sorted, 90.0), 2)
         itl_p99 = round(_percentile(itl_sorted, 99.0), 2)
 
+        # --- weight_streaming_overlap_ratio ---
+        if weight_streaming_overlap_ratio is None:
+            # Fallback: derive from module_breakdown.
+            # dma_weight = overlapped (hidden) DMA, dma_effective = exposed DMA.
+            _w_hidden = module_breakdown.get("dma_weight", 0) if module_breakdown else 0
+            _w_exposed = module_breakdown.get("dma_effective", 0) if module_breakdown else 0
+            _w_total = _w_hidden + _w_exposed
+            ws_overlap = round(_w_hidden / _w_total, 2) if _w_total > 0 else 0.0
+        else:
+            ws_overlap = round(weight_streaming_overlap_ratio, 2)
+
         # --- Build output dict ---
         output: dict[str, Any] = {
             "model": model_name,
@@ -190,6 +204,7 @@ class Dashboard:
             "bandwidth_utilization_pct": bandwidth_pct,
             "real_bw_utilization_pct": real_bw_pct,
             "dma_overlap_ratio": dma_overlap,
+            "weight_streaming_overlap_ratio": ws_overlap,
             "total_cycles": total_cycles,
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         }
@@ -248,7 +263,8 @@ class Dashboard:
                         "decode_per_token_us", "inference_latency_us",
                         "itl_us_p50", "itl_us_p90", "itl_us_p99",
                         "bandwidth_utilization_pct", "real_bw_utilization_pct",
-                        "dma_overlap_ratio", "total_cycles"]
+                        "dma_overlap_ratio", "weight_streaming_overlap_ratio",
+                        "total_cycles"]
 
         for key in summary_keys:
             if key in json_data:
@@ -338,6 +354,7 @@ class Dashboard:
         freq_mhz: int,
         is_cv: bool = False,
         engine_config: dict[str, Any] | None = None,
+        weight_streaming_overlap_ratio: float | None = None,
     ) -> tuple[str, str]:
         """Save JSON and Markdown reports under *output_dir*.
 
@@ -354,6 +371,7 @@ class Dashboard:
             freq_mhz=freq_mhz,
             is_cv=is_cv,
             engine_config=engine_config,
+            weight_streaming_overlap_ratio=weight_streaming_overlap_ratio,
         )
         md_text = self.generate_markdown(json_data)
 
