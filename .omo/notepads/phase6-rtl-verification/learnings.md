@@ -128,3 +128,53 @@ Cross-engine gap calibration deferred to W4-PERF-13..P16 per plan.
 - Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
 - Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
 - Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-07-15T10:36:20Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-07-15T10:38:03Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-07-15T10:39:02Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-07-15T10:41:25Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-07-15T10:42:00Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-07-15T10:44:00Z FM-4 Independent review gate (Atlas)
+
+- **Status**: VERDICT APPROVE
+- **Evidence file**: `build/evidence/fm-enhance-review-gate.txt`
+- **Re-verification performed independently**:
+  - FM-1: `PYTHONPATH=sim python -m sim.timing.benchmark --model qwen2.5-3b --output results/timing` → crossbar_wait/sram_stall/vcov_bubble present; same-engine gap model=4 vs Phase 5 P2 measured=4, delta=0.0% (within ±10%).
+  - FM-2: `PYTHONPATH=sim python -m pytest sim/tests/test_cv_mobilenetv3.py -k "chain" -v` → 1 passed; `build/evidence/fm-cv-chain.txt` shows all per-op cos_sim >= 0.99 (min 0.994569).
+  - FM-3: `results/timing/qwen2.5-3b.json` contains `weight_streaming_overlap_ratio` = 0.98, valid float in [0, 1].
+- **Caveats**: FM-1 cross-engine and FM-3 correctness validations remain deferred to W4-PERF tasks; 6b Q8_0 control remains blocked by missing asset and is outside FM-4 scope.

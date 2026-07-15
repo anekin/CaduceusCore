@@ -1,0 +1,103 @@
+======================================================================
+FM-4 Independent Review Gate — FM-Enhance Evidence Audit
+Reviewer: Atlas (independent verification)
+Timestamp: 2026-07-15T10:44:00+00:00
+Scope: Re-verify FM-1, FM-2, FM-3 evidence before W4 cross-validation.
+======================================================================
+
+FM-1: Cross-engine pipeline timing model — same-engine calibration
+------------------------------------------------------------------
+Command: PYTHONPATH=sim python -m sim.timing.benchmark --model qwen2.5-3b --output results/timing
+
+Output:
+[FM-1 calibration] qwen2.5-3b:
+  crossbar_wait = 288  sram_stall = 144  vcov_bubble = 144  (total=576)
+  Same-engine gap: model=4  P2 measured=4  delta=0.0%
+qwen2.5-3b: results/timing/qwen2.5-3b.json, results/timing/qwen2.5-3b.md
+
+Field presence check (grep results/timing/qwen2.5-3b.json):
+    "crossbar_wait": 288,
+    "sram_stall": 144,
+    "vcov_bubble": 144
+    "crossbar_wait": 0.0,
+    "sram_stall": 0.0,
+    "vcov_bubble": 0.0
+
+Assessment:
+- JSON contains crossbar_wait, sram_stall, and vcov_bubble in module_breakdown.
+- Same-engine gap model prediction (4 cycles) matches Phase 5 P2 measured (4 cycles).
+- Delta = 0.0%, which is within the required ±10% tolerance.
+- Cross-engine validation remains deferred to W4-PERF-13..P16 per plan.
+
+FM-1 Verdict: PASS
+
+FM-2: CV chain test (MobileNetV3 Conv2D -> VRESID -> SiLU)
+------------------------------------------------------------
+Command: PYTHONPATH=sim python -m pytest sim/tests/test_cv_mobilenetv3.py -k "chain" -v
+
+Output:
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 2 items / 1 deselected / 1 selected
+
+sim/tests/test_cv_mobilenetv3.py::TestMobileNetV3FuncModel::test_mobilenetv3_features_0_0_chain PASSED [100%]
+
+======================= 1 passed, 1 deselected in 2.71s ========================
+
+Evidence file build/evidence/fm-cv-chain.txt contents:
+----------------------------------------------------------------------
+FM-2 MobileNetV3 Conv2D->VRESID->SiLU Chain Verification
+Timestamp: 2026-07-15T10:39:02Z
+Layer: MobileNetV3-Small features.0.0  (16@3x3 s2)
+Dims: M=12544 K=27 N=16  length=200704
+Expanded program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+
+Op                      cos_sim  Verdict
+----------------------------------------
+conv2d                 0.994569     PASS
+vresid                 1.000000     PASS
+vconv                  1.000000     PASS
+silu                   1.000000     PASS
+silu_vs_torch          1.000000     PASS
+----------------------------------------
+Overall: PASS
+----------------------------------------------------------------------
+
+Assessment:
+- pytest -k "chain" passes (1/1 selected).
+- build/evidence/fm-cv-chain.txt exists and shows all per-op cos_sim >= 0.99.
+- Minimum cos_sim = 0.994569 (conv2d); all other ops = 1.000000.
+
+FM-2 Verdict: PASS
+
+FM-3: Weight streaming tile-level double-buffering timing
+----------------------------------------------------------
+Command: PYTHONPATH=sim python -m sim.timing.benchmark --model qwen2.5-3b --output results/timing
+
+Field presence check (grep results/timing/qwen2.5-3b.json):
+  "weight_streaming_overlap_ratio": 0.98
+
+Assessment:
+- JSON contains weight_streaming_overlap_ratio.
+- Value = 0.98, which is a valid float in [0, 1].
+- Correctness cross-validation against W4-PERF-09..P12 VCS data remains deferred.
+
+FM-3 Verdict: PASS
+
+======================================================================
+SUMMARY
+======================================================================
+FM-1: PASS (fields present, same-engine calibration 0.0% vs Phase 5 P2)
+FM-2: PASS (pytest passes, all cos_sim >= 0.99)
+FM-3: PASS (field present, ratio 0.98 in [0,1])
+
+Caveats:
+- FM-1 cross-engine validation is intentionally out of scope and deferred.
+- FM-3 correctness validation is intentionally out of scope and deferred.
+- 6b (Q8_0 control) is documented as blocked and is not part of FM-4 scope.
+
+VERDICT: APPROVE
+======================================================================
