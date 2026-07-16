@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NPU 参数扫描 v2 — 探索设计空间达到 24 tok/s (DRAM BW bounded)"""
+"""NPU 参数扫描 v2 — 探索设计空间达到 21 tok/s (DRAM BW bounded, .0f rounds to 22)"""
 
 import sys, math, json, copy
 from pathlib import Path
