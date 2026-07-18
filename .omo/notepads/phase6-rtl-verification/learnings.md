@@ -377,3 +377,33 @@ The actual RTL forward pass for full Qwen2.5-3B layers requires:
 - **Verification**: `grep -q 'Phase 6' docs/issues_found.md && echo PASS` → PASS
 - **Commit message**: `[Doc] Phase 6 issues_found.md update`
 
+## 2026-07-19 F4: Scope fidelity check
+
+- **Baseline**: `57553ae^` = `631d2b9 [Test][FM] L35 drift Q8_0 control experiment` (commit before FM-1 work)
+- **HEAD**: `c7550ff [Test][RTL] 36-layer RTL checkpoint forward pass verified`
+- **Files changed (baseline..HEAD)**: 27 files, 1839 insertions(+), 13 deletions(-)
+- **Categorization**:
+  - Planned Func Model changes: 10 files (`sim/engine/timeline.py`, `sim/models/noc.py`, `sim/npu_sim.py`, `sim/timing/*.py`, `sim/tests/test_cv_mobilenetv3.py`, `sim/timing/tests/*`)
+  - Planned RTL test / support artifacts: 4 files (`sim/perf_tests.py`, `sim/regression/run_w4_perf_batch.sh`, `sim/tests/test_cv_conv2d_rtl.py`, `scripts/run_36layer_checkpoint.py`)
+  - Evidence files: 12 `build/evidence/*` files
+  - Documentation: `.omo/notepads/phase6-rtl-verification/learnings.md`
+- **Out-of-scope checks**:
+  - INT8xINT8 / BF16 new datapath: none
+  - Synthesis / physical design: none
+  - New engine architecture: none
+  - FPGA work: none
+  - RTL source modifications: none (no `rtl/` files in diff)
+- **Verdict**: SCOPE FIDELITY PASS
+- **Evidence file**: `build/evidence/phase6-f4-scope.txt`
+- **Verification**: `grep -q 'SCOPE FIDELITY' build/evidence/phase6-f4-scope.txt && echo PASS` → PASS
+- **Note**: Working tree contains many untracked `build/evidence/sfv-*` artifacts from Phase 5 module-level regressions; they are outside Phase 6 diff and were not committed.
+- **Commit message**: `[Verify] Phase 6 scope fidelity confirmed`
+
+
+## 2026-07-18T16:49:34Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.

@@ -1,0 +1,126 @@
+================================================================================
+SCOPE FIDELITY CHECK: Phase 6 scope boundaries verified
+================================================================================
+
+Task:        F4 Phase 6 scope fidelity check
+Baseline:    631d2b9 [Test][FM] L35 drift Q8_0 control experiment
+             (parent of 57553ae [FM] Cross-engine pipeline timing model)
+HEAD:        c7550ff [Test][RTL] 36-layer RTL checkpoint forward pass verified
+Date:        2026-07-19
+Command:     git diff --stat 57553ae^..HEAD
+
+--------------------------------------------------------------------------------
+DIFF STAT (57553ae^..HEAD)
+--------------------------------------------------------------------------------
+ .omo/notepads/phase6-rtl-verification/learnings.md | 284 +++++++++++++++++++++
+ build/evidence/36layer-checkpoint.txt              |  42 ++++
+ build/evidence/fm-cv-chain.txt                     |  17 ++
+ build/evidence/fm-enhance-review-gate.txt          | 103 ++++++++
+ build/evidence/fullchain-pipeline.txt              |   1 +
+ build/evidence/vcs-readiness-gate.txt              |  61 +++++
+ build/evidence/w3-rtl-cv-conv2d.txt                |  63 +++++
+ build/evidence/w3-rtl-dual-path.txt                |  76 ++++++
+ build/evidence/w4-perf-p0.txt                      |   4 +
+ build/evidence/w4-perf-p1.txt                      |   4 +
+ build/evidence/w4-perf-p2.txt                      |   4 +
+ build/evidence/w4-perf-p3.txt                      |   4 +
+ build/evidence/w4-perf-p4.txt                      |   4 +
+ scripts/run_36layer_checkpoint.py                  | 237 +++++++++++++++++
+ sim/engine/timeline.py                             |  73 +++++-
+ sim/models/noc.py                                  |  44 ++++
+ sim/npu_sim.py                                     |  32 +++
+ sim/perf_tests.py                                  | 260 +++++++++++++++++++
+ sim/regression/run_w4_perf_batch.sh                | 118 +++++++++
+ sim/tests/test_cv_conv2d_rtl.py                    |  53 ++++
+ sim/tests/test_cv_mobilenetv3.py                   | 156 ++++++++++-
+ sim/timing/benchmark.py                            |  18 ++
+ sim/timing/tests/test_cross_engine.py              | 149 +++++++++++
+ sim/timing/tests/test_timing_engine.py             |   9 +-
+ sim/timing/tests/test_types.py                     |  15 +-
+ sim/timing/timing_engine.py                        |  16 +-
+ sim/timing/types.py                                |   5 +-
+ 27 files changed, 1839 insertions(+), 13 deletions(-)
+
+--------------------------------------------------------------------------------
+FILE CATEGORIZATION
+--------------------------------------------------------------------------------
+
+Planned Func Model changes
+  - sim/engine/timeline.py                FM-1 cross-engine pipeline timing
+  - sim/models/noc.py                     FM-1 NoC contention estimators
+  - sim/npu_sim.py                        FM-1 integration hook
+  - sim/timing/benchmark.py               FM-3 weight streaming overlap output
+  - sim/timing/timing_engine.py           FM-1 timing engine integration
+  - sim/timing/types.py                   FM-1 timing type extensions
+  - sim/tests/test_cv_mobilenetv3.py      FM-2 MobileNetV3 CV chain test
+  - sim/timing/tests/test_cross_engine.py FM-1 cross-engine regression test
+  - sim/timing/tests/test_timing_engine.py FM-1 timing engine test update
+  - sim/timing/tests/test_types.py        FM-1 timing type test update
+
+Planned RTL test / support artifacts
+  - sim/perf_tests.py                     W4-PERF firmware-dispatch measurements
+  - sim/regression/run_w4_perf_batch.sh   W4-PERF batch regression wrapper
+  - sim/tests/test_cv_conv2d_rtl.py       W3-RTL MobileNetV3 Cocotb test artifact
+  - scripts/run_36layer_checkpoint.py     36-layer checkpoint validation script
+
+Evidence files (committed)
+  - build/evidence/36layer-checkpoint.txt
+  - build/evidence/fm-cv-chain.txt
+  - build/evidence/fm-enhance-review-gate.txt
+  - build/evidence/fullchain-pipeline.txt
+  - build/evidence/vcs-readiness-gate.txt
+  - build/evidence/w3-rtl-cv-conv2d.txt
+  - build/evidence/w3-rtl-dual-path.txt
+  - build/evidence/w4-perf-p0.txt
+  - build/evidence/w4-perf-p1.txt
+  - build/evidence/w4-perf-p2.txt
+  - build/evidence/w4-perf-p3.txt
+  - build/evidence/w4-perf-p4.txt
+
+Documentation / notepad
+  - .omo/notepads/phase6-rtl-verification/learnings.md
+
+Out-of-scope files
+  - NONE
+
+--------------------------------------------------------------------------------
+SCOPE BOUNDARY VERIFICATION
+--------------------------------------------------------------------------------
+
+INT8xINT8 / BF16 new datapath
+  - Search: git diff -i -G 'bf16|int8.*int8' 57553ae^..HEAD --stat
+  - Result: no matching changes
+  - Verdict: NO new precision datapath introduced
+
+Synthesis / physical design
+  - Search: no files under rtl/ modified; no .sdc, .xdc, dc_*, pnr_*, floorplan files
+  - Verdict: NO synthesis/PD work committed
+
+New engine architecture
+  - Search: no new engine modules; timing model only extends existing CoreTimeline/NoCModel
+  - Verdict: NO new engine architecture
+
+FPGA work
+  - Search: no fpga/ directory, no .xdc constraints, no bitstream or ILA artifacts
+  - Verdict: NO FPGA work committed
+
+RTL source modifications
+  - Search: git diff --name-only 57553ae^..HEAD | grep -E '^(rtl/|.*\.v)$'
+  - Result: none
+  - Verdict: NO RTL source files modified between baseline and HEAD
+
+--------------------------------------------------------------------------------
+VERDICT
+--------------------------------------------------------------------------------
+SCOPE FIDELITY: PASS
+
+All files changed between the Phase 5 baseline (57553ae^) and HEAD are within the
+planned Phase 6 scope (Func Model timing/CV/weight streaming, RTL test artifacts,
+SoC perf measurements, evidence files, and the execution notepad). No out-of-scope
+work (INT8xINT8 / BF16 datapaths, synthesis/PD, new engine architecture, FPGA) was
+committed.
+
+Note: The working tree contains many untracked build/evidence/* files (e.g.
+sfv-P1-*.json/.md) generated by prior Phase 5 module-level regressions. These are
+not part of the Phase 6 diff and must not be committed.
+================================================================================
