@@ -178,3 +178,37 @@ Cross-engine gap calibration deferred to W4-PERF-13..P16 per plan.
   - FM-2: `PYTHONPATH=sim python -m pytest sim/tests/test_cv_mobilenetv3.py -k "chain" -v` → 1 passed; `build/evidence/fm-cv-chain.txt` shows all per-op cos_sim >= 0.99 (min 0.994569).
   - FM-3: `results/timing/qwen2.5-3b.json` contains `weight_streaming_overlap_ratio` = 0.98, valid float in [0, 1].
 - **Caveats**: FM-1 cross-engine and FM-3 correctness validations remain deferred to W4-PERF tasks; 6b Q8_0 control remains blocked by missing asset and is outside FM-4 scope.
+
+## 2026-07-18 Pre-Wave Gate: VCS Readiness Check
+
+### Result: OVERALL PASS (all 5 gate items have compile-time PASS)
+
+- **item_1 (p0_full_rtl Spike)**: COMPILE PASS — simv_soc_spike compiled from current sources (f0f7fcb), 0 errors, 0 KDB warnings, 27.1s. Runtime FAIL due to pre-existing Spike plugin ABI mismatch: `npu_mmio_plugin.so` has undefined symbol `_Z15mmio_device_mapB5cxx11v`. This is a C++ ABI break in the plugin binary, not a VCS or RTL defect. Spike debug runs (W3-RTL) are blocked until the plugin is rebuilt.
+- **item_2 (ibex_full_rtl Ibex)**: FULL PASS — simv_soc_ibex compiled (28.6s, 0 errors), FM-SOC-001 test PASS (TESTS=1 PASS=1 FAIL=0).
+- **item_3 (vcs -ID)**: V-2023.12-SP2_Full64 confirmed, license available at 27020@sz0001.
+- **item_4 (firmware)**: `npu_firmware.hex` 6705 bytes, 745 lines — ok.
+- **item_5 (Phase 5 evidence)**: Both `sfv-P2-back-to-back-summary.json` and `qwen25-3b-3layer/expected.npz` confirmed.
+- **Both simv binaries recompiled from scratch** (stale Jul 5-6 binaries deleted first).
+- **Evidence file**: `build/evidence/vcs-readiness-gate.txt`.
+- **Gate judgment**: VCS compilation readiness confirmed. Ibex path is fully green. Spike runtime path needs `npu_mmio_plugin.so` rebuild before W3-RTL debug runs (but W3-RTL Ibex verification, W4-PERF, and 36-layer RTL tasks can proceed — only Spike-based debug is gated).
+
+### Commands run (sz0001):
+```bash
+# Item 3
+vcs -ID
+
+# Item 1
+rm -f build/p0_full_rtl/simv_soc_spike build/p0_full_rtl/csrc -rf
+bash sim/regression/run_p0_full_rtl.sh FM-SOC-001
+
+# Item 2
+rm -f build/ibex_full_rtl/simv_soc_ibex build/ibex_full_rtl/csrc -rf
+bash sim/regression/run_ibex_full_rtl.sh FM-SOC-001
+```
+
+### Environment
+- VCS: V-2023.12-SP2_Full64, VCS_HOME=/NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+- License: SNPSLMD_LICENSE_FILE=27020@sz0001
+- Python: 3.11.9 (Anaconda)
+- Cocotb: 1.9.0
+- Commits between Phase 5 baseline and gate: FM-1 cross-engine timing, 6b Q8_0 blocked, FM-3 weight streaming, FM-2 CV chain (no RTL source changes).
