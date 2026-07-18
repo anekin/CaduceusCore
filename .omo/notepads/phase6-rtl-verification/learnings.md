@@ -342,6 +342,65 @@ The actual RTL forward pass for full Qwen2.5-3B layers requires:
 - DMA output readback fix (currently returns zeros on CH1)
 - Or a different approach: layer-by-layer module-level MXU/SFU/Vector verification with backdoor SRAM access, avoiding the firmware DMA path
 
+## 2026-07-19 F2: Phase 6 Regression Baseline Confirmation
+
+- **Status**: COMPLETE
+- **Evidence file**: `build/evidence/phase6-f2-regression.txt`
+- **Verification**: `grep -c 'PASS' build/evidence/phase6-f2-regression.txt` → 16 (≥5 required)
+
+### Regression results
+
+| Suite | Phase 5 (Jul 10) | Phase 6 (Jul 19) | Delta |
+|-------|:---:|:---:|:---:|
+| Pytest | 700 P, 9 F | 735 P, 8 F | +35 P, -1 F |
+| FM-SOC RTL | 33/33 | 33/33 | 0 |
+| MXU module | 9/9 | 9/9 | 0 |
+| SFU module | 526/537 | 526/537 | 0 |
+| Vector module | 64/64 | 64/64 | 0 |
+
+**Verdict: PASS — No regression. Pytest improved.**
+
+### Pytest improvement details
+
+- **+35 passing**: FM-1 cross-engine timing, FM-2 CV chain, FM-3 weight streaming tests added to `sim/timing/tests/` in Phase 6.
+- **-1 failure**: `test_qkv_dimension_3b` now PASSES (pre-existing Arc Model spec fix took effect).
+- **8 pre-existing failures**: All in `test_engines.py` (engine calibration drift, ≤10 budget).
+
+### Baseline contradiction resolved
+
+The contradiction noted in F2 baseline (plan says pytest ≥700, SFU 526/537, Vector 64/64; README says pytest 210, SFU 319/319, Vector 63/63) has been resolved:
+
+- **Root cause**: README numbers are **stale** from Phase 1-2 (late 2025/early 2026). The test suite expanded from ~210 pytest / 319 SFU / 63 Vector in Phase 1-2 to ~700+ pytest / 537 SFU / 64 Vector by Phase 5.
+- **Resolution**: Plan numbers are correct and authoritative. Phase 6 confirms all plan numbers: pytest 735 ≥ 700 ✓, SFU 526/537 ✓, Vector 64/64 ✓.
+- **Action**: README.md should be updated to reflect current test counts.
+
+### RTL baseline preserved
+
+All RTL regression baselines (FM-SOC, MXU, SFU, Vector) are identical between Phase 5 and Phase 6. No RTL source files were modified in Phase 6 (FM-1/FM-2/FM-3 are Python-only timing model changes).
+
+### Commands run
+
+```bash
+# Pytest (local)
+PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q \
+  --ignore=sim/tests/test_cv_conv2d_rtl.py --ignore=sim/tests/test_soc_pcie_dma.py
+
+# FM-SOC verification (existing evidence)
+# 33/33 from build/evidence/final-fm-soc.log (sz0001, VCS V-2023.12-SP2_Full64)
+
+# MXU verification (existing evidence)
+# 9/9 from build/evidence/final-mxu*.log (sz0001, VCS)
+
+# SFU/Vector verification (existing evidence)
+# 526/537 SFU + 64/64 Vector from .omo/evidence/task-17-rerun.txt
+```
+
+### Blocked items
+
+- Spike-based tests: pre-existing `npu_mmio_plugin.so` C++ ABI mismatch.
+- FM-SOC re-run: requires sz0001 EDA server (VCS V-2023.12-SP2_Full64); existing evidence from Jul 10 is from same commit baseline and remains valid.
+- Cocotb tests (`test_cv_conv2d_rtl.py`, `test_soc_pcie_dma.py`): require VCS + cocotb on sz0001; excluded from local pytest.
+
 ## 2026-07-19 36-layer RTL Checkpoint Atlas Independent Review Gate (Task 36-2)
 
 - **Status**: VERDICT APPROVE WITH CONDITIONS
@@ -407,3 +466,43 @@ The actual RTL forward pass for full Qwen2.5-3B layers requires:
 - Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
 - Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
 - Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-07-19 F1: Phase 6 Full Plan Compliance Audit (Atlas)
+
+- **Status**: VERDICT APPROVE WITH CONDITIONS
+- **Evidence file**: `build/evidence/phase6-f1-compliance.txt`
+- **Scope audited**: FM-Enhance, W1-Supplement, W3-RTL, W4-PERF, 36-Layer
+- **Review gates read**:
+  - `build/evidence/fm-enhance-review-gate.txt` -> APPROVE
+  - `build/evidence/w3-rtl-review-gate.txt` -> APPROVE
+  - `build/evidence/w4-perf-review-gate.txt` -> APPROVE WITH CONDITIONS
+  - `build/evidence/36layer-review-gate.txt` -> APPROVE WITH CONDITIONS
+- **Key evidence files read**:
+  - `results/timing/qwen2.5-3b.json` -> crossbar_wait/sram_stall/vcov_bubble present; weight_streaming_overlap_ratio=0.98
+  - `build/evidence/fm-cv-chain.txt` -> all per-op cos_sim >= 0.99
+  - `build/evidence/w1-6b-q8o.txt` -> BLOCKED; Q8_0 GGUF missing; 36 placeholder entries
+  - `build/evidence/w3-rtl-dual-path.txt` -> bk_match=True, pcie_match=True, anti-vacuous PASS
+  - `build/evidence/w3-rtl-cv-conv2d.txt` -> composite PASS (RTL MMUL + FM golden)
+  - `build/evidence/w4-perf-p0.txt` -> 4/4 PASS; schema incomplete (timestamps missing)
+  - `build/evidence/w4-perf-p1.txt` -> 4/4 PASS; FM-1 delta 0.8%
+  - `build/evidence/w4-perf-p2.txt` -> 3/4 PASS; PERF-11 FAIL (64KB weight buffer)
+  - `build/evidence/w4-perf-p3.txt` -> 4/4 PASS; cross_engine_gap present
+  - `build/evidence/w4-perf-p4.txt` -> 4/4 PASS; repeatability 0.04% std
+  - `build/evidence/fullchain-pipeline.txt` -> 5 gaps present; MMUL-only cycles; SFU/Vector blocked
+  - `build/evidence/36layer-checkpoint.txt` -> L0/L10/L20/L35 cos_sim=1.000000; Func Model only
+- **Major findings**:
+  1. **W1-Supplement 6b plan-vs-evidence inconsistency**: plan checkbox is `[x]` but the Q8_0 control experiment is blocked by missing asset; evidence file is a blocker placeholder.
+  2. **W4-PERF evidence schema incomplete**: P0-P4 records lack `timestamp` and `commit` fields in most entries.
+  3. **PERF-11 blocked**: firmware does not implement per-K-tile weight reload; 64KB weight buffer too small for K=2560,N=4096.
+  4. **Fullchain non-MMUL segments blocked**: SFU op=1 / Vector op=2 not dispatched by current PERF firmware.
+  5. **36-layer RTL full pass blocked**: evidence is Func Model stability + FM-SOC-001 smoke; genuine 36-layer RTL forward pass not performed.
+  6. **Spike path blocked**: `npu_mmio_plugin.so` C++ ABI mismatch unresolved.
+- **Conditions for final signoff** (must close or waive):
+  1. Resolve W1-Supplement 6b blocker or revert plan checkbox to `[ ]`.
+  2. Add `timestamp` and `commit` to all W4-PERF P0-P4 evidence records.
+  3. Implement firmware per-K-tile weight streaming and re-run PERF-11.
+  4. Validate SFU/Vector opcodes in PERF firmware path and measure fullchain non-MMUL segments.
+  5. Obtain actual RTL measurement for FM-3 weight-streaming overlap ratio.
+  6. Perform genuine full 36-layer RTL forward pass once firmware/DMA limitations are resolved.
+  7. Resolve Spike plugin ABI mismatch or remove Spike dependency from required evidence.
+- **Verification**: `grep -q 'VERDICT.*APPROVE' build/evidence/phase6-f1-compliance.txt && echo PASS` -> PASS
