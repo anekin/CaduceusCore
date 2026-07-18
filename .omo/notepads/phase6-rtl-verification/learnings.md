@@ -241,3 +241,14 @@ bash sim/regression/run_ibex_full_rtl.sh FM-SOC-001
 - `_reformat_wgt_for_mxu_wrapper`: unpacks INT4, pads to [k_tiles*64, 64], repacks same nibble order
 - Descriptor `input_size` = len(reformatted_activation), NOT M*K
 - Descriptor `weight_size` = len(reformatted_weight), NOT K*N/2
+
+## 2026-07-18 W3-RTL Atlas Review Gate (Atlas audit)
+
+- **Status**: VERDICT APPROVE
+- **Evidence file**: `build/evidence/w3-rtl-review-gate.txt`
+- **Re-verification performed independently**:
+  - 17b: `grep -q 'bk_match=True.*pcie_match=True' build/evidence/w3-rtl-dual-path.txt` → PASS
+  - 19: `grep -q 'PASS' build/evidence/w3-rtl-cv-conv2d.txt` → PASS
+  - Optional raw-log check on sz0001: `build/ibex_full_rtl/evidence/FM-SOC-032.log` and `FM-SOC-10X.log` both exist
+- **Artifact committed**: `sim/tests/test_cv_conv2d_rtl.py` as `[Test][RTL][CV] MobileNetV3 Conv2D RTL testbench artifact`
+- **Caveat**: Task 19 is a composite verification. The RTL MXU GEMM path is directly proven by FM-SOC-032; the MobileNetV3-specific im2col→GEMM mapping and golden reference (cos_sim=0.994569) come from FM-2. The standalone Cocotb test file is now tracked but depends on generated vectors under `rtl/test_vectors/soc_e2e/cv_conv2d_rtl`.
