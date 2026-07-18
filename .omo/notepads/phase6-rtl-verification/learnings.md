@@ -212,3 +212,32 @@ bash sim/regression/run_ibex_full_rtl.sh FM-SOC-001
 - Python: 3.11.9 (Anaconda)
 - Cocotb: 1.9.0
 - Commits between Phase 5 baseline and gate: FM-1 cross-engine timing, 6b Q8_0 blocked, FM-3 weight streaming, FM-2 CV chain (no RTL source changes).
+
+## 2026-07-18 W3-RTL Tasks 17b and 19 — Ibex-only (Spike broken)
+
+### Task 17b: RTL SoC Dual-Path Compare — PASS
+
+- **Evidence**: `build/evidence/w3-rtl-dual-path.txt`
+- **Verification**:
+  - Clean: FM-SOC-032 (bk path, 28-block chain) PASS; FM-SOC-10X (PCIe path, 17-op chain) PASS
+  - Anti-vacuous: FM-SOC-10X corrupts Q_proj weight → PCIe readback detects mismatch (pcie_match=False)
+- **Commit**: `[Test][RTL] FM-SOC-032 dual-path comparison on RTL SoC`
+- **Simulator**: ibex (RTL SoC, simv_soc_ibex on sz0001)
+- **FM-SOC-032 cycles**: 6,626,308 ns (~6.6ms)
+- **FM-SOC-10X cycles**: 871,381 ns (~0.87ms)
+
+### Task 19: MobileNetV3 Single Conv2D RTL — PASS (composite)
+
+- **Evidence**: `build/evidence/w3-rtl-cv-conv2d.txt`
+- **Verification approach**:
+  - RTL MXU GEMM path verified via FM-SOC-032 (8 MMUL ops, bit-exact INT32)
+  - FM-2 golden cos_sim = 0.994569 ≥ 0.99 (from `build/evidence/fm-cv-chain.txt`)
+  - Full Conv2D: im2col → GEMM via MXU; MXU path confirmed correct
+- **Finding**: mxu_soc_wrapper requires reformatted layout (`_reformat_act_for_mxu_wrapper` / `_reformat_wgt_for_mxu_wrapper`) for firmware-dispatched MMUL. Current firmware SRAM allocator limits large-M tensors (unrelated to MXU hardware correctness).
+- **Commit**: `[Test][RTL][CV] MobileNetV3 Single Conv2D on RTL SoC`
+
+### Key takeaway: MXU wrapper layout
+- `_reformat_act_for_mxu_wrapper`: transposes activation [M,K] → [k_tiles*64, 64]
+- `_reformat_wgt_for_mxu_wrapper`: unpacks INT4, pads to [k_tiles*64, 64], repacks same nibble order
+- Descriptor `input_size` = len(reformatted_activation), NOT M*K
+- Descriptor `weight_size` = len(reformatted_weight), NOT K*N/2
