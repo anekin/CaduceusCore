@@ -345,3 +345,38 @@ All test results and evidence files are in `logs/` and `.omo/evidence/`.
 | PCIe TLP Limitation | 4 | Partial (TC2 blocks PCIe read verification) | Partial | W3 T16 (TC2 fix) |
 | SRAM Peak Concerns | 4 | Partial (tile streaming not stress-tested) | Yes | W1 (36-layer), W4 (perf) |
 | **Total** | **17** | **2 blocked** | **12 blocked** | — |
+
+---
+
+## Phase 6 RTL Verification Issues / Blockers
+
+> **Scope**: CaduceusCore Phase 6 RTL verification execution (`phase6-rtl-verification`).
+> **Baseline Date**: 2026-07-15 to 2026-07-19
+> **Overall State**: VCS compilation and Ibex SoC smoke are green; Spike debug and full-layer/full-weight RTL runs are blocked by firmware and plugin issues. No RTL source files were modified during Phase 6.
+
+### Blockers and Known Gaps
+
+| Issue | Root Cause | Impact | Workaround | Next Step / Owner | Evidence / Review Gate |
+|---|---|---|---|---|---|
+| **Spike plugin ABI mismatch** | `npu_mmio_plugin.so` was built with an incompatible C++ ABI; runtime fails with undefined symbol `_Z15mmio_device_mapB5cxx11v`. | Spike-based E2E debug and forward-pass flows are blocked for W3-RTL and 36-layer RTL tasks. | Use the Ibex-only RTL path for all Phase 6 verification. | Rebuild `npu_mmio_plugin.so` with an ABI-compatible toolchain before reintroducing Spike debug. Owner: plugin build/infra. | `build/evidence/vcs-readiness-gate.txt` |
+| **Firmware 64 KB weight-buffer limit** | Firmware loads weights once per descriptor and does not implement per-K-tile reload. | Full Q_proj (K=2560, N=4096) and a genuine full 36-layer RTL forward pass are blocked. PERF-11 FAIL. | Restrict RTL tests to K≈512 per load; rely on Func Model tile-level analysis for full-layer behavior. | Implement per-K-tile weight streaming reload in firmware. Owner: firmware. | `build/evidence/w4-perf-p2.txt`, `build/evidence/w4-perf-review-gate.txt` |
+| **DMA output readback zeros** | The CH1 DMA path that copies MXU output from SRAM→DRAM returns zeros — likely a direction/destination misconfiguration, MXU wrapper output drain, or SRAM-controller clear-on-completion behavior. | PERF path cannot read back MXU output through DRAM, blocking output golden comparison in the firmware-dispatch flow. | FM-SOC regression (33/33) still passes via the backdoor path; use backdoor SRAM reads for debug. | Fix CH1 DMA configuration / wrapper drain behavior / SRAM-controller completion handling. Owner: RTL/DMA integration. | `build/evidence/w4-perf-p*.txt`, `build/evidence/w4-perf-review-gate.txt` |
+| **PERF-11 blocked** | 64 KB weight buffer cannot hold 2560 tiles required by Q_proj (K=2560, N=4096). | No RTL measurement for full Q_proj; W4-PERF P2 acceptance is 3/4 PASS. | Document as a known firmware limitation; use smaller matmul configs for P0/P1/P3/P4. | Implement per-K-tile weight reload and re-run PERF-11. Owner: firmware/PERF tests. | `build/evidence/w4-perf-p2.txt`, `build/evidence/w4-perf-review-gate.txt` |
+| **Fullchain SFU/Vector blocked** | Current PERF firmware dispatch path only exercises MMUL (opcode 0); SFU (op=1) and Vector (op=2) are not dispatched in the PERF path. | Task 25a fullchain cannot measure non-MMUL segments; SFU/Vector end-to-end latency remains unvalidated in the PERF firmware flow. | Reference FM-SOC-004/005, which demonstrate SFU/Vector opcode dispatch in the non-PERF path. | Validate SFU and Vector opcodes in the PERF firmware path and measure fullchain non-MMUL segments. Owner: firmware/PERF tests. | `build/evidence/fullchain-pipeline.txt`, `build/evidence/w4-perf-review-gate.txt` |
+| **36-layer Func Model-only** | Spike is blocked by the plugin ABI mismatch, and the firmware weight-buffer/DMA limitations prevent a full RTL layer pass. | No genuine full 36-layer RTL forward pass exists; RTL evidence is limited to the FM-SOC-001 Ibex SoC smoke test. | Run Func Model checkpoint validation (L0/L10/L20/L35 cos_sim=1.0) to prove golden stability. | Resolve Spike ABI mismatch and firmware streaming/readback issues, then run a real 36-layer RTL forward pass. Owner: RTL/firmware/integration. | `build/evidence/36layer-checkpoint.txt`, `build/evidence/36layer-review-gate.txt` |
+| **W4-PERF evidence schema gaps** | Evidence generation scripts did not include `timestamp` and `commit` in every record. | P2-P4 lack timestamps entirely; P0-P1 are partial. Procedural non-compliance with the agreed evidence schema; does not invalidate technical measurements but must close before Final Wave. | Review gate accepted the technical measurements while documenting the schema gap. | Update evidence-generation scripts to add `timestamp` and `commit` to all W4-PERF records. Owner: verification automation. | `build/evidence/w4-perf-review-gate.txt` |
+| **F2 baseline contradiction** | The regression baseline section (pytest 210+, FM-SOC 33/33, MXU 9/9, SFU 319/319, Vector 63/63) disagrees with the success-criteria table (pytest ≥700, SFU 526/537, Vector 64/64). | Ambiguous Final Wave acceptance criteria; risk of misjudging signoff readiness. | Treat as a documentation inconsistency to be reconciled before Final Wave; Phase 6 proceeded with the measured evidence set. | Reconcile baseline numbers against the success-criteria table and update the plan or baseline. Owner: verification lead / documentation. | `.omo/notepads/phase6-rtl-verification/learnings.md` |
+
+### Review Gate Verdicts
+
+| Gate | Verdict | Key Conditions / Caveats |
+|---|---|---|
+| FM-4 Independent Review Gate | **APPROVE** | FM-1 cross-engine and FM-3 correctness validations deferred to W4-PERF; 6b Q8_0 control blocked by missing asset. |
+| Pre-Wave VCS Readiness Gate | **PASS** | All 5 gate items compile; Ibex runtime PASS; Spike runtime FAIL due to plugin ABI mismatch. |
+| W3-RTL Atlas Review Gate | **APPROVE** | Task 19 is a composite verification: RTL MXU path proven by FM-SOC-032, CV mapping/golden from FM-2. |
+| W4-PERF Independent Review Gate | **APPROVE WITH CONDITIONS** | Must close: evidence schema (timestamp/commit), PERF-11 per-K-tile reload, SFU/Vector opcode validation in PERF path, RTL measurement for FM-3 overlap. |
+| 36-layer RTL Checkpoint Review Gate | **APPROVE WITH CONDITIONS** | 36-layer pass was Func Model-only; genuine RTL full-layer pass still required after Spike/firmware blockers resolved. |
+
+### Summary
+
+Phase 6 closed with VCS compilation readiness confirmed and the Ibex SoC path fully operational, but several integration blockers remain before a genuine full-model RTL forward pass is possible. The dominant blockers are the Spike plugin ABI mismatch, the firmware 64 KB weight-buffer limit, and the DMA output readback zero issue. All three are tracked above with owners, workarounds, and evidence references.
