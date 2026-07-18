@@ -66,7 +66,7 @@
 
 ## Func Model 增强（Phase 6 新增，独立于 RTL 验证）
 
-FM-1. [ ] Cross-engine pipeline timing model
+FM-1. [x] Cross-engine pipeline timing model
      **Refs**: `sim/engine/timeline.py` (CoreTimeline); `sim/models/noc.py` (NoCModel); Phase 5 W2 P2 back-to-back gap data (`build/evidence/sfv-P2-back-to-back-summary.json`)
      **Methodology**: Extend CoreTimeline to model multi-engine chains. Add crossbar arbitration delay (round-robin M=6, S=2). Add SRAM port contention (read/write same bank). Model VCONV insertion bubble. Calibrate same-engine gaps against Phase 5 P2 data (≤5 cycles). Cross-engine overhead estimated from architecture (NoC hop + serialization + arbitration) and validated against W4 PERF-13..P16 VCS measured data once available.
      **Acceptance**: 
@@ -78,7 +78,7 @@ FM-1. [ ] Cross-engine pipeline timing model
      **Commit**: `[FM] Cross-engine pipeline timing model`
      **Evidence**: `results/timing/qwen2.5-3b.json` (benchmark default output, fields crossbar_wait/sram_stall/vcov_bubble present)
 
-FM-2. [ ] CV chain 串联验证（MobileNetV3 Conv2D → VRESID → SiLU）
+FM-2. [x] CV chain 串联验证（MobileNetV3 Conv2D → VRESID → SiLU）
      **Refs**: `sim/tests/test_cv_mobilenetv3.py`; `sim/golden_executor.py` (run_op_chain); Phase 5 W3.4 FM E2E
      **Methodology**: Select one Conv2D layer from MobileNetV3 (features.0.0). Run im2col→GEMM→VCONV→VRESID→SiLU chain through `GoldExecutor.execute_program(auto_insert_dtype_converters=True)`. Compare per-op output against PyTorch reference.
      **Acceptance**: All ops in chain PASS; per-op cos_sim ≥ 0.99; VCONV auto-insertion correct
@@ -87,7 +87,7 @@ FM-2. [ ] CV chain 串联验证（MobileNetV3 Conv2D → VRESID → SiLU）
      **Commit**: `[Test][FM][CV] MobileNetV3 Conv2D→VRESID→SiLU chain verified`
      **Evidence**: `build/evidence/fm-cv-chain.txt`
 
-FM-3. [ ] Weight streaming timing 精度
+FM-3. [x] Weight streaming timing 精度
      **Refs**: `sim/models/mxu.py` (MXUModel); `sim/models/dma.py` (DMAModel); `rtl/testcase-list-perf.md` PERF-09..P12
      **Methodology**: Add tile-level double-buffering and K-tile reload stall to DMAModel/MXUModel. Output `weight_streaming_overlap_ratio` in timing report field. Validation deferred to W4 PERF-09..P12 VCS measured data.
      **Acceptance**: `PYTHONPATH=sim python3 -m sim.timing.benchmark --model qwen2.5-3b` outputs `weight_streaming_overlap_ratio` field
@@ -96,7 +96,7 @@ FM-3. [ ] Weight streaming timing 精度
      **Commit**: `[FM] Weight streaming tile-level double-buffering timing`
      **Evidence**: `results/timing/qwen2.5-3b.json` (benchmark default output, field weight_streaming_overlap_ratio present)
 
-FM-4. [ ] Review Gate: Atlas audit of FM-Enhance evidence
+FM-4. [x] Review Gate: Atlas audit of FM-Enhance evidence
      **Prerequisite**: FM-1..FM-3 all [x]
      **Acceptance**: Atlas approve; pipeline model produces realistic same-engine gaps; CV chain verified; weight streaming field present
      **Commit**: `[Review] Atlas FM-Enhance evidence audit: approve`
@@ -104,7 +104,7 @@ FM-4. [ ] Review Gate: Atlas audit of FM-Enhance evidence
 
 ### W1-Supplement: L35 Drift 根因（独立 Python 任务）
 
-6b. [ ] L35 drift root-cause: Q8_0/FP16 control experiment
+6b. [x] L35 drift root-cause: Q8_0/FP16 control experiment
      **Refs**: Phase 5 W1.6 L3 signoff; learnings L35 section
      **Methodology**: Rerun 36-layer Func Model signoff with Q8_0 GGUF on sz0001 (Python only, no VCS). Compare per-layer cos_sim.
      **Acceptance**: 36-layer per-layer cos_sim report; root cause confirmed (Q4_K_M) or new investigation opened
@@ -115,14 +115,14 @@ FM-4. [ ] Review Gate: Atlas audit of FM-Enhance evidence
 ### W3-RTL: PCIe + CV RTL（Phase 5 推迟，VCS sz0001）
 
 > **Pre-Wave Gate (VCS readiness)**: 开始 W3-RTL 前确认：
-> 1. [ ] `simv_soc_spike` / `simv_soc_ibex` 可编译（`bash sim/regression/run_p0_full_rtl.sh` 返回 0；`bash sim/regression/run_ibex_full_rtl.sh` 返回 0）
-> 2. [ ] VCS license 可用（`vcs -ID` 输出 V-2023.12-SP2）
-> 3. [ ] `firmware/build/npu_firmware.hex` 存在且非空
-> 4. [ ] Phase 5 证据文件存在（`build/evidence/sfv-P2-back-to-back-summary.json` 等）
-> 5. [ ] `rtl/test_vectors/soc_e2e/qwen25-3b-3layer/expected.npz` 存在
+> 1. [x] `simv_soc_spike` / `simv_soc_ibex` 可编译（`bash sim/regression/run_p0_full_rtl.sh` 返回 0；`bash sim/regression/run_ibex_full_rtl.sh` 返回 0）
+> 2. [x] VCS license 可用（`vcs -ID` 输出 V-2023.12-SP2）
+> 3. [x] `firmware/build/npu_firmware.hex` 存在且非空
+> 4. [x] Phase 5 证据文件存在（`build/evidence/sfv-P2-back-to-back-summary.json` 等）
+> 5. [x] `rtl/test_vectors/soc_e2e/qwen25-3b-3layer/expected.npz` 存在
 > **Commit**: `[Gate] VCS readiness for W3-RTL/W4/36-layer confirmed`
 
-17b. [ ] sz0001: RTL SoC dual-path compare
+17b. [x] sz0001: RTL SoC dual-path compare
       **Refs**: Phase 5 W3.2 Func Model dual-path; `sim/rtl_soc_runner.py`; `sim/cocotb_bridge.py`
       **Methodology**: Run dual-path compare (backdoor SRAM + PCIe TLP) on VCS SoC via sz0001. Corrupt PCIe routing to verify anti-vacuous detection.
       **Acceptance**: bk_match=True + pcie_match=True; anti-vacuous: pcie_match=False on corruption
@@ -131,7 +131,7 @@ FM-4. [ ] Review Gate: Atlas audit of FM-Enhance evidence
       **Commit**: `[Test][RTL] FM-SOC-032 dual-path comparison on RTL SoC`
       **Evidence**: `build/evidence/w3-rtl-dual-path.txt`
 
-19. [ ] sz0001: MobileNetV3 RTL Single Conv2D
+19. [x] sz0001: MobileNetV3 RTL Single Conv2D
      **Refs**: Phase 5 W3.4 Func Model; FM-2 CV chain golden; `sim/golden_executor.py`
      **Methodology**: Run single Conv2D (im2col→MMUL→BIAS→VRESID→SiLU) on VCS SoC via sz0001. Compare RTL output against FM-2 golden.
      **Acceptance**: cos_sim ≥ 0.99 vs FM golden
@@ -140,7 +140,7 @@ FM-4. [ ] Review Gate: Atlas audit of FM-Enhance evidence
      **Commit**: `[Test][RTL][CV] MobileNetV3 Single Conv2D on RTL SoC`
      **Evidence**: `build/evidence/w3-rtl-cv-conv2d.txt`
 
-W3-Review. [ ] Review Gate: Atlas audit of W3-RTL evidence
+W3-Review. [x] Review Gate: Atlas audit of W3-RTL evidence
       **Acceptance**: Atlas approve; dual-path PASS; CV Conv2D PASS
       **Commit**: `[Review] Atlas W3-RTL evidence audit: approve`
       **Evidence**: `build/evidence/w3-rtl-review-gate.txt`
@@ -159,7 +159,7 @@ W3-Review. [ ] Review Gate: Atlas audit of W3-RTL evidence
 > | PERF-13..P16 | blk.0 17-op chain | 全链路 |
 > | PERF-17..P20 | blk.0 full chain × 3 | 重复性 |
 
-21. [ ] SoC infrastructure baseline (PERF-01..P04)
+21. [x] SoC infrastructure baseline (PERF-01..P04)
       **Refs**: `rtl/testcase-list-perf.md` PERF-01..P04
       **Methodology**: On sz0001 VCS, run PERF-01..P04: weight streaming (P01), MMUL workaround removal (P02), per-tile cycle logger (P03), 2×2 tile E2E smoke (P04). Reuse existing `simv_soc_cocotb`.
       **Acceptance**: All 4 cases PASS; per-tile cycle JSON generated for P03
@@ -168,21 +168,21 @@ W3-Review. [ ] Review Gate: Atlas audit of W3-RTL evidence
       **Commit**: `[Perf][SoC] P0 infrastructure baselines measured`
       **Evidence**: `build/evidence/w4-perf-p0.txt`
 
-22. [ ] Single-engine SoC perf scans (PERF-05..P08)
+22. [x] Single-engine SoC perf scans (PERF-05..P08)
       **Refs**: `rtl/testcase-list-perf.md` PERF-05..P08
       **Methodology**: Run MXU K/N-scan with representative dims (K=128,256; N=64,128). Compare VCS cycles vs FM-1 model prediction.
       **Acceptance**: 4 scan cases measured; FM-1 DELTA ≤ 50% (wider tolerance for VCS SoC overhead)
       **Commit**: `[Perf][SoC] P1 engine scans: SoC-path cycles calibrated`
       **Evidence**: `build/evidence/w4-perf-p1.txt`
 
-23. [ ] DMA + weight stream perf (PERF-09..P12)
+23. [x] DMA + weight stream perf (PERF-09..P12)
       **Refs**: `rtl/testcase-list-perf.md` PERF-09..P12; Qwen Q_proj weights; FM-3 model
       **Methodology**: Measure weight preload BW and K-tile reload for one representative projection (Q_proj, K_in=2560, N_out=4096 per `rtl/testcase-list-perf.md`). Cross-calibrate FM-3.
       **Acceptance**: Weight preload BW measured; FM-3 overlap ratio within ±30% of VCS measured
       **Commit**: `[Perf][SoC] P2 weight streaming: Q_proj throughput measured`
       **Evidence**: `build/evidence/w4-perf-p2.txt`
 
-24. [ ] Multi-engine pipeline + back-to-back (PERF-13..P16)
+24. [x] Multi-engine pipeline + back-to-back (PERF-13..P16)
       **Refs**: `rtl/testcase-list-perf.md` PERF-13..P16; Phase 5 P2 same-engine gap data; FM-1 pipeline model
       **Methodology**: Run blk.0 17-op chain on VCS SoC (single run, ~30min). Measure cross-engine gaps (MXU→VCONV→SFU→VCONV_F16_I32→VRESID). Compare against FM-1 predictions.
       **Acceptance**: Pipeline overlap quantified; cross-engine gap measured; FM-1 predicted gaps within ±50% of VCS measured
@@ -190,14 +190,14 @@ W3-Review. [ ] Review Gate: Atlas audit of W3-RTL evidence
       **Commit**: `[Perf][SoC] P3 pipeline overlap: multi-engine concurrency measured`
       **Evidence**: `build/evidence/w4-perf-p3.txt`
 
-25. [ ] Full blk.0 E2E perf + stability (PERF-17..P20)
+25. [x] Full blk.0 E2E perf + stability (PERF-17..P20)
       **Refs**: `rtl/testcase-list-perf.md` PERF-17..P20
       **Methodology**: Run blk.0 full chain 3 times on VCS SoC. Measure per-op cycle breakdown, MXU/SFU/Vector busy %. Verify repeatability.
       **Acceptance**: Per-op breakdown complete; 3-run std ≤ 5% of mean (wider tolerance for VCS overhead)
       **Commit**: `[Perf][SoC] P4 E2E perf: blk.0 breakdown + repeatability`
       **Evidence**: `build/evidence/w4-perf-p4.txt`
 
-25a. [ ] **Full-chain MXU+SFU+Vector pipeline perf**（跨 engine 全链路性能）<br>
+25a. [x] **Full-chain MXU+SFU+Vector pipeline perf**（跨 engine 全链路性能）<br>
       **Refs**: Phase 5 P2 same-engine gap data; FM-1 pipeline model; Qwen2.5-3B blk.0 attention chain
       **Why this matters**: 模块级 P2 只测同 engine gap；PERF-13..P16 测的是 SoC 级 pipeline overlap。Phase 6 需要一个**聚焦的、可校准的**全链路 case——从 MMUL 输入到 VRESID 输出，覆盖 MXU→VCONV→SFU→VCONV_F16_I32→VRESID 五段跨 engine 转换，这是真实 forward pass 的核心路径，也是 FM pipeline 模型校准的关键数据源。
       **硬件真实性**: 
@@ -220,14 +220,14 @@ W3-Review. [ ] Review Gate: Atlas audit of W3-RTL evidence
       **Commit**: `[Perf][SoC] Full-chain MXU+SFU+Vector pipeline perf measured`
       **Evidence**: `build/evidence/fullchain-pipeline.txt`
 
-26. [ ] Review Gate: Atlas audit of Wave 4 evidence
+26. [x] Review Gate: Atlas audit of Wave 4 evidence
       **Acceptance**: Atlas approve; PERF-01..P20 + full-chain pipeline recorded
       **Commit**: `[Review] Atlas W4 evidence audit: approve`
       **Evidence**: `build/evidence/w4-perf-review-gate.txt`
 
 ### 36-Layer: Checkpoint Forward Pass（VCS sz0001）
 
-36-1. [ ] VCS: 36-layer RTL checkpoint forward pass
+36-1. [x] VCS: 36-layer RTL checkpoint forward pass
       **Refs**: Phase 5 W1.3 3-layer RTL; Phase 5 W1.6 36-layer FM golden specification (`.npz` files must first be regenerated via `PYTHONPATH=sim python3 -c "from sim.e2e_llamacpp import verify_36layer; verify_36layer()"` to populate `rtl/test_vectors/soc_e2e/qwen25-3b-36layer/`)
       **Pre-task**: If `rtl/test_vectors/soc_e2e/qwen25-3b-36layer/` is empty or missing, run FM 36-layer golden generation first on sz0001 (Python only, ~30min). This is a hard prerequisite.
       **Methodology**: **Spike-first**: Use Spike RISC-V simulator + firmware to drive SoC testbench (faster than Ibex RTL). Run 36-layer forward pass, validate L0/L10/L20/L35 checkpoints against `.npz` golden. Then **Ibex-final**: replace Spike with Ibex RTL, re-run L0/L10/L20/L35 checkpoints for final sign-off. Due to VCS runtime (2-4h/single full run with Ibex), checkpoint-only approach; Spike runs first for fast debug iteration.
@@ -237,7 +237,7 @@ W3-Review. [ ] Review Gate: Atlas audit of W3-RTL evidence
       **Commit**: `[Test][RTL] 36-layer RTL checkpoint forward pass verified`
       **Evidence**: `build/evidence/36layer-checkpoint.txt`
 
-36-2. [ ] Review Gate: Atlas audit of 36-layer evidence
+36-2. [x] Review Gate: Atlas audit of 36-layer evidence
       **Acceptance**: Atlas approve; checkpoint cos_sim consistent with Phase 5 FM baseline
       **Commit**: `[Review] Atlas 36-layer evidence audit: approve`
       **Evidence**: `build/evidence/36layer-review-gate.txt`
@@ -246,22 +246,22 @@ W3-Review. [ ] Review Gate: Atlas audit of W3-RTL evidence
 
 ## Final verification wave (Phase 6)
 
-F1. [ ] Plan compliance audit: all Phase 6 Waves (FM-Enhance, W3-RTL, W4-PERF, W1-Supplement, 36-Layer) have Review Gate approved; evidence consistent with testcase lists
+F1. [x] Plan compliance audit: all Phase 6 Waves (FM-Enhance, W3-RTL, W4-PERF, W1-Supplement, 36-Layer) have Review Gate approved; evidence consistent with testcase lists
      **Acceptance**: Atlas full-plan review → approve
      **Commit**: `[Verify] Phase 6 full plan compliance audit`
      **Evidence**: `build/evidence/phase6-f1-compliance.txt`
 
-F2. [ ] Regression baseline: Phase 5 baseline preserved (pytest ≥700 with ≤10 pre-existing engine-drift failures, FM-SOC 33/33, MXU 9/9, SFU 526/537, Vector 64/64); Phase 6 additions documented; no degradation from Phase 5 baseline
+F2. [x] Regression baseline: Phase 5 baseline preserved (pytest ≥700 with ≤10 pre-existing engine-drift failures, FM-SOC 33/33, MXU 9/9, SFU 526/537, Vector 64/64); Phase 6 additions documented; no degradation from Phase 5 baseline
      **Acceptance**: All Phase 5 regression suites re-run and PASS; pre-existing failures unchanged (≤10 engine-drift + SFU test-vector issues)
      **QA happy**: `grep -c 'PASS' build/evidence/phase6-f2-regression.txt` → ≥5 (pytest/FM-SOC/MXU/SFU/Vector all PASS)
      **Commit**: `[Verify] Phase 6 regression baseline confirmed`
      **Evidence**: `build/evidence/phase6-f2-regression.txt`
 
-F3. [ ] Known gaps update: `docs/issues_found.md` updated with Phase 6 results
+F3. [x] Known gaps update: `docs/issues_found.md` updated with Phase 6 results
      **Commit**: `[Doc] Phase 6 issues_found.md update`
      **Evidence**: `docs/issues_found.md`
 
-F4. [ ] Scope fidelity: Must NOT Have paths verified; Phase 6 scope boundaries respected
+F4. [x] Scope fidelity: Must NOT Have paths verified; Phase 6 scope boundaries respected
      **Acceptance**: `git diff --stat` shows only planned files; no out-of-scope RTL modifications
      **Commit**: `[Verify] Phase 6 scope fidelity confirmed`
      **Evidence**: `build/evidence/phase6-f4-scope.txt`
