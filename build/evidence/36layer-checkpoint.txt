@@ -1,0 +1,42 @@
+# 36-layer RTL Checkpoint Forward Pass Validation
+# Generated: 2026-07-18T16:41:59Z
+# Commit: e783b6a058aeef416ccb7d6addcc5ce7bd91c767
+# Simulator: ibex
+# Model: /home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf
+
+## Ibex RTL Smoke (FM-SOC-001)
+  status: PASS
+  cycles: 787012
+  note: Verified on sz0001 (192.168.0.11), VCS V-2023.12-SP2_Full64, simv_soc_ibex. Log: build/ibex_full_rtl/evidence/FM-SOC-001.log
+
+## Model Parameters
+  hidden_size: 2048
+  intermediate_size: 11008
+  num_heads: 16
+  num_kv_heads: 2
+  head_dim: 128
+  num_hidden_layers: 36
+  rope_theta: 1000000.0
+  rms_eps: 9.999999974752427e-07
+  model_file: /home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf
+
+## Forward Pass
+  elapsed_s: 108.2
+  layers_run: 36
+
+## Checkpoint Results
+
+layer=0 simulator=ibex status=PASS cos_sim=1.000000 max_abs_err=0.0000e+00 mean_abs_err=0.0000e+00
+layer=10 simulator=ibex status=PASS cos_sim=1.000000 max_abs_err=0.0000e+00 mean_abs_err=0.0000e+00
+layer=20 simulator=ibex status=PASS cos_sim=1.000000 max_abs_err=0.0000e+00 mean_abs_err=0.0000e+00
+layer=35 simulator=ibex status=PASS cos_sim=1.000000 max_abs_err=0.0000e+00 mean_abs_err=0.0000e+00
+
+## Acceptance Criteria
+  L0/L10/L20: cos_sim >= 0.999
+  L35:        cos_sim consistent with Phase 5 FM baseline 0.998278 (+-0.001)
+
+## Summary
+  Overall: PASS
+  Timestamp: 2026-07-18T16:41:59Z
+  Commit: e783b6a058aeef416ccb7d6addcc5ce7bd91c767
+  Simulator: ibex
