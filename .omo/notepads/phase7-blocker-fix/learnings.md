@@ -19,6 +19,23 @@ cd spike_src/plugins && make clean && make
 
 **Lesson**: Always build shared objects on the target runtime environment. devtoolset-9 provides g++ 9.3.1 with C++17 support on RHEL/CentOS 7 while linking against system GLIBC 2.17.
 
+## 2026-07-19 11:43 UTC — W4-PERF Testcase List Status Sync
+
+### Lesson: PERF-11 weight-buffer-overflow documented as known firmware limitation
+
+The testcase-list-perf.md now reflects W4-PERF evidence: 19 PASS + 1 FAIL (PERF-11).
+
+PERF-11 (Q_proj MMUL, K=2560, N=4096, 2560 tiles) fails because the 64KB weight buffer cannot hold the full weight set. Firmware currently loads weights once per descriptor and does not implement per-K-tile reload. The 2560 tiles exceed capacity, requiring a firmware reload mechanism across K-tiles.
+
+**Status mapping applied**:
+- P0 (4): all PASS
+- P1 (4): all PASS
+- P2 (4): 3 PASS + 1 FAIL (PERF-11)
+- P3 (4): all PASS
+- P4 (4): all PASS
+
+**Evidence**: `build/evidence/w4-perf-p2.txt` line 3 confirms the FAIL record with root cause documented. Review gate (w4-perf-review-gate.txt §9) condition #2 requires firmware per-K-tile reload and PERF-11 re-run before Final Wave.
+
 ## 2026-07-19 10:55 UTC — W4-PERF Evidence Schema Fix
 
 ### Summary
