@@ -1,0 +1,46 @@
+=== PH8 PERF-04 Regression Report (Task 4) ===
+Timestamp: 2026-07-19T08:33:10Z
+COMMIT: 123b9340076f377fc97b6f6ca95cb10d0bd92617
+
+RESULT: PERF-01..04 FAILED on sz0001 with tile-major fix applied.
+
+PERF-01 (M=1,K=256,N=64): cos_sim=0.436549 (need >=0.999), cyc=22545
+  - DRAM/SRAM output matches (firmware DMA works)
+  - MXU computed non-zero output but wrong values
+  - Golden: [248 -5449 15 ...], Actual: [-1499 1989 ...]
+
+PERF-04 (M=1,K=128,N=128): cos_sim=-0.217997, cyc=2
+  - DOORBELL STALE: NPU_HEAD already at 1 from PERF-01 MMUL
+  - HTAIL=1 written again but no change → firmware WFI, no dispatch
+  - cyc=2 confirms doorbell read early exit
+  - DRAM read returned PERF-01's stale output
+
+PERF-05 (M=1,K=128,N=128, separate test): cos_sim=0.664574, cyc=16396
+PERF-06 (M=32,K=128,N=128): cos_sim=0.018049, cyc=2 (doorbell stale)
+
+ROOT CAUSE ANALYSIS:
+1. Primary: MXU computation produces wrong results through firmware doorbell path.
+   The tile-major packing (pack_int8_activation_tile_major, pack_int4_tile_major)
+   is verified correct for individual bytes. The firmware's offset calculations
+   (act_offset = k_start * 64, wgt_offset = (n_tile * num_blocks + k_block) * 2048)
+   are tile-major compatible. The wrapper preload constants (ACT_BEATS_PER_K=64,
+   WEIGHT_BEATS_PER_K=32) match tile-major sizes exactly.
+
+   Suspected issue: The MMIO address conflict — firmware sets mxu->I_ADDR/W_ADDR/O_ADDR
+   to wrapper-loaded SRAM addresses, but the wrapper's broadcast bus uses internal
+   buffers, not these MMIO registers. This may cause address misrouting during
+   multi-K-tile accumulation.
+
+2. Secondary: Doorbell protocol bug — sequential mmul() calls within same test
+   write HTAIL=1 repeatedly without advancing. After first MMUL, NPU_HEAD=1,
+   so second HTAIL=1 write is a no-op. Fix: advance HTAIL (1→2→...) or reset
+   NPU_HEAD between calls.
+
+PERF-11: STILL NOT RESOLVED. The tile-major fix in PR.mmul() is correct for
+data layout but insufficient for firmware-path dispatch. Further investigation
+needed into mxu_start() MMIO vs wrapper address configuration conflict.
+
+Evidence files:
+- build/evidence/w4-perf-p0.txt: PERF-01..04 (FAIL)
+- build/evidence/w4-perf-p1.txt: PERF-05..08 (FAIL)
+- build/evidence/ph8-p0_p1.log: Combined VCS log

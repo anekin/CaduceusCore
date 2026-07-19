@@ -414,3 +414,69 @@ Phase 6 closed with VCS compilation readiness confirmed and the Ibex SoC path fu
 | F1-#9 | testcase-list-perf.md status | RESOLVED | `rtl/testcase-list-perf.md` |
 | 36L-gate #3 | Regenerate golden after FM changes | ACKNOWLEDGED | out of Phase 7 scope (no FM changes) |
 | 36L-gate #4 | Next gate must confirm RTL full-layer | FORWARD | future Phase acceptance requirement |
+
+## Phase 8 Resolution Status — PERF Harness Fix
+
+> **Scope**: Phase 8 Python harness only (B1: no RTL/firmware changes). Fix data-layout in `sim/perf_tests.py` for MXU preload sequencer compatibility.
+> **Baseline Date**: 2026-07-19
+> **Overall State**: Core fix confirmed (data-layout hypothesis) and applied; several firmware-path blockers remain unresolved because root cause is in firmware/RTL.
+
+### Root Cause Verdict Matrix
+
+| Blocker / PERF Case | Resolution Status | Test Status | Root Cause Verdict | Evidence File | Scope Note |
+|---|---|---|---|---|---|
+| **Data-Layout Hypothesis** (PERF harness writes raw row-major bytes) | **RESOLVED** | PASS (cs=1.0 on single-tile direct preload) | **CONFIRMED** — `pack_int8_activation_tile_major()` is required; MXU preload sequencer expects K-vector tile-major layout. Applied in `PR.mmul()`. | `build/evidence/ph8-diagnostic.txt` | Python harness (`sim/perf_tests.py`) |
+| **PERF-11 / DMA zeros** (P2 batch: K=512, N=128) | **PARTIAL** | PARTIAL_PASS (cs=0.381 standalone; DMA readback works, output non-zero) | **PARTIAL** — Row-major → all zeros (pre-fix); tile-major → non-zero output (post-fix). Packing IS causal but INSUFFICIENT: firmware-path M=1 multi-tile bug prevents cs≥0.999. DMA output store is functional. | `build/evidence/ph8-perf-11-before-after.txt` | Python harness fix applied; remaining gap is firmware/RTL M=1 multi-tile issue |
+| **PERF-13 / M=1 multi-tile** (P3 batch: 7/9 MMULs fail) | **NOT RESOLVED** | FAIL (cos_sim 0.386–0.796 for M=1 multi-tile; M=32 single-K-tile passes at cs=1.0) | **NOT RESOLVED** — Firmware tile iteration loop or MXU wrapper broadcast sequencer bug for M=1 when K>64 or N>64. Tile-major packing IS correct (Task 1 direct preload cs=1.0). Divergence is in firmware→MMIO→wrapper→MXU path. | `build/evidence/ph8-p3_p4.log` | Firmware/RTL scope; beyond Phase 8 B1 |
+| **PERF-17 / M=1,K=128,N=128** (P4 batch) | **NOT RESOLVED** | FAIL (cs=0.711) | Same root cause as PERF-13: M=1 multi-tile firmware-path bug. | `build/evidence/ph8-p3_p4.log` | Firmware/RTL scope; beyond Phase 8 B1 |
+| **P0 Batch** (PERF-01..04: K=256, N=64) | **NOT RESOLVED** | FAIL (PERF-01 cs=0.437; PERF-04 cs=-0.218, cyc=2 doorbell stale) | Same root cause as PERF-13 + pre-existing ring buffer reuse. Firmware doorbell path produces incorrect MXU results for M=1 multi-tile. | `build/evidence/ph8-perf-04-regression.txt` | Firmware/RTL scope; beyond Phase 8 B1 |
+| **Ring Buffer Reuse** (P2/P3/P4 batches) | **RESOLVED** | PASS (all 9 MMULs produce distinct output) | **FIXED** — Added `_ring_tail` counter to `PR`. Each `mmul()` increments tail, writes to correct ring slot, sets `HOST_TAIL`, polls `NPU_HEAD`. | `build/evidence/ph8-p3_p4.log` | Python harness (`sim/perf_tests.py`) |
+| **FULLCHAIN single-tile** (5-op pipeline: MMUL→RMSNorm→VRESID→VCONV→SiLU) | **RESOLVED** | PASS (cos_sim=1.0, 5 gaps, DMA non-zero) | **RESOLVED** — Single-tile M=1,K=64,N=64 passes through firmware doorbell path for all 5 ops. Validates SFU (op 0x17/0x06) and Vector (op 0x14/0x13) dispatch. | `build/evidence/fullchain-pipeline.txt` | Python harness fix + fullchain test |
+| **PERF-20 Repeatability** (M=1,K=128,N=128, 3 runs) | **RESOLVED** | PASS (mean=16394 cyc, std=1.41, pct_std=0.01% ≤ 1%) | — | `build/evidence/ph8-p3_p4.log` | Measurement infra; cycle count is deterministic despite incorrect M=1 output |
+| **PERF-18 Inter-Op Gap** (sequential 2x M=1,K=64,N=64) | **RESOLVED** | PASS (cos_sim=1.0 both, inter_op_gap=0 cyc) | — | `build/evidence/ph8-p3_p4.log` | Single-tile M=1 works; multi-tile M=1 blocked by PERF-13 |
+| **FM-SOC Regression** (33/33 cases) | **RESOLVED** | PASS (33/33 PASS, 0 FAIL, 0 SKIP) | **NO REGRESSION** — FM-SOC path (`rtl_soc_runner.py` + Ibex firmware) is orthogonal to PERF harness changes. No RTL or firmware source files modified. | `build/evidence/fm-soc-regression.txt` | Regression gate clean |
+| **Q8_0 / 36-layer / FM-3 RTL** (weight-streaming RTL measurement) | **NOT ADDRESSED** | — | **DEFERRED** — Requires: Q8_0 GGUF download (external network), per-K-tile firmware weight reload, DMA readback fix before a genuine 36-layer RTL forward pass is possible. | `build/evidence/36layer-checkpoint.txt` (Phase 6), `.omo/notepads/phase6-rtl-verification/learnings.md` | Firmware/RTL scope; beyond Phase 8 B1 |
+| **Spike Plugin ABI Mismatch** | **RESOLVED** (Phase 7) | PASS | Fixed in Phase 7; rebuilt `npu_mmio_plugin.so` with ABI-compatible toolchain. | `build/evidence/ph7-spike-fixed.txt` | External toolchain; resolved before Phase 8 |
+| **W4-PERF Evidence Schema** | **RESOLVED** (Phase 7) | PASS | `timestamp`/`commit` added to W4-PERF evidence records. | `build/evidence/w4-perf-p*.txt` | Procedural; resolved before Phase 8 |
+
+### Key Distinction: Test PASS vs Blocker RESOLVED
+
+Per Metis G11, the following are **Test PASS** but do NOT equate to **Blocker RESOLVED**:
+
+- **PERF-20 Repeatability**: PASS (0.01% ≤ 1%) but the underlying MMUL computes **incorrect values** for M=1 multi-tile. The cycle count is deterministic despite incorrect output.
+- **PERF-18 Inter-Op Gap**: PASS (cos_sim=1.0, inter_op_gap=0) but only validates **single-tile** M=1,K=64,N=64. Multi-tile M=1 remains blocked.
+- **FULLCHAIN single-tile**: PASS (cos_sim=1.0, 5 ops) but only validates **K≤64, N≤64**. Multi-tile M=1 SFU/Vector dispatch is untested.
+
+### Phase 8 Closure Summary
+
+| Category | Count | Status |
+|---|---|---|
+| **Resolved** (harness fix applied, gate clean) | 5 | Data-layout, Ring buffer, FULLCHAIN single-tile, PERF-20, PERF-18 |
+| **Partial** (causal fix proven but insufficient) | 1 | PERF-11 (DMA works, output non-zero, cs<0.999) |
+| **Not Resolved** (root cause in firmware/RTL) | 4 | PERF-13, PERF-17, P0 batch, FM-3 weight-streaming |
+| **Deferred** (requires external unblock) | 1 | Q8_0 / 36-layer RTL |
+| **No Regression** | 1 | FM-SOC 33/33 |
+
+**Dominant remaining blocker**: M=1 multi-tile firmware-path bug — the tile-major packing fix is correct at the data-layout level, but the firmware tile iteration loop or MXU wrapper broadcast sequencer produces incorrect output when M=1 and K>64 or N>64. Next step (beyond Phase 8 B1 scope): isolate the divergence point in `firmware/npu_firmware.c` tile loop vs `rtl/wrapper/mxu_soc_wrapper.v` broadcast sequencer.
+
+## Phase 8 Condition Disposition
+
+> Maps each Phase 8 source condition to its disposition, evidence/next-step. Synthetic/analytical entries annotated with `source="analytical"`.
+
+| Phase 8 Source Condition | Disposition | Evidence / Next Step | Tag |
+|:---|:---|:---|:---|
+| **Data-layout hypothesis** (row-major vs tile-major) | **RESOLVED** — Hypothesis confirmed; tile-major packing applied in `PR.mmul()` | `build/evidence/ph8-diagnostic.txt`: row-major cs=0.201 (FAIL), tile-major cs=1.000 (PASS, bit-exact) | — |
+| **PERF-11 DMA zeros** (Q_proj K=512,N=128) | **PARTIAL** — Row-major→zeros; tile-major→non-zero output (cs=0.381). Packing causal but insufficient; firmware-path M=1 multi-tile bug prevents cs>=0.999. | `build/evidence/ph8-perf-11-before-after.txt`: pre-fix cs=0.000 (all zeros), post-fix cs=0.381 (non-zero). DMA output store confirmed functional. Next step: Phase 9 firmware/RTL debug. | — |
+| **PERF-13 / PERF-17 M=1 multi-tile** (K>64 or N>64) | **NOT RESOLVED** — Firmware tile iteration loop or MXU wrapper broadcast sequencer bug for M=1 when K>64 or N>64. Single-tile M=1 works (cs=1.0). Direct preload achieves cs=1.0 for multi-tile. | `build/evidence/ph8-p3_p4.log`: 7/9 MMULs FAIL (cs 0.386-0.796). Next step: Phase 9 isolate firmware vs wrapper divergence. | — |
+| **P0 batch** (PERF-01..04 firmware-path M=1 multi-tile) | **NOT RESOLVED** — Same root cause as PERF-13/17. Firmware doorbell path produces incorrect MXU results for M=1 multi-tile. | `build/evidence/ph8-perf-04-regression.txt`: PERF-01 cs=0.437, PERF-04 cs=-0.218 (doorbell stale). Next step: Phase 9 firmware/RTL debug. | — |
+| **Ring buffer reuse** (P2/P3/P4 sequential MMUL staleness) | **RESOLVED** — `_ring_tail` counter added to `PR`. Each `mmul()` writes to distinct ring slot. | `build/evidence/ph8-p3_p4.log`: P3 run 2 all 9 MMULs produce distinct output. P18a/P18b cs=1.0. | — |
+| **FULLCHAIN single-tile** (5-op pipeline) | **RESOLVED** — Single-tile M=1,K=64,N=64 fullchain passes cs=1.0, 5 gaps, DMA non-zero through firmware doorbell. | `build/evidence/fullchain-pipeline.txt`: status=PASS, cos_sim=1.000000, 5 gaps, DMA non-zero. | — |
+| **PERF-20 repeatability** (M=1,K=128,N=128, 3 runs) | **RESOLVED** | `build/evidence/ph8-p3_p4.log`: runs=[16396,16393,16393], pct_std=0.01% ≤ 1% | — |
+| **PERF-18 inter-op gap** (sequential 2x M=1,K=64,N=64) | **RESOLVED** — cos_sim=1.0 both, inter_op_gap=0. | `build/evidence/ph8-p3_p4.log` | — |
+| **FM-SOC regression** (33/33 cases) | **RESOLVED** — No regression; 33/33 PASS, 0 FAIL, 0 SKIP. | `build/evidence/fm-soc-regression.txt`: 33/33 PASS. RTL/firmware source unchanged. | — |
+| **PERF-12 overlap ratio** | **NOT ADDRESSED** (maintained as analytical estimate) | `build/evidence/w4-perf-p2.txt`: overlap_ratio=0.98 | `source="analytical"` |
+| **PERF-14/15/16 cross-engine gap** | **NOT ADDRESSED** (synthetic analytical entries) | `build/evidence/w4-perf-p3.txt`: cross_engine_gap=4, detailed gap_model | `source="analytical"` |
+| **PERF-18/19 analytical measurements** | **NOT ADDRESSED** (synthetic analytical entries) | `build/evidence/w4-perf-p4.txt`: inter_op_gap, cross_engine_gap fields | `source="analytical"` |
+| **Q8_0 GGUF missing** (requires external download) | **NOT RESOLVED** (deferred) | Next step: `huggingface-cli download Qwen/Qwen2.5-3B-Instruct-GGUF qwen2.5-3b-instruct-q8_0.gguf --local-dir ~/models` (Phase 9) | — |
+| **36-layer RTL full forward pass** | **NOT RESOLVED** (deferred) | Requires: weight streaming fix, DMA readback fix, M=1 multi-tile fix. Next step: Phase 9. | — |
+| **FM-3 overlap RTL measurement** | **NOT RESOLVED** (deferred) | Requires new VCS simulation run after M=1 multi-tile fix. Next step: Phase 9. | — |
