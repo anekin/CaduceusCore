@@ -380,3 +380,37 @@ All test results and evidence files are in `logs/` and `.omo/evidence/`.
 ### Summary
 
 Phase 6 closed with VCS compilation readiness confirmed and the Ibex SoC path fully operational, but several integration blockers remain before a genuine full-model RTL forward pass is possible. The dominant blockers are the Spike plugin ABI mismatch, the firmware 64 KB weight-buffer limit, and the DMA output readback zero issue. All three are tracked above with owners, workarounds, and evidence references.
+
+## Phase 7 Resolution Status
+
+> **Scope**: Disposition of every Phase 6 RTL verification blocker after Phase 7 investigation.
+> **Baseline Date**: 2026-07-19
+> **Overall State**: Three blockers are RESOLVED (environment / documentation); seven remain unresolved and require a specific next-step file or function.
+
+### Blocker Dispositions
+
+- **Spike plugin ABI mismatch** → RESOLVED (`build/evidence/ph7-spike-fixed.txt`)
+- **64 KB weight buffer / PERF-11** → NOT RESOLVED (needs `firmware/npu_firmware.c` per-K-tile weight reload in `run_mmul()` or equivalent)
+- **SFU/Vector fullchain dispatch** → NOT RESOLVED (needs `firmware/npu_firmware.c` PERF path support for op=1/op=2 in dispatch table)
+- **36-layer Func Model-only** → NOT RESOLVED (depends on weight streaming fix in `firmware/npu_firmware.c` plus DMA readback zero fix in `sim/cocotb_bridge.py`)
+- **DMA output readback zeros** → NOT RESOLVED (next step: compare DMA descriptors in `sim/cocotb_bridge.py` between FM-SOC path and PERF path; not a `npu_firmware.c` code defect)
+- **FM-3 weight-streaming RTL measurement** → NOT RESOLVED (needs new VCS simulation run; re-run PERF-12 via `sim/perf_tests.py` and update `build/evidence/w4-perf-p2.txt`; current 0.98 is model/parse value)
+- **Q8_0 GGUF missing** → NOT RESOLVED (external network blocked; download command: `huggingface-cli download Qwen/Qwen2.5-3B-Instruct-GGUF qwen2.5-3b-instruct-q8_0.gguf --local-dir ~/models`)
+- **Phase 6 plan checkbox 6b inconsistency** → NOT RESOLVED (after Q8_0 unblocked, revert Phase 6 plan 6b checkbox in `.omo/notepads/phase6-rtl-verification/plan.md` or re-run experiment)
+- **W4-PERF evidence schema** → RESOLVED (`build/evidence/w4-perf-p*.txt`)
+- **testcase-list-perf.md** → RESOLVED (`rtl/testcase-list-perf.md`)
+
+## Phase 6 Condition Disposition
+
+| Phase 6 Source | Condition | Phase 7 Disposition | Evidence / Next Step |
+|:---|:---|:---|:---|
+| W4-gate #1 / F1-#7 | Evidence schema gap | RESOLVED | `build/evidence/w4-perf-p*.txt` |
+| W4-gate #2 / F1-#2 | PERF-11 weight streaming | NOT RESOLVED | `firmware/npu_firmware.c` per-K-tile reload |
+| W4-gate #3 / F1-#3 | SFU/Vector fullchain dispatch | NOT RESOLVED | `firmware/npu_firmware.c` PERF op=1/2 dispatch |
+| W4-gate #4 / F1-#4 | FM-3 overlap RTL measurement | NOT RESOLVED | new VCS simulation run |
+| 36L-gate #1 / F1-#5 | 36-layer RTL full forward pass | NOT RESOLVED | weight streaming + DMA readback fix |
+| 36L-gate #2 / F1-#6 | Spike plugin ABI mismatch | RESOLVED | `build/evidence/ph7-spike-fixed.txt` |
+| F1-#8 | W1-Supplement plan checkbox inconsistency | NOT RESOLVED | Q8_0 unblocked: revert checkbox or re-run |
+| F1-#9 | testcase-list-perf.md status | RESOLVED | `rtl/testcase-list-perf.md` |
+| 36L-gate #3 | Regenerate golden after FM changes | ACKNOWLEDGED | out of Phase 7 scope (no FM changes) |
+| 36L-gate #4 | Next gate must confirm RTL full-layer | FORWARD | future Phase acceptance requirement |
