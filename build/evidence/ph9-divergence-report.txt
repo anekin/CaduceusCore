@@ -1,0 +1,23 @@
+======================================================================
+Phase 9 T3 — M=1 Multi-Tile Divergence Sweep
+Timestamp: 2026-07-21T11:24:03Z
+======================================================================
+
+CASE 1: M=1 K=128 N=64 path=direct cos_sim=1.000000 cycles=356 passed=True probe=ph9-probe-case1-direct-K128-N64.jsonl
+CASE 1: M=1 K=128 N=64 path=doorbell cos_sim=0.726723 cycles=11985 passed=False probe=ph9-probe-case1-firmware-K128-N64.jsonl
+CASE 2: M=1 K=512 N=128 path=direct cos_sim=1.000000 cycles=1524 passed=True probe=ph9-probe-case2-direct-K512-N128.jsonl
+CASE 2: M=1 K=512 N=128 path=doorbell cos_sim=0.394869 cycles=60887 passed=False probe=ph9-probe-case2-firmware-K512-N128.jsonl
+CASE 3: M=1 K=2048 N=256 path=direct cos_sim=1.000000 cycles=9672 passed=True probe=ph9-probe-case3-direct-K2048-N256.jsonl
+CASE 3: M=1 K=2048 N=256 path=doorbell cos_sim=0.086044 cycles=375855 passed=False probe=ph9-probe-case3-firmware-K2048-N256.jsonl
+
+Probe evidence: at least 5 signal samples captured per case in
+build/evidence/ph9-probe-<case>-<path>-K<N>-N<N>.jsonl
+
+Pattern summary:
+- Direct wrapper preload path: expected cos_sim ~1.0 (bypasses firmware MMIO).
+- Firmware doorbell path: observed cos_sim <0.999 for M=1 multi-tile in Phase 8.
+
+CONCLUSION: (A): Divergence is K-dependent (firmware cos_sim drops as K grows) while direct wrapper preload stays ~1.0; root cause is redundant I/W/O_ADDR MMIO after wrapper preload at npu_firmware.c:199-201, which perturbs mxu_top controller state on every K-block restart.
+Citation: npu_firmware.c:199-201
+
+======================================================================

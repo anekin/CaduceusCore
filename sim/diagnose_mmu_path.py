@@ -43,133 +43,122 @@ logger = logging.getLogger("diagnose_mmu_path")
 # ═══════════════════════════════════════════════════════════════════════════
 # Signal probe definitions — one probe group per diagnostic domain
 # Each probe is a (hier_path, width, description) tuple.
-# The hier_path is relative to the SoC top (tb_soc.u_caduceus_soc_top).
+# The hier_path is relative to the SoC top (tb_soc.u_dut.u_mxu_soc_wrapper).
 # ═══════════════════════════════════════════════════════════════════════════
 
-WRAPPER_PREFIX = "u_caduceus_soc_top.u_mxu_soc_wrapper"
+WRAPPER_PREFIX = "u_dut.u_mxu_wrapper"
 
-# Probe group 1: Wrapper preload registers   (mxu_soc_wrapper.v:165-170)
-PROBE_WRP_REGS = [
-    (f"{WRAPPER_PREFIX}.wrp_weight_base", 32,
-     "Wrapper preload — weight base address"),
-    (f"{WRAPPER_PREFIX}.wrp_act_base", 32,
-     "Wrapper preload — activation base address"),
-    (f"{WRAPPER_PREFIX}.wrp_out_base", 32,
-     "Wrapper preload — output base address"),
-    (f"{WRAPPER_PREFIX}.wrp_k_tiles", 16,
-     "Wrapper preload — K-tile count"),
-    (f"{WRAPPER_PREFIX}.wrp_n", 16,
-     "Wrapper preload — output N dimension"),
-    (f"{WRAPPER_PREFIX}.wrp_load_done", 1,
-     "Wrapper preload — load-done status flag"),
-    (f"{WRAPPER_PREFIX}.wrp_trigger", 1,
-     "Wrapper preload — trigger strobe (wire)"),
-]
 
-# Probe group 2: Preload FSM state          (mxu_soc_wrapper.v:289-292)
-PROBE_PRELOAD_FSM = [
-    (f"{WRAPPER_PREFIX}.pl_state", 4,
-     "Preload FSM — current state"),
-    (f"{WRAPPER_PREFIX}.pl_beat_cnt", 8,
-     "Preload FSM — beat counter within current burst"),
-    (f"{WRAPPER_PREFIX}.pl_k_tile_cnt", 16,
-     "Preload FSM — current K-tile index"),
-    (f"{WRAPPER_PREFIX}.pl_cur_addr", 32,
-     "Preload FSM — current burst start address"),
-]
+def _build_probe_groups(prefix: str = WRAPPER_PREFIX) -> Dict[str, List[tuple]]:
+    """Build signal probe lists using the current wrapper prefix.
 
-# Probe group 3: Broadcast bus driver       (mxu_soc_wrapper.v:412-415)
-PROBE_BROADCAST_DRIVER = [
-    (f"{WRAPPER_PREFIX}.tile_cycle", 14,
-     "Broadcast driver — cycle counter within tile"),
-    (f"{WRAPPER_PREFIX}.tile_active", 1,
-     "Broadcast driver — tile active flag"),
-    (f"{WRAPPER_PREFIX}.tile_k_cur", 7,
-     "Broadcast driver — current K index"),
-    (f"{WRAPPER_PREFIX}.burst_cnt", 16,
-     "Broadcast driver — burst counter"),
-    (f"{WRAPPER_PREFIX}.data_valid", 1,
-     "Broadcast driver — data valid (wire)"),
-]
+    Probe paths are evaluated lazily so callers can override WRAPPER_PREFIX
+    (or pass a custom prefix) before probing.
+    """
+    return {
+        "wrp_regs": [
+            (f"{prefix}.wrp_weight_base", 32,
+             "Wrapper preload — weight base address"),
+            (f"{prefix}.wrp_act_base", 32,
+             "Wrapper preload — activation base address"),
+            (f"{prefix}.wrp_out_base", 32,
+             "Wrapper preload — output base address"),
+            (f"{prefix}.wrp_k_tiles", 16,
+             "Wrapper preload — K-tile count"),
+            (f"{prefix}.wrp_n", 16,
+             "Wrapper preload — output N dimension"),
+            (f"{prefix}.wrp_load_done", 1,
+             "Wrapper preload — load-done status flag"),
+            (f"{prefix}.wrp_trigger", 1,
+             "Wrapper preload — trigger strobe (wire)"),
+        ],
+        "preload_fsm": [
+            (f"{prefix}.pl_state", 4,
+             "Preload FSM — current state"),
+            (f"{prefix}.pl_beat_cnt", 8,
+             "Preload FSM — beat counter within current burst"),
+            (f"{prefix}.pl_k_tile_cnt", 16,
+             "Preload FSM — current K-tile index"),
+            (f"{prefix}.pl_cur_addr", 32,
+             "Preload FSM — current burst start address"),
+        ],
+        "broadcast_driver": [
+            (f"{prefix}.tile_cycle", 14,
+             "Broadcast driver — cycle counter within tile"),
+            (f"{prefix}.tile_active", 1,
+             "Broadcast driver — tile active flag"),
+            (f"{prefix}.tile_k_cur", 7,
+             "Broadcast driver — current K index"),
+            (f"{prefix}.burst_cnt", 16,
+             "Broadcast driver — burst counter"),
+            (f"{prefix}.data_valid", 1,
+             "Broadcast driver — data valid (wire)"),
+        ],
+        "storeout_fifo": [
+            (f"{prefix}.so_fifo_wr_ptr", 6,
+             "Store-out FIFO — write pointer"),
+            (f"{prefix}.so_fifo_rd_ptr", 6,
+             "Store-out FIFO — read pointer"),
+            (f"{prefix}.so_fifo_empty", 1,
+             "Store-out FIFO — empty flag (wire)"),
+            (f"{prefix}.so_capture_row", 6,
+             "Store-out — captured row index (wire)"),
+            (f"{prefix}.so_state", 3,
+             "Store-out FSM — current state"),
+            (f"{prefix}.so_base_addr", 32,
+             "Store-out — output base address (wire)"),
+            (f"{prefix}.so_beats", 8,
+             "Store-out — AXI beats per row (wire)"),
+            (f"{prefix}.so_w_beat", 4,
+             "Store-out FSM — W-channel beat counter"),
+        ],
+        "axi_ar": [
+            (f"{prefix}.m_axi_araddr", 32,
+             "AXI AR — address (wire)"),
+            (f"{prefix}.m_axi_arlen", 8,
+             "AXI AR — burst length (wire)"),
+            (f"{prefix}.m_axi_arvalid", 1,
+             "AXI AR — valid (wire)"),
+            (f"{prefix}.m_axi_arready", 1,
+             "AXI AR — ready (input wire)"),
+        ],
+        "axi_aw_w": [
+            (f"{prefix}.m_axi_awaddr", 32,
+             "AXI AW — address (wire)"),
+            (f"{prefix}.m_axi_awlen", 8,
+             "AXI AW — burst length (wire)"),
+            (f"{prefix}.m_axi_awvalid", 1,
+             "AXI AW — valid (wire)"),
+            (f"{prefix}.m_axi_wlast", 1,
+             "AXI W — last beat (wire)"),
+            (f"{prefix}.m_axi_wvalid", 1,
+             "AXI W — valid (wire)"),
+            (f"{prefix}.m_axi_wready", 1,
+             "AXI W — ready (input wire)"),
+        ],
+        "mxu_dbg": [
+            (f"{prefix}.dbg_state", 4,
+             "MXU controller — FSM state"),
+            (f"{prefix}.dbg_compute_en", 1,
+             "MXU controller — compute enable"),
+            (f"{prefix}.dbg_weight_load", 1,
+             "MXU controller — weight load phase"),
+            (f"{prefix}.dbg_activation_load", 1,
+             "MXU controller — activation load phase"),
+            (f"{prefix}.dbg_store_out", 1,
+             "MXU controller — store-out phase"),
+            (f"{prefix}.dbg_store_row", 6,
+             "MXU controller — current store row"),
+            (f"{prefix}.dbg_compute_k", 6,
+             "MXU controller — current compute K index"),
+            (f"{prefix}.dbg_tiles_completed", 16,
+             "MXU controller — tiles completed counter"),
+        ],
+    }
 
-# Probe group 4: Store-out FIFO              (mxu_soc_wrapper.v:477-578)
-PROBE_STOREOUT_FIFO = [
-    (f"{WRAPPER_PREFIX}.so_fifo_wr_ptr", 6,
-     "Store-out FIFO — write pointer"),
-    (f"{WRAPPER_PREFIX}.so_fifo_rd_ptr", 6,
-     "Store-out FIFO — read pointer"),
-    (f"{WRAPPER_PREFIX}.so_fifo_empty", 1,
-     "Store-out FIFO — empty flag (wire)"),
-    (f"{WRAPPER_PREFIX}.so_capture_row", 6,
-     "Store-out — captured row index (wire)"),
-    (f"{WRAPPER_PREFIX}.so_state", 3,
-     "Store-out FSM — current state"),
-    (f"{WRAPPER_PREFIX}.so_base_addr", 32,
-     "Store-out — output base address (wire)"),
-    (f"{WRAPPER_PREFIX}.so_beats", 8,
-     "Store-out — AXI beats per row (wire)"),
-    (f"{WRAPPER_PREFIX}.so_w_beat", 4,
-     "Store-out FSM — W-channel beat counter"),
-]
 
-# Probe group 5: AXI4 AR channel            (mxu_soc_wrapper.v:90-94, 392-398)
-PROBE_AXI_AR = [
-    (f"{WRAPPER_PREFIX}.m_axi_araddr", 32,
-     "AXI AR — address (wire)"),
-    (f"{WRAPPER_PREFIX}.m_axi_arlen", 8,
-     "AXI AR — burst length (wire)"),
-    (f"{WRAPPER_PREFIX}.m_axi_arvalid", 1,
-     "AXI AR — valid (wire)"),
-    (f"{WRAPPER_PREFIX}.m_axi_arready", 1,
-     "AXI AR — ready (input wire)"),
-]
-
-# Probe group 6: AXI4 AW/W channel          (mxu_soc_wrapper.v:68-79, 591-617)
-PROBE_AXI_AW_W = [
-    (f"{WRAPPER_PREFIX}.m_axi_awaddr", 32,
-     "AXI AW — address (wire)"),
-    (f"{WRAPPER_PREFIX}.m_axi_awlen", 8,
-     "AXI AW — burst length (wire)"),
-    (f"{WRAPPER_PREFIX}.m_axi_awvalid", 1,
-     "AXI AW — valid (wire)"),
-    (f"{WRAPPER_PREFIX}.m_axi_wlast", 1,
-     "AXI W — last beat (wire)"),
-    (f"{WRAPPER_PREFIX}.m_axi_wvalid", 1,
-     "AXI W — valid (wire)"),
-    (f"{WRAPPER_PREFIX}.m_axi_wready", 1,
-     "AXI W — ready (input wire)"),
-]
-
-# Probe group 7: MXU debug/status ports     (mxu_soc_wrapper.v:109-116)
-PROBE_MXU_DBG = [
-    (f"{WRAPPER_PREFIX}.dbg_state", 4,
-     "MXU controller — FSM state"),
-    (f"{WRAPPER_PREFIX}.dbg_compute_en", 1,
-     "MXU controller — compute enable"),
-    (f"{WRAPPER_PREFIX}.dbg_weight_load", 1,
-     "MXU controller — weight load phase"),
-    (f"{WRAPPER_PREFIX}.dbg_activation_load", 1,
-     "MXU controller — activation load phase"),
-    (f"{WRAPPER_PREFIX}.dbg_store_out", 1,
-     "MXU controller — store-out phase"),
-    (f"{WRAPPER_PREFIX}.dbg_store_row", 6,
-     "MXU controller — current store row"),
-    (f"{WRAPPER_PREFIX}.dbg_compute_k", 6,
-     "MXU controller — current compute K index"),
-    (f"{WRAPPER_PREFIX}.dbg_tiles_completed", 16,
-     "MXU controller — tiles completed counter"),
-]
-
-# ── All probe groups (flat list) ──
-ALL_PROBES: List[tuple] = (
-    PROBE_WRP_REGS
-    + PROBE_PRELOAD_FSM
-    + PROBE_BROADCAST_DRIVER
-    + PROBE_STOREOUT_FIFO
-    + PROBE_AXI_AR
-    + PROBE_AXI_AW_W
-    + PROBE_MXU_DBG
-)
+# Flat list kept for backward-compatible offline self-test.
+ALL_PROBES: List[tuple] = sum(_build_probe_groups().values(), [])
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Firmware MMIO trace definitions
@@ -335,16 +324,8 @@ async def probe_all_signals(
         "probes": [],
     }
 
-    # Probe all signal groups
-    for group_name, group_probes in [
-        ("wrp_regs",           PROBE_WRP_REGS),
-        ("preload_fsm",        PROBE_PRELOAD_FSM),
-        ("broadcast_driver",   PROBE_BROADCAST_DRIVER),
-        ("storeout_fifo",      PROBE_STOREOUT_FIFO),
-        ("axi_ar",             PROBE_AXI_AR),
-        ("axi_aw_w",           PROBE_AXI_AW_W),
-        ("mxu_dbg",            PROBE_MXU_DBG),
-    ]:
+    # Probe all signal groups (paths resolved with the current WRAPPER_PREFIX)
+    for group_name, group_probes in _build_probe_groups().items():
         records = await probe_group(dut, group_probes, ts_ns, case_id)
         for r in records:
             r["group"] = group_name
