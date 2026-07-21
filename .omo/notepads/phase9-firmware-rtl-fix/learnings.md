@@ -707,3 +707,39 @@ Root cause final verdict:
 CONCLUSION: **(D) Firmware K-tile loop + missing RTL accumulate mode +
 SRAM/DRAM buffer overlap**, with RISC-V GCC -O2 MMIO base-pointer splitting
 being the compiler-level trigger that forced the all-K-tiles dispatch.
+
+## T5 Full Regression Execution Log
+
+**Date:** 2026-07-22
+**Executed by:** Sisyphus-Junior (Phase 9 T5)
+**Script:** `scripts/p9_regression.sh`
+
+### Results
+
+| Regression | Result | Detail |
+|------------|--------|--------|
+| Firmware rebuild gate | PASSED | `firmware/build/npu_firmware.elf` newer than `firmware/npu_firmware.c` and `firmware/npu-regmap.h` |
+| SoC simv rebuild gate | PASSED | `build/ibex_full_rtl/simv_soc_ibex` deleted and recompiled from updated RTL |
+| pytest | FAILED | pytest not installed in sz0001 conda env py3.11 (0 passed, expected >=210) |
+| FM-SOC 33-case | FAILED | 32 PASS, 1 FAIL (FM-SOC-003 MXU output mismatch) |
+| MXU 9-scenario | PASSED | 9/9 PASS |
+| SFU + Vector batch | FAILED | SFU 0/537 (expected 319/319), Vector 93/93 (expected 63/63) |
+
+### Evidence Files
+
+- `build/evidence/ph9-pytest.log`
+- `build/evidence/ph9-fm-soc-33.log`
+- `build/evidence/ph9-mxu-reg.log`
+- `build/evidence/ph9-sfu-vector.log`
+- `build/evidence/ph9-regression-fail.txt`
+- `build/evidence/ph9-regression-run.log`
+
+### Key Findings
+
+- FM-SOC-003 failure is consistent with a test-model / firmware data-layout mismatch: `sim/rtl_soc_runner.py` still writes broadcasted activations for the old broadcast-MAC path, while the T4 firmware expects the wrapper to broadcast from a non-broadcasted SRAM copy.
+- SFU failures are due to stale/inconsistent test-vector directories (e.g., `gelu_smoke` `params.txt` DIM=42 but `input.hex` has 35 elements) and missing/obsolete `manifest.json` files in several scenario directories.
+- The `scripts/run_batch_regression.py` runner discovered 537 SFU and 93 Vector scenarios, indicating extra/stale directories beyond the intended 319/63 counts.
+
+### Disposition
+
+T5 halted with `build/evidence/ph9-regression-fail.txt` per task instructions; T5 plan checkbox not marked complete.
