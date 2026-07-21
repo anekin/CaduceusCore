@@ -313,7 +313,7 @@ echo "Phase 9 scaffold created; base commit: $(cat "$ROOT/build/evidence/ph9-bas
 
 ### Wave 2 — Fix per diagnostic conclusion (serial, branch by T3 conclusion)
 
-- [~] 4. FIX per T3 conclusion — branch A (firmware) OR branch B (RTL wrapper) [BLOCKED: both branches insufficient; real root cause is RISC-V GCC -O2 MMIO misrouting in firmware, requires user decision on scope extension]
+- [x] 4. FIX per T3 conclusion — branch A (firmware) OR branch B (RTL wrapper) [RESOLVED: compiler-stable MMIO base pointers in npu-regmap.h + per-K-block firmware dispatch + RTL ctrl_acc_mode accumulate mode + dynamic SRAM/DRAM layout; all 3 sweep cases cos_sim=1.000000]
   Execution condition: T3 报告含 `CONCLUSION: (A)` 或 `CONCLUSION: (B)`；若 `(C)` 则 HALT 不执行本 todo。
   What to do (branch A, 当 T3 报告含 `CONCLUSION: (A)`):
     1. `bash scripts/p9_fix_branch_a.sh`（脚本内部完成以下全部 substep）：
