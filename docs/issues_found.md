@@ -480,3 +480,14 @@ Per Metis G11, the following are **Test PASS** but do NOT equate to **Blocker RE
 | **Q8_0 GGUF missing** (requires external download) | **NOT RESOLVED** (deferred) | Next step: `huggingface-cli download Qwen/Qwen2.5-3B-Instruct-GGUF qwen2.5-3b-instruct-q8_0.gguf --local-dir ~/models` (Phase 9) | — |
 | **36-layer RTL full forward pass** | **NOT RESOLVED** (deferred) | Requires: weight streaming fix, DMA readback fix, M=1 multi-tile fix. Next step: Phase 9. | — |
 | **FM-3 overlap RTL measurement** | **NOT RESOLVED** (deferred) | Requires new VCS simulation run after M=1 multi-tile fix. Next step: Phase 9. | — |
+
+## Phase 9 Q8_0 Control Experiment — 6b Status
+
+| Field | Detail |
+|-------|--------|
+| **Date** | 2026-07-21 20:22:27 |
+| **Source** | Phase 9 Todo 9 (Wave 5) |
+| **Status** | **`BLOCKED-NETWORK`** (ba/judge=BLOCKED-NETWORK) |
+| **Evidence** | `build/evidence/ph9-q8_0-download-FAILED.txt` |
+| **Note** | download from HuggingFace failed after retries; external network unavailable |
+

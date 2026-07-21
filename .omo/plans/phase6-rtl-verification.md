@@ -104,7 +104,7 @@ FM-4. [x] Review Gate: Atlas audit of FM-Enhance evidence
 
 ### W1-Supplement: L35 Drift 根因（独立 Python 任务）
 
-6b. [x] L35 drift root-cause: Q8_0/FP16 control experiment
+6b. [~] L35 drift root-cause: Q8_0/FP16 control experiment (ba/judge=BLOCKED-NETWORK)
      **Refs**: Phase 5 W1.6 L3 signoff; learnings L35 section
      **Methodology**: Rerun 36-layer Func Model signoff with Q8_0 GGUF on sz0001 (Python only, no VCS). Compare per-layer cos_sim.
      **Acceptance**: 36-layer per-layer cos_sim report; root cause confirmed (Q4_K_M) or new investigation opened
