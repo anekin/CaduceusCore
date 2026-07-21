@@ -410,3 +410,29 @@ Three working hypotheses, not yet resolved:
 | Ibex-specific bugs (full RTL CPU replacement) | 0 |
 | Regressions after fixes | 0 (27/27 active PASS on Spike, 33/33 PASS on Ibex) |
 | Re-opened bugs | 1 — BUG-RTL-SOC-005 (workaround broke at 51-op scale) |
+
+### BUG-RTL-SOC-P9-00A
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-21 |
+| **Block** | Phase 9 T3 |
+| **Severity** | Major |
+| **Type** | fw |
+| **Status** | open |
+
+#### Symptom
+
+M=1 multi-tile MMUL cos_sim < 0.999 via firmware doorbell dispatch; T3 divergence sweep concluded (A) firmware MMIO redundancy. P9-A fix (commenting I/W/O_ADDR writes at npu_firmware.c:199-201) is INSUFFICIENT — the compiler already optimized out those writes, making the fix a no-op at binary level. Results identical to T3.
+
+#### Root Cause
+
+T3 conclusion (A) invalid: RISC-V GCC -O2 already removes the redundant I/W/O_ADDR stores as dead code. The wrapper preload uses different register offsets (0x30-0x48) than MXU's I/W/O_ADDR (0x14-0x1C). Actual root cause is in the RTL wrapper preload mechanism — likely broadcast driver or store-out geometry for M=1 multi-tile cases. Recommending re-investigation with branch B scope.
+
+#### Fix
+
+Pending fix per Phase 9 plan.
+
+#### Verification
+
+Evidence: build/evidence/ph9-branch-A-insufficient.txt:51-100

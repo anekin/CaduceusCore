@@ -284,3 +284,31 @@ ph9-probe-case3-firmware-K2048-N256.jsonl
 ### Deviations
 - Pre-existing firmware/build/*.elf/*.o/*.map artifacts (from T1 rebuild) were restored after the sweep so the literal git diff AC returns 0; no RTL/firmware source files were modified.
 
+
+## T4 Branch A Execution Log
+
+**Date:** 2026-07-21T11:45:00Z
+**Executed by:** Sisyphus-Junior (Phase 9 T4A)
+
+### Fix Applied
+- Commented `mxu->I_ADDR` / `mxu->W_ADDR` / `mxu->O_ADDR` at `npu_firmware.c:199-201` in `mxu_start()`.
+- Each line marked with `// P9-A` for audit trail.
+- Firmware rebuilt: text section reduced from 2852 to 2836 bytes.
+
+### Directed Sweep Result
+- CASE 1: M=1 K=128 N=64 cos_sim=0.726723 (IDENTICAL to T3 firmware path)
+- CASE 2: M=1 K=512 N=128 cos_sim=0.394869 (IDENTICAL to T3 firmware path)
+- CASE 3: M=1 K=2048 N=256 cos_sim=0.086044 (IDENTICAL to T3 firmware path)
+
+### Root Cause Discovery: T3 Conclusion (A) Invalid
+- Disassembly of OLD firmware reveals NO store instructions to MXU I_ADDR (0x14), W_ADDR (0x18), or O_ADDR (0x1C) offsets.
+- RISC-V GCC -O2 already removed redundant I/W/O_ADDR writes as dead stores.
+- OLD firmware text=2852, NEW firmware text=2836. Both have single store to MXU_WRP_WEIGHT_BASE (0x40000030).
+- Fix is a NO-OP at binary level. T3 conclusion (A) was wrong.
+
+### Bug Status
+- BUG-RTL-SOC-P9-00A: verdict=open
+- Evidence: `build/evidence/ph9-branch-A-insufficient.txt`
+
+### Next Steps
+- Re-investigate with branch B scope: wrapper preload FSM, broadcast driver, store-out geometry.

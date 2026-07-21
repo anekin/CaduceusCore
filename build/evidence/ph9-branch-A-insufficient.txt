@@ -1,0 +1,41 @@
+=== P9 T4 Branch A — Insufficient Fix Evidence ===
+Date: 2026-07-21T11:45:00Z
+
+FIX APPLIED:
+- Commented mxu->I_ADDR, mxu->W_ADDR, mxu->O_ADDR at npu_firmware.c:199-201
+- Each line marked with // P9-A
+- Firmware rebuilt: text section shrank from 2852 to 2836 bytes
+- SCALE_ADDR, CTRL, DIM0, DIM1, CMD writes preserved
+
+RESULT:
+- Directed sweep cos_sim values IDENTICAL to T3 firmware path:
+  CASE 1: K=128 N=64 cs=0.726723 (T3: 0.726723)
+  CASE 2: K=512 N=128 cs=0.394869 (T3: 0.394869)
+  CASE 3: K=2048 N=256 cs=0.086044 (T3: 0.086044)
+
+ROOT CAUSE DISCOVERY:
+- objdump analysis of OLD firmware (before fix): NO store instructions to
+  MXU I_ADDR (0x14), W_ADDR (0x18), or O_ADDR (0x1C) offsets exist.
+  The OLD firmware had only one store to the MXU region: sw X,48(a4) at
+  0x40000030 (MXU_WRP_WEIGHT_BASE).
+- The RISC-V GCC compiler (-O2) already removed the redundant I/W/O_ADDR
+  writes as dead stores, because the wrapper preload uses different
+  register offsets (0x30-0x48) and the MXU's own I/W/O_ADDR registers
+  (0x14-0x1C) were never read after being written.
+- NEW firmware (P9-A fix): same single store to MXU_WRP_WEIGHT_BASE at
+  0x40000030. Text section: 2836 bytes (16 bytes smaller than old 2852).
+
+CONCLUSION:
+- T3 conclusion (A) was INVALID. The redundant MMIO writes cited in the
+  divergence report were already optimized out by the compiler.
+- Branch A fix is a NO-OP at the compiled binary level.
+- Divergence root cause is NOT firmware MMIO redundancy; it must be in
+  the RTL wrapper preload mechanism (branch B territory).
+
+NEXT STEP:
+- Re-open T3 divergence sweep with deeper probes focused on:
+  1. Wrapper preload FSM state transitions for M=1 K-block iterations
+  2. Broadcast driver beat count and tile geometry for M=1
+  3. Store-out FIFO sizing for single-row tiles
+  4. Comparison of AXI read patterns between direct path and wrapper path
+- Reconsider conclusion (B): wrapper geometry/broadcast/store-out bug

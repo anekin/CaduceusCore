@@ -402,5 +402,58 @@ async def test_w4_perf_fullchain_sfu_vector(dut):
     assert ok, f"FULLCHAIN-SFU-VEC cos_sim={cs:.6f} (need ≥0.999)"
 
 
+@cocotb.test()
+async def test_w4_perf_p9_directed_sweep(dut):
+    """Phase 9 T4A: Directed sweep after firmware fix — 3 M=1 cases via doorbell dispatch.
+
+    Verifies that commenting I/W/O_ADDR at npu_firmware.c:199-201 restores cos_sim>=0.999.
+    """
+    r = PR(dut); await r.setup(); ev = []
+    cases = [(1, 128, 64), (1, 512, 128), (1, 2048, 256)]
+    all_ok = True
+    for i, (M, K, N) in enumerate(cases):
+        seed = 9000 + i + 1
+        v = _gen(M, K, N, seed)
+        ok, cyc, cs = await r.mmul(M, K, N, v["act"], v["wgt"], v["golden"],
+                                     tag=f"P9A-{i+1}")
+        tag = f"PERF-P9A-{i+1:02d}"
+        status = "PASS" if ok else "FAIL"
+        ev.append(_entry(tag, status, cyc, cs, M=M, K=K, N=N, note="P9 branch A fix"))
+        logger.info(f"[P9-T4A] CASE {i+1}: M={M} K={K} N={N} cs={cs:.6f} cyc={cyc} {'OK' if ok else 'FAIL'}")
+        if not ok:
+            all_ok = False
+    _save(os.path.join(_ROOT, "build", "evidence", "ph9-t4a-directed.log"), ev)
+    assert all_ok, "P9 T4A directed sweep: firmware fix insufficient"
+
+
+@cocotb.test()
+async def test_w4_perf_p9_causality(dut):
+    """Phase 9 T4A causality gate: K<=64 (no streaming) vs K=512 (streaming).
+
+    Runs two cases to verify the fix is causal:
+    - K=64 single tile: result written as K<=64: line
+    - K=512 multi-tile: result written as K=512: line
+    """
+    r = PR(dut); await r.setup()
+    causality_path = os.path.join(_ROOT, "build", "evidence", "ph9-causality.txt")
+    os.makedirs(os.path.dirname(causality_path), exist_ok=True)
+    lines = []
+
+    v64 = _gen(1, 64, 64, 9100)
+    ok64, cyc64, cs64 = await r.mmul(1, 64, 64, v64["act"], v64["wgt"], v64["golden"], "P9A-causal-K64")
+    lines.append(f"K<=64: cos_sim={cs64:.6f} cycles={cyc64} passed={'PASS' if ok64 else 'FAIL'}")
+
+    v512 = _gen(1, 512, 128, 9200)
+    ok512, cyc512, cs512 = await r.mmul(1, 512, 128, v512["act"], v512["wgt"], v512["golden"], "P9A-causal-K512")
+    lines.append(f"K=512: cos_sim={cs512:.6f} cycles={cyc512} passed={'PASS' if ok512 else 'FAIL'}")
+
+    with open(causality_path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+    logger.info(f"[P9-T4A-CAUSAL] K<=64 cs={cs64:.6f} K=512 cs={cs512:.6f}")
+    assert ok64, f"Causality K<=64 FAIL: cs={cs64:.6f}"
+    assert ok512, f"Causality K=512 FAIL: cs={cs512:.6f}"
+
+
 if __name__ == "__main__":
     print("W4-PERF module — run via cocotb: MODULE=sim.perf_tests TESTCASE=test_w4_perf_p0 simv ...")

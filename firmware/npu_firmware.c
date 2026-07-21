@@ -196,9 +196,9 @@ static void mxu_start(uint32_t i_addr, uint32_t w_addr, uint32_t o_addr,
     uint32_t k_tiles = (K + 63) / 64;
     mxu_wrapper_preload(w_addr, i_addr, o_addr, k_tiles, N & 0xFFFF);
     npu_mxu_t *mxu = NPU_MXU;
-    mxu->I_ADDR = i_addr;
-    mxu->W_ADDR = w_addr;
-    mxu->O_ADDR = o_addr;
+    // mxu->I_ADDR = i_addr;  // P9-A
+    // mxu->W_ADDR = w_addr;  // P9-A
+    // mxu->O_ADDR = o_addr;  // P9-A
     mxu->SCALE_ADDR = scale_addr;
     mxu->CTRL   = ctrl & 0xF;
     mxu->DIM0   = (M & 0xFFFF) | ((K & 0xFFFF) << 16);
