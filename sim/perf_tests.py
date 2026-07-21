@@ -25,7 +25,7 @@ try:
 except ImportError:
     COCOTB_AVAILABLE = False
 
-from sim.cocotb_bridge import CocotbBridge, DRAM_BASE as DB, SRAM_BASE as SB
+from sim.cocotb_bridge import CocotbBridge, DRAM_BASE as DB
 from sim.cocotb_bridge import pack_int8_activation_tile_major, pack_int4_tile_major
 
 logger = logging.getLogger("perf_tests")
@@ -146,13 +146,18 @@ class PR:
     def _c(self): return int(self.d.sim_cycle.value) - self.off
 
     async def mmul(self, M, K, N, act, wgt, golden, tag="mmul") -> Tuple[bool, int, float]:
-        ad, wd, od = DRAM_BASE+0x10000, DRAM_BASE+0x20000, DRAM_BASE+0x30000
-        scale_addr = DRAM_BASE + 0x40000
         wp = _pack_w(wgt)
         scales = _make_scales(K, N, 1.0)
         # Tile-major packing: MXU preload sequencer expects K-vector tile-major layout
         act_packed = pack_int8_activation_tile_major(act.tobytes(), M, K)
         wp_packed = pack_int4_tile_major(wp.tobytes(), K, N)
+
+        # Spread DRAM buffers so large activations do not overlap weights/scales.
+        ad = DRAM_BASE + 0x10000
+        wd = ad + ((len(act_packed) + 63) & ~63)
+        od = wd + ((len(wp_packed) + 63) & ~63)
+        scale_addr = od + ((M * N * 4 + 63) & ~63)
+
         await self.b._dram_backdoor_write(ad, act_packed)
         await self.b._dram_backdoor_write(wd, wp_packed)
         await self.b._dram_backdoor_write(scale_addr, scales)
@@ -169,7 +174,7 @@ class PR:
         t0 = self._c()
         await self.b._doorbell_backdoor_write(DOORBELL_HTAIL, self._ring_tail)
         target_head = self._ring_tail
-        for _ in range(max(1_000_000, M*K*N)):
+        for _ in range(max(5_000_000, M*K*N*2)):
             if await self.b._doorbell_backdoor_read(DOORBELL_NHEAD) == target_head: break
             await ClockCycles(self.d.clk, 1)
         else: raise TimeoutError(f"{tag}: NPU_HEAD timeout (expected {target_head})")
@@ -177,15 +182,11 @@ class PR:
         # Wait for DRAM writes to settle (48-cycle DDR latency + safety margin)
         await ClockCycles(self.d.clk, 200)
         raw = await self.b._dram_backdoor_read(od, M*N*4)
-        # Also check SRAM output area
-        sram_raw = await self.b._sram_backdoor_read(0x20018000, min(M*N*4, 64))
         out = np.frombuffer(bytes(raw), dtype=np.int32).reshape(M,N)
         a, g = out.flatten().astype(float), golden.flatten().astype(float)
         na, ng = np.linalg.norm(a), np.linalg.norm(g)
         cs = np.dot(a,g)/(na*ng) if na>0 and ng>0 else 0.0
-        print(f"[{tag}] DRAM first8={bytes(raw[:8]).hex()} SRAM_OUT first8={sram_raw[:8].hex()}")
-        print(f"[{tag}] golden first8={bytes(golden.ravel()[:8].tobytes()).hex()} cs={cs:.6f}")
-        print(f"[{tag}] cyc={cyc} cos={cs:.6f}")
+
         return (cs > 0.999 and na > 0), cyc, cs
 
 

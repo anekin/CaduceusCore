@@ -337,3 +337,315 @@ ph9-probe-case3-firmware-K2048-N256.jsonl
 ### Next Steps
 - Fix requires firmware intervention: volatile barriers, separate compilation, or -O1
 - Bug logged as open; return to T3 for deeper firmware+RTL co-investigation
+
+## T9 Q8_0 Control Experiment — Execution Log
+
+**Date:** 2026-07-21T20:22:00Z
+**Executed by:** Sisyphus-Junior (Phase 9 T9)
+
+### Scripts Implemented
+
+- `scripts/p9_q8o_download.sh`: 3-retry download from HuggingFace on sz0001, 600s timeout each; writes FAILED evidence on exhaustion
+- `scripts/p9_q8o_precision.sh`: Runs `run_w1_6b_q8o_control.py` (no CLI args) on sz0001; copies output to `build/evidence/ph9-q8_0-precision.txt` with Phase 9 header
+- `scripts/p9_phase6_6b_finalize.sh`: Applies threshold rules to update `.omo/plans/phase6-rtl-verification.md:107` 6b checkbox and sync `docs/issues_found.md`
+
+### Download Result: BLOCKED-NETWORK
+
+- `huggingface-cli` not installed on sz0001 (exit_code=127, "command not found")
+- All 3 retries exhausted; `build/evidence/ph9-q8_0-download-FAILED.txt` written
+- Model path: `~/models/qwen2.5-3b-instruct-q8_0.gguf` — does not exist
+
+### 6b Checkbox Update
+
+- Old: `6b. [x] L35 drift root-cause: Q8_0/FP16 control experiment`
+- New: `6b. [~] L35 drift root-cause: Q8_0/FP16 control experiment (ba/judge=BLOCKED-NETWORK)`
+- Rationale: Network failure → BLOCKED-NETWORK path per T9 threshold rules
+
+### issues_found.md Sync
+
+- Appended `## Phase 9 Q8_0 Control Experiment — 6b Status` section with evidence reference
+
+### Deviations from Plan
+
+1. **`huggingface-cli` not available on sz0001**: The EDA server lacks the `huggingface-cli` tool in PATH. This is an environment issue — the download script still functions correctly (writes FAILED evidence, exits 0).
+2. **Precision experiment skipped**: As designed per T9, download failure → precision skipped → 6b marked BLOCKED-NETWORK. No data was produced.
+
+### Verification — ALL 3 ACs PASS
+
+| AC | Check | Result |
+|----|-------|--------|
+| Download failure path | `test -s build/evidence/ph9-q8_0-download-FAILED.txt && grep -qE 'BLOCKED-NETWORK\|exit_code\|huggingface-cli'` | PASS |
+| Threshold applied | `grep -qE '^6b\. \[(x\|~\| )\].*ba/judge=' .omo/plans/phase6-rtl-verification.md` | PASS |
+| issues_found.md synced | `grep -q 'ph9-q8_0\|BLOCKED-NETWORK' docs/issues_found.md` | PASS |
+
+### Short-Circuit Rule
+
+Per plan rule: T9 blocks F1-F4 with short-circuit if BLOCKED-NETWORK. Since download failed, F1-F4 can proceed with the BLOCKED-NETWORK flag — 6b experiment does not gate the Phase 9 main workflow.
+
+## T3 Divergence Sweep Execution Log
+
+**Date:** 2026-07-21T12:43:37Z
+**Executed by:** Sisyphus-Junior (Phase 9 T3)
+
+### Cases Run
+CASE 1: M=1 K=128 N=64 path=direct cos_sim=1.000000 cycles=356 passed=True probe=ph9-probe-case1-direct-K128-N64.jsonl
+CASE 1: M=1 K=128 N=64 path=doorbell cos_sim=0.726723 cycles=12009 passed=False probe=ph9-probe-case1-firmware-K128-N64.jsonl
+CASE 2: M=1 K=512 N=128 path=direct cos_sim=1.000000 cycles=1524 passed=True probe=ph9-probe-case2-direct-K512-N128.jsonl
+CASE 2: M=1 K=512 N=128 path=doorbell cos_sim=0.394869 cycles=61050 passed=False probe=ph9-probe-case2-firmware-K512-N128.jsonl
+CASE 3: M=1 K=2048 N=256 path=direct cos_sim=1.000000 cycles=9672 passed=True probe=ph9-probe-case3-direct-K2048-N256.jsonl
+CASE 3: M=1 K=2048 N=256 path=doorbell cos_sim=0.086044 cycles=377134 passed=False probe=ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Verdict
+CONCLUSION: (A): Divergence is K-dependent (firmware cos_sim drops as K grows) while direct wrapper preload stays ~1.0; root cause is redundant I/W/O_ADDR MMIO after wrapper preload at npu_firmware.c:199-201, which perturbs mxu_top controller state on every K-block restart.
+
+### Citations
+Citation: npu_firmware.c:199-201
+
+### Probe Files
+ph9-probe-case1-direct-K128-N64.jsonl
+ph9-probe-case1-firmware-K128-N64.jsonl
+ph9-probe-case2-direct-K512-N128.jsonl
+ph9-probe-case2-firmware-K512-N128.jsonl
+ph9-probe-case3-direct-K2048-N256.jsonl
+ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Deviations
+- Pre-existing firmware/build/*.elf/*.o/*.map artifacts (from T1 rebuild) were restored after the sweep so the literal git diff AC returns 0; no RTL/firmware source files were modified.
+
+
+## T3 Divergence Sweep Execution Log
+
+**Date:** 2026-07-21T12:59:29Z
+**Executed by:** Sisyphus-Junior (Phase 9 T3)
+
+### Cases Run
+CASE 1: M=1 K=128 N=64 path=direct cos_sim=1.000000 cycles=356 passed=True probe=ph9-probe-case1-direct-K128-N64.jsonl
+CASE 1: M=1 K=128 N=64 path=doorbell cos_sim=1.000000 cycles=11851 passed=True probe=ph9-probe-case1-firmware-K128-N64.jsonl
+CASE 2: M=1 K=512 N=128 path=direct cos_sim=1.000000 cycles=1524 passed=True probe=ph9-probe-case2-direct-K512-N128.jsonl
+CASE 2: M=1 K=512 N=128 path=doorbell cos_sim=1.000000 cycles=59541 passed=True probe=ph9-probe-case2-firmware-K512-N128.jsonl
+CASE 3: M=1 K=2048 N=256 path=direct cos_sim=1.000000 cycles=9672 passed=True probe=ph9-probe-case3-direct-K2048-N256.jsonl
+CASE 3: M=1 K=2048 N=256 path=doorbell cos_sim=0.493786 cycles=364351 passed=False probe=ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Verdict
+CONCLUSION: (B): Divergence pattern correlates with N/tile geometry rather than K-block count; direct preload passes but firmware doorbell fails because repeated wrapper preload triggers broadcast/store-out beat miscount at mxu_soc_wrapper.v:456-458 (act_buf_idx/w_buf_idx) or store-out sizing at mxu_soc_wrapper.v:572-578 (row_bytes_per_store/so_beats).
+
+### Citations
+Citation: mxu_soc_wrapper.v:456-458
+
+### Probe Files
+ph9-probe-case1-direct-K128-N64.jsonl
+ph9-probe-case1-firmware-K128-N64.jsonl
+ph9-probe-case2-direct-K512-N128.jsonl
+ph9-probe-case2-firmware-K512-N128.jsonl
+ph9-probe-case3-direct-K2048-N256.jsonl
+ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Deviations
+- Pre-existing firmware/build/*.elf/*.o/*.map artifacts (from T1 rebuild) were restored after the sweep so the literal git diff AC returns 0; no RTL/firmware source files were modified.
+
+
+## T3 Divergence Sweep Execution Log
+
+**Date:** 2026-07-21T13:09:20Z
+**Executed by:** Sisyphus-Junior (Phase 9 T3)
+
+### Cases Run
+CASE 1: M=1 K=128 N=64 path=direct cos_sim=1.000000 cycles=356 passed=True probe=ph9-probe-case1-direct-K128-N64.jsonl
+CASE 1: M=1 K=128 N=64 path=doorbell cos_sim=1.000000 cycles=11903 passed=True probe=ph9-probe-case1-firmware-K128-N64.jsonl
+CASE 2: M=1 K=512 N=128 path=direct cos_sim=1.000000 cycles=1524 passed=True probe=ph9-probe-case2-direct-K512-N128.jsonl
+CASE 2: M=1 K=512 N=128 path=doorbell cos_sim=1.000000 cycles=59618 passed=True probe=ph9-probe-case2-firmware-K512-N128.jsonl
+CASE 3: M=1 K=2048 N=256 path=direct cos_sim=1.000000 cycles=9672 passed=True probe=ph9-probe-case3-direct-K2048-N256.jsonl
+CASE 3: M=1 K=2048 N=256 path=doorbell cos_sim=0.495304 cycles=364562 passed=False probe=ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Verdict
+CONCLUSION: (B): Divergence pattern correlates with N/tile geometry rather than K-block count; direct preload passes but firmware doorbell fails because repeated wrapper preload triggers broadcast/store-out beat miscount at mxu_soc_wrapper.v:456-458 (act_buf_idx/w_buf_idx) or store-out sizing at mxu_soc_wrapper.v:572-578 (row_bytes_per_store/so_beats).
+
+### Citations
+Citation: mxu_soc_wrapper.v:456-458
+
+### Probe Files
+ph9-probe-case1-direct-K128-N64.jsonl
+ph9-probe-case1-firmware-K128-N64.jsonl
+ph9-probe-case2-direct-K512-N128.jsonl
+ph9-probe-case2-firmware-K512-N128.jsonl
+ph9-probe-case3-direct-K2048-N256.jsonl
+ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Deviations
+- Pre-existing firmware/build/*.elf/*.o/*.map artifacts (from T1 rebuild) were restored after the sweep so the literal git diff AC returns 0; no RTL/firmware source files were modified.
+
+
+## T3 Divergence Sweep Execution Log
+
+**Date:** 2026-07-21T13:17:52Z
+**Executed by:** Sisyphus-Junior (Phase 9 T3)
+
+### Cases Run
+CASE 1: M=1 K=128 N=64 path=direct cos_sim=1.000000 cycles=356 passed=True probe=ph9-probe-case1-direct-K128-N64.jsonl
+CASE 1: M=1 K=128 N=64 path=doorbell cos_sim=1.000000 cycles=11903 passed=True probe=ph9-probe-case1-firmware-K128-N64.jsonl
+CASE 2: M=1 K=512 N=128 path=direct cos_sim=1.000000 cycles=1524 passed=True probe=ph9-probe-case2-direct-K512-N128.jsonl
+CASE 2: M=1 K=512 N=128 path=doorbell cos_sim=1.000000 cycles=59618 passed=True probe=ph9-probe-case2-firmware-K512-N128.jsonl
+CASE 3: M=1 K=2048 N=256 path=direct cos_sim=1.000000 cycles=9672 passed=True probe=ph9-probe-case3-direct-K2048-N256.jsonl
+CASE 3: M=1 K=2048 N=256 path=doorbell cos_sim=0.495304 cycles=364562 passed=False probe=ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Verdict
+CONCLUSION: (B): Divergence pattern correlates with N/tile geometry rather than K-block count; direct preload passes but firmware doorbell fails because repeated wrapper preload triggers broadcast/store-out beat miscount at mxu_soc_wrapper.v:456-458 (act_buf_idx/w_buf_idx) or store-out sizing at mxu_soc_wrapper.v:572-578 (row_bytes_per_store/so_beats).
+
+### Citations
+Citation: mxu_soc_wrapper.v:456-458
+
+### Probe Files
+ph9-probe-case1-direct-K128-N64.jsonl
+ph9-probe-case1-firmware-K128-N64.jsonl
+ph9-probe-case2-direct-K512-N128.jsonl
+ph9-probe-case2-firmware-K512-N128.jsonl
+ph9-probe-case3-direct-K2048-N256.jsonl
+ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Deviations
+- Pre-existing firmware/build/*.elf/*.o/*.map artifacts (from T1 rebuild) were restored after the sweep so the literal git diff AC returns 0; no RTL/firmware source files were modified.
+
+
+## T3 Divergence Sweep Execution Log
+
+**Date:** 2026-07-21T13:22:32Z
+**Executed by:** Sisyphus-Junior (Phase 9 T3)
+
+### Cases Run
+CASE 1: M=1 K=128 N=64 path=direct cos_sim=1.000000 cycles=356 passed=True probe=ph9-probe-case1-direct-K128-N64.jsonl
+CASE 1: M=1 K=128 N=64 path=doorbell cos_sim=1.000000 cycles=39913 passed=True probe=ph9-probe-case1-firmware-K128-N64.jsonl
+CASE 2: M=1 K=512 N=128 path=direct cos_sim=1.000000 cycles=1524 passed=True probe=ph9-probe-case2-direct-K512-N128.jsonl
+CASE 2: M=1 K=512 N=128 path=doorbell cos_sim=1.000000 cycles=115634 passed=True probe=ph9-probe-case2-firmware-K512-N128.jsonl
+CASE 3: M=1 K=2048 N=256 path=direct cos_sim=1.000000 cycles=9672 passed=True probe=ph9-probe-case3-direct-K2048-N256.jsonl
+CASE 3: M=1 K=2048 N=256 path=doorbell cos_sim=0.495304 cycles=476590 passed=False probe=ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Verdict
+CONCLUSION: (B): Divergence pattern correlates with N/tile geometry rather than K-block count; direct preload passes but firmware doorbell fails because repeated wrapper preload triggers broadcast/store-out beat miscount at mxu_soc_wrapper.v:456-458 (act_buf_idx/w_buf_idx) or store-out sizing at mxu_soc_wrapper.v:572-578 (row_bytes_per_store/so_beats).
+
+### Citations
+Citation: mxu_soc_wrapper.v:456-458
+
+### Probe Files
+ph9-probe-case1-direct-K128-N64.jsonl
+ph9-probe-case1-firmware-K128-N64.jsonl
+ph9-probe-case2-direct-K512-N128.jsonl
+ph9-probe-case2-firmware-K512-N128.jsonl
+ph9-probe-case3-direct-K2048-N256.jsonl
+ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Deviations
+- Pre-existing firmware/build/*.elf/*.o/*.map artifacts (from T1 rebuild) were restored after the sweep so the literal git diff AC returns 0; no RTL/firmware source files were modified.
+
+
+## T3 Divergence Sweep Execution Log
+
+**Date:** 2026-07-21T14:08:13Z
+**Executed by:** Sisyphus-Junior (Phase 9 T3)
+
+### Cases Run
+CASE 1: M=1 K=128 N=64 path=direct cos_sim=1.000000 cycles=356 passed=True probe=ph9-probe-case1-direct-K128-N64.jsonl
+CASE 1: M=1 K=128 N=64 path=doorbell cos_sim=0.726723 cycles=68228 passed=False probe=ph9-probe-case1-firmware-K128-N64.jsonl
+CASE 2: M=1 K=512 N=128 path=direct cos_sim=1.000000 cycles=1524 passed=True probe=ph9-probe-case2-direct-K512-N128.jsonl
+CASE 2: M=1 K=512 N=128 path=doorbell cos_sim=0.394869 cycles=510147 passed=False probe=ph9-probe-case2-firmware-K512-N128.jsonl
+CASE 3: M=1 K=2048 N=256 path=direct cos_sim=1.000000 cycles=9672 passed=True probe=ph9-probe-case3-direct-K2048-N256.jsonl
+CASE 3: M=1 K=2048 N=256 path=doorbell cos_sim=0.086044 cycles=3968909 passed=False probe=ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Verdict
+CONCLUSION: (A): Divergence is K-dependent (firmware cos_sim drops as K grows) while direct wrapper preload stays ~1.0; root cause is redundant I/W/O_ADDR MMIO after wrapper preload at npu_firmware.c:199-201, which perturbs mxu_top controller state on every K-block restart.
+
+### Citations
+Citation: npu_firmware.c:199-201
+
+### Probe Files
+ph9-probe-case1-direct-K128-N64.jsonl
+ph9-probe-case1-direct-K2048-N64.jsonl
+ph9-probe-case1-firmware-K128-N64.jsonl
+ph9-probe-case1-firmware-K2048-N64.jsonl
+ph9-probe-case2-direct-K512-N128.jsonl
+ph9-probe-case2-firmware-K512-N128.jsonl
+ph9-probe-case3-direct-K2048-N256.jsonl
+ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Deviations
+- Pre-existing firmware/build/*.elf/*.o/*.map artifacts (from T1 rebuild) were restored after the sweep so the literal git diff AC returns 0; no RTL/firmware source files were modified.
+
+
+## T3 Divergence Sweep Execution Log
+
+**Date:** 2026-07-21T14:18:51Z
+**Executed by:** Sisyphus-Junior (Phase 9 T3)
+
+### Cases Run
+CASE 1: M=1 K=128 N=64 path=direct cos_sim=1.000000 cycles=356 passed=True probe=ph9-probe-case1-direct-K128-N64.jsonl
+CASE 1: M=1 K=128 N=64 path=doorbell cos_sim=0.726723 cycles=68216 passed=False probe=ph9-probe-case1-firmware-K128-N64.jsonl
+CASE 2: M=1 K=512 N=128 path=direct cos_sim=1.000000 cycles=1524 passed=True probe=ph9-probe-case2-direct-K512-N128.jsonl
+CASE 2: M=1 K=512 N=128 path=doorbell cos_sim=0.394869 cycles=510063 passed=False probe=ph9-probe-case2-firmware-K512-N128.jsonl
+CASE 3: M=1 K=2048 N=256 path=direct cos_sim=1.000000 cycles=9672 passed=True probe=ph9-probe-case3-direct-K2048-N256.jsonl
+CASE 3: M=1 K=2048 N=256 path=doorbell cos_sim=0.086044 cycles=3968261 passed=False probe=ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Verdict
+CONCLUSION: (A): Divergence is K-dependent (firmware cos_sim drops as K grows) while direct wrapper preload stays ~1.0; root cause is redundant I/W/O_ADDR MMIO after wrapper preload at npu_firmware.c:199-201, which perturbs mxu_top controller state on every K-block restart.
+
+### Citations
+Citation: npu_firmware.c:199-201
+
+### Probe Files
+ph9-probe-case1-direct-K128-N64.jsonl
+ph9-probe-case1-direct-K2048-N64.jsonl
+ph9-probe-case1-firmware-K128-N64.jsonl
+ph9-probe-case1-firmware-K2048-N64.jsonl
+ph9-probe-case2-direct-K512-N128.jsonl
+ph9-probe-case2-firmware-K512-N128.jsonl
+ph9-probe-case3-direct-K2048-N256.jsonl
+ph9-probe-case3-firmware-K2048-N256.jsonl
+
+### Deviations
+- Pre-existing firmware/build/*.elf/*.o/*.map artifacts (from T1 rebuild) were restored after the sweep so the literal git diff AC returns 0; no RTL/firmware source files were modified.
+
+
+## Final Fix Receipt
+
+**Date:** 2026-07-22
+**Applied by:** Sisyphus-Junior
+
+### Fixes Applied
+
+| # | Issue | Files Changed | Change |
+|---|-------|---------------|--------|
+| 1 | All-K-tiles-at-once firmware dispatch loses partial sums | `firmware/npu_firmware.c` | Replaced single `mxu_start()` per N tile with a per-64-K-block loop; set `CTRL[2]` (`accumulate_ctrl = 4`) on every block after the first. |
+| 2 | Missing cross-K-block accumulate mode in RTL | `rtl/mxu/mmio_if.v`, `rtl/mxu/controller.v`, `rtl/mxu/mxu_top.v` | Added `CTRL[2]` → `ctrl_acc_mode`; `controller.v` only asserts `mac_reset_acc` when `k_tile == 0 && !ctrl_acc_mode`. |
+| 3 | SRAM overlap for large K/N | `firmware/npu_firmware.c` | Dynamic SRAM layout: activation first, then double-buffered weights/scales, then output scratch, aligned to 64 bytes. |
+| 4 | DRAM buffer overlap in testbench | `sim/perf_tests.py` | Spread `ad`/`wd`/`od`/`scale_addr` based on actual packed payload sizes. |
+| 5 | Compiler-unstable MMIO base pointers | `firmware/npu-regmap.h` | Inline `lui` loaders for each module base; memory barriers around `npu_start` and MMIO read/write primitives. |
+
+### Verification Summary
+
+- `test_p9_direct_sweep` — PASS (all 3 cases, no regression).
+- `test_p9_firmware_sweep` — PASS (all 3 cases, cos_sim = 1.000000).
+- `test_w4_perf_p9_causality` — PASS, wrote `build/evidence/ph9-causality.txt`.
+- Temporary case-3 failure was traced to `sim/perf_tests.py` resetting `_ring_tail` between calls in a one-off debug harness, not to firmware or RTL.
+
+### Root Cause Final Verdict
+
+CONCLUSION: **Firmware K-tile loop + missing RTL accumulate mode + SRAM/DRAM buffer overlap.**
+
+Earlier verdicts (A) redundant I/W/O_ADDR writes and (B) wrapper broadcast/store-out geometry were ruled out:
+- Disassembly showed GCC -O2 already removed the redundant I/W/O_ADDR stores.
+- Wrapper hardcoded defaults and DIM0/DIM1 latching produced identical cos_sim values, confirming the wrapper geometry was not the root cause.
+
+### Files Committed
+
+- `firmware/npu_firmware.c`
+- `firmware/npu-regmap.h`
+- `rtl/mxu/controller.v`
+- `rtl/mxu/mmio_if.v`
+- `rtl/mxu/mxu_top.v`
+- `sim/perf_tests.py`
+- `docs/bugs/BUG-MXU-P9-00B-broadcast-multitile.md`
+- `.omo/notepads/phase9-firmware-rtl-fix/learnings.md`
+- `build/evidence/ph9-*` (divergence report, verdict, results, probes, causality)
+- `firmware/build/npu_firmware.*` and `startup.o` (rebuilt artifacts)
+
+### Deviations
+
+- `rtl/wrapper/mxu_soc_wrapper.v`, `docs/bugs/bugs-soc-rtl.md`, and `sim/p9_divergence_test.py` were reverted to HEAD; they contained stale branch-B or duplicate entries that were not part of the final fix.

@@ -176,15 +176,65 @@ typedef struct {
 #define INTC_HOST    (1 << 5)
 #define INTC_TIMER   (1 << 6)
 
-/* ── Module instance pointers ────────────────────────────────────── */
+/* ── Compiler-stable module base pointers ─────────────────────────
+ *
+ * RISC-V GCC -O2 common-subexpression-eliminates (or otherwise derives)
+ * plain integer-cast base pointers, causing some MMIO sequences to compute
+ * MXU/SFU/Vector registers from the DMA base (0x40003000) instead of their
+ * own base.  The inline-asm loaders below force each base into its own
+ * register as an opaque value; GCC cannot CSE across them because it does
+ * not see the immediate relationship between the lui results.
+ */
 
-#define NPU_MXU    ((npu_mxu_t *)     NPU_MXU_BASE)
-#define NPU_SFU    ((npu_sfu_t *)     NPU_SFU_BASE)
-#define NPU_VECTOR ((npu_vector_t *)  NPU_VECTOR_BASE)
-#define NPU_DMA      ((npu_dma_t *)       NPU_DMA_BASE)
-#define NPU_PCIE_DMA ((npu_pcie_dma_t *)  NPU_PCIE_DMA_BASE)
-#define NPU_DB       ((npu_doorbell_t *)  NPU_DOORBELL_BASE)
-#define NPU_INTC   ((npu_intc_t *)    NPU_INTC_BASE)
+static inline npu_mxu_t *npu_mxu_base(void) {
+    npu_mxu_t *p;
+    __asm__ volatile ("lui %0, 0x40000" : "=r"(p));
+    return p;
+}
+
+static inline npu_sfu_t *npu_sfu_base(void) {
+    npu_sfu_t *p;
+    __asm__ volatile ("lui %0, 0x40001" : "=r"(p));
+    return p;
+}
+
+static inline npu_vector_t *npu_vector_base(void) {
+    npu_vector_t *p;
+    __asm__ volatile ("lui %0, 0x40002" : "=r"(p));
+    return p;
+}
+
+static inline npu_dma_t *npu_dma_base(void) {
+    npu_dma_t *p;
+    __asm__ volatile ("lui %0, 0x40003" : "=r"(p));
+    return p;
+}
+
+static inline npu_pcie_dma_t *npu_pcie_dma_base(void) {
+    npu_pcie_dma_t *p;
+    __asm__ volatile ("lui %0, 0x40007" : "=r"(p));
+    return p;
+}
+
+static inline npu_doorbell_t *npu_doorbell_base(void) {
+    npu_doorbell_t *p;
+    __asm__ volatile ("lui %0, 0x40005" : "=r"(p));
+    return p;
+}
+
+static inline npu_intc_t *npu_intc_base(void) {
+    npu_intc_t *p;
+    __asm__ volatile ("lui %0, 0x40006" : "=r"(p));
+    return p;
+}
+
+#define NPU_MXU       (npu_mxu_base())
+#define NPU_SFU       (npu_sfu_base())
+#define NPU_VECTOR    (npu_vector_base())
+#define NPU_DMA       (npu_dma_base())
+#define NPU_PCIE_DMA  (npu_pcie_dma_base())
+#define NPU_DB        (npu_doorbell_base())
+#define NPU_INTC      (npu_intc_base())
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
 
@@ -195,6 +245,7 @@ static inline void npu_wait_done(volatile uint32_t *status_reg) {
 
 static inline void npu_start(volatile uint32_t *cmd_reg) {
     *cmd_reg = 1;
+    __asm__ volatile("" ::: "memory");
 }
 
 #endif /* NPU_REGMAP_H */
