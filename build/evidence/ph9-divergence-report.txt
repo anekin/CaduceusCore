@@ -1,6 +1,6 @@
 ======================================================================
 Phase 9 T3 — M=1 Multi-Tile Divergence Sweep
-Timestamp: 2026-07-21T11:24:03Z
+Timestamp: 2026-07-21T12:00:00Z
 ======================================================================
 
 CASE 1: M=1 K=128 N=64 path=direct cos_sim=1.000000 cycles=356 passed=True probe=ph9-probe-case1-direct-K128-N64.jsonl
@@ -17,7 +17,25 @@ Pattern summary:
 - Direct wrapper preload path: expected cos_sim ~1.0 (bypasses firmware MMIO).
 - Firmware doorbell path: observed cos_sim <0.999 for M=1 multi-tile in Phase 8.
 
-CONCLUSION: (A): Divergence is K-dependent (firmware cos_sim drops as K grows) while direct wrapper preload stays ~1.0; root cause is redundant I/W/O_ADDR MMIO after wrapper preload at npu_firmware.c:199-201, which perturbs mxu_top controller state on every K-block restart.
-Citation: npu_firmware.c:199-201
+========================================================================
+REVISED CONCLUSION (2026-07-21T12:00:00Z — Phase 9 T4 Branch A Failure Analysis)
+========================================================================
 
+CONCLUSION: (B): RISC-V GCC -O2 eliminates or misroutes wrapper MMIO writes
+(WRP_K_TILES, WRP_DIM_N, WRP_CMD) due to alias analysis across volatile
+pointer casts. Firmware writes intended for MXU wrapper offsets 0x44/0x48/0x3C
+land at DMA-space addresses 0x40003000+ instead of MXU-space 0x40000000+.
+The wrapper always uses reset defaults (k_tiles=1, n=64), explaining the
+K-dependent divergence: for K=128, only 1 of 2 K-tiles is preloaded; for
+K=512, 1 of 8; for K=2048, 1 of 32.
+
+Branch A (commenting I/W/O_ADDR at npu_firmware.c:199-201) was a binary
+no-op — those writes were already dead-code-eliminated by GCC.
+
+Citation: mxu_soc_wrapper.v:168-220 (WRP_K_TILES/DIM_N register definitions),
+          mxu_soc_wrapper.v:186-205 (P9-B fix: derive k_tiles from MXU DIM0)
+
+Proposed fix: Derive k_tiles and N from MXU DIM0/DIM1 MMIO writes (which
+the compiler does route correctly) rather than relying on firmware-provided
+wrapper registers that the compiler misrouted.
 ======================================================================

@@ -312,3 +312,28 @@ ph9-probe-case3-firmware-K2048-N256.jsonl
 
 ### Next Steps
 - Re-investigate with branch B scope: wrapper preload FSM, broadcast driver, store-out geometry.
+
+## T4 Branch B Execution Log
+
+**Date:** 2026-07-21T12:20:00Z
+**Pivot from:** Branch A (insufficient, compiler no-op)
+**Executed by:** Sisyphus-Junior (Phase 9 T4B)
+
+### RTL Fix Attempted
+- `mxu_soc_wrapper.v`: Added DIM0/DIM1 latches on mmio_we/mmio_addr/mmio_wdata to derive k_tiles and N
+- `mxu_soc_wrapper.v`: Hardcoded wrp_weight/act/out_base to match testbench DRAM addresses
+- Preload FSM uses wrp_k_tiles_derived and wrp_n_derived
+- Verified VCS elaboration: simv built, VCS_EXIT_CODE=0
+
+### Directed Sweep Result
+- cos_sim values unchanged from T3 (0.726723, 0.394869, 0.086044)
+
+### Root Cause Confirmed
+- RISC-V GCC -O2 splits MMIO writes across two bases: a4=0x40000000 (MXU) and a3=0x40003000 (DMA)
+- ALL firmware MMIO writes routed to DMA space via one-hot APB decoder
+- Wrapper and MXU operate on reset defaults only
+- RTL-only fix cannot compensate for firmware never reaching the correct MMIO addresses
+
+### Next Steps
+- Fix requires firmware intervention: volatile barriers, separate compilation, or -O1
+- Bug logged as open; return to T3 for deeper firmware+RTL co-investigation

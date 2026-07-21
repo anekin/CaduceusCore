@@ -436,3 +436,29 @@ Pending fix per Phase 9 plan.
 #### Verification
 
 Evidence: build/evidence/ph9-branch-A-insufficient.txt:51-100
+
+### BUG-MXU-P9-00B-broadcast-multitile
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-21 |
+| **Block** | Phase 9 T3 |
+| **Severity** | Major |
+| **Type** | RTL Wrapper / Firmware Interaction |
+| **Status** | rtl-suspect |
+
+#### Symptom
+
+M=1 multi-tile MMUL cos_sim < 0.999 via firmware doorbell; direct wrapper preload passes.
+
+#### Root Cause
+
+See independent report /home/prj/zhengs/caduceuscore/CaduceusCore/docs/bugs/BUG-MXU-P9-00B-broadcast-multitile.md.
+
+#### Fix
+
+Pending fix per Phase 9 plan.
+
+#### Verification
+
+Evidence: build/evidence/ph9-divergence-report.txt, build/evidence/ph9-probe-*.jsonl
