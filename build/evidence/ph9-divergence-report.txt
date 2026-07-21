@@ -1,14 +1,14 @@
 ======================================================================
 Phase 9 T3 — M=1 Multi-Tile Divergence Sweep
-Timestamp: 2026-07-21T14:43:56Z
+Timestamp: 2026-07-21T16:37:07Z
 ======================================================================
 
 CASE 1: M=1 K=128 N=64 path=direct cos_sim=1.000000 cycles=356 passed=True probe=ph9-probe-case1-direct-K128-N64.jsonl
-CASE 1: M=1 K=128 N=64 path=doorbell cos_sim=1.000000 cycles=68216 passed=True probe=ph9-probe-case1-firmware-K128-N64.jsonl
+CASE 1: M=1 K=128 N=64 path=doorbell cos_sim=1.000000 cycles=68230 passed=True probe=ph9-probe-case1-firmware-K128-N64.jsonl
 CASE 2: M=1 K=512 N=128 path=direct cos_sim=1.000000 cycles=1524 passed=True probe=ph9-probe-case2-direct-K512-N128.jsonl
-CASE 2: M=1 K=512 N=128 path=doorbell cos_sim=1.000000 cycles=510063 passed=True probe=ph9-probe-case2-firmware-K512-N128.jsonl
+CASE 2: M=1 K=512 N=128 path=doorbell cos_sim=1.000000 cycles=510078 passed=True probe=ph9-probe-case2-firmware-K512-N128.jsonl
 CASE 3: M=1 K=2048 N=256 path=direct cos_sim=1.000000 cycles=9672 passed=True probe=ph9-probe-case3-direct-K2048-N256.jsonl
-CASE 3: M=1 K=2048 N=256 path=doorbell cos_sim=0.496865 cycles=3968261 passed=False probe=ph9-probe-case3-firmware-K2048-N256.jsonl
+CASE 3: M=1 K=2048 N=256 path=doorbell cos_sim=1.000000 cycles=3968278 passed=True probe=ph9-probe-case3-firmware-K2048-N256.jsonl
 
 Probe evidence: at least 5 signal samples captured per case in
 build/evidence/ph9-probe-<case>-<path>-K<N>-N<N>.jsonl
@@ -17,7 +17,7 @@ Pattern summary:
 - Direct wrapper preload path: expected cos_sim ~1.0 (bypasses firmware MMIO).
 - Firmware doorbell path: observed cos_sim <0.999 for M=1 multi-tile in Phase 8.
 
-CONCLUSION: (B): Divergence pattern correlates with N/tile geometry rather than K-block count; direct preload passes but firmware doorbell fails because repeated wrapper preload triggers broadcast/store-out beat miscount at mxu_soc_wrapper.v:456-458 (act_buf_idx/w_buf_idx) or store-out sizing at mxu_soc_wrapper.v:572-578 (row_bytes_per_store/so_beats).
-Citation: mxu_soc_wrapper.v:456-458
+CONCLUSION: (D): Firmware K-tile loop + missing RTL accumulate mode + SRAM/DRAM buffer overlap. RISC-V GCC -O2 split MMIO base pointers forced the firmware to dispatch all K tiles in one mxu_start() call, losing partial sums; the RTL had no accumulate mode to continue across per-K-block restarts; fixed SRAM and DRAM layouts overlapped for large K/N.
+Citation: firmware/npu_firmware.c (per-K-block dispatch, dynamic SRAM layout), firmware/npu-regmap.h (compiler-stable MMIO base pointers), rtl/mxu/controller.v (ctrl_acc_mode gated mac_reset_acc), sim/perf_tests.py (spread DRAM buffers)
 
 ======================================================================

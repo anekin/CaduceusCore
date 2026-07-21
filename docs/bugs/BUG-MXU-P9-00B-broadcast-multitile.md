@@ -70,3 +70,20 @@ Three independent defects combined to produce the divergence:
 3. Run `test_w4_perf_p9_causality` and write `build/evidence/ph9-causality.txt`
    to prove the fix is causal.
 4. Run the direct-wrapper sweep to confirm no regression.
+
+## Verification Results
+
+| Case | Path | cos_sim | Result |
+|------|------|---------|--------|
+| M=1 K=128 N=64 | direct | 1.000000 | PASS |
+| M=1 K=128 N=64 | doorbell | 1.000000 | PASS |
+| M=1 K=512 N=128 | direct | 1.000000 | PASS |
+| M=1 K=512 N=128 | doorbell | 1.000000 | PASS |
+| M=1 K=2048 N=256 | direct | 1.000000 | PASS |
+| M=1 K=2048 N=256 | doorbell | 1.000000 | PASS |
+
+- `test_w4_perf_p9_causality`: K<=64 cos_sim=1.000000, K=512 cos_sim=1.000000 — PASS.
+
+## Status
+
+**resolved** — Firmware per-K-block dispatch, RTL accumulate mode, dynamic SRAM/DRAM layout, and compiler-stable MMIO base pointers eliminate the divergence. Earlier hypotheses (A) redundant I/W/O_ADDR writes and (B) wrapper broadcast/store-out geometry were ruled out by disassembly and wrapper-only experiments.

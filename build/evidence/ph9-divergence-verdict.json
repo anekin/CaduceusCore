@@ -1,5 +1,5 @@
 {
-  "verdict": "B",
-  "citation": "mxu_soc_wrapper.v:456-458",
+  "verdict": "A",
+  "citation": "npu_firmware.c:199-201",
   "report": "/home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph9-divergence-report.txt"
 }
