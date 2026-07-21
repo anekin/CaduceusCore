@@ -1,0 +1,27 @@
+----------------------------------------
+Exception occurred during processing of request from 
+Traceback (most recent call last):
+  File "/NAS/Tools/anaconda3/envs/py3.11/lib/python3.11/socketserver.py", line 691, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/NAS/Tools/anaconda3/envs/py3.11/lib/python3.11/socketserver.py", line 361, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/NAS/Tools/anaconda3/envs/py3.11/lib/python3.11/socketserver.py", line 755, in __init__
+    self.handle()
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 95, in handle
+    file.write(response.encode("ascii"))
+  File "/NAS/Tools/anaconda3/envs/py3.11/lib/python3.11/socket.py", line 724, in write
+    return self._sock.send(b)
+           ^^^^^^^^^^^^^^^^^^
+BrokenPipeError: [Errno 32] Broken pipe
+----------------------------------------
+======================================================================
+Spike Host Chain: ops=['mmul', 'sfu', 'vector', 'dma_copy']
+======================================================================
+  [FAIL] mmul         — timeout waiting for NPU_HEAD=4
+  [FAIL] sfu          — timeout waiting for NPU_HEAD=4
+  [FAIL] vector       — timeout waiting for NPU_HEAD=4
+  [FAIL] dma_copy     — timeout waiting for NPU_HEAD=4
+
+======================================================================
+Spike Host Chain Summary: 0 PASS, 4 FAIL
+======================================================================
