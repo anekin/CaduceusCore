@@ -743,3 +743,17 @@ being the compiler-level trigger that forced the all-K-tiles dispatch.
 ### Disposition
 
 T5 halted with `build/evidence/ph9-regression-fail.txt` per task instructions; T5 plan checkbox not marked complete.
+
+## T5 Full Regression Execution Log
+
+**Date:** 2026-07-22T01:16:52Z
+**Result:** ALL PASS
+
+| Regression | Result |
+|------------|--------|
+| pytest | 732 passed |
+| FM-SOC | PASS=33 FAIL=0 |
+| MXU | 9/9 PASS |
+| SFU | 319/319 PASS |
+| Vector | 63/63 PASS |
+

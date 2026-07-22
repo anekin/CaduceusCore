@@ -98,6 +98,10 @@ try:
         SFU_OP_SOFTMAX,
         VEC_OP_ADD,
     )
+    from sim.cocotb_bridge import (
+        pack_int8_activation_tile_major,
+        pack_int4_tile_major,
+    )
     FUNC_MODEL_AVAILABLE = True
 except Exception as exc:
     FUNC_MODEL_AVAILABLE = False
@@ -1412,31 +1416,32 @@ class P0SpikeRunner:
         golden = GoldenMXU().matmul_int32(act, wgt_packed, M, K, N)
         golden_bytes = golden.astype(np.int32).tobytes()
 
-        wgt_bytes = wgt_packed.tobytes() + wgt_scales.tobytes()
         act_dram = 0x80010000
         wgt_dram = 0x80200000
         out_dram = 0x80030000
         input_sram = 0x00000000
         weight_sram = 0x00100000
         output_sram = 0x00300000
-        scale_sram = weight_sram + len(wgt_packed.tobytes())
 
-        model.dram[act_dram - self.DRAM_BASE:act_dram - self.DRAM_BASE + act.nbytes] = act.tobytes()
-        model.dram[wgt_dram - self.DRAM_BASE:wgt_dram - self.DRAM_BASE + len(wgt_bytes)] = wgt_bytes
-        # Broadcast MAC: each activation byte must be repeated 64 times (one per row)
-        act_bc = np.repeat(act.ravel(), 64).astype(np.int8)
-        model.sram[input_sram:input_sram + len(act_bc)] = act_bc.tobytes()
-        model.sram[weight_sram:weight_sram + len(wgt_packed.tobytes())] = wgt_packed.tobytes()
+        act_packed = pack_int8_activation_tile_major(act.tobytes(), M, K)
+        wp_packed = pack_int4_tile_major(wgt_packed.tobytes(), K, N)
+        scale_addr = wgt_dram + len(wp_packed)
+        scale_sram = weight_sram + len(wp_packed)
+
+        model.dram[act_dram - self.DRAM_BASE:act_dram - self.DRAM_BASE + len(act_packed)] = act_packed
+        model.dram[wgt_dram - self.DRAM_BASE:wgt_dram - self.DRAM_BASE + len(wp_packed)] = wp_packed
+        model.dram[scale_addr - self.DRAM_BASE:scale_addr - self.DRAM_BASE + wgt_scales.nbytes] = wgt_scales.tobytes()
+        model.sram[input_sram:input_sram + len(act_packed)] = act_packed
+        model.sram[weight_sram:weight_sram + len(wp_packed)] = wp_packed
         model.sram[scale_sram:scale_sram + wgt_scales.nbytes] = wgt_scales.tobytes()
 
         desc_addr = self.DESC_BASE
-        scale_addr = wgt_dram + len(wgt_packed.tobytes())
         write_mmul_descriptor(model, desc_addr,
                               input_addr=act_dram, weight_addr=wgt_dram, output_addr=out_dram,
                               scale_addr=scale_addr,
                               input_sram=input_sram, weight_sram=weight_sram, output_sram=output_sram,
                               scale_sram=scale_sram,
-                              input_size=act.nbytes, weight_size=len(wgt_packed.tobytes()),
+                              input_size=len(act_packed), weight_size=len(wp_packed),
                               output_size=M * N * 4, scale_size=wgt_scales.nbytes,
                               M=M, K=K, N=N)
         self._write_cmd(model, 0, 0, desc_addr)

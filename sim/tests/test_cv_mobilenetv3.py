@@ -16,9 +16,10 @@ from pathlib import Path
 from typing import Dict, Tuple
 
 import numpy as np
-import torch
-import torchvision
 import pytest
+
+torch = pytest.importorskip("torch")
+torchvision = pytest.importorskip("torchvision")
 
 _sim_dir = Path(__file__).resolve().parent.parent
 if str(_sim_dir) not in sys.path:

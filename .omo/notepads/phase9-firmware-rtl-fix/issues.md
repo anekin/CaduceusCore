@@ -34,3 +34,10 @@
 ### Disposition
 
 T5 halted without marking the plan checkbox. Failures recorded in `build/evidence/ph9-regression-fail.txt`.
+
+## T5 Regression Failure Log
+
+**Date:** 2026-07-21T23:59:13Z
+**Failures:**
+- pytest returned non-zero exit code
+

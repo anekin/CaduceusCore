@@ -39,12 +39,15 @@ BATCH_RE = re.compile(r"^\[BATCH\]\s+(\S+)\s+(PASS|FAIL)$")
 
 
 def discover_scenarios(root: Path) -> list[str]:
-    """Return sorted scenario directory paths relative to REPO_ROOT."""
+    """Return sorted absolute scenario directory paths.
+
+    Absolute paths avoid CWD ambiguity when the testbench invokes external
+    comparison scripts from a hardcoded directory.
+    """
     scenarios: list[str] = []
     if root.exists():
         for manifest in sorted(root.rglob("manifest.json")):
-            rel = manifest.parent.relative_to(REPO_ROOT)
-            scenarios.append(str(rel))
+            scenarios.append(str(manifest.parent.resolve()))
     return scenarios
 
 

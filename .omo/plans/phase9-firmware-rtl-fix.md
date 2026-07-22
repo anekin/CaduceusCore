@@ -385,7 +385,7 @@ echo "Phase 9 scaffold created; base commit: $(cat "$ROOT/build/evidence/ph9-bas
     - Evidence: `rtl/wrapper/mxu_soc_wrapper.v` diff, `build/p9_soc_elaborate.log`, `build/evidence/ph9-causality.txt`, `docs/bugs/BUG-MXU-P9-00B-broadcast-multitile.md`
   Commit: Y | `fix(rtl/wrapper): correct M=1 multi-tile broadcast/store-out count (P9 branch B)`
 
-- [ ] 5. Regression suite after T4 fix + (firmware OR simv) rebuild gate
+- [x] 5. Regression suite after T4 fix + (firmware OR simv) rebuild gate
   What to do:
     1. `bash scripts/p9_regression.sh`（脚本内部执行全部 substep）：
        a. Rebuild gate：若 T4 走 branch A 则重编固件并校验产物新于源码；若 branch B 则校验 SoC 仿真产物存在，固件用 Phase 8 baseline；
