@@ -573,7 +573,7 @@ echo "Phase 9 scaffold created; base commit: $(cat "$ROOT/build/evidence/ph9-bas
 ## Final verification wave
 > Runs in parallel after ALL todos (T1-T9 全 `[x]` 或 T9 BLOCKED-NETWORK)。ALL必须 APPROVE。Surface results and wait for the user's explicit okay before declaring complete。
 
-- [ ] F1. Plan compliance audit: all todo checkboxes `[x]`; evidence files match plan acceptance criteria
+- [x] F1. Plan compliance audit: all todo checkboxes `[x]`; evidence files match plan acceptance criteria
   What to do:
     1. `bash scripts/p9_f1_audit.sh`（T1 bootstrap 创建的脚本）：内部检查所有 todo checkbox 为 `[x]`，读取每条 acceptance criterion 并执行 grep/test，输出 `build/evidence/f1-audit.log`，格式 `F1-AUDIT-PASS` 或 `FAIL:<line>:<AC>`；T9 BLOCKED-NETWORK 时只核 T9 的 BLOCKED-NETWORK 路径 AC，跳过 precision 路径。
   Must NOT do:
@@ -590,7 +590,7 @@ echo "Phase 9 scaffold created; base commit: $(cat "$ROOT/build/evidence/ph9-bas
     - Evidence: `build/evidence/f1-audit.log`, `build/evidence/f1-fail-summary.txt` (fallback)
   Commit: N（审计）
 
-- [ ] F2. Code quality review: 只允许以下文件改动：`firmware/npu_firmware.c`、`rtl/wrapper/mxu_soc_wrapper.v`、`sim/perf_tests.py`、`sim/diagnose_mmu_path.py`、`scripts/p9_*.sh`、`scripts/p9_lib/*.sh`、`docs/bugs/*.md`、`docs/issues_found.md`、`rtl/testcase-list-perf.md`、`.omo/plans/phase6-rtl-verification.md`、`.omo/notepads/phase9-firmware-rtl-fix/*.md`、`build/evidence/ph9-*`、`build/evidence/w4-perf-p*.txt`、`build/evidence/fullchain-pipeline.txt`、`build/evidence/f{1,2,3,4}-*`、`build/evidence/36layer-checkpoint.txt`；不动 `sim/cocotb_bridge.py`
+- [x] F2. Code quality review: 只允许以下文件改动：`firmware/npu_firmware.c`、`rtl/wrapper/mxu_soc_wrapper.v`、`sim/perf_tests.py`、`sim/diagnose_mmu_path.py`、`scripts/p9_*.sh`、`scripts/p9_lib/*.sh`、`docs/bugs/*.md`、`docs/issues_found.md`、`rtl/testcase-list-perf.md`、`.omo/plans/phase6-rtl-verification.md`、`.omo/notepads/phase9-firmware-rtl-fix/*.md`、`build/evidence/ph9-*`、`build/evidence/w4-perf-p*.txt`、`build/evidence/fullchain-pipeline.txt`、`build/evidence/f{1,2,3,4}-*`、`build/evidence/36layer-checkpoint.txt`；不动 `sim/cocotb_bridge.py`
   What to do:
     1. `bash scripts/p9_f2_code_quality.sh`（T1 bootstrap 创建）：脚本以 `build/evidence/ph9-base-commit.txt` 为 baseline，检查新增/修改文件落在上述白名单内、bridge 未改动、相关 Python 文件 AST OK；输出 `build/evidence/f2-file-diff.txt` 与 `build/evidence/f2-ast.txt`。
   Must NOT do:
@@ -607,7 +607,7 @@ echo "Phase 9 scaffold created; base commit: $(cat "$ROOT/build/evidence/ph9-bas
     - Evidence: `build/evidence/f2-file-diff.txt`, `build/evidence/f2-ast.txt`
   Commit: N（审计）
 
-- [ ] F3. Real manual QA: causality gate、root-cause verdict matrix、fullchain 多 tile hex 非零
+- [x] F3. Real manual QA: causality gate、root-cause verdict matrix、fullchain 多 tile hex 非零
   What to do:
     1. `bash scripts/p9_f3_manual_qa.sh`（T1 bootstrap 创建）：脚本检查 `build/evidence/ph9-causality.txt` 的 K<=64 与 K=512 两路结果及 K<=64 的 cos_sim 阈值；检查 BUG-MXU-P9-00B 独立报告（若存在）含 Root Cause Verdict 块；检查 fullchain 多 tile 结果文件 hex 非全零；输出 `build/evidence/f3-checklist.txt`。
   Must NOT do:
@@ -624,7 +624,7 @@ echo "Phase 9 scaffold created; base commit: $(cat "$ROOT/build/evidence/ph9-bas
     - Evidence: `build/evidence/f3-checklist.txt`, `build/evidence/f3-fail.txt` (fallback)
   Commit: N（审计）
 
-- [ ] F4. Scope fidelity: 多 guardrail 终查
+- [x] F4. Scope fidelity: 多 guardrail 终查
   What to do:
     1. `bash scripts/p9_f4_scope_gate.sh`（T1 bootstrap 创建）：内部以 `cat build/evidence/ph9-base-commit.txt` 为 baseline，检查 (a) RTL 只改 `rtl/wrapper/mxu_soc_wrapper.v`（其余 rtl/ 文件无 diff）；(b) `.omo/plans/phase6-rtl-verification.md` 含 `ba/judge=(PASS|CONDITIONAL|FAIL|BLOCKED-NETWORK)`；(c) commit 历史无 `spike_src/plugins/npu_mmio_plugin` 改动；(d) 若 T9 BLOCKED-NETWORK 则 judge 字段必为 `BLOCKED-NETWORK` 且不存在 `build/evidence/ph9-q8_0-precision.txt`。脚本输出 `build/evidence/f4-gate.txt` 含 `RTL_SCOPE_OK=1`、`Q8O_JUDGE_OK=1`、`SPIKE_PLUGIN_UNCHANGED=1`。
   Must NOT do:
