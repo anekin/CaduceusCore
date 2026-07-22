@@ -489,7 +489,7 @@ echo "Phase 9 scaffold created; base commit: $(cat "$ROOT/build/evidence/ph9-bas
 
 ### Wave 4 — Full re-run + documentation (parallel after Wave 3)
 
-- [ ] 8. Full PERF re-run + fullchain multi-tile + testcase-list sync + issues_found Phase 9 + closure
+- [x] 8. Full PERF re-run + fullchain multi-tile + testcase-list sync + issues_found Phase 9 + closure
   What to do:
     1. `bash scripts/p9_perfect_batch.sh`（脚本内部执行全部 substep）：
        a. 新增 `test_w4_perf_fullchain_multitile` 到 `sim/perf_tests.py`；
