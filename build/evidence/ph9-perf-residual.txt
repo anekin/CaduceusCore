@@ -1,0 +1,5 @@
+# Phase 9 PERF Residual cs<0.999 2026-07-22T02:00:41Z commit=4e0f5b4e581209aa61cc293e7b0845b9c2356811
+Failed cases:  PERF-06(cs=0.053543)
+Bug: BUG-RTL-SOC-P9-00D
+Verdict: open
+Symptom: PERF residual cs<0.999 after Phase 9 firmware+RTL fixes (T4)

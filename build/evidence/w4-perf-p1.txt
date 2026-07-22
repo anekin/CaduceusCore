@@ -1,4 +1,5 @@
-{"case_id": "PERF-05", "simulator": "ibex", "status": "FAIL", "cycles": 16396, "commit": "123b9340076f377fc97b6f6ca95cb10d0bd92617", "timestamp": "2026-07-19T08:33:23Z", "cos_sim": 0.664574, "M": 1, "K": 128, "N": 128, "tiles": 4}
-{"case_id": "PERF-06", "simulator": "ibex", "status": "FAIL", "cycles": 2, "commit": "123b9340076f377fc97b6f6ca95cb10d0bd92617", "timestamp": "2026-07-19T08:33:23Z", "cos_sim": 0.018049, "M": 32, "K": 128, "N": 128}
-{"case_id": "PERF-07", "simulator": "ibex", "status": "PASS", "cycles": 500, "commit": "123b9340076f377fc97b6f6ca95cb10d0bd92617", "timestamp": "2026-07-19T08:33:23Z", "method": "MXUModel.estimate", "tile_base": 124}
-{"case_id": "PERF-08", "simulator": "ibex", "status": "PASS", "cycles": 16396, "commit": "123b9340076f377fc97b6f6ca95cb10d0bd92617", "timestamp": "2026-07-19T08:33:23Z", "predicted": 500, "delta_pct": 97.0}
+# Phase 9 re-run 2026-07-22T02:00:41Z commit=4e0f5b4e581209aa61cc293e7b0845b9c2356811 source=rtl
+{"case_id": "PERF-05", "simulator": "ibex", "status": "PASS", "cycles": 128832, "commit": "4e0f5b4e581209aa61cc293e7b0845b9c2356811", "timestamp": "2026-07-22T02:01:43Z", "cos_sim": 1.0, "M": 1, "K": 128, "N": 128, "tiles": 4}
+{"case_id": "PERF-06", "simulator": "ibex", "status": "FAIL", "cycles": 129974, "commit": "4e0f5b4e581209aa61cc293e7b0845b9c2356811", "timestamp": "2026-07-22T02:01:57Z", "cos_sim": 0.053543, "M": 32, "K": 128, "N": 128}
+{"case_id": "PERF-07", "simulator": "ibex", "status": "PASS", "cycles": 500, "commit": "4e0f5b4e581209aa61cc293e7b0845b9c2356811", "timestamp": "2026-07-22T02:01:57Z", "method": "MXUModel.estimate", "tile_base": 124}
+{"case_id": "PERF-08", "simulator": "ibex", "status": "PASS", "cycles": 128832, "commit": "4e0f5b4e581209aa61cc293e7b0845b9c2356811", "timestamp": "2026-07-22T02:01:57Z", "predicted": 500, "delta_pct": 99.6}

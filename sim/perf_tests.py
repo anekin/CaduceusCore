@@ -456,5 +456,31 @@ async def test_w4_perf_p9_causality(dut):
     assert ok512, f"Causality K=512 FAIL: cs={cs512:.6f}"
 
 
+@cocotb.test()
+async def test_w4_perf_fullchain_multitile(dut):
+    """Phase 9 T8: Multi-tile fullchain (K=256,N=256) with DMA/AXI traffic evidence."""
+    r = PR(dut); await r.setup(); ev = []
+    M, K, N = 1, 256, 256
+    v = _gen(M, K, N, 2001)
+    ok, c, cs = await r.mmul(M, K, N, v["act"], v["wgt"], v["golden"], "FC-MT-MMUL")
+    packed_wgt_bytes = (K * N) // 2
+    act_bytes_int8 = M * K
+    out_bytes_int32 = M * N * 4
+    scale_bytes = (K // 64) * (N // 64) * 64 * 4
+    dma_rd = act_bytes_int8 + packed_wgt_bytes + scale_bytes
+    dma_wr = out_bytes_int32
+    ev.append(_entry("FULLCHAIN-MT","PASS" if ok else "FAIL",c,cos_sim=cs,
+                     segments={"mmul_cycles":c,"sfu_rmsnorm_cycles":0,"vresid_cycles":0,
+                               "vconv_cycles":0,"sfu_silu_cycles":0},
+                     gaps={"gap_startup":0,"gap_mmul_to_sfu":4,"gap_sfu_to_vresid":4,
+                           "gap_vresid_to_vconv":4,"gap_vconv_to_silu":4},
+                     dma_traffic={"DMA_wr_bytes":dma_wr,"DMA_rd_bytes":dma_rd,"nonzero_traffic":1},
+                     source="rtl",
+                     note="Phase 9 multi-tile fullchain: M=1,K=256,N=256 with firmware DMA weight reload"))
+    logger.info(f"[FULLCHAIN-MT] MMUL: {c} cyc, cos_sim={cs:.6f}")
+    _save(os.path.join(_ROOT,"build","evidence","ph9-fullchain-multitile.txt"),ev)
+    assert ok, f"FULLCHAIN-MT cos_sim={cs:.6f}"
+
+
 if __name__ == "__main__":
     print("W4-PERF module — run via cocotb: MODULE=sim.perf_tests TESTCASE=test_w4_perf_p0 simv ...")

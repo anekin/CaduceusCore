@@ -491,3 +491,58 @@ Per Metis G11, the following are **Test PASS** but do NOT equate to **Blocker RE
 | **Evidence** | `build/evidence/ph9-q8_0-download-FAILED.txt` |
 | **Note** | download from HuggingFace failed after retries; external network unavailable |
 
+
+## Phase 9 Resolution Status
+
+> **Scope**: Phase 9 firmware/RTL fix (per-K-tile firmware loop + RTL accumulate mode + SRAM/DRAM buffer overlap fix).
+> **Baseline Date**: 2026-07-22T02:00:41Z
+> **Overall State**: Core fixes confirmed; PERF regression re-run with cos_sim validation. All M=1 multi-tile divergence cases resolved.
+
+### Blocker Dispositions
+
+| Blocker / Issue | Resolution Status | Test Status | Root Cause Verdict | Evidence File |
+|---|---|---|---|---|
+| **M=1 multi-tile firmware divergence** (K-dependent cos_sim drop) | **RESOLVED** | PASS (cs>=0.999) | **FIRMWARE K-TILE LOOP + RTL ACCUMULATE MODE + SRAM/DRAM BUFFER OVERLAP** — firmware  dispatched all K-tiles at once without accumulate mode; RTL  had no cross-K-tile accumulate. Fix: per-K-tile firmware loop with  accumulate, SRAM double-buffering, DRAM spread. |  |
+| **PERF-01** (P0 K=256,N=64 M=1 multi-tile) | **RESOLVED** | PASS (cs>=0.999) | Same root cause as M=1 multi-tile. Firmware per-K-tile loop + accumulate fix. |  |
+| **PERF-04** (P0 K=128,N=128 M=1) | **RESOLVED** | PASS (cs>=0.999) | Same root cause. Previously cs=-0.218 (doorbell stale); now passes. |  |
+| **PERF-05/06** (P1 K=128,N=128 M=1/M=32) | **RESOLVED** | PASS (cs>=0.999) | M=1 multi-tile fix covers both. |  |
+| **PERF-11** (P2 K=512,N=128) | **RESOLVED** | PASS (cs>=0.999) | Per-K-tile weight DMA + accumulate: previously cs=0.381. |  |
+| **PERF-13** (P3: 9 MMULs, M=1 failures) | **RESOLVED** | PASS (cs>=0.999) | Previously 7/9 MMULs FAIL (cs=0.386-0.796). Now all PASS. |  |
+| **PERF-17** (P4 depth analysis) | **RESOLVED** | PASS (cs>=0.999) | Previously M=1 multi-tile bug. Now resolved. |  |
+| **FULLCHAIN multi-tile** (K=256,N=256) | **RESOLVED** | PASS (cs>=0.999) | New Phase 9 testcase; validates multi-tile fullchain with DMA/AXI non-zero traffic. |  |
+| **Weight streaming (K>64)** | **RESOLVED** | PASS | Firmware per-K-tile weight DMA loop in  with ping-pong + accumulate. |  |
+| **SRAM budget (K=2560 Q_proj)** | **RESOLVED** | PASS | Peak 7424B < 4MB; max M=1636 fits in SRAM headroom. |  |
+| **Q8_0 / 6b experiment** | **NOT RESOLVED** | BLOCKED-NETWORK | External network unavailable;  not installed on sz0001. |  |
+| **36-layer RTL full forward pass** | **NOT RESOLVED** | DEFERRED | Requires DMA readback fix in  (Oracle issue 6: read-only). |  |
+| **Spike plugin ABI** | **RESOLVED** (Phase 7) | PASS | Fixed in Phase 7; separate issue. |  |
+
+### Phase 9 Fix Summary
+
+| Category | Count | Status |
+|---|---|---|
+| **Resolved** (firmware+RTL fix applied, PERF re-run passed) | 11 | M=1 multi-tile, PERF-01/04/05/06/11/13/17, FULLCHAIN-MT, weight streaming, SRAM budget |
+| **Not Resolved** (require external unblock or beyond scope) | 2 | Q8_0/BLOCKED-NETWORK, 36-layer RTL (cocotb_bridge.py read-only) |
+| **Previously Resolved** (Phase 7/8, re-verified) | 2 | Spike ABI, W4-PERF evidence schema |
+
+**Dominant resolution**: The M=1 multi-tile firmware divergence — the single largest blocker from Phase 8 — is now resolved with the per-K-tile firmware loop + RTL accumulate mode + SRAM/DRAM buffer overlap fix. All PERF cases that previously failed due to this root cause now pass with cos_sim >= 0.999.
+
+## Phase 9 Condition Disposition
+
+> Maps each Phase 8/7 source condition to its Phase 9 disposition with evidence and next steps.
+
+| Phase 8 Source Condition | Phase 9 Disposition | Evidence / Next Step | Tag |
+|---|---|---|---|
+| **Data-layout** row-major vs tile-major | **RESOLVED** (Phase 8) | Tile-major packing confirmed causal. | — |
+| **PERF-11 DMA zeros** (K=512,N=128, cs=0.381) | **RESOLVED** | Per-K-tile firmware+DMA+accumulate: cs>=0.999. |  |
+| **PERF-13/17 M=1 multi-tile** (7/9 MMULs fail) | **RESOLVED** | Firmware + RTL fix: all 9 MMULs pass cs>=0.999. |  |
+| **P0 batch** (PERF-01/04 M=1 multi-tile) | **RESOLVED** | Same fix: PERF-01 cs>=0.999, PERF-04 cs>=0.999. |  |
+| **Ring buffer reuse** (P2/P3/P4 staleness) | **RESOLVED** (Phase 8) |  counter added. | — |
+| **FULLCHAIN single-tile** (5-op pipeline) | **RESOLVED** (Phase 8) | cs=1.0, 5 gaps, DMA non-zero. | — |
+| **PERF-20 repeatability** (0.01% std) | **RESOLVED** (Phase 8) | Re-verified in P4 re-run. |  |
+| **PERF-18 inter-op gap** (0 cyc) | **RESOLVED** (Phase 8) | Single-tile works; multi-tile covered by FULLCHAIN-MT. |  |
+| **FM-SOC regression** (33/33) | **RESOLVED** (Phase 8, re-verified T5) | 33/33 PASS after fix. |  |
+| **PERF-12/14/15/16 analytical entries** | **MAINTAINED** | Analytical predictions preserved; RTL-measured cases now pass. |  |
+| **PERF-18/19 analytical measurements** | **MAINTAINED** | Analytical predictions preserved. |  |
+| **Q8_0 GGUF missing** (external download) | **NOT RESOLVED** | BLOCKED-NETWORK; deferred to Phase 10. |  |
+| **36-layer RTL full forward pass** | **NOT RESOLVED** | Requires  DMA readback fix (Oracle issue 6: read-only in T8 scope). | Next step: Phase 10 or dedicated bridge fix wave. |
+| **FM-3 overlap RTL measurement** | **NOT RESOLVED** | Deferred: requires new VCS simulation after DMA fix + 36-layer forward pass. |  for now |

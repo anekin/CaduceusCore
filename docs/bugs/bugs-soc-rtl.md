@@ -462,3 +462,29 @@ Pending fix per Phase 9 plan.
 #### Verification
 
 Evidence: build/evidence/ph9-divergence-report.txt, build/evidence/ph9-probe-*.jsonl
+
+### BUG-RTL-SOC-P9-00D
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-22 |
+| **Block** | Phase 9 T3 |
+| **Severity** | Major |
+| **Type** | integ |
+| **Status** | open |
+
+#### Symptom
+
+PERF residual cs<0.999 after Phase 9 T4 firmware+RTL fixes
+
+#### Root Cause
+
+Residual divergence after per-K-tile firmware loop + RTL accumulate mode fix; see /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph9-perf-residual.txt
+
+#### Fix
+
+Pending fix per Phase 9 plan.
+
+#### Verification
+
+Evidence: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph9-perf-residual.txt

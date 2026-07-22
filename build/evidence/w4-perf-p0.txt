@@ -1,4 +1,5 @@
-{"case_id": "PERF-01", "simulator": "ibex", "status": "FAIL", "cycles": 22545, "commit": "123b9340076f377fc97b6f6ca95cb10d0bd92617", "timestamp": "2026-07-19T08:33:10Z", "cos_sim": 0.436549, "M": 1, "K": 256, "N": 64, "tiles": 4}
-{"case_id": "PERF-02", "simulator": "ibex", "status": "PASS", "cycles": 22545, "commit": "123b9340076f377fc97b6f6ca95cb10d0bd92617", "timestamp": "2026-07-19T08:33:10Z", "note": "K>64 firmware dispatch"}
-{"case_id": "PERF-03", "simulator": "ibex", "status": "PASS", "cycles": 22545, "commit": "123b9340076f377fc97b6f6ca95cb10d0bd92617", "timestamp": "2026-07-19T08:33:10Z", "tiles": 4, "note": "per-tile cycle in total"}
-{"case_id": "PERF-04", "simulator": "ibex", "status": "FAIL", "cycles": 2, "commit": "123b9340076f377fc97b6f6ca95cb10d0bd92617", "timestamp": "2026-07-19T08:33:10Z", "cos_sim": -0.217997, "M": 1, "K": 128, "N": 128, "tiles": 4}
+# Phase 9 re-run 2026-07-22T02:00:41Z commit=4e0f5b4e581209aa61cc293e7b0845b9c2356811 source=rtl
+{"case_id": "PERF-01", "simulator": "ibex", "status": "PASS", "cycles": 134914, "commit": "4e0f5b4e581209aa61cc293e7b0845b9c2356811", "timestamp": "2026-07-22T02:01:06Z", "cos_sim": 1.0, "M": 1, "K": 256, "N": 64, "tiles": 4}
+{"case_id": "PERF-02", "simulator": "ibex", "status": "PASS", "cycles": 134914, "commit": "4e0f5b4e581209aa61cc293e7b0845b9c2356811", "timestamp": "2026-07-22T02:01:06Z", "note": "K>64 firmware dispatch"}
+{"case_id": "PERF-03", "simulator": "ibex", "status": "PASS", "cycles": 134914, "commit": "4e0f5b4e581209aa61cc293e7b0845b9c2356811", "timestamp": "2026-07-22T02:01:06Z", "tiles": 4, "note": "per-tile cycle in total"}
+{"case_id": "PERF-04", "simulator": "ibex", "status": "PASS", "cycles": 128838, "commit": "4e0f5b4e581209aa61cc293e7b0845b9c2356811", "timestamp": "2026-07-22T02:01:19Z", "cos_sim": 1.0, "M": 1, "K": 128, "N": 128, "tiles": 4}
