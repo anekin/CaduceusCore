@@ -460,7 +460,7 @@ echo "Phase 9 scaffold created; base commit: $(cat "$ROOT/build/evidence/ph9-bas
     - Evidence: `build/evidence/ph9-sram-budget.txt`, `build/evidence/ph9-t6-p2-k512.txt`, `build/evidence/ph9-p2-k512.log`
   Commit: Y | `fix(firmware): per-K-tile weight streaming for K=2560 Q_proj within 4MB SRAM (P9)`
 
-- [ ] 7. 36-layer checkpoint L0/L10/L20/L35 cos_sim gate (L35 阈值 0.997)
+- [x] 7. 36-layer checkpoint L0/L10/L20/L35 cos_sim gate (L35 阈值 0.997)
   What to do:
     1. `bash scripts/p9_36layer.sh 0 10 20 35`（脚本内部调已有 36-layer checkpoint 脚本，把硬编码输出复制为 `build/evidence/ph9-36layer-checkpoint.txt` 并加 Phase 9 头与 timestamp；log 写入 `build/evidence/ph9-36layer-checkpoint.log`）。
     2. 每层 cos_sim 阈值：L0/L10/L20 ≥ 0.999；L35 ≥ 0.997（按脚本内 L35 baseline 0.998278、tolerance ±0.001 而定）。
