@@ -422,7 +422,7 @@ echo "Phase 9 scaffold created; base commit: $(cat "$ROOT/build/evidence/ph9-bas
 
 ### Wave 3 — Firmware per-K-tile weight streaming (serial)
 
-- [ ] 6. SRAM budget pre-check + firmware per-K-tile weight DMA segment chain
+- [x] 6. SRAM budget pre-check + firmware per-K-tile weight DMA segment chain
   What to do:
     1. `bash scripts/p9_sram_budget.sh`（内部计算 Q_proj K=2560,N=4096,INT4 的 peak SRAM：per-K-tile weight 2048B、activation tile 64×64=4096B、output tile 64×4=256B、ping-pong double-buffered weight 2×2048B；assert `2*2048 + 4096 + 256 + scale_tile(256) < 4*1024*1024`，写 `build/evidence/ph9-sram-budget.txt`；超 → 写 `build/evidence/ph9-sram-overflow.txt` 并 HALT）。
     2. `bash scripts/p9_weight_streaming.sh`（内部执行 substep b–e）：
