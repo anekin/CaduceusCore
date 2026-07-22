@@ -1,0 +1,4 @@
+T6_NO_NEW_RTL=1
+Date: 2026-07-22T01:36:29Z
+Scope: firmware per-K-tile weight streaming (RTL unchanged since T4 accumulate-mode fix)
+Verified: sim/cocotb_bridge.py unchanged, sim/perf_tests.py weight layout consistent

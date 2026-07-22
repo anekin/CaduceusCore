@@ -1,0 +1,1 @@
+{"case_id": "PERF-11", "source": "rtl", "simulator": "ibex", "M": 1, "K": 512, "N": 128, "cos_sim": 1.0, "status": "PASS", "commit": "417437b328fce9a600ded104db30263379bf40f5", "timestamp": "2026-07-22T01:36:29Z", "note": "T6 per-K-tile weight streaming verification (K=512 partial Q_proj)"}
