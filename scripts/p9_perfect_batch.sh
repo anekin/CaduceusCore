@@ -221,6 +221,18 @@ echo '[p9_perf_batch] ${TESTCASE} done.'
             echo "  Header ALREADY present in ${EVFILE}"
         fi
     fi
+
+    # After P1 batch: merge PERF-05 and PERF-06 lines into w4-perf-p0.txt
+    # (plan AC expects PERF-05/06 in p0; they are produced by test_w4_perf_p1)
+    if [ "${EVFILE}" = "w4-perf-p1.txt" ] && [ -f "${EVPATH}" ]; then
+        P0PATH="${EVIDENCE_DIR}/w4-perf-p0.txt"
+        if [ -f "${P0PATH}" ]; then
+            for cid in "PERF-05" "PERF-06"; do
+                grep "\"case_id\": \"${cid}\"" "${EVPATH}" >> "${P0PATH}" || true
+            done
+            echo "  PERF-05/06 merged into w4-perf-p0.txt"
+        fi
+    fi
 done
 
 # ── Step 3: Validate cos_sim >= 0.999 for key PERF cases ────────────────

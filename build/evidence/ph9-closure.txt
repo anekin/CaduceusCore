@@ -1,6 +1,6 @@
 # Phase 9 Closure Report
-# Generated: 2026-07-22T02:00:41Z
-# Commit: 4e0f5b4e581209aa61cc293e7b0845b9c2356811
+# Generated: 2026-07-22T02:29:26Z
+# Commit: 819a34b
 # Script: scripts/p9_perfect_batch.sh (Phase 9 Todo 8)
 
 ## FIXED
@@ -8,43 +8,47 @@
 1. BUG-MXU-P9-00B (M=1 multi-tile firmware divergence)
    Root cause: firmware K-tile loop + missing RTL accumulate mode + SRAM/DRAM buffer overlap
    Fix: per-K-tile firmware loop with CTRL[2] accumulate, SRAM double-buffering, DRAM spread
-   Verified: all PERF cases (01/04/05/09/10/11/13/17) pass cos_sim>=0.999. Note: PERF-06 (M=32) shows residual cs=0.053543 → BUG-RTL-SOC-P9-00D
+   Verified: PERF-01/04/05/09/10/11/13/17 all pass cos_sim>=0.999
    Evidence: build/evidence/w4-perf-p*.txt, build/evidence/ph9-divergence-verdict.json
 
-2. Weight streaming (PERF-11 K=512,N=128)
-   Previously: standalone cs=0.381; fix needed per-K-tile DMA reload
-   Fix: firmware per-K-tile weight DMA loop + accumulate mode + ping-pong SRAM
-   Verified: K=512 passes cs>=0.999; K=2560 Q_proj SRAM budget 7424B < 4MB
-   Evidence: build/evidence/ph9-t6-p2-k512.txt, build/evidence/ph9-sram-budget.txt
+2. PERF-09 Weight streaming (K=256,N=64)
+   Verified: cos_sim=1.0 (previously NOT RESOLVED in Phase 8)
+   Evidence: build/evidence/w4-perf-p2.txt
 
-3. SRAM budget (K=2560 Q_proj)
-   Verified: peak SRAM = 7424B (0.18% of 4MB). Max M=1636 fits.
-   Evidence: build/evidence/ph9-sram-budget.txt
+3. PERF-10 Multi-round weight streaming (K=512,N=64)
+   Verified: cos_sim=1.0 (previously NOT RESOLVED in Phase 8)
+   Evidence: build/evidence/w4-perf-p2.txt
 
-4. FULLCHAIN multi-tile (M=1,K=256,N=256)
-   New testcase: validates firmware DMA weight reload + multi-tile fullchain pipeline
-   Verified: cos_sim>=0.999, DMA/AXI non-zero traffic
-   Evidence: build/evidence/ph9-fullchain-multitile.txt, build/evidence/ph9-fullchain-multitile.log
+4. PERF-11 Q_proj scaled (K=512,N=128)
+   Verified: cos_sim=1.0 (previously cs=0.381)
+   Evidence: build/evidence/w4-perf-p2.txt
 
-5. 36-layer checkpoint (L0/L10/L20/L35)
-   Verified: all 4 layers pass cos_sim>=0.999 (L35>=0.997: actual=1.000000)
+5. FULLCHAIN multi-tile (M=1,K=256,N=256)
+   Verified: cos_sim=1.0, DMA non-zero traffic (37,120 read / 1,024 write bytes)
+   Evidence: build/evidence/ph9-fullchain-multitile.txt
+
+6. 36-layer checkpoint (L0/L10/L20/L35)
+   Verified: all 4 layers cos_sim=1.000000
    Evidence: build/evidence/ph9-36layer-checkpoint.txt
 
-6. Full regression (pytest 732, FM-SOC 33/33, MXU 9/9, SFU 319/319, Vector 63/63)
-   Verified: no regression after firmware+RTL fix
+7. SRAM budget (K=2560 Q_proj)
+   Verified: peak 7,424B < 4MB. Max M=1,636 fits.
+   Evidence: build/evidence/ph9-sram-budget.txt
+
+8. Full regression (pytest 732, FM-SOC 33/33, MXU 9/9, SFU 319/319, Vector 63/63)
    Evidence: build/evidence/ph9-regression-run.log
 
-7. Testcase-list sync (rtl/testcase-list-perf.md)
-   All FAIL rows (PERF-01/04/05/06/11/13/17) upgraded to PASS
-   Evidence: rtl/testcase-list-perf.md
+9. Testcase-list sync (rtl/testcase-list-perf.md)
+   Verified: 20/21 PASS rows. All FAIL→PASS synced.
 
 ## REST NOT RESOLVED
 
-Residual PERF failures: PERF-06(cs=0.053543)
-
-1. BUG-RTL-SOC-P9-00D (PERF residual cs<0.999)
-   Status: open
-   Evidence: build/evidence/ph9-perf-residual.txt
+1. PERF-06 (M=32, K=128, N=128): cos_sim=0.053543 residual
+   Bug: BUG-RTL-SOC-P9-00D (open)
+   Root cause: M=32 firmware ring-buffer dispatch path may not correctly handle
+     per-row accumulate mode reset across 32 sequential dispatches.
+   Evidence: build/evidence/ph9-perf-residual.txt, w4-perf-p1.txt
+   Status: NOT RESOLVED — carried forward to Phase 10
 
 ## REMAINING BLOCKERS (carry-forward)
 
@@ -53,7 +57,7 @@ Residual PERF failures: PERF-06(cs=0.053543)
    Next step: Phase 10 — re-attempt download or use alternative precision bridge
 
 2. 36-layer RTL full forward pass
-   Blocker: sim/cocotb_bridge.py DMA readback function (Oracle issue 6: read-only in T8 scope)
+   Blocker: sim/cocotb_bridge.py DMA readback fix (Oracle issue 6: read-only)
    Next step: Phase 10 or dedicated bridge fix wave
 
 3. FM-3 overlap RTL measurement (weight-streaming)
@@ -64,4 +68,5 @@ Residual PERF failures: PERF-06(cs=0.053543)
 
 - F1-F4 Final Verification Wave: audit + code quality + manual QA + scope gate
 - Phase 10 extends: DMA readback fix + 36-layer RTL forward + Q8_0 download retry
+- PERF-06 (M=32) residual: investigate per-row accumulate mode reset in firmware ring dispatch
 - Re-run closure after F1-F4 verification

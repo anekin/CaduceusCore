@@ -254,7 +254,8 @@ async def test_w4_perf_p3(dut):
         v = _gen(M, K, N, 800+i)
         ok, c, cs = await r.mmul(M, K, N, v["act"], v["wgt"], v["golden"], f"P13-{nm}")
         res.append({"name":nm,"M":M,"K":K,"N":N,"cycles":c,"cos_sim":round(cs,6),"passed":bool(cs>0.999)})
-    ev.append(_entry("PERF-13","PASS" if all(rr["passed"] for rr in res) else "FAIL",sum(rr["cycles"] for rr in res),mmul_results=res))
+    min_cs = min(rr["cos_sim"] for rr in res)
+    ev.append(_entry("PERF-13","PASS" if all(rr["passed"] for rr in res) else "FAIL",sum(rr["cycles"] for rr in res),cos_sim=min_cs,mmul_results=res))
     ev.append(_entry("PERF-14","PASS",0,source="analytical",predictions=[{"name":rr["name"],"pred":(rr["K"]//64+1)*(rr["N"]//64+1)*(max(rr["M"]//64,1))*124+2000} for rr in res]))
     ev.append(_entry("PERF-15","PASS",res[0]["cycles"],source="analytical",note="chain via 9-MMUL pipeline"))
     ev.append(_entry("PERF-16","PASS",res[0]["cycles"],source="analytical",cross_engine_gap=4,gap_model="FM-1: 4-cycle same-engine gap (crossbar_wait=2,sram_stall=1,vcov_bubble=1)",note="FM-1 calibrated cross-engine gap verified analytically."))
@@ -267,7 +268,7 @@ async def test_w4_perf_p4(dut):
     r = PR(dut); await r.setup(); ev = []
     v17 = _gen(1, 128, 128, 1000)
     ok17, c17, cs17 = await r.mmul(1, 128, 128, v17["act"], v17["wgt"], v17["golden"], "P17")
-    ev.append(_entry("PERF-17","PASS" if ok17 else "FAIL",c17,mxu_busy_ratio=0.52))
+    ev.append(_entry("PERF-17","PASS" if ok17 else "FAIL",c17,cs=cs17,mxu_busy_ratio=0.52))
     v18a = _gen(1, 64, 64, 1100); ok18a, c18a, _ = await r.mmul(1, 64, 64, v18a["act"], v18a["wgt"], v18a["golden"], "P18a")
     v18b = _gen(1, 64, 64, 1200); ok18b, c18b, _ = await r.mmul(1, 64, 64, v18b["act"], v18b["wgt"], v18b["golden"], "P18b")
     gap18 = max(0, abs(c18a - c18b))
