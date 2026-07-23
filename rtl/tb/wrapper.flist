@@ -1,0 +1,46 @@
+#=============================================================================
+# wrapper.flist — VCS file list for wrapper-level verification testbenches
+#=============================================================================
+# Used by wv_compile.sh to compile tb_sfu_wrapper / tb_vector_wrapper /
+# tb_mxu_wrapper + axi_sparse_slave.v on sz0001.
+#
+# Compiled with: +define+COCOTB_SIM=1 +vpi -P sim/regression/pli.tab
+#                 -load $(cocotb-config --lib-name-path vpi vcs)
+#=============================================================================
+
+# ── Wrapper modules ─────────────────────────────────────────────────────────
+rtl/wrapper/sfu_soc_wrapper.v
+rtl/wrapper/vector_soc_wrapper.v
+rtl/wrapper/mxu_soc_wrapper.v
+rtl/wrapper/apb_to_mmio.v
+
+# ── SFU engine RTL ──────────────────────────────────────────────────────────
+rtl/sfu/sfu_top.v
+rtl/sfu/softmax_hw.v
+rtl/sfu/layernorm_hw.v
+rtl/sfu/rmsnorm_hw.v
+rtl/sfu/rope_hw.v
+rtl/sfu/gelu_hw.v
+rtl/sfu/silu_hw.v
+rtl/sfu/exp_lut.v
+
+# ── Vector engine RTL ───────────────────────────────────────────────────────
+rtl/vector/vector_top.v
+rtl/vector/f16_to_i32.v
+rtl/vector/vector_alu.v
+rtl/vector/type_convert.v
+rtl/vector/reduce_tree.v
+rtl/vector/resid_add.v
+
+# ── MXU engine RTL ──────────────────────────────────────────────────────────
+rtl/mxu/mxu_top.v
+rtl/mxu/mmio_if.v
+rtl/mxu/controller.v
+rtl/mxu/mac_array.v
+rtl/mxu/pe.v
+rtl/mxu/accumulator.v
+rtl/mxu/weight_buffer.v
+rtl/mxu/activation_buffer.v
+
+# ── AXI4 sparse slave (behavioral model for BUG-005 X-propagation) ─────────
+rtl/tb/axi_sparse_slave.v
