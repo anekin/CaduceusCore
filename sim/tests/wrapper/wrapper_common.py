@@ -115,7 +115,8 @@ async def read_reg(apb, base, offset):
 
 
 async def wait_done(
-    apb, base, status_offset=0x08, done_bit=1, timeout_cycles=100000
+    apb, base, status_offset=0x08, done_bit=1, timeout_cycles=100000,
+    clk=None
 ):
     """
     Poll STATUS.DONE until it is set or timeout expires.
@@ -130,6 +131,7 @@ async def wait_done(
         status_offset: APB byte offset of the STATUS register (default 0x08)
         done_bit: bit position to check (default 1 = STATUS.DONE)
         timeout_cycles: maximum cycles to wait (default 100000)
+        clk: optional clock signal for ClockCycles; fallback to apb._bus.clk
 
     Raises:
         TimeoutError: if DONE is not asserted within timeout_cycles
@@ -137,11 +139,12 @@ async def wait_done(
     import cocotb
     from cocotb.triggers import ClockCycles
 
+    _clk = clk if clk is not None else apb._bus.clk
     for _ in range(timeout_cycles):
         data = await read_reg(apb, 0, status_offset)
         if data & (1 << done_bit):
             return data
-        await ClockCycles(apb._bus.clk, 1)
+        await ClockCycles(_clk, 1)
     raise TimeoutError(
         f"wait_done: timeout after {timeout_cycles} cycles "
         f"(status_offset=0x{status_offset:02X}, done_bit={done_bit})"
