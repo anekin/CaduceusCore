@@ -345,3 +345,246 @@ All test results and evidence files are in `logs/` and `.omo/evidence/`.
 | PCIe TLP Limitation | 4 | Partial (TC2 blocks PCIe read verification) | Partial | W3 T16 (TC2 fix) |
 | SRAM Peak Concerns | 4 | Partial (tile streaming not stress-tested) | Yes | W1 (36-layer), W4 (perf) |
 | **Total** | **17** | **2 blocked** | **12 blocked** | — |
+
+---
+
+## Phase 6 RTL Verification Issues / Blockers
+
+> **Scope**: CaduceusCore Phase 6 RTL verification execution (`phase6-rtl-verification`).
+> **Baseline Date**: 2026-07-15 to 2026-07-19
+> **Overall State**: VCS compilation and Ibex SoC smoke are green; Spike debug and full-layer/full-weight RTL runs are blocked by firmware and plugin issues. No RTL source files were modified during Phase 6.
+
+### Blockers and Known Gaps
+
+| Issue | Root Cause | Impact | Workaround | Next Step / Owner | Evidence / Review Gate |
+|---|---|---|---|---|---|
+| **Spike plugin ABI mismatch** | `npu_mmio_plugin.so` was built with an incompatible C++ ABI; runtime fails with undefined symbol `_Z15mmio_device_mapB5cxx11v`. | Spike-based E2E debug and forward-pass flows are blocked for W3-RTL and 36-layer RTL tasks. | Use the Ibex-only RTL path for all Phase 6 verification. | Rebuild `npu_mmio_plugin.so` with an ABI-compatible toolchain before reintroducing Spike debug. Owner: plugin build/infra. | `build/evidence/vcs-readiness-gate.txt` |
+| **Firmware 64 KB weight-buffer limit** | Firmware loads weights once per descriptor and does not implement per-K-tile reload. | Full Q_proj (K=2560, N=4096) and a genuine full 36-layer RTL forward pass are blocked. PERF-11 FAIL. | Restrict RTL tests to K≈512 per load; rely on Func Model tile-level analysis for full-layer behavior. | Implement per-K-tile weight streaming reload in firmware. Owner: firmware. | `build/evidence/w4-perf-p2.txt`, `build/evidence/w4-perf-review-gate.txt` |
+| **DMA output readback zeros** | The CH1 DMA path that copies MXU output from SRAM→DRAM returns zeros — likely a direction/destination misconfiguration, MXU wrapper output drain, or SRAM-controller clear-on-completion behavior. | PERF path cannot read back MXU output through DRAM, blocking output golden comparison in the firmware-dispatch flow. | FM-SOC regression (33/33) still passes via the backdoor path; use backdoor SRAM reads for debug. | Fix CH1 DMA configuration / wrapper drain behavior / SRAM-controller completion handling. Owner: RTL/DMA integration. | `build/evidence/w4-perf-p*.txt`, `build/evidence/w4-perf-review-gate.txt` |
+| **PERF-11 blocked** | 64 KB weight buffer cannot hold 2560 tiles required by Q_proj (K=2560, N=4096). | No RTL measurement for full Q_proj; W4-PERF P2 acceptance is 3/4 PASS. | Document as a known firmware limitation; use smaller matmul configs for P0/P1/P3/P4. | Implement per-K-tile weight reload and re-run PERF-11. Owner: firmware/PERF tests. | `build/evidence/w4-perf-p2.txt`, `build/evidence/w4-perf-review-gate.txt` |
+| **Fullchain SFU/Vector blocked** | Current PERF firmware dispatch path only exercises MMUL (opcode 0); SFU (op=1) and Vector (op=2) are not dispatched in the PERF path. | Task 25a fullchain cannot measure non-MMUL segments; SFU/Vector end-to-end latency remains unvalidated in the PERF firmware flow. | Reference FM-SOC-004/005, which demonstrate SFU/Vector opcode dispatch in the non-PERF path. | Validate SFU and Vector opcodes in the PERF firmware path and measure fullchain non-MMUL segments. Owner: firmware/PERF tests. | `build/evidence/fullchain-pipeline.txt`, `build/evidence/w4-perf-review-gate.txt` |
+| **36-layer Func Model-only** | Spike is blocked by the plugin ABI mismatch, and the firmware weight-buffer/DMA limitations prevent a full RTL layer pass. | No genuine full 36-layer RTL forward pass exists; RTL evidence is limited to the FM-SOC-001 Ibex SoC smoke test. | Run Func Model checkpoint validation (L0/L10/L20/L35 cos_sim=1.0) to prove golden stability. | Resolve Spike ABI mismatch and firmware streaming/readback issues, then run a real 36-layer RTL forward pass. Owner: RTL/firmware/integration. | `build/evidence/36layer-checkpoint.txt`, `build/evidence/36layer-review-gate.txt` |
+| **W4-PERF evidence schema gaps** | Evidence generation scripts did not include `timestamp` and `commit` in every record. | P2-P4 lack timestamps entirely; P0-P1 are partial. Procedural non-compliance with the agreed evidence schema; does not invalidate technical measurements but must close before Final Wave. | Review gate accepted the technical measurements while documenting the schema gap. | Update evidence-generation scripts to add `timestamp` and `commit` to all W4-PERF records. Owner: verification automation. | `build/evidence/w4-perf-review-gate.txt` |
+| **F2 baseline contradiction** | The regression baseline section (pytest 210+, FM-SOC 33/33, MXU 9/9, SFU 319/319, Vector 63/63) disagrees with the success-criteria table (pytest ≥700, SFU 526/537, Vector 64/64). | Ambiguous Final Wave acceptance criteria; risk of misjudging signoff readiness. | Treat as a documentation inconsistency to be reconciled before Final Wave; Phase 6 proceeded with the measured evidence set. | Reconcile baseline numbers against the success-criteria table and update the plan or baseline. Owner: verification lead / documentation. | `.omo/notepads/phase6-rtl-verification/learnings.md` |
+
+### Review Gate Verdicts
+
+| Gate | Verdict | Key Conditions / Caveats |
+|---|---|---|
+| FM-4 Independent Review Gate | **APPROVE** | FM-1 cross-engine and FM-3 correctness validations deferred to W4-PERF; 6b Q8_0 control blocked by missing asset. |
+| Pre-Wave VCS Readiness Gate | **PASS** | All 5 gate items compile; Ibex runtime PASS; Spike runtime FAIL due to plugin ABI mismatch. |
+| W3-RTL Atlas Review Gate | **APPROVE** | Task 19 is a composite verification: RTL MXU path proven by FM-SOC-032, CV mapping/golden from FM-2. |
+| W4-PERF Independent Review Gate | **APPROVE WITH CONDITIONS** | Must close: evidence schema (timestamp/commit), PERF-11 per-K-tile reload, SFU/Vector opcode validation in PERF path, RTL measurement for FM-3 overlap. |
+| 36-layer RTL Checkpoint Review Gate | **APPROVE WITH CONDITIONS** | 36-layer pass was Func Model-only; genuine RTL full-layer pass still required after Spike/firmware blockers resolved. |
+
+### Summary
+
+Phase 6 closed with VCS compilation readiness confirmed and the Ibex SoC path fully operational, but several integration blockers remain before a genuine full-model RTL forward pass is possible. The dominant blockers are the Spike plugin ABI mismatch, the firmware 64 KB weight-buffer limit, and the DMA output readback zero issue. All three are tracked above with owners, workarounds, and evidence references.
+
+## Phase 7 Resolution Status
+
+> **Scope**: Disposition of every Phase 6 RTL verification blocker after Phase 7 investigation.
+> **Baseline Date**: 2026-07-19
+> **Overall State**: Three blockers are RESOLVED (environment / documentation); seven remain unresolved and require a specific next-step file or function.
+
+### Blocker Dispositions
+
+- **Spike plugin ABI mismatch** → RESOLVED (`build/evidence/ph7-spike-fixed.txt`)
+- **64 KB weight buffer / PERF-11** → NOT RESOLVED (needs `firmware/npu_firmware.c` per-K-tile weight reload in `run_mmul()` or equivalent)
+- **SFU/Vector fullchain dispatch** → NOT RESOLVED (needs `firmware/npu_firmware.c` PERF path support for op=1/op=2 in dispatch table)
+- **36-layer Func Model-only** → NOT RESOLVED (depends on weight streaming fix in `firmware/npu_firmware.c` plus DMA readback zero fix in `sim/cocotb_bridge.py`)
+- **DMA output readback zeros** → NOT RESOLVED (next step: compare DMA descriptors in `sim/cocotb_bridge.py` between FM-SOC path and PERF path; not a `npu_firmware.c` code defect)
+- **FM-3 weight-streaming RTL measurement** → NOT RESOLVED (needs new VCS simulation run; re-run PERF-12 via `sim/perf_tests.py` and update `build/evidence/w4-perf-p2.txt`; current 0.98 is model/parse value)
+- **Q8_0 GGUF missing** → NOT RESOLVED (external network blocked; download command: `huggingface-cli download Qwen/Qwen2.5-3B-Instruct-GGUF qwen2.5-3b-instruct-q8_0.gguf --local-dir ~/models`)
+- **Phase 6 plan checkbox 6b inconsistency** → NOT RESOLVED (after Q8_0 unblocked, revert Phase 6 plan 6b checkbox in `.omo/notepads/phase6-rtl-verification/plan.md` or re-run experiment)
+- **W4-PERF evidence schema** → RESOLVED (`build/evidence/w4-perf-p*.txt`)
+- **testcase-list-perf.md** → RESOLVED (`rtl/testcase-list-perf.md`)
+
+## Phase 6 Condition Disposition
+
+| Phase 6 Source | Condition | Phase 7 Disposition | Evidence / Next Step |
+|:---|:---|:---|:---|
+| W4-gate #1 / F1-#7 | Evidence schema gap | RESOLVED | `build/evidence/w4-perf-p*.txt` |
+| W4-gate #2 / F1-#2 | PERF-11 weight streaming | NOT RESOLVED | `firmware/npu_firmware.c` per-K-tile reload |
+| W4-gate #3 / F1-#3 | SFU/Vector fullchain dispatch | NOT RESOLVED | `firmware/npu_firmware.c` PERF op=1/2 dispatch |
+| W4-gate #4 / F1-#4 | FM-3 overlap RTL measurement | NOT RESOLVED | new VCS simulation run |
+| 36L-gate #1 / F1-#5 | 36-layer RTL full forward pass | NOT RESOLVED | weight streaming + DMA readback fix |
+| 36L-gate #2 / F1-#6 | Spike plugin ABI mismatch | RESOLVED | `build/evidence/ph7-spike-fixed.txt` |
+| F1-#8 | W1-Supplement plan checkbox inconsistency | NOT RESOLVED | Q8_0 unblocked: revert checkbox or re-run |
+| F1-#9 | testcase-list-perf.md status | RESOLVED | `rtl/testcase-list-perf.md` |
+| 36L-gate #3 | Regenerate golden after FM changes | ACKNOWLEDGED | out of Phase 7 scope (no FM changes) |
+| 36L-gate #4 | Next gate must confirm RTL full-layer | FORWARD | future Phase acceptance requirement |
+
+## Phase 8 Resolution Status — PERF Harness Fix
+
+> **Scope**: Phase 8 Python harness only (B1: no RTL/firmware changes). Fix data-layout in `sim/perf_tests.py` for MXU preload sequencer compatibility.
+> **Baseline Date**: 2026-07-19
+> **Overall State**: Core fix confirmed (data-layout hypothesis) and applied; several firmware-path blockers remain unresolved because root cause is in firmware/RTL.
+
+### Root Cause Verdict Matrix
+
+| Blocker / PERF Case | Resolution Status | Test Status | Root Cause Verdict | Evidence File | Scope Note |
+|---|---|---|---|---|---|
+| **Data-Layout Hypothesis** (PERF harness writes raw row-major bytes) | **RESOLVED** | PASS (cs=1.0 on single-tile direct preload) | **CONFIRMED** — `pack_int8_activation_tile_major()` is required; MXU preload sequencer expects K-vector tile-major layout. Applied in `PR.mmul()`. | `build/evidence/ph8-diagnostic.txt` | Python harness (`sim/perf_tests.py`) |
+| **PERF-11 / DMA zeros** (P2 batch: K=512, N=128) | **PARTIAL** | PARTIAL_PASS (cs=0.381 standalone; DMA readback works, output non-zero) | **PARTIAL** — Row-major → all zeros (pre-fix); tile-major → non-zero output (post-fix). Packing IS causal but INSUFFICIENT: firmware-path M=1 multi-tile bug prevents cs≥0.999. DMA output store is functional. | `build/evidence/ph8-perf-11-before-after.txt` | Python harness fix applied; remaining gap is firmware/RTL M=1 multi-tile issue |
+| **PERF-13 / M=1 multi-tile** (P3 batch: 7/9 MMULs fail) | **NOT RESOLVED** | FAIL (cos_sim 0.386–0.796 for M=1 multi-tile; M=32 single-K-tile passes at cs=1.0) | **NOT RESOLVED** — Firmware tile iteration loop or MXU wrapper broadcast sequencer bug for M=1 when K>64 or N>64. Tile-major packing IS correct (Task 1 direct preload cs=1.0). Divergence is in firmware→MMIO→wrapper→MXU path. | `build/evidence/ph8-p3_p4.log` | Firmware/RTL scope; beyond Phase 8 B1 |
+| **PERF-17 / M=1,K=128,N=128** (P4 batch) | **NOT RESOLVED** | FAIL (cs=0.711) | Same root cause as PERF-13: M=1 multi-tile firmware-path bug. | `build/evidence/ph8-p3_p4.log` | Firmware/RTL scope; beyond Phase 8 B1 |
+| **P0 Batch** (PERF-01..04: K=256, N=64) | **NOT RESOLVED** | FAIL (PERF-01 cs=0.437; PERF-04 cs=-0.218, cyc=2 doorbell stale) | Same root cause as PERF-13 + pre-existing ring buffer reuse. Firmware doorbell path produces incorrect MXU results for M=1 multi-tile. | `build/evidence/ph8-perf-04-regression.txt` | Firmware/RTL scope; beyond Phase 8 B1 |
+| **Ring Buffer Reuse** (P2/P3/P4 batches) | **RESOLVED** | PASS (all 9 MMULs produce distinct output) | **FIXED** — Added `_ring_tail` counter to `PR`. Each `mmul()` increments tail, writes to correct ring slot, sets `HOST_TAIL`, polls `NPU_HEAD`. | `build/evidence/ph8-p3_p4.log` | Python harness (`sim/perf_tests.py`) |
+| **FULLCHAIN single-tile** (5-op pipeline: MMUL→RMSNorm→VRESID→VCONV→SiLU) | **RESOLVED** | PASS (cos_sim=1.0, 5 gaps, DMA non-zero) | **RESOLVED** — Single-tile M=1,K=64,N=64 passes through firmware doorbell path for all 5 ops. Validates SFU (op 0x17/0x06) and Vector (op 0x14/0x13) dispatch. | `build/evidence/fullchain-pipeline.txt` | Python harness fix + fullchain test |
+| **PERF-20 Repeatability** (M=1,K=128,N=128, 3 runs) | **RESOLVED** | PASS (mean=16394 cyc, std=1.41, pct_std=0.01% ≤ 1%) | — | `build/evidence/ph8-p3_p4.log` | Measurement infra; cycle count is deterministic despite incorrect M=1 output |
+| **PERF-18 Inter-Op Gap** (sequential 2x M=1,K=64,N=64) | **RESOLVED** | PASS (cos_sim=1.0 both, inter_op_gap=0 cyc) | — | `build/evidence/ph8-p3_p4.log` | Single-tile M=1 works; multi-tile M=1 blocked by PERF-13 |
+| **FM-SOC Regression** (33/33 cases) | **RESOLVED** | PASS (33/33 PASS, 0 FAIL, 0 SKIP) | **NO REGRESSION** — FM-SOC path (`rtl_soc_runner.py` + Ibex firmware) is orthogonal to PERF harness changes. No RTL or firmware source files modified. | `build/evidence/fm-soc-regression.txt` | Regression gate clean |
+| **Q8_0 / 36-layer / FM-3 RTL** (weight-streaming RTL measurement) | **NOT ADDRESSED** | — | **DEFERRED** — Requires: Q8_0 GGUF download (external network), per-K-tile firmware weight reload, DMA readback fix before a genuine 36-layer RTL forward pass is possible. | `build/evidence/36layer-checkpoint.txt` (Phase 6), `.omo/notepads/phase6-rtl-verification/learnings.md` | Firmware/RTL scope; beyond Phase 8 B1 |
+| **Spike Plugin ABI Mismatch** | **RESOLVED** (Phase 7) | PASS | Fixed in Phase 7; rebuilt `npu_mmio_plugin.so` with ABI-compatible toolchain. | `build/evidence/ph7-spike-fixed.txt` | External toolchain; resolved before Phase 8 |
+| **W4-PERF Evidence Schema** | **RESOLVED** (Phase 7) | PASS | `timestamp`/`commit` added to W4-PERF evidence records. | `build/evidence/w4-perf-p*.txt` | Procedural; resolved before Phase 8 |
+
+### Key Distinction: Test PASS vs Blocker RESOLVED
+
+Per Metis G11, the following are **Test PASS** but do NOT equate to **Blocker RESOLVED**:
+
+- **PERF-20 Repeatability**: PASS (0.01% ≤ 1%) but the underlying MMUL computes **incorrect values** for M=1 multi-tile. The cycle count is deterministic despite incorrect output.
+- **PERF-18 Inter-Op Gap**: PASS (cos_sim=1.0, inter_op_gap=0) but only validates **single-tile** M=1,K=64,N=64. Multi-tile M=1 remains blocked.
+- **FULLCHAIN single-tile**: PASS (cos_sim=1.0, 5 ops) but only validates **K≤64, N≤64**. Multi-tile M=1 SFU/Vector dispatch is untested.
+
+### Phase 8 Closure Summary
+
+| Category | Count | Status |
+|---|---|---|
+| **Resolved** (harness fix applied, gate clean) | 5 | Data-layout, Ring buffer, FULLCHAIN single-tile, PERF-20, PERF-18 |
+| **Partial** (causal fix proven but insufficient) | 1 | PERF-11 (DMA works, output non-zero, cs<0.999) |
+| **Not Resolved** (root cause in firmware/RTL) | 4 | PERF-13, PERF-17, P0 batch, FM-3 weight-streaming |
+| **Deferred** (requires external unblock) | 1 | Q8_0 / 36-layer RTL |
+| **No Regression** | 1 | FM-SOC 33/33 |
+
+**Dominant remaining blocker**: M=1 multi-tile firmware-path bug — the tile-major packing fix is correct at the data-layout level, but the firmware tile iteration loop or MXU wrapper broadcast sequencer produces incorrect output when M=1 and K>64 or N>64. Next step (beyond Phase 8 B1 scope): isolate the divergence point in `firmware/npu_firmware.c` tile loop vs `rtl/wrapper/mxu_soc_wrapper.v` broadcast sequencer.
+
+## Phase 8 Condition Disposition
+
+> Maps each Phase 8 source condition to its disposition, evidence/next-step. Synthetic/analytical entries annotated with `source="analytical"`.
+
+| Phase 8 Source Condition | Disposition | Evidence / Next Step | Tag |
+|:---|:---|:---|:---|
+| **Data-layout hypothesis** (row-major vs tile-major) | **RESOLVED** — Hypothesis confirmed; tile-major packing applied in `PR.mmul()` | `build/evidence/ph8-diagnostic.txt`: row-major cs=0.201 (FAIL), tile-major cs=1.000 (PASS, bit-exact) | — |
+| **PERF-11 DMA zeros** (Q_proj K=512,N=128) | **PARTIAL** — Row-major→zeros; tile-major→non-zero output (cs=0.381). Packing causal but insufficient; firmware-path M=1 multi-tile bug prevents cs>=0.999. | `build/evidence/ph8-perf-11-before-after.txt`: pre-fix cs=0.000 (all zeros), post-fix cs=0.381 (non-zero). DMA output store confirmed functional. Next step: Phase 9 firmware/RTL debug. | — |
+| **PERF-13 / PERF-17 M=1 multi-tile** (K>64 or N>64) | **NOT RESOLVED** — Firmware tile iteration loop or MXU wrapper broadcast sequencer bug for M=1 when K>64 or N>64. Single-tile M=1 works (cs=1.0). Direct preload achieves cs=1.0 for multi-tile. | `build/evidence/ph8-p3_p4.log`: 7/9 MMULs FAIL (cs 0.386-0.796). Next step: Phase 9 isolate firmware vs wrapper divergence. | — |
+| **P0 batch** (PERF-01..04 firmware-path M=1 multi-tile) | **NOT RESOLVED** — Same root cause as PERF-13/17. Firmware doorbell path produces incorrect MXU results for M=1 multi-tile. | `build/evidence/ph8-perf-04-regression.txt`: PERF-01 cs=0.437, PERF-04 cs=-0.218 (doorbell stale). Next step: Phase 9 firmware/RTL debug. | — |
+| **Ring buffer reuse** (P2/P3/P4 sequential MMUL staleness) | **RESOLVED** — `_ring_tail` counter added to `PR`. Each `mmul()` writes to distinct ring slot. | `build/evidence/ph8-p3_p4.log`: P3 run 2 all 9 MMULs produce distinct output. P18a/P18b cs=1.0. | — |
+| **FULLCHAIN single-tile** (5-op pipeline) | **RESOLVED** — Single-tile M=1,K=64,N=64 fullchain passes cs=1.0, 5 gaps, DMA non-zero through firmware doorbell. | `build/evidence/fullchain-pipeline.txt`: status=PASS, cos_sim=1.000000, 5 gaps, DMA non-zero. | — |
+| **PERF-20 repeatability** (M=1,K=128,N=128, 3 runs) | **RESOLVED** | `build/evidence/ph8-p3_p4.log`: runs=[16396,16393,16393], pct_std=0.01% ≤ 1% | — |
+| **PERF-18 inter-op gap** (sequential 2x M=1,K=64,N=64) | **RESOLVED** — cos_sim=1.0 both, inter_op_gap=0. | `build/evidence/ph8-p3_p4.log` | — |
+| **FM-SOC regression** (33/33 cases) | **RESOLVED** — No regression; 33/33 PASS, 0 FAIL, 0 SKIP. | `build/evidence/fm-soc-regression.txt`: 33/33 PASS. RTL/firmware source unchanged. | — |
+| **PERF-12 overlap ratio** | **NOT ADDRESSED** (maintained as analytical estimate) | `build/evidence/w4-perf-p2.txt`: overlap_ratio=0.98 | `source="analytical"` |
+| **PERF-14/15/16 cross-engine gap** | **NOT ADDRESSED** (synthetic analytical entries) | `build/evidence/w4-perf-p3.txt`: cross_engine_gap=4, detailed gap_model | `source="analytical"` |
+| **PERF-18/19 analytical measurements** | **NOT ADDRESSED** (synthetic analytical entries) | `build/evidence/w4-perf-p4.txt`: inter_op_gap, cross_engine_gap fields | `source="analytical"` |
+| **Q8_0 GGUF missing** (requires external download) | **NOT RESOLVED** (deferred) | Next step: `huggingface-cli download Qwen/Qwen2.5-3B-Instruct-GGUF qwen2.5-3b-instruct-q8_0.gguf --local-dir ~/models` (Phase 9) | — |
+| **36-layer RTL full forward pass** | **NOT RESOLVED** (deferred) | Requires: weight streaming fix, DMA readback fix, M=1 multi-tile fix. Next step: Phase 9. | — |
+| **FM-3 overlap RTL measurement** | **NOT RESOLVED** (deferred) | Requires new VCS simulation run after M=1 multi-tile fix. Next step: Phase 9. | — |
+
+## Phase 9 Q8_0 Control Experiment — 6b Status
+
+| Field | Detail |
+|-------|--------|
+| **Date** | 2026-07-21 20:22:27 |
+| **Source** | Phase 9 Todo 9 (Wave 5) |
+| **Status** | **`BLOCKED-NETWORK`** (ba/judge=BLOCKED-NETWORK) |
+| **Evidence** | `build/evidence/ph9-q8_0-download-FAILED.txt` |
+| **Note** | download from HuggingFace failed after retries; external network unavailable |
+
+
+## Phase 9 Resolution Status
+
+> **Scope**: Phase 9 firmware/RTL fix (per-K-tile firmware loop + RTL accumulate mode + SRAM/DRAM buffer overlap fix).
+> **Baseline Date**: 2026-07-22T02:00:41Z
+> **Overall State**: Core fixes confirmed; PERF regression re-run with cos_sim validation. All M=1 multi-tile divergence cases resolved.
+
+### Blocker Dispositions
+
+| Blocker / Issue | Resolution Status | Test Status | Root Cause Verdict | Evidence File |
+|---|---|---|---|---|
+| **M=1 multi-tile firmware divergence** (K-dependent cos_sim drop) | **RESOLVED** | PASS (cs>=0.999) | **FIRMWARE K-TILE LOOP + RTL ACCUMULATE MODE + SRAM/DRAM BUFFER OVERLAP** — firmware  dispatched all K-tiles at once without accumulate mode; RTL  had no cross-K-tile accumulate. Fix: per-K-tile firmware loop with  accumulate, SRAM double-buffering, DRAM spread. |  |
+| **PERF-01** (P0 K=256,N=64 M=1 multi-tile) | **RESOLVED** | PASS (cs>=0.999) | Same root cause as M=1 multi-tile. Firmware per-K-tile loop + accumulate fix. |  |
+| **PERF-04** (P0 K=128,N=128 M=1) | **RESOLVED** | PASS (cs>=0.999) | Same root cause. Previously cs=-0.218 (doorbell stale); now passes. |  |
+| **PERF-05/06** (P1 K=128,N=128 M=1/M=32) | **RESOLVED** | PASS (cs>=0.999) | M=1 multi-tile fix covers both. |  |
+| **PERF-11** (P2 K=512,N=128) | **RESOLVED** | PASS (cs>=0.999) | Per-K-tile weight DMA + accumulate: previously cs=0.381. |  |
+| **PERF-13** (P3: 9 MMULs, M=1 failures) | **RESOLVED** | PASS (cs>=0.999) | Previously 7/9 MMULs FAIL (cs=0.386-0.796). Now all PASS. |  |
+| **PERF-17** (P4 depth analysis) | **RESOLVED** | PASS (cs>=0.999) | Previously M=1 multi-tile bug. Now resolved. |  |
+| **FULLCHAIN multi-tile** (K=256,N=256) | **RESOLVED** | PASS (cs>=0.999) | New Phase 9 testcase; validates multi-tile fullchain with DMA/AXI non-zero traffic. |  |
+| **Weight streaming (K>64)** | **RESOLVED** | PASS | Firmware per-K-tile weight DMA loop in  with ping-pong + accumulate. |  |
+| **SRAM budget (K=2560 Q_proj)** | **RESOLVED** | PASS | Peak 7424B < 4MB; max M=1636 fits in SRAM headroom. |  |
+| **Q8_0 / 6b experiment** | **NOT RESOLVED** | BLOCKED-NETWORK | External network unavailable;  not installed on sz0001. |  |
+| **36-layer RTL full forward pass** | **NOT RESOLVED** | DEFERRED | Requires DMA readback fix in  (Oracle issue 6: read-only). |  |
+| **Spike plugin ABI** | **RESOLVED** (Phase 7) | PASS | Fixed in Phase 7; separate issue. |  |
+
+### Phase 9 Fix Summary
+
+| Category | Count | Status |
+|---|---|---|
+| **Resolved** (firmware+RTL fix applied, PERF re-run passed) | 11 | M=1 multi-tile, PERF-01/04/05/06/11/13/17, FULLCHAIN-MT, weight streaming, SRAM budget |
+| **Not Resolved** (require external unblock or beyond scope) | 2 | Q8_0/BLOCKED-NETWORK, 36-layer RTL (cocotb_bridge.py read-only) |
+| **Previously Resolved** (Phase 7/8, re-verified) | 2 | Spike ABI, W4-PERF evidence schema |
+
+**Dominant resolution**: The M=1 multi-tile firmware divergence — the single largest blocker from Phase 8 — is now resolved with the per-K-tile firmware loop + RTL accumulate mode + SRAM/DRAM buffer overlap fix. All PERF cases that previously failed due to this root cause now pass with cos_sim >= 0.999.
+
+## Phase 9 Condition Disposition
+
+> Maps each Phase 8/7 source condition to its Phase 9 disposition with evidence and next steps.
+
+| Phase 8 Source Condition | Phase 9 Disposition | Evidence / Next Step | Tag |
+|---|---|---|---|
+| **Data-layout** row-major vs tile-major | **RESOLVED** (Phase 8) | Tile-major packing confirmed causal. | — |
+| **PERF-11 DMA zeros** (K=512,N=128, cs=0.381) | **RESOLVED** | Per-K-tile firmware+DMA+accumulate: cs>=0.999. |  |
+| **PERF-13/17 M=1 multi-tile** (7/9 MMULs fail) | **RESOLVED** | Firmware + RTL fix: all 9 MMULs pass cs>=0.999. |  |
+| **P0 batch** (PERF-01/04 M=1 multi-tile) | **RESOLVED** | Same fix: PERF-01 cs>=0.999, PERF-04 cs>=0.999. |  |
+| **Ring buffer reuse** (P2/P3/P4 staleness) | **RESOLVED** (Phase 8) |  counter added. | — |
+| **FULLCHAIN single-tile** (5-op pipeline) | **RESOLVED** (Phase 8) | cs=1.0, 5 gaps, DMA non-zero. | — |
+| **PERF-20 repeatability** (0.01% std) | **RESOLVED** (Phase 8) | Re-verified in P4 re-run. |  |
+| **PERF-18 inter-op gap** (0 cyc) | **RESOLVED** (Phase 8) | Single-tile works; multi-tile covered by FULLCHAIN-MT. |  |
+| **FM-SOC regression** (33/33) | **RESOLVED** (Phase 8, re-verified T5) | 33/33 PASS after fix. |  |
+| **PERF-12/14/15/16 analytical entries** | **MAINTAINED** | Analytical predictions preserved; RTL-measured cases now pass. |  |
+| **PERF-18/19 analytical measurements** | **MAINTAINED** | Analytical predictions preserved. |  |
+| **Q8_0 GGUF missing** (external download) | **NOT RESOLVED** | BLOCKED-NETWORK; deferred to Phase 10. |  |
+| **36-layer RTL full forward pass** | **NOT RESOLVED** | Requires  DMA readback fix (Oracle issue 6: read-only in T8 scope). | Next step: Phase 10 or dedicated bridge fix wave. |
+| **FM-3 overlap RTL measurement** | **NOT RESOLVED** | Deferred: requires new VCS simulation after DMA fix + 36-layer forward pass. |  for now |
+
+## Wrapper-Level Verification Results
+
+> **Scope**: CaduceusCore wrapper-level verification (WV) for SFU, Vector, and MXU engine wrappers.
+> **Baseline Date**: 2026-07-23
+> **Plan**: `wrapper-level-verification` (Waves 0-3)
+> **Overall State**: Partial — Vector and MXU functional tests pass; SFU blocked by BUG-RTL-SOC-WV-001.
+
+### Per-Wrapper Test Results
+
+| Wrapper | Tests | PASS | FAIL | Status | Notes |
+|---------|:-----:|:----:|:----:|--------|-------|
+| **SFU** | 5 | 1 | 4 | **PARTIAL** | `test_apb_regmap_rw` passes; 4 operation tests (softmax/gelu/width_converter/line_buffer_prefetch) time out waiting for STATUS.DONE (BUG-RTL-SOC-WV-001). SFU produces correct output via AXI writes but DONE state transition never occurs. |
+| **Vector** | 5 | 5 | 0 | **PASS** | All 5 tests (apb_native_rw, apb_wrapper_rw, add_normal, chunk_burst_8beat, conv_type_convert) pass. |
+| **MXU** | 5 | 5 | 0 | **PASS** | All 5 tests (apb_regmap_rw, preload_single_tile, single_tile_compute, store_out_burst, accumulate_mode) pass. |
+
+### Bug Investigations
+
+#### BUG-005: AXI Sparse Slave X-Propagation
+
+- **SFU**: **BLOCKED** — Cannot reproduce X-propagation for SFU because STATUS.DONE never asserts (BUG-RTL-SOC-WV-001). Test `test_bug005_sfu_nonaligned_xprop` times out before output can be checked.
+- **Vector**: **X_PROP/FAIL** — X-propagation confirmed. Bytes 400-511 (X from uninitialized sparse slave) propagate into valid output bytes 0-399 when reading 512-byte chunks.
+- **Conclusion**: BUG-005 is a real RTL issue affecting the Vector wrapper. Root cause: the wrapper reads full 512-byte AXI beats; uninitialized padding bytes contaminate the valid data. SFU test deferred until BUG-RTL-SOC-WV-001 is fixed.
+
+#### BUG-007: Consecutive Multi-Op Dispatch
+
+- **MXU**: **FAIL** — Warm-up MMUL STATUS.DONE timeout after 100K cycles. Genuine RTL bug in MXU wrapper DONE assertion path for consecutive dispatch.
+- **SFU**: **PASS** — `start_hold` correctly gates START replay for both GELU and SOFTMAX ops. Back-to-back dispatch works through the start_hold mechanism.
+- **Conclusion**: BUG-007 is reproduced for MXU (DONE path) but not for SFU (start_hold path verified). The MXU wrapper needs a fix for its DONE state machine.
+
+### New Bugs Found
+
+| Bug ID | Severity | Summary | Block |
+|--------|----------|---------|-------|
+| **BUG-RTL-SOC-WV-001** | Major | SFU wrapper never asserts STATUS.DONE after processing completes. SFU produces correct output via AXI writes but internal DONE state transition fails. Root cause is in the wrapper glue (sfu_soc_wrapper.v + apb_to_mmio.v), not sfu_top arithmetic (IP-level 319/319 PASS). Affects all SFU operation tests and blocks BUG-005 SFU investigation. | T2, T5 |
+
+### Forward Actions
+
+1. **Fix BUG-RTL-SOC-WV-001**: Waveform-level debug of `sfu_top.done` vs wrapper `STATUS.DONE` propagation. Investigate `start_hold`, `post_start_stall`, or width-converter FSM for DONE suppression. After fix, re-run SFU functional (4 tests) and BUG-005 SFU test.
+2. **Fix BUG-007 MXU**: Investigate MXU wrapper DONE assertion for warm-up MMUL. After fix, re-run `test_bug007_consecutive_dispatch`.
+3. **Address BUG-005 Vector**: Fix the sparse-slave X-propagation in `vector_soc_wrapper.v`. Implement wstrb-based or mask-based padding-byte exclusion.
+4. **Regression automation**: `scripts/wv_regression.sh` now aggregates all wrapper verification evidence into `build/evidence/wrap-regression-summary.txt`. Run after any wrapper RTL change.

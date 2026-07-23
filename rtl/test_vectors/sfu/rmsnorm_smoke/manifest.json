@@ -1,15 +1,12 @@
 {
   "name": "rmsnorm_smoke",
-  "description": "4096-element FP16 RMSNorm smoke test",
-  "sfu_op": "rmsnorm",
-  "sfu_len": 4096,
-  "seed": 909,
+  "sfu_op": true,
   "files": {
-    "input": "input.hex",
-    "golden": "golden.hex"
+    "golden": "golden_output.hex"
   },
-  "format": {
-    "input": "float16 (FP16), 4 hex digits per value, little-endian",
-    "golden": "float16 (FP16), 4 hex digits per value, little-endian"
+  "results": {
+    "golden_shape": [
+      64
+    ]
   }
 }

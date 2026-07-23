@@ -1,0 +1,28 @@
+W4-PERF Schema Verification (PH7 Blocker Fix)
+==============================================
+Date: 2026-07-19
+Commit: fd9a59ff98c8f9d0f3731c086f11668ff1a262c2
+
+--- JSON validity ---
+All JSON valid.
+
+--- timestamp counts ---
+build/evidence/w4-perf-p0.txt: 4
+build/evidence/w4-perf-p1.txt: 4
+build/evidence/w4-perf-p2.txt: 4
+build/evidence/w4-perf-p3.txt: 4
+build/evidence/w4-perf-p4.txt: 4
+build/evidence/fullchain-pipeline.txt: 1
+
+--- commit counts ---
+build/evidence/w4-perf-p0.txt: 4
+build/evidence/w4-perf-p1.txt: 4
+build/evidence/w4-perf-p2.txt: 4
+build/evidence/w4-perf-p3.txt: 4
+build/evidence/w4-perf-p4.txt: 4
+build/evidence/fullchain-pipeline.txt: 1
+
+--- FAIL occurrences ---
+build/evidence/w4-perf-p2.txt: PERF-11 (status=FAIL) — only FAIL record, unchanged
+
+=== STATUS: ALL 6/6 CHECKS PASSED ===

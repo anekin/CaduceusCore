@@ -1,0 +1,9 @@
+/NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+=== CaduceusCore EDA Environment ===
+VCS:         /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/bin/vcs
+VCS_HOME:    /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+Python:      Python 3.11.9
+PLI_TAB:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/pli.tab
+LICENSE:     27020@sz0001
+====================================
+bash: /tmp/sfu_debug.sh: No such file or directory

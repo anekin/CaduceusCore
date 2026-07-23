@@ -224,6 +224,47 @@ def validate_exp_lut_q0_12(values: list[int]):
 
 
 # ══════════════════════════════════════════════════════════════════════
+# RoPE inv_freq LUT — matches sfu_top.v theta generator
+# ══════════════════════════════════════════════════════════════════════
+
+ROPE_HEAD_DIM = 128
+ROPE_INV_FRAC = 30
+ROPE_INV_SCALE = 1 << ROPE_INV_FRAC
+ROPE_THETA_BASE = 10000.0
+
+
+def generate_rope_inv_freq_lut() -> list[int]:
+    """Generate 64-entry RoPE inv_freq LUT in signed Q0.30.
+
+    inv_freq[i] = 10000^(-2*i/128) for i = 0..63 (head_dim/2 pairs).
+    Values are positive and fit in 32-bit signed fixed-point Q0.30.
+    """
+    values = []
+    for i in range(ROPE_HEAD_DIM // 2):
+        val = ROPE_THETA_BASE ** (-2.0 * i / ROPE_HEAD_DIM)
+        values.append(int(round(val * ROPE_INV_SCALE)))
+    return values
+
+
+def validate_rope_inv_freq_lut(values: list[int]):
+    """Self-check: 64 entries, monotonic decreasing, endpoints correct."""
+    assert len(values) == ROPE_HEAD_DIM // 2, (
+        f"Expected {ROPE_HEAD_DIM // 2} entries, got {len(values)}"
+    )
+    assert values[0] == int(round(1.0 * ROPE_INV_SCALE)), (
+        f"entry[0] expected {int(round(1.0 * ROPE_INV_SCALE))}, got {values[0]}"
+    )
+    for i in range(1, len(values)):
+        assert values[i] < values[i - 1], (
+            f"Non-monotonic at entry {i}: {values[i]} >= {values[i - 1]}"
+        )
+        assert 0 <= values[i] < (1 << 31), (
+            f"entry[{i}] = {values[i]} out of 32-bit signed range"
+        )
+    print(f"rope_theta_inv_freq validation PASSED: {len(values)} entries, endpoints OK")
+
+
+# ══════════════════════════════════════════════════════════════════════
 # Main
 # ══════════════════════════════════════════════════════════════════════
 
@@ -257,6 +298,13 @@ def main():
                   word_bits=16, signed=True)
         validate_gelu_lut(gelu_vals)
         print(f"Generated: {out_dir / 'gelu_lut.hex'} ({len(gelu_vals)} entries, signed Q3.12)")
+
+    if args.luts in ("exp", "all"):
+        rope_vals = generate_rope_inv_freq_lut()
+        write_hex(out_dir / "rope_theta_inv_freq.hex", rope_vals, width=8,
+                  word_bits=32, signed=True)
+        validate_rope_inv_freq_lut(rope_vals)
+        print(f"Generated: {out_dir / 'rope_theta_inv_freq.hex'} ({len(rope_vals)} entries, signed Q0.30)")
 
     return 0
 

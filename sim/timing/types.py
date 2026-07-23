@@ -8,7 +8,7 @@ from typing import Dict, List
 class ModuleBreakdown:
     """Per-module cycle breakdown for a single token.
 
-    Maps module name to cycle count for the six tracked modules.
+    Maps module name to cycle count for the tracked modules.
     """
     cycles: Dict[str, int] = field(default_factory=lambda: {
         "mxu": 0,
@@ -19,6 +19,9 @@ class ModuleBreakdown:
         "kv_cache": 0,
         "noc_latency": 0,
         "noc_contention": 0,
+        "crossbar_wait": 0,
+        "sram_stall": 0,
+        "vcov_bubble": 0,
     })
 
 

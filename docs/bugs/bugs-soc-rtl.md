@@ -410,3 +410,165 @@ Three working hypotheses, not yet resolved:
 | Ibex-specific bugs (full RTL CPU replacement) | 0 |
 | Regressions after fixes | 0 (27/27 active PASS on Spike, 33/33 PASS on Ibex) |
 | Re-opened bugs | 1 — BUG-RTL-SOC-005 (workaround broke at 51-op scale) |
+
+### BUG-RTL-SOC-P9-00A
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-21 |
+| **Block** | Phase 9 T3 |
+| **Severity** | Major |
+| **Type** | fw |
+| **Status** | open |
+
+#### Symptom
+
+M=1 multi-tile MMUL cos_sim < 0.999 via firmware doorbell dispatch; T3 divergence sweep concluded (A) firmware MMIO redundancy. P9-A fix (commenting I/W/O_ADDR writes at npu_firmware.c:199-201) is INSUFFICIENT — the compiler already optimized out those writes, making the fix a no-op at binary level. Results identical to T3.
+
+#### Root Cause
+
+T3 conclusion (A) invalid: RISC-V GCC -O2 already removes the redundant I/W/O_ADDR stores as dead code. The wrapper preload uses different register offsets (0x30-0x48) than MXU's I/W/O_ADDR (0x14-0x1C). Actual root cause is in the RTL wrapper preload mechanism — likely broadcast driver or store-out geometry for M=1 multi-tile cases. Recommending re-investigation with branch B scope.
+
+#### Fix
+
+Pending fix per Phase 9 plan.
+
+#### Verification
+
+Evidence: build/evidence/ph9-branch-A-insufficient.txt:51-100
+
+### BUG-MXU-P9-00B-broadcast-multitile
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-21 |
+| **Block** | Phase 9 T3 |
+| **Severity** | Major |
+| **Type** | RTL Wrapper / Firmware Interaction |
+| **Status** | rtl-suspect |
+
+#### Symptom
+
+M=1 multi-tile MMUL cos_sim < 0.999 via firmware doorbell; direct wrapper preload passes.
+
+#### Root Cause
+
+See independent report /home/prj/zhengs/caduceuscore/CaduceusCore/docs/bugs/BUG-MXU-P9-00B-broadcast-multitile.md.
+
+#### Fix
+
+Pending fix per Phase 9 plan.
+
+#### Verification
+
+Evidence: build/evidence/ph9-divergence-report.txt, build/evidence/ph9-probe-*.jsonl
+
+### BUG-RTL-SOC-P9-00D
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-22 |
+| **Block** | Phase 9 T3 |
+| **Severity** | Major |
+| **Type** | integ |
+| **Status** | open |
+
+#### Symptom
+
+PERF residual cs<0.999 after Phase 9 T4 firmware+RTL fixes
+
+#### Root Cause
+
+Residual divergence after per-K-tile firmware loop + RTL accumulate mode fix; see /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph9-perf-residual.txt
+
+#### Fix
+
+Pending fix per Phase 9 plan.
+
+#### Verification
+
+Evidence: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph9-perf-residual.txt
+
+### BUG-RTL-SOC-P9-00D
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-22 |
+| **Block** | Phase 9 T3 |
+| **Severity** | Major |
+| **Type** | integ |
+| **Status** | open |
+
+#### Symptom
+
+PERF residual cs<0.999 after Phase 9 T4 firmware+RTL fixes
+
+#### Root Cause
+
+Residual divergence after per-K-tile firmware loop + RTL accumulate mode fix; see /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph9-perf-residual.txt
+
+#### Fix
+
+Pending fix per Phase 9 plan.
+
+#### Verification
+
+Evidence: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph9-perf-residual.txt
+
+---
+
+### BUG-RTL-SOC-WV-001 — SFU wrapper never asserts STATUS.DONE after processing completes
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-07-23 |
+| **Block** | wrapper-level-verification T2 (Wave 1) |
+| **Case** | SFU wrapper functional tests (5 cocotb tests for tb_sfu_wrapper) |
+| **Severity** | Major |
+| **Type** | RTL: SFU wrapper |
+| **Status** | Open |
+
+#### Symptom
+
+Found during wrapper-level-verification T2 (Wave 1). 5 cocotb tests written for tb_sfu_wrapper:
+1. test_apb_regmap_rw -- PASS
+2. test_sfu_softmax_normal -- FAIL (STATUS.DONE never asserted)
+3. test_sfu_gelu_normal -- FAIL (same)
+4. test_sfu_width_converter_32to512 -- FAIL (same)
+5. test_sfu_line_buffer_prefetch -- FAIL (same)
+
+APB register reads/writes work correctly (test_apb_regmap_rw PASS). AXI reads work: wrapper issues 64-byte cache-line prefetch reads, AxiRam responds with correct data (verified via AR/R channel monitoring). AXI writes work: wrapper's write FIFO drains to AxiRam via AW/W/B channels. All 8 output lines for DIM=256 softmax are written by ~10us. SFU starts processing: STATUS.BUSY transitions to 1 after CMD.START. SFU produces output: all output data appears as AXI write bursts.
+
+**Critical**: STATUS.DONE (bit 1) is never asserted after output completion, even when waiting 5M cycles (50ms simulation time). This causes wait_done to time out for all SFU operation tests.
+
+The SFU processes data and writes output correctly (verified by AXI AW bursts at O_ADDR), but the internal DONE state transition never occurs. Verified for DIM=16, 25, 64, and 256 with both softmax and GELU.
+
+One exception: test_sfu_line_buffer_prefetch with DIM=25 did see STATUS.DONE=1 in one test run, but the output data comparison failed (max_abs_err=0.49, suggesting AxiRam returned zeros for some reads).
+
+Evidence: build/evidence/wrap-sfu-regression.txt, build/evidence/wv-sfu-run.log
+
+#### Root Cause
+
+Suspected interaction between sfu_soc_wrapper APB/AXI glue layer and sfu_top state-machine completion.
+
+Key observations:
+- IP-level SFU batch regression 319/319 PASS, confirming sfu_top internal arithmetic and control logic are correct.
+- The wrapper's start_hold mechanism (known issue from BUG-RTL-SOC-006) gates MMIO writes during I_ADDR prefetch. While the 100-cycle delay between I_ADDR write and CMD.START avoids the start_hold race, the post-start APB stall (post_start_stall) or the width-converter/line-buffer prefetch state machine may interfere with sfu_top's internal DONE transition logic.
+- The wrapper's APB-to-MMIO bridge, AXI width converter (32b APB vs 512b AXI), or line-buffer prefetch FSM may produce a timing or control interaction that suppresses the final STATUS.DONE assertion from sfu_top.
+
+Hypothesis: The sfu_top's done signal may be masked or not propagated through the wrapper layer when the AXI write-back of the final output beat races with the APB status read. Further debug with waveform-level analysis of sfu_top.done vs wrapper-internal status signals is required.
+
+#### Fix
+
+TBD -- root cause not yet identified. Recommended next steps:
+1. Waveform-level debug: trace sfu_top.done output relative to wrapper AXI WLAST and APB status read.
+2. Add assertions in tb_sfu_wrapper to monitor sfu_top.done -> wrapper STATUS.DONE propagation path.
+3. If confirmed as wrapper glue issue, fix may involve adding a done synchronizer or modifying the post_start_stall logic to not suppress the done transition.
+
+#### Verification
+
+TBD -- depends on root cause. Expected:
+- All 5 SFU wrapper cocotb tests PASS after fix.
+- SFU IP-level regression continues to pass 319/319 (no regressions).
+- DIM sweep (16/25/64/256) for both softmax and GELU all report STATUS.DONE=1 within expected cycle budget.
+

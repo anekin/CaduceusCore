@@ -1,0 +1,2 @@
+K<=64: cos_sim=1.000000 cycles=34888 passed=PASS
+K=512: cos_sim=1.000000 cycles=510078 passed=PASS

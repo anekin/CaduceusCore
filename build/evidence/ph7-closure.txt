@@ -1,0 +1,62 @@
+=== PHASE 7 CLOSURE EVIDENCE ===
+Generated: 2026-07-19 11:45 UTC
+Commit: 533c35f07c8c922ec07b11b274d177314057011e
+Plan: .omo/plans/phase7-blocker-fix.md §Wave 3 — Task 5 (Phase 7 closure evidence)
+
+=== VERIFICATION COMMAND OUTPUT ===
+
+# 1. Spike plugin check
+grep -q 'PASS' build/evidence/ph7-spike-fixed.txt && echo "Spike: FIXED" || echo "Spike: FAIL"
+Spike: FIXED
+
+# 2. Evidence schema check (total timestamp count = 21)
+TOTAL=$(grep -c '"timestamp"' build/evidence/w4-perf-p0.txt build/evidence/w4-perf-p1.txt build/evidence/w4-perf-p2.txt build/evidence/w4-perf-p3.txt build/evidence/w4-perf-p4.txt build/evidence/fullchain-pipeline.txt | awk -F: '{s+=$NF}END{print s}')
+[ "$TOTAL" -eq 21 ] && echo "Schema: FIXED (21/21)" || echo "Schema: FAIL ($TOTAL/21)"
+Schema: FIXED (21/21)
+
+# 3. Testcase-list check (19 PASS / 1 FAIL)
+P=$(grep -c '| ✅ PASS |' rtl/testcase-list-perf.md)
+F=$(grep -c '| ❌ FAIL |' rtl/testcase-list-perf.md)
+[ "$P" -eq 19 ] && [ "$F" -eq 1 ] && echo "Testcase-list: FIXED ($P PASS / $F FAIL)" || echo "Testcase-list: ISSUE ($P PASS / $F FAIL)"
+Testcase-list: FIXED (19 PASS / 1 FAIL)
+
+# 4. Issues-found checks (Phase 7 sections present)
+grep -q 'Phase 7 Resolution Status' docs/issues_found.md && echo "issues_found: UPDATED" || echo "issues_found: MISSING"
+issues_found: UPDATED
+grep -q 'Phase 6 Condition Disposition' docs/issues_found.md && echo "conditions: MAPPED" || echo "conditions: MISSING"
+conditions: MAPPED
+
+=== BLOCKER ROLLUP ===
+
+Summary of Phase 6 blocker resolution status after Phase 7 investigation:
+
+| Blocker | Final Status |
+|---------|-------------|
+| Spike plugin ABI mismatch | FIXED |
+| W4-PERF evidence schema | FIXED |
+| testcase-list-perf.md | FIXED |
+| 64KB weight buffer / PERF-11 | REMAIN BLOCKED |
+| SFU/Vector fullchain dispatch | REMAIN BLOCKED |
+| 36-layer Func Model-only | REMAIN BLOCKED |
+| DMA output readback zeros | REMAIN BLOCKED |
+| FM-3 weight-streaming RTL measurement | REMAIN BLOCKED |
+| Q8_0 GGUF missing | REMAIN BLOCKED |
+| Phase 6 plan checkbox 6b inconsistency | REMAIN BLOCKED |
+
+=== DISPOSITION ===
+
+3 BLOCKERS FIXED (Phase 7 scope complete):
+  - Spike plugin ABI mismatch: plugin rebuilt on sz0001 with devtoolset-9, GLIBC 2.17 compatible
+  - W4-PERF evidence schema: timestamp+commit added to all 21 JSON records
+  - testcase-list-perf.md: status synced to 19 PASS / 1 FAIL
+
+7 BLOCKERS REMAIN BLOCKED (out of Phase 7 scope, deferred):
+  - 64KB weight buffer / PERF-11: needs firmware per-K-tile weight reload
+  - SFU/Vector fullchain dispatch: needs PERF path op=1/op=2 dispatch
+  - 36-layer Func Model-only: depends on weight streaming + DMA readback fix
+  - DMA output readback zeros: needs FM-SOC vs PERF path descriptor comparison
+  - FM-3 weight-streaming RTL measurement: needs new VCS simulation run
+  - Q8_0 GGUF missing: external network blockage, download blocked
+  - Phase 6 plan checkbox 6b inconsistency: requires Q8_0 to re-run experiment
+
+REST REMAIN BLOCKED

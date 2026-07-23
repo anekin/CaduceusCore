@@ -1,0 +1,5 @@
+NO_LAYOUT_CHANGE=1
+Date: 2026-07-22T01:36:29Z
+pack_int4_tile_major traversal order: for nt in n_tiles, for kt in k_tiles → sequential 2048B tiles
+Firmware offset formula: (n_tile * num_blocks + k_block) * TILE_WEIGHT_BYTES
+Verdict: layout consistent; no perf_tests.py weight offset change needed

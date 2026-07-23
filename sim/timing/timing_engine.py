@@ -14,7 +14,9 @@ from sim.npu_sim import NPUSimulator
 from sim.timing.types import ModuleBreakdown, RequestMetrics, TokenTiming
 
 
-MODULE_KEYS = ("mxu", "sfu", "vector", "dma_weight", "dma_effective", "kv_cache", "noc_latency", "noc_contention")
+MODULE_KEYS = ("mxu", "sfu", "vector", "dma_weight", "dma_effective", "kv_cache",
+                "noc_latency", "noc_contention",
+                "crossbar_wait", "sram_stall", "vcov_bubble")
 
 
 def _build_llm_trace(model_spec: ModelSpec, m: int) -> List[Tuple[int, int, int, int, str]]:
@@ -66,8 +68,6 @@ def _aggregate_events(report: SimulationReport) -> ModuleBreakdown:
         elif ev.module == "kv":
             mb.cycles["kv_cache"] += cycles
         elif ev.module == "dma":
-            # Overlapped DMA is effective (hidden) work; non-overlapped is
-            # weight/stall work exposed on the critical path.
             if ev.overlapped:
                 mb.cycles["dma_effective"] += cycles
             else:
@@ -77,6 +77,10 @@ def _aggregate_events(report: SimulationReport) -> ModuleBreakdown:
                 mb.cycles["noc_latency"] += cycles
             else:
                 mb.cycles["noc_contention"] += cycles
+    # FM-1: engine overhead totals from SimulationReport
+    mb.cycles["crossbar_wait"] = report.crossbar_wait
+    mb.cycles["sram_stall"] = report.sram_stall
+    mb.cycles["vcov_bubble"] = report.vcov_bubble
     return mb
 
 
@@ -97,9 +101,11 @@ def _report_to_token_timing(
     else:
         mb = _aggregate_events(report)
 
-    # Wall-clock advancing modules: MXU, SFU, Vector, KV Cache.
+    # Wall-clock advancing modules: MXU, SFU, Vector, KV Cache,
+    # crossbar_wait, sram_stall, vcov_bubble.
     # DMA (effective/hidden) and NoC (latency/contention) are breakdown-only.
-    wall_keys = ("mxu", "sfu", "vector", "kv_cache")
+    wall_keys = ("mxu", "sfu", "vector", "kv_cache",
+                 "crossbar_wait", "sram_stall", "vcov_bubble")
     wall_cycles = sum(mb.cycles.get(k, 0) for k in wall_keys)
 
     # kv_cache from layer_breakdowns excludes the global DRAM refresh event

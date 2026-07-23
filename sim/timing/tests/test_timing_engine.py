@@ -62,7 +62,8 @@ class TestModuleBreakdown:
         timing = engine.simulate_decode(spec)
         keys = set(timing.module_breakdown.cycles.keys())
         expected = {"mxu", "sfu", "vector", "dma_weight", "dma_effective", "kv_cache",
-                     "noc_latency", "noc_contention"}
+                     "noc_latency", "noc_contention",
+                     "crossbar_wait", "sram_stall", "vcov_bubble"}
         missing = expected - keys
         assert keys == expected, (
             f"Module breakdown keys mismatch. Missing: {missing}. "
@@ -73,13 +74,15 @@ class TestModuleBreakdown:
         """total_cycles equals the wall-clock-advancing module sum.
 
         Only modules that actually advance the timeline are counted in total_cycles:
-        mxu + sfu + vector + all kv events (including DRAM refresh).  DMA and NoC
+        mxu + sfu + vector + crossbar_wait + sram_stall + vcov_bubble
+        + all kv events (including DRAM refresh).  DMA and NoC
         cycle counts overlap with compute and are excluded from the wall clock.
         """
         engine = TimingEngine("sim/config/npu_config.yaml")
         spec = get_spec("qwen2.5-1.5b")
         timing = engine.simulate_decode(spec)
-        wall_modules = ("mxu", "sfu", "vector", "kv_cache")
+        wall_modules = ("mxu", "sfu", "vector", "kv_cache",
+                        "crossbar_wait", "sram_stall", "vcov_bubble")
         wall_sum = sum(timing.module_breakdown.cycles.get(k, 0) for k in wall_modules)
         total = timing.total_cycles
         abs_diff = abs(total - wall_sum)

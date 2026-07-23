@@ -1,6 +1,6 @@
 {
   "name": "softmax_smoke",
-  "sfu_op": "softmax",
+  "sfu_op": true,
   "files": {
     "golden": "golden_output.hex"
   },

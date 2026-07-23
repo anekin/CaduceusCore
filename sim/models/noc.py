@@ -176,3 +176,47 @@ class NoCModel:
         base = max(individual)
         contention = self.estimate_contention(len(transfers), self.ports)
         return int(base * (1.0 + contention))
+
+    # ── FM-1 cross-engine overhead estimation ─────────────────────
+
+    def crossbar_wait_cycles(
+        self, num_masters: int = 6, num_slaves: int = 2
+    ) -> int:
+        """Estimate per-transaction crossbar arbitration wait.
+
+        Round-robin arbitration with *num_masters* competing for
+        *num_slaves* ports.  Worst-case a master waits for
+        ceil(num_masters / num_slaves) - 1 rounds before its turn.
+
+        Phase 5 P2 calibration (M=6, S=2): 2 cycles per same-engine
+        back-to-back operation.
+        """
+        if num_slaves <= 0:
+            return 0
+        rounds = math.ceil(num_masters / num_slaves)
+        wait_rounds = max(0, rounds - 1)
+        return wait_rounds * self.hop_latency_cycles // 3  # ≈2 cycles @ hop=3
+
+    def sram_stall_cycles(self, num_banks: int = 16) -> int:
+        """Estimate SRAM port contention stall for read/write on the same bank.
+
+        When consecutive operations on the same engine access the same
+        SRAM bank, the read-to-write turnaround costs one cycle.
+
+        Phase 5 P2 calibration: 1 cycle per same-engine back-to-back.
+        """
+        return 1 if num_banks > 0 else 0
+
+    def vcov_bubble_cycles(self, data_elements: int = 0) -> int:
+        """Estimate VCONV (INT32→FP16 type_convert) pipeline bubble.
+
+        When type_convert operations are chained or followed by
+        another engine operation, a pipeline flush bubble occurs.
+
+        Phase 5 P2 calibration: 1 cycle base bubble per VCONV operation.
+        Additional elements may contribute if the type_convert pipeline
+        is still draining.
+        """
+        if data_elements <= 0:
+            return 0
+        return 1  # base bubble

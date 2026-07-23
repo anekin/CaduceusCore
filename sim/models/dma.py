@@ -212,3 +212,127 @@ class DMAModel:
         hidden = min(transfer_cycles, compute_cycles)
         effective = max(0, transfer_cycles - compute_cycles)
         return effective, hidden
+
+    def estimate_tile_double_buffer_overlap(
+        self,
+        M: int, K: int, N: int,
+        tile_H: int, tile_W: int,
+        weight_bits: int, act_bits: int,
+        per_tile_compute_cycles: int,
+    ) -> float:
+        """Compute weight_streaming_overlap_ratio via tile-level double-buffering.
+
+        Models tile-by-tile weight streaming with a 2-entry double-buffer for
+        weight registers in each PE.  For each K-tile group across the N
+        dimension, the first N-tile pays a cold-start cost (DMA + compute
+        sequential); subsequent N-tiles overlap DMA for the next tile with
+        compute of the current tile.  K-tile reloads incur a possible stall
+        when the activation DMA plus first weight tile DMA for the next K-tile
+        cannot be hidden behind the compute of the last N-tile of the previous
+        K-tile.
+
+        Parameters
+        ----------
+        M: Batch / token count (for decode M=1).
+        K: Reduction dimension.
+        N: Output dimension.
+        tile_H: Array height (K-tile granularity).
+        tile_W: Array width (N-tile granularity).
+        weight_bits: Weight precision (e.g. 4 for INT4).
+        act_bits: Activation precision (e.g. 8 for INT8).
+        per_tile_compute_cycles: Compute cycles per tile (broadcast + MAC +
+            accumulate).
+
+        Returns
+        -------
+        overlap_ratio : float in [0, 1]
+            Fraction of total weight DMA hidden behind compute.  Returns 0.0
+            when total DMA is zero (sentinel for unsupported / degenerate).
+
+        Notes
+        -----
+        Cross-validation against W4 PERF-09..P12 VCS data is deferred.
+        The representative PERF-09..P12 config uses Qwen2.5-3B Q_proj with
+        K_in=2560, N_out=4096.
+        """
+        import math
+
+        if M <= 0 or K <= 0 or N <= 0:
+            return 0.0
+
+        K_tiles = math.ceil(K / max(tile_H, 1))
+        N_tiles = math.ceil(N / max(tile_W, 1))
+
+        if K_tiles <= 0 or N_tiles <= 0:
+            return 0.0
+
+        # Per-tile data volumes (bytes)
+        tile_weight_bytes = math.ceil(tile_H * tile_W * weight_bits / 8)
+        tile_act_bytes = math.ceil(tile_H * act_bits / 8)
+
+        # Per-tile DMA cycles (weight + activation)
+        per_tile_weight_dma = tile_weight_bytes / self.bw_bytes_per_cycle
+        per_tile_act_dma = tile_act_bytes / self.bw_bytes_per_cycle
+
+        # --- Without tile-level double-buffering: total DMA cycles ---
+        # Weights loaded once per K-tile, activations once per K-tile.
+        total_weight_dma = K_tiles * N_tiles * per_tile_weight_dma
+        total_act_dma = K_tiles * per_tile_act_dma
+        total_dma_all = M * (total_weight_dma + total_act_dma)
+
+        # --- With tile-level double-buffering ---
+        # For each K-tile, the first N-tile is cold (no preloaded buffer).
+        # Subsequent N-tiles overlap DMA_next with compute_current.
+        # Within a K-tile, activation is loaded once (shared across N-tiles).
+
+        cold_first_tile = per_tile_weight_dma + per_tile_act_dma + per_tile_compute_cycles
+        bottleneck_within_ktile = max(per_tile_weight_dma, per_tile_compute_cycles)
+
+        dma_on_critical_path = 0.0
+
+        for _kt in range(K_tiles):
+            if N_tiles == 1:
+                # Single N-tile: no overlap possible
+                dma_on_critical_path += per_tile_weight_dma + per_tile_act_dma
+            else:
+                # First N-tile: weight DMA + act DMA are both on the path (cold)
+                dma_on_critical_path += per_tile_weight_dma + per_tile_act_dma
+                # Remaining N_tiles-1 within this K-tile:
+                # DMA_next runs in parallel with compute_current via double-buffer.
+                # Only the portion of DMA that exceeds compute leaks onto the
+                # critical path.
+                excess = max(0.0, per_tile_weight_dma - per_tile_compute_cycles)
+                dma_on_critical_path += (N_tiles - 1) * excess
+
+            # --- K-tile reload stall (between K-tiles) ---
+            # When transitioning from K-tile k to k+1, the double-buffer has just
+            # finished loading the last N-tile's weights of K-tile k.  The next
+            # DMA burst (activation + first weight tile of K-tile k+1) can only
+            # begin after compute of K-tile k's last N-tile starts (buffer
+            # switch).  If the remaining compute time is shorter than the DMA
+            # burst, the difference stalls.
+            if _kt < K_tiles - 1:
+                # DMA needed for next K-tile: activation + first weight tile
+                dma_next_ktile = per_tile_act_dma + per_tile_weight_dma
+                # Remaining compute after buffer switch for last N-tile of
+                # current K-tile: per_tile_compute_cycles (the switch happens
+                # right when compute for the last tile starts).
+                remaining_compute = per_tile_compute_cycles
+                ktile_reload_stall = max(0.0, dma_next_ktile - remaining_compute)
+                dma_on_critical_path += min(ktile_reload_stall, dma_next_ktile)
+
+        # For M>1 (prefill): each additional token incurs its own activation DMA
+        # but can overlap with weight DMA if M-tiles share the same K-tile streaming.
+        # Simplified: add per-token activation DMA on critical path for M>1.
+        if M > 1:
+            extra_act_dma = (M - 1) * K_tiles * per_tile_act_dma
+            dma_on_critical_path += extra_act_dma
+
+        total_dma_all_scaled = M * (total_weight_dma + total_act_dma)
+
+        if total_dma_all_scaled <= 0:
+            return 0.0
+
+        overlap_ratio = max(0.0, min(1.0,
+            1.0 - dma_on_critical_path / total_dma_all_scaled))
+        return float(overlap_ratio)

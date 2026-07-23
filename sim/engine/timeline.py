@@ -1,7 +1,7 @@
 """事件驱动时间轴引擎 — 核心调度器，合并 MXU/SFU/DMA 事件"""
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 
 @dataclass
@@ -28,6 +28,9 @@ class LayerBreakdown:
     riscv: int = 0
     noc_latency: float = 0.0
     noc_contention: float = 0.0
+    crossbar_wait: int = 0
+    sram_stall: int = 0
+    vcov_bubble: int = 0
     total: int = 0
 
 
@@ -59,6 +62,9 @@ class SimulationReport:
     tps: float = 0.0
     tpot_us: float = 0.0
     itl_us_list: list = field(default_factory=list)
+    crossbar_wait: int = 0
+    sram_stall: int = 0
+    vcov_bubble: int = 0
 
     def to_text(self) -> str:
         lines = []
@@ -116,7 +122,26 @@ class CoreTimeline:
 
     Tracks overlapping events: MXU and DMA can run concurrently,
     SFU follows MXU (data dependency), RISC-V overhead is negligible.
+
+    Cross-engine overheads (FM-1): models multi-engine pipeline delays
+    for crossbar arbitration, SRAM port contention, and VCONV bubbles.
     """
+
+    # ── Same-engine gap calibration (Phase 5 P2):
+    #     P2 back-to-back data shows a consistent 4-cycle gap between
+    #     consecutive same-engine operations (SFU→SFU, Vector→Vector).
+    #     This gap is decomposed into:
+    #       crossbar_wait = 2  (round-robin re-arbitration M=6/S=2)
+    #       sram_stall    = 1  (SRAM read/write port turnaround)
+    #       vcov_bubble   = 1  (pipeline flush between ops)
+    #     Cross-engine gaps deferred to W4-PERF-13..P16.
+
+    SAME_ENGINE_GAP_CROSSBAR: int = 2
+    SAME_ENGINE_GAP_SRAM: int = 1
+    SAME_ENGINE_GAP_VCOV: int = 1
+    SAME_ENGINE_GAP_TOTAL: int = (
+        SAME_ENGINE_GAP_CROSSBAR + SAME_ENGINE_GAP_SRAM + SAME_ENGINE_GAP_VCOV
+    )
 
     def __init__(self, core_id: int = 0):
         self.core_id = core_id
@@ -124,6 +149,9 @@ class CoreTimeline:
         self._current_cycle: int = 0
         self._mxu_busy_until: int = 0
         self._dma_busy_until: int = 0
+        self._total_crossbar_wait: int = 0
+        self._total_sram_stall: int = 0
+        self._total_vcov_bubble: int = 0
 
     def add_mxu(self, op: str, cycles: int, layer: int) -> TimelineEvent:
         """Schedule a matrix multiply operation on the MXU.
@@ -145,7 +173,7 @@ class CoreTimeline:
         SFU runs after MXU for the current layer (data dependency:
         softmax/activation requires MXU output).
         """
-        # SFU runs after MXU for current layer (data dependency)
+        self._track_engine_overhead("sfu", layer)
         start = self._current_cycle
         end = start + cycles
         self._current_cycle = end
@@ -155,12 +183,29 @@ class CoreTimeline:
 
     def add_vector(self, op: str, cycles: int, layer: int) -> TimelineEvent:
         """Vector unit: can overlap with SFU (separate datapath)."""
+        self._track_engine_overhead("vector", layer)
         start = self._current_cycle
         end = start + cycles
         self._current_cycle = end
         ev = TimelineEvent("vector", op, start, end, layer)
         self.events.append(ev)
         return ev
+
+    def _track_engine_overhead(self, engine: str, layer: int) -> None:
+        """Inject cross-engine pipeline overhead for every engine operation.
+
+        Models three delay sources that accumulate per engine invocation:
+        - crossbar_wait: round-robin arbitration (M=6, S=2 crossbar)
+        - sram_stall: SRAM read/write port turnaround
+        - vcov_bubble: pipeline flush / VCONV insertion bubble
+
+        Phase 5 P2 calibration: total same-engine gap = 4 cycles.
+        Cross-engine gap placeholder = 4 cycles (deferred to W4-PERF-13..P16).
+        """
+        self._total_crossbar_wait += self.SAME_ENGINE_GAP_CROSSBAR
+        self._total_sram_stall += self.SAME_ENGINE_GAP_SRAM
+        self._total_vcov_bubble += self.SAME_ENGINE_GAP_VCOV
+        self._current_cycle += self.SAME_ENGINE_GAP_TOTAL
 
     def add_dma_parallel(self, op: str, cycles: int, layer: int) -> TimelineEvent:
         """DMA that can overlap with MXU: starts now, may extend beyond MXU."""
@@ -202,6 +247,27 @@ class CoreTimeline:
     def total_cycles(self) -> int:
         return self._current_cycle
 
+    @property
+    def total_crossbar_wait(self) -> int:
+        return self._total_crossbar_wait
+
+    @property
+    def total_sram_stall(self) -> int:
+        return self._total_sram_stall
+
+    @property
+    def total_vcov_bubble(self) -> int:
+        return self._total_vcov_bubble
+
+    def snapshot_overheads(self) -> Tuple[int, int, int]:
+        """Return (crossbar_wait, sram_stall, vcov_bubble) snapshot.
+
+        Callers can diff two snapshots to attribute overhead to a
+        specific layer or pipeline segment.
+        """
+        return (self._total_crossbar_wait, self._total_sram_stall,
+                self._total_vcov_bubble)
+
 
 def breakdown_events(events: List[TimelineEvent]) -> Dict[str, float]:
     """Aggregate events by module, counting only effective (non-overlapped) cycles."""
@@ -227,4 +293,7 @@ def breakdown_events(events: List[TimelineEvent]) -> Dict[str, float]:
             }.get(ev.module, ev.module)
             modules[key] = modules.get(key, 0) + cycles
     modules.setdefault("noc_contention", 0.0)
+    modules.setdefault("crossbar_wait", 0.0)
+    modules.setdefault("sram_stall", 0.0)
+    modules.setdefault("vcov_bubble", 0.0)
     return modules

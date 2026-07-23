@@ -1003,3 +1003,30 @@ help:
 	@echo "  distclean           — Remove all artifacts including waveforms"
 	@echo ""
 	@echo "Parallel: make -j4 all"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Wrapper-Level Verification (Wave 1b) — Cocotb SFU/Vector/MXU wrapper tests
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Each target invokes scripts/wv_run_*.sh which handles compile + simulate + grep PASS.
+# See .omo/plans/wrapper-level-verification.md for details.
+
+.PHONY: run_wrapper_sfu run_wrapper_vector run_wrapper_mxu run_wrapper_all
+
+run_wrapper_sfu:
+	@echo "$(YELLOW)[WRAPPER_SFU] Running SFU wrapper cocotb tests...$(NC)"
+	@bash scripts/wv_run_sfu.sh
+
+run_wrapper_vector:
+	@echo "$(YELLOW)[WRAPPER_VECTOR] Running Vector wrapper cocotb tests...$(NC)"
+	@bash scripts/wv_run_vector.sh
+
+run_wrapper_mxu:
+	@echo "$(YELLOW)[WRAPPER_MXU] Running MXU wrapper cocotb tests...$(NC)"
+	@bash scripts/wv_run_mxu.sh
+
+run_wrapper_all: run_wrapper_sfu run_wrapper_vector run_wrapper_mxu
+	@echo ""
+	@echo "$(GREEN)========================================$(NC)"
+	@echo "$(GREEN)  All Wrapper-Level Tests Complete$(NC)"
+	@echo "$(GREEN)========================================$(NC)"

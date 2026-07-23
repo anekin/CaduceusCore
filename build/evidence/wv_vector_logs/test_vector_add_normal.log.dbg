@@ -1,0 +1,17 @@
+Command: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/simv_tb_vector_wrapper -l build/evidence/wv_vector_logs/test_vector_add_normal.log.dbg
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Jul 23 08:42 2026
+[VEC_WRP_STORE] chunk=0 beat=0 wlast=0 addr=0x20002000 data=0x00000330fffffd5f
+[VEC_WRP_STORE] chunk=0 beat=1 wlast=0 addr=0x20002040 data=0xffffffda000003f3
+[VEC_WRP_STORE] chunk=0 beat=2 wlast=0 addr=0x20002080 data=0x000001b5000000b0
+[VEC_WRP_STORE] chunk=0 beat=3 wlast=0 addr=0x200020c0 data=0xffffff8600000315
+[VEC_WRP_STORE] chunk=0 beat=4 wlast=0 addr=0x20002100 data=0xfffffd8e00000023
+[VEC_WRP_STORE] chunk=0 beat=5 wlast=0 addr=0x20002140 data=0x000001af00000197
+[VEC_WRP_STORE] chunk=0 beat=6 wlast=0 addr=0x20002180 data=0xffffffe7ffffffb2
+[VEC_WRP_STORE] chunk=0 beat=7 wlast=1 addr=0x200021c0 data=0x00000055fffffd9f
+$finish at simulation time               850001
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 850001 ps
+CPU Time:      0.820 seconds;       Data structure size:   9.1Mb
+Thu Jul 23 08:42:27 2026

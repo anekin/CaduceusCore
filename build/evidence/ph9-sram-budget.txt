@@ -1,0 +1,7 @@
+=== CaduceusCore Phase 9 T6 SRAM Budget Pre-Check ===
+Date: 2026-07-22T01:28:04Z
+
+PASS: peak SRAM 7424B < 4MB (4194304B)
+K=2560, N=4096, M=1: peak=7424B, headroom=4186880B
+Maximum M for K=2560 that fits in 4MB: 1636
+overhead_breakdown: wbuf_double=4096B sbuf_double=512B output_per_tile=256B
