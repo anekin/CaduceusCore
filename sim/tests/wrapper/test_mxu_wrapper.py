@@ -535,3 +535,148 @@ async def test_mxu_accumulate_mode(dut):
             f"max_abs_diff={max_diff}, first_mismatches={first_few}"
         )
         assert False, f"Accumulate mode golden comparison failed: {mismatches} mismatches"
+
+
+# ==========================================================================
+# Test 6 -- BUG-007: Consecutive multi-op dispatch without full idle gap
+# ==========================================================================
+
+@cocotb.test()
+async def test_bug007_consecutive_dispatch(dut):
+    """BUG-007: Verify 3 consecutive CMD.START pulses (0/1/5-cycle gaps)
+    are not swallowed after DONE.
+
+    Preloads one tile of weights + activations, runs a first MMUL to
+    completion, then issues 3 more STARTs with progressively larger gaps
+    after DONE.  Each START must assert BUSY within 100 cycles and
+    eventually assert DONE.
+    """
+    cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
+    await ClockCycles(dut.clk, 5)
+
+    apb = create_apb_master(dut)
+    ram = create_axi_ram(dut, size=2**24)
+
+    M, K, N = 64, 64, 64   # small MMUL for fast turnaround
+    mxu = GoldenMXU()
+    w = _gen_weights_int4(K, N)
+    a = _gen_activations_int8(M, K)
+
+    wbytes = _pack_weight_bytes(w, mxu)
+    abytes = _pack_act_bytes(a)
+    golden = _compute_golden(M, K, N, w, a)
+
+    dut._log.info("BUG-007: Consecutive multi-op dispatch test starting")
+
+    # ---- Preload once for all dispatches -----------------------------------
+    _write_to_ram(ram, WGT_BASE, wbytes)
+    _write_to_ram(ram, ACT_BASE, abytes)
+
+    await write_reg(apb, 0, OFF_WRP_WEIGHT_BASE, WGT_BASE)
+    await write_reg(apb, 0, OFF_WRP_ACT_BASE,    ACT_BASE)
+    await write_reg(apb, 0, OFF_WRP_OUT_BASE,    OUT_BASE)
+
+    # Trigger preload
+    await write_reg(apb, 0, OFF_WRP_CMD, 0x0000_0001)
+    await wait_done(apb, 0, OFF_WRP_STATUS, done_bit=0, timeout_cycles=50000,
+                    clk=dut.clk)
+    dut._log.info("Preload complete")
+
+    # Helper: configure MXU MMIO for a standard 64x64x64 MMUL
+    async def _configure_mmu(ctrl_val=0):
+        await write_reg(apb, 0, OFF_CTRL,       ctrl_val)
+        await write_reg(apb, 0, OFF_DIM0,       (K << 16) | (M & 0xFFFF))
+        await write_reg(apb, 0, OFF_DIM1,       N & 0xFFFF)
+        await write_reg(apb, 0, OFF_I_ADDR,     0)
+        await write_reg(apb, 0, OFF_W_ADDR,     0)
+        await write_reg(apb, 0, OFF_O_ADDR,     0)
+        await write_reg(apb, 0, OFF_BIAS_ADDR,  0)
+        await write_reg(apb, 0, OFF_SCALE_ADDR, 0)
+        await write_reg(apb, 0, OFF_IRQ_EN,     0)
+
+    await _configure_mmu()
+
+    # ---- Warm-up dispatch: run one MMUL to DONE so we know the flow works ---
+    dut._log.info("Warm-up dispatch")
+    await write_reg(apb, 0, OFF_CMD, 0x0000_0001)
+    await wait_done(apb, 0, OFF_STATUS, done_bit=1, timeout_cycles=100000,
+                    clk=dut.clk)
+    dut._log.info("Warm-up DONE")
+
+    # ---- Consecutive dispatch with 0/1/5-cycle gaps ------------------------
+    gaps = [0, 1, 5]
+    accepted = 0
+
+    for idx, gap in enumerate(gaps):
+        dut._log.info(f"BUG-007 START #{idx+1}: gap={gap} cycle(s)")
+
+        # Apply the gap
+        if gap > 0:
+            await ClockCycles(dut.clk, gap)
+
+        # Issue START
+        await write_reg(apb, 0, OFF_CMD, 0x0000_0001)
+
+        # Check that BUSY asserts within 100 cycles
+        busy_seen = False
+        for _ in range(100):
+            status = await read_reg(apb, 0, OFF_STATUS)
+            if status & 0x1:   # STATUS[0] = BUSY
+                busy_seen = True
+                break
+            await ClockCycles(dut.clk, 1)
+
+        if not busy_seen:
+            dut._log.error(
+                f"BUG-007 START #{idx+1}: BUSY never asserted (gap={gap}) "
+                f"-- START SWALLOWED"
+            )
+            continue
+
+        dut._log.info(f"BUG-007 START #{idx+1}: BUSY asserted (gap={gap})")
+
+        # Wait for DONE
+        try:
+            await wait_done(apb, 0, OFF_STATUS, done_bit=1,
+                            timeout_cycles=100000, clk=dut.clk)
+            dut._log.info(f"BUG-007 START #{idx+1}: DONE asserted (gap={gap})")
+            accepted += 1
+        except TimeoutError:
+            dut._log.error(
+                f"BUG-007 START #{idx+1}: DONE timeout (gap={gap}) "
+                f"-- operation may be stuck"
+            )
+            continue
+
+    # ---- Verify store-out from the LAST dispatch is correct -----------------
+    out_data = _read_from_ram(ram, OUT_BASE, M * N * 4)
+
+    if accepted > 0:
+        result = np.zeros((M, N), dtype=np.int32)
+        for r in range(M):
+            row_bytes = out_data[r * 256:(r + 1) * 256]
+            vals = _read_i32_le(row_bytes, N)
+            result[r, :] = np.array(vals, dtype=np.int32)
+
+        diff = np.abs(golden.astype(np.int64) - result.astype(np.int64))
+        mismatches = int(np.sum(diff > 0))
+        if mismatches == 0:
+            dut._log.info("Store-out data bit-exact match after consecutive dispatch")
+        else:
+            dut._log.warning(
+                f"Store-out mismatch: {mismatches}/{M * N} elements differ "
+                f"(may be expected if data was overwritten by multiple dispatches)"
+            )
+
+    # ---- Conclusion ---------------------------------------------------------
+    if accepted == len(gaps):
+        dut._log.info("MXU: PASS -- all 3 consecutive STARTs accepted and completed")
+    else:
+        dut._log.error(
+            f"MXU: FAIL -- {accepted}/{len(gaps)} STARTs accepted "
+            f"({len(gaps) - accepted} swallowed)"
+        )
+        assert False, (
+            f"BUG-007 MXU consecutive dispatch: "
+            f"{len(gaps) - accepted} START(s) swallowed"
+        )

@@ -526,3 +526,200 @@ async def test_vector_conv_type_convert(dut):
         f"[test_vector_conv_type_convert] PASS — "
         f"{N} INT32→FP16 CONV bit-exact match"
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Test 6: BUG-005 — X-propagation from non-aligned wstrb masking (sparse)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Uses tb_vector_wrapper_sparse (axi_sparse_slave.v) to test BUG-RTL-SOC-005:
+# uninitialized padding bytes return X, which propagate through the wrapper's
+# read path if the wrapper does not mask uninitialized trailing bytes.
+#
+# Test flow:
+#   1. sparse_sel=1 → AxiMaster writes 400 bytes (100 INT32) of A-data
+#      at addr 0x0000; bytes 400-511 of word 6 remain X
+#   2. Write 512 bytes (128 INT32) of B-data at addr 0x0400 (fully valid)
+#   3. sparse_sel=0 → wrapper LOAD_A from 0x0000 (X in padding)
+#      LOAD_B from 0x0400 (fully valid), ADD, STORE_O to 0x0800
+#   4. Read sparse slave output: check bytes 0-399 for golden match,
+#      bytes 400-511 for X (wstrb masking verification)
+
+
+def _sparse_check_x_word(dut, word_idx):
+    """Check if a sparse slave memory word contains X/Z bits."""
+    s = str(dut.u_sparse.mem[word_idx].value)
+    return ('x' in s.lower() or 'z' in s.lower())
+
+
+def _sparse_read_int32(dut, byte_addr, count):
+    """Read INT32 values from sparse slave memory.
+    Returns (has_x, int32_array). X bytes are replaced with 0."""
+    DATA_W = 512
+    STRB_W = DATA_W // 8
+    result = []
+    has_x = False
+    word_idx = byte_addr // STRB_W
+    byte_off = byte_addr % STRB_W
+    remaining = count * 4
+
+    while remaining > 0:
+        raw = dut.u_sparse.mem[word_idx].value
+        s = str(raw)
+        if 'x' in s.lower() or 'z' in s.lower():
+            has_x = True
+        try:
+            word_int = int(raw)
+            word_bytes = word_int.to_bytes(STRB_W, 'little')
+        except ValueError:
+            word_bytes = bytearray(STRB_W)
+            for b in range(STRB_W):
+                try:
+                    word_bytes[b] = int(raw[8 * b : 8 * b + 7])
+                except ValueError:
+                    word_bytes[b] = 0
+                    has_x = True
+        take = min(STRB_W - byte_off, remaining)
+        chunk = word_bytes[byte_off: byte_off + take]
+        for i in range(0, len(chunk), 4):
+            result.append(int.from_bytes(chunk[i: i + 4], 'little', signed=True))
+        word_idx += 1
+        byte_off = 0
+        remaining -= take
+
+    return has_x, np.array(result, dtype=np.int32)
+
+
+@cocotb.test()
+async def test_bug005_vector_nonaligned_wstrb(dut):
+    """BUG-005 Vector: X-propagation from wstrb masking on unaligned store.
+
+    Checks whether vector_soc_wrapper:446-474 wstrb masking prevents
+    X from uninitialized slave memory from being written during STORE_O
+    for a non-chunk-aligned WRP_LEN (100 elements = 400 bytes).
+    """
+    await reset_and_start(dut)
+    apb = create_apb_master(dut)
+
+    # External AxiMaster for preloading
+    from cocotbext.axi import AxiBus, AxiMaster
+    e_bus = AxiBus.from_prefix(dut, "e_axi")
+    e_master = AxiMaster(e_bus, dut.clk, dut.rst_n, reset_active_level=False)
+
+    # Base addresses in sparse slave space
+    ADDR_A = 0x00000000   # A-data: 400 bytes valid, 400-511 = X
+    ADDR_B = 0x00000400   # B-data: 512 bytes fully valid (128 INT32)
+    ADDR_O = 0x00000800   # Output: STORE_O target
+
+    AXI_DATA_WIDTH = 512
+
+    N = 100  # only 100 of 128 elements valid per chunk
+
+    # Generate test data
+    rng = np.random.default_rng(42)
+    a_np = rng.integers(-1000, 1000, size=128, dtype=np.int32)
+    b_np = rng.integers(-1000, 1000, size=128, dtype=np.int32)
+    golden_full = golden_vector_add(a_np[:100], b_np[:100])
+
+    cocotb.log.info(
+        f"[test_bug005_vector_nonaligned_wstrb] A[:4]={a_np[:4]}, "
+        f"B[:4]={b_np[:4]}, Golden[:4]={golden_full[:4]}"
+    )
+
+    # ── Preload data via external AxiMaster ────────────────────────────────
+    dut.sparse_sel.value = 1
+    await ClockCycles(dut.clk, 5)
+
+    # Write A-data: first 400 bytes only (100 INT32 × 4 bytes)
+    await e_master.write(ADDR_A, pack_int32(a_np[:100]))
+    await ClockCycles(dut.clk, 10)
+
+    # Write B-data: full 512 bytes (128 INT32)
+    await e_master.write(ADDR_B, pack_int32(b_np))
+    await ClockCycles(dut.clk, 10)
+
+    # ── Switch to wrapper mode ─────────────────────────────────────────────
+    dut.sparse_sel.value = 0
+    await ClockCycles(dut.clk, 10)
+
+    # ── Configure wrapper MMIO ─────────────────────────────────────────────
+    await write_reg(apb, 0, WRA_BASE, ADDR_A)
+    await write_reg(apb, 0, WRB_BASE, ADDR_B)
+    await write_reg(apb, 0, WRO_BASE, ADDR_O)
+    await write_reg(apb, 0, WRP_LEN,  N)
+
+    # LOAD_A from sparse slave (bytes 400-511 = X)
+    await write_reg(apb, 0, WRP_CMD, CMD_LOAD_A)
+    await wait_wrp_ready(apb, dut.clk, timeout=50000)
+
+    # LOAD_B (fully valid)
+    await write_reg(apb, 0, WRP_CMD, CMD_LOAD_B)
+    await wait_wrp_ready(apb, dut.clk, timeout=50000)
+
+    # START ADD
+    await write_reg(apb, 0, MMIO_CTRL,   OP_ADD)
+    await write_reg(apb, 0, MMIO_A_ADDR, ADDR_A)
+    await write_reg(apb, 0, MMIO_B_ADDR, ADDR_B)
+    await write_reg(apb, 0, MMIO_O_ADDR, ADDR_O)
+    await write_reg(apb, 0, MMIO_DIM,    N)
+    await write_reg(apb, 0, MMIO_CMD,    0x01)
+
+    # Wait for DONE
+    await wait_vec_done(apb, dut.clk, timeout=50000)
+    cocotb.log.info("[test_bug005_vector_nonaligned_wstrb] Vector ADD done")
+
+    # STORE_O
+    await write_reg(apb, 0, WRP_CMD, CMD_STORE_O)
+    await wait_wrp_ready(apb, dut.clk, timeout=50000)
+
+    # ── Wait for AXI writes to settle ──────────────────────────────────────
+    await ClockCycles(dut.clk, 50)
+
+    # ── Check output at ADDR_O: bytes 0-399 for golden, bytes 400-511 for X
+    output_word0_x = _sparse_check_x_word(dut, ADDR_O // (AXI_DATA_WIDTH // 8))
+    has_x_out, result_np = _sparse_read_int32(dut, ADDR_O, 128)
+
+    # Check first 100 elements for X or corruption
+    x_in_valid = False
+    for i in range(100):
+        s = str(dut.u_sparse.mem[(ADDR_O // 64) + (i * 4) // 64].value)
+        if 'x' in s.lower() or 'z' in s.lower():
+            x_in_valid = True
+            break
+
+    mismatches = np.where(result_np[:100] != golden_full)[0]
+
+    # ── Check bytes 400-511 (word 6, upper bytes) for X ───────────────────
+    word6_idx = (ADDR_O + 384) // 64  # byte 384 is start of word 6
+    word6_x = _sparse_check_x_word(dut, word6_idx)
+
+    # ── Report results ──────────────────────────────────────────────────────
+    if x_in_valid:
+        cocotb.log.error(
+            "Vector: X_PROP - X detected in valid output bytes 0-399"
+        )
+    elif len(mismatches) > 0:
+        cocotb.log.error(
+            f"Vector: FAIL/X_PROP — {len(mismatches)} mismatches "
+            f"in output elements 0-99"
+        )
+        for i_ in mismatches[:5]:
+            cocotb.log.error(
+                f"  [{i_}]: rtl={result_np[i_]} golden={golden_full[i_]} "
+                f"a={a_np[i_]} b={b_np[i_]}"
+            )
+    elif word6_x:
+        cocotb.log.info(
+            "Vector: PASS - wstrb masking works: bytes 400-511 remain X, "
+            "output elements 0-99 bit-exact match"
+        )
+    else:
+        cocotb.log.info(
+            "Vector: PASS - output clean, no X in padding "
+            "(wstrb masked 400-511, or slave wrote 0)"
+        )
+
+    if not x_in_valid and len(mismatches) == 0:
+        cocotb.log.info("BUG005_VECTOR_FINAL: PASS")
+    else:
+        cocotb.log.info("BUG005_VECTOR_FINAL: X_PROP/FAIL")

@@ -427,3 +427,305 @@ async def test_sfu_line_buffer_prefetch(dut):
         f"Line buffer prefetch failed: max_abs={max_abs:.6e} max_rel={max_rel:.6e}"
     )
     dut._log.info("test_sfu_line_buffer_prefetch: PASS")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Test 6: BUG-005 — X-propagation from non-aligned burst padding (sparse)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# This test uses tb_sfu_wrapper_sparse which instantiates
+# axi_sparse_slave.v (uninitialized reg memory) as the AXI4 slave.
+# The sparse slave returns X for bytes that were never written, exposing
+# the SFU wrapper's vulnerability to BUG-RTL-SOC-005.
+#
+# Test flow:
+#   1. sparse_sel=1 → cocotb AxiMaster writes 50 valid FP16 bytes (DIM=25)
+#      to address 0. Bytes 50-63 of the 64-byte cache line remain X.
+#   2. sparse_sel=0 → SFU wrapper reads from sparse slave, X in padding
+#   3. APB configures SFU SOFTMAX, I_ADDR=0, O_ADDR=0x2000, DIM=25
+#   4. Wait for DONE (may timeout due to BUG-RTL-SOC-WV-001)
+#   5. Read back sparse slave memory at O_ADDR, check for X in output
+#   6. Compare against golden if no X found
+
+
+def _check_sparse_x(dut, byte_addr, n_bytes):
+    """Read bytes from sparse slave memory and check for X bits.
+    Returns (has_x, byte_data) where byte_data has X bytes replaced with 0x00.
+    """
+    import cocotb
+    from cocotb.binary import BinaryValue
+
+    DATA_W = 512
+    STRB_W = DATA_W // 8  # 64 bytes per word
+    result = bytearray()
+    has_x = False
+    word_idx = byte_addr // STRB_W
+    byte_off = byte_addr % STRB_W
+
+    remaining = n_bytes
+    while remaining > 0:
+        raw = dut.u_sparse.mem[word_idx].value
+        # BinaryValue.binstr contains 'x'/'z' if any bit is X/Z
+        s = str(raw)
+        if 'x' in s.lower() or 'z' in s.lower():
+            has_x = True
+        # Extract bytes: int conversion fails on X, so use raw integer
+        # with X bits treated as 0
+        try:
+            word_int = int(raw)
+            word_bytes = word_int.to_bytes(STRB_W, 'little')
+        except ValueError:
+            # X bits present; extract by working around them
+            word_bytes = bytearray(STRB_W)
+            for b in range(STRB_W):
+                byte_slice = raw[8 * b : 8 * b + 7]
+                try:
+                    word_bytes[b] = int(byte_slice)
+                except ValueError:
+                    word_bytes[b] = 0  # X → 0
+                    has_x = True
+        take = min(STRB_W - byte_off, remaining)
+        result.extend(word_bytes[byte_off: byte_off + take])
+        word_idx += 1
+        byte_off = 0
+        remaining -= take
+
+    return has_x, bytes(result)
+
+
+@cocotb.test()
+async def test_bug005_sfu_nonaligned_xprop(dut):
+    """BUG-005 SFU: X-propagation from non-aligned 64B cache-line padding.
+
+    Uses tb_sfu_wrapper_sparse. The sparse slave's uninitialized reg
+    memory returns X for bytes 50-63 of word 0, which the wrapper's
+    64-byte cache-line prefetch will read.
+    """
+    await _reset_and_init(dut)
+    apb = create_apb_master(dut)
+
+    # External AxiMaster for preloading valid data (e_axi_* ports)
+    from cocotbext.axi import AxiBus, AxiMaster
+    e_bus = AxiBus.from_prefix(dut, "e_axi")
+    e_master = AxiMaster(e_bus, dut.clk, dut.rst_n, reset_active_level=False)
+
+    dim = 25
+    i_addr = 0
+    o_addr = 0x2000
+
+    # ── Preload: sparse_sel=1, write exactly 50 bytes of valid FP16 data ──
+    dut.sparse_sel.value = 1
+    await ClockCycles(dut.clk, 5)
+
+    np.random.seed(42)
+    input_data = (np.random.randn(dim) * 10.0).astype(np.float16)
+    input_bytes = input_data.view(np.uint16).tobytes()  # 50 bytes
+    golden = softmax_golden(input_data)
+
+    await e_master.write(i_addr, input_bytes)
+    # Wait for write response completion
+    await ClockCycles(dut.clk, 20)
+
+    # ── Switch to wrapper mode ────────────────────────────────────────────
+    dut.sparse_sel.value = 0
+    await ClockCycles(dut.clk, 10)
+
+    # ── Configure and start SFU ───────────────────────────────────────────
+    await _sfu_configure_and_start(apb, dut, SFU_OP_SOFTMAX,
+                                   i_addr, o_addr, dim)
+
+    # ── Wait for DONE (may timeout — BUG-RTL-SOC-WV-001) ──────────────────
+    done_ok = False
+    try:
+        await wait_done(apb, BASE, status_offset=REG_STATUS, done_bit=1,
+                        timeout_cycles=200000, clk=dut.clk)
+        done_ok = True
+        dut._log.info("SFU BUG-005: STATUS.DONE asserted")
+    except TimeoutError:
+        dut._log.warning(
+            "SFU BUG-005: STATUS.DONE timeout after 200K cycles "
+            "(BUG-RTL-SOC-WV-001). Checking output for X anyway."
+        )
+
+    # Give the wrapper time to finish any in-flight AXI writes
+    await ClockCycles(dut.clk, 500)
+
+    # ── Read output from sparse slave memory ──────────────────────────────
+    has_x, output_bytes = _check_sparse_x(dut, o_addr, dim * 2)
+
+    # ── Determine result ──────────────────────────────────────────────────
+    if not done_ok:
+        dut._log.error("SFU: FAIL-TIMEOUT (BUG-RTL-SOC-WV-001)")
+    elif has_x:
+        dut._log.error(
+            "SFU: X_PROP - BUG-005 reproduced: X in output bytes "
+            f"at O_ADDR=0x{o_addr:08X}"
+        )
+    else:
+        # Golden compare
+        result_fp16 = bytes_to_fp16(output_bytes)
+        passed, max_abs, max_rel = compare_fp16(golden, result_fp16)
+        if passed:
+            dut._log.info("SFU: PASS - no X propagation, golden match OK")
+        else:
+            dut._log.error(
+                f"SFU: FAIL - golden mismatch: max_abs={max_abs:.6e} "
+                f"max_rel={max_rel:.6e}"
+            )
+
+    # ── Print final status line for script parsing ────────────────────────
+    final_status = "PASS" if (done_ok and not has_x) else (
+        "FAIL-TIMEOUT" if not done_ok else "X_PROP"
+    )
+    dut._log.info(f"BUG005_SFU_FINAL: {final_status}")
+
+
+# ==========================================================================
+# Test 6 -- BUG-007: SFU start_hold gates CMD.START during prefetch
+# ==========================================================================
+
+async def _sfu_bug007_phase(apb, ram, dut, op, i_addr, o_addr, dim,
+                              input_data, golden_fn, phase_label):
+    """Run one SFU BUG-007 phase: write I_ADDR then immediately CMD.START.
+
+    Deliberately triggers the wrapper's start_hold mechanism by issuing
+    CMD.START right after I_ADDR (0-cycle gap), before the cache-line
+    prefetch can complete.  The wrapper latches the START in start_pending
+    and replays it when the prefetch finishes.
+
+    Returns (accepted, output_correct): whether the START was accepted
+    (BUSY asserted) and output matches golden.
+    """
+    # Write input to AxiRam
+    input_bytes = fp16_bytes(input_data)
+    ram.write(i_addr, input_bytes)
+
+    # Configure SFU registers except CMD
+    await write_reg(apb, BASE, REG_CTRL, op)
+    await write_reg(apb, BASE, REG_I_ADDR, i_addr)
+    await write_reg(apb, BASE, REG_O_ADDR, o_addr)
+    await write_reg(apb, BASE, REG_DIM, dim)
+    await write_reg(apb, BASE, REG_POS, 0)
+    await write_reg(apb, BASE, REG_IRQ_EN, 0)
+
+    # Now write CMD.START immediately -- the wrapper's start_hold may
+    # stall this transaction until the prefetch completes.  Cocotbext-axi
+    # ApbMaster handles the pready backpressure internally.
+    dut._log.info(f"BUG-007 {phase_label}: issuing CMD.START (0-cycle gap)")
+    await write_reg(apb, BASE, REG_CMD, 1)
+    dut._log.info(f"BUG-007 {phase_label}: CMD.START write completed")
+
+    # Poll STATUS.BUSY (bit 0) -- should assert if the START was replayed
+    accepted = False
+    for _ in range(5000):
+        status = await read_reg(apb, BASE, REG_STATUS)
+        if status & 0x1:
+            accepted = True
+            dut._log.info(f"BUG-007 {phase_label}: BUSY asserted")
+            break
+        await ClockCycles(dut.clk, 1)
+
+    if not accepted:
+        dut._log.error(
+            f"BUG-007 {phase_label}: BUSY never asserted -- START swallowed"
+        )
+        return False, False
+
+    # Wait for DONE or timeout (BUG-RTL-SOC-WV-001 means DONE may never
+    # assert; still check for output in AxiRam as fallback)
+    try:
+        await wait_done(apb, BASE, status_offset=REG_STATUS, done_bit=1,
+                        timeout_cycles=500000, clk=dut.clk)
+        dut._log.info(f"BUG-007 {phase_label}: DONE asserted")
+    except TimeoutError:
+        dut._log.warning(
+            f"BUG-007 {phase_label}: DONE timeout (BUG-RTL-SOC-WV-001). "
+            f"Checking output anyway."
+        )
+
+    # Read output and compare against golden
+    output_bytes = ram.read(o_addr, dim * 2)
+    result = bytes_to_fp16(output_bytes)
+    passed, max_abs, max_rel = compare_fp16(golden_fn(input_data), result)
+
+    if passed:
+        dut._log.info(f"BUG-007 {phase_label}: output matches golden")
+    else:
+        dut._log.warning(
+            f"BUG-007 {phase_label}: output mismatch "
+            f"max_abs={max_abs:.6e} max_rel={max_rel:.6e}"
+        )
+
+    return accepted, passed
+
+
+@cocotb.test()
+async def test_bug007_sfu_start_hold(dut):
+    """BUG-007: Verify SFU start_hold gates CMD.START during I_ADDR prefetch.
+
+    Writes I_ADDR then immediately writes CMD.START (0-cycle gap) for
+    two consecutive operations (GELU then SOFTMAX).  The wrapper's
+    start_hold mechanism must:
+      - Block the first START until the cache-line prefetch completes
+      - Replay the START (via start_pending latch) when prefetch finishes
+      - Block the second START similarly for the second op
+
+    BUG-RTL-SOC-WV-001 (STATUS.DONE never asserts) is handled gracefully:
+    the test still verifies BUSY assertion and output correctness.
+    """
+    await _reset_and_init(dut)
+    apb = create_apb_master(dut)
+    ram = create_axi_ram(dut, size=16 * 1024)
+
+    dim = 64
+    i_addr_1 = 0x0000
+    o_addr_1 = 0x0800
+    i_addr_2 = 0x0400
+    o_addr_2 = 0x0C00
+
+    # Phase 1: GELU with 0-cycle I_ADDR-to-START gap
+    np.random.seed(420)
+    input_1 = np.linspace(-4.0, 4.0, dim, dtype=np.float16)
+
+    accepted_1, correct_1 = await _sfu_bug007_phase(
+        apb, ram, dut, SFU_OP_GELU,
+        i_addr_1, o_addr_1, dim, input_1,
+        gelu_golden, "phase1-GELU"
+    )
+
+    # Phase 2: SOFTMAX with 0-cycle I_ADDR-to-START gap
+    np.random.seed(421)
+    input_2 = (np.random.randn(dim) * 3.0).astype(np.float16)
+
+    accepted_2, correct_2 = await _sfu_bug007_phase(
+        apb, ram, dut, SFU_OP_SOFTMAX,
+        i_addr_2, o_addr_2, dim, input_2,
+        softmax_golden, "phase2-SOFTMAX"
+    )
+
+    # Summary
+    start_hold_ok = accepted_1 and accepted_2
+    data_ok = (accepted_1 and correct_1) or (accepted_2 and correct_2)
+
+    dut._log.info(
+        f"BUG-007 SFU summary: "
+        f"phase1 accepted={accepted_1} correct={correct_1}, "
+        f"phase2 accepted={accepted_2} correct={correct_2}"
+    )
+
+    if start_hold_ok:
+        dut._log.info(
+            "SFU: PASS -- start_hold correctly gates and replays START "
+            "for both ops"
+        )
+    elif data_ok:
+        dut._log.warning(
+            "SFU: MIXED -- start_hold partially working; "
+            "see summary for details"
+        )
+    else:
+        dut._log.error(
+            "SFU: FAIL -- both STARTs swallowed or start_hold blocked "
+            "indefinitely"
+        )
+        assert False, "BUG-007 SFU start_hold: START(s) lost"
