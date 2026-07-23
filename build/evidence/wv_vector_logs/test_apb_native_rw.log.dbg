@@ -1,0 +1,9 @@
+Command: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/simv_tb_vector_wrapper -l build/evidence/wv_vector_logs/test_apb_native_rw.log.dbg
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Jul 23 08:41 2026
+$finish at simulation time               480001
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 480001 ps
+CPU Time:      0.790 seconds;       Data structure size:   9.1Mb
+Thu Jul 23 08:42:06 2026

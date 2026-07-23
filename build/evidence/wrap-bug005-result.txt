@@ -1,0 +1,8 @@
+=== BUG-005 X-propagation Results ===
+Date: Thu Jul 23 11:10:27 CST 2026
+
+SFU: FAIL-TIMEOUT
+
+Vector: X_PROP/FAIL
+
+=== Done ===

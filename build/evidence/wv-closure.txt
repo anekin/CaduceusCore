@@ -1,0 +1,72 @@
+=== Wrapper-Level Verification — Closure Evidence ===
+Date:    2026-07-23
+Plan:    wrapper-level-verification (Waves 0-3)
+Status:  PARTIAL_CLOSURE
+
+--- Per-Task Status ---
+
+T1 (Wave 0): SCAFFOLD       PASS — 3 TB skeletons + common lib + flist + scripts
+T2 (Wave 1): SFU functional  PARTIAL (1/5) — blocked by BUG-RTL-SOC-WV-001
+T3 (Wave 1): Vector functional PASS (5/5)
+T4 (Wave 1): MXU functional   PASS (5/5)
+T5 (Wave 2): BUG-005 tests    SFU=BLOCKED, Vector=X_PROP
+T6 (Wave 2): BUG-007 tests    MXU=FAIL, SFU=PASS
+T7 (Wave 1): Makefile targets PASS
+T8 (Wave 3): Regression + docs PASS
+
+--- PASS / NOT RESOLVED / New Bugs ---
+
+PASS:
+  - Vector wrapper:            5/5 functional tests
+  - MXU wrapper:               5/5 functional tests
+  - SFU test_apb_regmap_rw:    1/5 PASS
+  - BUG-007 SFU start_hold:    PASS
+  - Regression script:         generates wrap-regression-summary.txt
+  - Evidence files:            all 5 evidence files present and non-empty
+  - Docs:                      issues_found.md updated with WV section
+  - Notepads:                  learnings.md and issues.md updated
+
+NOT RESOLVED:
+  - SFU operation tests:       4/5 FAIL (softmax/gelu/width_converter/line_buffer_prefetch) — STATUS.DONE timeout
+  - BUG-005 SFU:               BLOCKED by BUG-RTL-SOC-WV-001
+  - BUG-005 Vector:            X_PROP reproduced but not fixed
+  - BUG-007 MXU:               FAIL (warm-up MMUL DONE timeout) — not fixed
+
+NEW BUGS:
+  - BUG-RTL-SOC-WV-001 (Major): SFU wrapper STATUS.DONE never asserts
+    Root cause: wrapper glue (sfu_soc_wrapper + apb_to_mmio), not sfu_top
+    Evidence:  build/evidence/wrap-sfu-regression.txt
+    Logged:    docs/bugs/bugs-soc-rtl.md (lines 518-574)
+    Impact:    blocks 4 SFU operation tests + BUG-005 SFU investigation
+
+--- Forward Actions ---
+
+1. Debug BUG-RTL-SOC-WV-001 (SFU DONE state):
+   - Waveform trace: sfu_top.done vs wrapper STATUS.DONE
+   - Check: start_hold, post_start_stall, width-converter FSM interactions
+   - After fix: re-run wv_run_sfu.sh for full SFU regression
+   - After fix: re-run wv_run_bug005.sh for SFU BUG-005
+
+2. Fix BUG-007 MXU DONE path:
+   - Investigate MXU wrapper DONE assertion for warm-up MMUL
+   - After fix: re-run wv_run_bug007.sh
+
+3. Fix BUG-005 Vector X-propagation:
+   - Implement byte-mask or wstrb-based padding exclusion in vector_soc_wrapper.v
+   - After fix: re-run wv_run_bug005.sh
+
+4. Re-run regression after fixes:
+   - bash scripts/wv_regression.sh
+   - Verify wrap-regression-summary.txt shows all sections PASS
+
+--- Evidence Base ---
+  scripts/wv_regression.sh
+  build/evidence/wrap-regression-summary.txt
+  build/evidence/wrap-sfu-regression.txt
+  build/evidence/wrap-vec-regression.txt
+  build/evidence/wrap-mxu-regression.txt
+  build/evidence/wrap-bug005-result.txt
+  build/evidence/wrap-bug007-result.txt
+  docs/issues_found.md (## Wrapper-Level Verification Results)
+  .omo/notepads/wrapper-level-verification/learnings.md
+  .omo/notepads/wrapper-level-verification/issues.md

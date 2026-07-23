@@ -223,3 +223,7 @@ STATUS.DONE=1 in one test run, but the output data comparison failed
 - `build/evidence/wv-closure.txt` lists all T1-T8 statuses, PASS/NOT RESOLVED/new bugs, and forward actions.
 - `docs/issues_found.md` now contains a `## Wrapper-Level Verification Results` section with per-wrapper stats, BUG-005/007 conclusions, and the new `BUG-RTL-SOC-WV-001`.
 - The dominant blocker is BUG-RTL-SOC-WV-001 (SFU DONE). After that is fixed, BUG-005 SFU and the 4 SFU operation tests can be re-run. BUG-007 MXU (DONE timeout) and BUG-005 Vector (X-propagation) are independent fixes.
+
+### F2 scope gate: whitelist bug-tracking file
+
+The plan's mandatory bug-tracking file `docs/bugs/bugs-soc-rtl.md` was not in the F2 whitelist, causing `SCOPE_CREEP=1`. Added `^docs/bugs/bugs-soc-rtl\.md$` to `WHITELIST_PATTERNS` in `scripts/wv_f2_scope_gate.sh`. F2 now passes with `SCOPE_CREEP=0`.

@@ -1,0 +1,5 @@
+WV-F2-AST
+=========
+
+AST_OK=1
+All Python files under sim/tests/wrapper/ pass AST parsing.

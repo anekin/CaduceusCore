@@ -1,0 +1,9 @@
+Command: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/simv_tb_sfu_wrapper -l /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/wv-bug007-sfu.log.dbg
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Jul 23 11:29 2026
+$finish at simulation time              3600001
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 3600001 ps
+CPU Time:      0.870 seconds;       Data structure size:   8.3Mb
+Thu Jul 23 11:29:46 2026
