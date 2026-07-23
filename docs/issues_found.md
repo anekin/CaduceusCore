@@ -546,3 +546,45 @@ Per Metis G11, the following are **Test PASS** but do NOT equate to **Blocker RE
 | **Q8_0 GGUF missing** (external download) | **NOT RESOLVED** | BLOCKED-NETWORK; deferred to Phase 10. |  |
 | **36-layer RTL full forward pass** | **NOT RESOLVED** | Requires  DMA readback fix (Oracle issue 6: read-only in T8 scope). | Next step: Phase 10 or dedicated bridge fix wave. |
 | **FM-3 overlap RTL measurement** | **NOT RESOLVED** | Deferred: requires new VCS simulation after DMA fix + 36-layer forward pass. |  for now |
+
+## Wrapper-Level Verification Results
+
+> **Scope**: CaduceusCore wrapper-level verification (WV) for SFU, Vector, and MXU engine wrappers.
+> **Baseline Date**: 2026-07-23
+> **Plan**: `wrapper-level-verification` (Waves 0-3)
+> **Overall State**: Partial — Vector and MXU functional tests pass; SFU blocked by BUG-RTL-SOC-WV-001.
+
+### Per-Wrapper Test Results
+
+| Wrapper | Tests | PASS | FAIL | Status | Notes |
+|---------|:-----:|:----:|:----:|--------|-------|
+| **SFU** | 5 | 1 | 4 | **PARTIAL** | `test_apb_regmap_rw` passes; 4 operation tests (softmax/gelu/width_converter/line_buffer_prefetch) time out waiting for STATUS.DONE (BUG-RTL-SOC-WV-001). SFU produces correct output via AXI writes but DONE state transition never occurs. |
+| **Vector** | 5 | 5 | 0 | **PASS** | All 5 tests (apb_native_rw, apb_wrapper_rw, add_normal, chunk_burst_8beat, conv_type_convert) pass. |
+| **MXU** | 5 | 5 | 0 | **PASS** | All 5 tests (apb_regmap_rw, preload_single_tile, single_tile_compute, store_out_burst, accumulate_mode) pass. |
+
+### Bug Investigations
+
+#### BUG-005: AXI Sparse Slave X-Propagation
+
+- **SFU**: **BLOCKED** — Cannot reproduce X-propagation for SFU because STATUS.DONE never asserts (BUG-RTL-SOC-WV-001). Test `test_bug005_sfu_nonaligned_xprop` times out before output can be checked.
+- **Vector**: **X_PROP/FAIL** — X-propagation confirmed. Bytes 400-511 (X from uninitialized sparse slave) propagate into valid output bytes 0-399 when reading 512-byte chunks.
+- **Conclusion**: BUG-005 is a real RTL issue affecting the Vector wrapper. Root cause: the wrapper reads full 512-byte AXI beats; uninitialized padding bytes contaminate the valid data. SFU test deferred until BUG-RTL-SOC-WV-001 is fixed.
+
+#### BUG-007: Consecutive Multi-Op Dispatch
+
+- **MXU**: **FAIL** — Warm-up MMUL STATUS.DONE timeout after 100K cycles. Genuine RTL bug in MXU wrapper DONE assertion path for consecutive dispatch.
+- **SFU**: **PASS** — `start_hold` correctly gates START replay for both GELU and SOFTMAX ops. Back-to-back dispatch works through the start_hold mechanism.
+- **Conclusion**: BUG-007 is reproduced for MXU (DONE path) but not for SFU (start_hold path verified). The MXU wrapper needs a fix for its DONE state machine.
+
+### New Bugs Found
+
+| Bug ID | Severity | Summary | Block |
+|--------|----------|---------|-------|
+| **BUG-RTL-SOC-WV-001** | Major | SFU wrapper never asserts STATUS.DONE after processing completes. SFU produces correct output via AXI writes but internal DONE state transition fails. Root cause is in the wrapper glue (sfu_soc_wrapper.v + apb_to_mmio.v), not sfu_top arithmetic (IP-level 319/319 PASS). Affects all SFU operation tests and blocks BUG-005 SFU investigation. | T2, T5 |
+
+### Forward Actions
+
+1. **Fix BUG-RTL-SOC-WV-001**: Waveform-level debug of `sfu_top.done` vs wrapper `STATUS.DONE` propagation. Investigate `start_hold`, `post_start_stall`, or width-converter FSM for DONE suppression. After fix, re-run SFU functional (4 tests) and BUG-005 SFU test.
+2. **Fix BUG-007 MXU**: Investigate MXU wrapper DONE assertion for warm-up MMUL. After fix, re-run `test_bug007_consecutive_dispatch`.
+3. **Address BUG-005 Vector**: Fix the sparse-slave X-propagation in `vector_soc_wrapper.v`. Implement wstrb-based or mask-based padding-byte exclusion.
+4. **Regression automation**: `scripts/wv_regression.sh` now aggregates all wrapper verification evidence into `build/evidence/wrap-regression-summary.txt`. Run after any wrapper RTL change.

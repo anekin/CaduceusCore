@@ -194,3 +194,32 @@ STATUS.DONE=1 in one test run, but the output data comparison failed
 - Reuses existing simv binaries if present (idempotent).
 - Evidence written to `build/evidence/wrap-bug007-result.txt` with MXU/SFU PASS/FAIL lines.
 - Exits 0 regardless of outcome (evidence capture mode).
+
+## [2026-07-23 11:40] T8 Wave 3 — regression aggregation + closure
+
+### Regression script design
+
+- `scripts/wv_regression.sh` follows the same pattern as `wv_run_*.sh`: source `p9_lib/p9_sz0001.sh`, verify evidence file existence, write structured summary to `build/evidence/`.
+- Uses a fast parse-and-aggregate approach: checks that each evidence file exists and is non-empty (50+ bytes minimum), then parses the structured results.
+- **SFU special case**: The `wrap-sfu-regression.txt` file is 3 GB — the cocotb output captured only `test_apb_regmap_rw: PASS` before being truncated. The 4 operation tests timed out waiting for STATUS.DONE, producing millions of APB poll cycles. We use the verified counts from the T2 debugging session (1 PASS, 4 FAIL) rather than attempting to parse the truncated file.
+- **BUG-005/007 parsing**: Uses structured evidence files (`wrap-bug005-result.txt`, `wrap-bug007-result.txt`) with clear `SFU:` / `Vector:` / `MXU:` prefix lines. Simple `grep -oP` extraction suffices.
+- **Evidence freshness**: If any evidence file is missing or too small, the script calls the corresponding `wv_run_*.sh` runner to regenerate it. This makes the regression script idempotent and safe to use as a CI-style gate.
+
+### Final states by wrapper
+
+| Wrapper | Tests | PASS | FAIL | Status |
+|---------|:-----:|:----:|:----:|--------|
+| SFU | 5 | 1 | 4 | PARTIAL (BUG-RTL-SOC-WV-001) |
+| Vector | 5 | 5 | 0 | PASS |
+| MXU | 5 | 5 | 0 | PASS |
+
+| Bug | SFU | Vector | MXU |
+|-----|:---:|:------:|:---:|
+| BUG-005 | BLOCKED | X_PROP/FAIL | N/A |
+| BUG-007 | PASS | N/A | FAIL |
+
+### Closure
+
+- `build/evidence/wv-closure.txt` lists all T1-T8 statuses, PASS/NOT RESOLVED/new bugs, and forward actions.
+- `docs/issues_found.md` now contains a `## Wrapper-Level Verification Results` section with per-wrapper stats, BUG-005/007 conclusions, and the new `BUG-RTL-SOC-WV-001`.
+- The dominant blocker is BUG-RTL-SOC-WV-001 (SFU DONE). After that is fixed, BUG-005 SFU and the 4 SFU operation tests can be re-run. BUG-007 MXU (DONE timeout) and BUG-005 Vector (X-propagation) are independent fixes.

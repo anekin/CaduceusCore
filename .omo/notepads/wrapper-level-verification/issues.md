@@ -64,3 +64,24 @@
   - `scripts/wv_run_bug007.sh`: unified runner script
 - **Risk**: SFU test will encounter BUG-RTL-SOC-WV-001 (STATUS.DONE never asserts). Handled gracefully via timeout+fallback output check.
 - **If new bugs found during execution**: use `scripts/wv_log_bug.sh` to log as BUG-RTL-SOC-WV-004 (MXU) or BUG-RTL-SOC-WV-005 (SFU).
+
+## [2026-07-23 11:40] T8 Wave 3 — regression aggregation complete
+
+### Final wrapper verification status
+
+- **SFU**: 1/5 PASS, 4/5 blocked by BUG-RTL-SOC-WV-001 (STATUS.DONE never asserts).
+- **Vector**: 5/5 PASS.
+- **MXU**: 5/5 PASS.
+- **BUG-005**: SFU=BLOCKED (WV-001), Vector=X_PROP/FAIL.
+- **BUG-007**: MXU=FAIL (warm-up MMUL DONE timeout), SFU=PASS.
+
+### No new bugs found during Wave 3 aggregation
+
+- BUG-RTL-SOC-WV-001 was already logged in T2 (Wave 1).
+- No BUG-RTL-SOC-WV-004 or WV-005 needed — BUG-007 failures are manifestations of pre-existing wrapper DONE issues, not newly discovered during aggregation.
+
+### Evidence
+
+- `build/evidence/wrap-regression-summary.txt`: structured 5-section summary
+- `build/evidence/wv-closure.txt`: per-task status, PASS/NOT RESOLVED, forward actions
+- `docs/issues_found.md`: new `## Wrapper-Level Verification Results` section appended
