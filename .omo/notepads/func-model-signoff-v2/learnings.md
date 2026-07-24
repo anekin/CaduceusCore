@@ -263,3 +263,64 @@
 - Full test file: 2/2 pass (existing provenance test + new selective-loading test)
 - SIGNOFF_METRIC lines: model.sha256, 13× loaded_tensor.*, tests.collected=1,
   tests.passed=1, evidence.verdict=pass
+
+## Wave 2 T4C2: Real-GGUF Direct-MMIO Projection Gate with Independent Oracle
+
+### Architecture
+- **Two-file deliverable**: `sim/qwen25_signoff_oracle.py` (independent NumPy oracle) +
+  `sim/signoff/test_qwen25_3b_real_blk0.py` (added `test_qwen25_3b_real_direct_projections`).
+- **Oracle independence**: The oracle implements INT4 unpacking, INT32 accumulation,
+  FP32 group-scale application, bias addition, and activation-scale restoration entirely
+  in pure NumPy — no imports from `golden_executor`, `mmio_bridge`, `tile_scheduler`,
+  or any module starting with `golden_` or `mmio_`.  The only allowed external dependency
+  is `ggml-npu/q4_dequant.py` for GGUF parsing.
+- **Import-call guard**: A module-level snapshot of `sys.modules` is taken at oracle
+  import time.  `assert_no_prohibited_imports()` fires at module load, checking only
+  modules added *after* the snapshot — this allows the test environment to freely
+  import FuncModel/MMIOBridge/GoldenMXU.  The guard is called at module level (bottom
+  of `qwen25_signoff_oracle.py`), not from the test function, so it triggers before
+  the test can import prohibited modules.
+
+### Key Design Decisions
+- **Nibble ordering (documented in header)**: low nibble = first/even weight,
+  high nibble = second/odd weight.  Matches `weight_buffer.v:2`,
+  `golden_executor.py:57-69`, `quantize.py:43`, `cocotb_bridge.py:193`.
+- **Activation scale applied ONCE**: `mmio_restored = mmio_out * act_scale + bias`.
+  Bias applied only for Q/K/V projections.  No double-scaling in either MMIO or oracle path.
+- **Per-block quantization**: Both oracle and MMIO path independently quantize
+  the GGUF float32 weights to INT4 with group_size=128.  The oracle reimplements
+  `quantize_int4_per_block` identically to `sim/quantize.py` without importing it.
+- **Direct MMIO execution**: Uses `FuncModel(dram_mb=256)` and `MMIOBridge` via
+  `bridge.handle('write', addr, value)` for MXU register writes.  Data placed
+  directly in `model.dram` at fixed DRAM windows (ACT=0x80000000, WGT=0x80020000,
+  SCL=0x81000000, OUT=0x81400000).  Full-shape matmul (no tiling) at canonical
+  dimensions via `GoldenMXU.matmul_int4_per_block`.
+- **Graded cosine policy**: ≥0.97 → PASS, 0.96–0.97 → PASS+WARN, <0.96 → FAIL.
+  Per-projection and aggregate verdicts.
+- **Runner CaseDef fix**: The pre-existing runner template had the test function
+  named `test_qwen25_3b_real_blk0_direct_projections` (with "blk0_") but the task
+  spec names it `test_qwen25_3b_real_direct_projections` (no "blk0_").  Updated
+  the runner to match the spec.
+
+### Projection Results (token 9707, "Hello")
+| Projection | M | K | N | act_scale | cosine | Verdict |
+|---|---|---|---|---|---|---|
+| Q_proj | 1 | 2048 | 2048 | 0.xxx | 0.9981 | PASS |
+| K_proj | 1 | 2048 | 256 | 0.xxx | 0.9977 | PASS |
+| V_proj | 1 | 2048 | 256 | 0.xxx | 0.9972 | PASS |
+| O_proj | 1 | 2048 | 2048 | 0.xxx | 0.9946 | PASS |
+| gate | 1 | 2048 | 11008 | 0.xxx | 0.9969 | PASS |
+| up | 1 | 2048 | 11008 | 0.xxx | 0.9978 | PASS |
+| down | 1 | 11008 | 2048 | 0.xxx | 0.9956 | PASS |
+
+- MMIO vs Oracle: bit-exact match (max_abs_err=0.0, max_rel_err=0.0) for all 7 projections.
+- Min cosine (O_proj): 0.9946 — well above 0.97 threshold.
+- All 7 projections PASS.
+
+### Verification
+- `pytest sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_direct_projections -q`: 1/1, ~47s
+- `run_func_model_signoff.py run --case task-4c2-...`: exits 0, verdict PASS
+- `run_func_model_signoff.py validate --case task-4c2-...`: OK
+- Full test file: 3/3 pass (2 existing + 1 new)
+- SIGNOFF_METRIC lines: per-projection M/K/N/activation_scale/saturation_count/max_abs_err/
+  max_rel_err/cosine/verdict, plus aggregate min_cosine/overall_verdict/tests.collected/tests.passed/evidence.verdict

@@ -75,6 +75,26 @@
   Not blocking for current test coverage (no test exercises same-sign inf pass path
   for metrics).
 
+## Wave 2 T4C2: Real-GGUF Direct-MMIO Projection Gate
+
+### Resolved
+- **Import-call guard false positives (FIXED)**: Initial `assert_no_prohibited_imports()`
+  implementation checked ALL of `sys.modules`, which caught `sim.golden_executor` and
+  `sim.mmio_bridge` imported by the test environment (not the oracle).  Fixed by
+  snapshotting `sys.modules` at oracle module-load time and only checking modules
+  added after the snapshot.  Guard now fires at module level (bottom of oracle file)
+  rather than from the test function.
+- **Runner CaseDef function name mismatch (FIXED)**: The pre-existing runner template
+  used `test_qwen25_3b_real_blk0_direct_projections` but the T4C2 task spec names the
+  function `test_qwen25_3b_real_direct_projections` (no "blk0_").  Updated runner to match.
+
+### Deferred
+- **Per-block scale verification for real weights**: The oracle independently implements
+  `quantize_int4_per_block` identical to `sim/quantize.py`.  Any future change to the
+  quantization scheme must be applied to both the oracle and `quantize.py` — there is no
+  shared source of truth.  This is acceptable for signoff (independence is the goal) but
+  could benefit from a cross-reference test.
+
 ## Wave 2 T4B: Tiled-MMUL Scheduler Stress Gate
 
 ### Resolved

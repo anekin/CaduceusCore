@@ -449,7 +449,7 @@ CASE_REGISTRY: Dict[str, CaseDef] = {
     "task-4a-qwen3b-direct-mmio": CaseDef(
         case_id="task-4a-qwen3b-direct-mmio",
         argv=["python3", "-m", "pytest",
-              "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_direct_mmio_17op_replay",
+              "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_direct_mmio_manifest_ops",
               "-q"],
         evidence_path="task-4a-qwen3b-direct-mmio.txt",
         expected_exit=0,
@@ -498,7 +498,7 @@ CASE_REGISTRY: Dict[str, CaseDef] = {
     "task-4c2-qwen25-3b-real-direct-projections": CaseDef(
         case_id="task-4c2-qwen25-3b-real-direct-projections",
         argv=["python3", "-m", "pytest",
-              "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_blk0_direct_projections",
+              "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_direct_projections",
               "-q"],
         evidence_path="task-4c2-qwen25-3b-real-direct-projections.txt",
         expected_exit=0,
