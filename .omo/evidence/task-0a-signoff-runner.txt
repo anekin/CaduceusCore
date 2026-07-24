@@ -1,0 +1,37 @@
+case_id: task-0a-signoff-runner
+utc_start: 2026-07-24T07:53:25.464915+00:00
+utc_end: 2026-07-24T07:53:52.863174+00:00
+elapsed_s: 27.398
+branch: main
+head: 8002c24f272d759460df9540bc1c54188d47ab80
+dirty_worktree: dirty:build/evidence/wrap-bug005-result.txt              |  6 +--
+ build/evidence/wrap-bug007-result.txt              |  4 +-
+ build/evidence/wrap-mxu-regression.txt             |  2 +-
+ build/evidence/wrap
+argv: ["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_runner.py", "-q"]
+command_hash: 2630ba76ed890a8a
+exit_code: 0
+source_fingerprint: 4cfd1a8741f28ec3ad3aaa50fc481496867b4fdf2bf03e5e9499755c76a5ed0e
+source_files (4):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_fm_env.sh
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/conftest.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_runner.py
+verdict: pass
+test_collected: 51
+test_passed: 51
+test_failed: 0
+test_skipped: 0
+test_xfailed: 0
+SIGNOFF_METRIC {"case": "task-0a-signoff-runner", "key": "tests.collected", "value": 51}
+SIGNOFF_METRIC {"case": "task-0a-signoff-runner", "key": "tests.passed", "value": 51}
+SIGNOFF_METRIC {"case": "task-0a-signoff-runner", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-0a-signoff-runner", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-0a-signoff-runner", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-0a-signoff-runner", "key": "evidence.verdict", "value": "pass"}
+
+--- STDOUT (first 8000 chars) ---
+...................................................                      [100%]
+51 passed in 25.91s
+
+--- END ---
