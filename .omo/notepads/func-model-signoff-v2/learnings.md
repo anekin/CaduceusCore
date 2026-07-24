@@ -27,6 +27,27 @@
 - `run --case task-0a-signoff-runner` exits 0 with PASS evidence
 - `validate --case task-0a-signoff-runner` confirms evidence is current and valid
 
+## Wave 1 T1 (RED): Comparator Tests — Lessons
+
+### Bug exposed
+- `GoldenSFU.compare_hw_vs_ref()` uses `np.all(abs_diff < tol_abs) or np.all(rel_diff < tol_rel)`
+  — the `or` is at the global level: either all elements pass abs OR all pass rel.
+  Correct behavior: each element individually must pass EITHER abs OR rel.
+- Same bug exists in `scripts/verify_w2_2_fm_golden_vectors.py:225`.
+
+### Test design
+- `test_compare_mixed_abs_rel_pass` (the RED test): fp16 arrays where element 0 passes
+  only abs tolerance and element 1 passes only rel tolerance. Asserts `within_tolerance=True`
+  with message containing `mixed abs/rel must pass element-wise`.
+- `test_compare_exact_boundary`: also exposes `<` vs `≤` boundary behavior bug.
+- 5 tests total: 2 fail (RED), 3 pass (genuine out-of-tolerance/NAN/Inf cases).
+
+### Runner integration
+- Runner case `task-1-comparator-red` runs only the mixed test with `expected_exit=1` and
+  `expected_failure_pattern="mixed.*abs.*rel"`. Pattern check is against stdout (pytest
+  prints to stdout), not stderr.
+- Tests must be top-level functions (not class methods) for pytest `::selector` syntax.
+
 ### Fix: Ancestor-HEAD staleness check
 - **Problem**: After committing evidence + code to `main`, HEAD advances. The original
   `validate_case()` rejected any HEAD mismatch, making `--all-functional` validation fail
