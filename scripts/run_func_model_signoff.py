@@ -530,7 +530,7 @@ CASE_REGISTRY: Dict[str, CaseDef] = {
     "task-4c4-qwen25-3b-real-connected-blk0": CaseDef(
         case_id="task-4c4-qwen25-3b-real-connected-blk0",
         argv=["python3", "-m", "pytest",
-              "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_blk0_connected_func_model",
+              "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_connected_blk0",
               "-q"],
         evidence_path="task-4c4-qwen25-3b-real-connected-blk0.txt",
         expected_exit=0,

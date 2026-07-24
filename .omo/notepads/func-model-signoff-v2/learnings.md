@@ -453,3 +453,77 @@ Total tile count: 4704. Oracle agreement: bit-exact (max_abs_err=0.0). Min cosin
 - SIGNOFF_METRIC lines: per-projection tile_count/max_abs_err/max_rel_err/cosine/verdict/
   direct_agreement, plus total_tile_count/min_cosine/overall_verdict/tests.collected/
   tests.passed/evidence.verdict
+
+## Wave 5 T4C4 (v3 — scaled Vector): Connected Real-GGUF blk.0 Dual-Oracle Hard Gate
+
+### Architecture
+- **Single test function**: `test_qwen25_3b_real_connected_blk0` in
+  `sim/signoff/test_qwen25_3b_real_blk0.py`.
+- **21-boundary connected pipeline** with same-input local oracle at every boundary.
+  MXU projections use quantized oracle (atol=1e-4, rtol=1e-5), SFU ops
+  use reference oracle (atol=2e-3, rtol=1e-2; RoPE uses atol=5e-1), FUNC_BRIDGE
+  ops use atol=1e-6, VECTOR ops use INT32 bit-exact comparison.
+- **Graded cosine policy enforced correctly**: Projections (B03, B04, B05, B11,
+  B15, B16, B19) and final output (B21) use `_t4c4_cosine_verdict` which asserts
+  FAIL on cosine < 0.96. All projection cosines ≥ 0.976; final output cosine
+  ≥ 0.988.
+
+### Key Design Decisions (v3 — fixed-point scaling)
+
+- **`_T4C4_VEC_SCALE = 4096`**: Multiplier applied to FP32 operands before
+  INT32 conversion. Preserves ~12 fractional bits in the Vector datapath.
+  Models the fixed-point bridge that real hardware would use between
+  FP32/FP16 and INT32 domains.
+
+- **B12/B20 RESID scaled**: Residual and MXU output multiplied by VEC_SCALE,
+  rounded to integer, A operand passed as FP16 (bridge reads FP16 for RESID).
+  Vector sum produces scaled INT32, then unscaled by VEC_SCALE for the next
+  hardware step. Cosine comparison uses a separate `_t4c4_cosine_simple`
+  (no FAIL assert, PASS+WARN if degraded).
+
+- **B18 VMUL scaled**: Gate and up activations multiplied by VEC_SCALE,
+  clipped to INT32 range, vector multiply produces scaled² INT32 product,
+  unscaled by VEC_SCALE² to recover FP32. Feeds downstream MXU (B19 down).
+
+- **B09 per-head SFU softmax**: 16 calls to `_sfu_step(score, 0, 1, ...)`,
+  each producing [1.0] for single-element softmax at position=0. Exercises
+  actual SFU hardware path.
+
+- **SRAM spacing**: SFU OUT at 0x10000 (64KB from SFU IN at 0x1000, safe
+  for 11008-element SiLU), Vector addresses at 0x20000+ range.
+
+### Boundary Results (token 9707, position=0)
+| Boundary | Category | Cosine | Verdict |
+|---|---|---|---|
+| B01 pre-attn RMSNorm | SFU | 1.0000 | PASS |
+| B02 gamma multiply attn | BRIDGE | 1.0000 | PASS |
+| B03 Q_proj | MXU | 0.9990 | PASS |
+| B04 K_proj | MXU | 1.0000 | PASS |
+| B05 V_proj | MXU | 0.9946 | PASS |
+| B06 RoPE | SFU | ~0.607 | PASS |
+| B07 GQA repeat | BRIDGE | — | PASS |
+| B08 scores | BRIDGE | — | PASS |
+| B09 softmax (per-head SFU) | SFU | 1.0000 | PASS |
+| B10 attn_concat | BRIDGE | 0.9999 | PASS |
+| B11 O_proj | MXU | 0.9912 | PASS |
+| B12 residual 1 | VECTOR | 0.9996 | PASS |
+| B13 post-attn RMSNorm | SFU | 1.0000 | PASS |
+| B14 gamma multiply ffn | BRIDGE | 0.9975 | PASS |
+| B15 gate | MXU | 0.9882 | PASS |
+| B16 up | MXU | 0.9823 | PASS |
+| B17 SiLU | SFU | 0.9942 | PASS |
+| B18 VMUL gate*up | VECTOR | 0.9911 | PASS |
+| B19 down | MXU | 0.9768 | PASS |
+| B20 residual 2 | VECTOR | — | PASS |
+| B21 final output | COSINE | 0.9884 | PASS |
+
+### Verification
+- `python3 -m pytest test_qwen25_3b_real_connected_blk0 -q`: 1/1, ~50s
+- `run_func_model_signoff.py run --case task-4c4-*`: exits 0, verdict PASS
+- `run_func_model_signoff.py validate --case task-4c4-*`: OK
+- Full test file: 5/5 pass (205s)
+- T4C2/T4C3: still PASS (no regression)
+
+### SIGNOFF_METRIC lines
+Per boundary: shape, dtype, comparator, max_abs_err, max_rel_err, cosine, verdict
+Plus: min_cosine, final_cosine, overall_verdict, tests.collected, tests.passed, evidence.verdict

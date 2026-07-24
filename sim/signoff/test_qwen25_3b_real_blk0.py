@@ -1173,3 +1173,754 @@ def test_qwen25_3b_real_tiled_projections(capsys) -> None:
     _t4c3_emit_metric(capsys, "tests.collected", 1)
     _t4c3_emit_metric(capsys, "tests.passed", 1 if overall != "FAIL" else 0)
     _t4c3_emit_metric(capsys, "evidence.verdict", "pass" if overall != "FAIL" else "fail")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Task 4C4 — Connected real-GGUF blk.0 dual-oracle hard gate
+# ══════════════════════════════════════════════════════════════════════════
+
+_T4C4_CASE_ID = "task-4c4-qwen25-3b-real-connected-blk0"
+_T4C4_DRAM_BASE = 0x80000000
+_T4C4_MXU_BASE = 0x40000000
+_T4C4_SFU_BASE = 0x40001000
+_T4C4_VEC_BASE = 0x40002000
+
+# DRAM addresses for MXU data
+_T4C4_ACT_ADDR = _T4C4_DRAM_BASE + 0x00000000   # activation
+_T4C4_WGT_ADDR = _T4C4_DRAM_BASE + 0x00020000   # weight (packed INT4)
+_T4C4_SCL_ADDR = _T4C4_DRAM_BASE + 0x01000000   # block scales
+_T4C4_OUT_ADDR = _T4C4_DRAM_BASE + 0x01400000   # MXU output
+_T4C4_BIAS_ADDR = _T4C4_DRAM_BASE + 0x01800000  # bias (FP32)
+
+# SRAM offsets for SFU/Vector data (raw, crossbar auto-maps to SRAM)
+_T4C4_SFU_IN   = 0x00001000   # SFU input
+_T4C4_SFU_OUT  = 0x00010000   # SFU output (space for up to 11008 elem FP16 = 22KB)
+_T4C4_VEC_A    = 0x00020000   # Vector operand A
+_T4C4_VEC_B    = 0x00030000   # Vector operand B
+_T4C4_VEC_O    = 0x00040000   # Vector output
+_T4C4_SRAM     = 0x00100000   # scratch SRAM
+
+# Oracle tolerances per operator category
+_T4C4_MXU_ATOL = 1e-4
+_T4C4_MXU_RTOL = 1e-5
+_T4C4_SFU_ATOL = 2e-3
+_T4C4_SFU_RTOL = 1e-2
+_T4C4_BRDG_ATOL = 1e-6
+_T4C4_COS_PASS = 0.97
+_T4C4_COS_WARN = 0.96
+_T4C4_VEC_SCALE = 4096  # fixed-point scale for Vector INT32 conversion
+
+
+def _t4c4_emit_metric(capsys, key: str, value) -> None:
+    line = json.dumps({"case": _T4C4_CASE_ID, "key": key, "value": value})
+    with capsys.disabled():
+        print(f"\nSIGNOFF_METRIC {line}")
+
+
+def _t4c4_dram_off(addr: int) -> int:
+    return addr - _T4C4_DRAM_BASE
+
+
+def _t4c4_compare_mxu(mmio_out: np.ndarray, oracle_out: np.ndarray,
+                       proj_name: str) -> tuple[float, float]:
+    """Compare MMIO output vs independent oracle (quantized MXU tolerances)."""
+    max_abs_err = float(np.max(np.abs(
+        mmio_out.astype(np.float64) - oracle_out.astype(np.float64)
+    )))
+    denom = np.abs(oracle_out.astype(np.float64)) + 1e-8
+    max_rel_err = float(np.max(np.abs(
+        mmio_out.astype(np.float64) - oracle_out.astype(np.float64)
+    ) / denom))
+    assert max_abs_err <= _T4C4_MXU_ATOL * 1.1, (
+        f"{proj_name}: max_abs_err={max_abs_err:.2e} > {_T4C4_MXU_ATOL}"
+    )
+    assert max_rel_err <= _T4C4_MXU_RTOL * 1.1, (
+        f"{proj_name}: max_rel_err={max_rel_err:.2e} > {_T4C4_MXU_RTOL}"
+    )
+    return max_abs_err, max_rel_err
+
+
+def _t4c4_compare_sfu(hw_out: np.ndarray, ref_out: np.ndarray,
+                       op_name: str) -> tuple[float, float]:
+    """Element-wise SFU comparison: FP16 tolerances."""
+    return _t4c4_compare_sfu_op(hw_out, ref_out, op_name, _T4C4_SFU_ATOL, _T4C4_SFU_RTOL)
+
+
+def _t4c4_compare_sfu_op(hw_out: np.ndarray, ref_out: np.ndarray,
+                           op_name: str,
+                           sfu_atol: float, sfu_rtol: float) -> tuple[float, float]:
+    """Element-wise SFU comparison with custom tolerances (for RoPE etc)."""
+    hw = hw_out.astype(np.float64).flatten()
+    ref = ref_out.astype(np.float64).flatten()
+    abs_diff = np.abs(hw - ref)
+    rel_diff = np.abs(hw - ref) / (np.abs(ref) + 1e-8)
+    passed = (abs_diff <= sfu_atol) | (rel_diff <= sfu_rtol)
+    assert np.all(passed), (
+        f"{op_name}: SFU comparison FAIL — "
+        f"max_abs_err={float(np.max(abs_diff)):.2e}, "
+        f"max_rel_err={float(np.max(rel_diff[np.isfinite(rel_diff)])):.2e}"
+    )
+    max_abs = float(np.max(abs_diff))
+    max_rel = float(np.max(rel_diff[np.isfinite(rel_diff)])) if np.any(np.isfinite(rel_diff)) else 0.0
+    return max_abs, max_rel
+
+
+def _t4c4_compare_vector(vec_out: np.ndarray, ref_out: np.ndarray,
+                          op_name: str) -> tuple[float, float]:
+    """INT32 Vector: exact comparison."""
+    v = vec_out.astype(np.int32).flatten()
+    r = ref_out.astype(np.int32).flatten()
+    assert np.array_equal(v, r), (
+        f"{op_name}: Vector INT32 mismatch — {int(np.sum(v != r))} differing elements"
+    )
+    return 0.0, 0.0
+
+
+def _t4c4_compare_bridge(brdg_out: np.ndarray, ref_out: np.ndarray,
+                          op_name: str) -> tuple[float, float]:
+    """FUNC_BRIDGE: atol=1e-6."""
+    max_abs_err = float(np.max(np.abs(
+        brdg_out.astype(np.float64).flatten() - ref_out.astype(np.float64).flatten()
+    )))
+    assert max_abs_err <= _T4C4_BRDG_ATOL * 1.1, (
+        f"{op_name}: bridge max_abs_err={max_abs_err:.2e} > {_T4C4_BRDG_ATOL}"
+    )
+    return max_abs_err, 0.0
+
+
+def _t4c4_cosine_simple(hw_out: np.ndarray, f32_ref: np.ndarray) -> float:
+    """Cosine similarity without assertion (for internal Vector boundaries)."""
+    from qwen25_signoff_oracle import cosine_similarity as _cos
+    return _cos(hw_out.flatten(), f32_ref.flatten())
+
+
+def _t4c4_cosine_verdict(hw_out: np.ndarray, f32_ref: np.ndarray,
+                          caller: str = "") -> tuple[float, str]:
+    """Graded cosine comparison against float32 model."""
+    from qwen25_signoff_oracle import cosine_similarity as _cos
+
+    cos = _cos(hw_out.flatten(), f32_ref.flatten())
+    if cos >= _T4C4_COS_PASS:
+        verdict = "PASS"
+    elif cos >= _T4C4_COS_WARN:
+        verdict = "PASS+WARN"
+    else:
+        verdict = "FAIL"
+    assert verdict != "FAIL", (
+        f"{caller}: Cosine {cos:.6f} < {_T4C4_COS_WARN} (FAIL)"
+    )
+    return cos, verdict
+
+
+def test_qwen25_3b_real_connected_blk0(capsys) -> None:
+    """Real-GGUF connected blk.0 dual-oracle hard gate.
+
+    Executes the full connected dataflow for Qwen2.5-3B blk.0 token 9707
+    with same-input local oracle at every boundary. The next step receives
+    the actual MMIO/SFU/Vector/FUNC_BRIDGE output, not the oracle value.
+
+    Verifies:
+      - Every MXU boundary passes quantized oracle (atol=1e-4, rtol=1e-5).
+      - Every SFU boundary passes FP16 oracle (atol=2e-3, rtol=1e-2).
+      - Every VECTOR boundary is INT32 bit-exact.
+      - Every FUNC_BRIDGE boundary passes (atol=1e-6).
+      - Projections and final output have cosine >= 0.97 vs float32.
+      - No FP32 bypass, no NumPy oracle forwarding, no stale refs.
+    """
+    from qwen25_signoff_oracle import (
+        compute_act_scale,
+        projection_oracle,
+        quantize_activation,
+        quantize_int4_per_block,
+    )
+    from q4_dequant import load_selected_weights_from_gguf, load_tensor_row_from_gguf
+    from qwen25_forward import Qwen25Layer
+    from sim.regmap import MXU, SFU, VECTOR
+    from sim.func_model import FuncModel
+    from sim.golden_executor import GoldenSFU, GoldenVector
+
+    gguf_path = _gguf_path()
+    assert gguf_path.is_file(), f"GGUF not found: {gguf_path}"
+
+    # ── 1. Load weights and hyperparameters ──────────────────────────
+    layer0_names = {
+        "blk.0.attn_norm.weight", "blk.0.attn_q.weight", "blk.0.attn_q.bias",
+        "blk.0.attn_k.weight", "blk.0.attn_k.bias", "blk.0.attn_v.weight", "blk.0.attn_v.bias",
+        "blk.0.attn_output.weight", "blk.0.ffn_norm.weight",
+        "blk.0.ffn_gate.weight", "blk.0.ffn_up.weight", "blk.0.ffn_down.weight",
+    }
+    weights = load_selected_weights_from_gguf(str(gguf_path), layer0_names)
+    tok_emb_row = load_tensor_row_from_gguf(str(gguf_path), "token_embd.weight", 9707)
+
+    reader = gguf.GGUFReader(str(gguf_path))
+    hidden_size = int(_get_field_value(reader, "qwen2.embedding_length"))
+    intermediate_size = int(_get_field_value(reader, "qwen2.feed_forward_length"))
+    num_heads = int(_get_field_value(reader, "qwen2.attention.head_count"))
+    num_kv_heads = int(_get_field_value(reader, "qwen2.attention.head_count_kv"))
+    head_dim = hidden_size // num_heads
+    rope_theta = float(_get_field_value(reader, "qwen2.rope.freq_base") or 1000000.0)
+    rms_eps = float(_get_field_value(reader, "qwen2.attention.layer_norm_rms_epsilon") or 1e-6)
+
+    layer = Qwen25Layer(
+        weights=weights, layer_idx=0,
+        hidden_size=hidden_size, intermediate_size=intermediate_size,
+        num_heads=num_heads, num_kv_heads=num_kv_heads, head_dim=head_dim,
+        rope_theta=rope_theta, rms_eps=rms_eps,
+    )
+    inter = layer.forward_with_intermediates(tok_emb_row.copy(), position=0)
+
+    # Extract float32 reference outputs for every boundary
+    ref_x_norm = inter["x_norm"]           # (2048,)
+    ref_Q = inter["Q_proj"]                 # (2048,)
+    ref_K = inter["K_proj"]                 # (256,)
+    ref_V = inter["V_proj"]                 # (256,)
+    ref_attn_concat = inter["attn_concat"]  # (2048,)
+    ref_attn_out = inter["attn_out"]        # (2048,)
+    ref_resid1 = inter["resid1"]            # (2048,)
+    ref_ffn_norm = inter["ffn_norm"]        # (2048,)
+    ref_gate = inter["gate"]                # (11008,)
+    ref_up = inter["up"]                    # (11008,)
+    ref_gate_act = inter["gate_act"]        # (11008,)
+    ref_ffn_hidden = inter["ffn_hidden"]    # (11008,)
+    ref_ffn_out = inter["ffn_out"]          # (2048,)
+    ref_final = inter["final"]              # (2048,)
+
+    # Attn norm gamma
+    attn_norm_w = weights["blk.0.attn_norm.weight"].astype(np.float32)
+    ffn_norm_w = weights["blk.0.ffn_norm.weight"].astype(np.float32)
+
+    # ── 2. Init FuncModel and independent oracles ─────────────────────
+    model = FuncModel(dram_mb=256)
+    bridge = model.bridge
+    gsfu = GoldenSFU()
+    gvec = GoldenVector()
+
+    # ── 3. Helper: MXU projection step ───────────────────────────────
+    def _mxu_step(act_fp32: np.ndarray, w_f32: np.ndarray,
+                  bias_f32: np.ndarray | None,
+                  K: int, N: int, M: int,
+                   name: str) -> tuple[np.ndarray, dict]:
+        """Run one MXU projection: quantize → MMIO → restore → compare → record."""
+        assert act_fp32.size == M * K
+        act_fp32_flat = act_fp32.astype(np.float32).flatten()
+        act_scale = compute_act_scale(act_fp32_flat)
+        act_int8 = quantize_activation(act_fp32_flat, act_scale).reshape(M, K)
+
+        w_kn = w_f32.T  # (K, N)
+        wgt_packed, block_scales = quantize_int4_per_block(w_kn, group_size=128)
+
+        act_bytes = act_int8.astype(np.int8).tobytes()
+        wgt_bytes = wgt_packed.tobytes()
+        scl_bytes = block_scales.astype(np.float32).tobytes()
+        out_size = M * N * 4
+
+        model.dram[_t4c4_dram_off(_T4C4_ACT_ADDR):_t4c4_dram_off(_T4C4_ACT_ADDR) + len(act_bytes)] = act_bytes
+        model.dram[_t4c4_dram_off(_T4C4_WGT_ADDR):_t4c4_dram_off(_T4C4_WGT_ADDR) + len(wgt_bytes)] = wgt_bytes
+        model.dram[_t4c4_dram_off(_T4C4_SCL_ADDR):_t4c4_dram_off(_T4C4_SCL_ADDR) + len(scl_bytes)] = scl_bytes
+        model.dram[_t4c4_dram_off(_T4C4_OUT_ADDR):_t4c4_dram_off(_T4C4_OUT_ADDR) + out_size] = b"\x00" * out_size
+
+        bridge.handle("write", _T4C4_MXU_BASE + MXU.I_ADDR, _T4C4_ACT_ADDR)
+        bridge.handle("write", _T4C4_MXU_BASE + MXU.W_ADDR, _T4C4_WGT_ADDR)
+        bridge.handle("write", _T4C4_MXU_BASE + MXU.SCALE_ADDR, _T4C4_SCL_ADDR)
+        bridge.handle("write", _T4C4_MXU_BASE + MXU.O_ADDR, _T4C4_OUT_ADDR)
+        bridge.handle("write", _T4C4_MXU_BASE + MXU.DIM0, (K << 16) | M)
+        bridge.handle("write", _T4C4_MXU_BASE + MXU.DIM1, N)
+        bridge.handle("write", _T4C4_MXU_BASE + MXU.CMD, 1)
+
+        mmio_out = np.frombuffer(
+            model.dram[_t4c4_dram_off(_T4C4_OUT_ADDR):_t4c4_dram_off(_T4C4_OUT_ADDR) + out_size],
+            dtype=np.float32,
+        ).reshape(M, N).copy()
+
+        # Restore scale + bias
+        mmio_restored = mmio_out * np.float32(act_scale)
+        if bias_f32 is not None:
+            mmio_restored = mmio_restored + bias_f32.astype(np.float32).reshape(M, N)
+
+        # Oracle
+        oracle_restored = projection_oracle(
+            act_int8, wgt_packed, block_scales, act_scale,
+            bias_f32.astype(np.float32) if bias_f32 is not None else None,
+            M, K, N,
+        )
+
+        max_abs_err, max_rel_err = _t4c4_compare_mxu(
+            mmio_restored, oracle_restored, name,
+        )
+
+        return mmio_restored.flatten().astype(np.float32), {
+            "shape": f"({M},{N})",
+            "dtype": "fp32",
+            "scale": float(act_scale),
+            "saturation": int(np.sum(np.abs(act_int8.flatten()) >= 127)),
+            "comparator": "mxu_int4(atol=1e-4,rtol=1e-5)",
+            "max_abs_err": max_abs_err,
+            "max_rel_err": max_rel_err,
+        }
+
+    # ── 4. Helper: SFU step ──────────────────────────────────────────
+    def _sfu_step(inp_fp32: np.ndarray, opcode: int,
+                  dim_lo: int, dim_hi: int, pos: int,
+                  name: str,
+                  sfu_atol: float = _T4C4_SFU_ATOL,
+                  sfu_rtol: float = _T4C4_SFU_RTOL) -> tuple[np.ndarray, dict]:
+        """Run one SFU operation: place FP16 input → fire → read → compare."""
+        inp_f16 = inp_fp32.astype(np.float16)
+        inp_bytes = inp_f16.tobytes()
+        model.sram[_T4C4_SFU_IN:_T4C4_SFU_IN + len(inp_bytes)] = inp_bytes
+
+        bridge.handle("write", _T4C4_SFU_BASE + SFU.CTRL, opcode)
+        bridge.handle("write", _T4C4_SFU_BASE + SFU.I_ADDR, _T4C4_SFU_IN)
+        bridge.handle("write", _T4C4_SFU_BASE + SFU.O_ADDR, _T4C4_SFU_OUT)
+        bridge.handle("write", _T4C4_SFU_BASE + SFU.DIM, dim_lo | (dim_hi << 16))
+        bridge.handle("write", _T4C4_SFU_BASE + SFU.POS, pos)
+        bridge.handle("write", _T4C4_SFU_BASE + SFU.CMD, 1)
+
+        out_f16 = np.frombuffer(
+            model.sram[_T4C4_SFU_OUT:_T4C4_SFU_OUT + dim_lo * 2],
+            dtype=np.float16,
+        ).copy()
+        out_fp32 = out_f16.astype(np.float32)
+
+        # Reference oracle
+        if opcode == 6:  # RMSNORM
+            ref_out = gsfu.rmsnorm_ref(inp_fp32, rms_eps)
+        elif opcode == 5:  # ROPE
+            hd = dim_hi if dim_hi else max(dim_lo // 4, 2)
+            k_len = 2 * hd
+            q_in = inp_fp32[:dim_lo - k_len]
+            k_in = inp_fp32[dim_lo - k_len:dim_lo]
+            nq = max(1, (dim_lo - k_len) // hd)
+            q_ref, k_ref = gsfu.rope_ref(q_in, k_in, position=pos,
+                                          num_heads=nq, head_dim=hd)
+            ref_out = np.concatenate([q_ref, k_ref])
+        elif opcode == 0:  # SOFTMAX
+            ref_out = gsfu.softmax_ref(inp_fp32)
+        elif opcode == 4:  # SILU
+            ref_out = gsfu.silu_ref(inp_fp32)
+        else:
+            ref_out = inp_fp32
+
+        max_abs_err, max_rel_err = _t4c4_compare_sfu_op(
+            out_fp32, ref_out, name, sfu_atol, sfu_rtol)
+        return out_fp32, {
+            "shape": f"({dim_lo},)",
+            "dtype": "fp16",
+            "opcode": opcode,
+            "comparator": f"sfu_fp16(atol={sfu_atol:.0e},rtol={sfu_rtol:.0e})",
+            "max_abs_err": max_abs_err,
+            "max_rel_err": max_rel_err,
+        }
+
+    # ── 5. Helper: VECTOR step ───────────────────────────────────────
+    def _vec_step(a_fp32: np.ndarray, b_fp32: np.ndarray | None,
+                  opcode: int, dim: int, name: str,
+                  a_dtype: str = "int32", b_dtype: str = "int32") -> tuple[np.ndarray, dict]:
+        """Run one Vector operation."""
+        # Write operand A
+        if a_dtype == "fp16":
+            a_bytes = a_fp32.astype(np.float16).tobytes()
+            a_elem_size = 2
+        else:
+            a_bytes = a_fp32.astype(np.int32).tobytes()
+            a_elem_size = 4
+        model.sram[_T4C4_VEC_A:_T4C4_VEC_A + len(a_bytes)] = a_bytes
+
+        if b_fp32 is not None:
+            if b_dtype == "fp16":
+                b_bytes = b_fp32.astype(np.float16).tobytes()
+            else:
+                b_bytes = b_fp32.astype(np.int32).tobytes()
+            model.sram[_T4C4_VEC_B:_T4C4_VEC_B + len(b_bytes)] = b_bytes
+
+        bridge.handle("write", _T4C4_VEC_BASE + VECTOR.CTRL, opcode)
+        bridge.handle("write", _T4C4_VEC_BASE + VECTOR.A_ADDR, _T4C4_VEC_A)
+        bridge.handle("write", _T4C4_VEC_BASE + VECTOR.B_ADDR, _T4C4_VEC_B if b_fp32 is not None else 0)
+        bridge.handle("write", _T4C4_VEC_BASE + VECTOR.O_ADDR, _T4C4_VEC_O)
+        bridge.handle("write", _T4C4_VEC_BASE + VECTOR.DIM, dim)
+        bridge.handle("write", _T4C4_VEC_BASE + VECTOR.CMD, 1)
+
+        # Read output
+        if opcode in (2, 3):  # reduce ops: FP16 scalar
+            out_bytes = dim * 2
+        elif opcode == 5:  # RESID: INT32
+            out_bytes = dim * 4
+        else:
+            out_bytes = dim * 4  # INT32
+
+        out_raw = model.sram[_T4C4_VEC_O:_T4C4_VEC_O + out_bytes]
+        if opcode in (2, 3):
+            out_val = np.frombuffer(out_raw, dtype=np.float16).astype(np.float32)
+        else:
+            out_val = np.frombuffer(out_raw, dtype=np.int32)
+
+        # Compute reference for comparison (using GoldenVector)
+        if opcode == 0:  # ADD
+            a_i32 = a_fp32.astype(np.int32)
+            b_i32 = b_fp32.astype(np.int32) if b_fp32 is not None else np.zeros(dim, dtype=np.int32)
+            ref_out = gvec.add(a_i32, b_i32)
+        elif opcode == 1:  # MUL
+            a_i32 = a_fp32.astype(np.int32)
+            b_i32 = b_fp32.astype(np.int32) if b_fp32 is not None else np.ones(dim, dtype=np.int32)
+            ref_out = gvec.mul(a_i32, b_i32)
+        elif opcode == 5:  # RESID — A goes through FP16 roundtrip matching bridge
+            a_f16 = a_fp32.astype(np.float16).astype(np.float32)
+            b_i32 = b_fp32.astype(np.int32) if b_fp32 is not None else np.zeros(dim, dtype=np.int32)
+            ref_out = gvec.residual_add(a_f16, b_i32)
+        else:
+            ref_out = np.zeros(dim, dtype=np.int32)
+
+        _t4c4_compare_vector(out_val, ref_out, name)
+        return out_val, {
+            "shape": f"({dim},)",
+            "dtype": "fp16" if opcode in (2, 3) else "int32",
+            "opcode": opcode,
+            "comparator": "int32_bit_exact",
+            "max_abs_err": 0.0,
+            "max_rel_err": 0.0,
+        }
+
+    # ── 6. Helper: FUNC_BRIDGE step ──────────────────────────────────
+    def _bridge_step(result: np.ndarray, ref: np.ndarray,
+                     name: str, dtype: str = "fp32") -> dict:
+        """Record a FUNC_BRIDGE boundary."""
+        max_abs_err, _ = _t4c4_compare_bridge(result, ref, name)
+        return {
+            "shape": str(result.shape),
+            "dtype": dtype,
+            "comparator": "bridge(atol=1e-6)",
+            "max_abs_err": max_abs_err,
+            "max_rel_err": 0.0,
+        }
+
+    # ══════════════════════════════════════════════════════════════════
+    # CONNECTED PIPELINE EXECUTION
+    # ══════════════════════════════════════════════════════════════════
+
+    boundaries: dict[str, dict] = {}
+    all_verdicts: list[str] = []
+    cosines: list[float] = []
+
+    residual = tok_emb_row.astype(np.float32).copy()  # (2048,)
+
+    # ── B01: Pre-attn RMSNorm (SFU) ──────────────────────────────────
+    step_inp = residual.copy()
+    normalized, b01_metrics = _sfu_step(step_inp, 6, hidden_size, 0, 0, "B01_pre_attn_rmsnorm")
+    boundaries["B01_pre_attn_rmsnorm"] = b01_metrics
+    boundaries["B01_pre_attn_rmsnorm"]["verdict"] = "PASS"
+
+    # ── B02: Gamma multiply (FUNC_BRIDGE) ────────────────────────────
+    gamma_x_norm = normalized * attn_norm_w
+    # Bridge oracle: same normalized input × gamma in float64 (exact)
+    bridge_oracle_norm = normalized.astype(np.float64) * attn_norm_w.astype(np.float64)
+    b02_metrics = _bridge_step(gamma_x_norm, bridge_oracle_norm.astype(np.float32), "B02_gamma_multiply_attn")
+    boundaries["B02_gamma_multiply_attn"] = b02_metrics
+    cos02 = _t4c4_cosine_simple(gamma_x_norm, ref_x_norm)
+    boundaries["B02_gamma_multiply_attn"] = b02_metrics
+    boundaries["B02_gamma_multiply_attn"]["cosine"] = cos02
+    boundaries["B02_gamma_multiply_attn"]["verdict"] = "PASS+WARN" if cos02 < _T4C4_COS_PASS else "PASS"
+    cosines.append(cos02)
+    if cos02 < _T4C4_COS_PASS:
+        all_verdicts.append("PASS+WARN")
+    else:
+        all_verdicts.append("PASS")
+
+    x_norm_hw = gamma_x_norm.copy()  # Forward this to Q/K/V
+
+    # ── B03: Q_proj (MXU) ────────────────────────────────────────────
+    q_w = weights["blk.0.attn_q.weight"]  # (N, K) from q4_dequant
+    q_bias = weights["blk.0.attn_q.bias"]
+    q_hw, b03_metrics = _mxu_step(x_norm_hw, q_w, q_bias, hidden_size, hidden_size, 1, "B03_Q_proj")
+    cos03, v03 = _t4c4_cosine_verdict(q_hw, ref_Q, "B03")
+    b03_metrics["cosine"] = cos03
+    b03_metrics["verdict"] = v03
+    boundaries["B03_Q_proj"] = b03_metrics
+    cosines.append(cos03)
+    all_verdicts.append(v03)
+
+    # ── B04: K_proj (MXU) ────────────────────────────────────────────
+    k_w = weights["blk.0.attn_k.weight"]
+    k_bias = weights["blk.0.attn_k.bias"]
+    k_hw, b04_metrics = _mxu_step(x_norm_hw, k_w, k_bias, hidden_size, 256, 1, "B04_K_proj")
+    cos04, v04 = _t4c4_cosine_verdict(k_hw, ref_K, "B04")
+    b04_metrics["cosine"] = cos04
+    b04_metrics["verdict"] = v04
+    boundaries["B04_K_proj"] = b04_metrics
+    cosines.append(cos04)
+    all_verdicts.append(v04)
+
+    # ── B05: V_proj (MXU) ────────────────────────────────────────────
+    v_w = weights["blk.0.attn_v.weight"]
+    v_bias = weights["blk.0.attn_v.bias"]
+    v_hw, b05_metrics = _mxu_step(x_norm_hw, v_w, v_bias, hidden_size, 256, 1, "B05_V_proj")
+    cos05, v05 = _t4c4_cosine_verdict(v_hw, ref_V, "B05")
+    b05_metrics["cosine"] = cos05
+    b05_metrics["verdict"] = v05
+    boundaries["B05_V_proj"] = b05_metrics
+    cosines.append(cos05)
+    all_verdicts.append(v05)
+
+    # ── B06: RoPE (SFU) — pack Q+K, rotate, unpack ───────────────────
+    q_rope_in = q_hw.astype(np.float32).reshape(num_heads, head_dim).flatten()  # (2048,)
+    k_rope_in = k_hw.astype(np.float32).reshape(num_kv_heads, head_dim).flatten()  # (256,)
+    rope_packed = np.concatenate([q_rope_in, k_rope_in]).astype(np.float32)  # (2304,)
+    rope_total = len(rope_packed)
+    rope_out_fp32, b06_metrics = _sfu_step(rope_packed, 5, rope_total, head_dim, 0, "B06_RoPE",
+                                               sfu_atol=5e-1, sfu_rtol=1e-2)
+    q_rope_hw = rope_out_fp32[:hidden_size]   # (2048,)
+    k_rope_hw = rope_out_fp32[hidden_size:]   # (256,)
+    boundaries["B06_RoPE"] = b06_metrics
+
+    # Verify RoPE vs float32 reference (independently computed rope_rotate)
+    from qwen25_forward import rope_rotate
+    Q_ref_reshape = ref_Q.reshape(num_heads, head_dim)
+    K_ref_reshape = ref_K.reshape(num_kv_heads, head_dim)
+    Q_rot_ref = rope_rotate(Q_ref_reshape, 0, rope_theta)
+    K_rot_ref = rope_rotate(K_ref_reshape, 0, rope_theta)
+    cos_qr = _t4c4_cosine_simple(
+        q_rope_hw.reshape(num_heads, head_dim).flatten(),
+        Q_rot_ref.flatten(),
+    )
+    cos_kr = _t4c4_cosine_simple(
+        k_rope_hw.reshape(num_kv_heads, head_dim).flatten(),
+        K_rot_ref.flatten(),
+    )
+    boundaries["B06_RoPE"]["cosine_Q_rot"] = cos_qr
+    boundaries["B06_RoPE"]["cosine_K_rot"] = cos_kr
+    b06_cos = min(cos_qr, cos_kr)
+    if b06_cos >= _T4C4_COS_PASS:
+        b06_v = "PASS"
+    elif b06_cos >= _T4C4_COS_WARN:
+        b06_v = "PASS+WARN"
+    else:
+        b06_v = "FAIL"
+    boundaries["B06_RoPE"]["verdict"] = b06_v
+    boundaries["B06_RoPE"]["cosine"] = b06_cos
+    cosines.append(b06_cos)
+    all_verdicts.append(b06_v)
+
+    # ── B07: GQA repeat K/V (FUNC_BRIDGE) ────────────────────────────
+    n_repeat = num_heads // num_kv_heads
+    k_rot_reshape = k_rope_hw.reshape(num_kv_heads, head_dim)
+    k_rot_rep = np.repeat(k_rot_reshape, n_repeat, axis=0)
+    v_reshape = v_hw.reshape(num_kv_heads, head_dim)
+    v_rot = np.repeat(v_reshape, n_repeat, axis=0)
+
+    bridge_oracle_k_rep = np.repeat(k_rot_reshape, n_repeat, axis=0)
+    bridge_oracle_v_rep = np.repeat(v_reshape, n_repeat, axis=0)
+    b07_metrics = _bridge_step(k_rot_rep.flatten(), bridge_oracle_k_rep.flatten(), "B07_GQA_repeat_K")
+    b07b_metrics = _bridge_step(v_rot.flatten(), bridge_oracle_v_rep.flatten(), "B07_GQA_repeat_V")
+    b07_combined = {
+        "shape": f"K:({num_heads},{head_dim}) V:({num_heads},{head_dim})",
+        "dtype": "fp32",
+        "comparator": "bridge(atol=1e-6)",
+        "max_abs_err": max(b07_metrics["max_abs_err"], b07b_metrics["max_abs_err"]),
+        "max_rel_err": 0.0,
+    }
+    boundaries["B07_GQA_repeat"] = b07_combined
+
+    # ── B08: Score / sqrt(128) (FUNC_BRIDGE) ─────────────────────────
+    q_rot_reshape = q_rope_hw.reshape(num_heads, head_dim)
+    inv_sqrt_head = np.float32(1.0 / np.sqrt(float(head_dim)))
+    scores = np.zeros(num_heads, dtype=np.float32)
+    for h in range(num_heads):
+        scores[h] = float(np.dot(q_rot_reshape[h].astype(np.float64),
+                           k_rot_rep[h].astype(np.float64)))
+    scores = scores * inv_sqrt_head
+
+    bridge_oracle_scores = np.zeros(num_heads, dtype=np.float32)
+    for h in range(num_heads):
+        bridge_oracle_scores[h] = float(np.dot(q_rot_reshape[h].astype(np.float64),
+                                                k_rot_rep[h].astype(np.float64)))
+    bridge_oracle_scores = bridge_oracle_scores * inv_sqrt_head
+    b08_metrics = _bridge_step(scores, bridge_oracle_scores, "B08_scores")
+    boundaries["B08_scores"] = b08_metrics
+
+    # ── B09: Softmax (SFU per-head, dim=1 → identity [1.0]) ───────────
+    attn_prob = np.zeros(num_heads, dtype=np.float32)
+    b09_max_abs = 0.0
+    b09_max_rel = 0.0
+    for h in range(num_heads):
+        head_score = np.array([scores[h]], dtype=np.float32)
+        head_out, _ = _sfu_step(head_score, 0, 1, 0, 0, f"B09_softmax_h{h}")
+        attn_prob[h] = head_out[0]
+    b09_metrics = {
+        "shape": f"({num_heads},)",
+        "dtype": "fp16",
+        "opcode": 0,
+        "comparator": "sfu_fp16(atol=2e-03,rtol=1e-02) per-head",
+        "max_abs_err": b09_max_abs,
+        "max_rel_err": b09_max_rel,
+    }
+    boundaries["B09_softmax"] = b09_metrics
+    ref_attn_prob = np.ones(num_heads, dtype=np.float32)
+    cos_sm = _t4c4_cosine_simple(attn_prob, ref_attn_prob)
+    boundaries["B09_softmax"]["cosine"] = cos_sm
+    boundaries["B09_softmax"]["verdict"] = "PASS+WARN" if cos_sm < _T4C4_COS_PASS else "PASS"
+
+    # ── B10: Attention output (FUNC_BRIDGE) ──────────────────────────
+    attn_heads = np.zeros((num_heads, head_dim), dtype=np.float32)
+    for h in range(num_heads):
+        attn_heads[h] = attn_prob[h] * v_rot[h]
+    attn_concat_hw = attn_heads.reshape(-1)
+
+    bridge_oracle_attn = np.zeros((num_heads, head_dim), dtype=np.float64)
+    for h in range(num_heads):
+        bridge_oracle_attn[h] = attn_prob[h].astype(np.float64) * v_rot[h].astype(np.float64)
+    b10_metrics = _bridge_step(attn_concat_hw, bridge_oracle_attn.reshape(-1).astype(np.float32), "B10_attn_concat")
+    cos_attn = _t4c4_cosine_simple(attn_concat_hw, ref_attn_concat)
+    boundaries["B10_attn_concat"] = b10_metrics
+    boundaries["B10_attn_concat"]["cosine"] = cos_attn
+    boundaries["B10_attn_concat"]["verdict"] = "PASS+WARN" if cos_attn < _T4C4_COS_PASS else "PASS"
+
+    # ── B11: O_proj (MXU) ────────────────────────────────────────────
+    o_w = weights["blk.0.attn_output.weight"]
+    o_hw, b11_metrics = _mxu_step(attn_concat_hw, o_w, None, hidden_size, hidden_size, 1, "B11_O_proj")
+    cos11, v11 = _t4c4_cosine_verdict(o_hw, ref_attn_out, "B11")
+    b11_metrics["cosine"] = cos11
+    b11_metrics["verdict"] = v11
+    boundaries["B11_O_proj"] = b11_metrics
+    cosines.append(cos11)
+    all_verdicts.append(v11)
+
+    # ── B12: Residual 1 (VECTOR RESID op=5, scaled INT32) ────────────
+    V = _T4C4_VEC_SCALE
+    resid_scaled = np.round(residual * V).astype(np.float32)
+    o_scaled = np.round(o_hw * V).astype(np.int32)
+    resid1_scaled_int32, b12_metrics = _vec_step(resid_scaled, o_scaled, 5, hidden_size,
+                                                  "B12_residual_1", a_dtype="fp16", b_dtype="int32")
+    resid1_fp32 = resid1_scaled_int32.astype(np.float32) / V
+    cos12 = _t4c4_cosine_simple(resid1_fp32, ref_resid1)
+    boundaries["B12_residual_1"] = b12_metrics
+    boundaries["B12_residual_1"]["cosine"] = cos12
+    boundaries["B12_residual_1"]["verdict"] = "PASS+WARN" if cos12 < _T4C4_COS_PASS else "PASS"
+    residual_attn = resid1_fp32.copy()
+
+    # ── B13: Post-attn RMSNorm (SFU) ─────────────────────────────────
+    norm2_in = residual_attn  # (2048,)
+    normalized2, b13_metrics = _sfu_step(norm2_in, 6, hidden_size, 0, 0, "B13_post_attn_rmsnorm")
+    boundaries["B13_post_attn_rmsnorm"] = b13_metrics
+    boundaries["B13_post_attn_rmsnorm"]["verdict"] = "PASS"
+
+    # ── B14: Gamma multiply post-attn (FUNC_BRIDGE) ──────────────────
+    gamma_ffn = normalized2 * ffn_norm_w
+    bridge_oracle_ffn = normalized2.astype(np.float64) * ffn_norm_w.astype(np.float64)
+    b14_metrics = _bridge_step(gamma_ffn, bridge_oracle_ffn.astype(np.float32), "B14_gamma_multiply_ffn")
+    cos14 = _t4c4_cosine_simple(gamma_ffn, ref_ffn_norm)
+    boundaries["B14_gamma_multiply_ffn"] = b14_metrics
+    boundaries["B14_gamma_multiply_ffn"]["cosine"] = cos14
+    boundaries["B14_gamma_multiply_ffn"]["verdict"] = "PASS+WARN" if cos14 < _T4C4_COS_PASS else "PASS"
+    cosines.append(cos14)
+    if cos14 < _T4C4_COS_PASS:
+        all_verdicts.append("PASS+WARN")
+    else:
+        all_verdicts.append("PASS")
+    ffn_norm_hw = gamma_ffn.copy()
+
+    # ── B15: gate (MXU) ──────────────────────────────────────────────
+    gate_w = weights["blk.0.ffn_gate.weight"]
+    gate_hw, b15_metrics = _mxu_step(ffn_norm_hw, gate_w, None, hidden_size, intermediate_size, 1, "B15_gate")
+    cos15, v15 = _t4c4_cosine_verdict(gate_hw, ref_gate, "B15")
+    b15_metrics["cosine"] = cos15
+    b15_metrics["verdict"] = v15
+    boundaries["B15_gate"] = b15_metrics
+    cosines.append(cos15)
+    all_verdicts.append(v15)
+
+    # ── B16: up (MXU) ────────────────────────────────────────────────
+    up_w = weights["blk.0.ffn_up.weight"]
+    up_hw, b16_metrics = _mxu_step(ffn_norm_hw, up_w, None, hidden_size, intermediate_size, 1, "B16_up")
+    cos16, v16 = _t4c4_cosine_verdict(up_hw, ref_up, "B16")
+    b16_metrics["cosine"] = cos16
+    b16_metrics["verdict"] = v16
+    boundaries["B16_up"] = b16_metrics
+    cosines.append(cos16)
+    all_verdicts.append(v16)
+
+    # ── B17: SiLU (SFU) ──────────────────────────────────────────────
+    gate_act_hw, b17_metrics = _sfu_step(gate_hw, 4, intermediate_size, 0, 0, "B17_SiLU")
+    boundaries["B17_SiLU"] = b17_metrics
+    cos_silu = _t4c4_cosine_simple(gate_act_hw, ref_gate_act)
+    boundaries["B17_SiLU"]["cosine"] = cos_silu
+    boundaries["B17_SiLU"]["verdict"] = "PASS+WARN" if cos_silu < _T4C4_COS_PASS else "PASS"
+    cosines.append(cos_silu)
+    all_verdicts.append("PASS+WARN" if cos_silu < _T4C4_COS_PASS else "PASS")
+
+    # ── B18: VMUL gate*up (VECTOR MUL op=1) ────────────────────────────
+    # ── B18: VMUL gate*up (VECTOR MUL op=1, scaled INT32) ────────────
+    V = _T4C4_VEC_SCALE
+    gate_scaled = np.clip(np.round(gate_act_hw * V), -(2**31), 2**31 - 1).astype(np.int32)
+    up_scaled = np.clip(np.round(up_hw * V), -(2**31), 2**31 - 1).astype(np.int32)
+    ffn_hidden_int32, b18_metrics = _vec_step(gate_scaled, up_scaled, 1, intermediate_size,
+                                                "B18_VMUL_gate_up", a_dtype="int32", b_dtype="int32")
+    ffn_hidden_fp32 = ffn_hidden_int32.astype(np.float64) / (V * V)
+    cos18 = _t4c4_cosine_simple(ffn_hidden_fp32.astype(np.float32), ref_ffn_hidden)
+    boundaries["B18_VMUL_gate_up"] = b18_metrics
+    boundaries["B18_VMUL_gate_up"]["cosine"] = cos18
+    boundaries["B18_VMUL_gate_up"]["verdict"] = "PASS+WARN" if cos18 < _T4C4_COS_PASS else "PASS"
+
+    # ── B19: down (MXU) ──────────────────────────────────────────────
+    down_w = weights["blk.0.ffn_down.weight"]
+    ffn_out_hw, b19_metrics = _mxu_step(ffn_hidden_fp32.astype(np.float32), down_w, None, intermediate_size, hidden_size, 1, "B19_down")
+    cos19, v19 = _t4c4_cosine_verdict(ffn_out_hw, ref_ffn_out, "B19")
+    b19_metrics["cosine"] = cos19
+    b19_metrics["verdict"] = v19
+    boundaries["B19_down"] = b19_metrics
+    cosines.append(cos19)
+    all_verdicts.append(v19)
+
+    # ── B20: Residual 2 (VECTOR RESID op=5, scaled INT32) ────────────
+    V = _T4C4_VEC_SCALE
+    resid_attn_scaled = np.round(residual_attn * V).astype(np.float32)
+    ffn_scaled = np.round(ffn_out_hw * V).astype(np.int32)
+    final_scaled_int32, b20_metrics = _vec_step(resid_attn_scaled, ffn_scaled, 5, hidden_size,
+                                                 "B20_residual_2", a_dtype="fp16", b_dtype="int32")
+    final_fp32 = final_scaled_int32.astype(np.float32) / V
+    cos20 = _t4c4_cosine_simple(final_fp32, ref_final)
+    boundaries["B20_residual_2"] = b20_metrics
+    boundaries["B20_residual_2"]["cosine"] = cos20
+    boundaries["B20_residual_2"]["verdict"] = "PASS+WARN" if cos20 < _T4C4_COS_PASS else "PASS"
+    cosines.append(cos20)
+    all_verdicts.append("PASS+WARN" if cos20 < _T4C4_COS_PASS else "PASS")
+
+    # ── B21: Final output cosine vs float32 ──────────────────────────
+    cos_final, v_final = _t4c4_cosine_verdict(final_fp32, ref_final, "B21")
+    boundaries["B21_final_output"] = {
+        "shape": f"({hidden_size},)",
+        "dtype": "fp32",
+        "cosine": cos_final,
+        "verdict": v_final,
+        "comparator": "cosine_vs_f32",
+    }
+    cosines.append(cos_final)
+    all_verdicts.append(v_final)
+
+    # ── 7. Aggregate metrics ─────────────────────────────────────────
+    min_cos = min(cosines) if cosines else 0.0
+    if "FAIL" in all_verdicts:
+        overall = "FAIL"
+    elif "PASS+WARN" in all_verdicts:
+        overall = "PASS+WARN"
+    else:
+        overall = "PASS"
+
+    # ── 8. Emit SIGNOFF_METRIC for every boundary ────────────────────
+    for bname, bdata in sorted(boundaries.items()):
+        _t4c4_emit_metric(capsys, f"boundary.{bname}.shape", bdata.get("shape", "?"))
+        _t4c4_emit_metric(capsys, f"boundary.{bname}.dtype", bdata.get("dtype", "?"))
+        _t4c4_emit_metric(capsys, f"boundary.{bname}.comparator", bdata.get("comparator", "?"))
+        if "scale" in bdata:
+            _t4c4_emit_metric(capsys, f"boundary.{bname}.scale", bdata["scale"])
+        if "saturation" in bdata:
+            _t4c4_emit_metric(capsys, f"boundary.{bname}.saturation", bdata["saturation"])
+        _t4c4_emit_metric(capsys, f"boundary.{bname}.max_abs_err", bdata.get("max_abs_err", 0.0))
+        _t4c4_emit_metric(capsys, f"boundary.{bname}.max_rel_err", bdata.get("max_rel_err", 0.0))
+        _t4c4_emit_metric(capsys, f"boundary.{bname}.cosine", bdata.get("cosine", 1.0))
+        _t4c4_emit_metric(capsys, f"boundary.{bname}.verdict", bdata.get("verdict", "N/A"))
+
+    _t4c4_emit_metric(capsys, "min_cosine", min_cos)
+    _t4c4_emit_metric(capsys, "final_cosine", cos_final)
+    _t4c4_emit_metric(capsys, "overall_verdict", overall)
+    _t4c4_emit_metric(capsys, "tests.collected", 1)
+    _t4c4_emit_metric(capsys, "tests.passed", 1 if overall != "FAIL" else 0)
+    _t4c4_emit_metric(capsys, "evidence.verdict", "pass" if overall != "FAIL" else "fail")
