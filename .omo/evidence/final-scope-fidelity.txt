@@ -1,0 +1,42 @@
+SIGNOFF_METRIC scope_check.base_commit ef090b1
+SIGNOFF_METRIC scope_check.head_commit HEAD
+SIGNOFF_METRIC scope_check.exit_code 0
+SIGNOFF_METRIC changed_files.total 39
+SIGNOFF_METRIC changed_files.authorized 39
+SIGNOFF_METRIC changed_files.rejected 0
+SIGNOFF_METRIC rejected_paths none
+SIGNOFF_METRIC untracked_scope_concerns docs/bugs/BUG-MXU-P9-001-doorbell-divergence.md,rtl/testcase-list-perf.md.bak.2591890
+SIGNOFF_METRIC evidence.verdict pass
+---
+## Scope Fidelity Report
+
+### Classification Rules
+- **Authorized**: `sim/`, `scripts/`, `docs/func-model-signoff-checklist.md`, `rtl/testcase-list-soc-fm.md`, `.omo/evidence/`, `.omo/notepads/`
+- **Plan-required**: `ggml-npu/q4_dequant.py` — T4C1 ("Selective real-GGUF loading and reference inputs") explicitly requires extending this file with `load_selected_weights_from_gguf()` and `load_tensor_row_from_gguf()`. Confirmed at plan lines 164-171.
+- **Rejected**: `rtl/mxu/`, `rtl/sfu/`, `rtl/wrapper/`, `rtl/soc/`, `rtl/cpu/`, `rtl/ip/`, `rtl/tb/`, performance files
+
+### Gate Checks
+| Gate | Result |
+|------|--------|
+| RTL implementation dirs touched? | NO — `git diff --name-only ef090b1..HEAD | grep -E '^rtl/(mxu|sfu|wrapper|soc|cpu|ip|tb)/'` returned empty |
+| RTL testbench touched? | NO |
+| Performance files touched? | NO — `git diff --name-only ef090b1..HEAD | grep -iE 'performance|perf'` returned empty |
+| Unauthorized paths outside plan? | NO — only `ggml-npu/q4_dequant.py` is outside the allowlist prefixes, and it is plan-mandated |
+
+### Authorized Changed Files (39/39)
+All 39 changed files fall under authorized paths or are plan-required:
+- `.omo/evidence/` (19 evidence files from T0A–T7)
+- `.omo/notepads/` (2 files: `issues.md`, `learnings.md`)
+- `docs/func-model-signoff-checklist.md` (1 file)
+- `ggml-npu/q4_dequant.py` (1 file — T4C1 plan-mandated: selective GGUF loading API)
+- `rtl/testcase-list-soc-fm.md` (1 file, FM-SOC-027 update)
+- `scripts/` (4 files: runner, docs checker, env wrapper, golden vector verifier)
+- `sim/` (11 files: golden executor, Qwen forward/model/oracle, synthetic vectors, signoff tests, pytest tests)
+
+### Untracked Scope Concerns (2, informational)
+These untracked pre-existing artifacts exist outside authorized directories:
+- `docs/bugs/BUG-MXU-P9-001-doorbell-divergence.md`
+- `rtl/testcase-list-perf.md.bak.2591890`
+
+### VERDICT: APPROVE
+All 39 changed files are within authorized scope: 38 under the standard allowlist prefixes (`sim/`, `scripts/`, `docs/func-model-signoff-checklist.md`, `rtl/testcase-list-soc-fm.md`, `.omo/evidence/`, `.omo/notepads/`), and 1 (`ggml-npu/q4_dequant.py`) is explicitly required by T4C1 in the signoff plan. No RTL implementation, testbench, or performance files were touched. Scope fidelity is clean.
