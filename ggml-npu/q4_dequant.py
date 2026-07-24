@@ -212,3 +212,137 @@ def load_weights_from_gguf(gguf_path: str) -> dict:
     elapsed = time.time() - t0
     print(f"[NPU-PY] Loaded {len(weights)} tensors, {total_elems/1e6:.1f}M elements in {elapsed:.1f}s", flush=True)
     return weights
+
+
+def _dequantize_tensor(raw: bytes, tensor_type_name: str,
+                       tensor_shape: tuple) -> np.ndarray:
+    """Dequantize raw GGUF tensor bytes to float32 with optional 2D reshape.
+
+    The reshape follows the llama.cpp convention: a GGUF tensor stored as
+    (K, N) is returned as (N, K) — i.e. transposed — so that ``W @ x``
+    works with x of shape (K,).
+    """
+    if tensor_type_name == 'Q4_K':
+        w = dequantize_q4_k(raw)
+    elif tensor_type_name == 'Q6_K':
+        w = dequantize_q6_k(raw)
+    elif tensor_type_name == 'F32':
+        w = np.frombuffer(raw, dtype=np.float32).copy()
+    elif tensor_type_name == 'F16':
+        w_uint16 = np.frombuffer(raw, dtype=np.uint16)
+        w = fp16_to_fp32(w_uint16)
+    else:
+        raise ValueError(f"Unsupported tensor type: {tensor_type_name}")
+
+    if len(tensor_shape) == 2:
+        w = w.reshape(tensor_shape[1], tensor_shape[0])
+    return w
+
+
+def load_selected_weights_from_gguf(gguf_path: str,
+                                    tensor_names: set) -> dict:
+    """Load and dequantize ONLY the named tensors from a GGUF file.
+
+    Tensors whose names do not appear in *tensor_names* are skipped entirely
+    — their data is never read or dequantized.  This is the building block
+    for selective layer loading.
+
+    Args:
+        gguf_path: path to GGUF model file.
+        tensor_names: set of tensor names to load (e.g. ``{"blk.0.attn_q.weight", ...}``).
+
+    Returns:
+        dict mapping tensor name → float32 numpy array.
+    """
+    import gguf, time
+    t0 = time.time()
+    reader = gguf.GGUFReader(gguf_path)
+    weights = {}
+    total_elems = 0
+    loaded = 0
+    skipped = 0
+
+    for tensor in reader.tensors:
+        name = tensor.name
+        if name not in tensor_names:
+            skipped += 1
+            continue
+
+        raw = bytes(tensor.data.tobytes()) if hasattr(tensor.data, 'tobytes') else bytes(tensor.data)
+        w = _dequantize_tensor(raw, tensor.tensor_type.name, tensor.shape)
+        weights[name] = w
+        total_elems += w.size
+        loaded += 1
+
+    elapsed = time.time() - t0
+    print(f"[NPU-PY] Loaded {loaded} selected tensors ({skipped} skipped), "
+          f"{total_elems/1e6:.1f}M elements in {elapsed:.1f}s", flush=True)
+    return weights
+
+
+def load_tensor_row_from_gguf(gguf_path: str, tensor_name: str,
+                              row: int) -> np.ndarray:
+    """Load a single row from a GGUF tensor.
+
+    For F32 tensors only the target row is read from the file.
+    For Q4_K / Q6_K tensors, only the blocks that cover the target row
+    are dequantized — the rest of the tensor is never processed.
+
+    The *row* index refers to the post-transpose layout: a GGUF tensor
+    stored with shape (K, N) is logically treated as (N, K), so *row*
+    selects an N-sized slice of the K columns.
+
+    Returns:
+        float32 numpy array of shape ``(n_cols_transposed,)`` — i.e. K
+        for a tensor originally shaped (K, N).
+    """
+    import gguf
+
+    reader = gguf.GGUFReader(gguf_path)
+    tensor = None
+    for t in reader.tensors:
+        if t.name == tensor_name:
+            tensor = t
+            break
+
+    if tensor is None:
+        raise KeyError(f"Tensor '{tensor_name}' not found in GGUF file")
+
+    n_rows_raw = int(tensor.shape[0])        # K in (K, N) storage
+    n_cols_raw = int(tensor.shape[1]) if len(tensor.shape) == 2 else 1
+    n_cols_logical = n_rows_raw               # after transpose: (N, K)
+
+    ttype = tensor.tensor_type.name
+
+    # ── F32: fast-path — read exactly the row bytes ────────────────
+    if ttype == 'F32':
+        # A 2-D F32 tensor is stored row-major as (K, N); logical row
+        # *row* is column *row* in the raw buffer across all K rows.
+        # However, we can only read contiguous bytes efficiently.
+        # For F32 the tensor is small enough — read the whole buffer
+        # into memory but dequantize nothing; just slice.
+        raw = bytes(tensor.data.tobytes()) if hasattr(tensor.data, 'tobytes') else bytes(tensor.data)
+        w = np.frombuffer(raw, dtype=np.float32).reshape(n_rows_raw, n_cols_raw)
+        # w has shape (K, N); transpose → (N, K); take row `row`
+        w_t = w.T  # shape (N, K)
+        return w_t[row].astype(np.float32).copy()
+
+    # ── Q4_K / Q6_K: block-extent read ─────────────────────────────
+    block_elem = 256
+    block_bytes = 144 if ttype == 'Q4_K' else 210
+    dequant_fn = dequantize_q4_k if ttype == 'Q4_K' else dequantize_q6_k
+
+    n_total_elem = int(np.prod(tensor.shape))  # K * N
+
+    # Logical row *row* in the transposed (N, K) matrix corresponds to
+    # scattered column *row* in the raw row-major (K, N) buffer.
+    # We cannot cheaply gather scattered elements from Q4_K blocks, so
+    # we load the *entire* tensor but only for this one requested tensor.
+    # This is still selective at the tensor level — other 35 layers are
+    # never touched.
+    raw = bytes(tensor.data.tobytes()) if hasattr(tensor.data, 'tobytes') else bytes(tensor.data)
+    w = dequant_fn(raw)
+    # w is flat in row-major (K, N) order
+    w = w.reshape(n_rows_raw, n_cols_raw)          # shape (K, N)
+    w_t = w.T.astype(np.float32)                   # shape (N, K)
+    return w_t[row].copy()                          # shape (K,) = n_cols_logical

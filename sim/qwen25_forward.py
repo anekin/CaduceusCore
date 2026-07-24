@@ -249,10 +249,12 @@ class Qwen25Layer:
         final = residual_ffn + ffn_out
 
         return {
+            "x_norm": x_norm.astype(np.float32),
             "attn_norm": x_norm.astype(np.float32),
             "Q_proj": Q.astype(np.float32),
             "K_proj": K.astype(np.float32),
             "V_proj": V.astype(np.float32),
+            "attn_concat": attn_concat.astype(np.float32),
             "attn_out": attn_out.astype(np.float32),
             "resid1": resid1.astype(np.float32),
             "ffn_norm": x_norm2.astype(np.float32),

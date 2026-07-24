@@ -98,3 +98,23 @@
   to `TILE_WEIGHT_BYTES`. The DMA copies only the actual needed bytes (`wgt_bytes`),
   so the padding is never read. This is correct but adds memory overhead for tiny ops
   like attn_score (128 bytes → 8192 bytes in tile-major). Not a concern for 256 MB DRAM.
+
+## Wave 2 T4C1: Selective Loading + Reference Inputs
+
+### Resolved
+- **Metric case_id collision (FIXED)**: `_emit_metric()` now accepts optional `case_id`
+  parameter. When two signoff tests share the same file (T0B preflight + T4C1 selective
+  loading), each test emits metrics with its own case ID, preventing the validator's
+  `metric_case_id_mismatch` rejection.
+- **Duplicate metric key for loaded tensors (FIXED)**: Emitting `loaded_tensor` as a
+  metric key with 13 different tensor-name values triggered the evidence validator's
+  `duplicate_metric_key_with_conflicting_value` check. Fixed by using unique keys per
+  tensor: `loaded_tensor.blk.0.attn_q.weight`, etc.
+
+### Deferred
+- **Block-level row extraction for Q4_K/Q6_K**: `load_tensor_row_from_gguf` loads the
+  entire single tensor for quantized types because a logical "row" in the transposed
+  (N,K) layout is scattered across every Q4_K block in the raw (K,N) storage. Block-level
+  extraction would require reading and dequantizing ~n_rows blocks scattered across the
+  tensor — the code complexity is not worth the marginal savings for one tensor.
+  The per-tensor selectivity guarantee (skip 35 layers) is sufficient for T4C1-T4C4.

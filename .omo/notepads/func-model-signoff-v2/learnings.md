@@ -215,3 +215,51 @@
 - Full `sim/signoff/test_qwen_blk0_synthetic_stress.py`: 2/2 pass (preflight + tiled MMUL)
 - SIGNOFF_METRIC lines: tests.collected=1, tests.passed=1, tile_count=5922,
   data_provenance=synthetic
+
+## Wave 2 T4C1: Selective Real-GGUF Loading + Reference Input Exposure
+
+### Architecture
+- **Four-file deliverable**: `ggml-npu/q4_dequant.py` (selective loading API),
+  `sim/qwen25_forward.py` (intermediate exposure), `sim/qwen25_func_model.py` (new:
+  Func Model wrapper), `sim/signoff/test_qwen25_3b_real_blk0.py` (signoff test).
+- **Selective loading**: `load_selected_weights_from_gguf(path, tensor_names)` iterates
+  all GGUF tensors but only reads/dequantizes those in the named set. Non-matching
+  tensors are skipped entirely — no data read, no dequantization. This is the
+  per-tensor selectivity guarantee T4C1 promises.
+- **Row extraction**: `load_tensor_row_from_gguf(path, name, row)` maps logical row
+  indices (post-transpose (N,K) layout) to raw storage. For F32 tensors it reads
+  the transposed slice; for Q4_K/Q6_K it loads the full single tensor (tensor-level
+  selectivity, not block-level) since a "row" in the transposed layout is scattered
+  across every block.
+- **Refactored dequant dispatch**: `_dequantize_tensor(raw, type, shape)` extracts
+  the type-switch logic shared by `load_weights_from_gguf`,
+  `load_selected_weights_from_gguf`, and `load_tensor_row_from_gguf`.
+- **Intermediate exposure**: `forward_with_intermediates()` now returns `"x_norm"`,
+  `"attn_concat"`, and `"ffn_norm"` keys (the latter already present) — matching
+  the exact signal names that T4C2/T4C4 need for projection inputs.
+- **Func Model wrapper**: `Qwen25FuncModel` in `sim/qwen25_func_model.py` wraps
+  selective loading + `FuncModel(dram_mb=256)` + `Qwen25Layer` to produce a
+  self-contained compute path for downstream tasks.
+
+### Key Design Decisions
+- **Float32 forward hash unchanged**: `forward()` computes identical results before
+  and after the `forward_with_intermediates()` extension. The test asserts SHA-256
+  hash equality between both paths.
+- **Metric case_id override**: `_emit_metric()` gained a `case_id` keyword parameter
+  because the same test file now serves two signoff cases (T0B and T4C1). Each test
+  function passes its own case ID to avoid metric key collisions.
+- **Unique metric keys per tensor**: Instead of a single `loaded_tensor` key with
+  13 different values (which the evidence validator rejects as conflicting
+  duplicates), each tensor gets its own key: `loaded_tensor.blk.0.attn_q.weight`,
+  etc. The validator accepts these as distinct non-conflicting keys.
+- **`layer0_names` set in test**: The test hard-codes the exact 13 tensor names
+  needed for layer-0 forward pass, then asserts no non-layer-0 tensors leaked in.
+  This is the "Do NOT dequantize all 36 layers" gate.
+
+### Verification
+- `pytest sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_selective_loading_and_reference_inputs -q`: 1/1, ~41s
+- `run_func_model_signoff.py run --case task-4c1-...`: exits 0, verdict PASS
+- `run_func_model_signoff.py validate --case task-4c1-...`: OK
+- Full test file: 2/2 pass (existing provenance test + new selective-loading test)
+- SIGNOFF_METRIC lines: model.sha256, 13× loaded_tensor.*, tests.collected=1,
+  tests.passed=1, evidence.verdict=pass
