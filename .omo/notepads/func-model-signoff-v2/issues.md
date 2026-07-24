@@ -27,3 +27,17 @@
 - **Metrics from non-pytest cases**: Cases like W2.2 golden vectors use `SIGNOFF_METRIC`
   lines in stdout for test counts. The runner parses these but cannot auto-add synthetic
   metrics. Test scripts must emit their own `SIGNOFF_METRIC` lines.
+
+## Wave 1 T3: Issues Found / Resolved
+
+### Resolved
+- **test_soc_fm.py pytest discovery failure after file creation**: The newly created
+  `sim/tests/test_func_model_signoff_docs.py` was not found by pytest on the first run
+  (exit code 4). Re-running with an absolute path worked; subsequent relative-path runs
+  also worked. Likely a caching or file-system propagation delay. No code change needed.
+
+### Deferred
+- **Old test names in testcase-list-soc-fm.md**: FM-SOC-027 still references the old
+  name `test_blk0_full_chain_single_tile`. This is outside the allowed file scope for T3
+  and does not break any test execution or the checker. Can be updated opportunistically
+  in a later wave.

@@ -57,3 +57,19 @@
   allow the evidence (source_fingerprint and command_hash are still checked for staleness).
   Only fail when the recorded HEAD is NOT an ancestor (branch switched, history rewritten).
 - **Exception**: `task-1-comparator-red` remains intentionally allowed to be stale.
+
+## Wave 1 T3: Scaled/Single-Tile Test Reclassification
+
+### Decision
+- The three scaled/single-tile Qwen tests are reclassified as fast regressions, not signoff
+  evidence. The runner's case registry already uses the new names; only the function
+  definitions in `test_soc_fm.py` needed renaming.
+- A docs consistency checker (`check_func_model_signoff_docs.py`) ensures no test
+  containing `scaled` or `single_tile` in its name is ever described as `full-shape`
+  in the signoff checklist or testcase list.
+
+### Verification
+- `task-3-scaled-qwen-regressions` runner case exits 0 with 3/3 collected and passed
+- `task-6-signoff-doc-consistency` runner case exits 0 with 2/2 passed
+- Checker handles the absence of `docs/func-model-signoff-checklist.md` gracefully
+  (created in T6)
