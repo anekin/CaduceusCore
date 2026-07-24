@@ -10,6 +10,7 @@ test_qwen25_3b_real_blk0.py.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import struct
@@ -445,3 +446,310 @@ def test_qwen_blk0_synthetic_tiled_mmul_manifest_ops(capsys) -> None:
     _t4b_emit_metric(capsys, "tests.passed", 1)
     _t4b_emit_metric(capsys, "tile_count", total_tile_count)
     _t4b_emit_metric(capsys, "data_provenance", "synthetic")
+
+
+# ══════════════════════════════════════════════════════════════════════
+# T4A — Synthetic direct-MMIO 17-op stress gate
+# ══════════════════════════════════════════════════════════════════════
+
+_T4A_CASE_ID = "task-4a-qwen3b-direct-mmio"
+
+_T4A_IN_SRAM = 0x010000
+_T4A_OUT_SRAM = 0x020000
+_T4A_A_SRAM = 0x030000
+_T4A_B_SRAM = 0x040000
+_T4A_DRAM_WEIGHT = 0x80000000
+_T4A_DRAM_WEIGHT_OFF = _T4A_DRAM_WEIGHT - _DRAM_BASE
+
+_SFU_OP = {"SOFTMAX": 0, "ROPE": 5, "RMSNORM": 6, "SILU": 4}
+_VEC_OP = {"VMUL": 1, "VRESID": 5}
+
+
+def _t4a_emit_metric(capsys, key: str, value) -> None:
+    line = json.dumps({"case": _T4A_CASE_ID, "key": key, "value": value})
+    with capsys.disabled():
+        print(f"\nSIGNOFF_METRIC {line}")
+
+
+def _read_hex_fp16(filepath: Path, num_elements: int) -> np.ndarray:
+    raw = _read_hex_file(filepath, elem_bytes=2)
+    raw = _pad_bytes(raw, num_elements * 2)[:num_elements * 2]
+    return np.frombuffer(raw, dtype=np.float16).astype(np.float32)
+
+
+def _read_hex_int32(filepath: Path, num_elements: int) -> np.ndarray:
+    raw = _read_hex_file(filepath, elem_bytes=4)
+    raw = _pad_bytes(raw, num_elements * 4)[:num_elements * 4]
+    return np.frombuffer(raw, dtype=np.int32)
+
+
+def _element_wise_hw_vs_ref(
+    hw: np.ndarray, ref: np.ndarray, atol: float, rtol: float
+) -> tuple[bool, float, float]:
+    hw = np.asarray(hw, dtype=np.float64)
+    ref = np.asarray(ref, dtype=np.float64)
+    if np.any(np.isnan(hw)) or np.any(np.isnan(ref)):
+        return False, float("nan"), float("nan")
+    abs_diff = np.abs(hw - ref)
+    rel_diff = abs_diff / (np.abs(ref) + 1e-12)
+    hw_inf = np.isinf(hw)
+    ref_inf = np.isinf(ref)
+    either_inf = hw_inf | ref_inf
+    same_sign_inf = hw_inf & ref_inf & (np.sign(hw) == np.sign(ref))
+    inf_fail = either_inf & ~same_sign_inf
+    if np.any(inf_fail):
+        return False, float(np.max(abs_diff)), float(np.max(rel_diff))
+    finite_mask = ~either_inf
+    element_ok = np.ones_like(abs_diff, dtype=bool)
+    element_ok[finite_mask] = (
+        (abs_diff[finite_mask] <= atol) | (rel_diff[finite_mask] <= rtol)
+    )
+    max_ae = float(np.max(abs_diff)) if np.any(finite_mask) else 0.0
+    max_re = float(np.max(rel_diff)) if np.any(finite_mask) else 0.0
+    return bool(np.all(element_ok)), max_ae, max_re
+
+
+def test_qwen_blk0_synthetic_direct_mmio_manifest_ops(capsys) -> None:
+    """Synthetic direct-MMIO 17-op stress: load manifest, dispatch each op
+    through FuncModel.bridge (MMIOBridge) at declared dimensions, compare
+    against checked-in manifest golden."""
+    from sim.regmap import MXU, SFU, VECTOR
+
+    manifest = load_manifest()
+    ops = manifest["ops"]
+    assert len(ops) == 17, f"Expected 17 ops, got {len(ops)}"
+
+    model = FuncModel(dram_mb=256)
+    bridge = model.bridge
+    sram = model.sram
+
+    _t4a_emit_metric(capsys, "tests.collected", 1)
+
+    per_op_records: list[dict] = []
+
+    for op in ops:
+        idx = op["idx"]
+        opcode = op["opcode"]
+        name = op["name"]
+        dims = op["dimensions"]
+        output_dtype = op.get("output_dtype", "INT32")
+
+        # ── MMUL ops ─────────────────────────────────────────────
+        if opcode == "MMUL":
+            M = dims["M"]
+            K = dims["K"]
+            N = dims["N"]
+
+            input_bytes = _read_hex_file(
+                VECTORS_DIR / op["input_hex"], elem_bytes=1
+            )
+            input_bytes = _pad_bytes(input_bytes, M * K)[:M * K]
+
+            weight_raw = _read_hex_file(
+                VECTORS_DIR / op["weight_hex"], elem_bytes=1
+            )
+            wgt_bytes = (K * N + 1) // 2
+            weight_packed = _pad_bytes(weight_raw, wgt_bytes)[:wgt_bytes]
+
+            golden = _read_hex_int32(
+                VECTORS_DIR / op["golden_output_hex"], M * N
+            ).reshape(M, N)
+
+            out_size = M * N * 4
+            sram[_T4A_IN_SRAM : _T4A_IN_SRAM + len(input_bytes)] = input_bytes
+            model.dram[_T4A_DRAM_WEIGHT_OFF : _T4A_DRAM_WEIGHT_OFF + len(weight_packed)] = weight_packed
+            sram[_T4A_OUT_SRAM : _T4A_OUT_SRAM + out_size] = b"\x00" * out_size
+
+            bridge.handle("write", MXU.BASE + MXU.CTRL, 0)
+            bridge.handle("write", MXU.BASE + MXU.DIM0, (K << 16) | M)
+            bridge.handle("write", MXU.BASE + MXU.DIM1, N)
+            bridge.handle("write", MXU.BASE + MXU.I_ADDR, _T4A_IN_SRAM)
+            bridge.handle("write", MXU.BASE + MXU.W_ADDR, _T4A_DRAM_WEIGHT)
+            bridge.handle("write", MXU.BASE + MXU.O_ADDR, _T4A_OUT_SRAM)
+            bridge.handle("write", MXU.BASE + MXU.SCALE_ADDR, 0)
+            bridge.handle("write", MXU.BASE + MXU.CMD, 1)
+
+            output = np.frombuffer(
+                sram[_T4A_OUT_SRAM : _T4A_OUT_SRAM + out_size], dtype=np.int32
+            ).reshape(M, N)
+
+            np.testing.assert_allclose(
+                output.astype(np.float32),
+                golden.astype(np.float32),
+                atol=1e-4,
+                rtol=1e-5,
+                err_msg=(
+                    f"op{idx:02d} {name}: INT32 mismatch "
+                    f"at max_abs_err={np.max(np.abs(output.astype(np.float32) - golden.astype(np.float32))):.2e}"
+                ),
+            )
+            per_op_records.append({
+                "idx": idx, "name": name, "dims": f"M={M},K={K},N={N}",
+                "dtype": "INT32", "golden_hash": hashlib.sha256(
+                    golden.tobytes()
+                ).hexdigest()[:16],
+                "comparator": "int32_bit_exact", "verdict": "PASS",
+            })
+
+        # ── SFU ops ──────────────────────────────────────────────
+        elif opcode in ("RMSNORM", "ROPE", "SOFTMAX", "SILU"):
+            elements: int
+            input_hex: str
+            golden_hex: str
+            head_dim = 0
+            pos = 0
+
+            if opcode == "RMSNORM":
+                elements = dims["elements"]
+                if idx == 0:
+                    input_hex = "op00_rmsnorm_pre_input.hex"
+                    golden_hex = "op00_rmsnorm_pre_golden.hex"
+                else:
+                    input_hex = "op10_rmsnorm_post_input.hex"
+                    golden_hex = "op10_rmsnorm_post_golden.hex"
+            elif opcode == "ROPE":
+                elements = dims["q_len"] + dims["k_len"]
+                head_dim = 128
+                pos = dims.get("position", 0)
+                input_hex = "op04_rope_input.hex"
+                golden_hex = "op04_rope_golden.hex"
+            elif opcode == "SOFTMAX":
+                elements = dims["elements"]
+                input_hex = "op06_attn_softmax_input.hex"
+                golden_hex = "op06_attn_softmax_golden.hex"
+            elif opcode == "SILU":
+                elements = dims["elements"]
+                input_hex = "op13_silu_input.hex"
+                golden_hex = "op13_silu_golden.hex"
+            else:
+                raise AssertionError(f"Unknown SFU opcode: {opcode}")
+
+            input_fp16 = _read_hex_fp16(VECTORS_DIR / input_hex, elements)
+            input_bytes = input_fp16.astype(np.float16).tobytes()
+            golden = _read_hex_fp16(VECTORS_DIR / golden_hex, elements)
+
+            sram[_T4A_IN_SRAM : _T4A_IN_SRAM + len(input_bytes)] = input_bytes
+
+            bridge.handle("write", SFU.BASE + SFU.CTRL, _SFU_OP[opcode])
+            bridge.handle("write", SFU.BASE + SFU.I_ADDR, _T4A_IN_SRAM)
+            bridge.handle("write", SFU.BASE + SFU.O_ADDR, _T4A_OUT_SRAM)
+            bridge.handle("write", SFU.BASE + SFU.DIM, (head_dim << 16) | elements)
+            if opcode == "ROPE":
+                bridge.handle("write", SFU.BASE + SFU.POS, pos)
+
+            bridge.handle("write", SFU.BASE + SFU.CMD, 1)
+
+            output = np.frombuffer(
+                sram[_T4A_OUT_SRAM : _T4A_OUT_SRAM + elements * 2],
+                dtype=np.float16,
+            ).astype(np.float32)
+
+            if opcode == "ROPE":
+                sfu_atol, sfu_rtol = 5e-1, 1e-2
+            else:
+                sfu_atol, sfu_rtol = 2e-3, 1e-2
+
+            within, max_ae, max_re = _element_wise_hw_vs_ref(
+                output, golden, atol=sfu_atol, rtol=sfu_rtol
+            )
+            assert within, (
+                f"op{idx:02d} {name}: SFU FP16 mismatch "
+                f"at max_abs_err={max_ae:.2e}, max_rel_err={max_re:.2e}"
+            )
+            per_op_records.append({
+                "idx": idx, "name": name, "elements": elements,
+                "dtype": "FP16", "golden_hash": hashlib.sha256(
+                    golden.astype(np.float16).tobytes()
+                ).hexdigest()[:16],
+                "comparator": "sfu_fp16_element_wise(atol=2e-3,rtol=1e-2)",
+                "verdict": "PASS",
+            })
+
+        # ── VECTOR ops ───────────────────────────────────────────
+        elif opcode in ("VRESID", "VMUL"):
+            elements = dims["elements"]
+            vec_op = _VEC_OP[opcode]
+
+            if opcode == "VRESID":
+                if idx == 9:
+                    a_hex = "op09_vresid_pre_input.hex"
+                    b_hex = "op09_vresid_pre_o_out.hex"
+                    golden_hex = "op09_vresid_pre_golden.hex"
+                else:
+                    a_hex = "op16_vresid_post_input.hex"
+                    b_hex = "op16_vresid_post_down.hex"
+                    golden_hex = "op16_vresid_post_golden.hex"
+
+                a_fp16 = _read_hex_fp16(VECTORS_DIR / a_hex, elements)
+                a_bytes = a_fp16.astype(np.float16).tobytes()
+                b_int32 = _read_hex_int32(VECTORS_DIR / b_hex, elements)
+                b_bytes = b_int32.tobytes()
+
+                sram[_T4A_A_SRAM : _T4A_A_SRAM + len(a_bytes)] = a_bytes
+                sram[_T4A_B_SRAM : _T4A_B_SRAM + len(b_bytes)] = b_bytes
+
+                golden = _read_hex_int32(VECTORS_DIR / golden_hex, elements)
+            else:
+                a_int32 = _read_hex_int32(
+                    VECTORS_DIR / "op14_vmul_gate_input.hex", elements
+                )
+                b_int32 = _read_hex_int32(
+                    VECTORS_DIR / "op14_vmul_up_input.hex", elements
+                )
+                a_bytes = a_int32.tobytes()
+                b_bytes = b_int32.tobytes()
+
+                sram[_T4A_A_SRAM : _T4A_A_SRAM + len(a_bytes)] = a_bytes
+                sram[_T4A_B_SRAM : _T4A_B_SRAM + len(b_bytes)] = b_bytes
+
+                golden = _read_hex_int32(
+                    VECTORS_DIR / "op14_vmul_golden.hex", elements
+                )
+
+            bridge.handle("write", VECTOR.BASE + VECTOR.CTRL, vec_op)
+            bridge.handle("write", VECTOR.BASE + VECTOR.A_ADDR, _T4A_A_SRAM)
+            bridge.handle("write", VECTOR.BASE + VECTOR.B_ADDR, _T4A_B_SRAM)
+            bridge.handle("write", VECTOR.BASE + VECTOR.O_ADDR, _T4A_OUT_SRAM)
+            bridge.handle("write", VECTOR.BASE + VECTOR.DIM, elements)
+            bridge.handle("write", VECTOR.BASE + VECTOR.CMD, 1)
+
+            out_size = elements * 4
+            output = np.frombuffer(
+                sram[_T4A_OUT_SRAM : _T4A_OUT_SRAM + out_size], dtype=np.int32
+            )
+
+            np.testing.assert_allclose(
+                output.astype(np.float32),
+                golden.astype(np.float32),
+                atol=1e-4,
+                rtol=1e-5,
+                err_msg=(
+                    f"op{idx:02d} {name}: INT32 mismatch "
+                    f"at max_abs_err={np.max(np.abs(output.astype(np.float32) - golden.astype(np.float32))):.2e}"
+                ),
+            )
+            per_op_records.append({
+                "idx": idx, "name": name, "dim": f"elements={elements}",
+                "dtype": output_dtype,
+                "golden_hash": hashlib.sha256(golden.tobytes()).hexdigest()[:16],
+                "comparator": "int32_bit_exact",
+                "verdict": "PASS",
+            })
+
+        else:
+            raise AssertionError(f"Unknown opcode: {opcode} for op{idx:02d} {name}")
+
+    _t4a_emit_metric(capsys, "tests.passed", 1)
+    _t4a_emit_metric(capsys, "data_provenance", "synthetic")
+    for rec in per_op_records:
+        _t4a_emit_metric(
+            capsys,
+            f"op.{rec['idx']:02d}",
+            {
+                "name": rec["name"],
+                "dtype": rec["dtype"],
+                "golden_hash": rec["golden_hash"],
+                "comparator": rec["comparator"],
+                "verdict": rec["verdict"],
+            },
+        )
