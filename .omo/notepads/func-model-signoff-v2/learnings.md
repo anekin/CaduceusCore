@@ -393,3 +393,63 @@
 - Full `sim/signoff/test_qwen_blk0_synthetic_stress.py`: 3/3 pass (preflight + tiled MMUL + direct MMIO)
 - SIGNOFF_METRIC lines: tests.collected=1, tests.passed=1, data_provenance=synthetic,
   17× op.{idx} records with per-op name/dtype/golden_hash/comparator/verdict
+
+## Wave 2 T4C3: Real-GGUF Tiled-Scheduler Projection Gate
+
+### Architecture
+- **Single test function**: `test_qwen25_3b_real_tiled_projections` in
+  `sim/signoff/test_qwen25_3b_real_blk0.py`.
+- **Tile-major conversion**: `_row_major_to_tile_major_int4()` converts row-major packed
+  INT4 (K×N) to tile-major 128×128 layout, reusing unpack/repack logic from T4B.
+  `_scales_to_tile_major()` converts (num_blocks, N) FP32 block scales to tile-major
+  128×128 layout with one scale per output column per tile.
+- **Per-block scaled mmio handler**: `_build_mmio_handlers_scaled()` extends the T4B
+  inline MMIO infrastructure with per-column FP32 scale application. On MXU CMD write,
+  the handler reads activation slice, weight tile (packed INT4), and scale tile (FP32)
+  from SRAM, runs INT32 matmul → clip → per-column FP32 scale → accumulate, writing
+  FP32 output to SRAM. This differs from T4B which used unity scales and INT32 output.
+- **Tile compute**: `_mxu_compute_tile_scaled()` encapsulates the per-tile INT4×INT8→INT32
+  →scale→FP32 computation for a single (M, block_h) × (block_h, tile_w) matmul with
+  per-column FP32 scales.
+- **Direct-MMIO agreement check**: Each tiled projection is compared against a re-run of
+  the direct-MMIO path (same as T4C2) using `FuncModel(dram_mb=256)` with `MMIOBridge`.
+  All 7 projections achieve bit-exact agreement (max_abs_err=0.0).
+
+### Key Design Decisions
+- **No imports from T4B**: All helpers are reimplemented inline in the test file to keep
+  it self-contained. `_unpack_int4_raw`, `_pack_int4_raw`, and `_row_major_to_tile_major_int4`
+  are independent reimplementations of the T4B patterns.
+- **Scale tile format**: Each tile-major scale slot stores `tile_width` FP32 values
+  (one per output column in the tile) matching `block_scales[k_block, n_start:n_end]`.
+  The DMA in `tile_mmul` reads exactly `tile_width * 4` bytes per tile.
+- **FP32 output in SRAM**: The accumulator is FP32 (not INT32) because per-block
+  scaling produces float32 values. The `tile_mmul` output DMA writes `M * tile_w * 4`
+  bytes per tile. SRAM output at `out_sram + n_start * 4` stores the accumulated FP32
+  for columns `[n_start:n_end]`.
+- **Separate case ID**: `_T4C3_CASE_ID = "task-4c3-qwen25-3b-real-tiled-projections"`
+  uses distinct metric keys from T4C2 to avoid collisions.
+- **Runner name fix**: The pre-existing runner had `test_qwen25_3b_real_blk0_tiled_projections`
+  (extra "blk0_") but the task spec names the function `test_qwen25_3b_real_tiled_projections`.
+  Updated runner to match.
+
+### Projection Results (token 9707, "Hello")
+| Projection | M | K | N | Tiles | cosine | Verdict | Direct Agree |
+|---|---|---|---|---|---|---|---|
+| Q_proj | 1 | 2048 | 2048 | 256 (16×16) | 0.9990 | PASS | ✓ |
+| K_proj | 1 | 2048 | 256 | 32 (16×2) | 1.0000 | PASS | ✓ |
+| V_proj | 1 | 2048 | 256 | 32 (16×2) | 0.9946 | PASS | ✓ |
+| O_proj | 1 | 2048 | 2048 | 256 (16×16) | 0.9957 | PASS | ✓ |
+| gate | 1 | 2048 | 11008 | 1376 (16×86) | 0.9974 | PASS | ✓ |
+| up | 1 | 2048 | 11008 | 1376 (16×86) | 0.9962 | PASS | ✓ |
+| down | 1 | 11008 | 2048 | 1376 (86×16) | 0.9956 | PASS | ✓ |
+
+Total tile count: 4704. Oracle agreement: bit-exact (max_abs_err=0.0). Min cosine (V_proj): 0.9946 > 0.97.
+
+### Verification
+- `pytest sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_tiled_projections -q`: 1/1, ~50s
+- `run_func_model_signoff.py run --case task-4c3-...`: exits 0, verdict PASS
+- `run_func_model_signoff.py validate --case task-4c3-...`: OK
+- Full test file: 4/4 pass (3 existing + 1 new)
+- SIGNOFF_METRIC lines: per-projection tile_count/max_abs_err/max_rel_err/cosine/verdict/
+  direct_agreement, plus total_tile_count/min_cosine/overall_verdict/tests.collected/
+  tests.passed/evidence.verdict

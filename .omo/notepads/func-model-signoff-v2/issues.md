@@ -167,4 +167,26 @@
   - **Workaround**: ROPE comparison uses `atol=5e-1` (vs `2e-3` for other SFU ops).
   - **Not a FuncModel bug**: The CORDIC error is expected hardware behavior. The
     manifest golden should be regenerated using `rope_hw` or a wider tolerance should
-    be accepted for ROPE comparisons against ref-based golden.
+    be     accepted for ROPE comparisons against ref-based golden.
+
+## Wave 2 T4C3: Real-GGUF Tiled-Scheduler Projection Gate
+
+### Resolved
+- **Per-block scale mmio handler (IMPLEMENTED)**: `_build_mmio_handlers_scaled()` handles
+  per-column FP32 scale application in the MXU CMD path. Unlike T4B's unity-scale handler,
+  this reads SCALE_ADDR from SRAM (FP32, `tile_w` values), applies per-column scaling
+  after INT32 matmul, and produces FP32 output. Accumulate path adds FP32 partials.
+- **Tile-major scale conversion (IMPLEMENTED)**: `_scales_to_tile_major()` converts
+  (num_blocks, N) block_scales to the tile-major layout expected by `tile_mmul`,
+  storing `tile_width` FP32 values per tile slot.
+- **Runner function name (FIXED)**: Changed from `test_qwen25_3b_real_blk0_tiled_projections`
+  to `test_qwen25_3b_real_tiled_projections` to match the task spec.
+
+### Deferred
+- **Per-op scale data verification**: The test verifies output correctness (bit-exact
+  oracle agreement) but does not inspect individual scale values in the tile-major layout.
+  A separate test could verify that each tile-major scale slot contains the correct
+  `block_scales[k_block, n_start:n_end]` values.
+- **SRAM size not pathologically tested**: The 256KB SRAM buffer fits all real-GGUF tile
+  data comfortably. Edge cases with larger M dimensions (batch inference) should be
+  tested in a future wave.

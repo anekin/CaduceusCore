@@ -514,7 +514,7 @@ CASE_REGISTRY: Dict[str, CaseDef] = {
     "task-4c3-qwen25-3b-real-tiled-projections": CaseDef(
         case_id="task-4c3-qwen25-3b-real-tiled-projections",
         argv=["python3", "-m", "pytest",
-              "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_blk0_tiled_projections",
+              "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_tiled_projections",
               "-q"],
         evidence_path="task-4c3-qwen25-3b-real-tiled-projections.txt",
         expected_exit=0,
