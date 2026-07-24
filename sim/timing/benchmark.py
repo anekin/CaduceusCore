@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 
 from sim.model_specs import ModelSpec, all_aliases, get_spec
-from sim.models.dma import DMAModel
+from models.dma import DMAModel
 from sim.timing.dashboard import Dashboard
 from sim.timing.metrics import MetricsCollector
 from sim.timing.timing_engine import TimingEngine

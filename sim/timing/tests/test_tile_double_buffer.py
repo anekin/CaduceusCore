@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from sim.models.dma import DMAModel
+from models.dma import DMAModel
 
 
 _BASELINE_CONFIG = {
