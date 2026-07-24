@@ -118,3 +118,12 @@
   extraction would require reading and dequantizing ~n_rows blocks scattered across the
   tensor — the code complexity is not worth the marginal savings for one tensor.
   The per-tensor selectivity guarantee (skip 35 layers) is sufficient for T4C1-T4C4.
+
+### Resolved (T4C1 fixup)
+- **Missing ggml-npu in PYTHONPATH (FIXED)**: The signoff runner sets `PYTHONPATH=sim`
+  only. `test_qwen25_3b_selective_loading_and_reference_inputs` imports `q4_dequant`
+  from `ggml-npu/`, which was not on the path. Fixed by adding the same `sys.path.insert`
+  pattern already used in `qwen25_forward.py` and `qwen25_func_model.py` — inserted
+  `_PROJECT / "ggml-npu"` into `sys.path` at module level in the test file. Note:
+  `_HERE.parents[1]` (not `[2]`) is the project root because the test file is at
+  `sim/signoff/` (two levels deep under CaduceusCore).

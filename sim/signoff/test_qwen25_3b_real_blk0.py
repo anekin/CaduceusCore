@@ -15,12 +15,17 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
 
 import numpy as np
 
 import gguf
 from gguf import GGUFReader
+
+_HERE = Path(__file__).resolve().parent
+_PROJECT = _HERE.parents[1]
+sys.path.insert(0, str(_PROJECT / "ggml-npu"))
 
 CASE_ID = "task-0b-qwen3b-synthetic-and-real-preflight"
 
