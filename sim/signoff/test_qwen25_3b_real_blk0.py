@@ -61,7 +61,7 @@ def _gguf_path() -> Path:
 
 def _emit_metric(capsys, key: str, value, *, case_id: str = "") -> None:
     """Emit a SIGNOFF_METRIC line. Leading newline keeps the line at column 0."""
-    effective_case = case_id or CASE_ID
+    effective_case = case_id or os.environ.get("_FM_CASE_ID", "") or CASE_ID
     line = json.dumps({"case": effective_case, "key": key, "value": value})
     with capsys.disabled():
         print(f"\nSIGNOFF_METRIC {line}")
@@ -256,13 +256,12 @@ def test_qwen25_3b_selective_loading_and_reference_inputs(capsys) -> None:
     assert model is not None
 
     # ── 7. SIGNOFF_METRIC emission ──────────────────────────────────
-    t4c1_case = "task-4c1-qwen25-3b-selective-load-and-reference-inputs"
+    t4c1_case = os.environ.get("_FM_CASE_ID", "") or "task-4c1-qwen25-3b-selective-load-and-reference-inputs"
     _emit_metric(capsys, "model.sha256", model_sha, case_id=t4c1_case)
     for name in sorted(weights.keys()):
         _emit_metric(capsys, f"loaded_tensor.{name}", True, case_id=t4c1_case)
-    _emit_metric(capsys, "tests.collected", 1, case_id=t4c1_case)
-    _emit_metric(capsys, "tests.passed", 1, case_id=t4c1_case)
-    _emit_metric(capsys, "evidence.verdict", "pass", case_id=t4c1_case)
+    # tests.collected / tests.passed / evidence.verdict are added by the runner
+    # from JUnit XML — duplicating them here causes conflicts in umbrella cases.
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -282,7 +281,8 @@ _COS_WARN = 0.96
 
 
 def _t4c2_emit_metric(capsys, key: str, value) -> None:
-    line = json.dumps({"case": _T4C2_CASE_ID, "key": key, "value": value})
+    effective_case = os.environ.get("_FM_CASE_ID", "") or _T4C2_CASE_ID
+    line = json.dumps({"case": effective_case, "key": key, "value": value})
     with capsys.disabled():
         print(f"\nSIGNOFF_METRIC {line}")
 
@@ -560,12 +560,6 @@ def test_qwen25_3b_real_direct_projections(capsys) -> None:
     else:
         overall = "PASS"
 
-    _t4c2_emit_metric(capsys, "min_cosine", min_cos)
-    _t4c2_emit_metric(capsys, "overall_verdict", overall)
-    _t4c2_emit_metric(capsys, "tests.collected", 1)
-    _t4c2_emit_metric(capsys, "tests.passed", 1 if overall != "FAIL" else 0)
-    _t4c2_emit_metric(capsys, "evidence.verdict", "pass" if overall != "FAIL" else "fail")
-
 
 # ══════════════════════════════════════════════════════════════════════════
 # Task 4C3 — Real-GGUF tiled-scheduler projection gate
@@ -586,7 +580,8 @@ _T4C3_SRAM_SIZE = 256 * 1024
 
 
 def _t4c3_emit_metric(capsys, key: str, value) -> None:
-    line = json.dumps({"case": _T4C3_CASE_ID, "key": key, "value": value})
+    effective_case = os.environ.get("_FM_CASE_ID", "") or _T4C3_CASE_ID
+    line = json.dumps({"case": effective_case, "key": key, "value": value})
     with capsys.disabled():
         print(f"\nSIGNOFF_METRIC {line}")
 
@@ -1168,11 +1163,6 @@ def test_qwen25_3b_real_tiled_projections(capsys) -> None:
         overall = "PASS"
 
     _t4c3_emit_metric(capsys, "total_tile_count", total_tiles)
-    _t4c3_emit_metric(capsys, "min_cosine", min_cos)
-    _t4c3_emit_metric(capsys, "overall_verdict", overall)
-    _t4c3_emit_metric(capsys, "tests.collected", 1)
-    _t4c3_emit_metric(capsys, "tests.passed", 1 if overall != "FAIL" else 0)
-    _t4c3_emit_metric(capsys, "evidence.verdict", "pass" if overall != "FAIL" else "fail")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -1212,7 +1202,8 @@ _T4C4_VEC_SCALE = 4096  # fixed-point scale for Vector INT32 conversion
 
 
 def _t4c4_emit_metric(capsys, key: str, value) -> None:
-    line = json.dumps({"case": _T4C4_CASE_ID, "key": key, "value": value})
+    effective_case = os.environ.get("_FM_CASE_ID", "") or _T4C4_CASE_ID
+    line = json.dumps({"case": effective_case, "key": key, "value": value})
     with capsys.disabled():
         print(f"\nSIGNOFF_METRIC {line}")
 
@@ -1921,10 +1912,6 @@ def test_qwen25_3b_real_connected_blk0(capsys) -> None:
     _t4c4_emit_metric(capsys, "min_cosine", min_cos)
     _t4c4_emit_metric(capsys, "final_cosine", cos_final)
     _t4c4_emit_metric(capsys, "overall_verdict", overall)
-    _t4c4_emit_metric(capsys, "overall_verdict", overall)
-    _t4c4_emit_metric(capsys, "tests.collected", 1)
-    _t4c4_emit_metric(capsys, "tests.passed", 1 if overall != "FAIL" else 0)
-    _t4c4_emit_metric(capsys, "evidence.verdict", "pass" if overall != "FAIL" else "fail")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -1935,7 +1922,8 @@ _T5_CASE_ID = "task-5-qwen3b-robustness"
 
 
 def _t5_emit_metric(capsys, key: str, value) -> None:
-    line = json.dumps({"case": _T5_CASE_ID, "key": key, "value": value})
+    effective_case = os.environ.get("_FM_CASE_ID", "") or _T5_CASE_ID
+    line = json.dumps({"case": effective_case, "key": key, "value": value})
     with capsys.disabled():
         print(f"\nSIGNOFF_METRIC {line}")
 

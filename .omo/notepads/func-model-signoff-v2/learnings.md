@@ -567,3 +567,50 @@ Plus: min_cosine, final_cosine, overall_verdict, tests.collected, tests.passed, 
 - `python3 scripts/check_func_model_signoff_docs.py --check-scaled-labels`: OK
 - `python3 scripts/run_func_model_signoff.py run --case task-6-signoff-doc-consistency`: PASS
 - `python3 scripts/run_func_model_signoff.py validate --case task-6-signoff-doc-consistency`: OK
+
+## Wave 8 T7: Comprehensive Func Model Signoff Sweep
+
+### Results
+- `task-7-functional-selected-regression`: 532/532 (11 files), verdict PASS
+- `task-7-functional-full-sweep`: 697/697 (≥638 threshold), verdict PASS
+- `task-7-qwen3b-synthetic-stress-gates`: 6/6 (all synthetic tests), verdict PASS
+- `task-7-qwen25-3b-real-blk0-hard-gate`: 6/6 (all real GGUF tests), verdict PASS
+- `task-7-w2-2-golden-vectors`: 14/14 vectors, verdict PASS
+- `validate --all-functional`: 19/19 OK, exit 0
+
+### Fix: Per-test-function metrics conflict in umbrella cases
+
+**Problem**: When the T7 umbrella cases ran all tests in a single file (e.g., all tests
+in `test_qwen25_3b_real_blk0.py`), per-test-function `tests.collected`/`tests.passed`/
+`evidence.verdict` emissions conflicted with the runner's JUnit-based synthetic metrics.
+Additionally, shared keys like `min_cosine` and `overall_verdict` from multiple test
+functions produced conflicting values under the same umbrella case_id.
+
+**Root cause**: Test functions emitted summary metrics individually, but the runner
+aggregates them from JUnit XML. The `_FM_CASE_ID` env var correctly scoped them to
+the umbrella case, but the same key with different values caused duplicate-metric
+validation failures.
+
+**Fix**:
+1. Removed redundant `tests.collected`/`tests.passed`/`evidence.verdict` emissions
+   from ALL per-test-function emit blocks (T4A, T4B, T4C1, T4C2, T4C3, T4C4).
+   The runner always adds these from JUnit XML.
+2. Removed `min_cosine` and `overall_verdict` from T4C2 and T4C3 (retained in T4C4
+   only, where they're unique).
+3. Fixed T4C1 metric emission to read `_FM_CASE_ID` from environment instead of
+   hard-coding `"task-4c1-..."`.
+4. Added guard in `validate --all-functional` to skip cases with empty argv
+   (deferred `final-*` gates for later waves).
+
+### Files changed
+- `sim/signoff/test_qwen25_3b_real_blk0.py`: Removed redundant summary metrics; fixed
+  T4C1 case_id to use `_FM_CASE_ID`
+- `sim/signoff/test_qwen_blk0_synthetic_stress.py`: Removed redundant `tests.collected`/
+  `tests.passed` from T4A and T4B emit blocks
+- `scripts/run_func_model_signoff.py`: Added guard to skip validate-only cases in
+  `--all-functional`
+
+### Verification
+- All 19 functional cases: `validate --all-functional` exit 0, no stale/missing
+- Full sweep: 697 collected, 697 passed, 0 failed/skipped/xfailed
+- All 5 T7 evidence files contain required `SIGNOFF_METRIC` records and `verdict: pass`

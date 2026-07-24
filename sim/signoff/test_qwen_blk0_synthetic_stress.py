@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import struct
 from pathlib import Path
 from types import SimpleNamespace
@@ -46,7 +47,8 @@ CASE_ID = "task-0b-qwen3b-synthetic-and-real-preflight"
 def _emit_metric(capsys, key: str, value) -> None:
     """Emit a SIGNOFF_METRIC line. The leading newline ensures the line
     starts at column 0 even when interleaved with pytest's progress dots."""
-    line = json.dumps({"case": CASE_ID, "key": key, "value": value})
+    effective_case = os.environ.get("_FM_CASE_ID", "") or CASE_ID
+    line = json.dumps({"case": effective_case, "key": key, "value": value})
     with capsys.disabled():
         print(f"\nSIGNOFF_METRIC {line}")
 
@@ -90,7 +92,8 @@ _SRAM_SIZE = 256 * 1024
 
 
 def _t4b_emit_metric(capsys, key: str, value) -> None:
-    line = json.dumps({"case": _T4B_CASE_ID, "key": key, "value": value})
+    effective_case = os.environ.get("_FM_CASE_ID", "") or _T4B_CASE_ID
+    line = json.dumps({"case": effective_case, "key": key, "value": value})
     with capsys.disabled():
         print(f"\nSIGNOFF_METRIC {line}")
 
@@ -442,8 +445,6 @@ def test_qwen_blk0_synthetic_tiled_mmul_manifest_ops(capsys) -> None:
         )
         total_tile_count += actual_tiles
 
-    _t4b_emit_metric(capsys, "tests.collected", 1)
-    _t4b_emit_metric(capsys, "tests.passed", 1)
     _t4b_emit_metric(capsys, "tile_count", total_tile_count)
     _t4b_emit_metric(capsys, "data_provenance", "synthetic")
 
@@ -466,7 +467,8 @@ _VEC_OP = {"VMUL": 1, "VRESID": 5}
 
 
 def _t4a_emit_metric(capsys, key: str, value) -> None:
-    line = json.dumps({"case": _T4A_CASE_ID, "key": key, "value": value})
+    effective_case = os.environ.get("_FM_CASE_ID", "") or _T4A_CASE_ID
+    line = json.dumps({"case": effective_case, "key": key, "value": value})
     with capsys.disabled():
         print(f"\nSIGNOFF_METRIC {line}")
 
@@ -522,8 +524,6 @@ def test_qwen_blk0_synthetic_direct_mmio_manifest_ops(capsys) -> None:
     model = FuncModel(dram_mb=256)
     bridge = model.bridge
     sram = model.sram
-
-    _t4a_emit_metric(capsys, "tests.collected", 1)
 
     per_op_records: list[dict] = []
 
@@ -739,7 +739,6 @@ def test_qwen_blk0_synthetic_direct_mmio_manifest_ops(capsys) -> None:
         else:
             raise AssertionError(f"Unknown opcode: {opcode} for op{idx:02d} {name}")
 
-    _t4a_emit_metric(capsys, "tests.passed", 1)
     _t4a_emit_metric(capsys, "data_provenance", "synthetic")
     for rec in per_op_records:
         _t4a_emit_metric(
@@ -763,7 +762,8 @@ _T5S_CASE_ID = "task-5-qwen3b-robustness"
 
 
 def _t5s_emit_metric(capsys, key: str, value) -> None:
-    line = json.dumps({"case": _T5S_CASE_ID, "key": key, "value": value})
+    effective_case = os.environ.get("_FM_CASE_ID", "") or _T5S_CASE_ID
+    line = json.dumps({"case": effective_case, "key": key, "value": value})
     with capsys.disabled():
         print(f"\nSIGNOFF_METRIC {line}")
 

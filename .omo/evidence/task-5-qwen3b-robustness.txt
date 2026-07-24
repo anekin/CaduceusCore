@@ -1,17 +1,17 @@
 case_id: task-5-qwen3b-robustness
-utc_start: 2026-07-24T12:04:22.099087+00:00
-utc_end: 2026-07-24T12:05:06.921388+00:00
-elapsed_s: 44.822
+utc_start: 2026-07-24T13:53:49.842641+00:00
+utc_end: 2026-07-24T13:54:36.301037+00:00
+elapsed_s: 46.458
 branch: main
-head: 7848bfe97d8cda34e112865829dc087994124970
-dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  10 +-
- ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  15 +-
- .../task-4c2-qwen25-3b-real-direct-projections.txt |  16 +-
- .../task-4c3-qwen
+head: d250e3e0de14ee4e0a041993e350224dccc4796a
+dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  20 +--
+ ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  20 +--
+ .../task-4c2-qwen25-3b-real-direct-projections.txt |  35 ++---
+ .../task-4c3
 argv: ["python3", "-m", "pytest", "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_validation_rejects_corruption", "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_validation_rejects_invalid_descriptor", "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_tiled_boundary_coverage", "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_blk0_rejects_corruption_and_shape_substitution", "-q"]
 command_hash: 7cd5d8c69f6316f7
 exit_code: 0
-source_fingerprint: 70fc028f230e6321b530fc174b31f57e4df012a022eff4b8c3692fcd4d6426aa
+source_fingerprint: 07ed32d1680cf17780ef04073671fe565437618998fb1641d0e16970a2a689fc
 source_files (103):
   - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/p9_lib/p9_sz0001.sh
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/__init__.py
@@ -242,6 +242,6 @@ SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_output
 
 SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_output_addr.caught", "value": "Address 0xffffffff unmapped (DECERR)"}
 .                                                                     [100%]
-4 passed in 43.21s
+4 passed in 44.51s
 
 --- END ---

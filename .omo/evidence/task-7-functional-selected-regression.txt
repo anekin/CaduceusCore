@@ -1,15 +1,15 @@
-case_id: task-0b-qwen3b-synthetic-and-real-preflight
-utc_start: 2026-07-24T13:51:50.509505+00:00
-utc_end: 2026-07-24T13:52:05.736546+00:00
-elapsed_s: 15.227
+case_id: task-7-functional-selected-regression
+utc_start: 2026-07-24T13:54:49.200897+00:00
+utc_end: 2026-07-24T13:55:18.883840+00:00
+elapsed_s: 29.683
 branch: main
 head: d250e3e0de14ee4e0a041993e350224dccc4796a
 dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  20 +--
  ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  20 +--
- .../task-4c2-qwen25-3b-real-direct-projections.txt |  20 +--
- .../task-4c3-q
-argv: ["python3", "-m", "pytest", "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_assets_preflight", "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_model_provenance_and_shapes", "-q"]
-command_hash: 2f02bf224c2adf98
+ .../task-4c2-qwen25-3b-real-direct-projections.txt |  35 ++--
+ .../task-4c3-
+argv: ["python3", "-m", "pytest", "sim/tests/test_golden_smoke.py", "sim/tests/test_golden_mxu_quant.py", "sim/tests/test_golden_mxu_edges.py", "sim/tests/test_golden_sfu.py", "sim/tests/test_golden_sfu_gaps.py", "sim/tests/test_golden_vector.py", "sim/tests/test_golden_dma.py", "sim/tests/test_golden_noc.py", "sim/tests/test_golden_cross_module.py", "sim/tests/test_golden_corruption.py", "sim/tests/test_golden_sfu_compare.py", "-q"]
+command_hash: c672b53ce010375c
 exit_code: 0
 source_fingerprint: 07ed32d1680cf17780ef04073671fe565437618998fb1641d0e16970a2a689fc
 source_files (103):
@@ -117,38 +117,41 @@ source_files (103):
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/timing_engine.py
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/types.py
 verdict: pass
-test_collected: 2
-test_passed: 2
+test_collected: 532
+test_passed: 532
 test_failed: 0
 test_skipped: 0
 test_xfailed: 0
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.sha256", "value": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d"}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.hidden", "value": 2048}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.intermediate", "value": 11008}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_heads", "value": 16}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_kv_heads", "value": 2}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.head_dim", "value": 128}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.collected", "value": 2}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.passed", "value": 2}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.failed", "value": 0}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.skipped", "value": 0}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.xfailed", "value": 0}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "evidence.verdict", "value": "pass"}
+SIGNOFF_METRIC {"case": "task-7-functional-selected-regression", "key": "tests.collected", "value": 532}
+SIGNOFF_METRIC {"case": "task-7-functional-selected-regression", "key": "tests.passed", "value": 532}
+SIGNOFF_METRIC {"case": "task-7-functional-selected-regression", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-7-functional-selected-regression", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-7-functional-selected-regression", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-7-functional-selected-regression", "key": "evidence.verdict", "value": "pass"}
 
 --- STDOUT (first 8000 chars) ---
-.
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.sha256", "value": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d"}
+........................................................................ [ 13%]
+........................................................................ [ 27%]
+........................................................................ [ 40%]
+........................................................................ [ 54%]
+........................................................................ [ 67%]
+........................................................................ [ 81%]
+........................................................................ [ 94%]
+............................                                             [100%]
+=============================== warnings summary ===============================
+sim/tests/test_golden_vector.py::test_v02_add_float_special
+  /home/prj/zhengs/caduceuscore/CaduceusCore/sim/golden_executor.py:719: RuntimeWarning: invalid value encountered in cast
+    result = a.astype(np.int64) + b.astype(np.int64)
 
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.hidden", "value": 2048}
+sim/tests/test_golden_vector.py::test_v02_mul_float_special
+  /home/prj/zhengs/caduceuscore/CaduceusCore/sim/golden_executor.py:725: RuntimeWarning: invalid value encountered in cast
+    result = a.astype(np.int64) * b.astype(np.int64)
 
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.intermediate", "value": 11008}
+sim/tests/test_golden_sfu_compare.py::test_compare_inf_mismatch
+  /home/prj/zhengs/caduceuscore/CaduceusCore/sim/golden_executor.py:662: RuntimeWarning: invalid value encountered in divide
+    rel_diff = abs_diff / (np.abs(ref) + 1e-12)
 
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_heads", "value": 16}
-
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_kv_heads", "value": 2}
-
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.head_dim", "value": 128}
-.                                                                       [100%]
-2 passed in 13.71s
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+532 passed, 3 warnings in 28.11s
 
 --- END ---

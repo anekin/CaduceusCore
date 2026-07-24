@@ -1,0 +1,585 @@
+case_id: task-7-qwen25-3b-real-blk0-hard-gate
+utc_start: 2026-07-24T13:54:50.567500+00:00
+utc_end: 2026-07-24T13:59:04.305865+00:00
+elapsed_s: 253.738
+branch: main
+head: d250e3e0de14ee4e0a041993e350224dccc4796a
+dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  20 +--
+ ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  20 +--
+ .../task-4c2-qwen25-3b-real-direct-projections.txt |  35 ++--
+ .../task-4c3-
+argv: ["python3", "-m", "pytest", "sim/signoff/test_qwen25_3b_real_blk0.py", "-q"]
+command_hash: f7db700cc02ef00a
+exit_code: 0
+source_fingerprint: 07ed32d1680cf17780ef04073671fe565437618998fb1641d0e16970a2a689fc
+source_files (103):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/p9_lib/p9_sz0001.sh
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/conv_mapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/cv_ppa_report.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/cv_sim.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/cv_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/onnx_importer.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/qwen_vl_vit_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/resnet18_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/resnet50_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/sd_unet_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/vit_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/yolov8n_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/validate_onnx.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/block_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/compiler.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/fsa_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/gmma_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/is_systolic_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/isa.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/mac_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/multicore.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/os_systolic_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/ppa_model.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/systolic_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/tensor_core_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/timeline.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/wmma_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/crossbar.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/dma.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/dram.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/golden.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/kv_cache.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/mxu.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/noc.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/pcie.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/sfu.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/sw_overhead.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/vector.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/scripts/gen_sfu_luts.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/scripts/lut_generator.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/signoff/test_qwen25_3b_real_blk0.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/signoff/test_qwen_blk0_synthetic_stress.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/conftest.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_arc_model.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_arc_precision.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_cv_conv2d_rtl.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_cv_mobilenetv3.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_design_space_explorer.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_dma_noc_integration.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_engine_instantiate.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_engines.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_firmware.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_docs.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_runner.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_corruption.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_cross_module.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_deprecation.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_dma.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_mxu_edges.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_mxu_quant.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_noc.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_sfu.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_sfu_compare.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_sfu_gaps.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_smoke.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_vector.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_mmio_bridge.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_op_dtype_chains.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_pcie_dma_fm.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_pool_relu_opcodes.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_rmsnorm_opcode.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_soc_fm.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_soc_pcie_dma.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_soc_rtl_e2e.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_tile_scheduler.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_vconv_f16_i32.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_w3_2_dual_path.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_mxu_wrapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_sfu_wrapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_vector_wrapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/wrapper_common.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/benchmark.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/dashboard.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/f3_crosscheck.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/generate_summary.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/metrics.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_benchmark.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_cross_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_dashboard.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_metrics.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_tile_double_buffer.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_timing_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_types.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/timing_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/types.py
+verdict: pass
+test_collected: 6
+test_passed: 6
+test_failed: 0
+test_skipped: 0
+test_xfailed: 0
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.sha256", "value": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.hidden", "value": 2048}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.intermediate", "value": 11008}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.num_heads", "value": 16}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.num_kv_heads", "value": 2}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.head_dim", "value": 128}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.sha256", "value": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_k.bias", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_k.weight", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_norm.weight", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_output.weight", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_q.bias", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_q.weight", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_v.bias", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_v.weight", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.ffn_down.weight", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.ffn_gate.weight", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.ffn_norm.weight", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.ffn_up.weight", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.M", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.K", "value": 2048}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.N", "value": 2048}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.activation_scale", "value": 0.020616892725229263}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.saturation_count", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.cosine", "value": 0.9989696731247228}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.M", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.K", "value": 2048}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.N", "value": 256}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.activation_scale", "value": 0.020616892725229263}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.saturation_count", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.cosine", "value": 0.9999818574294884}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.M", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.K", "value": 2048}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.N", "value": 256}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.activation_scale", "value": 0.020616892725229263}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.saturation_count", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.cosine", "value": 0.9945660907150852}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.M", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.K", "value": 2048}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.N", "value": 2048}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.activation_scale", "value": 0.015191207639873028}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.saturation_count", "value": 8}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.cosine", "value": 0.9956863922408645}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.M", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.K", "value": 2048}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.N", "value": 11008}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.activation_scale", "value": 0.01809135638177395}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.saturation_count", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.cosine", "value": 0.9973763273795546}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.M", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.K", "value": 2048}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.N", "value": 11008}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.activation_scale", "value": 0.01809135638177395}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.saturation_count", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.cosine", "value": 0.9962362627592843}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.M", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.K", "value": 11008}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.N", "value": 2048}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.activation_scale", "value": 0.01556393038481474}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.saturation_count", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.cosine", "value": 0.995567767878999}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.tile_count", "value": 256}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.cosine", "value": 0.9989696731247228}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.direct_agreement", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.tile_count", "value": 32}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.cosine", "value": 0.9999818574294884}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.direct_agreement", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.tile_count", "value": 32}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.cosine", "value": 0.9945660907150852}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.direct_agreement", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.tile_count", "value": 256}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.cosine", "value": 0.9956863922408645}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.direct_agreement", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.tile_count", "value": 1376}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.cosine", "value": 0.9973763273795546}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.direct_agreement", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.tile_count", "value": 1376}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.cosine", "value": 0.9962362627592843}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.direct_agreement", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.tile_count", "value": 1376}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.cosine", "value": 0.995567767878999}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "down.direct_agreement", "value": true}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "total_tile_count", "value": 4704}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B01_pre_attn_rmsnorm.shape", "value": "(2048,)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B01_pre_attn_rmsnorm.dtype", "value": "fp16"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B01_pre_attn_rmsnorm.comparator", "value": "sfu_fp16(atol=2e-03,rtol=1e-02)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B01_pre_attn_rmsnorm.max_abs_err", "value": 0.025608301162719727}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B01_pre_attn_rmsnorm.max_rel_err", "value": 0.007928595375168183}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B01_pre_attn_rmsnorm.cosine", "value": 1.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B01_pre_attn_rmsnorm.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B02_gamma_multiply_attn.shape", "value": "(2048,)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B02_gamma_multiply_attn.dtype", "value": "fp32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B02_gamma_multiply_attn.comparator", "value": "bridge(atol=1e-6)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B02_gamma_multiply_attn.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B02_gamma_multiply_attn.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B02_gamma_multiply_attn.cosine", "value": 0.9999999583047792}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B02_gamma_multiply_attn.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B03_Q_proj.shape", "value": "(1,2048)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B03_Q_proj.dtype", "value": "fp32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B03_Q_proj.comparator", "value": "mxu_int4(atol=1e-4,rtol=1e-5)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B03_Q_proj.scale", "value": 0.02046630159020424}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B03_Q_proj.saturation", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B03_Q_proj.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B03_Q_proj.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B03_Q_proj.cosine", "value": 0.9989867221448224}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B03_Q_proj.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B04_K_proj.shape", "value": "(1,256)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B04_K_proj.dtype", "value": "fp32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B04_K_proj.comparator", "value": "mxu_int4(atol=1e-4,rtol=1e-5)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B04_K_proj.scale", "value": 0.02046630159020424}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B04_K_proj.saturation", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B04_K_proj.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B04_K_proj.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B04_K_proj.cosine", "value": 0.9999818461086916}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B04_K_proj.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B05_V_proj.shape", "value": "(1,256)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B05_V_proj.dtype", "value": "fp32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B05_V_proj.comparator", "value": "mxu_int4(atol=1e-4,rtol=1e-5)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B05_V_proj.scale", "value": 0.02046630159020424}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B05_V_proj.saturation", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B05_V_proj.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B05_V_proj.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B05_V_proj.cosine", "value": 0.9945941259982827}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B05_V_proj.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B06_RoPE.shape", "value": "(2304,)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B06_RoPE.dtype", "value": "fp16"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B06_RoPE.comparator", "value": "sfu_fp16(atol=5e-01,rtol=1e-02)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B06_RoPE.max_abs_err", "value": 0.03839874267578125}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B06_RoPE.max_rel_err", "value": 0.3356319876245005}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B06_RoPE.cosine", "value": 0.9989875884615426}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B06_RoPE.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B07_GQA_repeat.shape", "value": "K:(16,128) V:(16,128)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B07_GQA_repeat.dtype", "value": "fp32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B07_GQA_repeat.comparator", "value": "bridge(atol=1e-6)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B07_GQA_repeat.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B07_GQA_repeat.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B07_GQA_repeat.cosine", "value": 1.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B07_GQA_repeat.verdict", "value": "N/A"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B08_scores.shape", "value": "(16,)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B08_scores.dtype", "value": "fp32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B08_scores.comparator", "value": "bridge(atol=1e-6)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B08_scores.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B08_scores.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B08_scores.cosine", "value": 1.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B08_scores.verdict", "value": "N/A"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B09_softmax.shape", "value": "(16,)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B09_softmax.dtype", "value": "fp16"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B09_softmax.comparator", "value": "sfu_fp16(atol=2e-03,rtol=1e-02) per-head"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B09_softmax.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B09_softmax.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B09_softmax.cosine", "value": 1.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B09_softmax.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B10_attn_concat.shape", "value": "(2048,)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B10_attn_concat.dtype", "value": "fp32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B10_attn_concat.comparator", "value": "bridge(atol=1e-6)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B10_attn_concat.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B10_attn_concat.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B10_attn_concat.cosine", "value": 0.994594125998283}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B10_attn_concat.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B11_O_proj.shape", "value": "(1,2048)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B11_O_proj.dtype", "value": "fp32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B11_O_proj.comparator", "value": "mxu_int4(atol=1e-4,rtol=1e-5)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B11_O_proj.scale", "value": 0.015137541107833385}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B11_O_proj.saturation", "value": 8}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B11_O_proj.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B11_O_proj.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B11_O_proj.cosine", "value": 0.9911900930867752}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B11_O_proj.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B12_residual_1.shape", "value": "(2048,)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B12_residual_1.dtype", "value": "int32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B12_residual_1.comparator", "value": "int32_bit_exact"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B12_residual_1.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B12_residual_1.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B12_residual_1.cosine", "value": 0.9912787200942206}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B12_residual_1.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B13_post_attn_rmsnorm.shape", "value": "(2048,)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B13_post_attn_rmsnorm.dtype", "value": "fp16"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B13_post_attn_rmsnorm.comparator", "value": "sfu_fp16(atol=2e-03,rtol=1e-02)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B13_post_attn_rmsnorm.max_abs_err", "value": 0.004038810729980469}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B13_post_attn_rmsnorm.max_rel_err", "value": 0.0006546809826741584}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B13_post_attn_rmsnorm.cosine", "value": 1.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B13_post_attn_rmsnorm.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B14_gamma_multiply_ffn.shape", "value": "(2048,)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B14_gamma_multiply_ffn.dtype", "value": "fp32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B14_gamma_multiply_ffn.comparator", "value": "bridge(atol=1e-6)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B14_gamma_multiply_ffn.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B14_gamma_multiply_ffn.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B14_gamma_multiply_ffn.cosine", "value": 0.9819223473134708}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B14_gamma_multiply_ffn.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B15_gate.shape", "value": "(1,11008)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B15_gate.dtype", "value": "fp32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B15_gate.comparator", "value": "mxu_int4(atol=1e-4,rtol=1e-5)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B15_gate.scale", "value": 0.018826207146048546}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B15_gate.saturation", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B15_gate.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B15_gate.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B15_gate.cosine", "value": 0.9881787350203174}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B15_gate.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B16_up.shape", "value": "(1,11008)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B16_up.dtype", "value": "fp32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B16_up.comparator", "value": "mxu_int4(atol=1e-4,rtol=1e-5)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B16_up.scale", "value": 0.018826207146048546}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B16_up.saturation", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B16_up.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B16_up.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B16_up.cosine", "value": 0.9823366146944046}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B16_up.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B17_SiLU.shape", "value": "(11008,)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B17_SiLU.dtype", "value": "fp16"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B17_SiLU.comparator", "value": "sfu_fp16(atol=2e-03,rtol=1e-02)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B17_SiLU.max_abs_err", "value": 0.000804901123046875}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B17_SiLU.max_rel_err", "value": 0.001001788300740838}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B17_SiLU.cosine", "value": 0.9856691014165521}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B17_SiLU.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B18_VMUL_gate_up.shape", "value": "(11008,)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B18_VMUL_gate_up.dtype", "value": "int32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B18_VMUL_gate_up.comparator", "value": "int32_bit_exact"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B18_VMUL_gate_up.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B18_VMUL_gate_up.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B18_VMUL_gate_up.cosine", "value": 0.9709532108341283}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B18_VMUL_gate_up.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B19_down.shape", "value": "(1,2048)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B19_down.dtype", "value": "fp32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B19_down.comparator", "value": "mxu_int4(atol=1e-4,rtol=1e-5)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B19_down.scale", "value": 0.015571021474897861}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B19_down.saturation", "value": 1}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B19_down.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B19_down.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B19_down.cosine", "value": 0.9768144654042341}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B19_down.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B20_residual_2.shape", "value": "(2048,)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B20_residual_2.dtype", "value": "int32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B20_residual_2.comparator", "value": "int32_bit_exact"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B20_residual_2.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B20_residual_2.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B20_residual_2.cosine", "value": 0.9883881615792555}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B20_residual_2.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B21_final_output.shape", "value": "(2048,)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B21_final_output.dtype", "value": "fp32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B21_final_output.comparator", "value": "cosine_vs_f32"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B21_final_output.max_abs_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B21_final_output.max_rel_err", "value": 0.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B21_final_output.cosine", "value": 0.9883881615792555}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "boundary.B21_final_output.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "min_cosine", "value": 0.9768144654042341}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "final_cosine", "value": 0.9883881615792555}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "overall_verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.weight_corruption.max_diff", "value": 0.030134856700897217}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.weight_corruption.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.activation_corruption.max_diff", "value": 0.17338871955871582}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.activation_corruption.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.scale_corruption.max_diff", "value": 1.7060169875621796}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.scale_corruption.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.gamma_omission.normal_cosine", "value": 1.0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.gamma_omission.omitted_cosine", "value": 0.905898746074457}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.gamma_omission.warning", "value": "gamma_omitted_cosine_below_0.97"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.gamma_omission.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.sfu_tolerance.n_elements", "value": 206}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.sfu_tolerance.n_above_both_tolerances", "value": 0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.sfu_tolerance.max_abs_err", "value": 0.00189971923828125}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.sfu_tolerance.max_rel_err", "value": 0.0009325213415870527}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.sfu_tolerance.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.wrong_dims.cosine", "value": 0.8351160727864979}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.wrong_dims.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.wrong_output_addr.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "subtest.wrong_output_addr.caught", "value": "Address 0xffffffff unmapped (DECERR)"}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "tests.collected", "value": 6}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "tests.passed", "value": 6}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "evidence.verdict", "value": "pass"}
+
+--- STDOUT (first 8000 chars) ---
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.sha256", "value": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d"}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.hidden", "value": 2048}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.intermediate", "value": 11008}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.num_heads", "value": 16}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.num_kv_heads", "value": 2}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.head_dim", "value": 128}
+.
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "model.sha256", "value": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d"}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_k.bias", "value": true}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_k.weight", "value": true}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_norm.weight", "value": true}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_output.weight", "value": true}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_q.bias", "value": true}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_q.weight", "value": true}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_v.bias", "value": true}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.attn_v.weight", "value": true}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.ffn_down.weight", "value": true}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.ffn_gate.weight", "value": true}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.ffn_norm.weight", "value": true}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "loaded_tensor.blk.0.ffn_up.weight", "value": true}
+.
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.M", "value": 1}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.K", "value": 2048}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.N", "value": 2048}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.activation_scale", "value": 0.020616892725229263}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.saturation_count", "value": 1}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.max_abs_err", "value": 0.0}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.max_rel_err", "value": 0.0}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.cosine", "value": 0.9989696731247228}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "Q_proj.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.M", "value": 1}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.K", "value": 2048}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.N", "value": 256}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.activation_scale", "value": 0.020616892725229263}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.saturation_count", "value": 1}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.max_abs_err", "value": 0.0}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.max_rel_err", "value": 0.0}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.cosine", "value": 0.9999818574294884}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "K_proj.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.M", "value": 1}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.K", "value": 2048}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.N", "value": 256}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.activation_scale", "value": 0.020616892725229263}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.saturation_count", "value": 1}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.max_abs_err", "value": 0.0}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.max_rel_err", "value": 0.0}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.cosine", "value": 0.9945660907150852}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "V_proj.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.M", "value": 1}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.K", "value": 2048}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.N", "value": 2048}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.activation_scale", "value": 0.015191207639873028}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.saturation_count", "value": 8}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.max_abs_err", "value": 0.0}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.max_rel_err", "value": 0.0}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.cosine", "value": 0.9956863922408645}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "O_proj.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.M", "value": 1}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.K", "value": 2048}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.N", "value": 11008}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.activation_scale", "value": 0.01809135638177395}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.saturation_count", "value": 1}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.max_abs_err", "value": 0.0}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.max_rel_err", "value": 0.0}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.cosine", "value": 0.9973763273795546}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "gate.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.M", "value": 1}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.K", "value": 2048}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.N", "value": 11008}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.activation_scale", "value": 0.01809135638177395}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.saturation_count", "value": 1}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.max_abs_err", "value": 0.0}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate", "key": "up.max_rel_err", "value": 0.0}
+
+SIGNOFF_METRIC {"case": "task-7-qwen25-3b-real-blk0-hard-gate
+--- END ---

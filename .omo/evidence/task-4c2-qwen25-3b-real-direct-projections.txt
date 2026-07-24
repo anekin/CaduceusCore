@@ -1,17 +1,17 @@
 case_id: task-4c2-qwen25-3b-real-direct-projections
-utc_start: 2026-07-24T09:09:46.509300+00:00
-utc_end: 2026-07-24T09:10:39.871123+00:00
-elapsed_s: 53.362
+utc_start: 2026-07-24T13:52:49.340609+00:00
+utc_end: 2026-07-24T13:53:40.821596+00:00
+elapsed_s: 51.481
 branch: main
-head: 47e356c7cb8dbdf1c79303e3600353126dcb920b
-dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  10 +-
- ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  15 +-
- .../soc-verification-gaps-phase5/learnings.md      |  84 ++++++
- build/evidenc
+head: d250e3e0de14ee4e0a041993e350224dccc4796a
+dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  20 +--
+ ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  20 +--
+ .../task-4c2-qwen25-3b-real-direct-projections.txt |  20 +--
+ .../task-4c3-q
 argv: ["python3", "-m", "pytest", "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_direct_projections", "-q"]
 command_hash: 60453282c5b961d0
 exit_code: 0
-source_fingerprint: 427ce5cc02c38e61c1c3782176582233e375a7a3e3b4082de481c5cfc868cd69
+source_fingerprint: 07ed32d1680cf17780ef04073671fe565437618998fb1641d0e16970a2a689fc
 source_files (103):
   - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/p9_lib/p9_sz0001.sh
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/__init__.py
@@ -185,11 +185,6 @@ SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "do
 SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "down.max_rel_err", "value": 0.0}
 SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "down.cosine", "value": 0.995567767878999}
 SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "down.verdict", "value": "PASS"}
-SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "min_cosine", "value": 0.9945660907150852}
-SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "overall_verdict", "value": "PASS"}
-SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "tests.collected", "value": 1}
-SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "tests.passed", "value": 1}
-SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "evidence.verdict", "value": "pass"}
 SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "tests.collected", "value": 1}
 SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "tests.passed", "value": 1}
 SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "tests.failed", "value": 0}
@@ -324,17 +319,7 @@ SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "do
 SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "down.cosine", "value": 0.995567767878999}
 
 SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "down.verdict", "value": "PASS"}
-
-SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "min_cosine", "value": 0.9945660907150852}
-
-SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "overall_verdict", "value": "PASS"}
-
-SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "tests.collected", "value": 1}
-
-SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "tests.passed", "value": 1}
-
-SIGNOFF_METRIC {"case": "task-4c2-qwen25-3b-real-direct-projections", "key": "evidence.verdict", "value": "pass"}
 .                                                                        [100%]
-1 passed in 51.73s
+1 passed in 49.98s
 
 --- END ---

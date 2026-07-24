@@ -1,0 +1,37 @@
+case_id: task-6-signoff-doc-consistency
+utc_start: 2026-07-24T12:15:37.860827+00:00
+utc_end: 2026-07-24T12:15:39.781855+00:00
+elapsed_s: 1.921
+branch: main
+head: d250e3e0de14ee4e0a041993e350224dccc4796a
+dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           | 10 +--
+ ...task-0b-qwen3b-synthetic-and-real-preflight.txt | 15 ++--
+ .../task-4c2-qwen25-3b-real-direct-projections.txt | 16 ++--
+ .../task-4c3-qw
+argv: ["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_docs.py", "-q"]
+command_hash: e231e40ac72697f4
+exit_code: 0
+source_fingerprint: 4466c6a20190a24eb2c599626a558ab636d485800416fe00006c89bb5d798e1c
+source_files (4):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/docs/func-model-plan.md
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/docs/func_model_architecture.md
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/check_func_model_signoff_docs.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_docs.py
+verdict: pass
+test_collected: 2
+test_passed: 2
+test_failed: 0
+test_skipped: 0
+test_xfailed: 0
+SIGNOFF_METRIC {"case": "task-6-signoff-doc-consistency", "key": "tests.collected", "value": 2}
+SIGNOFF_METRIC {"case": "task-6-signoff-doc-consistency", "key": "tests.passed", "value": 2}
+SIGNOFF_METRIC {"case": "task-6-signoff-doc-consistency", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-6-signoff-doc-consistency", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-6-signoff-doc-consistency", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-6-signoff-doc-consistency", "key": "evidence.verdict", "value": "pass"}
+
+--- STDOUT (first 8000 chars) ---
+..                                                                       [100%]
+2 passed in 0.16s
+
+--- END ---

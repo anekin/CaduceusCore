@@ -1,17 +1,17 @@
 case_id: task-4c3-qwen25-3b-real-tiled-projections
-utc_start: 2026-07-24T09:27:10.706654+00:00
-utc_end: 2026-07-24T09:28:04.030863+00:00
-elapsed_s: 53.324
+utc_start: 2026-07-24T13:52:49.353141+00:00
+utc_end: 2026-07-24T13:53:43.283498+00:00
+elapsed_s: 53.930
 branch: main
-head: c569dd162eab86939589d881f6e1d1092f4c6a76
-dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  10 +-
- ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  15 +-
- .../task-4c2-qwen25-3b-real-direct-projections.txt |  20 +-
- .../soc-verificat
+head: d250e3e0de14ee4e0a041993e350224dccc4796a
+dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  20 +--
+ ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  20 +--
+ .../task-4c2-qwen25-3b-real-direct-projections.txt |  20 +--
+ .../task-4c3-q
 argv: ["python3", "-m", "pytest", "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_tiled_projections", "-q"]
 command_hash: e4a464bf7e1ea043
 exit_code: 0
-source_fingerprint: d95ce9109699150772373f2725080b5c97e221a659c989bdb06ba0e4b23db015
+source_fingerprint: 07ed32d1680cf17780ef04073671fe565437618998fb1641d0e16970a2a689fc
 source_files (103):
   - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/p9_lib/p9_sz0001.sh
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/__init__.py
@@ -165,11 +165,6 @@ SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "dow
 SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "down.verdict", "value": "PASS"}
 SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "down.direct_agreement", "value": true}
 SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "total_tile_count", "value": 4704}
-SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "min_cosine", "value": 0.9945660907150852}
-SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "overall_verdict", "value": "PASS"}
-SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "tests.collected", "value": 1}
-SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "tests.passed", "value": 1}
-SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "evidence.verdict", "value": "pass"}
 SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "tests.collected", "value": 1}
 SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "tests.passed", "value": 1}
 SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "tests.failed", "value": 0}
@@ -264,17 +259,7 @@ SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "dow
 SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "down.direct_agreement", "value": true}
 
 SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "total_tile_count", "value": 4704}
-
-SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "min_cosine", "value": 0.9945660907150852}
-
-SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "overall_verdict", "value": "PASS"}
-
-SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "tests.collected", "value": 1}
-
-SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "tests.passed", "value": 1}
-
-SIGNOFF_METRIC {"case": "task-4c3-qwen25-3b-real-tiled-projections", "key": "evidence.verdict", "value": "pass"}
 .                                                                        [100%]
-1 passed in 51.71s
+1 passed in 52.28s
 
 --- END ---

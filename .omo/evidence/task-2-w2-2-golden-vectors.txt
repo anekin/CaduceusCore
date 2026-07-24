@@ -1,19 +1,19 @@
-case_id: task-0b-qwen3b-synthetic-and-real-preflight
-utc_start: 2026-07-24T13:51:50.509505+00:00
-utc_end: 2026-07-24T13:52:05.736546+00:00
-elapsed_s: 15.227
+case_id: task-2-w2-2-golden-vectors
+utc_start: 2026-07-24T13:59:56.373484+00:00
+utc_end: 2026-07-24T13:59:57.749068+00:00
+elapsed_s: 1.376
 branch: main
 head: d250e3e0de14ee4e0a041993e350224dccc4796a
 dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  20 +--
  ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  20 +--
- .../task-4c2-qwen25-3b-real-direct-projections.txt |  20 +--
- .../task-4c3-q
-argv: ["python3", "-m", "pytest", "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_assets_preflight", "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_model_provenance_and_shapes", "-q"]
-command_hash: 2f02bf224c2adf98
+ .../task-4c2-qwen25-3b-real-direct-projections.txt |  35 ++--
+ .../task-4c3-
+argv: ["python3", "scripts/verify_w2_2_fm_golden_vectors.py", "--skip-dry-run"]
+command_hash: f24a4d789221a055
 exit_code: 0
-source_fingerprint: 07ed32d1680cf17780ef04073671fe565437618998fb1641d0e16970a2a689fc
+source_fingerprint: c39909eb4361cb13434903150151cd412e4e05760c541409a22a4b8dcc4e8870
 source_files (103):
-  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/p9_lib/p9_sz0001.sh
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/verify_w2_2_fm_golden_vectors.py
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/__init__.py
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/conv_mapper.py
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/cv_ppa_report.py
@@ -117,38 +117,46 @@ source_files (103):
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/timing_engine.py
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/types.py
 verdict: pass
-test_collected: 2
-test_passed: 2
-test_failed: 0
-test_skipped: 0
-test_xfailed: 0
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.sha256", "value": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d"}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.hidden", "value": 2048}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.intermediate", "value": 11008}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_heads", "value": 16}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_kv_heads", "value": 2}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.head_dim", "value": 128}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.collected", "value": 2}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.passed", "value": 2}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.failed", "value": 0}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.skipped", "value": 0}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.xfailed", "value": 0}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "evidence.verdict", "value": "pass"}
+SIGNOFF_METRIC {"case": "task-2-w2-2-golden-vectors", "key": "tests.collected", "value": 0}
+SIGNOFF_METRIC {"case": "task-2-w2-2-golden-vectors", "key": "tests.passed", "value": 0}
+SIGNOFF_METRIC {"case": "task-2-w2-2-golden-vectors", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-2-w2-2-golden-vectors", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-2-w2-2-golden-vectors", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-2-w2-2-golden-vectors", "key": "evidence.verdict", "value": "pass"}
 
 --- STDOUT (first 8000 chars) ---
-.
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.sha256", "value": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d"}
+[verify] SFV-P01 SFU softmax dim=64 ...
+  formula=PASS golden=PASS max_abs=1.9371509552001953e-07 max_rel=1.7837396760756594e-06
+[verify] SFV-P02 SFU layernorm dim=64 ...
+  formula=PASS golden=PASS max_abs=0.0010426044464111328 max_rel=0.0005140403062610349
+[verify] SFV-P03 SFU rmsnorm dim=64 ...
+  formula=PASS golden=PASS max_abs=2.384185791015625e-07 max_rel=1.1832046933447162e-07
+[verify] SFV-P04 SFU gelu dim=64 ...
+  formula=PASS golden=PASS max_abs=0.0015764012932777405 max_rel=0.1305819440740373
+[verify] SFV-P05 SFU silu dim=64 ...
+  formula=PASS golden=PASS max_abs=7.152557373046875e-07 max_rel=2.6857568833338108e-06
+[verify] SFV-P06 SFU rope dim=64 ...
+  formula=PASS golden=PASS max_abs=0.0009765625 max_rel=0.04347826084933884
+[verify] SFV-P07 SFU mmio dim=0 ...
+  formula=PASS (MMIO timing — no data formula) golden=PASS max_abs=N/A max_rel=N/A
+[verify] SFV-P08 Vector add dim=128 ...
+  formula=PASS golden=PASS max_abs=0.0 max_rel=0.0
+[verify] SFV-P09 Vector mul dim=128 ...
+  formula=PASS golden=PASS max_abs=0.0 max_rel=0.0
+[verify] SFV-P10 Vector max dim=128 ...
+  formula=PASS golden=PASS max_abs=0.0 max_rel=0.0
+[verify] SFV-P11 Vector sum dim=128 ...
+  formula=PASS golden=PASS max_abs=0.0 max_rel=0.0
+[verify] SFV-P12 Vector conv dim=128 ...
+  formula=PASS golden=PASS max_abs=0.0 max_rel=0.0
+[verify] SFV-P13 Vector resid dim=128 ...
+  formula=PASS golden=PASS max_abs=0.0 max_rel=0.0
+[verify] SFV-P14 Vector mmio dim=0 ...
+  formula=PASS (MMIO timing — no data formula) golden=PASS max_abs=N/A max_rel=N/A
+[evidence] wrote /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/w2-2-fm-golden-vectors.md
+[status] wrote /home/prj/zhengs/caduceuscore/CaduceusCore/build/wave2/testcase-list.md
+[learnings] appended summary
 
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.hidden", "value": 2048}
-
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.intermediate", "value": 11008}
-
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_heads", "value": 16}
-
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_kv_heads", "value": 2}
-
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.head_dim", "value": 128}
-.                                                                       [100%]
-2 passed in 13.71s
+[PASS] All 14 P0 cases verified
 
 --- END ---

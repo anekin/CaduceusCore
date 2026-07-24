@@ -1,17 +1,17 @@
 case_id: task-0a-signoff-runner
-utc_start: 2026-07-24T07:53:25.464915+00:00
-utc_end: 2026-07-24T07:53:52.863174+00:00
-elapsed_s: 27.398
+utc_start: 2026-07-24T14:02:11.603722+00:00
+utc_end: 2026-07-24T14:02:42.177238+00:00
+elapsed_s: 30.574
 branch: main
-head: 8002c24f272d759460df9540bc1c54188d47ab80
-dirty_worktree: dirty:build/evidence/wrap-bug005-result.txt              |  6 +--
- build/evidence/wrap-bug007-result.txt              |  4 +-
- build/evidence/wrap-mxu-regression.txt             |  2 +-
- build/evidence/wrap
+head: d250e3e0de14ee4e0a041993e350224dccc4796a
+dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  20 +-
+ ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  20 +-
+ .../task-4c2-qwen25-3b-real-direct-projections.txt |  35 +---
+ .../task-4c3-qw
 argv: ["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_runner.py", "-q"]
 command_hash: 2630ba76ed890a8a
 exit_code: 0
-source_fingerprint: 4cfd1a8741f28ec3ad3aaa50fc481496867b4fdf2bf03e5e9499755c76a5ed0e
+source_fingerprint: 38f5709512427fcb23d1d72c563c108d27481c239873480484d0abcf21fe5305
 source_files (4):
   - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_fm_env.sh
   - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
@@ -32,6 +32,6 @@ SIGNOFF_METRIC {"case": "task-0a-signoff-runner", "key": "evidence.verdict", "va
 
 --- STDOUT (first 8000 chars) ---
 ...................................................                      [100%]
-51 passed in 25.91s
+51 passed in 29.07s
 
 --- END ---

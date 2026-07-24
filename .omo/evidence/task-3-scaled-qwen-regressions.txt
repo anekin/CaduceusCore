@@ -1,15 +1,15 @@
-case_id: task-0b-qwen3b-synthetic-and-real-preflight
-utc_start: 2026-07-24T13:51:50.509505+00:00
-utc_end: 2026-07-24T13:52:05.736546+00:00
-elapsed_s: 15.227
+case_id: task-3-scaled-qwen-regressions
+utc_start: 2026-07-24T13:51:51.714988+00:00
+utc_end: 2026-07-24T13:52:41.919800+00:00
+elapsed_s: 50.205
 branch: main
 head: d250e3e0de14ee4e0a041993e350224dccc4796a
 dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  20 +--
  ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  20 +--
  .../task-4c2-qwen25-3b-real-direct-projections.txt |  20 +--
  .../task-4c3-q
-argv: ["python3", "-m", "pytest", "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_assets_preflight", "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_model_provenance_and_shapes", "-q"]
-command_hash: 2f02bf224c2adf98
+argv: ["python3", "-m", "pytest", "sim/tests/test_soc_fm.py::test_blk0_scaled_single_tile_manifest_replay", "sim/tests/test_soc_fm.py::test_28block_scaled_chain", "sim/tests/test_soc_fm.py::test_e2e_host_pcie_doorbell_firmware_scaled_blk0", "-q"]
+command_hash: 912ed83260dd4a22
 exit_code: 0
 source_fingerprint: 07ed32d1680cf17780ef04073671fe565437618998fb1641d0e16970a2a689fc
 source_files (103):
@@ -117,38 +117,20 @@ source_files (103):
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/timing_engine.py
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/types.py
 verdict: pass
-test_collected: 2
-test_passed: 2
+test_collected: 3
+test_passed: 3
 test_failed: 0
 test_skipped: 0
 test_xfailed: 0
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.sha256", "value": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d"}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.hidden", "value": 2048}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.intermediate", "value": 11008}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_heads", "value": 16}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_kv_heads", "value": 2}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.head_dim", "value": 128}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.collected", "value": 2}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.passed", "value": 2}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.failed", "value": 0}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.skipped", "value": 0}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.xfailed", "value": 0}
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "evidence.verdict", "value": "pass"}
+SIGNOFF_METRIC {"case": "task-3-scaled-qwen-regressions", "key": "tests.collected", "value": 3}
+SIGNOFF_METRIC {"case": "task-3-scaled-qwen-regressions", "key": "tests.passed", "value": 3}
+SIGNOFF_METRIC {"case": "task-3-scaled-qwen-regressions", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-3-scaled-qwen-regressions", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-3-scaled-qwen-regressions", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-3-scaled-qwen-regressions", "key": "evidence.verdict", "value": "pass"}
 
 --- STDOUT (first 8000 chars) ---
-.
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.sha256", "value": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d"}
-
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.hidden", "value": 2048}
-
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.intermediate", "value": 11008}
-
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_heads", "value": 16}
-
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_kv_heads", "value": 2}
-
-SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.head_dim", "value": 128}
-.                                                                       [100%]
-2 passed in 13.71s
+...                                                                      [100%]
+3 passed in 48.53s
 
 --- END ---

@@ -1,17 +1,17 @@
 case_id: task-4c4-qwen25-3b-real-connected-blk0
-utc_start: 2026-07-24T11:31:55.152684+00:00
-utc_end: 2026-07-24T11:32:42.930492+00:00
-elapsed_s: 47.778
+utc_start: 2026-07-24T13:53:49.814580+00:00
+utc_end: 2026-07-24T13:54:41.135135+00:00
+elapsed_s: 51.321
 branch: main
-head: cafc9d7ae959aeec95d91e47bfed9679f660c48d
-dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  10 +-
- ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  15 ++-
- .../task-4c2-qwen25-3b-real-direct-projections.txt |  16 ++--
- .../task-4c3-q
+head: d250e3e0de14ee4e0a041993e350224dccc4796a
+dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  20 +--
+ ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  20 +--
+ .../task-4c2-qwen25-3b-real-direct-projections.txt |  35 ++---
+ .../task-4c3
 argv: ["python3", "-m", "pytest", "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_connected_blk0", "-q"]
 command_hash: f5e74663a009f9bb
 exit_code: 0
-source_fingerprint: a8c2f42f957260eda86da5da9535441948505177879c9aff7c5889559254b0ee
+source_fingerprint: 07ed32d1680cf17780ef04073671fe565437618998fb1641d0e16970a2a689fc
 source_files (103):
   - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/p9_lib/p9_sz0001.sh
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/__init__.py
@@ -286,9 +286,6 @@ SIGNOFF_METRIC {"case": "task-4c4-qwen25-3b-real-connected-blk0", "key": "bounda
 SIGNOFF_METRIC {"case": "task-4c4-qwen25-3b-real-connected-blk0", "key": "min_cosine", "value": 0.9768144654042341}
 SIGNOFF_METRIC {"case": "task-4c4-qwen25-3b-real-connected-blk0", "key": "final_cosine", "value": 0.9883881615792555}
 SIGNOFF_METRIC {"case": "task-4c4-qwen25-3b-real-connected-blk0", "key": "overall_verdict", "value": "PASS"}
-SIGNOFF_METRIC {"case": "task-4c4-qwen25-3b-real-connected-blk0", "key": "tests.collected", "value": 1}
-SIGNOFF_METRIC {"case": "task-4c4-qwen25-3b-real-connected-blk0", "key": "tests.passed", "value": 1}
-SIGNOFF_METRIC {"case": "task-4c4-qwen25-3b-real-connected-blk0", "key": "evidence.verdict", "value": "pass"}
 SIGNOFF_METRIC {"case": "task-4c4-qwen25-3b-real-connected-blk0", "key": "tests.collected", "value": 1}
 SIGNOFF_METRIC {"case": "task-4c4-qwen25-3b-real-connected-blk0", "key": "tests.passed", "value": 1}
 SIGNOFF_METRIC {"case": "task-4c4-qwen25-3b-real-connected-blk0", "key": "tests.failed", "value": 0}

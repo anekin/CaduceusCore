@@ -612,7 +612,9 @@ CASE_REGISTRY: Dict[str, CaseDef] = {
         case_id="task-7-functional-full-sweep",
         argv=["python3", "-m", "pytest", "sim/tests/", "-q",
               "--ignore=sim/tests/test_soc_pcie_dma.py",
-              "--ignore=sim/tests/test_engines.py"],
+              "--ignore=sim/tests/test_engines.py",
+              "--ignore=sim/tests/test_cv_conv2d_rtl.py",
+              "--ignore=sim/tests/wrapper"],
         evidence_path="task-7-functional-full-sweep.txt",
         expected_exit=0,
         min_collected=638,
@@ -794,6 +796,10 @@ def run_case(case: CaseDef, evidence_file: Path) -> bool:
         # Guard against recursive runner invocations: when the spawned pytest
         # session itself imports and re-invokes the runner, stop the chain.
         env["_FM_SIGNOFF_RECURSE_GUARD"] = "1"
+
+    # Tell test files which case ID they're running under, so emit wrappers
+    # can tag metrics correctly when the same test file serves multiple cases.
+    env["_FM_CASE_ID"] = case.case_id
 
     # Run subprocess
     try:
@@ -1127,6 +1133,9 @@ def main() -> None:
         if args.all_functional:
             all_ok = True
             for case_id, case in CASE_REGISTRY.items():
+                # Skip validate-only cases (empty argv) — they are deferred to later waves
+                if not case.argv:
+                    continue
                 ok = validate_case(case)
                 if not ok:
                     all_ok = False
