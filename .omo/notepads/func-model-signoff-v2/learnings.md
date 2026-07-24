@@ -527,3 +527,43 @@ Total tile count: 4704. Oracle agreement: bit-exact (max_abs_err=0.0). Min cosin
 ### SIGNOFF_METRIC lines
 Per boundary: shape, dtype, comparator, max_abs_err, max_rel_err, cosine, verdict
 Plus: min_cosine, final_cosine, overall_verdict, tests.collected, tests.passed, evidence.verdict
+
+## Wave 6 T5: Qwen 3B Robustness Coverage
+
+### Verification
+- `run --case task-5-qwen3b-robustness` PASS (4/4 tests)
+- `validate --case task-5-qwen3b-robustness` OK
+- Evidence metrics: tests.collected=4, tests.passed=4, tests.failed=0, evidence.verdict=pass
+- Corruption/rejection cases all detect mutations deterministically.
+
+## Wave 7 T6: Documentation + Checklist Reconciliation
+
+### Deliverables
+- **Created `docs/func-model-signoff-checklist.md`**: 17 signoff items (F-FM-01 through F-FM-17)
+  covering all evidence from T0B through T5, plus provenance rules, classification
+  boundaries, and scope limitations.
+- **Updated `rtl/testcase-list-soc-fm.md` FM-SOC-027**: Renamed test reference from
+  `test_blk0_full_chain_single_tile` to `test_blk0_scaled_single_tile_manifest_replay`;
+  added clarification that this is a scaled/single-tile fast regression, not canonical
+  full-shape signoff (T4C4 covers that).
+
+### Key Design Decisions
+- **Semantic checker compatibility**: The checker flag rule is "any line containing a
+  test name with `scaled` or `single_tile` must NOT contain `full-shape` on the same
+  line." The FM-SOC-027 update avoided "full-shape" by using "canonical" and
+  referencing the 2048/11008 dimensions instead.
+- **F-FM-13 (real Qwen2.5-3B blk.0 full-shape)** is derived PASS — it depends on
+  T4A+T4B+T4C1+T4C2+T4C3+T4C4 all passing. It is not independently testable.
+- **No existing `526/537` mentions** in the testcase list — no downstream RTL
+  labeling needed.
+- **Performance signoff** declared FAIL/PARTIAL in the checklist header. No
+  performance pass is claimed.
+- **RTL-golden-readiness** explicitly deferred; this is Func Model functional
+  signoff only.
+- **Synthetic data** (dims 2560/9728) always labeled synthetic; real GGUF
+  (SHA-256 `626b4a66...`, dims 2048/11008) always labeled real-model.
+
+### Verification
+- `python3 scripts/check_func_model_signoff_docs.py --check-scaled-labels`: OK
+- `python3 scripts/run_func_model_signoff.py run --case task-6-signoff-doc-consistency`: PASS
+- `python3 scripts/run_func_model_signoff.py validate --case task-6-signoff-doc-consistency`: OK
