@@ -27,6 +27,19 @@
 - **Metrics from non-pytest cases**: Cases like W2.2 golden vectors use `SIGNOFF_METRIC`
   lines in stdout for test counts. The runner parses these but cannot auto-add synthetic
   metrics. Test scripts must emit their own `SIGNOFF_METRIC` lines.
+- **Pytest stdout capture requires capsys.disabled()**: Test functions that need to emit
+  `SIGNOFF_METRIC` lines through the runner's subprocess must use `capsys.disabled()` context
+  manager. Plain `print()` is captured by pytest and never reaches the runner's stdout.
+  Adding `-s` to the runner's CaseDef argv would be simpler but affects all test output.
+
+### Wave 1 — Open Issues
+- **Duplicate metric key detection**: If both synthetic and real tests emit the same metric
+  keys (e.g., model.hidden), the evidence validator detects conflicting values. Workaround:
+  only the real-GGUF test emits model.* metrics. If future tests need to emit the same keys
+  with different values, the validator logic must distinguish by test source.
+- **GGUF SHA-256 computation is slow**: Computing SHA-256 of a 2.1 GB file takes ~12 seconds
+  on this server. This is acceptable for a preflight gate but may need caching for repeated
+  runs (currently no cache).
 
 ## Wave 1 T3: Issues Found / Resolved
 
@@ -41,3 +54,47 @@
   name `test_blk0_full_chain_single_tile`. This is outside the allowed file scope for T3
   and does not break any test execution or the checker. Can be updated opportunistically
   in a later wave.
+
+## Wave 2 T2: Comparator Fix Applied (F-FM-03)
+
+### Resolved (T2)
+- **Comparator OR-logic bug (FIXED)**: `GoldenSFU.compare_hw_vs_ref()` now uses element-wise
+  `(abs_diff <= tol_abs) | (rel_diff <= tol_rel)` with `np.all()` guard. NaN rejection
+  and Inf sign-matching added as explicit pre-checks. Commit `7b90bc0`.
+- **verify_w2_2_fm_golden_vectors.py:225 (FIXED)**: Same element-wise `|` semantics.
+- **Boundary `<` vs `≤` (FIXED)**: Now uses `<=` for both absolute and relative tolerance.
+- **Inf divide-by-zero warning (RESOLVED)**: The `RuntimeWarning` persists in the metrics
+  computation (rel_diff = inf/inf = NaN for opposite-sign infs) but does not affect the
+  within_tolerance decision since infinities are handled by the Inf gate before the
+  element-wise check is reached for inf-fail cases.
+
+### Remaining
+- **Inf/Metrics interaction**: When same-sign infinities pass, `abs_diff` contains NaN at
+  inf positions (inf - inf = NaN), so `max_abs_err` and `mean_abs_err` return NaN.
+  This is pre-existing behavior (original code also computes raw `np.max`).
+  Not blocking for current test coverage (no test exercises same-sign inf pass path
+  for metrics).
+
+## Wave 2 T4B: Tiled-MMUL Scheduler Stress Gate
+
+### Resolved
+- **Tile-major weight conversion**: Implemented `_row_major_to_tile_major()` which unpacks
+  row-major INT4 bytes, reshapes to (K,N), extracts per-tile submatrices, repacks, and
+  places at tile-major offsets. Verified bit-exact against manifest INT32 golden for all
+  9 MMUL ops across 5922 total tiles.
+- **Inline mmio infrastructure**: `_build_mmio_handlers()` replicates the DMA/MXU pipeline
+  without needing the full FuncModel+RISC-V firmware stack. DMA copies bytes between DRAM
+  and SRAM; MXU invokes `GoldenMXU.matmul_int32()` per tile with accumulate support.
+- **Unity scale generation**: `_make_unity_scale_bytes()` produces tile-major FP32 1.0f
+  scale data, confirming that the manifest golden was computed without per-block
+  quantization (output dtype is INT32, not FP32).
+
+### Deferred
+- **Per-op scale verification**: All scales are unity (1.0). Real GGUF weights in T4C3-T4C4
+  will exercise per-block scale quantization with non-unity scales. The mmio handler's
+  MXU path currently ignores SCALE_ADDR (safe when scales are 1.0); for real weights,
+  it must switch to `matmul_int4_per_block()` and read actual scale values.
+- **Partial tile zero-padding**: `_row_major_to_tile_major()` zero-pads partial tile slots
+  to `TILE_WEIGHT_BYTES`. The DMA copies only the actual needed bytes (`wgt_bytes`),
+  so the padding is never read. This is correct but adds memory overhead for tiny ops
+  like attn_score (128 bytes → 8192 bytes in tile-major). Not a concern for 256 MB DRAM.
