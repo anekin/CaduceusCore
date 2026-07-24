@@ -1,0 +1,247 @@
+case_id: task-5-qwen3b-robustness
+utc_start: 2026-07-24T12:04:22.099087+00:00
+utc_end: 2026-07-24T12:05:06.921388+00:00
+elapsed_s: 44.822
+branch: main
+head: 7848bfe97d8cda34e112865829dc087994124970
+dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  10 +-
+ ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  15 +-
+ .../task-4c2-qwen25-3b-real-direct-projections.txt |  16 +-
+ .../task-4c3-qwen
+argv: ["python3", "-m", "pytest", "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_validation_rejects_corruption", "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_validation_rejects_invalid_descriptor", "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_tiled_boundary_coverage", "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_blk0_rejects_corruption_and_shape_substitution", "-q"]
+command_hash: 7cd5d8c69f6316f7
+exit_code: 0
+source_fingerprint: 70fc028f230e6321b530fc174b31f57e4df012a022eff4b8c3692fcd4d6426aa
+source_files (103):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/p9_lib/p9_sz0001.sh
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/conv_mapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/cv_ppa_report.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/cv_sim.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/cv_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/onnx_importer.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/qwen_vl_vit_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/resnet18_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/resnet50_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/sd_unet_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/vit_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/yolov8n_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/validate_onnx.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/block_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/compiler.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/fsa_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/gmma_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/is_systolic_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/isa.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/mac_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/multicore.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/os_systolic_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/ppa_model.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/systolic_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/tensor_core_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/timeline.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/wmma_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/crossbar.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/dma.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/dram.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/golden.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/kv_cache.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/mxu.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/noc.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/pcie.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/sfu.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/sw_overhead.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/vector.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/scripts/gen_sfu_luts.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/scripts/lut_generator.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/signoff/test_qwen25_3b_real_blk0.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/signoff/test_qwen_blk0_synthetic_stress.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/conftest.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_arc_model.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_arc_precision.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_cv_conv2d_rtl.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_cv_mobilenetv3.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_design_space_explorer.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_dma_noc_integration.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_engine_instantiate.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_engines.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_firmware.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_docs.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_runner.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_corruption.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_cross_module.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_deprecation.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_dma.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_mxu_edges.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_mxu_quant.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_noc.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_sfu.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_sfu_compare.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_sfu_gaps.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_smoke.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_vector.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_mmio_bridge.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_op_dtype_chains.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_pcie_dma_fm.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_pool_relu_opcodes.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_rmsnorm_opcode.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_soc_fm.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_soc_pcie_dma.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_soc_rtl_e2e.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_tile_scheduler.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_vconv_f16_i32.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_w3_2_dual_path.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_mxu_wrapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_sfu_wrapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_vector_wrapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/wrapper_common.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/benchmark.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/dashboard.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/f3_crosscheck.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/generate_summary.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/metrics.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_benchmark.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_cross_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_dashboard.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_metrics.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_tile_double_buffer.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_timing_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_types.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/timing_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/types.py
+verdict: pass
+test_collected: 4
+test_passed: 4
+test_failed: 0
+test_skipped: 0
+test_xfailed: 0
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.synth_weight_corruption.max_diff", "value": 12.0}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.synth_weight_corruption.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.synth_activation_corruption.max_diff", "value": 256.0}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.synth_activation_corruption.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.total", "value": 2}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.passed", "value": 2}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_dims_n_zero.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_dims_n_zero.note", "value": "completed without crash"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_output_addr.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_output_addr.caught", "value": "Address 0xffffffff unmapped (DECERR)"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.total", "value": 2}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.passed", "value": 2}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.tiled_boundary.K", "value": 129}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.tiled_boundary.N", "value": 130}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.tiled_boundary.num_blocks", "value": 2}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.tiled_boundary.num_tiles", "value": 2}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.tiled_boundary.tile_count", "value": 4}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.tiled_boundary.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.weight_corruption.max_diff", "value": 0.030134856700897217}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.weight_corruption.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.activation_corruption.max_diff", "value": 0.17338871955871582}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.activation_corruption.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.scale_corruption.max_diff", "value": 1.7060169875621796}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.scale_corruption.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.gamma_omission.normal_cosine", "value": 1.0}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.gamma_omission.omitted_cosine", "value": 0.905898746074457}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.gamma_omission.warning", "value": "gamma_omitted_cosine_below_0.97"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.gamma_omission.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.sfu_tolerance.n_elements", "value": 206}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.sfu_tolerance.n_above_both_tolerances", "value": 0}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.sfu_tolerance.max_abs_err", "value": 0.00189971923828125}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.sfu_tolerance.max_rel_err", "value": 0.0009325213415870527}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.sfu_tolerance.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_dims.cosine", "value": 0.8351160727864979}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_dims.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_output_addr.verdict", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_output_addr.caught", "value": "Address 0xffffffff unmapped (DECERR)"}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "tests.collected", "value": 4}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "tests.passed", "value": 4}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "evidence.verdict", "value": "pass"}
+
+--- STDOUT (first 8000 chars) ---
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.synth_weight_corruption.max_diff", "value": 12.0}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.synth_weight_corruption.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.synth_activation_corruption.max_diff", "value": 256.0}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.synth_activation_corruption.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.total", "value": 2}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.passed", "value": 2}
+.
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_dims_n_zero.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_dims_n_zero.note", "value": "completed without crash"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_output_addr.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_output_addr.caught", "value": "Address 0xffffffff unmapped (DECERR)"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.total", "value": 2}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.passed", "value": 2}
+.
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.tiled_boundary.K", "value": 129}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.tiled_boundary.N", "value": 130}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.tiled_boundary.num_blocks", "value": 2}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.tiled_boundary.num_tiles", "value": 2}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.tiled_boundary.tile_count", "value": 4}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.tiled_boundary.verdict", "value": "PASS"}
+.
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.weight_corruption.max_diff", "value": 0.030134856700897217}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.weight_corruption.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.activation_corruption.max_diff", "value": 0.17338871955871582}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.activation_corruption.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.scale_corruption.max_diff", "value": 1.7060169875621796}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.scale_corruption.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.gamma_omission.normal_cosine", "value": 1.0}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.gamma_omission.omitted_cosine", "value": 0.905898746074457}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.gamma_omission.warning", "value": "gamma_omitted_cosine_below_0.97"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.gamma_omission.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.sfu_tolerance.n_elements", "value": 206}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.sfu_tolerance.n_above_both_tolerances", "value": 0}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.sfu_tolerance.max_abs_err", "value": 0.00189971923828125}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.sfu_tolerance.max_rel_err", "value": 0.0009325213415870527}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.sfu_tolerance.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_dims.cosine", "value": 0.8351160727864979}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_dims.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_output_addr.verdict", "value": "PASS"}
+
+SIGNOFF_METRIC {"case": "task-5-qwen3b-robustness", "key": "subtest.wrong_output_addr.caught", "value": "Address 0xffffffff unmapped (DECERR)"}
+.                                                                     [100%]
+4 passed in 43.21s
+
+--- END ---

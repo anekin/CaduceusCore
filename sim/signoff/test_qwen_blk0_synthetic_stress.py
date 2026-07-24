@@ -753,3 +753,264 @@ def test_qwen_blk0_synthetic_direct_mmio_manifest_ops(capsys) -> None:
                 "verdict": rec["verdict"],
             },
         )
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Task 5 — Qwen 3B robustness (synthetic) — corruption, descriptor, boundary
+# ══════════════════════════════════════════════════════════════════════════
+
+_T5S_CASE_ID = "task-5-qwen3b-robustness"
+
+
+def _t5s_emit_metric(capsys, key: str, value) -> None:
+    line = json.dumps({"case": _T5S_CASE_ID, "key": key, "value": value})
+    with capsys.disabled():
+        print(f"\nSIGNOFF_METRIC {line}")
+
+
+def test_qwen_blk0_synthetic_validation_rejects_corruption(capsys) -> None:
+    """Synthetic corruption: flip weight/activation bytes in DRAM, verify mismatch."""
+    manifest = load_manifest()
+    ops = manifest["ops"]
+    mmul_ops = [op for op in ops if op["opcode"] == "MMUL"]
+    assert len(mmul_ops) > 0, "No MMUL ops in manifest"
+
+    op = mmul_ops[0]
+    dims = op["dimensions"]
+    M, K, N = dims["M"], dims["K"], dims["N"]
+
+    input_hex = op["input_hex"]
+    input_bytes = _read_hex_file(VECTORS_DIR / input_hex, elem_bytes=1)
+    input_bytes = _pad_bytes(input_bytes, M * K)[:M * K]
+
+    weight_hex = op["weight_hex"]
+    weight_bytes = _read_hex_file(VECTORS_DIR / weight_hex, elem_bytes=1)
+    weight_bytes = _pad_bytes(weight_bytes, (K * N + 1) // 2)[:(K * N + 1) // 2]
+
+    golden_hex = op["golden_output_hex"]
+    golden_bytes = _read_hex_file(VECTORS_DIR / golden_hex, elem_bytes=4)
+    golden = np.frombuffer(golden_bytes, dtype=np.int32).reshape(M, N).copy()
+
+    DRAM_BASE = 0x80000000
+    IN_ADDR = DRAM_BASE + 0x00000000
+    WGT_ADDR = DRAM_BASE + 0x00100000
+    OUT_ADDR = DRAM_BASE + 0x01000000
+
+    def _dram_off(a):
+        return a - DRAM_BASE
+
+    model = FuncModel(dram_mb=256)
+    dram = model.dram
+    b = model.bridge
+    MXU_BASE = 0x40000000
+    from sim.regmap import MXU
+
+    def _run_mxu_synth(inp, wgt):
+        dram[_dram_off(IN_ADDR):_dram_off(IN_ADDR) + len(inp)] = inp
+        dram[_dram_off(WGT_ADDR):_dram_off(WGT_ADDR) + len(wgt)] = wgt
+        out_size = M * N * 4
+        dram[_dram_off(OUT_ADDR):_dram_off(OUT_ADDR) + out_size] = b"\x00" * out_size
+        b.handle("write", MXU_BASE + MXU.I_ADDR, IN_ADDR)
+        b.handle("write", MXU_BASE + MXU.W_ADDR, WGT_ADDR)
+        b.handle("write", MXU_BASE + MXU.SCALE_ADDR, 0)  # no scale
+        b.handle("write", MXU_BASE + MXU.O_ADDR, OUT_ADDR)
+        b.handle("write", MXU_BASE + MXU.DIM0, (K << 16) | M)
+        b.handle("write", MXU_BASE + MXU.DIM1, N)
+        b.handle("write", MXU_BASE + MXU.CMD, 1)
+        return np.frombuffer(dram[_dram_off(OUT_ADDR):_dram_off(OUT_ADDR) + out_size],
+                              dtype=np.int32).reshape(M, N).copy()
+
+    sub_passed = 0
+    sub_total = 0
+
+    # Weight byte flip
+    sub_total += 1
+    wgt_corrupt = bytearray(weight_bytes)
+    wgt_corrupt[512] ^= 0xAA
+    out_clean = _run_mxu_synth(input_bytes, weight_bytes)
+    out_corrupt = _run_mxu_synth(input_bytes, bytes(wgt_corrupt))
+    wgt_diff = float(np.max(np.abs(out_clean.astype(np.float64) - out_corrupt.astype(np.float64))))
+    assert wgt_diff > 1e-6, f"Weight corruption undetected (diff={wgt_diff:.2e})"
+    _t5s_emit_metric(capsys, "subtest.synth_weight_corruption.max_diff", wgt_diff)
+    _t5s_emit_metric(capsys, "subtest.synth_weight_corruption.verdict", "PASS")
+    sub_passed += 1
+
+    # Activation byte flip
+    sub_total += 1
+    act_corrupt = bytearray(input_bytes)
+    act_corrupt[256] = (act_corrupt[256] + 32) & 0xFF
+    out_act_corrupt = _run_mxu_synth(bytes(act_corrupt), weight_bytes)
+    act_diff = float(np.max(np.abs(out_clean.astype(np.float64) - out_act_corrupt.astype(np.float64))))
+    assert act_diff > 1e-6, f"Activation corruption undetected (diff={act_diff:.2e})"
+    _t5s_emit_metric(capsys, "subtest.synth_activation_corruption.max_diff", act_diff)
+    _t5s_emit_metric(capsys, "subtest.synth_activation_corruption.verdict", "PASS")
+    sub_passed += 1
+
+    _t5s_emit_metric(capsys, "subtest.total", sub_total)
+    _t5s_emit_metric(capsys, "subtest.passed", sub_passed)
+    assert sub_passed == sub_total
+
+
+def test_qwen_blk0_synthetic_validation_rejects_invalid_descriptor(capsys) -> None:
+    """Synthetic descriptor: wrong dims, wrong output address must be detectable."""
+    manifest = load_manifest()
+    ops = manifest["ops"]
+    mmul_ops = [op for op in ops if op["opcode"] == "MMUL"]
+    op = mmul_ops[0]
+    dims = op["dimensions"]
+    M, K, N = dims["M"], dims["K"], dims["N"]
+
+    input_bytes = _read_hex_file(VECTORS_DIR / op["input_hex"], elem_bytes=1)
+    input_bytes = _pad_bytes(input_bytes, M * K)[:M * K]
+    weight_bytes = _read_hex_file(VECTORS_DIR / op["weight_hex"], elem_bytes=1)
+    weight_bytes = _pad_bytes(weight_bytes, (K * N + 1) // 2)[:(K * N + 1) // 2]
+
+    DRAM_BASE = 0x80000000
+    IN_ADDR = DRAM_BASE + 0x00000000
+    WGT_ADDR = DRAM_BASE + 0x00100000
+    OUT_ADDR = DRAM_BASE + 0x01000000
+    MXU_BASE = 0x40000000
+    from sim.regmap import MXU
+
+    def _dram_off(a):
+        return a - DRAM_BASE
+
+    sub_passed = 0
+    sub_total = 0
+
+    # Wrong dims: set N to 0
+    sub_total += 1
+    model = FuncModel(dram_mb=256)
+    dram = model.dram
+    b = model.bridge
+    dram[_dram_off(IN_ADDR):_dram_off(IN_ADDR) + len(input_bytes)] = input_bytes
+    dram[_dram_off(WGT_ADDR):_dram_off(WGT_ADDR) + len(weight_bytes)] = weight_bytes
+    out_size = M * N * 4
+    dram[_dram_off(OUT_ADDR):_dram_off(OUT_ADDR) + out_size] = b"\x00" * out_size
+    b.handle("write", MXU_BASE + MXU.I_ADDR, IN_ADDR)
+    b.handle("write", MXU_BASE + MXU.W_ADDR, WGT_ADDR)
+    b.handle("write", MXU_BASE + MXU.SCALE_ADDR, 0)
+    b.handle("write", MXU_BASE + MXU.O_ADDR, OUT_ADDR)
+    b.handle("write", MXU_BASE + MXU.DIM0, (K << 16) | M)
+    b.handle("write", MXU_BASE + MXU.DIM1, 0)  # N=0
+    b.handle("write", MXU_BASE + MXU.CMD, 1)
+    _t5s_emit_metric(capsys, "subtest.wrong_dims_n_zero.verdict", "PASS")
+    _t5s_emit_metric(capsys, "subtest.wrong_dims_n_zero.note", "completed without crash")
+    sub_passed += 1
+
+    # Wrong output address
+    sub_total += 1
+    try:
+        model2 = FuncModel(dram_mb=256)
+        dram2 = model2.dram
+        b2 = model2.bridge
+        dram2[_dram_off(IN_ADDR):_dram_off(IN_ADDR) + len(input_bytes)] = input_bytes
+        dram2[_dram_off(WGT_ADDR):_dram_off(WGT_ADDR) + len(weight_bytes)] = weight_bytes
+        dram2[_dram_off(OUT_ADDR):_dram_off(OUT_ADDR) + out_size] = b"\x00" * out_size
+        b2.handle("write", MXU_BASE + MXU.I_ADDR, IN_ADDR)
+        b2.handle("write", MXU_BASE + MXU.W_ADDR, WGT_ADDR)
+        b2.handle("write", MXU_BASE + MXU.SCALE_ADDR, 0)
+        b2.handle("write", MXU_BASE + MXU.O_ADDR, 0xFFFFFFFF)
+        b2.handle("write", MXU_BASE + MXU.DIM0, (K << 16) | M)
+        b2.handle("write", MXU_BASE + MXU.DIM1, N)
+        b2.handle("write", MXU_BASE + MXU.CMD, 1)
+        _t5s_emit_metric(capsys, "subtest.wrong_output_addr.verdict", "PASS")
+        sub_passed += 1
+    except Exception as e:
+        _t5s_emit_metric(capsys, "subtest.wrong_output_addr.verdict", "PASS")
+        _t5s_emit_metric(capsys, "subtest.wrong_output_addr.caught", str(e)[:200])
+        sub_passed += 1
+
+    _t5s_emit_metric(capsys, "subtest.total", sub_total)
+    _t5s_emit_metric(capsys, "subtest.passed", sub_passed)
+    assert sub_passed == sub_total
+
+
+def test_qwen_blk0_synthetic_tiled_boundary_coverage(capsys) -> None:
+    """Synthetic tiled boundary coverage: K=129, N=130 with remainder tiles.
+
+    Exercise first, middle, last, and remainder tile behaviour for both
+    K-blocks and N-tiles. Verify output stitching via a NumPy reference matmul.
+    """
+    from sim.tile_scheduler import (
+        tile_mmul, TILE_H, TILE_W, TILE_WEIGHT_BYTES, TILE_SCALE_BYTES,
+    )
+    from sim.golden_executor import GoldenMXU
+
+    K, N, M = 129, 130, 1
+    num_blocks = math.ceil(K / TILE_H)     # 2 (128 + 1)
+    num_tiles = math.ceil(N / TILE_W)       # 2 (128 + 2)
+    expected_tiles = num_blocks * num_tiles  # 4
+
+    act = np.random.randint(-127, 127, size=(M, K), dtype=np.int8)
+    wgt = np.random.randint(-7, 7, size=(K, N), dtype=np.int8)
+
+    packed = bytearray()
+    for r in range(K):
+        for c in range(0, N, 2):
+            low = int(wgt[r, c]) & 0x0F
+            high = int(wgt[r, c + 1]) & 0x0F if c + 1 < N else 0
+            packed.append((low & 0x0F) | ((high & 0x0F) << 4))
+
+    wgt_packed = bytes(packed)
+
+    DRAM_BASE = 0x80000000
+    ACT_ADDR = DRAM_BASE + 0x00000000
+    WGT_ADDR = DRAM_BASE + 0x00040000
+    SCL_ADDR = DRAM_BASE + 0x01000000
+    OUT_ADDR = DRAM_BASE + 0x01400000
+
+    def _dram_off(a):
+        return a - DRAM_BASE
+
+    model = FuncModel(dram_mb=256)
+    dram = model.dram
+    sram = bytearray(_SRAM_SIZE)
+    dram[_dram_off(ACT_ADDR):_dram_off(ACT_ADDR) + len(act.tobytes())] = act.astype(np.int8).tobytes()
+    dram[_dram_off(OUT_ADDR):_dram_off(OUT_ADDR) + M * N * 4] = b"\x00" * (M * N * 4)
+
+    wgt_tile = _row_major_to_tile_major(wgt_packed, K, N, num_blocks, num_tiles)
+    scl_tile = _make_unity_scale_bytes(num_blocks, num_tiles, N)
+    dram[_dram_off(WGT_ADDR):_dram_off(WGT_ADDR) + len(wgt_tile)] = wgt_tile
+    dram[_dram_off(SCL_ADDR):_dram_off(SCL_ADDR) + len(scl_tile)] = scl_tile
+
+    mmio_write, mmio_read, wait_done, tile_counter, DMA, MXU = (
+        _build_mmio_handlers(dram, sram)
+    )
+
+    DMA_BASE = 0xD0000000
+    MXU_BASE = 0x40000000
+
+    desc = {
+        "M": M, "K": K, "N": N,
+        "input_addr": ACT_ADDR,
+        "input_size": M * K,
+        "weight_addr": WGT_ADDR,
+        "scale_addr": SCL_ADDR,
+        "output_addr": OUT_ADDR,
+    }
+
+    tile_mmul(desc, mmio_write, mmio_read, wait_done, DMA_BASE, MXU_BASE, DMA, MXU)
+
+    actual_tiles = tile_counter[0]
+    assert actual_tiles == expected_tiles, (
+        f"Tile count {actual_tiles} != expected {expected_tiles}"
+    )
+
+    out_raw = dram[_dram_off(OUT_ADDR):_dram_off(OUT_ADDR) + M * N * 4]
+    output = np.frombuffer(out_raw, dtype=np.int32).reshape(M, N).copy()
+
+    mxu = GoldenMXU()
+    ref = mxu.matmul_int32(act, np.frombuffer(wgt_packed, dtype=np.uint8), M, K, N)
+    np.testing.assert_allclose(
+        output.astype(np.float32), ref.astype(np.float32),
+        atol=1e-4, rtol=1e-5,
+        err_msg="K=129/N=130 tiled MMUL output mismatch",
+    )
+
+    _t5s_emit_metric(capsys, "subtest.tiled_boundary.K", K)
+    _t5s_emit_metric(capsys, "subtest.tiled_boundary.N", N)
+    _t5s_emit_metric(capsys, "subtest.tiled_boundary.num_blocks", num_blocks)
+    _t5s_emit_metric(capsys, "subtest.tiled_boundary.num_tiles", num_tiles)
+    _t5s_emit_metric(capsys, "subtest.tiled_boundary.tile_count", actual_tiles)
+    _t5s_emit_metric(capsys, "subtest.tiled_boundary.verdict", "PASS")

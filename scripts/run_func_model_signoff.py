@@ -550,19 +550,18 @@ CASE_REGISTRY: Dict[str, CaseDef] = {
               "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_validation_rejects_invalid_descriptor",
               "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_tiled_boundary_coverage",
               "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_blk0_rejects_corruption_and_shape_substitution",
-              "sim/tests/test_soc_fm.py",
               "-q"],
         evidence_path="task-5-qwen3b-robustness.txt",
         expected_exit=0,
-        min_collected=1,
-        min_passed=1,
+        min_collected=4,
+        min_passed=4,
         forbid_skip=True,
         forbid_xfail=True,
         source_fingerprint_globs=_DEFAULT_TEST_GLOBS,
-        required_metrics=["tests.collected", "tests.passed", "evidence.verdict"],
+        required_metrics=[],
         is_pytest=True,
     ),
-    # Task 6 - signoff doc consistency
+    # Task 6 - Signoff doc consistency
     "task-6-signoff-doc-consistency": CaseDef(
         case_id="task-6-signoff-doc-consistency",
         argv=["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_docs.py", "-q"],

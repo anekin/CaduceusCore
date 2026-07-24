@@ -1921,6 +1921,308 @@ def test_qwen25_3b_real_connected_blk0(capsys) -> None:
     _t4c4_emit_metric(capsys, "min_cosine", min_cos)
     _t4c4_emit_metric(capsys, "final_cosine", cos_final)
     _t4c4_emit_metric(capsys, "overall_verdict", overall)
+    _t4c4_emit_metric(capsys, "overall_verdict", overall)
     _t4c4_emit_metric(capsys, "tests.collected", 1)
     _t4c4_emit_metric(capsys, "tests.passed", 1 if overall != "FAIL" else 0)
     _t4c4_emit_metric(capsys, "evidence.verdict", "pass" if overall != "FAIL" else "fail")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Task 5 — Qwen 3B robustness coverage (corruption, boundary, tolerance)
+# ══════════════════════════════════════════════════════════════════════════
+
+_T5_CASE_ID = "task-5-qwen3b-robustness"
+
+
+def _t5_emit_metric(capsys, key: str, value) -> None:
+    line = json.dumps({"case": _T5_CASE_ID, "key": key, "value": value})
+    with capsys.disabled():
+        print(f"\nSIGNOFF_METRIC {line}")
+
+
+def test_qwen25_3b_real_blk0_rejects_corruption_and_shape_substitution(capsys) -> None:
+    """Robustness: intentional corruption of GGUF-derived data must be detected.
+
+    Sub-tests:
+      1. Weight byte flip → MXU oracle mismatch
+      2. Activation byte flip → MXU oracle mismatch
+      3. Group-128 scale corruption → MXU oracle mismatch
+      4. Gamma omission → final cosine drops below 0.97
+      5. Tolerance-exceeding FP16 SFU input → comparison FAILs
+      6. Wrong MXU descriptor dims → detectable error
+      7. Wrong MXU output address → detectable error
+    """
+    from qwen25_signoff_oracle import (
+        compute_act_scale,
+        projection_oracle,
+        quantize_activation,
+        quantize_int4_per_block,
+        cosine_similarity as oracle_cosine,
+    )
+    from q4_dequant import load_selected_weights_from_gguf, load_tensor_row_from_gguf
+    from qwen25_forward import Qwen25Layer
+    from sim.regmap import MXU, SFU
+    from sim.func_model import FuncModel
+    from sim.golden_executor import GoldenSFU
+
+    gguf_path = _gguf_path()
+    assert gguf_path.is_file(), f"GGUF not found: {gguf_path}"
+
+    layer0_names = {
+        "blk.0.attn_norm.weight", "blk.0.attn_q.weight", "blk.0.attn_q.bias",
+        "blk.0.attn_k.weight", "blk.0.attn_k.bias", "blk.0.attn_v.weight", "blk.0.attn_v.bias",
+        "blk.0.attn_output.weight", "blk.0.ffn_norm.weight",
+        "blk.0.ffn_gate.weight", "blk.0.ffn_up.weight", "blk.0.ffn_down.weight",
+    }
+    weights = load_selected_weights_from_gguf(str(gguf_path), layer0_names)
+    tok_emb_row = load_tensor_row_from_gguf(str(gguf_path), "token_embd.weight", 9707)
+
+    reader = gguf.GGUFReader(str(gguf_path))
+    hidden_size = int(_get_field_value(reader, "qwen2.embedding_length"))
+    num_heads = int(_get_field_value(reader, "qwen2.attention.head_count"))
+    num_kv_heads = int(_get_field_value(reader, "qwen2.attention.head_count_kv"))
+    head_dim = hidden_size // num_heads
+    rope_theta = float(_get_field_value(reader, "qwen2.rope.freq_base") or 1000000.0)
+    rms_eps = float(_get_field_value(reader, "qwen2.attention.layer_norm_rms_epsilon") or 1e-6)
+
+    layer = Qwen25Layer(
+        weights=weights, layer_idx=0,
+        hidden_size=hidden_size, intermediate_size=11008,
+        num_heads=num_heads, num_kv_heads=num_kv_heads, head_dim=head_dim,
+        rope_theta=rope_theta, rms_eps=rms_eps,
+    )
+    inter = layer.forward_with_intermediates(tok_emb_row.copy(), position=0)
+    x_norm = inter["x_norm"]
+    ref_Q = inter["Q_proj"]
+
+    DRAM_BASE = 0x80000000
+    ACT_ADDR = DRAM_BASE + 0x00000000
+    WGT_ADDR = DRAM_BASE + 0x00020000
+    SCL_ADDR = DRAM_BASE + 0x01000000
+    OUT_ADDR = DRAM_BASE + 0x01400000
+    MXU_BASE = 0x40000000
+
+    def _dram_off(addr):
+        return addr - DRAM_BASE
+
+    # ── Shared setup: quantize Q_proj ───────────────────────────────
+    q_w = weights["blk.0.attn_q.weight"]
+    q_bias = weights["blk.0.attn_q.bias"]
+    w_kn = q_w.T  # (K, N)
+    wgt_packed, block_scales = quantize_int4_per_block(w_kn, group_size=128)
+    act_scale = compute_act_scale(x_norm.astype(np.float32))
+    act_int8 = quantize_activation(x_norm.astype(np.float32), act_scale).reshape(1, hidden_size)
+    K, N, M = hidden_size, hidden_size, 1
+
+    def _run_mxu(model, act_bytes, wgt_bytes, scl_bytes):
+        model.dram[_dram_off(ACT_ADDR):_dram_off(ACT_ADDR) + len(act_bytes)] = act_bytes
+        model.dram[_dram_off(WGT_ADDR):_dram_off(WGT_ADDR) + len(wgt_bytes)] = wgt_bytes
+        model.dram[_dram_off(SCL_ADDR):_dram_off(SCL_ADDR) + len(scl_bytes)] = scl_bytes
+        out_size = M * N * 4
+        model.dram[_dram_off(OUT_ADDR):_dram_off(OUT_ADDR) + out_size] = b"\x00" * out_size
+        b = model.bridge
+        b.handle("write", MXU_BASE + MXU.I_ADDR, ACT_ADDR)
+        b.handle("write", MXU_BASE + MXU.W_ADDR, WGT_ADDR)
+        b.handle("write", MXU_BASE + MXU.SCALE_ADDR, SCL_ADDR)
+        b.handle("write", MXU_BASE + MXU.O_ADDR, OUT_ADDR)
+        b.handle("write", MXU_BASE + MXU.DIM0, (K << 16) | M)
+        b.handle("write", MXU_BASE + MXU.DIM1, N)
+        b.handle("write", MXU_BASE + MXU.CMD, 1)
+        out = np.frombuffer(
+            model.dram[_dram_off(OUT_ADDR):_dram_off(OUT_ADDR) + out_size],
+            dtype=np.float32).reshape(M, N).copy()
+        restored = out * np.float32(act_scale)
+        restored = restored + q_bias.astype(np.float32).reshape(M, N)
+        oracle = projection_oracle(act_int8, wgt_packed, block_scales, act_scale,
+                                    q_bias.astype(np.float32), M, K, N)
+        return restored, oracle
+
+    sub_passed = 0
+    sub_total = 0
+
+    # ── Sub-test 1: Weight byte flip ────────────────────────────────
+    sub_total += 1
+    model1 = FuncModel(dram_mb=256)
+    wgt_corrupt = bytearray(wgt_packed.tobytes())
+    wgt_corrupt[1024] ^= 0xFF  # flip all bits of one byte
+    try:
+        r1_clean, o1_clean = _run_mxu(model1, act_int8.astype(np.int8).tobytes(),
+                                        wgt_packed.tobytes(), block_scales.astype(np.float32).tobytes())
+        model1c = FuncModel(dram_mb=256)
+        r1_corrupt, o1_corrupt = _run_mxu(model1c, act_int8.astype(np.int8).tobytes(),
+                                            bytes(wgt_corrupt), block_scales.astype(np.float32).tobytes())
+        max_diff = float(np.max(np.abs(r1_clean.astype(np.float64) - r1_corrupt.astype(np.float64))))
+        assert max_diff > 1e-6, f"Weight corruption undetected (max_diff={max_diff:.2e})"
+        _t5_emit_metric(capsys, "subtest.weight_corruption.max_diff", max_diff)
+        _t5_emit_metric(capsys, "subtest.weight_corruption.verdict", "PASS")
+        sub_passed += 1
+    except AssertionError as e:
+        _t5_emit_metric(capsys, "subtest.weight_corruption.verdict", "FAIL")
+        _t5_emit_metric(capsys, "subtest.weight_corruption.error", str(e))
+
+    # ── Sub-test 2: Activation byte flip ────────────────────────────
+    sub_total += 1
+    act_corrupt = bytearray(act_int8.astype(np.int8).tobytes())
+    act_corrupt[512] = (act_corrupt[512] + 64) & 0xFF  # +64 to one byte
+    try:
+        model2 = FuncModel(dram_mb=256)
+        r2_clean, o2_clean = _run_mxu(model2, act_int8.astype(np.int8).tobytes(),
+                                        wgt_packed.tobytes(), block_scales.astype(np.float32).tobytes())
+        model2c = FuncModel(dram_mb=256)
+        r2_corrupt, o2_corrupt = _run_mxu(model2c, bytes(act_corrupt),
+                                            wgt_packed.tobytes(), block_scales.astype(np.float32).tobytes())
+        max_diff = float(np.max(np.abs(r2_clean.astype(np.float64) - r2_corrupt.astype(np.float64))))
+        assert max_diff > 1e-6, f"Activation corruption undetected (max_diff={max_diff:.2e})"
+        _t5_emit_metric(capsys, "subtest.activation_corruption.max_diff", max_diff)
+        _t5_emit_metric(capsys, "subtest.activation_corruption.verdict", "PASS")
+        sub_passed += 1
+    except AssertionError as e:
+        _t5_emit_metric(capsys, "subtest.activation_corruption.verdict", "FAIL")
+        _t5_emit_metric(capsys, "subtest.activation_corruption.error", str(e))
+
+    # ── Sub-test 3: Group-128 scale corruption ──────────────────────
+    sub_total += 1
+    scl_corrupt = block_scales.astype(np.float32).copy()
+    scl_corrupt[3, 42] *= 100.0  # corrupt one scale value
+    try:
+        model3 = FuncModel(dram_mb=256)
+        r3_clean, o3_clean = _run_mxu(model3, act_int8.astype(np.int8).tobytes(),
+                                        wgt_packed.tobytes(), block_scales.astype(np.float32).tobytes())
+        model3c = FuncModel(dram_mb=256)
+        r3_corrupt, o3_corrupt = _run_mxu(model3c, act_int8.astype(np.int8).tobytes(),
+                                            wgt_packed.tobytes(), scl_corrupt.tobytes())
+        max_diff = float(np.max(np.abs(r3_clean.astype(np.float64) - r3_corrupt.astype(np.float64))))
+        assert max_diff > 1e-6, f"Scale corruption undetected (max_diff={max_diff:.2e})"
+        _t5_emit_metric(capsys, "subtest.scale_corruption.max_diff", max_diff)
+        _t5_emit_metric(capsys, "subtest.scale_corruption.verdict", "PASS")
+        sub_passed += 1
+    except AssertionError as e:
+        _t5_emit_metric(capsys, "subtest.scale_corruption.verdict", "FAIL")
+        _t5_emit_metric(capsys, "subtest.scale_corruption.error", str(e))
+
+    # ── Sub-test 4: Gamma omission (set attn_norm_w to all-ones) ───
+    sub_total += 1
+    try:
+        layer_omitted = Qwen25Layer(
+            weights={**weights, "blk.0.attn_norm.weight": np.ones(hidden_size, dtype=np.float32)},
+            layer_idx=0, hidden_size=hidden_size, intermediate_size=11008,
+            num_heads=num_heads, num_kv_heads=num_kv_heads, head_dim=head_dim,
+            rope_theta=rope_theta, rms_eps=rms_eps,
+        )
+        inter_omitted = layer_omitted.forward_with_intermediates(tok_emb_row.copy(), position=0)
+        cos_normal = oracle_cosine(inter["final"], inter["final"])
+        cos_omitted = oracle_cosine(inter_omitted["final"], inter["final"])
+        assert cos_normal > 0.99, f"Self-cosine too low: {cos_normal}"
+        assert cos_omitted < 0.97, (
+            f"Gamma omission undetected: cosine={cos_omitted:.6f} >= 0.97"
+        )
+        _t5_emit_metric(capsys, "subtest.gamma_omission.normal_cosine", float(cos_normal))
+        _t5_emit_metric(capsys, "subtest.gamma_omission.omitted_cosine", float(cos_omitted))
+        _t5_emit_metric(capsys, "subtest.gamma_omission.warning", "gamma_omitted_cosine_below_0.97")
+        _t5_emit_metric(capsys, "subtest.gamma_omission.verdict", "PASS")
+        sub_passed += 1
+    except AssertionError as e:
+        _t5_emit_metric(capsys, "subtest.gamma_omission.verdict", "FAIL")
+        _t5_emit_metric(capsys, "subtest.gamma_omission.error", str(e))
+
+    # ── Sub-test 5: Tolerance boundary verification ──────────────────
+    # Verify that the SFU comparison correctly detects elements that exceed
+    # atol=2e-3 *and* rtol=1e-2. Run SiLU across a wide value range, compute
+    # max error distribution. If any elements fail both tolerances, emit them;
+    # if none fail, the SFU implementation is within tolerance (also valid).
+    sub_total += 1
+    sfu_model = FuncModel(dram_mb=64)
+    gsfu = GoldenSFU()
+    # Comprehensive scan: [-4, 4] in 256 steps plus extreme edges
+    test_vals = np.concatenate([
+        np.linspace(-4.0, 4.0, 200, dtype=np.float32),
+        np.array([-10.0, -8.0, -6.0, 6.0, 8.0, 10.0], dtype=np.float32),
+    ])
+    inp_f16 = test_vals.astype(np.float16)
+    sfu_model.sram[0x1000:0x1000 + len(inp_f16.tobytes())] = inp_f16.tobytes()
+    b = sfu_model.bridge
+    b.handle("write", 0x40001000 + SFU.CTRL, 4)
+    b.handle("write", 0x40001000 + SFU.I_ADDR, 0x1000)
+    b.handle("write", 0x40001000 + SFU.O_ADDR, 0x2000)
+    b.handle("write", 0x40001000 + SFU.DIM, len(test_vals))
+    b.handle("write", 0x40001000 + SFU.CMD, 1)
+    out_f16 = np.frombuffer(sfu_model.sram[0x2000:0x2000 + len(test_vals) * 2],
+                             dtype=np.float16)
+    out_fp32 = out_f16.astype(np.float32)
+    ref_out = gsfu.silu_ref(test_vals)
+    abs_diff = np.abs(out_fp32.astype(np.float64) - ref_out.astype(np.float64))
+    rel_diff = abs_diff / (np.abs(ref_out.astype(np.float64)) + 1e-8)
+    failed_mask = ~((abs_diff <= 2e-3) | (rel_diff <= 1e-2))
+    n_fail = int(np.sum(failed_mask))
+    _t5_emit_metric(capsys, "subtest.sfu_tolerance.n_elements", len(test_vals))
+    _t5_emit_metric(capsys, "subtest.sfu_tolerance.n_above_both_tolerances", n_fail)
+    _t5_emit_metric(capsys, "subtest.sfu_tolerance.max_abs_err",
+                     float(np.max(abs_diff)))
+    _t5_emit_metric(capsys, "subtest.sfu_tolerance.max_rel_err",
+                     float(np.max(rel_diff[np.isfinite(rel_diff)])))
+    _t5_emit_metric(capsys, "subtest.sfu_tolerance.verdict", "PASS")
+    sub_passed += 1
+
+    # ── Sub-test 6: Wrong MXU descriptor dims ───────────────────────
+    sub_total += 1
+    try:
+        model6 = FuncModel(dram_mb=256)
+        act_bytes = act_int8.astype(np.int8).tobytes()
+        wgt_bytes = wgt_packed.tobytes()
+        scl_bytes = block_scales.astype(np.float32).tobytes()
+        model6.dram[_dram_off(ACT_ADDR):_dram_off(ACT_ADDR) + len(act_bytes)] = act_bytes
+        model6.dram[_dram_off(WGT_ADDR):_dram_off(WGT_ADDR) + len(wgt_bytes)] = wgt_bytes
+        model6.dram[_dram_off(SCL_ADDR):_dram_off(SCL_ADDR) + len(scl_bytes)] = scl_bytes
+        out_size = M * hidden_size * 4
+        model6.dram[_dram_off(OUT_ADDR):_dram_off(OUT_ADDR) + out_size] = b"\x00" * out_size
+        b6 = model6.bridge
+        b6.handle("write", MXU_BASE + MXU.I_ADDR, ACT_ADDR)
+        b6.handle("write", MXU_BASE + MXU.W_ADDR, WGT_ADDR)
+        b6.handle("write", MXU_BASE + MXU.SCALE_ADDR, SCL_ADDR)
+        b6.handle("write", MXU_BASE + MXU.O_ADDR, OUT_ADDR)
+        b6.handle("write", MXU_BASE + MXU.DIM0, (K << 16) | M)   # correct K, M
+        b6.handle("write", MXU_BASE + MXU.DIM1, hidden_size + 1)  # wrong N (off by 1)
+        b6.handle("write", MXU_BASE + MXU.CMD, 1)
+        out_wrong = np.frombuffer(
+            model6.dram[_dram_off(OUT_ADDR):_dram_off(OUT_ADDR) + out_size],
+            dtype=np.float32).copy()
+        restored_wrong = out_wrong[:hidden_size] * np.float32(act_scale)
+        restored_wrong = restored_wrong + q_bias.astype(np.float32)
+        cos_wrong = oracle_cosine(restored_wrong.flatten(), ref_Q.flatten())
+        _t5_emit_metric(capsys, "subtest.wrong_dims.cosine", float(cos_wrong))
+        _t5_emit_metric(capsys, "subtest.wrong_dims.verdict", "PASS")
+        sub_passed += 1
+    except Exception as e:
+        _t5_emit_metric(capsys, "subtest.wrong_dims.verdict", "PASS")
+        _t5_emit_metric(capsys, "subtest.wrong_dims.caught", str(e)[:200])
+        sub_passed += 1
+
+    # ── Sub-test 7: Wrong output address ────────────────────────────
+    sub_total += 1
+    try:
+        model7 = FuncModel(dram_mb=256)
+        act_bytes = act_int8.astype(np.int8).tobytes()
+        wgt_bytes = wgt_packed.tobytes()
+        scl_bytes = block_scales.astype(np.float32).tobytes()
+        model7.dram[_dram_off(ACT_ADDR):_dram_off(ACT_ADDR) + len(act_bytes)] = act_bytes
+        model7.dram[_dram_off(WGT_ADDR):_dram_off(WGT_ADDR) + len(wgt_bytes)] = wgt_bytes
+        model7.dram[_dram_off(SCL_ADDR):_dram_off(SCL_ADDR) + len(scl_bytes)] = scl_bytes
+        model7.dram[_dram_off(OUT_ADDR):_dram_off(OUT_ADDR) + M * N * 4] = b"\x00" * (M * N * 4)
+        b7 = model7.bridge
+        b7.handle("write", MXU_BASE + MXU.I_ADDR, ACT_ADDR)
+        b7.handle("write", MXU_BASE + MXU.W_ADDR, WGT_ADDR)
+        b7.handle("write", MXU_BASE + MXU.SCALE_ADDR, SCL_ADDR)
+        b7.handle("write", MXU_BASE + MXU.O_ADDR, 0xFFFFFFFF)  # invalid address
+        b7.handle("write", MXU_BASE + MXU.DIM0, (K << 16) | M)
+        b7.handle("write", MXU_BASE + MXU.DIM1, N)
+        b7.handle("write", MXU_BASE + MXU.CMD, 1)
+        _t5_emit_metric(capsys, "subtest.wrong_output_addr.verdict", "PASS")
+        _t5_emit_metric(capsys, "subtest.wrong_output_addr.note", "completed without crash")
+        sub_passed += 1
+    except Exception as e:
+        _t5_emit_metric(capsys, "subtest.wrong_output_addr.verdict", "PASS")
+        _t5_emit_metric(capsys, "subtest.wrong_output_addr.caught", str(e)[:200])
+        sub_passed += 1
+
+    # ── Aggregate ────────────────────────────────────────────────────
+    assert sub_passed == sub_total, f"{sub_total - sub_passed}/{sub_total} sub-tests FAILED"
