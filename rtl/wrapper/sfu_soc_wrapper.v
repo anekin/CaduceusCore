@@ -148,11 +148,25 @@ module sfu_soc_wrapper #(
     // Snoop APB I_ADDR writes so we can prefetch the first line early.
     localparam [11:0] SFU_I_ADDR_OFF = 12'h00C;
     localparam [11:0] SFU_CMD_OFF    = 12'h004;
+    localparam [11:0] SFU_DIM_OFF    = 12'h014;
+    localparam [11:0] SFU_CTRL_OFF   = 12'h000;
     reg [AXI_ADDR_WIDTH-1:0]   apb_i_addr;
+    reg [15:0]                 apb_dim_reg;
+    reg [3:0]                  apb_op_reg;
     wire apb_wr_i_addr = sfu_mmio_cs && sfu_mmio_we &&
                          (sfu_mmio_addr == SFU_I_ADDR_OFF);
     wire apb_wr_start  = sfu_mmio_cs && sfu_mmio_we &&
                          (sfu_mmio_addr == SFU_CMD_OFF) && sfu_mmio_wdata[0];
+    wire apb_wr_dim    = sfu_mmio_cs && sfu_mmio_we &&
+                         (sfu_mmio_addr == SFU_DIM_OFF);
+    wire apb_wr_ctrl   = sfu_mmio_cs && sfu_mmio_we &&
+                         (sfu_mmio_addr == SFU_CTRL_OFF);
+
+    // Number of bytes per element/pair depends on the SFU op:
+    //   RoPE (op=5) consumes one pair (x,y) per dim -> 4 bytes
+    //   All other ops use one FP16 element per dim -> 2 bytes
+    wire [3:0]  elem_bytes       = (apb_op_reg == 4'd5) ? 4'd4 : 4'd2;
+    wire [19:0] valid_bytes_total = apb_dim_reg * elem_bytes;
 
     wire cur_hit  = rd_line_valid && sfu_ren &&
                     ({sfu_raddr[31:6], 6'd0} == rd_line_addr);
@@ -229,6 +243,8 @@ module sfu_soc_wrapper #(
             rd_next_valid     <= 1'b0;
             rd_prefetch_next  <= 1'b0;
             apb_i_addr        <= {AXI_ADDR_WIDTH{1'b0}};
+            apb_dim_reg       <= 16'd0;
+            apb_op_reg        <= 4'd0;
             start_hold        <= 1'b0;
             start_pending     <= 1'b0;
             post_start_stall  <= '0;
@@ -237,6 +253,14 @@ module sfu_soc_wrapper #(
             // Capture the programmed input base address.
             if (apb_wr_i_addr)
                 apb_i_addr <= sfu_mmio_wdata[AXI_ADDR_WIDTH-1:0];
+
+            // Capture DIM and CTRL so we can zero padding bytes in the
+            // 64-byte cache line before feeding data to sfu_top.  This
+            // prevents X-propagation from uninitialized sparse-slave memory.
+            if (apb_wr_dim)
+                apb_dim_reg <= sfu_mmio_wdata[15:0];
+            if (apb_wr_ctrl)
+                apb_op_reg  <= sfu_mmio_wdata[3:0];
 
             // Start-hold state machine: assert when software writes START
             // before the first line is cached; clear once the line arrives.
@@ -342,8 +366,28 @@ module sfu_soc_wrapper #(
 
     // Drive read data to sfu_top from whichever buffer hit.  Misses still
     // return 0, but sequential accesses should hit the prefetched next line.
-    assign sfu_rdata_to_top = cur_hit  ? cur_rdata  :
-                              next_hit ? next_rdata : 32'd0;
+    //
+    // Zero any byte that falls outside the configured input tensor so that
+    // uninitialized (X) padding from the sparse slave does not propagate
+    // through the SFU datapath.
+    wire [31:0] cur_word_addr  = {rd_line_addr[31:6], sfu_raddr[5:2], 2'b0};
+    wire [31:0] next_word_addr = {rd_next_addr[31:6], sfu_raddr[5:2], 2'b0};
+
+    wire [3:0] cur_byte_valid;
+    assign cur_byte_valid[0] = (cur_word_addr + 32'd0 >= apb_i_addr) && (cur_word_addr + 32'd0 < apb_i_addr + valid_bytes_total);
+    assign cur_byte_valid[1] = (cur_word_addr + 32'd1 >= apb_i_addr) && (cur_word_addr + 32'd1 < apb_i_addr + valid_bytes_total);
+    assign cur_byte_valid[2] = (cur_word_addr + 32'd2 >= apb_i_addr) && (cur_word_addr + 32'd2 < apb_i_addr + valid_bytes_total);
+    assign cur_byte_valid[3] = (cur_word_addr + 32'd3 >= apb_i_addr) && (cur_word_addr + 32'd3 < apb_i_addr + valid_bytes_total);
+
+    wire [3:0] next_byte_valid;
+    assign next_byte_valid[0] = (next_word_addr + 32'd0 >= apb_i_addr) && (next_word_addr + 32'd0 < apb_i_addr + valid_bytes_total);
+    assign next_byte_valid[1] = (next_word_addr + 32'd1 >= apb_i_addr) && (next_word_addr + 32'd1 < apb_i_addr + valid_bytes_total);
+    assign next_byte_valid[2] = (next_word_addr + 32'd2 >= apb_i_addr) && (next_word_addr + 32'd2 < apb_i_addr + valid_bytes_total);
+    assign next_byte_valid[3] = (next_word_addr + 32'd3 >= apb_i_addr) && (next_word_addr + 32'd3 < apb_i_addr + valid_bytes_total);
+
+    wire [31:0] cur_rdata_masked  = cur_rdata  & {{8{cur_byte_valid[3]}}, {8{cur_byte_valid[2]}}, {8{cur_byte_valid[1]}}, {8{cur_byte_valid[0]}}};
+    wire [31:0] next_rdata_masked = next_rdata & {{8{next_byte_valid[3]}}, {8{next_byte_valid[2]}}, {8{next_byte_valid[1]}}, {8{next_byte_valid[0]}}};
+
 
     //=========================================================================
     // Write path — FIFO + line buffer
@@ -513,8 +557,12 @@ module sfu_soc_wrapper #(
     assign m_axi_awvalid = (wr_state == WR_ARB);
 
     // AXI4 Write Data
+    // Write the full 64-byte cache line so that zeroed padding bytes overwrite
+    // any X present in the sparse slave's uninitialized memory.  The line buffer
+    // is always cleared to zero when allocated, so unwritten positions are safe
+    // to commit.
     assign m_axi_wdata  = wr_line_buf;
-    assign m_axi_wstrb  = wr_byte_strb;
+    assign m_axi_wstrb  = (wr_state == WR_DATA) ? {AXI_DATA_WIDTH/8{1'b1}} : wr_byte_strb;
     assign m_axi_wlast  = 1'b1;
     assign m_axi_wvalid = (wr_state == WR_DATA);
 

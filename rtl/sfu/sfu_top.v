@@ -432,8 +432,9 @@ module sfu_top #(
                 //-------------------------------------------------------------
                 ST_IDLE: begin
                     sram_ren    <= 1'b0;
-                    status_done <= 1'b0;
+                    // status_done is sticky until next cmd_start. IP testbench resets DUT between scenarios, ensuring clean DONE state.
                     if (cmd_start) begin
+                        status_done <= 1'b0;
                         status_busy   <= 1'b1;
                         in_elem       <= 16'd0;
                         out_elem      <= 16'd0;

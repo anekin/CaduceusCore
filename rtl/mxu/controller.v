@@ -141,7 +141,6 @@ module controller (
             activation_load_en <= 1'b0;
             mac_reset_acc     <= 1'b0;
             store_out         <= 1'b0;
-            status_done       <= 1'b0;
             status_error      <= 1'b0;
             irq               <= 1'b0;
             compute_en        <= 1'b0;
@@ -154,9 +153,10 @@ module controller (
                 S_IDLE: begin
                     status_busy <= 1'b0;
                     if (cmd_start) begin
+                        status_done     <= 1'b0;
                         done_cnt        <= 16'd0;
                         tiles_completed <= 16'd0;
-                        state         <= S_READ_DIMS;
+                        state           <= S_READ_DIMS;
                     end
                 end
 
@@ -302,13 +302,23 @@ module controller (
                 end
 
                 //=============================================================
-                // DONE — assert status_done + irq for one cycle
+                // DONE — assert status_done + irq; remain sticky until next cmd_start
+                // If cmd_start arrives here, bypass IDLE and re-dispatch using the
+                // DIM values currently held in mmio_if (firmware must have written
+                // them before asserting CMD.START, which is already required).
                 //=============================================================
                 S_DONE: begin
                     status_busy  <= 1'b0;
                     status_done  <= 1'b1;
                     irq          <= irq_en;
-                    state      <= S_IDLE;
+                    if (cmd_start) begin
+                        done_cnt        <= 16'd0;
+                        tiles_completed <= 16'd0;
+                        status_done     <= 1'b0;
+                        state           <= S_READ_DIMS;
+                    end else begin
+                        state <= S_IDLE;
+                    end
                 end
 
                 //=============================================================

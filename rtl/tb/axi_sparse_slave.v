@@ -103,7 +103,8 @@ module axi_sparse_slave #(
                 s_axi_awready <= 1'b0;
                 wr_active     <= 1'b1;
                 wr_beat_cnt   <= 8'd0;
-                wr_addr       <= s_axi_awaddr[ADDR_IDX_W-1:0];
+                // Memory is word-addressed (64 bytes per word); drop the byte offset.
+                wr_addr       <= s_axi_awaddr[ADDR_IDX_W+5:6];
                 wr_id         <= s_axi_awid;
             end else if (!wr_active && s_axi_awvalid) begin
                 s_axi_awready <= 1'b1;
@@ -114,7 +115,7 @@ module axi_sparse_slave #(
 
             if (wr_active && s_axi_wvalid && s_axi_wready) begin
                 // Write data into memory, per-byte strobe
-                if (wr_addr < DEPTH[ADDR_IDX_W-1:0]) begin
+                if (wr_addr < DEPTH) begin
                     integer b;
                     for (b = 0; b < STRB_W; b = b + 1) begin
                         if (s_axi_wstrb[b])
@@ -163,7 +164,7 @@ module axi_sparse_slave #(
     reg                     rd_active;
 
     wire rd_addr_in_range;
-    assign rd_addr_in_range = (rd_addr < DEPTH[ADDR_IDX_W-1:0]);
+    assign rd_addr_in_range = (rd_addr < DEPTH);
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -185,7 +186,8 @@ module axi_sparse_slave #(
                 rd_active     <= 1'b1;
                 rd_beat_cnt   <= 8'd0;
                 rd_beat_total <= s_axi_arlen;
-                rd_addr       <= s_axi_araddr[ADDR_IDX_W-1:0];
+                // Memory is word-addressed (64 bytes per word); drop the byte offset.
+                rd_addr       <= s_axi_araddr[ADDR_IDX_W+5:6];
                 rd_id         <= s_axi_arid;
             end else if (!rd_active && s_axi_arvalid) begin
                 s_axi_arready <= 1'b1;
@@ -202,8 +204,8 @@ module axi_sparse_slave #(
                     end else begin
                         rd_addr     <= rd_addr + 1'b1;
                         rd_beat_cnt <= rd_beat_cnt + 8'd1;
-                        // Present next beat
-                        s_axi_rlast <= (rd_beat_cnt == rd_beat_total);
+                        // Present next beat; rlast when the NEXT beat is the last.
+                        s_axi_rlast <= (rd_beat_cnt + 8'd1 == rd_beat_total);
                         if (rd_addr_in_range)
                             s_axi_rdata <= mem[rd_addr + 1'b1];
                         else
