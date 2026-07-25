@@ -1,0 +1,34 @@
+case_id: task-4-v3-doorbell
+utc_start: 2026-07-25T03:22:51.014152+00:00
+utc_end: 2026-07-25T03:22:53.233561+00:00
+elapsed_s: 2.219
+branch: main
+head: a91c45dee244d3973cce958ddbc5431c633cb5f9
+dirty_worktree: dirty:.omo/notepads/phase6-rtl-verification/learnings.md |  32 +++
+ .../soc-verification-gaps-phase5/learnings.md      | 224 +++++++++++++++++++++
+ build/evidence/fm-cv-chain.txt                     |   2 +
+argv: ["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_v3_doorbell.py", "-q"]
+command_hash: 1d8a0cbbb91fd9be
+exit_code: 0
+source_fingerprint: 5c89401c8adfb5280d869b14af64ce3d9760bf341e99ea7236c4c84d141e7170
+source_files (2):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_v3_doorbell.py
+verdict: pass
+test_collected: 8
+test_passed: 8
+test_failed: 0
+test_skipped: 0
+test_xfailed: 0
+SIGNOFF_METRIC {"case": "task-4-v3-doorbell", "key": "tests.collected", "value": 8}
+SIGNOFF_METRIC {"case": "task-4-v3-doorbell", "key": "tests.passed", "value": 8}
+SIGNOFF_METRIC {"case": "task-4-v3-doorbell", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-4-v3-doorbell", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-4-v3-doorbell", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-4-v3-doorbell", "key": "evidence.verdict", "value": "pass"}
+
+--- STDOUT (first 8000 chars) ---
+........                                                                 [100%]
+8 passed in 0.64s
+
+--- END ---
