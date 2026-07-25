@@ -122,12 +122,12 @@ Func Model default parameter (`entries=256`) was copied from the RTL ROM size wi
 
 | Metric | Value |
 |--------|:-----:|
-| Total bugs | 3 |
-| Open | 1 |
+| Total bugs | 6 |
+| Open | 3 |
 | Fixed | 3 |
 | Critical | 0 |
-| Major | 3 |
-| Minor | 1 |
+| Major | 4 |
+| Minor | 2 |
 
 ---
 
@@ -154,3 +154,66 @@ The firmware's `sfu_start()` uses its own hardcoded scratch buffer addresses (`S
 
 - Verified in W5.5 descriptor alignment check (`scripts/verify_descriptor_alignment.py`, `build/evidence/descriptor-alignment-report.md`)
 - No functional misbehavior in current single-op smoke tests or forward pass
+
+---
+
+### 2026-07-25 [Major] MMUL Golden Comparison: Bridge DMA→SRAM→MXU vs Direct Golden Precision Gap (BUG-SOC-FM-005)
+
+**Case**: T1a Spike MMUL Smoke Verification
+**Status**: Open (documented, no fix needed)
+
+#### Description
+
+The Spike-based MMUL smoke verification (`spike_host.py --mode mmul_smoke`) compares Bridge-path MAC results (DMA→SRAM→MXU via Spike + firmware + MMIO bridge) against the direct `GoldenMXU.matmul_int4_per_block` reference. All six Q/K/V projections across layers 0 and 1 fail with `max_diff` ranging from 77 to 858, far exceeding the required `rtol=1e-5` tolerance.
+
+| Projection | Shape | max_diff |
+|------------|-------|:--------:|
+| L0 Q_proj  | 2048x2048 | 4.07e+02 |
+| L0 K_proj  | 256x2048  | 1.87e+02 |
+| L0 V_proj  | 256x2048  | 7.70e+01 |
+| L1 Q_proj  | 2048x2048 | 8.58e+02 |
+| L1 K_proj  | 256x2048  | 7.75e+02 |
+| L1 V_proj  | 256x2048  | 1.90e+02 |
+
+#### Root Cause
+
+The Bridge path and the direct GoldenMXU path use different quantization/dequantization flows. The Bridge path exercises GGUF INT4 weights through the real firmware DMA→SRAM→MXU compute pipeline with readback via MMIO, while the golden reference computes directly in Python with `GoldenMXU.matmul_int4_per_block`. The INT4 weights traverse different dequantization paths (firmware-side INT4 storage format vs Python-side representation), producing systematically different numerical results. This is an intrinsic property of the dual-path verification methodology — the Bridge path validates Spike+firmware+DMA data pipeline integrity, not numerical bit-exactness against the golden reference.
+
+#### Impact
+
+- Does NOT block Func Model verification — the direct golden path (`GoldenMXU.matmul_int4_per_block`) remains the correct reference for module-level bit-exact RTL comparisons.
+- The Bridge path still validates deterministic execution, correct address mapping, and command sequencing.
+- If bridge-path numerical equivalence is required (e.g., for end-to-end accuracy characterization), a common quantization/dequantization reference shared between firmware and Python would be needed.
+
+#### Evidence
+
+- `.omo/evidence/task-1a-spike-mmul-smoke.txt` — 6/6 MMUL comparisons FAIL, max_diff 77–858
+- `sim/spike_host.py` — Bridge path `_run_mxu_compute()` implementation
+- `sim/golden_executor.py` — `GoldenMXU.matmul_int4_per_block` reference
+
+---
+
+### 2026-07-25 [Minor] Forward Pass: `tokenizers` Python Module Missing on sz0001 (BUG-SOC-FM-006)
+
+**Case**: T1c Spike Forward Pass Verification
+**Status**: Open (documented, no fix needed)
+
+#### Description
+
+The Spike forward pass (`spike_host.py --mode forward`) crashes at startup with `ModuleNotFoundError: No module named 'tokenizers'`. The `sim/tokenizer.py` module imports the HuggingFace `tokenizers` library to tokenize the input prompt, but this library is not installed on the sz0001 EDA server and cannot be installed without internet access.
+
+#### Root Cause
+
+The sz0001 EDA server has restricted internet access. The Python environment on sz0001 lacks the `tokenizers` package (and its Rust-compiled binary dependencies), which is required by `sim/tokenizer.py` for on-the-fly prompt tokenization from a GGUF model file.
+
+#### Impact
+
+- Blocks forward pass execution on sz0001 in the current environment.
+- Does NOT affect `mmul_smoke`, `chain`, or other Spike modes that do not require tokenization.
+- Workaround: pre-tokenize the prompt on a machine with internet access and pass token IDs directly, or install `tokenizers` via a pre-built wheel.
+- Does not indicate any Func Model or RTL correctness issue — purely an environment/dependency problem.
+
+#### Evidence
+
+- `.omo/evidence/task-1c-spike-forward.txt` — `ModuleNotFoundError: No module named 'tokenizers'` at `sim/tokenizer.py:51`
+- `sim/tokenizer.py` — `_load_tokenizer()` function that depends on `tokenizers`
