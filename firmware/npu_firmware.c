@@ -64,7 +64,8 @@ typedef struct __attribute__((packed)) {
     uint32_t size;
     uint32_t dim;          // head_dim for ROPE, elements for others
     uint32_t pos;          // position for ROPE
-    uint32_t _pad[4];
+    uint32_t sfu_op;       // SFU sub-operation (hardware op code)
+    uint32_t _pad[3];
 } sfu_desc_t;
 
 /* 操作描述符 — Vector */
@@ -223,20 +224,6 @@ static void mxu_start(uint32_t i_addr, uint32_t w_addr, uint32_t o_addr,
     for (volatile uint32_t d = 0; d < 2000; d++) __asm__ volatile("nop");
 }
 
-/* Map engine-level OpCode to hardware SFU_OP_* value. */
-static uint32_t sfu_hw_op(uint32_t opcode) {
-    switch (opcode) {
-    case 0x01: return 0;
-    case 0x02: return 1;
-    case 0x03: return 2;
-    case 0x04: return 3;
-    case 0x06: return 4;
-    case 0x05: return 5;
-    case 0x17: return 6;
-    default:   return 0;
-    }
-}
-
 #define SFU_SCRATCH_IN  (NPU_SRAM_BASE + 0x80000)
 #define SFU_SCRATCH_OUT (NPU_SRAM_BASE + 0x80400)
 #define VEC_SCRATCH_A   (NPU_SRAM_BASE + 0x81000)
@@ -365,7 +352,8 @@ static void read_sfu_desc(uint32_t desc_addr, sfu_desc_t *desc) {
     desc->input_sram  = 0x00000000;
     desc->output_sram = 0x00018000;
     desc->dim         = src[8];
-    desc->pos         = 0;
+    desc->pos         = src[9];
+    desc->sfu_op      = src[10];
 }
 
 static void read_vector_desc(uint32_t desc_addr, vector_desc_t *desc) {
@@ -480,15 +468,13 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
             }
             status = 0;
         }
-    } else if (op == 0x01 || op == 0x02 || op == 0x03 || op == 0x04 ||
-               op == 0x06 || op == 0x17) {
+    } else if (op == 0x01) {  /* SFU — sub-op in descriptor src[10] */
         sfu_desc_t desc;
         NPU_DB->LAST_STATUS = 0x00004000 | (op & 0xFF);
         read_sfu_desc(cmd->desc_addr, &desc);
 
-        uint32_t hw_op = sfu_hw_op(op);
         NPU_DB->LAST_STATUS = 0x00004100 | (op & 0xFF);
-        sfu_start(hw_op, desc.input_addr, desc.output_addr, desc.dim, 0, desc.pos);
+        sfu_start(desc.sfu_op, desc.input_addr, desc.output_addr, desc.dim, 0, desc.pos);
         status = 0;
     } else if (op == 0x05) {  /* ROPE: dim packs (head_dim << 16) | elements */
         sfu_desc_t desc;
@@ -496,7 +482,7 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
 
         uint32_t elements  = desc.dim & 0xFFFF;
         uint32_t head_dim  = (desc.dim >> 16) & 0xFFFF;
-        sfu_start(sfu_hw_op(op), desc.input_addr, desc.output_addr,
+        sfu_start(5, desc.input_addr, desc.output_addr,
                   elements, head_dim, desc.pos);
         status = 0;
     } else if (op >= 0x0F && op <= 0x14) {  /* Vector: VADD/VMUL/VRED_MAX/VRED_SUM/VCONV/VRESID */

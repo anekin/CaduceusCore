@@ -1,0 +1,24 @@
+=== BUG-SOC-FM-007 Fix Evidence ===
+Date: 2026-07-25
+Case: task-1b-v3-spike-chain
+Verdict: PASS
+
+--- Signoff Runner (3-op chain: mmul, sfu, vector) ---
+exit_code: 0
+NPU_HEAD: 3 (expected=3) OK
+mmul: PASS
+sfu: PASS
+vector: PASS
+Summary: 3 PASS, 0 FAIL, AllOpsPassed=YES
+
+--- Raw Chain Test (4-op chain: mmul, sfu, vector, dma_copy) ---
+exit_code: 0
+NPU_HEAD: 4 (expected=4) OK
+mmul: PASS
+sfu: PASS
+vector: PASS
+dma_copy: PASS
+Summary: 4 PASS, 0 FAIL, AllOpsPassed=YES
+
+--- Firmware Rebuild ---
+make -C firmware: 0 errors, 0 warnings

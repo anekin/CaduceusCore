@@ -1,5 +1,7 @@
 """PCIe Endpoint functional model — TLP builder/parser + BAR routing."""
 
+from __future__ import annotations
+
 import struct
 from dataclasses import dataclass, field
 from typing import Tuple

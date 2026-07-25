@@ -23,6 +23,7 @@ _HERE = Path(__file__).parent
 sys.path.insert(0, str(_HERE.parent))
 sys.path.insert(0, str(_HERE.parent / "ggml-npu"))
 
+from opcodes import EngineOp
 from q4_dequant import load_weights_from_gguf
 from sim.func_model import FuncModel
 from sim.golden_executor import GoldenMXU
@@ -93,11 +94,14 @@ def write_sfu_descriptor(model: FuncModel, desc_addr: int,
                           op: int, input_addr: int, output_addr: int,
                           input_sram: int, output_sram: int, size: int,
                           dim: int = 0, pos: int = 0):
-    """Write an SFU descriptor in the 15-word generic layout expected by firmware npu_firmware.c."""
+    """Write an SFU descriptor in the 15-word generic layout expected by firmware npu_firmware.c.
+    
+    Layout: src[0]=input, src[2]=output, src[8]=dim, src[9]=pos, src[10]=sfu_op.
+    """
     buf = struct.pack('<15I',
                       input_addr, 0, output_addr, 0,
                       input_sram, output_sram, 0, 0,
-                      dim, 0, 0, 0,
+                      dim, pos, op, 0,
                       1, dim, 1)
     model.host_write_data(desc_addr, np.frombuffer(buf, dtype=np.uint8))
 
@@ -144,16 +148,16 @@ def schedule_chain(model: FuncModel, ops: list) -> int:
         desc = op['desc']
         if op_type == 'mmul':
             write_mmul_descriptor(model, desc_addr, **desc)
-            opcode = 0
+            opcode = int(EngineOp.MMUL)
         elif op_type == 'sfu':
             write_sfu_descriptor(model, desc_addr, **desc)
-            opcode = 1
+            opcode = int(EngineOp.SFU)
         elif op_type == 'vector':
             write_vector_descriptor(model, desc_addr, **desc)
-            opcode = 2
+            opcode = int(EngineOp.VECTOR)
         elif op_type == 'dma_copy':
             write_dma_copy_descriptor(model, desc_addr, **desc)
-            opcode = 3
+            opcode = int(EngineOp.DMA_COPY)
         else:
             raise ValueError(f"Unknown op type: {op_type}")
         write_cmd_entry(model, i, opcode, desc_addr, flags=op.get('flags', 0))
@@ -1087,10 +1091,21 @@ def run_chain_smoke(op_types: list) -> tuple:
 
     results = []
     if not done:
+        head = model.bridge._status.get(DOORBELL.BASE + DOORBELL.NPU_HEAD, 0)
+        print(f"  [FAIL] chain — timeout: NPU_HEAD={head}, expected={len(ops) % 64}")
         for t, _ in goldens:
-            print(f"  [FAIL] {t:12s} — timeout waiting for NPU_HEAD={len(ops) % 64}")
             results.append((t, False))
         return results, False
+
+    # Verify NPU_HEAD == len(ops) (mod 64)
+    head = model.bridge._status.get(DOORBELL.BASE + DOORBELL.NPU_HEAD, 0)
+    expected_head = len(ops) % 64
+    if head != expected_head:
+        print(f"  [FAIL] NPU_HEAD={head}, expected={expected_head}")
+        for t, _ in goldens:
+            results.append((t, False))
+        return results, False
+    print(f"  [INFO] NPU_HEAD={head} (expected={expected_head}) OK")
 
     for (t, (output_addr, golden, dtype)), _op in zip(goldens, ops):
         ok = _verify_output(model, output_addr, golden, dtype)
@@ -1099,7 +1114,8 @@ def run_chain_smoke(op_types: list) -> tuple:
         out_blob = bytes(model.dram[off:off + min(size, 256)])
         has_data = not all(b == 0 for b in out_blob)
         if not has_data:
-            print(f"  [CHAIN_NZ] {t:12s} — zero output")
+            print(f"  [FAIL] {t:12s} — zero output (CHAIN_NZ)")
+            ok = False
         results.append((t, ok))
         print(f"  [{'PASS' if ok else 'FAIL'}] {t:12s}")
     return results, True
@@ -1234,7 +1250,7 @@ def main() -> int:
         failed = len(results) - passed
 
         elapsed = time.time() - t0
-        chain_ok = completed  # no crash
+        chain_ok = completed and failed == 0
         exit_code = 0 if chain_ok else 1
         _emit_metric("spike.exit_code", exit_code, case_id)
         _emit_metric("spike.tolerance_result", "PASS" if chain_ok else "FAIL", case_id)
@@ -1242,6 +1258,7 @@ def main() -> int:
 
         print(f"\n{'='*70}")
         print(f"Spike Host Chain Summary: {passed} PASS, {failed} FAIL")
+        print(f"NPU_HEAD={'OK' if completed else 'TIMEOUT'}, AllOpsPassed={'YES' if (completed and failed == 0) else 'NO'}")
         print(f"{'='*70}")
         return exit_code
 
