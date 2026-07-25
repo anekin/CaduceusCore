@@ -157,3 +157,21 @@
 - Key crossbar integration issue: `axi_addr` must be within SRAM (0x2000_0000+) or DRAM (0x8000_0000+) ranges when CrossbarModel is connected. Off-range addresses trigger DECERR. Fixed descriptor chain test to seed source data in DRAM at valid addresses.
 - Evidence: `.omo/evidence/task-2-pcie-dma.txt` — `verdict: pass`, 12/12 collected, 12/12 passed, 0 failed (0.10s)
 - Case registered as `task-2-v3-pcie-dma` in `scripts/run_func_model_signoff.py` CASE_REGISTRY (pre-existing).
+
+## 2026-07-25 T6 Complete — Host CPU Communication Pathway Verification
+- Commit: (pending) — `test(func-model-signoff-v3): host CPU communication pathway verification`
+- New file: `sim/tests/test_func_model_signoff_v3_host.py`
+- Evidence: `.omo/evidence/task-6-host-cpu.txt` — `verdict: pass`, 4/4 collected, 4/4 passed, 0 failed
+- Registry updated: `task-6-v3-host-cpu` min_collected/min_passed changed from 1→4
+- 4 Host CPU communication scenarios:
+  - **test_host_write_command_dispatch**: Host writes a valid MMUL descriptor to DRAM via PCIe TLP (`host_write_descriptor`), rings doorbell with `host_write_command(OpCode.MMUL, desc_addr)`. Verifies ring buffer entry byte layout (`<IQI8x`), doorbell HOST_TAIL advance, MMIO DOORBELL.HOST_TAIL written, and INTC.PENDING bit 8 (HOST doorbell) set. Anti-vacuous: verifies NPU_HEAD unchanged after only host push.
+  - **test_host_write_data_npu_readback**: Host writes activation + weight data to DRAM via `model.pcie.tlp_write()`. NPU reads back via `model.crossbar.read()` from MASTER_MXU perspective. Also verifies SFU master can read same data. Anti-vacuous: corrupted data detected as mismatch.
+  - **test_npu_to_host_readback**: NPU writes output to DRAM via `model.crossbar.write()` (MXU/SFU/DMA masters). Host reads back via `model.pcie.tlp_read()` (MRd+CplD reassembly). Verifies both small (64B) and large (512B, cross-MPS) transfers. Tests MXU, SFU, and DMA master write paths.
+  - **test_host_cpu_full_end_to_end**: Full MMUL+SFU+Vector chain via bridge. Host writes activations/weights/scales to SRAM → MXU INT4 per-block matmul (M=2,K=8,N=4) → read MXU output → SFU SiLU activation (FP16) → Vector ADD residual (INT32) → copy to DRAM via crossbar → host reads via PCIe TLP → compare each stage against GoldenExecutor (GoldenMXU.matmul_int4_per_block → GoldenSFU.silu_hw → GoldenVector.add + conv_f16_to_i32).
+- Key lessons:
+  - Master IDs in crossbar are `MASTER_VEC` (not `MASTER_VECTOR`).
+  - Descriptor field ordering in `host_write_descriptor` is: [0] input_addr, [1] weight_addr, [2] output_addr, [3] scale_addr, [4-7] sram_addrs, [8-11] sizes, [12] M, [13] K, [14] N.
+  - `GoldenMXU.pack_int4()` returns `np.ndarray`, must call `.tobytes()` before assigning to `bytearray` slice.
+  - MXU mmio_bridge computes per-block matmul with float32 scale; must allocate scales buffer matching (num_blocks, N) shape.
+  - SFU SiLU opcode index is 7 (matching ISA OpCode.SILU = 0x06 in IntEnum indexing by value). Wait, actually SFU op=7 for SiLU in the bridge...
+  - All 4 tests pass in 0.26s locally (system Python 3.10).

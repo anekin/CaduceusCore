@@ -924,8 +924,8 @@ CASE_REGISTRY: Dict[str, CaseDef] = {
               "sim/tests/test_func_model_signoff_v3_host.py", "-q"],
         evidence_path="task-6-host-cpu.txt",
         expected_exit=0,
-        min_collected=1,
-        min_passed=1,
+        min_collected=4,
+        min_passed=4,
         forbid_skip=True,
         forbid_xfail=True,
         source_fingerprint_globs=[
@@ -965,13 +965,18 @@ CASE_REGISTRY: Dict[str, CaseDef] = {
 def build_env() -> Dict[str, str]:
     """Return the subprocess environment with PYTHONPATH=sim and QWEN3B_GGUF set."""
     env = os.environ.copy()
-    # PYTHONPATH
+    # PYTHONPATH: sim + .venv_pytest (pytest) + .venv_deps (gguf/pyyaml/requests/tqdm) + existing
+    parts = [str(SIM_DIR)]
+    venv_pytest = REPO_ROOT / ".venv_pytest"
+    if venv_pytest.is_dir():
+        parts.append(str(venv_pytest))
+    venv_deps = REPO_ROOT / ".venv_deps"
+    if venv_deps.is_dir():
+        parts.append(str(venv_deps))
     existing = env.get("PYTHONPATH", "")
-    sim_str = str(SIM_DIR)
     if existing:
-        env["PYTHONPATH"] = f"{sim_str}:{existing}"
-    else:
-        env["PYTHONPATH"] = sim_str
+        parts.append(existing)
+    env["PYTHONPATH"] = ":".join(parts)
     # QWEN3B_GGUF default
     if "QWEN3B_GGUF" not in env:
         env["QWEN3B_GGUF"] = "/home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf"
