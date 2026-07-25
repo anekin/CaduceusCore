@@ -975,6 +975,9 @@ def build_env() -> Dict[str, str]:
     # QWEN3B_GGUF default
     if "QWEN3B_GGUF" not in env:
         env["QWEN3B_GGUF"] = "/home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf"
+    # Propagate the runner's own Python interpreter so subprocess wrappers
+    # (e.g. run_fm_env.sh) can use it via FM_PYTHON.
+    env["FM_PYTHON"] = sys.executable
     return env
 
 
