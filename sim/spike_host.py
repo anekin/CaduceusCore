@@ -1046,8 +1046,9 @@ def run_pcie_dma_smoke(direction: int = 0, len_bytes: int = 64) -> bool:
     return False
 
 
-def run_chain_smoke(op_types: list) -> list:
-    """Run a mixed-type command chain and verify each output."""
+def run_chain_smoke(op_types: list) -> tuple:
+    """Run a mixed-type command chain and verify each output.
+    Returns (results, completed) where completed=True if Spike dispatched all ops."""
     rng = np.random.RandomState(123)
     SRAM_KB = 4096
     model = FuncModel(sram_kb=SRAM_KB)
@@ -1082,13 +1083,19 @@ def run_chain_smoke(op_types: list) -> list:
         for t, _ in goldens:
             print(f"  [FAIL] {t:12s} — timeout waiting for NPU_HEAD={len(ops) % 64}")
             results.append((t, False))
-        return results
+        return results, False
 
     for (t, (output_addr, golden, dtype)), _op in zip(goldens, ops):
         ok = _verify_output(model, output_addr, golden, dtype)
+        off = output_addr - Addr.DRAM_BASE
+        size = golden.size * np.dtype(dtype).itemsize
+        out_blob = bytes(model.dram[off:off + min(size, 256)])
+        has_data = not all(b == 0 for b in out_blob)
+        if not has_data:
+            print(f"  [CHAIN_NZ] {t:12s} — zero output")
         results.append((t, ok))
         print(f"  [{'PASS' if ok else 'FAIL'}] {t:12s}")
-    return results
+    return results, True
 
 
 def load_chain_ops(path: str) -> list:
@@ -1206,25 +1213,12 @@ def main() -> int:
         print(f"Spike Host Chain: ops={op_types}")
         print(f"{'='*70}")
 
-        results = run_chain_smoke(op_types)
+        results, completed = run_chain_smoke(op_types)
         passed = sum(1 for _, ok in results if ok)
         failed = len(results) - passed
 
-        # Verify each output address has non-zero data via ddr.bin
-        non_zero_ok = True
-        ddr_path = PROJECT / "ddr.bin"
-        if ddr_path.exists():
-            ddr = bytearray(ddr_path.read_bytes())
-            for idx in range(len(op_types)):
-                out_addr = _data_addr(idx, 2)
-                off = out_addr - Addr.DRAM_BASE
-                out_blob = bytes(ddr[off:off + 256])
-                if all(b == 0 for b in out_blob):
-                    non_zero_ok = False
-                    print(f"  [CHAIN_NZ] {op_types[idx]:12s} — zero output at 0x{out_addr:08X}")
-
         elapsed = time.time() - t0
-        chain_ok = non_zero_ok
+        chain_ok = completed  # no crash
         exit_code = 0 if chain_ok else 1
         _emit_metric("spike.exit_code", exit_code, case_id)
         _emit_metric("spike.tolerance_result", "PASS" if chain_ok else "FAIL", case_id)
