@@ -1,0 +1,89 @@
+=== BUG-SOC-FM-005 Fix Evidence ===
+Date: 2026-07-25
+Case: task-1a-v3-spike-mmul-smoke
+Verdict: IMPROVEMENT — max_diff still 1.07e+03 but zero entries eliminated; root cause is pre-existing bridge accumulation bug, not weight tiling.
+
+---
+
+=== Weight Reordering Implementation ===
+
+Added _reorder_weights_to_firmware_tiles() to sim/spike_host.py:
+- Converts row-major packed INT4 weights to firmware's tiled DRAM layout
+- TILE_H=64, TILE_W=64, iterated as: for each N-tile, for each K-tile
+- Scale blocking: 2 K-tiles share 1 group_size=128 scale block
+- Partial tiles zero-padded to full tile size
+- Guard: returns unchanged if num_blocks≤1 and num_n_tiles≤1
+
+Integration points:
+- _quantize_weight_for_mmul(): forward path
+- _quantize_weight_tile(): tiled MMUL path
+- run_one_op(): direct Spike path (mmul_smoke mode)
+
+Derivation test passes:
+- K=128,N=128: tile-by-tile computation matches golden (max_diff=6.1e-5)
+- K=1536,N=1536: tile-by-tile computation matches golden (max_diff=9.2e-5)
+
+---
+
+=== Baseline vs Fix Comparison ===
+
+Baseline (row-major weights, unreordered):
+  weights: 1179648 bytes (row-major)
+  scales: 73728 bytes (per-group)
+  nonzero_count: 768/1536 (50% zeros)
+  → firmware reads wrong weight data for some tiles
+
+Fix (tiled weights, reordered):
+  weights: 1179648 bytes (tiled, same size since 1536=24×64)
+  scales: 147456 bytes (per-tile, 2x due to scale duplication)
+  nonzero_count: 1536/1536 (0% zeros)
+  → firmware reads correct data for all tiles
+
+Reordering works: zero entries eliminated (768 → 1536).
+
+---
+
+=== Remaining Issue: Bridge Accumulation Bug ===
+
+Bridge trace (BBRIDGE_TRACE=1, n_tile=0):
+  k_block=0: acc=False, result[:4]=[-5.89,  4.39, -3.70,  1.60]
+  k_block=1: acc=True,  result[:4]=[-4.11,  2.01, -3.94,  2.84]  ← changed (correct)
+  k_block=2: acc=True,  result[:4]=[-4.11,  2.01, -3.94,  2.84]  ← NOT changing!
+  ...
+  k_block=23: acc=True, result[:4]=[-4.11,  2.01, -3.94,  2.84]  ← STALE
+
+After k_block=2, the accumulated result stops changing. Root cause: the
+crossbar MXU master read of o_abs in _run_mxu_compute() returns stale
+data for k_block≥2, preventing proper accumulation across K-tiles.
+
+This is a pre-existing bug in the bridge/crossbar interaction, not caused
+by the weight reordering. The reordering fix is a necessary but not
+sufficient step.
+
+Golden result[:4] = [121.64, -10.50, 56.40, 88.62]
+Firmware result[:4] = [-4.11, 2.02, -3.95, 2.85]
+
+Ratio ~30x suggests only ~1/24 of K-tiles accumulated (24 K-tiles total).
+
+---
+
+=== Direct Bridge Simulation (bypassing Spike) ===
+
+Tile-by-tile computation with reordered data (direct GoldenMXU calls):
+  K=1536,N=1536: max_diff=9.2e-05 vs golden → PASS
+
+This confirms the reordering + per-tile computation logic is correct.
+The failure is in the Spike/firmware/bridge interaction path.
+
+---
+
+=== Files Modified ===
+  sim/spike_host.py: +70 lines (_reorder_weights_to_firmware_tiles + integration)
+  sim/mmio_bridge.py: +10 lines (docstring for _run_mxu_compute)
+
+=== Next Steps (future work) ===
+  1. Debug bridge accumulation: investigate why xbar.read() from o_abs
+     returns stale data for k_block≥2
+  2. Verify whether the MXU wrapper preload interferes with output base
+     address for the actual MXU O_ADDR register
+  3. Consider removing the wrapper preload or syncing output addresses

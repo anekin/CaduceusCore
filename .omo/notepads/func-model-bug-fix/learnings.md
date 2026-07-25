@@ -41,4 +41,37 @@ Created `sim/opcodes.py` with `EngineOp(IntEnum)` — single source of truth; ve
   - `make -C firmware`: 0 errors, 0 warnings.
   - `python3 scripts/run_func_model_signoff.py run --case task-1b-v3-spike-chain`: PASS (exit 0, NPU_HEAD=3, mmul/sfu/vector all PASS).
   - 4-op chain (mmul+sfu+vector+dma_copy): NPU_HEAD=4, all 4 ops PASS.
-  - Plugin ABI fix: rebuilt `npu_mmio_plugin.so` with `-D_GLIBCXX_USE_CXX11_ABI=0` to match Spike binary's old C++ ABI.
+   - Plugin ABI fix: rebuilt `npu_mmio_plugin.so` with `-D_GLIBCXX_USE_CXX11_ABI=0` to match Spike binary's old C++ ABI.
+
+## 2026-07-25 — T4 BUG-SOC-FM-004: SFU/Vector descriptor SRAM field respect
+
+- **Root cause**: `read_sfu_desc()` hardcoded `input_sram=0x00000000, output_sram=0x00018000` and `sfu_start()` hardcoded `SFU_SCRATCH_IN`/`SFU_SCRATCH_OUT` for DMA/MMIO addresses, making the descriptor SRAM fields inoperative. Similarly, `vector_desc_t`, `read_vector_desc()`, and `vector_start()` had no SRAM fields at all.
+- **Fix — `firmware/npu_firmware.c`**:
+  - `read_sfu_desc()`: changed from hardcoded to `src[4]`→`input_sram`, `src[5]`→`output_sram`.
+  - `sfu_start()`: added `i_sram, o_sram` parameters; when non-zero use them as DMA dest/MMIO I_ADDR, else fallback to `SFU_SCRATCH_IN`/`SFU_SCRATCH_OUT`.
+  - SFU dispatch (op==0x01 and op==0x05): pass `desc->input_sram`/`desc->output_sram`.
+  - `vector_desc_t`: added `a_sram, b_sram, o_sram` fields.
+  - `read_vector_desc()`: reads `src[4]`→`a_sram`, `src[5]`→`b_sram`, `src[6]`→`o_sram`.
+  - `vector_start()`: added SRAM params with `VEC_SCRATCH_A/B/O` fallback.
+  - Vector dispatch: passes SRAM fields.
+- **Fix — `sim/spike_host.py`**:
+  - `write_vector_descriptor()`: added optional `a_sram=0, b_sram=0, o_sram=0` params written to `src[4]`–`src[6]`.
+- **Fix — `scripts/verify_descriptor_alignment.py`**:
+  - Removed 2 "design inconsistency" notes about SFU SRAM/pos hardcoding (pos was already fixed by T1).
+  - Added alignment checks for SFU `src[4]`=input_sram, `src[5]`=output_sram, `src[9]`=pos, `src[10]`=sfu_op.
+  - Added alignment checks for Vector `src[4]`=a_sram, `src[5]`=b_sram, `src[6]`=o_sram.
+- **Verification**:
+  - `make -C firmware`: 0 errors, 0 warnings (clean rebuild).
+  - `python3 scripts/verify_descriptor_alignment.py`: PASS, 0 warnings, 15/15 fields aligned.
+- **Design choices**: All new SRAM fields default to 0 to preserve backward compatibility with existing callers. When SRAM fields are 0, `sfu_start()` and `vector_start()` fall back to the original hardcoded `SFU_SCRATCH_*`/`VEC_SCRATCH_*` macros, so existing behavior is unchanged.
+
+## 2026-07-25 — T2 BUG-SOC-FM-005: Weight pre-tiling for firmware-compatible DRAM layout
+
+- **Root cause**: Firmware expects weights in tiled order (for each N-tile, for each K-tile, TILE_WEIGHT_BYTES of packed INT4 + TILE_SCALE_BYTES of float32), but `spike_host.py` wrote row-major packed weights to DRAM. The firmware's tile DMA offsets `(n_tile * num_blocks + k_block) * TILE_WEIGHT_BYTES` read wrong data from row-major layout.
+- **Fix — `sim/spike_host.py`**: Added `_reorder_weights_to_firmware_tiles()` that converts row-major packed INT4 weights to firmware's tiled DRAM layout (TILE_H=64, TILE_W=64). Scale blocking: 2 K-tiles share 1 group_size=128 scale block. Partial tiles zero-padded to full tile size. Integrated into `_quantize_weight_for_mmul()`, `_quantize_weight_tile()`, and `run_one_op()`.
+- **Fix — `sim/mmio_bridge.py`**: Added docstring to `_run_mxu_compute()` documenting the tiled data layout assumption and the host's responsibility to write weights in firmware-compatible tiled order.
+- **Verification**:
+  - Direct simulation (bypassing Spike): tile-by-tile computation with reordered data matches golden within 9.2e-5 for K=1536,N=1536. Reordering unit test: roundtrip extraction and tile-by-tile golden comparison pass.
+  - Spike smoke test (mmul_smoke, L0 Q_proj): nonzero output entries increased from 768/1536 (50%, baseline row-major) to 1536/1536 (0%, reordered), confirming tiling eliminates wrong-tile reads.
+  - Spike smoke test max_diff: still 1.07e+03 → caused by pre-existing bridge accumulation bug. Bridge trace shows per-tile accumulation stops updating after k_block≥2; all k_blocks 2-23 produce identical output.
+- **Remaining issue**: Bridge `_run_mxu_compute()` accumulation across K-tiles is broken for k_block≥2. The crossbar MXU master's read of `o_abs` appears to return stale data rather than the updated accumulated output. Root cause TBD but is independent of the weight tiling fix. Direct GoldenMXU tile-by-tile simulation proves the reordering + per-tile computation logic is correct.
