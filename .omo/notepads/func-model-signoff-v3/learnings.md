@@ -51,8 +51,19 @@
   ```
 - `scripts/run_fm_env.sh` now checks for `.venv_deps/` at repo root and prepends it to `PYTHONPATH` before `sim/`. This makes gguf and its pure-Python deps available to all Spike/firmware runs on sz0001. When `.venv_deps` is absent, PYTHONPATH is unchanged (backward-compatible).
 
+## 2026-07-25 T3 Complete — Crossbar M=6/S=2 Arbitration Signoff
+- Commit: `46e797a` — `test(func-model-signoff-v3): crossbar concurrent multi-master verification`
+- Evidence: `.omo/evidence/task-3-crossbar.txt` — `verdict: pass` (7/7 tests)
+- Test file: `sim/tests/test_func_model_signoff_v3_crossbar.py`
+  - 5 existing crossbar tests re-exported from `test_soc_fm.py` (concurrent, two-master read, three-master mixed, address conflict, all-six-master stress)
+  - `test_crossbar_concurrent_real_engines`: simulates MXU (M=4,K=8,N=8) computing via GoldenMXU while SFU writes output to DRAM and DMA loads next tile DRAM→SRAM. All three masters use real engine interfaces (GoldenMXU.matmul_int32, xbar.read/write with correct master IDs) concurrently. Verifies data integrity (no torn reads), address isolation (no BAR boundary aliasing), and arbitration tracking (AR/AW grant history + txn IDs).
+  - `test_crossbar_round_robin_fairness`: 200 accesses with deterministic round-robin master selection (i%6) + randomized addr/size/rw. Verifies per-master grant count within ±20% of expected (33.3, range [26,40]), both slave ports exercised, data integrity (no torn reads), DECERR for invalid masters/addresses.
+  - Key lesson: pure random master selection doesn't guarantee ±20% fairness with only 100-200 accesses (binomial std dev ≈ 5.3 at n=200). Used deterministic round-robin master order (i % NUM_MASTERS) to guarantee distribution while randomizing all other parameters.
+  - Key lesson: M×K×N matrix output size = M×N×4 bytes (INT32). Must match buffer allocation exactly to avoid off-by-factor-of-2 bugs.
+  - BAR boundary check: DRAM→SRAM aliasing check must be computed as `(dram_addr - DRAM_BASE) + SRAM_BASE`, not as raw offset into SRAM bytearray.
+
 ## 2026-07-25 T4 Complete — Doorbell Ring Buffer Verification
-- Commit: `a91c45d` — `test(func-model-signoff-v3): doorbell ring buffer protocol verification`
+- Commit: `8e072f1` — `test(func-model-signoff-v3): doorbell ring buffer protocol verification`
 - Evidence: `.omo/evidence/task-4-doorbell.txt` — `verdict: pass` (8/8 tests)
 - 5 existing doorbell tests re-exported from `test_soc_fm.py` + 3 new tests:
   - **test_doorbell_empty_ring_noop**: HOST_TAIL==NPU_HEAD==0, no IRQ, run_loop dispatches 0 commands — confirms `doorbell_irq = (host_tail != npu_head)` from `rtl/soc/doorbell.v:111`
