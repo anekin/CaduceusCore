@@ -50,3 +50,26 @@
   rsync -avz <path>/.venv_deps/ zhengs@192.168.0.11:/home/prj/zhengs/caduceuscore/CaduceusCore/.venv_deps/
   ```
 - `scripts/run_fm_env.sh` now checks for `.venv_deps/` at repo root and prepends it to `PYTHONPATH` before `sim/`. This makes gguf and its pure-Python deps available to all Spike/firmware runs on sz0001. When `.venv_deps` is absent, PYTHONPATH is unchanged (backward-compatible).
+
+## 2026-07-25 T4 Complete — Doorbell Ring Buffer Verification
+- Commit: `a91c45d` — `test(func-model-signoff-v3): doorbell ring buffer protocol verification`
+- Evidence: `.omo/evidence/task-4-doorbell.txt` — `verdict: pass` (8/8 tests)
+- 5 existing doorbell tests re-exported from `test_soc_fm.py` + 3 new tests:
+  - **test_doorbell_empty_ring_noop**: HOST_TAIL==NPU_HEAD==0, no IRQ, run_loop dispatches 0 commands — confirms `doorbell_irq = (host_tail != npu_head)` from `rtl/soc/doorbell.v:111`
+  - **test_doorbell_concurrent_push_poll**: 6-phase interleaving test — push+catch cycles verify HOST_TAIL and NPU_HEAD track correctly through intermediate head-lag state (tail=4, head=1), with IRQ assertion during lag
+  - **test_doorbell_descriptor_byte_layout**: Round-trip verify of `mmul_desc_t` (15 × uint32 = 60 bytes, `<15I`), ring buffer entry format (`<IQI8x`, 24 bytes at 32-byte stride), and pack/unpack identity
+- Ring buffer semantics confirmed: HOST_TAIL (host writes), NPU_HEAD (firmware advances), 16-entry wrap, full-check `(tail+1)%16==head`
+- All tests pass on sz0001 (EDA Python 3.10) and local (system Python 3.10)
+
+## 2026-07-25 T2 Complete — PCIe DMA pathway functional verification
+- Commit: (pending) — `test(func-model-signoff-v3): PCIe DMA pathway functional verification`
+- New file: `sim/tests/test_func_model_signoff_v3_pcie.py`
+- Re-exports 8 existing DmaEngine unit tests from `test_pcie_dma_fm.py` via direct import.
+- Adds 4 integration-level signoff tests:
+  - `test_pcie_dma_host_to_npu_mwr`: Host→NPU MWr via crossbar→DRAM (256B data integrity). Uses submit_read_desc with CrossbarModel to route data to DRAM.
+  - `test_pcie_dma_npu_to_host_mrd`: NPU→Host MRd+CplD (512B reassembly). Dual-path verification: (A) submit_read_desc through crossbar, (B) tlp_read_with_reassembly for CPLD header byte-count inspection.
+  - `test_pcie_dma_descriptor_irq_chain`: 3 descriptors (write/read/write) with CrossbarModel, verifies 3/3 IRQ fire and edge-triggered clear semantics.
+  - `test_dma_tag_pool_no_leak`: Tag pool lifecycle validation — 256→0→256 cycle across MWr/MRd/16-TLP splits/UR errors/stress loops/descriptor paths. No tag leak on error paths.
+- Key crossbar integration issue: `axi_addr` must be within SRAM (0x2000_0000+) or DRAM (0x8000_0000+) ranges when CrossbarModel is connected. Off-range addresses trigger DECERR. Fixed descriptor chain test to seed source data in DRAM at valid addresses.
+- Evidence: `.omo/evidence/task-2-pcie-dma.txt` — `verdict: pass`, 12/12 collected, 12/12 passed, 0 failed (0.10s)
+- Case registered as `task-2-v3-pcie-dma` in `scripts/run_func_model_signoff.py` CASE_REGISTRY (pre-existing).
