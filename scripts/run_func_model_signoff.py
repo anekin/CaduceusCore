@@ -937,15 +937,15 @@ CASE_REGISTRY: Dict[str, CaseDef] = {
         is_pytest=True,
     ),
 
-    # T7 — Full SoC integration smoke (pytest-based; test file TBD by T7)
+    # T7 — Full SoC integration chain verification (4 test scenarios)
     "task-7-v3-soc-integration": CaseDef(
         case_id="task-7-v3-soc-integration",
         argv=["python3", "-m", "pytest",
               "sim/tests/test_func_model_signoff_v3_integration.py", "-q"],
         evidence_path="task-7-soc-integration.txt",
         expected_exit=0,
-        min_collected=1,
-        min_passed=1,
+        min_collected=4,
+        min_passed=4,
         forbid_skip=True,
         forbid_xfail=True,
         source_fingerprint_globs=[
