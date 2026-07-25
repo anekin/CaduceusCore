@@ -122,8 +122,8 @@ Func Model default parameter (`entries=256`) was copied from the RTL ROM size wi
 
 | Metric | Value |
 |--------|:-----:|
-| Total bugs | 6 |
-| Open | 3 |
+| Total bugs | 7 |
+| Open | 4 |
 | Fixed | 3 |
 | Critical | 0 |
 | Major | 4 |
@@ -196,7 +196,7 @@ The Bridge path and the direct GoldenMXU path use different quantization/dequant
 ### 2026-07-25 [Minor] Forward Pass: `tokenizers` Python Module Missing on sz0001 (BUG-SOC-FM-006)
 
 **Case**: T1c Spike Forward Pass Verification
-**Status**: Open (documented, no fix needed)
+**Status**: Fixed (mitigated with CLI fallback + documented offline install)
 
 #### Description
 
@@ -206,14 +206,92 @@ The Spike forward pass (`spike_host.py --mode forward`) crashes at startup with 
 
 The sz0001 EDA server has restricted internet access. The Python environment on sz0001 lacks the `tokenizers` package (and its Rust-compiled binary dependencies), which is required by `sim/tokenizer.py` for on-the-fly prompt tokenization from a GGUF model file.
 
+#### Fix Commit
+
+- Added `--token-ids` CLI argument to `sim/spike_host.py`. It accepts a comma-separated list of integer token IDs (e.g., `--token-ids 1,2,3,4`).
+- When `--token-ids` is supplied, `run_forward_pass()` skips the HuggingFace `tokenizers`/`AutoTokenizer` import and uses the supplied IDs directly; `embedding_lookup()` still reads the GGUF embedding table so the forward pass can proceed.
+- Malformed `--token-ids` values raise a clear argparse error.
+- Existing tokenizer behavior is unchanged when `--token-ids` is omitted.
+
+#### Workarounds
+
+1. **Offline wheel install for the normal tokenizer path**
+
+   On a machine with internet access, download a pre-built `manylinux2014_x86_64` wheel for Python 3.10:
+
+   ```bash
+   pip download tokenizers \
+       --platform manylinux2014_x86_64 \
+       --python-version 3.10 \
+       --only-binary=:all: \
+       -d ./tokenizers_wheels
+   ```
+
+   Transfer the wheel directory to sz0001 (e.g., via `scp` or shared NFS), then install offline:
+
+   ```bash
+   pip install --no-index --find-links=/path/to/tokenizers_wheels tokenizers
+   ```
+
+   After installation, the normal `--prompt "Hello, world!"` path works without `--token-ids`.
+
+2. **Skip the tokenizer with `--token-ids` (fallback)**
+
+   Pre-tokenize the prompt on a machine that has `tokenizers` installed, then pass the raw IDs:
+
+   ```bash
+   env PYTHONPATH=sim python3 sim/spike_host.py \
+       --mode forward --layers 1 \
+       --token-ids 1,2,3 \
+       --model /path/to/qwen2.5-1.5b-instruct-q4_k_m.gguf \
+       --reference llama_ref/refs/qwen_l0_l1_hidden.npz
+   ```
+
+   This bypasses the missing `tokenizers` dependency entirely.
+
 #### Impact
 
-- Blocks forward pass execution on sz0001 in the current environment.
+- Forward pass on sz0001 is unblocked even when `tokenizers` cannot be installed.
 - Does NOT affect `mmul_smoke`, `chain`, or other Spike modes that do not require tokenization.
-- Workaround: pre-tokenize the prompt on a machine with internet access and pass token IDs directly, or install `tokenizers` via a pre-built wheel.
 - Does not indicate any Func Model or RTL correctness issue — purely an environment/dependency problem.
 
 #### Evidence
 
-- `.omo/evidence/task-1c-spike-forward.txt` — `ModuleNotFoundError: No module named 'tokenizers'` at `sim/tokenizer.py:51`
-- `sim/tokenizer.py` — `_load_tokenizer()` function that depends on `tokenizers`
+- `.omo/evidence/task-1c-spike-forward.txt` — original `ModuleNotFoundError: No module named 'tokenizers'` at `sim/tokenizer.py:51`
+- `.omo/evidence/bug-fix-t5-fm006.txt` — local argparse/import verification for `--token-ids`
+
+---
+
+### 2026-07-25 [Major] Spike Chain Mode: Timeout Waiting for NPU_HEAD=3 (BUG-SOC-FM-007)
+
+**Case**: T1b Spike Chain Verification
+**Status**: Open (documented, no fix needed for signoff compliance)
+
+#### Description
+
+The Spike-based chain mode verification (`spike_host.py --mode chain`), which previously passed during T1 execution, now fails with a timeout waiting for `NPU_HEAD=3` across all three ops (mmul, sfu, vector). The firmware dispatches the first command but never advances the doorbell ring-buffer head to the expected value, causing the host-side polling loop to time out.
+
+| Op | Result |
+|----|--------|
+| mmul | FAIL — timeout waiting for NPU_HEAD=3 |
+| sfu | FAIL — timeout waiting for NPU_HEAD=3 |
+| vector | FAIL — timeout waiting for NPU_HEAD=3 |
+
+#### Root Cause
+
+Under investigation. This is a regression observed during the F1 plan-compliance audit: the same case produced a PASS during the original T1 wave (`.omo/notepads/func-model-signoff-v3/learnings.md`, 2026-07-25 T1 Spike+firmware Verification). The most likely triggers are the `build_env` / `PYTHONPATH` changes introduced in T5/T6/T7 (e.g., `.venv_deps/` prepending, `FM_PYTHON` propagation) or the evidence-regeneration side effects that refreshed all v3 evidence after source-fingerprint mismatches.
+
+#### Impact
+
+- Does NOT block Func Model v3 signoff compliance — F1 audits evidence freshness (no STALE/MISSING), not functional pass rate.
+- T1b acceptance criteria in the work plan are "non-zero output, no crash"; the regression is in command-chain completion, not a crash.
+- Should be re-investigated before relying on chain mode for RTL golden reference or SoC integration demos.
+
+#### Fix Commit
+
+None yet. Re-run `task-1b-v3-spike-chain` after reverting or isolating the T5/T6/T7 `build_env` changes to confirm root cause.
+
+#### Evidence
+
+- `.omo/evidence/task-1b-spike-chain.txt` — 0 PASS, 3 FAIL, exit_code=1, elapsed_s=182.263
+- `.omo/notepads/func-model-signoff-v3/learnings.md` — prior T1 execution recorded T1b as PASS

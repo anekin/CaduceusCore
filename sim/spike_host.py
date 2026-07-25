@@ -600,12 +600,19 @@ def _add_mmul_op_tiled(ops: list, model: FuncModel,
 def run_forward_pass(gguf_path: str, prompt: str, layers: int = 2,
                      reference_npz: str = None, seq_len: int = 4,
                      tolerance: float = 1e-1,
-                     log_fp=None) -> dict:
+                     log_fp=None,
+                     token_ids: list = None) -> dict:
     """Run a complete 2-layer Qwen2.5-1.5B forward pass through Spike firmware."""
     from sim.tokenizer import tokenize, embedding_lookup
 
     weights = load_weights_from_gguf(gguf_path)
-    token_ids = tokenize(prompt, gguf_path)
+    if token_ids is not None:
+        # Bypass HuggingFace tokenizer; caller-supplied raw integer IDs.
+        token_ids = [int(x) for x in token_ids]
+        if not token_ids:
+            raise ValueError("--token-ids must contain at least one integer ID")
+    else:
+        token_ids = tokenize(prompt, gguf_path)
     if seq_len == 1:
         token_ids = token_ids[:1]
     emb = embedding_lookup(token_ids, gguf_path).astype(np.float32)
@@ -1155,7 +1162,16 @@ def main() -> int:
                         help="Number of forward runs for determinism check")
     parser.add_argument("--evidence-dir", default=".omo/evidence",
                         help="Directory to save evidence files")
+    parser.add_argument("--token-ids", default=None,
+                        help="Comma-separated integer token IDs (e.g., 1,2,3,4). "
+                             "When provided, bypasses the HuggingFace tokenizer.")
     args = parser.parse_args()
+
+    if args.token_ids is not None:
+        try:
+            args.token_ids = [int(x.strip()) for x in args.token_ids.split(",")]
+        except ValueError as exc:
+            parser.error(f"--token-ids must be a comma-separated list of integers: {exc}")
 
     case_id = os.environ.get("_FM_CASE_ID", "unknown")
 
@@ -1234,7 +1250,10 @@ def main() -> int:
         t0 = time.time()
 
         print(f"{'='*70}")
-        print(f"Spike Host Forward: {Path(args.model).name}  layers={args.layers}  prompt={args.prompt!r}")
+        if args.token_ids is not None:
+            print(f"Spike Host Forward: {Path(args.model).name}  layers={args.layers}  token_ids={args.token_ids}")
+        else:
+            print(f"Spike Host Forward: {Path(args.model).name}  layers={args.layers}  prompt={args.prompt!r}")
         print(f"{'='*70}")
 
         evidence_dir = Path(args.evidence_dir)
@@ -1263,6 +1282,7 @@ def main() -> int:
                 args.model, args.prompt, layers=args.layers,
                 reference_npz=args.reference, seq_len=args.seq_len,
                 tolerance=args.tolerance, log_fp=e2e_fp,
+                token_ids=args.token_ids,
             )
             run_results.append(result)
             _tee(f"Run {run + 1} overall: {'PASS' if result['ok'] else 'WARN'}")
