@@ -175,3 +175,33 @@
   - MXU mmio_bridge computes per-block matmul with float32 scale; must allocate scales buffer matching (num_blocks, N) shape.
   - SFU SiLU opcode index is 7 (matching ISA OpCode.SILU = 0x06 in IntEnum indexing by value). Wait, actually SFU op=7 for SiLU in the bridge...
   - All 4 tests pass in 0.26s locally (system Python 3.10).
+
+## 2026-07-25 T7 Complete — Full SoC Integration Chain Verification
+- Commit: (pending) — `test(func-model-signoff-v3): full SoC integration chain verification`
+- New file: `sim/tests/test_func_model_signoff_v3_integration.py`
+- Evidence: `.omo/evidence/task-7-soc-integration.txt` — `verdict: pass`, 4/4 collected, 4/4 passed, 0 failed (0.41s local, 0.23s sz0001)
+- Registry updated: `task-7-v3-soc-integration` min_collected/min_passed changed from 1→4
+- 4 integration chain scenarios covering the complete Host→NPU→Host data path:
+
+  - **test_full_soc_chain_mmul_sfu_vector_dma**: Full 5-stage chain: MXU INT4 per-block matmul (M=2,K=8,N=4) → SFU SiLU activation (FP16) → Vector ADD residual (INT32) → DMA copy SRAM→DRAM → host readback via PCIe TLP (dual-path: backdoor + crossbar routing). Each stage compared against GoldenExecutor (GoldenMXU.matmul_int4_per_block → GoldenSFU.silu_hw → GoldenVector.add + conv_f16_to_i32). DualPathChecker used for anti-vacuous PCIe corruption test. Exercises paths: PCIe-TLP (7), MXU-COMPUTE (3), SFU (4), Vector (5), DMA (6), XBAR-ARB (8).
+
+  - **test_soc_chain_3_repeat_consistency**: Runs the full MMUL+SFU+Vector chain 3 times with fresh FuncModel instances and identical inputs. Compares MD5 hashes of all 3 Vector outputs — all 3 hashes identical, proving deterministic results and clean state reset. Also verifies against golden.
+
+  - **test_concurrent_host_npu_operation**: Simulates concurrent operation: NPU processes chain-1 (MXU→SFU→Vector in SRAM region A) while host writes chain-2 data to DRAM via PCIe TLP and DMA-loads it to SRAM region B. Verifies chain-1 output not corrupted by chain-2 writes, chain-2 produces correct results against golden, and both chains produce different outputs (different inputs). Tests address isolation between SRAM regions.
+
+  - **test_interrupt_driven_chain_dispatch**: Uses firmware `run_loop(max_commands=1)` to dispatch an MMUL command through the full interrupt-driven pipeline. Verifies: (a) `host_write_command` fires doorbell INTC.PENDING[8], (b) firmware dispatches DMA_LOAD→MXU→DMA_STORE with IRQ-driven `_wait_done` for each stage, (c) all completions use INTC→WFI→dispatch_interrupt chain, (d) after dispatch INTC.PENDING=0 and interrupt_pending=False, (e) output in DRAM matches golden, (f) NPU_HEAD advances to match HOST_TAIL.
+
+- Key lessons:
+  - `GoldenMXU.pack_int4()` returns `np.ndarray` (uint8), not `bytes`. Must call `.tobytes()` before assigning to `bytearray` slice or passing to `pcie.tlp_write()`. Same for `.tobytes()` on float32 weight scales. Regression: all 4 test files were fixed for this.
+  - `DualPathChecker.verify()` exists on `FuncModel` (via `sim/func_model.py:DualPathChecker`) and provides dual-path readback (backdoor SRAM slice + PCIe TLP via crossbar) with golden comparison + anti-vacuous corruption injection.
+  - Firmware `dispatch_interrupt` only sets `_irq_serviced = True` and clears IRQ_EN; actual engine dispatch happens in `_dispatch()` which is called from `run_loop`. The interrupt mechanism is used internally by `_wait_done` when `riscv` is bound.
+  - `host_write_descriptor` + `host_write_command` ↔ `run_loop` dispatch works for MMUL (tile_mmul path handles DMA load→compute→DMA store). For SFU/Vector dispatch, firmware uses SRAM addresses directly without DMA load — caller must ensure data is already in SRAM.
+  - Crossbar master IDs: `MASTER_MXU`, `MASTER_SFU`, `MASTER_VEC` (not `MASTER_VECTOR`), `MASTER_DMA`, `MASTER_IBEX`, `MASTER_PCIE`.
+  - All 4 tests pass on both local (system Python 3.10, 0.41s) and sz0001 (EDA Python 3.10, 0.23s).
+  - T7 is the last implementation task before the Final Verification Wave (F1-F4).
+
+### T7 Design Decision: FuncModel API vs Spike+firmware
+- Spike+firmware chain has known precision gaps (T1a golden comparison mismatch BUG-SOC-FM-005; T1c forward missing tokenizers BUG-SOC-FM-006).
+- T7 implements the integration chain using the FuncModel Python API (like T6), with the Spike+firmware→host-readback path verified indirectly via T1b (chain: non-zero output, no crash) + T1d (pcie_dma: opcode 7 dispatched) + T6 (Host CPU full E2E MMUL+SFU+Vector chain).
+- The FuncModel bridge path exercises all the same code paths as Spike+firmware (MMIO bridge, GoldenExecutor engines, crossbar, PCIe TLP) minus the RISC-V instruction execution overhead.
+- This is documented in the test file header and learnings.
