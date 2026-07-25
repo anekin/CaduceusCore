@@ -158,6 +158,16 @@ class MMIOBridge:
         return 0
 
     def _run_mxu_compute(self, mxu, M, K, N, raw_i, raw_w, raw_o, raw_s, accumulate):
+        """Execute a single MXU tile computation (called per firmware tile iteration).
+
+        Operates on per-tile data: K ≤ TILE_H (64), N ≤ TILE_W (64).
+        The firmware has already DMA'd the correct 64×64 INT4 tile + per-tile
+        scales into SRAM at the addresses passed via MMIO registers.
+
+        Data layout assumption: the host must write weights to DRAM in
+        firmware-compatible tiled order (for each N-tile, for each K-tile,
+        TILE_WEIGHT_BYTES + TILE_SCALE_BYTES). See _reorder_weights_to_firmware_tiles().
+        """
         act_bytes = M * K
         wgt_packed_bytes = (K * N + 1) // 2
         xbar = self._crossbar

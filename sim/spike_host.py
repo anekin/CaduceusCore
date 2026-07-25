@@ -108,11 +108,16 @@ def write_sfu_descriptor(model: FuncModel, desc_addr: int,
 
 def write_vector_descriptor(model: FuncModel, desc_addr: int,
                              op: int, a_addr: int, b_addr: int, o_addr: int,
-                             dim: int):
-    """Write a Vector descriptor in the 15-word generic layout expected by firmware npu_firmware.c."""
+                             dim: int,
+                             a_sram: int = 0, b_sram: int = 0, o_sram: int = 0):
+    """Write a Vector descriptor in the 15-word generic layout expected by firmware npu_firmware.c.
+    
+    Layout: src[0]=a_addr, src[1]=b_addr, src[2]=o_addr, src[4]=a_sram, src[5]=b_sram,
+    src[6]=o_sram, src[8]=dim.
+    """
     buf = struct.pack('<15I',
                       a_addr, b_addr, o_addr, 0,
-                      0, 0, 0, 0,
+                      a_sram, b_sram, o_sram, 0,
                       dim, 0, 0, 0,
                       1, dim, 1)
     model.host_write_data(desc_addr, np.frombuffer(buf, dtype=np.uint8))
@@ -188,22 +193,24 @@ def run_one_op(gguf_path: str, layer: int, op: str, M: int = 1) -> bool:
     W_f32 = weights[target]
     K, N = W_f32.shape
 
-    # Quantize to row-major INT4 + per-block scales (C firmware reads row-major)
-    wgt_packed, wgt_scales, _ = quantize_int4_per_block(W_f32, 128)
-    wgt_bytes = wgt_packed.tobytes()
-    scale_bytes = wgt_scales.tobytes()
-
-    # The C firmware copies one contiguous weight blob via DMA.  Pack weights
-    # and scales back-to-back so the bridge can find scales at SCALE_ADDR.
-    combined_weight_blob = wgt_bytes + scale_bytes
-
     # Activation
     rng = np.random.RandomState(42)
     act = rng.randint(-128, 128, size=M * K, dtype=np.int8).reshape(M, K)
 
-    # Golden reference (row-major weights + scales)
+    # Quantize to row-major INT4 + per-block scales
+    wgt_packed, wgt_scales, _ = quantize_int4_per_block(W_f32, 128)
+
+    # Golden reference (computed BEFORE reordering — uses row-major weights/scales)
     mxu = GoldenMXU()
     golden = mxu.matmul_int4_per_block(act, wgt_packed, wgt_scales, M, K, N, group_size=128)
+
+    # Reorder for firmware's tiled DRAM layout (TILE_H=64, TILE_W=64)
+    wgt_packed, wgt_scales = _reorder_weights_to_firmware_tiles(wgt_packed, wgt_scales, K, N)
+    wgt_bytes = wgt_packed.tobytes()
+    scale_bytes = wgt_scales.tobytes()
+
+    # Pack weights and scales back-to-back for contiguous DMA
+    combined_weight_blob = wgt_bytes + scale_bytes
 
     SRAM_KB = 4096  # match firmware NPU_SRAM_SIZE
     model = FuncModel(sram_kb=SRAM_KB)
@@ -257,7 +264,6 @@ def run_one_op(gguf_path: str, layer: int, op: str, M: int = 1) -> bool:
     print(f"  [{'PASS' if ok else 'FAIL'}] L{layer} {op:12s} ({K}x{N})")
     if not ok:
         print(f"    max_diff={np.max(np.abs(out_fw - golden)):.2e}")
-    return ok
 
 
 SFU_OP_SOFTMAX = 0
@@ -433,7 +439,91 @@ def _read_tensor(model: FuncModel, addr: int, shape: tuple, dtype: type) -> np.n
 def _quantize_weight_for_mmul(W_f32: np.ndarray, group_size: int = 128
                               ) -> tuple:
     packed, scales, _ = quantize_int4_per_block(W_f32, group_size)
+    packed, scales = _reorder_weights_to_firmware_tiles(packed, scales,
+                                                         W_f32.shape[0], W_f32.shape[1])
     return packed, scales, packed.nbytes, scales.nbytes
+
+
+def _reorder_weights_to_firmware_tiles(packed: np.ndarray, scales: np.ndarray,
+                                       K: int, N: int,
+                                       tile_h: int = 64, tile_w: int = 64
+                                       ) -> tuple:
+    """Convert row-major packed INT4 weights to firmware's tiled DRAM layout.
+
+    Firmware expects weights and scales in TILE_H×TILE_W tiles, iterated as:
+        for each N-tile (stride TILE_W), for each K-tile (stride TILE_H):
+            DMA TILE_WEIGHT_BYTES of packed INT4 + TILE_SCALE_BYTES of float32.
+
+    Scale blocking: 2 K-tiles share 1 group_size=128 scale block, so the
+    scale slice for each (n_tile, k_tile) pair is scales[k_tile//2, n*W:n_end].
+    Partial tiles (K or N not multiples of TILE_H/TILE_W) are zero-padded to
+    full tile size so the firmware always reads fixed-size chunks.
+
+    Args:
+        packed: uint8 packed INT4 weights (row-major K×N)
+        scales: float32 per-block scales, shape (ceil(K/128), N)
+        K, N: original weight matrix dimensions
+        tile_h, tile_w: tile dimensions (default 64)
+
+    Returns:
+        reordered_packed: uint8 tiled weights (ceil(N/64)*ceil(K/64)*2048 bytes)
+        reordered_scales: float32 per-tile scales (flat)
+    """
+    TILE_WEIGHT_BYTES = tile_h * tile_w // 2
+    TILE_SCALE_BYTES = tile_w * 4
+    num_blocks = (K + tile_h - 1) // tile_h
+    num_n_tiles = (N + tile_w - 1) // tile_w
+
+    # Guard: if no tiling needed, return unchanged (preserves non-MMUL paths)
+    if num_blocks <= 1 and num_n_tiles <= 1:
+        return packed, scales
+
+    # Unpack to (K, N) int8
+    weights_int4 = GoldenMXU.unpack_int4(packed)
+    if len(weights_int4) < K * N:
+        weights_int4 = np.pad(weights_int4, (0, K * N - len(weights_int4)),
+                              constant_values=0)
+    W = weights_int4[:K * N].reshape(K, N)
+
+    reordered_chunks = []
+    reordered_scales_chunks = []
+
+    for n_tile in range(num_n_tiles):
+        n_start = n_tile * tile_w
+        n_end = min(n_start + tile_w, N)
+        n_width = n_end - n_start
+
+        for k_block in range(num_blocks):
+            k_start = k_block * tile_h
+            k_end = min(k_start + tile_h, K)
+            k_height = k_end - k_start
+
+            # Extract tile data (K×N slice)
+            tile = W[k_start:k_end, n_start:n_end]  # (k_height, n_width)
+
+            # Zero-pad to full tile size (firmware always reads full tile)
+            if k_height < tile_h or n_width < tile_w:
+                padded = np.zeros((tile_h, tile_w), dtype=np.int8)
+                padded[:k_height, :n_width] = tile
+                tile = padded
+
+            reordered_chunks.append(GoldenMXU.pack_int4(tile))
+
+            # Scales: 2 K-tiles share 1 group_size=128 scale block
+            group_idx = k_block // 2
+            tile_scales = scales[group_idx, n_start:n_end].astype(np.float32)
+
+            # Pad to full tile_w scales
+            if n_width < tile_w:
+                padded_scales = np.ones(tile_w, dtype=np.float32)
+                padded_scales[:n_width] = tile_scales
+                tile_scales = padded_scales
+
+            reordered_scales_chunks.append(tile_scales)
+
+    reordered_packed = np.concatenate(reordered_chunks)
+    reordered_scales = np.concatenate(reordered_scales_chunks)
+    return reordered_packed, reordered_scales
 
 
 def _add_mmul_op(ops: list, model: FuncModel,
@@ -553,6 +643,8 @@ def _quantize_weight_tile(W_f32: np.ndarray, n_start: int, n_end: int,
                           group_size: int = 128) -> tuple:
     tile = W_f32[:, n_start:n_end]
     packed, scales, _ = quantize_int4_per_block(tile, group_size)
+    K_tile, N_tile = tile.shape
+    packed, scales = _reorder_weights_to_firmware_tiles(packed, scales, K_tile, N_tile)
     return packed, scales
 
 
