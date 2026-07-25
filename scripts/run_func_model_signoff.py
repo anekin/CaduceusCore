@@ -904,8 +904,8 @@ CASE_REGISTRY: Dict[str, CaseDef] = {
               "sim/tests/test_func_model_signoff_v3_intc.py", "-q"],
         evidence_path="task-5-intc.txt",
         expected_exit=0,
-        min_collected=1,
-        min_passed=1,
+        min_collected=9,
+        min_passed=9,
         forbid_skip=True,
         forbid_xfail=True,
         source_fingerprint_globs=[

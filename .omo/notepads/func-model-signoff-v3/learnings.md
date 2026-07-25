@@ -127,6 +127,24 @@
 - Ring buffer semantics confirmed: HOST_TAIL (host writes), NPU_HEAD (firmware advances), 16-entry wrap, full-check `(tail+1)%16==head`
 - All tests pass on sz0001 (EDA Python 3.10) and local (system Python 3.10)
 
+## 2026-07-25 T5 Complete — INTC Interrupt Delivery Chain Verification
+- Commit: (pending) — `test(func-model-signoff-v3): INTC interrupt delivery chain verification`
+- New file: `sim/tests/test_func_model_signoff_v3_intc.py`
+- Evidence: `.omo/evidence/task-5-intc.txt` — `verdict: pass`, 9/9 collected, 9/9 passed, 0 failed (0.77s local, 1.89s sz0001)
+- Re-exports `test_interrupt_delivery` from `test_soc_fm.py` (MXU source 0, complete chain)
+- 7 per-source tests covering all interrupt sources:
+  - **MXU (bit 0)**: MXU compute with IRQ_EN → PENDING[0] → WFI wake → ACK clears. Anti-vacuous: IRQ_EN=0 → no IRQ.
+  - **SFU (bit 1)**: RMSNorm compute triggers _set_irq(1), full PENDING→WFI→ACK chain with anti-vacuous.
+  - **Vector (bit 2)**: ADD compute triggers _set_irq(2), full chain with anti-vacuous.
+  - **DMA (bit 3)**: DRAM→SRAM copy triggers _set_irq(3), full chain with anti-vacuous.
+  - **PCIe EP (bit 4)**: Direct PENDING injection via bridge (no engine trigger in FuncModel). Full chain verifies INTC handles external sources correctly. ENABLE+THRESHOLD configured before PENDING set.
+  - **PCIe DMA (bit 7)**: Direct PENDING injection via bridge. Full chain verification.
+  - **Host Doorbell (bit 8)**: `host_write_command()` triggers _set_irq(8). Full descriptor+command pathway, verifies doorbell→INTC linkage from `func_model.py:139-142`.
+- 1 priority test: **test_intc_priority** — asserts PENDING bits 1 (SFU) and 3 (DMA) simultaneously. Two WFI cycles: first services bit 1 (lower number), second services bit 3. Verifies `RISCVMini._handle_irq` priority iteration order (bits 0→31).
+- All 9 tests pass on sz0001 (EDA Python 3.10 + `.venv_pytest` for pytest module)
+- Runner: `PYTHONPATH=sim:.venv_pytest` needed on sz0001 for EDA Python 3.10 to find pytest
+- Case registered as `task-5-v3-intc` in CASE_REGISTRY with `min_collected=9, min_passed=9`
+
 ## 2026-07-25 T2 Complete — PCIe DMA pathway functional verification
 - Commit: (pending) — `test(func-model-signoff-v3): PCIe DMA pathway functional verification`
 - New file: `sim/tests/test_func_model_signoff_v3_pcie.py`
