@@ -729,6 +729,233 @@ CASE_REGISTRY: Dict[str, CaseDef] = {
         required_metrics=["evidence.verdict"],
         is_pytest=False,
     ),
+
+    # -----------------------------------------------------------------------
+    # V3 SoC Integration Cases (Wave 0 — registry + runner)
+    # -----------------------------------------------------------------------
+
+    # T0 — V3 signoff runner self-test
+    "task-0-v3-signoff-runner": CaseDef(
+        case_id="task-0-v3-signoff-runner",
+        argv=["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_v3.py", "-q"],
+        evidence_path="task-0-signoff-v3-runner.txt",
+        expected_exit=0,
+        min_collected=1,
+        min_passed=1,
+        forbid_skip=True,
+        forbid_xfail=True,
+        source_fingerprint_globs=[
+            "scripts/run_func_model_signoff.py",
+            "sim/tests/test_func_model_signoff_v3.py",
+            "sim/tests/conftest.py",
+        ],
+        required_metrics=["tests.collected", "tests.passed", "tests.failed",
+                          "tests.skipped", "tests.xfailed", "evidence.verdict"],
+        is_pytest=True,
+    ),
+
+    # T1 — Spike + firmware E2E forward pass (4 modes, split into independent cases
+    # to avoid shell=True and to give per-mode pass/fail visibility).
+    "task-1a-v3-spike-mmul-smoke": CaseDef(
+        case_id="task-1a-v3-spike-mmul-smoke",
+        argv=["bash", "scripts/run_fm_env.sh", "--", "python3",
+              "sim/spike_host.py", "--mode", "mmul_smoke"],
+        evidence_path="task-1a-spike-mmul-smoke.txt",
+        expected_exit=0,
+        min_collected=0,
+        min_passed=0,
+        forbid_skip=True,
+        forbid_xfail=True,
+        source_fingerprint_globs=[
+            "scripts/run_fm_env.sh",
+            "sim/spike_host.py",
+            "scripts/run_func_model_signoff.py",
+        ],
+        required_metrics=["spike.mode", "spike.exit_code",
+                          "spike.tolerance_result", "spike.elapsed_s",
+                          "evidence.verdict"],
+        is_pytest=False,
+    ),
+    "task-1b-v3-spike-chain": CaseDef(
+        case_id="task-1b-v3-spike-chain",
+        argv=["bash", "scripts/run_fm_env.sh", "--", "python3",
+              "sim/spike_host.py", "--mode", "chain"],
+        evidence_path="task-1b-spike-chain.txt",
+        expected_exit=0,
+        min_collected=0,
+        min_passed=0,
+        forbid_skip=True,
+        forbid_xfail=True,
+        source_fingerprint_globs=[
+            "scripts/run_fm_env.sh",
+            "sim/spike_host.py",
+            "scripts/run_func_model_signoff.py",
+        ],
+        required_metrics=["spike.mode", "spike.exit_code",
+                          "spike.tolerance_result", "spike.elapsed_s",
+                          "evidence.verdict"],
+        is_pytest=False,
+    ),
+    "task-1c-v3-spike-forward": CaseDef(
+        case_id="task-1c-v3-spike-forward",
+        argv=["bash", "scripts/run_fm_env.sh", "--", "python3",
+              "sim/spike_host.py", "--mode", "forward"],
+        evidence_path="task-1c-spike-forward.txt",
+        expected_exit=0,
+        min_collected=0,
+        min_passed=0,
+        forbid_skip=True,
+        forbid_xfail=True,
+        source_fingerprint_globs=[
+            "scripts/run_fm_env.sh",
+            "sim/spike_host.py",
+            "scripts/run_func_model_signoff.py",
+        ],
+        required_metrics=["spike.mode", "spike.exit_code",
+                          "spike.tolerance_result", "spike.elapsed_s",
+                          "evidence.verdict"],
+        is_pytest=False,
+    ),
+    "task-1d-v3-spike-pcie-dma": CaseDef(
+        case_id="task-1d-v3-spike-pcie-dma",
+        argv=["bash", "scripts/run_fm_env.sh", "--", "python3",
+              "sim/spike_host.py", "--mode", "pcie_dma"],
+        evidence_path="task-1d-spike-pcie-dma.txt",
+        expected_exit=0,
+        min_collected=0,
+        min_passed=0,
+        forbid_skip=True,
+        forbid_xfail=True,
+        source_fingerprint_globs=[
+            "scripts/run_fm_env.sh",
+            "sim/spike_host.py",
+            "scripts/run_func_model_signoff.py",
+        ],
+        required_metrics=["spike.mode", "spike.exit_code",
+                          "spike.tolerance_result", "spike.elapsed_s",
+                          "evidence.verdict"],
+        is_pytest=False,
+    ),
+
+    # T2 — PCIe DMA functional end-to-end (pytest-based)
+    "task-2-v3-pcie-dma": CaseDef(
+        case_id="task-2-v3-pcie-dma",
+        argv=["python3", "-m", "pytest",
+              "sim/tests/test_func_model_signoff_v3_pcie.py", "-q"],
+        evidence_path="task-2-pcie-dma.txt",
+        expected_exit=0,
+        min_collected=1,
+        min_passed=1,
+        forbid_skip=True,
+        forbid_xfail=True,
+        source_fingerprint_globs=[
+            "sim/tests/test_func_model_signoff_v3_pcie.py",
+            "scripts/run_func_model_signoff.py",
+        ],
+        required_metrics=["tests.collected", "tests.passed", "tests.failed",
+                          "tests.skipped", "tests.xfailed", "evidence.verdict"],
+        is_pytest=True,
+    ),
+
+    # T3 — AXI Crossbar functional verification (pytest-based)
+    "task-3-v3-crossbar": CaseDef(
+        case_id="task-3-v3-crossbar",
+        argv=["python3", "-m", "pytest",
+              "sim/tests/test_func_model_signoff_v3_crossbar.py", "-q"],
+        evidence_path="task-3-crossbar.txt",
+        expected_exit=0,
+        min_collected=1,
+        min_passed=1,
+        forbid_skip=True,
+        forbid_xfail=True,
+        source_fingerprint_globs=[
+            "sim/tests/test_func_model_signoff_v3_crossbar.py",
+            "scripts/run_func_model_signoff.py",
+        ],
+        required_metrics=["tests.collected", "tests.passed", "tests.failed",
+                          "tests.skipped", "tests.xfailed", "evidence.verdict"],
+        is_pytest=True,
+    ),
+
+    # T4 — Doorbell mechanism verification (pytest-based)
+    "task-4-v3-doorbell": CaseDef(
+        case_id="task-4-v3-doorbell",
+        argv=["python3", "-m", "pytest",
+              "sim/tests/test_func_model_signoff_v3_doorbell.py", "-q"],
+        evidence_path="task-4-doorbell.txt",
+        expected_exit=0,
+        min_collected=1,
+        min_passed=1,
+        forbid_skip=True,
+        forbid_xfail=True,
+        source_fingerprint_globs=[
+            "sim/tests/test_func_model_signoff_v3_doorbell.py",
+            "scripts/run_func_model_signoff.py",
+        ],
+        required_metrics=["tests.collected", "tests.passed", "tests.failed",
+                          "tests.skipped", "tests.xfailed", "evidence.verdict"],
+        is_pytest=True,
+    ),
+
+    # T5 — Interrupt controller verification (pytest-based)
+    "task-5-v3-intc": CaseDef(
+        case_id="task-5-v3-intc",
+        argv=["python3", "-m", "pytest",
+              "sim/tests/test_func_model_signoff_v3_intc.py", "-q"],
+        evidence_path="task-5-intc.txt",
+        expected_exit=0,
+        min_collected=1,
+        min_passed=1,
+        forbid_skip=True,
+        forbid_xfail=True,
+        source_fingerprint_globs=[
+            "sim/tests/test_func_model_signoff_v3_intc.py",
+            "scripts/run_func_model_signoff.py",
+        ],
+        required_metrics=["tests.collected", "tests.passed", "tests.failed",
+                          "tests.skipped", "tests.xfailed", "evidence.verdict"],
+        is_pytest=True,
+    ),
+
+    # T6 — Host CPU (Ibex) verification (pytest-based)
+    "task-6-v3-host-cpu": CaseDef(
+        case_id="task-6-v3-host-cpu",
+        argv=["python3", "-m", "pytest",
+              "sim/tests/test_func_model_signoff_v3_host.py", "-q"],
+        evidence_path="task-6-host-cpu.txt",
+        expected_exit=0,
+        min_collected=1,
+        min_passed=1,
+        forbid_skip=True,
+        forbid_xfail=True,
+        source_fingerprint_globs=[
+            "sim/tests/test_func_model_signoff_v3_host.py",
+            "scripts/run_func_model_signoff.py",
+        ],
+        required_metrics=["tests.collected", "tests.passed", "tests.failed",
+                          "tests.skipped", "tests.xfailed", "evidence.verdict"],
+        is_pytest=True,
+    ),
+
+    # T7 — Full SoC integration smoke (pytest-based; test file TBD by T7)
+    "task-7-v3-soc-integration": CaseDef(
+        case_id="task-7-v3-soc-integration",
+        argv=["python3", "-m", "pytest",
+              "sim/tests/test_func_model_signoff_v3_integration.py", "-q"],
+        evidence_path="task-7-soc-integration.txt",
+        expected_exit=0,
+        min_collected=1,
+        min_passed=1,
+        forbid_skip=True,
+        forbid_xfail=True,
+        source_fingerprint_globs=[
+            "sim/tests/test_func_model_signoff_v3_integration.py",
+            "scripts/run_func_model_signoff.py",
+        ],
+        required_metrics=["tests.collected", "tests.passed", "tests.failed",
+                          "tests.skipped", "tests.xfailed", "evidence.verdict"],
+        is_pytest=True,
+    ),
 }
 
 
@@ -1105,7 +1332,9 @@ def main() -> None:
     validate_parser = sub.add_parser("validate", help="Validate existing evidence")
     validate_parser.add_argument("--case", help="Case ID to validate")
     validate_parser.add_argument("--all-functional", action="store_true",
-                                  help="Validate all functional cases")
+                                  help="Validate all functional cases (v1/v2, excludes v3)")
+    validate_parser.add_argument("--v3", action="store_true",
+                                  help="Validate all v3 SoC integration cases")
 
     args = parser.parse_args()
 
@@ -1130,11 +1359,26 @@ def main() -> None:
         sys.exit(0 if passed else 1)
 
     elif args.command == "validate":
-        if args.all_functional:
+        if args.v3:
+            all_ok = True
+            v3_found = 0
+            for case_id, case in CASE_REGISTRY.items():
+                if "-v3-" not in case_id:
+                    continue
+                if not case.argv:
+                    continue
+                v3_found += 1
+                ok = validate_case(case)
+                if not ok:
+                    all_ok = False
+            print(f"V3 cases discovered: {v3_found}")
+            sys.exit(0 if all_ok else 1)
+        elif args.all_functional:
             all_ok = True
             for case_id, case in CASE_REGISTRY.items():
-                # Skip validate-only cases (empty argv) — they are deferred to later waves
                 if not case.argv:
+                    continue
+                if "-v3-" in case_id:
                     continue
                 ok = validate_case(case)
                 if not ok:
