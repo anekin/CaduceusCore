@@ -1,0 +1,72 @@
+case_id: f4-scope-fidelity
+utc_start: 2026-07-25T05:26:24.892609278+00:00
+utc_end: 2026-07-25T05:26:43.979854782+00:00
+branch: main
+head: a02202c93f18b7ef792dc82c3c32bb5e9d565af7
+signoff_start_commit: e734154f8990626d2796c52559f802b4aef904b7
+signoff_first_commit: 5df01d9 feat(func-model-signoff-v3): add v3 SoC signoff runner cases
+commits_in_signoff_scope: 17
+changed_files_total: 27
+
+changed_files_by_category:
+  v3_harness (11):
+    - scripts/run_func_model_signoff.py
+    - scripts/run_fm_env.sh
+    - sim/mmio_bridge.py
+    - sim/spike_host.py
+    - sim/tests/test_func_model_signoff_v3.py
+    - sim/tests/test_func_model_signoff_v3_crossbar.py
+    - sim/tests/test_func_model_signoff_v3_doorbell.py
+    - sim/tests/test_func_model_signoff_v3_host.py
+    - sim/tests/test_func_model_signoff_v3_intc.py
+    - sim/tests/test_func_model_signoff_v3_integration.py
+    - sim/tests/test_func_model_signoff_v3_pcie.py
+
+  evidence_notepad (11):
+    - .omo/evidence/task-0-signoff-v3-runner.txt
+    - .omo/evidence/task-1b-spike-chain.txt
+    - .omo/evidence/task-1d-spike-pcie-dma.txt
+    - .omo/evidence/task-2-pcie-dma.txt
+    - .omo/evidence/task-3-crossbar.txt
+    - .omo/evidence/task-4-doorbell.txt
+    - .omo/evidence/task-5-intc.txt
+    - .omo/evidence/task-7-soc-integration.txt
+    - .omo/notepads/func-model-signoff-v3/issues.md
+    - .omo/notepads/func-model-signoff-v3/learnings.md
+
+  bug_track (1):
+    - docs/bugs/bugs-soc-func-model.md
+
+  out_of_scope (1):
+    - spike_src/plugins/npu_mmio_plugin.so
+
+rtl_changed: 0 files
+firmware_changed: 0 files
+spike_plugin_cc_changed: 0 files
+spike_plugin_h_changed: 0 files
+spike_plugin_so_changed: 1 file
+
+out_of_scope_details:
+  - path: spike_src/plugins/npu_mmio_plugin.so
+    type: compiled shared object (binary artifact)
+    commit: 0f12602 test(func-model-signoff-v3): Spike+firmware dispatch chain verification
+    size_delta: 34400 -> 34360 bytes
+    reason_out_of_scope: not under allowed paths (sim/, scripts/, .omo/, docs/bugs/); Spike plugin C++ source (.cc/.h) is unchanged, but the compiled binary was rebuilt and committed as part of v3 work
+
+evidence.verdict: fail
+scope_fidelity_summary: |
+  All source-code changes are within allowed paths and no RTL, firmware, or Spike plugin
+  C++ source files were modified. However, one compiled binary artifact under
+  spike_src/plugins/ changed during the v3 signoff window, which violates the
+  "allowed paths only" constraint. The binary rebuild was documented in T1 learnings
+  as an ABI-compatibility workaround for sz0001, but it remains outside the approved
+  scope for func-model-signoff-v3.
+
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "changed_files.total", "value": 27}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "changed_files.in_scope", "value": 26}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "changed_files.out_of_scope", "value": 1}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "rtl.changed", "value": 0}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "firmware.changed", "value": 0}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "spike_plugin_cc.changed", "value": 0}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "spike_plugin_h.changed", "value": 0}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "evidence.verdict", "value": "fail"}

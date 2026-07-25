@@ -1,5 +1,31 @@
 # func-model-signoff-v3 Learnings
 
+## 2026-07-25 F4 Scope Fidelity Audit — FAIL
+- Evidence: `.omo/evidence/v3-final-scope-fidelity.txt` — `evidence.verdict: fail`
+- Signoff start commit: `e734154` (parent of first v3 commit `5df01d9`)
+- HEAD: `a02202c`, 17 commits in v3 signoff scope, 27 files changed
+- In-scope changes (26 files):
+  - v3 harness: 11 files under `sim/` and `scripts/` (test files, runner registry, env wrapper, MMIO bridge, Spike host)
+  - evidence/notepad: 10 evidence files + 2 notepad files under `.omo/`
+  - bug track: `docs/bugs/bugs-soc-func-model.md`
+- Out-of-scope change (1 file): `spike_src/plugins/npu_mmio_plugin.so`
+  - Compiled binary artifact rebuilt in commit `0f12602` (T1 Spike+firmware dispatch chain)
+  - Size delta: 34400 -> 34360 bytes; C++ source `npu_mmio_plugin.cc` is unchanged
+  - Violates the "allowed paths only" constraint (`sim/`, `scripts/`, `.omo/`, `docs/bugs/`)
+  - Root cause: ABI mismatch between plugin (Ubuntu GCC 11) and Spike (GCC 4.8) on sz0001 required a rebuild with `-D_GLIBCXX_USE_CXX11_ABI=0`
+- Corrective recommendation for future signoffs: do not commit compiled `.so` artifacts into the func-model signoff scope; either rebuild the plugin in a pre-existing spike/plugin build workflow outside the signoff branch, or add the binary to `.gitignore` and build it on demand
+
+## 2026-07-25 F2 Code Quality Review — PASS
+- Evidence: `.omo/evidence/v3-final-code-quality.txt` — `evidence.verdict: pass`
+- Scope: 7 new v3 test files + modified `scripts/run_func_model_signoff.py`
+- Compileall: exit code 0, no syntax errors
+- Direct pytest run on new v3 test files: 44/44 passed (1.97s)
+- Runner unit tests (`test_func_model_signoff_v3.py`): 23/23 passed (26.29s)
+- Stub scan (TODO/FIXME/HACK/xxx): no matches
+- Forbidden import scan (rtl/cocotb/vcs): no matches
+- Confirms v3 harness/test files remain isolated from RTL/Cocotb/VCS dependencies
+
+
 ## 2026-07-25 Session start
 - Plan: func-model-signoff-v3 approved, 12 tasks total (T0-T7 + F1-F4)
 - Execution waves: T0 → T1-T4 → T5-T6 → T7 → F1-F4
