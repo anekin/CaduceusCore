@@ -1,12 +1,12 @@
 case_id: task-0-v3-signoff-runner
-utc_start: 2026-07-25T02:48:58.249055+00:00
-utc_end: 2026-07-25T02:49:01.169304+00:00
-elapsed_s: 2.920
+utc_start: 2026-07-25T02:50:59.270502+00:00
+utc_end: 2026-07-25T02:51:02.131083+00:00
+elapsed_s: 2.861
 branch: main
-head: 5df01d9485f3cd15208b93bed78a1edadf8191c3
-dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |  27 ++-
- .omo/notepads/phase6-rtl-verification/learnings.md |  32 +++
- .../soc-verification-gaps-phase5/learnings.md      | 224 +++++++++++++++++++
+head: 70c915bb7225f6b08880cde781f7fa085066fa64
+dirty_worktree: dirty:.omo/notepads/phase6-rtl-verification/learnings.md |  32 +++
+ .../soc-verification-gaps-phase5/learnings.md      | 224 +++++++++++++++++++++
+ build/evidence/fm-cv-chain.txt                     |   2 +
 argv: ["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_v3.py", "-q"]
 command_hash: 3c192012365a11c9
 exit_code: 0
@@ -30,6 +30,6 @@ SIGNOFF_METRIC {"case": "task-0-v3-signoff-runner", "key": "evidence.verdict", "
 
 --- STDOUT (first 8000 chars) ---
 .......................                                                  [100%]
-23 passed in 1.36s
+23 passed in 1.34s
 
 --- END ---
