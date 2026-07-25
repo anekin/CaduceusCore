@@ -9,7 +9,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-export PYTHONPATH="${REPO_ROOT}/sim${PYTHONPATH:+:$PYTHONPATH}"
+_venv_deps="${REPO_ROOT}/.venv_deps"
+if [ -d "$_venv_deps" ]; then
+    export PYTHONPATH="${_venv_deps}:${REPO_ROOT}/sim${PYTHONPATH:+:$PYTHONPATH}"
+else
+    export PYTHONPATH="${REPO_ROOT}/sim${PYTHONPATH:+:$PYTHONPATH}"
+fi
+unset _venv_deps
 export QWEN3B_GGUF="${QWEN3B_GGUF:-/home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf}"
 
 # Allow caller to override Python interpreter via FM_PYTHON env var.

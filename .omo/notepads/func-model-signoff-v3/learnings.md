@@ -30,3 +30,23 @@
 - Smoke test on sz0001: `FM_PYTHON=... bash run_fm_env.sh -- python3 -c "..."` works correctly.
 - T1a Spike case fails on sz0001 due to missing `gguf` module (pre-existing dependency), not Python propagation.
 - Evidence: T0 re-run passes, T0 validation passes with fresh fingerprint.
+
+## 2026-07-25 .venv_deps scaffolding (T1 prerequisite)
+- `.venv_deps/` was created by a separate pip install session on a machine with internet, then rsynced to sz0001. Contents (no numpy):
+  - `gguf/` + `gguf-0.19.0.dist-info/` — GGUF model loader (pure Python)
+  - `pyyaml/` + `yaml/` + `_yaml/` — YAML config parsing
+  - `requests/` + `urllib3/` + `idna/` + `certifi/` + `charset_normalizer/` — HTTP for model downloads in automation
+  - `tqdm/` — progress bars
+  - `bin/` — entry point scripts (e.g. `yaml2json`)
+  - `images/` — bundled images (from tqdm)
+- **numpy deliberately excluded** from `.venv_deps/`. sz0001's EDA Python 3.10 (Cadence INNOVUS221) ships numpy 1.23.1; pip-installing numpy 2.2.6 causes ABI/import conflicts. The existing EDA numpy 1.23.1 is compatible with gguf.
+- **Reproduction** (if `.venv_deps/` needs to be rebuilt from scratch):
+  ```bash
+  # On a machine with internet (not sz0001):
+  pip install --target=<path>/.venv_deps gguf pyyaml requests tqdm
+  # Then remove numpy files:
+  rm -rf <path>/.venv_deps/numpy/ <path>/.venv_deps/numpy-*.dist-info/
+  # Rsync to sz0001:
+  rsync -avz <path>/.venv_deps/ zhengs@192.168.0.11:/home/prj/zhengs/caduceuscore/CaduceusCore/.venv_deps/
+  ```
+- `scripts/run_fm_env.sh` now checks for `.venv_deps/` at repo root and prepends it to `PYTHONPATH` before `sim/`. This makes gguf and its pure-Python deps available to all Spike/firmware runs on sz0001. When `.venv_deps` is absent, PYTHONPATH is unchanged (backward-compatible).

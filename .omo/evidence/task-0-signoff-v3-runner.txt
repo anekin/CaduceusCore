@@ -1,9 +1,9 @@
 case_id: task-0-v3-signoff-runner
-utc_start: 2026-07-25T02:59:06.547545+00:00
-utc_end: 2026-07-25T02:59:10.633499+00:00
-elapsed_s: 4.086
+utc_start: 2026-07-25T03:11:02.110142+00:00
+utc_end: 2026-07-25T03:11:06.329313+00:00
+elapsed_s: 4.219
 branch: main
-head: 94e55faf2c65ffaf03ffa255b5e997d6048e7147
+head: 3fd86be3982f50733e6c01450df574f68af9c349
 dirty_worktree: dirty:.omo/notepads/phase6-rtl-verification/learnings.md |  32 +++
  .../soc-verification-gaps-phase5/learnings.md      | 224 +++++++++++++++++++++
  build/evidence/fm-cv-chain.txt                     |   2 +
@@ -30,6 +30,6 @@ SIGNOFF_METRIC {"case": "task-0-v3-signoff-runner", "key": "evidence.verdict", "
 
 --- STDOUT (first 8000 chars) ---
 .......................                                                  [100%]
-23 passed in 2.53s
+23 passed in 2.62s
 
 --- END ---
