@@ -1028,6 +1028,16 @@ def run_case(case: CaseDef, evidence_file: Path) -> bool:
     # can tag metrics correctly when the same test file serves multiple cases.
     env["_FM_CASE_ID"] = case.case_id
 
+    # Normalize argv: replace "python3" with sys.executable for environments
+    # where python3 is not in PATH (e.g. sz0001 EDA server).
+    normalized = False
+    for i, a in enumerate(argv):
+        if a == "python3":
+            argv[i] = sys.executable
+            normalized = True
+    if normalized:
+        print(f"[runner] argv normalized: python3 -> {sys.executable}")
+
     # Run subprocess
     try:
         result = subprocess.run(

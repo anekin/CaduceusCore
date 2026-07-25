@@ -7,6 +7,7 @@ compatibility of existing v2 cases.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -169,7 +170,7 @@ class TestV3CLIFlag:
     def test_v3_flag_in_validate_help(self) -> None:
         result = subprocess.run(
             [
-                "python3",
+                sys.executable,
                 str(_SCRIPTS_DIR / "run_func_model_signoff.py"),
                 "validate",
                 "--help",
@@ -189,7 +190,7 @@ class TestV3CLIFlag:
     def test_v3_validate_runs_without_crashing(self) -> None:
         result = subprocess.run(
             [
-                "python3",
+                sys.executable,
                 str(_SCRIPTS_DIR / "run_func_model_signoff.py"),
                 "validate",
                 "--v3",
@@ -281,3 +282,48 @@ class TestV3VsV2Isolation:
             assert len(case.source_fingerprint_globs) > 0, (
                 f"Empty source_fingerprint_globs for {cid}"
             )
+
+
+class TestArgvNormalization:
+    """Verify python3-is-normalized-to-sys.exe at subprocess spawn time."""
+
+    def test_registry_still_uses_python3_string(self) -> None:
+        """CASE_REGISTRY must keep 'python3' literals; normalization happens at runtime."""
+        python3_cases = [
+            cid for cid, case in _runner.CASE_REGISTRY.items()
+            if "python3" in case.argv
+        ]
+        assert len(python3_cases) > 0, (
+            "Expected CASE_REGISTRY to still contain 'python3' in argv"
+        )
+
+    def test_normalization_triggers_at_runtime(self) -> None:
+        """Run a v3 case and verify the normalization message appears in stdout.
+
+        When running inside the runner's own pytest subprocess, the recursion
+        guard is set. Return early (not skip) to avoid triggering forbid_skip.
+        """
+        if os.environ.get("_FM_SIGNOFF_RECURSE_GUARD"):
+            return
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(_SCRIPTS_DIR / "run_func_model_signoff.py"),
+                "run",
+                "--case", "task-0-v3-signoff-runner",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert "[runner] argv normalized" in result.stdout, (
+            "Missing normalization message in runner output"
+        )
+
+    def test_normalization_preserves_other_argv_elements(self) -> None:
+        """Only 'python3' is replaced; other elements like -m, pytest, paths are untouched."""
+        case = _runner.CASE_REGISTRY["task-0-v3-signoff-runner"]
+        assert "python3" in case.argv
+        assert "-m" in case.argv
+        assert "pytest" in case.argv
+        assert "test_func_model_signoff_v3.py" in str(case.argv)

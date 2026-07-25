@@ -1,36 +1,35 @@
 case_id: task-0-v3-signoff-runner
-utc_start: 2026-07-25T02:28:18.554562+00:00
-utc_end: 2026-07-25T02:28:20.296173+00:00
-elapsed_s: 1.742
+utc_start: 2026-07-25T02:48:58.249055+00:00
+utc_end: 2026-07-25T02:49:01.169304+00:00
+elapsed_s: 2.920
 branch: main
-head: e734154f8990626d2796c52559f802b4aef904b7
-dirty_worktree: dirty:.omo/notepads/phase6-rtl-verification/learnings.md |  32 +++
- .../soc-verification-gaps-phase5/learnings.md      | 224 ++++++++++++++++++
- build/evidence/fm-cv-chain.txt                     |   2 +-
- 
+head: 5df01d9485f3cd15208b93bed78a1edadf8191c3
+dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |  27 ++-
+ .omo/notepads/phase6-rtl-verification/learnings.md |  32 +++
+ .../soc-verification-gaps-phase5/learnings.md      | 224 +++++++++++++++++++
 argv: ["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_v3.py", "-q"]
 command_hash: 3c192012365a11c9
 exit_code: 0
-source_fingerprint: a83719b78d5e387950c350a14210991834990cac5bfce328df6a534cfbcaa114
+source_fingerprint: 48f62ee284ef6b37eb77678aaa99ec86f4e4ebff1e93ea3c9d6c4dd94cd00dbd
 source_files (3):
   - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/conftest.py
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_v3.py
 verdict: pass
-test_collected: 20
-test_passed: 20
+test_collected: 23
+test_passed: 23
 test_failed: 0
 test_skipped: 0
 test_xfailed: 0
-SIGNOFF_METRIC {"case": "task-0-v3-signoff-runner", "key": "tests.collected", "value": 20}
-SIGNOFF_METRIC {"case": "task-0-v3-signoff-runner", "key": "tests.passed", "value": 20}
+SIGNOFF_METRIC {"case": "task-0-v3-signoff-runner", "key": "tests.collected", "value": 23}
+SIGNOFF_METRIC {"case": "task-0-v3-signoff-runner", "key": "tests.passed", "value": 23}
 SIGNOFF_METRIC {"case": "task-0-v3-signoff-runner", "key": "tests.failed", "value": 0}
 SIGNOFF_METRIC {"case": "task-0-v3-signoff-runner", "key": "tests.skipped", "value": 0}
 SIGNOFF_METRIC {"case": "task-0-v3-signoff-runner", "key": "tests.xfailed", "value": 0}
 SIGNOFF_METRIC {"case": "task-0-v3-signoff-runner", "key": "evidence.verdict", "value": "pass"}
 
 --- STDOUT (first 8000 chars) ---
-....................                                                     [100%]
-20 passed in 0.26s
+.......................                                                  [100%]
+23 passed in 1.36s
 
 --- END ---
