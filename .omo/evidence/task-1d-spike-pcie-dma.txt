@@ -1,0 +1,43 @@
+case_id: task-1d-v3-spike-pcie-dma
+utc_start: 2026-07-25T04:13:23.316594+00:00
+utc_end: 2026-07-25T04:13:25.909054+00:00
+elapsed_s: 2.592
+branch: main
+head: 0f12602f406747d537bb2cb3bb9a710ba4bd2400
+dirty_worktree: dirty:.omo/notepads/phase6-rtl-verification/learnings.md |  32 +++
+ .../soc-verification-gaps-phase5/learnings.md      | 224 +++++++++++++++++++++
+ build/evidence/fm-cv-chain.txt                     |   2 +
+argv: ["bash", "scripts/run_fm_env.sh", "--", "python3", "sim/spike_host.py", "--mode", "pcie_dma"]
+command_hash: fd6e5c3359532bdf
+exit_code: 0
+source_fingerprint: ab9f929a0ce101daaaf1bc1fcaba47455f64c859d2bcc9e046f3abdca2501ddf
+source_files (3):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_fm_env.sh
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_host.py
+verdict: pass
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.mode", "value": "pcie_dma"}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.exit_code", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.tolerance_result", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.elapsed_s", "value": 1.165}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "tests.collected", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "tests.passed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "evidence.verdict", "value": "pass"}
+
+--- STDOUT (first 8000 chars) ---
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.mode", "value": "pcie_dma"}
+======================================================================
+Spike Host PCIe DMA: opcode 7 dispatch smoke test
+======================================================================
+  [PASS] pcie_dma — opcode 7 dispatched, NPU_HEAD=1
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.exit_code", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.tolerance_result", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.elapsed_s", "value": 1.165}
+======================================================================
+Spike Host PCIe DMA Summary: PASS
+======================================================================
+
+--- END ---
