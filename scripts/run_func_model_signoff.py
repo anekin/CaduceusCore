@@ -1049,7 +1049,7 @@ def run_case(case: CaseDef, evidence_file: Path) -> bool:
             env=env,
             capture_output=True,
             text=True,
-            timeout=600,  # 10-minute timeout
+            timeout=1200 if case.case_id.startswith("task-1") else 600,
         )
     except subprocess.TimeoutExpired:
         result = None

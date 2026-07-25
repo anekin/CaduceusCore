@@ -100,6 +100,18 @@ class MMIOBridge:
         self.handle('write', paddr, pwdata)
 
     # ── MXU ─────────────────────────────────────────────────────────
+    # Wrapper register offsets used by firmware npx-regmap.h:
+    #   MXU_WRP_WEIGHT_BASE=0x30  MXU_WRP_ACT_BASE=0x34  MXU_WRP_OUT_BASE=0x38
+    #   MXU_WRP_CMD=0x3C          MXU_WRP_STATUS=0x40
+    #   MXU_WRP_K_TILES=0x44      MXU_WRP_DIM_N=0x48
+    MXU_WRP_BASE = 0x30
+    MXU_WRP_WEIGHT_BASE = MXU_WRP_BASE + 0
+    MXU_WRP_ACT_BASE    = MXU_WRP_BASE + 4
+    MXU_WRP_OUT_BASE    = MXU_WRP_BASE + 8
+    MXU_WRP_CMD         = MXU_WRP_BASE + 12
+    MXU_WRP_STATUS      = MXU_WRP_BASE + 16
+    MXU_WRP_K_TILES     = MXU_WRP_BASE + 20
+    MXU_WRP_DIM_N       = MXU_WRP_BASE + 24
 
     def _handle_mxu(self, rw: str, addr: int, value: int) -> int:
         off = addr - MXU.BASE
@@ -108,7 +120,14 @@ class MMIOBridge:
             return 0
 
         if rw == 'write':
-            if off == MXU.CTRL:
+            # Wrapper CMD: firmware writes preload command, bridge
+            # acknowledges immediately (DRAM→SRAM DMA already done
+            # in Python by host_write_data).
+            if off == self.MXU_WRP_CMD:
+                self._status[addr & 0xFFFFFFFC] = value
+                self._status[MXU.BASE + self.MXU_WRP_STATUS] = 1  # done
+
+            elif off == MXU.CTRL:
                 self._status[MXU.BASE + MXU.CTRL] = value  # CTRL stored
 
             elif off == MXU.CMD and (value & 1):  # START
@@ -305,6 +324,12 @@ class MMIOBridge:
         return inp
 
     # ── VECTOR ──────────────────────────────────────────────────────
+    # Wrapper register offsets (npx-regmap.h):
+    #   VEC_WRP_A_BASE=0x30  VEC_WRP_B_BASE=0x34  VEC_WRP_O_BASE=0x38
+    #   VEC_WRP_CMD=0x3C     VEC_WRP_STATUS=0x40  VEC_WRP_LEN=0x44
+    VEC_WRP_BASE = 0x30
+    VEC_WRP_CMD    = VEC_WRP_BASE + 12
+    VEC_WRP_STATUS = VEC_WRP_BASE + 16
 
     def _handle_vector(self, rw: str, addr: int, value: int) -> int:
         off = addr - VECTOR.BASE
@@ -314,7 +339,11 @@ class MMIOBridge:
             self.modules['vector'] = vector
 
         if rw == 'write':
-            if off == VECTOR.CMD and (value & 1):
+            # Wrapper CMD: firmware writes DMA preload; acknowledge immediately
+            if off == self.VEC_WRP_CMD:
+                self._status[addr & 0xFFFFFFFC] = value
+                self._status[VECTOR.BASE + self.VEC_WRP_STATUS] = 1  # done
+            elif off == VECTOR.CMD and (value & 1):
                 self._status[VECTOR.BASE + VECTOR.STATUS] = 1
 
                 raw_a = self._status.get(VECTOR.BASE + VECTOR.A_ADDR, 0)

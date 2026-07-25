@@ -65,6 +65,12 @@ DESC_BASE = 0x80001000
 DESC_STRIDE = 64
 
 
+def _emit_metric(key: str, value, case_id: str = ""):
+    """Print a SIGNOFF_METRIC line for the signoff runner to capture."""
+    cid = case_id or os.environ.get("_FM_CASE_ID", "unknown")
+    print(f'SIGNOFF_METRIC {{"case": "{cid}", "key": "{key}", "value": {json.dumps(value)}}}')
+
+
 # ── Helpers ────────────────────────────────────────────────────────
 
 def write_mmul_descriptor(model: FuncModel, desc_addr: int,
@@ -832,6 +838,9 @@ def _launch_spike(model: FuncModel):
 
     env = os.environ.copy()
     env["PATH"] = str(PROJECT / "dtc_src") + ":" + env.get("PATH", "")
+    # Cadence CEREBRUS provides a libstdc++ with CXXABI_1.3.9+ required by the MMIO plugin
+    _cadence_lib = "/home/EDA/cadence/CEREBRUS22.15_P/tools.lnx86/lib/64bit"
+    env["LD_LIBRARY_PATH"] = _cadence_lib + ":" + env.get("LD_LIBRARY_PATH", "")
 
     cmd = [
         str(SPIKE_BIN),
@@ -862,6 +871,14 @@ def _cleanup_spike(proc: subprocess.Popen, server):
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()
+    else:
+        # Already exited — capture diagnostic output
+        out = proc.stdout.read() if proc.stdout else ""
+        err = proc.stderr.read() if proc.stderr else ""
+        if err:
+            print(f"[SPIKE_STDERR] {err[:2000]}", file=sys.stderr, flush=True)
+        if out:
+            print(f"[SPIKE_STDOUT] {out[:2000]}", file=sys.stderr, flush=True)
     server.shutdown()
     try:
         os.unlink(DEFAULT_SOCK_PATH)
@@ -1106,8 +1123,9 @@ def run_chain_file(ops_file: str) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Spike NPU host adapter")
-    parser.add_argument("--model", default=str(Path.home() / "models" /
-                        "qwen2.5-1.5b-instruct-q4_k_m.gguf"),
+    parser.add_argument("--model", default=os.environ.get(
+                        "QWEN3B_GGUF",
+                        str(Path.home() / "models" / "qwen2.5-1.5b-instruct-q4_k_m.gguf")),
                         help="Path to GGUF model")
     parser.add_argument("--layers", type=int, default=2,
                         help="Number of layers to test")
@@ -1132,10 +1150,15 @@ def main() -> int:
                         help="Directory to save evidence files")
     args = parser.parse_args()
 
+    case_id = os.environ.get("_FM_CASE_ID", "unknown")
+
     if args.mode == "mmul_smoke":
         ops = [o.strip() for o in args.ops.split(",")]
         passed = 0
         failed = 0
+
+        _emit_metric("spike.mode", "mmul_smoke", case_id)
+        t0 = time.time()
 
         print(f"{'='*70}")
         print(f"Spike Host: {Path(args.model).name}  layers={args.layers}  ops={ops}")
@@ -1149,15 +1172,29 @@ def main() -> int:
                 else:
                     failed += 1
 
+        elapsed = time.time() - t0
+        exit_code = 0 if failed == 0 else 1
+        _emit_metric("spike.exit_code", exit_code, case_id)
+        _emit_metric("spike.tolerance_result", "PASS" if failed == 0 else "FAIL", case_id)
+        _emit_metric("spike.elapsed_s", round(elapsed, 3), case_id)
+
         print(f"\n{'='*70}")
         print(f"Spike Host Summary: {passed} PASS, {failed} FAIL")
         print(f"{'='*70}")
-        return 0 if failed == 0 else 1
+        return exit_code
 
     if args.mode == "chain":
+        _emit_metric("spike.mode", "chain", case_id)
+        t0 = time.time()
+
         if args.ops_file:
             ok = run_chain_file(args.ops_file)
-            return 0 if ok else 1
+            elapsed = time.time() - t0
+            exit_code = 0 if ok else 1
+            _emit_metric("spike.exit_code", exit_code, case_id)
+            _emit_metric("spike.tolerance_result", "PASS" if ok else "FAIL", case_id)
+            _emit_metric("spike.elapsed_s", round(elapsed, 3), case_id)
+            return exit_code
 
         op_types = [o.strip().lower() for o in args.ops.split(",")]
         if op_types == ["q_proj", "k_proj", "v_proj"]:
@@ -1173,12 +1210,21 @@ def main() -> int:
         passed = sum(1 for _, ok in results if ok)
         failed = len(results) - passed
 
+        elapsed = time.time() - t0
+        exit_code = 0 if failed == 0 else 1
+        _emit_metric("spike.exit_code", exit_code, case_id)
+        _emit_metric("spike.tolerance_result", "PASS" if failed == 0 else "FAIL", case_id)
+        _emit_metric("spike.elapsed_s", round(elapsed, 3), case_id)
+
         print(f"\n{'='*70}")
         print(f"Spike Host Chain Summary: {passed} PASS, {failed} FAIL")
         print(f"{'='*70}")
-        return 0 if failed == 0 else 1
+        return exit_code
 
     if args.mode == "forward":
+        _emit_metric("spike.mode", "forward", case_id)
+        t0 = time.time()
+
         print(f"{'='*70}")
         print(f"Spike Host Forward: {Path(args.model).name}  layers={args.layers}  prompt={args.prompt!r}")
         print(f"{'='*70}")
@@ -1270,17 +1316,33 @@ def main() -> int:
         print(f"Spike Host Forward Summary: {'PASS' if all_ok else 'WARN'}  deterministic={'YES' if deterministic else 'NO'}")
         print(f"Evidence saved: {e2e_path}  {npz_path}")
         print(f"{'='*70}")
-        return 0 if all_ok else 1
+
+        elapsed = time.time() - t0
+        exit_code = 0 if all_ok else 1
+        _emit_metric("spike.exit_code", exit_code, case_id)
+        _emit_metric("spike.tolerance_result", "PASS" if all_ok else "FAIL", case_id)
+        _emit_metric("spike.elapsed_s", round(elapsed, 3), case_id)
+        return exit_code
 
     if args.mode == "pcie_dma":
+        _emit_metric("spike.mode", "pcie_dma", case_id)
+        t0 = time.time()
+
         print(f"{'='*70}")
         print("Spike Host PCIe DMA: opcode 7 dispatch smoke test")
         print(f"{'='*70}")
         ok = run_pcie_dma_smoke()
+
+        elapsed = time.time() - t0
+        exit_code = 0 if ok else 1
+        _emit_metric("spike.exit_code", exit_code, case_id)
+        _emit_metric("spike.tolerance_result", "PASS" if ok else "FAIL", case_id)
+        _emit_metric("spike.elapsed_s", round(elapsed, 3), case_id)
+
         print(f"{'='*70}")
         print(f"Spike Host PCIe DMA Summary: {'PASS' if ok else 'FAIL'}")
         print(f"{'='*70}")
-        return 0 if ok else 1
+        return exit_code
 
     return 1
 
