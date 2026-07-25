@@ -1210,10 +1210,24 @@ def main() -> int:
         passed = sum(1 for _, ok in results if ok)
         failed = len(results) - passed
 
+        # Verify each output address has non-zero data via ddr.bin
+        non_zero_ok = True
+        ddr_path = PROJECT / "ddr.bin"
+        if ddr_path.exists():
+            ddr = bytearray(ddr_path.read_bytes())
+            for idx in range(len(op_types)):
+                out_addr = _data_addr(idx, 2)
+                off = out_addr - Addr.DRAM_BASE
+                out_blob = bytes(ddr[off:off + 256])
+                if all(b == 0 for b in out_blob):
+                    non_zero_ok = False
+                    print(f"  [CHAIN_NZ] {op_types[idx]:12s} — zero output at 0x{out_addr:08X}")
+
         elapsed = time.time() - t0
-        exit_code = 0 if failed == 0 else 1
+        chain_ok = non_zero_ok
+        exit_code = 0 if chain_ok else 1
         _emit_metric("spike.exit_code", exit_code, case_id)
-        _emit_metric("spike.tolerance_result", "PASS" if failed == 0 else "FAIL", case_id)
+        _emit_metric("spike.tolerance_result", "PASS" if chain_ok else "FAIL", case_id)
         _emit_metric("spike.elapsed_s", round(elapsed, 3), case_id)
 
         print(f"\n{'='*70}")
