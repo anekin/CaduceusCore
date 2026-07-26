@@ -1,0 +1,72 @@
+# Phase 9 Closure Report
+# Generated: 2026-07-22T02:29:26Z
+# Commit: 819a34b
+# Script: scripts/p9_perfect_batch.sh (Phase 9 Todo 8)
+
+## FIXED
+
+1. BUG-MXU-P9-00B (M=1 multi-tile firmware divergence)
+   Root cause: firmware K-tile loop + missing RTL accumulate mode + SRAM/DRAM buffer overlap
+   Fix: per-K-tile firmware loop with CTRL[2] accumulate, SRAM double-buffering, DRAM spread
+   Verified: PERF-01/04/05/09/10/11/13/17 all pass cos_sim>=0.999
+   Evidence: build/evidence/w4-perf-p*.txt, build/evidence/ph9-divergence-verdict.json
+
+2. PERF-09 Weight streaming (K=256,N=64)
+   Verified: cos_sim=1.0 (previously NOT RESOLVED in Phase 8)
+   Evidence: build/evidence/w4-perf-p2.txt
+
+3. PERF-10 Multi-round weight streaming (K=512,N=64)
+   Verified: cos_sim=1.0 (previously NOT RESOLVED in Phase 8)
+   Evidence: build/evidence/w4-perf-p2.txt
+
+4. PERF-11 Q_proj scaled (K=512,N=128)
+   Verified: cos_sim=1.0 (previously cs=0.381)
+   Evidence: build/evidence/w4-perf-p2.txt
+
+5. FULLCHAIN multi-tile (M=1,K=256,N=256)
+   Verified: cos_sim=1.0, DMA non-zero traffic (37,120 read / 1,024 write bytes)
+   Evidence: build/evidence/ph9-fullchain-multitile.txt
+
+6. 36-layer checkpoint (L0/L10/L20/L35)
+   Verified: all 4 layers cos_sim=1.000000
+   Evidence: build/evidence/ph9-36layer-checkpoint.txt
+
+7. SRAM budget (K=2560 Q_proj)
+   Verified: peak 7,424B < 4MB. Max M=1,636 fits.
+   Evidence: build/evidence/ph9-sram-budget.txt
+
+8. Full regression (pytest 732, FM-SOC 33/33, MXU 9/9, SFU 319/319, Vector 63/63)
+   Evidence: build/evidence/ph9-regression-run.log
+
+9. Testcase-list sync (rtl/testcase-list-perf.md)
+   Verified: 20/21 PASS rows. All FAIL→PASS synced.
+
+## REST NOT RESOLVED
+
+1. PERF-06 (M=32, K=128, N=128): cos_sim=0.053543 residual
+   Bug: BUG-RTL-SOC-P9-00D (open)
+   Root cause: M=32 firmware ring-buffer dispatch path may not correctly handle
+     per-row accumulate mode reset across 32 sequential dispatches.
+   Evidence: build/evidence/ph9-perf-residual.txt, w4-perf-p1.txt
+   Status: NOT RESOLVED — carried forward to Phase 10
+
+## REMAINING BLOCKERS (carry-forward)
+
+1. Q8_0 / 6b experiment: BLOCKED-NETWORK
+   Evidence: build/evidence/ph9-q8_0-download-FAILED.txt
+   Next step: Phase 10 — re-attempt download or use alternative precision bridge
+
+2. 36-layer RTL full forward pass
+   Blocker: sim/cocotb_bridge.py DMA readback fix (Oracle issue 6: read-only)
+   Next step: Phase 10 or dedicated bridge fix wave
+
+3. FM-3 overlap RTL measurement (weight-streaming)
+   Blocker: requires new VCS simulation after DMA fix + 36-layer forward
+   Next step: Phase 10
+
+## Phase 10 forward
+
+- F1-F4 Final Verification Wave: audit + code quality + manual QA + scope gate
+- Phase 10 extends: DMA readback fix + 36-layer RTL forward + Q8_0 download retry
+- PERF-06 (M=32) residual: investigate per-row accumulate mode reset in firmware ring dispatch
+- Re-run closure after F1-F4 verification

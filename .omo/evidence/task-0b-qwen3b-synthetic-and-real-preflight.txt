@@ -1,0 +1,154 @@
+case_id: task-0b-qwen3b-synthetic-and-real-preflight
+utc_start: 2026-07-24T13:51:50.509505+00:00
+utc_end: 2026-07-24T13:52:05.736546+00:00
+elapsed_s: 15.227
+branch: main
+head: d250e3e0de14ee4e0a041993e350224dccc4796a
+dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  20 +--
+ ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  20 +--
+ .../task-4c2-qwen25-3b-real-direct-projections.txt |  20 +--
+ .../task-4c3-q
+argv: ["python3", "-m", "pytest", "sim/signoff/test_qwen_blk0_synthetic_stress.py::test_qwen_blk0_synthetic_assets_preflight", "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_model_provenance_and_shapes", "-q"]
+command_hash: 2f02bf224c2adf98
+exit_code: 0
+source_fingerprint: 07ed32d1680cf17780ef04073671fe565437618998fb1641d0e16970a2a689fc
+source_files (103):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/p9_lib/p9_sz0001.sh
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/conv_mapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/cv_ppa_report.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/cv_sim.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/cv_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/onnx_importer.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/qwen_vl_vit_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/resnet18_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/resnet50_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/sd_unet_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/vit_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/yolov8n_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/validate_onnx.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/block_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/compiler.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/fsa_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/gmma_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/is_systolic_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/isa.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/mac_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/multicore.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/os_systolic_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/ppa_model.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/systolic_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/tensor_core_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/timeline.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/wmma_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/crossbar.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/dma.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/dram.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/golden.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/kv_cache.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/mxu.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/noc.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/pcie.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/sfu.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/sw_overhead.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/vector.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/scripts/gen_sfu_luts.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/scripts/lut_generator.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/signoff/test_qwen25_3b_real_blk0.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/signoff/test_qwen_blk0_synthetic_stress.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/conftest.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_arc_model.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_arc_precision.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_cv_conv2d_rtl.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_cv_mobilenetv3.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_design_space_explorer.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_dma_noc_integration.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_engine_instantiate.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_engines.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_firmware.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_docs.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_runner.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_corruption.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_cross_module.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_deprecation.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_dma.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_mxu_edges.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_mxu_quant.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_noc.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_sfu.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_sfu_compare.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_sfu_gaps.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_smoke.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_vector.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_mmio_bridge.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_op_dtype_chains.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_pcie_dma_fm.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_pool_relu_opcodes.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_rmsnorm_opcode.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_soc_fm.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_soc_pcie_dma.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_soc_rtl_e2e.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_tile_scheduler.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_vconv_f16_i32.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_w3_2_dual_path.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_mxu_wrapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_sfu_wrapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_vector_wrapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/wrapper_common.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/benchmark.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/dashboard.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/f3_crosscheck.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/generate_summary.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/metrics.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_benchmark.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_cross_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_dashboard.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_metrics.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_tile_double_buffer.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_timing_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_types.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/timing_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/types.py
+verdict: pass
+test_collected: 2
+test_passed: 2
+test_failed: 0
+test_skipped: 0
+test_xfailed: 0
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.sha256", "value": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d"}
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.hidden", "value": 2048}
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.intermediate", "value": 11008}
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_heads", "value": 16}
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_kv_heads", "value": 2}
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.head_dim", "value": 128}
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.collected", "value": 2}
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.passed", "value": 2}
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "evidence.verdict", "value": "pass"}
+
+--- STDOUT (first 8000 chars) ---
+.
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.sha256", "value": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d"}
+
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.hidden", "value": 2048}
+
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.intermediate", "value": 11008}
+
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_heads", "value": 16}
+
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.num_kv_heads", "value": 2}
+
+SIGNOFF_METRIC {"case": "task-0b-qwen3b-synthetic-and-real-preflight", "key": "model.head_dim", "value": 128}
+.                                                                       [100%]
+2 passed in 13.71s
+
+--- END ---

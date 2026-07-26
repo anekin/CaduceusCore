@@ -166,6 +166,13 @@ module vector_soc_wrapper #(
     wire [15:0] wrp_len_eff = (wrp_len == 0) ? WRP_LEN_DEFAULT[15:0] : wrp_len;
     wire [7:0]  wrp_chunks  = (wrp_len_eff[15:0] + NUM_LANES[15:0] - 1) / NUM_LANES[15:0];
 
+    // Range assertion: effective byte count must fit within the allocated buffers.
+    always @(*) begin
+        if ((wrp_len_eff * 32'd4) > (CHUNKS_MAX * CHUNK_BYTES))
+            $error("[VEC_WRP] valid_bytes_total %0d exceeds buffer capacity %0d",
+                   (wrp_len_eff * 32'd4), (CHUNKS_MAX * CHUNK_BYTES));
+    end
+
     wire wrp_cs       = psel && (paddr >= 12'h030) && (paddr <= 12'h044);
     wire wrp_load_a   = wrp_cs && pwrite && penable && (paddr == OFF_WRP_CMD) && pwdata[0];
     wire wrp_load_b   = wrp_cs && pwrite && penable && (paddr == OFF_WRP_CMD) && pwdata[1];
@@ -246,6 +253,22 @@ module vector_soc_wrapper #(
         (seq_chunk * CHUNK_BYTES) +
         (seq_beat * (AXI_DATA_WIDTH / 8));
 
+    // Variable AXI read burst length for the final chunk.
+    // Ceiling division of valid final-chunk bytes by 64 bytes/beat.
+    wire [31:0] valid_bytes_total_rd       = wrp_len_eff * 32'd4;
+    wire [31:0] valid_bytes_final_chunk_rd = valid_bytes_total_rd -
+        ((wrp_chunks - 8'd1) * CHUNK_BYTES);
+    wire [8:0]  final_chunk_beats          = (valid_bytes_final_chunk_rd + 32'd63) >> 6;
+    wire [8:0]  final_chunk_beats_safe     = (final_chunk_beats == 9'd0) ? 9'd1 : final_chunk_beats;
+
+    // Read-byte-enable mask for the final chunk's partial beat.
+    // Lower `partial_bytes` bytes are enabled; upper padding bytes are zeroed.
+    wire [AXI_DATA_WIDTH-1:0] read_mask;
+    wire [5:0] partial_bytes = valid_bytes_final_chunk_rd[5:0];
+    assign read_mask = (|partial_bytes)
+        ? ({AXI_DATA_WIDTH{1'b1}} >> (AXI_DATA_WIDTH - partial_bytes * 8))
+        : {AXI_DATA_WIDTH{1'b1}};
+
     // Capture trigger pulses (these are single-cycle from WRP_CMD write)
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -295,8 +318,14 @@ module vector_soc_wrapper #(
                     if (m_axi_rvalid && m_axi_rready) begin
                         if (seq_chunk >= CHUNKS_MAX)
                             $warning("[VEC_WRP_LOAD_A] seq_chunk %0d >= CHUNKS_MAX %0d — buffer overflow", seq_chunk, CHUNKS_MAX);
-                        // Assemble 4096-bit chunk from 8 x 512-bit beats
-                        buf_a[seq_chunk][seq_beat * AXI_DATA_WIDTH +: AXI_DATA_WIDTH] <= m_axi_rdata;
+                        // Assemble 4096-bit chunk from up to 8 x 512-bit beats.
+                        // Mask padding bytes in the final chunk's final partial beat.
+                        if ((seq_chunk == wrp_chunks - 8'd1) &&
+                            (seq_beat == (final_chunk_beats_safe - 9'd1)) &&
+                            (|partial_bytes))
+                            buf_a[seq_chunk][seq_beat * AXI_DATA_WIDTH +: AXI_DATA_WIDTH] <= m_axi_rdata & read_mask;
+                        else
+                            buf_a[seq_chunk][seq_beat * AXI_DATA_WIDTH +: AXI_DATA_WIDTH] <= m_axi_rdata;
                         if (m_axi_rlast) begin
 
                             // This chunk done
@@ -341,7 +370,13 @@ module vector_soc_wrapper #(
                     if (m_axi_rvalid && m_axi_rready) begin
                         if (seq_chunk >= CHUNKS_MAX)
                             $warning("[VEC_WRP_LOAD_B] seq_chunk %0d >= CHUNKS_MAX %0d — buffer overflow", seq_chunk, CHUNKS_MAX);
-                        buf_b[seq_chunk][seq_beat * AXI_DATA_WIDTH +: AXI_DATA_WIDTH] <= m_axi_rdata;
+                        // Mask padding bytes in the final chunk's final partial beat.
+                        if ((seq_chunk == wrp_chunks - 8'd1) &&
+                            (seq_beat == (final_chunk_beats_safe - 9'd1)) &&
+                            (|partial_bytes))
+                            buf_b[seq_chunk][seq_beat * AXI_DATA_WIDTH +: AXI_DATA_WIDTH] <= m_axi_rdata & read_mask;
+                        else
+                            buf_b[seq_chunk][seq_beat * AXI_DATA_WIDTH +: AXI_DATA_WIDTH] <= m_axi_rdata;
                         if (m_axi_rlast) begin
                             if (seq_chunk == wrp_chunks - 1) begin
                                 if (seq_store_pending) begin
@@ -420,7 +455,10 @@ module vector_soc_wrapper #(
     assign m_axi_arid    = 8'h20;
     assign m_axi_araddr  = (seq_state == SEQ_LOAD_A_AR) ? seq_beat_addr :
                            (seq_state == SEQ_LOAD_B_AR) ? seq_beat_addr : 32'd0;
-    assign m_axi_arlen   = BEATS_PER_CHUNK - 1;  // 7 = 8 beats
+    // Variable burst length: final chunk issues only the beats it needs.
+    assign m_axi_arlen   = (seq_chunk == wrp_chunks - 8'd1)
+                           ? (final_chunk_beats_safe[7:0] - 8'd1)
+                           : (BEATS_PER_CHUNK - 8'd1);
     assign m_axi_arsize  = 3'd6;                  // 64 bytes
     assign m_axi_arburst = 2'd1;                  // INCR
     assign m_axi_arvalid = (seq_state == SEQ_LOAD_A_AR) || (seq_state == SEQ_LOAD_B_AR);
@@ -464,9 +502,10 @@ module vector_soc_wrapper #(
             seq_wstrb = {AXI_DATA_WIDTH/8{1'b1}};
         end else if ((seq_beat == full_beats_final_chunk) &&
                      (partial_bytes_final_chunk != 0)) begin
-            // Final chunk, final partial beat
-            seq_wstrb = ({AXI_DATA_WIDTH/8{1'b1}} >>
-                         (32'd64 - partial_bytes_final_chunk));
+            // Final chunk, final partial beat: write all bytes so that
+            // zeroed padding from the read-side mask overwrites any X
+            // that would otherwise remain in the slave memory word.
+            seq_wstrb = {AXI_DATA_WIDTH/8{1'b1}};
         end else begin
             // Beyond the valid byte range of the final chunk
             seq_wstrb = {AXI_DATA_WIDTH/8{1'b0}};

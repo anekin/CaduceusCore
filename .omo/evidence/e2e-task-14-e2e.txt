@@ -1,0 +1,6 @@
+Forward pass determinism check: 3 runs
+Model: /home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf
+Reference: llama_ref/refs/qwen_l0_l1_hidden.npz
+Tolerance: 1e-01
+
+--- Run 1/3 ---

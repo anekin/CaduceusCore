@@ -1809,7 +1809,7 @@ def _blk0_run_vector(model: FuncModel, op: dict, manifest: dict) -> dict:
     return {"out": out_arr, "golden": golden, "elements": elements}
 
 
-def test_blk0_full_chain_single_tile():
+def test_blk0_scaled_single_tile_manifest_replay():
     """Full blk.0 17-op chain in FuncModel with single-tile MMUL workaround.
 
     Verifies every operation from the Qwen2.5-3B blk.0 manifest through the
@@ -2538,7 +2538,7 @@ def _chain_run_block(
     return result_addr
 
 
-def test_28block_chain():
+def test_28block_scaled_chain():
     """Chain 28 scaled blk.0 blocks through FuncModel and verify per-block isolation.
 
     - Each block uses a distinct INT4 weight set derived from blk.0 baseline weights
@@ -2809,7 +2809,7 @@ def _e2e_blk0_opcode(op):
     return mapping[op["opcode"]].value
 
 
-def test_e2e_host_pcie_doorbell_firmware_compute():
+def test_e2e_host_pcie_doorbell_firmware_scaled_blk0():
     """P4 full flow: host→PCIe→DRAM→doorbell→firmware→IRQ→17-op blk.0→DRAM→PCIe→host.
 
     Exercises all 13 SoC data paths simultaneously:

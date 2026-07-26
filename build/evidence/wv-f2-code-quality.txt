@@ -1,0 +1,5 @@
+WV-F2-CODE-QUALITY
+==================
+
+BRIDGE_UNCHANGED=1
+SCOPE_CREEP=0

@@ -1,0 +1,26 @@
+======================================================================
+Phase 8 Diagnostic: Data-Layout Hypothesis
+======================================================================
+Test: M=1, K=64, N=64 (single 64x64 tile)
+
+----------------------------------------------------------------------
+Variant              cos_sim    PASS/FAIL  SRAM_OUT hex (first 64B)                          
+----------------------------------------------------------------------
+raw row-major        0.201226   FAIL       92000000dcfeffffff01000001feffff6d01000093feffff6e
+tile-major           1.000000   PASS       b0070000ac0200004d0c00002df1ffff3b0c000050faffffff
+----------------------------------------------------------------------
+
+--- DIAG-RAW (raw row-major) ---
+SRAM_OUT hex (first 64B): 92000000dcfeffffff01000001feffff6d01000093feffff6effffff25ffffffdcfeffff6d010000b60100006d0100004afeffffdb000000db0000004afeffff
+Golden i32 hex (first 64B): b0070000ac0200004d0c00002df1ffff3b0c000050fafffffffdffff22070000dbf9ffff0ffbffff63f1ffffe70e0000110300003e0400004919000082f8ffff
+
+--- DIAG-PACKED (tile-major) ---
+SRAM_OUT hex (first 64B): b0070000ac0200004d0c00002df1ffff3b0c000050fafffffffdffff22070000dbf9ffff0ffbffff63f1ffffe70e0000110300003e0400004919000082f8ffff
+Golden i32 hex (first 64B): b0070000ac0200004d0c00002df1ffff3b0c000050fafffffffdffff22070000dbf9ffff0ffbffff63f1ffffe70e0000110300003e0400004919000082f8ffff
+
+======================================================================
+VERDICT: HYPOTHESIS CONFIRMED
+  => Raw row-major activation FAILS (cos_sim < 0.999)
+  => Tile-major packed activation PASSES (cos_sim >= 0.999)
+  => Root cause: activation must use tile-major layout for MXU
+======================================================================

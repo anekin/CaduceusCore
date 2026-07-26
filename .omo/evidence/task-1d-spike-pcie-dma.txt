@@ -1,0 +1,114 @@
+case_id: task-1d-v3-spike-pcie-dma
+utc_start: 2026-07-25T05:25:57.480154+00:00
+utc_end: 2026-07-25T05:26:00.453468+00:00
+elapsed_s: 2.973
+branch: main
+head: a02202c93f18b7ef792dc82c3c32bb5e9d565af7
+dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |  18 +-
+ .omo/evidence/task-2-pcie-dma.txt                  |  18 +-
+ .omo/evidence/task-3-crossbar.txt                  |  19 +-
+ .omo/evidence/tas
+argv: ["bash", "scripts/run_fm_env.sh", "--", "python3", "sim/spike_host.py", "--mode", "pcie_dma"]
+command_hash: fd6e5c3359532bdf
+exit_code: 0
+source_fingerprint: 0dc63ababc6d425ea9d567f6784be630a83282e7a579e4936c4b6c1af3cc68f9
+source_files (3):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_fm_env.sh
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_host.py
+verdict: pass
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.mode", "value": "pcie_dma"}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.exit_code", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.tolerance_result", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.elapsed_s", "value": 1.494}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "tests.collected", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "tests.passed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "evidence.verdict", "value": "pass"}
+
+--- STDOUT (first 8000 chars) ---
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.mode", "value": "pcie_dma"}
+======================================================================
+Spike Host PCIe DMA: opcode 7 dispatch smoke test
+======================================================================
+  [PASS] pcie_dma — opcode 7 dispatched, NPU_HEAD=1
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.exit_code", "value": 0}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.tolerance_result", "value": "PASS"}
+SIGNOFF_METRIC {"case": "task-1d-v3-spike-pcie-dma", "key": "spike.elapsed_s", "value": 1.494}
+======================================================================
+Spike Host PCIe DMA Summary: PASS
+======================================================================
+
+--- STDERR (first 4000 chars) ---
+----------------------------------------
+Exception occurred during processing of request from 
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/socketserver.py", line 683, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.10/socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.10/socketserver.py", line 747, in __init__
+    self.handle()
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 94, in handle
+    response = _handle_request(bridge, line)
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 73, in _handle_request
+    bridge.handle("write", addr, value)
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 71, in handle
+    return self._handle_intc(rw, addr, value)
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 542, in _handle_intc
+    self._status[INTC.BASE + INTC.PENDING] &= ~value
+KeyError: 1073766400
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from 
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/socketserver.py", line 683, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.10/socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.10/socketserver.py", line 747, in __init__
+    self.handle()
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 94, in handle
+    response = _handle_request(bridge, line)
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 73, in _handle_request
+    bridge.handle("write", addr, value)
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 71, in handle
+    return self._handle_intc(rw, addr, value)
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 542, in _handle_intc
+    self._status[INTC.BASE + INTC.PENDING] &= ~value
+KeyError: 1073766400
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from 
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/socketserver.py", line 683, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.10/socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.10/socketserver.py", line 747, in __init__
+    self.handle()
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 94, in handle
+    response = _handle_request(bridge, line)
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 73, in _handle_request
+    bridge.handle("write", addr, value)
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 71, in handle
+    return self._handle_intc(rw, addr, value)
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 542, in _handle_intc
+    self._status[INTC.BASE + INTC.PENDING] &= ~value
+KeyError: 1073766400
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from 
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/socketserver.py", line 683, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.10/socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.10/socketserver.py", line 747, in __init__
+    self.handle()
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 94, in handle
+    response = _handle_request(bridge, line)
+  File "/home/prj/zh
+--- END ---

@@ -649,17 +649,48 @@ class GoldenSFU:
     @staticmethod
     def compare_hw_vs_ref(hw: np.ndarray, ref: np.ndarray,
                           tol_abs: float = 1e-3, tol_rel: float = 1e-3) -> Dict[str, Any]:
-        """Compare hardware-equivalent vs reference implementation."""
+        """Compare hardware-equivalent vs reference implementation.
+
+        Element-wise tolerance: each element must individually pass
+        EITHER absolute (<= tol_abs) OR relative (<= tol_rel) tolerance.
+        NaNs in either array reject. Same-position same-sign infinities
+        accept; opposite-sign or one-sided infinities reject.
+        """
         hw = np.asarray(hw, dtype=np.float64)
         ref = np.asarray(ref, dtype=np.float64)
         abs_diff = np.abs(hw - ref)
         rel_diff = abs_diff / (np.abs(ref) + 1e-12)
-        return {
+
+        metrics: Dict[str, Any] = {
             "max_abs_err": float(np.max(abs_diff)),
             "mean_abs_err": float(np.mean(abs_diff)),
             "max_rel_err": float(np.max(rel_diff)),
-            "within_tolerance": bool(np.all(abs_diff < tol_abs) or np.all(rel_diff < tol_rel)),
         }
+
+        # NaN: any NaN in either array ⇒ reject
+        if np.any(np.isnan(hw)) or np.any(np.isnan(ref)):
+            metrics["within_tolerance"] = False
+            return metrics
+
+        # Inf handling: same-position same-sign infinities pass
+        hw_inf = np.isinf(hw)
+        ref_inf = np.isinf(ref)
+        either_inf = hw_inf | ref_inf
+        same_sign_inf = hw_inf & ref_inf & (np.sign(hw) == np.sign(ref))
+        inf_fail = either_inf & ~same_sign_inf
+
+        if np.any(inf_fail):
+            metrics["within_tolerance"] = False
+            return metrics
+
+        # Finite positions: element-wise (abs <= atol) OR (rel <= rtol)
+        finite_mask = ~either_inf
+        element_ok = np.ones_like(abs_diff, dtype=bool)
+        element_ok[finite_mask] = (
+            (abs_diff[finite_mask] <= tol_abs) | (rel_diff[finite_mask] <= tol_rel)
+        )
+        metrics["within_tolerance"] = bool(np.all(element_ok))
+        return metrics
 
 
 # ══════════════════════════════════════════════════════════════════════

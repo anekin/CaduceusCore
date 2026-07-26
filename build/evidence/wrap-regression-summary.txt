@@ -1,0 +1,53 @@
+=== Wrapper-Level Regression Summary ===
+Date: 2026-07-23 11:41:29 CST
+Plan:  wrapper-level-verification (Waves 0-3)
+
+--- SFU Wrapper ---
+# NOTE: The 4 operand tests timed out after 3 GB evidence capture limit.
+#       Counts below are from the verified T2 debugging session.
+  Tests: 5 total, 1 PASS, 4 FAIL
+  BUG-RTL-SOC-WV-001: STATUS.DONE never asserts (BLOCKER)
+  Status: PARTIAL (1/5 PASS; 4/5 blocked by WV-001)
+  SFU: PARTIAL
+
+--- Vector Wrapper ---
+  Tests: 5 total, 5 PASS, 0 FAIL
+  Status: PASS
+  Vector: PASS
+
+--- MXU Wrapper ---
+  Tests: 5 total, 5 PASS, 0 FAIL
+  Status: PASS
+  MXU: PASS
+
+--- BUG-005 (AXI Sparse Slave X-Propagation) ---
+  SFU:   FAIL-TIMEOUT (blocked by BUG-RTL-SOC-WV-001)
+  Vector: X_PROP/FAIL (X-propagation confirmed)
+  BUG-005 SFU: BLOCKED (WV-001)
+  BUG-005 Vector: X_PROP/FAIL
+
+--- BUG-007 (Consecutive Multi-Op Dispatch) ---
+  MXU: FAIL (warm-up MMUL DONE timeout)
+  SFU: PASS (start_hold replay verified)
+  BUG-007 MXU: FAIL
+  BUG-007 SFU: PASS
+
+--- Overall ---
+
+  SFU wrapper:      PARTIAL (1/5 PASS; 4 blocked by BUG-RTL-SOC-WV-001)
+  Vector wrapper:   PASS (5/5)
+  MXU wrapper:      PASS (5/5)
+  BUG-005:          SFU=BLOCKED, Vector=X_PROP
+  BUG-007:          MXU=FAIL (DONE timeout), SFU=PASS
+
+  New bugs logged:  BUG-RTL-SOC-WV-001 (SFU STATUS.DONE never asserts)
+
+---
+Evidence base:
+  SFU:    build/evidence/wrap-sfu-regression.txt
+  Vector: build/evidence/wrap-vec-regression.txt
+  MXU:    build/evidence/wrap-mxu-regression.txt
+  BUG005: build/evidence/wrap-bug005-result.txt
+  BUG007: build/evidence/wrap-bug007-result.txt
+
+Generated: 2026-07-23T11:41:29+08:00

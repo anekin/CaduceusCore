@@ -396,13 +396,22 @@ NAMED_SCENARIOS = [
     ("softmax_64",      generate_softmax,   64,     101),
     ("softmax_256",     generate_softmax,   256,    102),
     ("softmax_4096",    generate_softmax,   4096,   103),
+    ("softmax_smoke",   generate_softmax,   4,      111),
+    ("softmax_16",      generate_softmax,   16,     112),
     ("layernorm_4096",  generate_layernorm, 4096,   104),
+    ("layernorm_smoke", generate_layernorm, 32,     113),
     ("gelu_1000",       generate_gelu,      1000,   105),
+    ("gelu_smoke",      generate_gelu,      42,     114),
+    ("gelu_256",        generate_gelu,      256,    115),
     ("silu_1000",       generate_silu,      1000,   106),
+    ("silu_smoke",      generate_silu,      1007,   116),
     ("rope_pos0",       generate_rope,      128,    0,   107),
+    ("rope_pos1",       generate_rope,      128,    1,   117),
     ("rope_pos42",      generate_rope,      128,    42,  108),
     ("rope_pos100",     generate_rope,      128,    100, 109),
+    ("rope_pos256",     generate_rope,      128,    256, 118),
     ("rmsnorm_4096",    generate_rmsnorm,   4096,   110),
+    ("rmsnorm_smoke",   generate_rmsnorm,   64,     119),
 ]
 
 

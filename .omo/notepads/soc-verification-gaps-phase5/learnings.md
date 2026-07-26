@@ -1030,3 +1030,227 @@ PYTHONPATH=sim python3 -c "from sim.e2e_llamacpp import verify_36layer_true_e2e;
   - Replaced `VECTOR.CMD`/`VECTOR.STATUS` references with hardcoded offsets `0x04`/`0x08` to avoid `NameError` (the `VECTOR` symbol is not imported in this module-level test context).
 - Strengthened anti-vacuous corruption in `_run_w13_op_snapshot`: a single-byte activation flip was insufficient to fail the `cos_sim >= 0.999` / `max_abs < 10.0` MMUL threshold. Changed to overwrite the first 32 activation bytes with `0x80` (INT8 min), causing op01 Q_proj to mismatch golden.
 - Verification: `bash sim/regression/soc-verification-run.sh run_w17_intermediate_compare 0` on sz0001 passed; `build/evidence/w1-7-intermediate-compare.txt` shows `TESTS=18 PASS=18` and `ANTI-VACUOUS: PASS`.
+
+## [2026-07-24T16:33:59Z] W2.2: SFU+Vector Func Model golden vectors verified (14/14 PASS)
+
+
+### Scope
+Verified the Func Model golden reference for all 14 SFU+Vector P0 module-level performance cases:
+SFV-P01..SFV-P07 (SFU) and SFV-P08..SFV-P14 (Vector).
+
+### Method
+- Ran `scripts/run_sfu_perf_case.py --dry-run` / `scripts/run_vector_perf_case.py --dry-run` for cycle-formula checks.
+- Generated synthetic inputs sized to each case's N/DIM.
+- Compared `GoldenSFU` / `GoldenVector` hardware-equivalent output against numpy reference.
+
+### Tolerance
+- SFU / CONV FP16 outputs: `rtol=0.01, atol=0.002`
+- Vector INT32 ops (add, mul, max, sum, resid): bit-exact.
+
+### Results
+- Overall: **14/14 PASS**
+- Worst-case absolute error: `SFV-P04` max_abs_err=1.576e-03, max_rel_err=1.306e-01
+- GELU shows the largest absolute error (~1.5e-3) from the 64-entry LUT; still within 2e-3 FP16 tolerance.
+- RoPE verification used 1 Q head (128 elems / 64 pairs) + 2 KV heads (256 elems) to match RTL GQA.
+
+### Changes
+- Added `GoldenVector.max()` element-wise static method in `sim/golden_executor.py` (Func Model only).
+- Created `scripts/verify_w2_2_fm_golden_vectors.py` for reusable P0 golden-vector regression.
+- Evidence: `build/evidence/w2-2-fm-golden-vectors.md`.
+- Status board: `build/wave2/testcase-list.md`.
+
+## [2026-07-24T16:34:12Z] W2.2: SFU+Vector Func Model golden vectors verified (14/14 PASS)
+
+
+### Scope
+Verified the Func Model golden reference for all 14 SFU+Vector P0 module-level performance cases:
+SFV-P01..SFV-P07 (SFU) and SFV-P08..SFV-P14 (Vector).
+
+### Method
+- Ran `scripts/run_sfu_perf_case.py --dry-run` / `scripts/run_vector_perf_case.py --dry-run` for cycle-formula checks.
+- Generated synthetic inputs sized to each case's N/DIM.
+- Compared `GoldenSFU` / `GoldenVector` hardware-equivalent output against numpy reference.
+
+### Tolerance
+- SFU / CONV FP16 outputs: `rtol=0.01, atol=0.002`
+- Vector INT32 ops (add, mul, max, sum, resid): bit-exact.
+
+### Results
+- Overall: **14/14 PASS**
+- Worst-case absolute error: `SFV-P04` max_abs_err=1.576e-03, max_rel_err=1.306e-01
+- GELU shows the largest absolute error (~1.5e-3) from the 64-entry LUT; still within 2e-3 FP16 tolerance.
+- RoPE verification used 1 Q head (128 elems / 64 pairs) + 2 KV heads (256 elems) to match RTL GQA.
+
+### Changes
+- Added `GoldenVector.max()` element-wise static method in `sim/golden_executor.py` (Func Model only).
+- Created `scripts/verify_w2_2_fm_golden_vectors.py` for reusable P0 golden-vector regression.
+- Evidence: `build/evidence/w2-2-fm-golden-vectors.md`.
+- Status board: `build/wave2/testcase-list.md`.
+
+## [2026-07-24T16:50:14Z] W2.2: SFU+Vector Func Model golden vectors verified (14/14 PASS)
+
+
+### Scope
+Verified the Func Model golden reference for all 14 SFU+Vector P0 module-level performance cases:
+SFV-P01..SFV-P07 (SFU) and SFV-P08..SFV-P14 (Vector).
+
+### Method
+- Ran `scripts/run_sfu_perf_case.py --dry-run` / `scripts/run_vector_perf_case.py --dry-run` for cycle-formula checks.
+- Generated synthetic inputs sized to each case's N/DIM.
+- Compared `GoldenSFU` / `GoldenVector` hardware-equivalent output against numpy reference.
+
+### Tolerance
+- SFU / CONV FP16 outputs: `rtol=0.01, atol=0.002`
+- Vector INT32 ops (add, mul, max, sum, resid): bit-exact.
+
+### Results
+- Overall: **14/14 PASS**
+- Worst-case absolute error: `SFV-P04` max_abs_err=1.576e-03, max_rel_err=1.306e-01
+- GELU shows the largest absolute error (~1.5e-3) from the 64-entry LUT; still within 2e-3 FP16 tolerance.
+- RoPE verification used 1 Q head (128 elems / 64 pairs) + 2 KV heads (256 elems) to match RTL GQA.
+
+### Changes
+- Added `GoldenVector.max()` element-wise static method in `sim/golden_executor.py` (Func Model only).
+- Created `scripts/verify_w2_2_fm_golden_vectors.py` for reusable P0 golden-vector regression.
+- Evidence: `build/evidence/w2-2-fm-golden-vectors.md`.
+- Status board: `build/wave2/testcase-list.md`.
+
+## [2026-07-24T20:21:34Z] W2.2: SFU+Vector Func Model golden vectors verified (14/14 PASS)
+
+
+### Scope
+Verified the Func Model golden reference for all 14 SFU+Vector P0 module-level performance cases:
+SFV-P01..SFV-P07 (SFU) and SFV-P08..SFV-P14 (Vector).
+
+### Method
+- Ran `scripts/run_sfu_perf_case.py --dry-run` / `scripts/run_vector_perf_case.py --dry-run` for cycle-formula checks.
+- Generated synthetic inputs sized to each case's N/DIM.
+- Compared `GoldenSFU` / `GoldenVector` hardware-equivalent output against numpy reference.
+
+### Tolerance
+- SFU / CONV FP16 outputs: `rtol=0.01, atol=0.002`
+- Vector INT32 ops (add, mul, max, sum, resid): bit-exact.
+
+### Results
+- Overall: **14/14 PASS**
+- Worst-case absolute error: `SFV-P04` max_abs_err=1.576e-03, max_rel_err=1.306e-01
+- GELU shows the largest absolute error (~1.5e-3) from the 64-entry LUT; still within 2e-3 FP16 tolerance.
+- RoPE verification used 1 Q head (128 elems / 64 pairs) + 2 KV heads (256 elems) to match RTL GQA.
+
+### Changes
+- Added `GoldenVector.max()` element-wise static method in `sim/golden_executor.py` (Func Model only).
+- Created `scripts/verify_w2_2_fm_golden_vectors.py` for reusable P0 golden-vector regression.
+- Evidence: `build/evidence/w2-2-fm-golden-vectors.md`.
+- Status board: `build/wave2/testcase-list.md`.
+
+## [2026-07-24T20:30:49Z] W2.2: SFU+Vector Func Model golden vectors verified (14/14 PASS)
+
+
+### Scope
+Verified the Func Model golden reference for all 14 SFU+Vector P0 module-level performance cases:
+SFV-P01..SFV-P07 (SFU) and SFV-P08..SFV-P14 (Vector).
+
+### Method
+- Ran `scripts/run_sfu_perf_case.py --dry-run` / `scripts/run_vector_perf_case.py --dry-run` for cycle-formula checks.
+- Generated synthetic inputs sized to each case's N/DIM.
+- Compared `GoldenSFU` / `GoldenVector` hardware-equivalent output against numpy reference.
+
+### Tolerance
+- SFU / CONV FP16 outputs: `rtol=0.01, atol=0.002`
+- Vector INT32 ops (add, mul, max, sum, resid): bit-exact.
+
+### Results
+- Overall: **14/14 PASS**
+- Worst-case absolute error: `SFV-P04` max_abs_err=1.576e-03, max_rel_err=1.306e-01
+- GELU shows the largest absolute error (~1.5e-3) from the 64-entry LUT; still within 2e-3 FP16 tolerance.
+- RoPE verification used 1 Q head (128 elems / 64 pairs) + 2 KV heads (256 elems) to match RTL GQA.
+
+### Changes
+- Added `GoldenVector.max()` element-wise static method in `sim/golden_executor.py` (Func Model only).
+- Created `scripts/verify_w2_2_fm_golden_vectors.py` for reusable P0 golden-vector regression.
+- Evidence: `build/evidence/w2-2-fm-golden-vectors.md`.
+- Status board: `build/wave2/testcase-list.md`.
+
+## [2026-07-24T21:40:32Z] W2.2: SFU+Vector Func Model golden vectors verified (14/14 PASS)
+
+
+### Scope
+Verified the Func Model golden reference for all 14 SFU+Vector P0 module-level performance cases:
+SFV-P01..SFV-P07 (SFU) and SFV-P08..SFV-P14 (Vector).
+
+### Method
+- Ran `scripts/run_sfu_perf_case.py --dry-run` / `scripts/run_vector_perf_case.py --dry-run` for cycle-formula checks.
+- Generated synthetic inputs sized to each case's N/DIM.
+- Compared `GoldenSFU` / `GoldenVector` hardware-equivalent output against numpy reference.
+
+### Tolerance
+- SFU / CONV FP16 outputs: `rtol=0.01, atol=0.002`
+- Vector INT32 ops (add, mul, max, sum, resid): bit-exact.
+
+### Results
+- Overall: **14/14 PASS**
+- Worst-case absolute error: `SFV-P04` max_abs_err=1.576e-03, max_rel_err=1.306e-01
+- GELU shows the largest absolute error (~1.5e-3) from the 64-entry LUT; still within 2e-3 FP16 tolerance.
+- RoPE verification used 1 Q head (128 elems / 64 pairs) + 2 KV heads (256 elems) to match RTL GQA.
+
+### Changes
+- Added `GoldenVector.max()` element-wise static method in `sim/golden_executor.py` (Func Model only).
+- Created `scripts/verify_w2_2_fm_golden_vectors.py` for reusable P0 golden-vector regression.
+- Evidence: `build/evidence/w2-2-fm-golden-vectors.md`.
+- Status board: `build/wave2/testcase-list.md`.
+
+## [2026-07-24T21:53:52Z] W2.2: SFU+Vector Func Model golden vectors verified (14/14 PASS)
+
+
+### Scope
+Verified the Func Model golden reference for all 14 SFU+Vector P0 module-level performance cases:
+SFV-P01..SFV-P07 (SFU) and SFV-P08..SFV-P14 (Vector).
+
+### Method
+- Ran `scripts/run_sfu_perf_case.py --dry-run` / `scripts/run_vector_perf_case.py --dry-run` for cycle-formula checks.
+- Generated synthetic inputs sized to each case's N/DIM.
+- Compared `GoldenSFU` / `GoldenVector` hardware-equivalent output against numpy reference.
+
+### Tolerance
+- SFU / CONV FP16 outputs: `rtol=0.01, atol=0.002`
+- Vector INT32 ops (add, mul, max, sum, resid): bit-exact.
+
+### Results
+- Overall: **14/14 PASS**
+- Worst-case absolute error: `SFV-P04` max_abs_err=1.576e-03, max_rel_err=1.306e-01
+- GELU shows the largest absolute error (~1.5e-3) from the 64-entry LUT; still within 2e-3 FP16 tolerance.
+- RoPE verification used 1 Q head (128 elems / 64 pairs) + 2 KV heads (256 elems) to match RTL GQA.
+
+### Changes
+- Added `GoldenVector.max()` element-wise static method in `sim/golden_executor.py` (Func Model only).
+- Created `scripts/verify_w2_2_fm_golden_vectors.py` for reusable P0 golden-vector regression.
+- Evidence: `build/evidence/w2-2-fm-golden-vectors.md`.
+- Status board: `build/wave2/testcase-list.md`.
+
+## [2026-07-24T21:59:57Z] W2.2: SFU+Vector Func Model golden vectors verified (14/14 PASS)
+
+
+### Scope
+Verified the Func Model golden reference for all 14 SFU+Vector P0 module-level performance cases:
+SFV-P01..SFV-P07 (SFU) and SFV-P08..SFV-P14 (Vector).
+
+### Method
+- Ran `scripts/run_sfu_perf_case.py --dry-run` / `scripts/run_vector_perf_case.py --dry-run` for cycle-formula checks.
+- Generated synthetic inputs sized to each case's N/DIM.
+- Compared `GoldenSFU` / `GoldenVector` hardware-equivalent output against numpy reference.
+
+### Tolerance
+- SFU / CONV FP16 outputs: `rtol=0.01, atol=0.002`
+- Vector INT32 ops (add, mul, max, sum, resid): bit-exact.
+
+### Results
+- Overall: **14/14 PASS**
+- Worst-case absolute error: `SFV-P04` max_abs_err=1.576e-03, max_rel_err=1.306e-01
+- GELU shows the largest absolute error (~1.5e-3) from the 64-entry LUT; still within 2e-3 FP16 tolerance.
+- RoPE verification used 1 Q head (128 elems / 64 pairs) + 2 KV heads (256 elems) to match RTL GQA.
+
+### Changes
+- Added `GoldenVector.max()` element-wise static method in `sim/golden_executor.py` (Func Model only).
+- Created `scripts/verify_w2_2_fm_golden_vectors.py` for reusable P0 golden-vector regression.
+- Evidence: `build/evidence/w2-2-fm-golden-vectors.md`.
+- Status board: `build/wave2/testcase-list.md`.

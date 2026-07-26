@@ -1,0 +1,86 @@
+# F1 — Plan Compliance Audit — func-model-signoff-v2
+# Generated: 2026-07-24
+# Validator: scripts/run_func_model_signoff.py validate --all-functional
+
+## SIGNOFF_METRIC: validate_all_functional.exit_code
+SIGNOFF_METRIC {"case": "final-plan-compliance", "key": "validate_all_functional.exit_code", "value": 0}
+
+## SIGNOFF_METRIC: cases.checked
+SIGNOFF_METRIC {"case": "final-plan-compliance", "key": "cases.checked", "value": 19}
+
+## SIGNOFF_METRIC: cases.ok
+SIGNOFF_METRIC {"case": "final-plan-compliance", "key": "cases.ok", "value": 19}
+
+## SIGNOFF_METRIC: cases.failed
+SIGNOFF_METRIC {"case": "final-plan-compliance", "key": "cases.failed", "value": 0}
+
+## Task → Case mapping with evidence verification
+
+### T0A — Signoff evidence runner framework
+  - Case: task-0a-signoff-runner     → tests: 51/51, skip=0, xfail=0, verdict: pass ✅
+
+### T1 — FP16 comparator RED phase
+  - Case: task-1-comparator-red       → tests: 1 collected, 0 passed (RED/expected_failure), skip=0, xfail=0, verdict: pass ✅
+  - Note: T1 is the expected-RED case — allowed per plan (stop condition #12 does not apply to intentional RED)
+
+### T2 — FP16 comparator GREEN phase
+  - Case: task-2-comparator-green     → tests: 115/115, skip=0, xfail=0, verdict: pass ✅
+  - Case: task-2-w2-2-golden-vectors  → script case, tests: 0 (non-pytest), 14/14 SIGNOFF_METRIC records present, verdict: pass ✅
+
+### T3 — Reclassify scaled Qwen tests
+  - Case: task-3-scaled-qwen-regressions → tests: 3/3, skip=0, xfail=0, verdict: pass ✅
+
+### T4A — Synthetic direct-MMIO stress gate
+  - Case: task-4a-qwen3b-direct-mmio  → tests: 1/1, skip=0, xfail=0, verdict: pass ✅
+
+### T4B — Synthetic tiled-MMUL stress gate
+  - Case: task-4b-qwen3b-tiled-mmul   → tests: 1/1, skip=0, xfail=0, verdict: pass ✅
+
+### T4C1 — Selective real-GGUF loading
+  - Case: task-4c1-qwen25-3b-selective-load-and-reference-inputs → tests: 1/1, skip=0, xfail=0, verdict: pass ✅
+
+### T4C2 — Real direct-MMIO projection gate
+  - Case: task-4c2-qwen25-3b-real-direct-projections → tests: 1/1, skip=0, xfail=0, verdict: pass ✅
+
+### T4C3 — Real tiled-scheduler projection gate
+  - Case: task-4c3-qwen25-3b-real-tiled-projections → tests: 1/1, skip=0, xfail=0, verdict: pass ✅
+
+### T4C4 — Connected real blk.0 dual-oracle hard gate
+  - Case: task-4c4-qwen25-3b-real-connected-blk0 → tests: 1/1, skip=0, xfail=0, verdict: pass ✅
+
+### T5 — Qwen 3B robustness coverage
+  - Case: task-5-qwen3b-robustness    → tests: 4/4, skip=0, xfail=0, verdict: pass ✅
+
+### T6 — Documentation consistency
+  - Case: task-6-signoff-doc-consistency → tests: 2/2, skip=0, xfail=0, verdict: pass ✅
+
+### T7 — Comprehensive signoff sweep
+  - Case: task-7-functional-selected-regression     → tests: 532/532, skip=0, xfail=0, verdict: pass ✅
+  - Case: task-7-functional-full-sweep              → tests: 697/697, skip=0, xfail=0, verdict: pass ✅
+    (Baseline: ≥638. Satisfied: 697.)
+  - Case: task-7-qwen3b-synthetic-stress-gates      → tests: 6/6, skip=0, xfail=0, verdict: pass ✅
+  - Case: task-7-qwen25-3b-real-blk0-hard-gate      → tests: 6/6, skip=0, xfail=0, verdict: pass ✅
+  - Case: task-7-w2-2-golden-vectors                → script case, tests: 0 (non-pytest), 14/14 SIGNOFF_METRIC records present, verdict: pass ✅
+
+## Hard-gate audit
+
+| Gate | Condition | Result |
+|------|-----------|--------|
+| No skips in hard gates | tests.skipped = 0 for all | ✅ 0 skips across all evidence |
+| No xfails in hard gates | tests.xfailed = 0 for all | ✅ 0 xfails across all evidence |
+| No zero-test gates | collected > 0 OR script SIGNOFF_METRIC records present | ✅ T1 (RED, 1 test), T2-w2-2/T7-w2-2 (script, SIGNOFF_METRIC records) |
+| All evidence current | validate --all-functional passes | ✅ 19/19 OK |
+| Source fingerprint match | validate --all-functional checks staleness | ✅ No stale evidence detected |
+| GGUF hash correct | model.sha256 = 626b4a66...c62d | ✅ Confirmed in T4C1+T4C2+T4C3+T4C4+T7 evidence |
+| Cosine policy satisfied | All projections cosine ≥ 0.96 | ✅ Min cosine=0.9768 (down), Q=0.9990, K=1.0000, V=0.9946, O=0.9957, gate=0.9974, up=0.9962, final=0.9884 |
+
+## SIGNOFF_METRIC: evidence.verdict
+SIGNOFF_METRIC {"case": "final-plan-compliance", "key": "evidence.verdict", "value": "pass"}
+
+## Summary
+validate --all-functional: PASS (19/19 cases OK)
+Task coverage: 13/13 tasks (T0A, T1, T2, T3, T4A, T4B, T4C1, T4C2, T4C3, T4C4, T5, T6, T7) → 19 evidence files
+All evidence.verdict: pass
+All hard gates: zero skips, zero xfails, non-zero tests (or valid script-based SIGNOFF_METRIC records)
+Full functional sweep: 697 passed (baseline ≥638 satisfied)
+No blockers detected.

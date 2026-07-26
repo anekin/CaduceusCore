@@ -1,0 +1,33 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 24 items
+
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_mmul PASSED [  4%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_sfu_base PASSED [  8%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_sfu_softmax PASSED [ 12%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_sfu_layernorm PASSED [ 16%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_sfu_gelu PASSED [ 20%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_sfu_relu PASSED [ 25%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_sfu_silu PASSED [ 29%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_sfu_rmsnorm PASSED [ 33%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_rope PASSED [ 37%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_pcie_dma PASSED [ 41%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_dma_copy PASSED [ 45%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_dma_st PASSED [ 50%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_dma_copy_ldd PASSED [ 54%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_dma_copy_std PASSED [ 58%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_vector_base PASSED [ 62%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_vadd PASSED [ 66%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_vmul PASSED [ 70%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_vred_max PASSED [ 75%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_vred_sum PASSED [ 79%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_vconv PASSED [ 83%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_vresid PASSED [ 87%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_no_duplicate_values PASSED [ 91%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_sfu_range PASSED [ 95%]
+sim/tests/test_opcode_consistency.py::TestEngineOpValues::test_vector_range PASSED [100%]
+
+============================== 24 passed in 0.07s ==============================

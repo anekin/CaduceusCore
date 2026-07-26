@@ -1,0 +1,52 @@
+=== FINAL-WAVE F2 — CODE QUALITY REVIEW ===
+Date: 2026-07-24
+Plan: func-model-signoff-v2
+Signoff start commit: ef090b1
+Scope: all Python files changed since ef090b1..HEAD
+
+=== CHANGED FILES (15 files) ===
+ggml-npu/q4_dequant.py
+scripts/check_func_model_signoff_docs.py
+scripts/run_func_model_signoff.py
+scripts/verify_w2_2_fm_golden_vectors.py
+sim/golden_executor.py
+sim/qwen25_forward.py
+sim/qwen25_func_model.py
+sim/qwen25_signoff_oracle.py
+sim/qwen_blk0_synthetic_vectors.py
+sim/signoff/test_qwen25_3b_real_blk0.py
+sim/signoff/test_qwen_blk0_synthetic_stress.py
+sim/tests/test_func_model_signoff_docs.py
+sim/tests/test_func_model_signoff_runner.py
+sim/tests/test_golden_sfu_compare.py
+sim/tests/test_soc_fm.py
+
+=== CHECK 1: compileall ===
+SIGNOFF_METRIC: compileall.exit_code=0
+SIGNOFF_METRIC: compileall.files_checked=15
+SIGNOFF_METRIC: compileall.errors=0
+All 15 files compile cleanly (no syntax errors).
+
+=== CHECK 2: unit tests ===
+SIGNOFF_METRIC: unit_tests.exit_code=0
+SIGNOFF_METRIC: unit_tests.passed=58
+SIGNOFF_METRIC: unit_tests.failed=0
+SIGNOFF_METRIC: unit_tests.warnings=1
+Test files:
+  sim/tests/test_func_model_signoff_runner.py
+  sim/tests/test_golden_sfu_compare.py
+  sim/tests/test_func_model_signoff_docs.py
+Result: 58 passed, 0 failed (1 warning: RuntimeWarning in golden_executor.py:662 — invalid value in divide, pre-existing, non-blocking)
+
+=== CHECK 3: oracle guard ===
+SIGNOFF_METRIC: oracle_guard.exit_code=0
+Oracle file: sim/qwen25_signoff_oracle.py
+Prohibited modules checked: golden_executor, mmio_bridge, tile_scheduler
+Result: PASS — no prohibited modules imported by the oracle after its own import.
+
+=== VERDICT ===
+SIGNOFF_METRIC: evidence.verdict=pass
+All checks passed:
+  - compileall: 15/15 files clean
+  - unit tests: 58/58 passed
+  - oracle guard: no prohibited imports

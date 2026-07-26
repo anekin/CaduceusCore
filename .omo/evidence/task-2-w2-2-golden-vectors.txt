@@ -1,0 +1,162 @@
+case_id: task-2-w2-2-golden-vectors
+utc_start: 2026-07-24T13:59:56.373484+00:00
+utc_end: 2026-07-24T13:59:57.749068+00:00
+elapsed_s: 1.376
+branch: main
+head: d250e3e0de14ee4e0a041993e350224dccc4796a
+dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           |  20 +--
+ ...task-0b-qwen3b-synthetic-and-real-preflight.txt |  20 +--
+ .../task-4c2-qwen25-3b-real-direct-projections.txt |  35 ++--
+ .../task-4c3-
+argv: ["python3", "scripts/verify_w2_2_fm_golden_vectors.py", "--skip-dry-run"]
+command_hash: f24a4d789221a055
+exit_code: 0
+source_fingerprint: c39909eb4361cb13434903150151cd412e4e05760c541409a22a4b8dcc4e8870
+source_files (103):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/verify_w2_2_fm_golden_vectors.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/conv_mapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/cv_ppa_report.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/cv_sim.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/cv_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/onnx_importer.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/qwen_vl_vit_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/resnet18_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/resnet50_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/sd_unet_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/vit_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/traces/yolov8n_trace.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/cv/validate_onnx.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/block_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/compiler.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/fsa_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/gmma_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/is_systolic_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/isa.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/mac_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/multicore.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/os_systolic_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/ppa_model.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/systolic_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/tensor_core_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/timeline.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/engine/wmma_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/crossbar.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/dma.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/dram.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/golden.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/kv_cache.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/mxu.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/noc.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/pcie.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/sfu.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/sw_overhead.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/models/vector.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/scripts/gen_sfu_luts.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/scripts/lut_generator.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/signoff/test_qwen25_3b_real_blk0.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/signoff/test_qwen_blk0_synthetic_stress.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/conftest.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_arc_model.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_arc_precision.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_cv_conv2d_rtl.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_cv_mobilenetv3.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_design_space_explorer.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_dma_noc_integration.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_engine_instantiate.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_engines.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_firmware.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_docs.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_runner.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_corruption.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_cross_module.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_deprecation.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_dma.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_mxu_edges.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_mxu_quant.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_noc.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_sfu.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_sfu_compare.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_sfu_gaps.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_smoke.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_vector.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_mmio_bridge.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_op_dtype_chains.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_pcie_dma_fm.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_pool_relu_opcodes.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_rmsnorm_opcode.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_soc_fm.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_soc_pcie_dma.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_soc_rtl_e2e.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_tile_scheduler.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_vconv_f16_i32.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_w3_2_dual_path.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_mxu_wrapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_sfu_wrapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_vector_wrapper.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/wrapper_common.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/benchmark.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/dashboard.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/f3_crosscheck.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/generate_summary.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/metrics.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/__init__.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_benchmark.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_cross_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_dashboard.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_metrics.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_tile_double_buffer.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_timing_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/tests/test_types.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/timing_engine.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/timing/types.py
+verdict: pass
+SIGNOFF_METRIC {"case": "task-2-w2-2-golden-vectors", "key": "tests.collected", "value": 0}
+SIGNOFF_METRIC {"case": "task-2-w2-2-golden-vectors", "key": "tests.passed", "value": 0}
+SIGNOFF_METRIC {"case": "task-2-w2-2-golden-vectors", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-2-w2-2-golden-vectors", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-2-w2-2-golden-vectors", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-2-w2-2-golden-vectors", "key": "evidence.verdict", "value": "pass"}
+
+--- STDOUT (first 8000 chars) ---
+[verify] SFV-P01 SFU softmax dim=64 ...
+  formula=PASS golden=PASS max_abs=1.9371509552001953e-07 max_rel=1.7837396760756594e-06
+[verify] SFV-P02 SFU layernorm dim=64 ...
+  formula=PASS golden=PASS max_abs=0.0010426044464111328 max_rel=0.0005140403062610349
+[verify] SFV-P03 SFU rmsnorm dim=64 ...
+  formula=PASS golden=PASS max_abs=2.384185791015625e-07 max_rel=1.1832046933447162e-07
+[verify] SFV-P04 SFU gelu dim=64 ...
+  formula=PASS golden=PASS max_abs=0.0015764012932777405 max_rel=0.1305819440740373
+[verify] SFV-P05 SFU silu dim=64 ...
+  formula=PASS golden=PASS max_abs=7.152557373046875e-07 max_rel=2.6857568833338108e-06
+[verify] SFV-P06 SFU rope dim=64 ...
+  formula=PASS golden=PASS max_abs=0.0009765625 max_rel=0.04347826084933884
+[verify] SFV-P07 SFU mmio dim=0 ...
+  formula=PASS (MMIO timing — no data formula) golden=PASS max_abs=N/A max_rel=N/A
+[verify] SFV-P08 Vector add dim=128 ...
+  formula=PASS golden=PASS max_abs=0.0 max_rel=0.0
+[verify] SFV-P09 Vector mul dim=128 ...
+  formula=PASS golden=PASS max_abs=0.0 max_rel=0.0
+[verify] SFV-P10 Vector max dim=128 ...
+  formula=PASS golden=PASS max_abs=0.0 max_rel=0.0
+[verify] SFV-P11 Vector sum dim=128 ...
+  formula=PASS golden=PASS max_abs=0.0 max_rel=0.0
+[verify] SFV-P12 Vector conv dim=128 ...
+  formula=PASS golden=PASS max_abs=0.0 max_rel=0.0
+[verify] SFV-P13 Vector resid dim=128 ...
+  formula=PASS golden=PASS max_abs=0.0 max_rel=0.0
+[verify] SFV-P14 Vector mmio dim=0 ...
+  formula=PASS (MMIO timing — no data formula) golden=PASS max_abs=N/A max_rel=N/A
+[evidence] wrote /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/w2-2-fm-golden-vectors.md
+[status] wrote /home/prj/zhengs/caduceuscore/CaduceusCore/build/wave2/testcase-list.md
+[learnings] appended summary
+
+[PASS] All 14 P0 cases verified
+
+--- END ---

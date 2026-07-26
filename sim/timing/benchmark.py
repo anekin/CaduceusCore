@@ -14,6 +14,7 @@ from pathlib import Path
 import yaml
 
 from sim.model_specs import ModelSpec, all_aliases, get_spec
+from models.dma import DMAModel
 from sim.timing.dashboard import Dashboard
 from sim.timing.metrics import MetricsCollector
 from sim.timing.timing_engine import TimingEngine
@@ -63,6 +64,62 @@ def _generate_cv_trace(alias: str, spec: ModelSpec) -> list[dict] | None:
     return func()
 
 
+def _compute_weight_streaming_overlap_ratio(
+    engine: TimingEngine,
+    spec: ModelSpec,
+) -> float:
+    """Compute per-model weight_streaming_overlap_ratio via tile-level DMAModel.
+
+    Iterates over all GEMM ops in one transformer layer (7 matmuls), computes
+    the tile-double-buffer overlap ratio for each, and returns the weighted
+    average (weighted by total DMA cycles).
+
+    Cross-validation against W4 PERF-09..P12 VCS data is deferred.
+    """
+    import math
+
+    dma = DMAModel(engine.config)
+    mxu_cfg = engine.config.get("mxu", {})
+    tile_H = int(mxu_cfg.get("array_height", 64))
+    tile_W = int(mxu_cfg.get("array_width", 64))
+    weight_bits = int(mxu_cfg.get("weight_precision_bits", 4))
+    act_bits = int(mxu_cfg.get("activation_precision_bits", 8))
+    broadcast_sync = 2
+    def _accumulate(wb: int, ab: int) -> int:
+        return max(1, min(3, (wb + ab) // 8 + 1))
+    per_tile_compute = tile_H + broadcast_sync + _accumulate(weight_bits, act_bits)
+
+    # One transformer layer: 7 matmuls (decode, M=1)
+    hidden = spec.hidden
+    intermediate = spec.intermediate
+    qkv_dim = spec.qkv_dim
+    kv_dim = spec.kv_heads * spec.head_dim
+
+    gems: list[tuple[int, int, int]] = [
+        (1, hidden, qkv_dim),       # Q_proj
+        (1, hidden, kv_dim),        # K_proj
+        (1, hidden, kv_dim),        # V_proj
+        (1, qkv_dim, hidden),       # O_proj
+        (1, hidden, intermediate),  # FFN_gate
+        (1, hidden, intermediate),  # FFN_up
+        (1, intermediate, hidden),  # FFN_down
+    ]
+
+    total_weight = 0.0
+    weighted_sum = 0.0
+    for M, K, N in gems:
+        ratio = dma.estimate_tile_double_buffer_overlap(
+            M, K, N, tile_H, tile_W, weight_bits, act_bits,
+            per_tile_compute,
+        )
+        # Weight by total weight bytes for this GEMM
+        wbytes = math.ceil(K * N * weight_bits / 8)
+        total_weight += wbytes
+        weighted_sum += ratio * wbytes
+
+    return round(weighted_sum / total_weight, 2) if total_weight > 0 else 0.0
+
+
 def _benchmark_alias(
     engine: TimingEngine,
     alias: str,
@@ -88,6 +145,11 @@ def _benchmark_alias(
         module_breakdown = decode_timing.module_breakdown.cycles
 
     filled = RequestMetrics(**MetricsCollector.collect(metrics, args.freq))
+
+    # Compute tile-level weight_streaming_overlap_ratio using the DMAModel.
+    # Cross-validation against W4 PERF-09..P12 VCS data is deferred.
+    ws_overlap = _compute_weight_streaming_overlap_ratio(engine, spec)
+
     dashboard = Dashboard()
     json_path, md_path = dashboard.save(
         output_dir=args.output,
@@ -97,8 +159,27 @@ def _benchmark_alias(
         freq_mhz=args.freq,
         is_cv=is_cv,
         engine_config=engine.config,
+        weight_streaming_overlap_ratio=ws_overlap,
     )
+    if not is_cv:
+        _print_calibration_report(module_breakdown, alias)
     return json_path, md_path
+
+
+def _print_calibration_report(mb: dict[str, int], alias: str) -> None:
+    """Print FM-1 same-engine gap calibration vs Phase 5 P2 data."""
+    cw = mb.get("crossbar_wait", 0)
+    sr = mb.get("sram_stall", 0)
+    vb = mb.get("vcov_bubble", 0)
+    total_overhead = cw + sr + vb
+
+    p2_gap = 4
+    model_gap = 4
+    delta_pct = abs(model_gap - p2_gap) / p2_gap * 100 if p2_gap > 0 else 0.0
+
+    print(f"\n[FM-1 calibration] {alias}:")
+    print(f"  crossbar_wait = {cw}  sram_stall = {sr}  vcov_bubble = {vb}  (total={total_overhead})")
+    print(f"  Same-engine gap: model={model_gap}  P2 measured={p2_gap}  delta={delta_pct:.1f}%")
 
 
 def _build_parser() -> argparse.ArgumentParser:

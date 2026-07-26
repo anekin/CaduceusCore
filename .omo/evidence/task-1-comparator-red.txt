@@ -1,0 +1,66 @@
+case_id: task-1-comparator-red
+utc_start: 2026-07-24T08:27:32.664783+00:00
+utc_end: 2026-07-24T08:27:34.260424+00:00
+elapsed_s: 1.596
+branch: main
+head: 8d308d2615b19bca54df37f7d2420f97a55fd249
+dirty_worktree: dirty:.omo/evidence/task-0a-signoff-runner.txt           | 10 ++---
+ .omo/notepads/func-model-signoff-v2/issues.md      | 13 ++++++
+ .omo/notepads/func-model-signoff-v2/learnings.md   | 42 +++++++++++++++++
+argv: ["python3", "-m", "pytest", "sim/tests/test_golden_sfu_compare.py::test_compare_mixed_abs_rel_pass", "-q"]
+command_hash: b88c0329f51f29b7
+exit_code: 1
+source_fingerprint: 8e7bcde328021c115c4c039a3241cefd92bf407989f72aaef2c3dd70801ba38a
+source_files (3):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/compare_rtl.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/golden_executor.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_golden_sfu_compare.py
+verdict: pass
+test_collected: 1
+test_passed: 0
+test_failed: 1
+test_skipped: 0
+test_xfailed: 0
+SIGNOFF_METRIC {"case": "task-1-comparator-red", "key": "tests.collected", "value": 1}
+SIGNOFF_METRIC {"case": "task-1-comparator-red", "key": "tests.passed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1-comparator-red", "key": "tests.failed", "value": 1}
+SIGNOFF_METRIC {"case": "task-1-comparator-red", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-1-comparator-red", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1-comparator-red", "key": "evidence.verdict", "value": "pass"}
+
+--- STDOUT (first 8000 chars) ---
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________________ test_compare_mixed_abs_rel_pass ________________________
+
+    def test_compare_mixed_abs_rel_pass():
+        """One element passes only atol, another passes only rtol.
+    
+        The current comparator uses np.all(abs_diff < atol) OR np.all(rel_diff < rtol)
+        which rejects this case because neither atol alone nor rtol alone covers
+        ALL elements.  The correct element-wise semantics: each element individually
+        must pass EITHER abs OR rel tolerance.
+        """
+        # fp16 values chosen so that:
+        #   ref[0]=0.25, hw[0]≈0.250488 → abs_diff≈0.488e-3 < 1e-3 ✓, rel_diff≈1.95e-3 > 1e-3 ✗
+        #   ref[1]=2.0,  hw[1]≈2.00195 → abs_diff≈1.95e-3 > 1e-3 ✗, rel_diff≈0.977e-3 < 1e-3 ✓
+        ref_f64 = np.array([0.25, 2.0])
+        hw_f64 = np.array([0.2505, 2.002])
+        ref = ref_f64.astype(np.float16)
+        hw = hw_f64.astype(np.float16)
+    
+        result = GoldenSFU.compare_hw_vs_ref(hw, ref, tol_abs=1e-3, tol_rel=1e-3)
+    
+>       assert result["within_tolerance"], (
+            "mixed abs/rel must pass element-wise: "
+            f"max_abs={result['max_abs_err']:.4e} max_rel={result['max_rel_err']:.4e}"
+        )
+E       AssertionError: mixed abs/rel must pass element-wise: max_abs=1.9531e-03 max_rel=1.9531e-03
+E       assert False
+
+sim/tests/test_golden_sfu_compare.py:35: AssertionError
+=========================== short test summary info ============================
+FAILED sim/tests/test_golden_sfu_compare.py::test_compare_mixed_abs_rel_pass
+1 failed in 0.07s
+
+--- END ---

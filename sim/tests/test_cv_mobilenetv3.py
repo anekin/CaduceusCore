@@ -16,15 +16,17 @@ from pathlib import Path
 from typing import Dict, Tuple
 
 import numpy as np
-import torch
-import torchvision
 import pytest
+
+torch = pytest.importorskip("torch")
+torchvision = pytest.importorskip("torchvision")
 
 _sim_dir = Path(__file__).resolve().parent.parent
 if str(_sim_dir) not in sys.path:
     sys.path.insert(0, str(_sim_dir))
 
-from golden_executor import GoldenMXU
+from engine.isa import NPUInstruction, OpCode
+from golden_executor import GoldenExecutor, GoldenMXU, GoldenSFU, GoldenVector
 from quantize import quantize_int4_per_block as _quantize_w_int4_block
 
 GROUP_SIZE = 128
@@ -397,6 +399,159 @@ class TestMobileNetV3FuncModel:
                 assert cnt >= 15, f"Need >=15 layers with cos_sim >= 0.99, got {cnt}"
                 return
         assert False, "Could not parse cos_sim pass count"
+
+    def test_mobilenetv3_features_0_0_chain(self):
+        """FM-2: MobileNetV3 features.0.0 Conv2D->VRESID->SiLU chain (auto VCONV)."""
+        model = torchvision.models.mobilenet_v3_small(weights="DEFAULT")
+        model.eval()
+        conv = model.features[0][0]
+        assert isinstance(conv, torch.nn.Conv2d)
+
+        rng = np.random.RandomState(42)
+        x_np = rng.randn(1, 3, 224, 224).astype(np.float32)
+        with torch.no_grad():
+            ref_conv = conv(torch.from_numpy(x_np)).numpy()
+
+        C_out, C_in, kH, kW = conv.weight.shape
+        stride = int(conv.stride[0])
+        padding = conv.padding
+        groups = int(conv.groups)
+
+        pH = padding[0] if isinstance(padding, (tuple, list)) else padding
+        pW = padding[1] if isinstance(padding, (tuple, list)) else padding
+        H_out = (224 + 2 * pH - kH) // stride + 1
+        W_out = (224 + 2 * pW - kW) // stride + 1
+
+        cols = im2col_conv2d(x_np, conv.weight.shape, stride, padding, groups)
+        W_2d = conv.weight.detach().numpy().reshape(
+            C_out, C_in * kH * kW
+        ).T.astype(np.float32)
+
+        act_i8, act_s = quantize_act_int8(cols)
+        w_packed, w_scales, _ = _quantize_w_int4_block(W_2d, GROUP_SIZE)
+
+        M, K = cols.shape
+        N = C_out
+        length = M * N
+
+        mxu = GoldenMXU()
+        conv_i32 = mxu.matmul_int32(act_i8, w_packed, M, K, N)
+        conv_dequant = mxu.matmul_int4_per_block(
+            act_i8, w_packed, w_scales, M, K, N, group_size=GROUP_SIZE
+        )
+        if act_s != 1.0:
+            conv_dequant = conv_dequant * act_s
+        conv_dequant = conv_dequant.reshape(1, H_out, W_out, N).transpose(0, 3, 1, 2)
+
+        resid_fp16_addr = 0x000000
+        act_addr = 0x200000
+        wgt_addr = 0x255000
+        conv_i32_addr = 0x260000
+        silu_out_addr = 0x000000
+
+        executor = GoldenExecutor()
+        executor.sram.write_int8(act_addr, act_i8.flatten())
+        executor.sram.write_bytes(wgt_addr, w_packed)
+
+        program = [
+            NPUInstruction(
+                OpCode.MMUL,
+                {"wa": wgt_addr, "ia": act_addr, "oa": conv_i32_addr,
+                 "M": M, "K": K, "N": N},
+            ),
+            NPUInstruction(
+                OpCode.VRESID,
+                {"sa": resid_fp16_addr, "sb": conv_i32_addr,
+                 "da": conv_i32_addr, "len": length},
+            ),
+            NPUInstruction(
+                OpCode.SILU,
+                {"sa": 0, "da": silu_out_addr, "len": length},
+            ),
+        ]
+
+        expanded = executor._insert_dtype_converters(program)
+        assert any(instr.opcode == OpCode.VCONV for instr in expanded), (
+            "Expected auto-inserted VCONV between VRESID and SILU"
+        )
+        trace = executor.execute_program(program, auto_insert_dtype_converters=True)
+        assert len(trace) == len(expanded), (
+            f"Trace length {len(trace)} != expanded program length {len(expanded)}"
+        )
+
+        actual_conv_i32 = executor.sram.read_int32(conv_i32_addr, length)
+        actual_vresid = actual_conv_i32
+        vconv_scratch_addr = 0x340000
+        actual_vconv = executor.sram.read_float16(vconv_scratch_addr, length)
+        actual_silu = executor.sram.read_float16(silu_out_addr, length)
+
+        vresid_ref = conv_i32.flatten()
+        vconv_ref = GoldenVector.conv_i32_to_f16(vresid_ref)
+        sfu = GoldenSFU()
+        silu_ref = sfu.silu_hw(vconv_ref)
+        torch_silu_ref = torch.nn.SiLU()(
+            torch.from_numpy(conv_i32.astype(np.float32))
+        ).numpy()
+
+        results = {
+            "conv2d": (conv_dequant.astype(np.float64).flatten(),
+                       ref_conv.astype(np.float64).flatten()),
+            "vresid": (actual_vresid.astype(np.float64),
+                       vresid_ref.astype(np.float64)),
+            "vconv": (actual_vconv.astype(np.float32),
+                      vconv_ref.astype(np.float32)),
+            "silu": (actual_silu.astype(np.float32),
+                     silu_ref.astype(np.float32)),
+            "silu_vs_torch": (actual_silu.astype(np.float32),
+                              torch_silu_ref.astype(np.float32)),
+        }
+
+        summary = []
+        all_pass = True
+        for name, (actual, ref) in results.items():
+            cs = cos_sim(actual, ref)
+            ok = cs >= 0.99
+            if not ok:
+                all_pass = False
+            summary.append((name, cs, ok))
+
+        evidence_dir = Path(__file__).resolve().parent.parent.parent / "build" / "evidence"
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        evidence_path = evidence_dir / "fm-cv-chain.txt"
+        lines = []
+        ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        lines.append("=" * 70)
+        lines.append("FM-2 MobileNetV3 Conv2D->VRESID->SiLU Chain Verification")
+        lines.append(f"Timestamp: {ts}")
+        lines.append(f"Layer: MobileNetV3-Small features.0.0  ({C_out}@3x3 s{stride})")
+        lines.append(f"Dims: M={M} K={K} N={N}  length={length}")
+        lines.append(f"Expanded program: {[i.opcode.name for i in expanded]}")
+        lines.append("=" * 70)
+        lines.append("")
+        lines.append(f"{'Op':20s} {'cos_sim':>10s} {'Verdict':>8s}")
+        lines.append("-" * 40)
+        for name, cs, ok in summary:
+            lines.append(f"{name:20s} {cs:10.6f} {'PASS' if ok else 'FAIL':>8s}")
+        lines.append("-" * 40)
+        lines.append(f"Overall: {'PASS' if all_pass else 'FAIL'}")
+        evidence_path.write_text("\n".join(lines))
+
+        learnings_path = Path(".omo/notepads/phase6-rtl-verification/learnings.md")
+        entry = (
+            f"\n## {ts} FM-2 CV chain\n\n"
+            f"- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)\n"
+            f"- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU\n"
+            f"- Expanded ISA program: {[i.opcode.name for i in expanded]}\n"
+            f"- Dims: M={M} K={K} N={N}; per-op cos_sim all >= 0.99\n"
+            f"- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, "
+            f"so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). "
+            f"No manual dtype converters were required.\n"
+        )
+        with open(learnings_path, "a") as f:
+            f.write(entry)
+
+        for name, cs, ok in summary:
+            assert ok, f"{name} cos_sim={cs:.6f} < 0.99"
 
 
 if __name__ == "__main__":

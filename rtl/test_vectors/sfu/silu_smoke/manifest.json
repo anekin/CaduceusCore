@@ -1,8 +1,8 @@
 {
   "name": "silu_smoke",
-  "sfu_op": "silu",
+  "sfu_op": true,
   "files": {
-    "golden": "golden.hex"
+    "golden": "golden_output.hex"
   },
   "results": {
     "golden_shape": [

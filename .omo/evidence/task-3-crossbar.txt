@@ -1,0 +1,35 @@
+case_id: task-3-v3-crossbar
+utc_start: 2026-07-25T05:25:20.430205+00:00
+utc_end: 2026-07-25T05:25:22.488714+00:00
+elapsed_s: 2.059
+branch: main
+head: a02202c93f18b7ef792dc82c3c32bb5e9d565af7
+dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |  12 +-
+ .omo/evidence/task-2-pcie-dma.txt                  |  18 +-
+ .omo/notepads/phase6-rtl-verification/learnings.md |  32 +++
+ .../soc-verifica
+argv: ["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_v3_crossbar.py", "-q"]
+command_hash: 09954e90c0c5d5c5
+exit_code: 0
+source_fingerprint: 6a5d100e7851c9b8130815c70e8a97f9c38ffd1ba4f5146d19f261d64f464d0d
+source_files (2):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_v3_crossbar.py
+verdict: pass
+test_collected: 7
+test_passed: 7
+test_failed: 0
+test_skipped: 0
+test_xfailed: 0
+SIGNOFF_METRIC {"case": "task-3-v3-crossbar", "key": "tests.collected", "value": 7}
+SIGNOFF_METRIC {"case": "task-3-v3-crossbar", "key": "tests.passed", "value": 7}
+SIGNOFF_METRIC {"case": "task-3-v3-crossbar", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-3-v3-crossbar", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-3-v3-crossbar", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-3-v3-crossbar", "key": "evidence.verdict", "value": "pass"}
+
+--- STDOUT (first 8000 chars) ---
+.......                                                                  [100%]
+7 passed in 0.41s
+
+--- END ---

@@ -23,6 +23,7 @@ _HERE = Path(__file__).parent
 sys.path.insert(0, str(_HERE.parent))
 sys.path.insert(0, str(_HERE.parent / "ggml-npu"))
 
+from opcodes import EngineOp
 from q4_dequant import load_weights_from_gguf
 from sim.func_model import FuncModel
 from sim.golden_executor import GoldenMXU
@@ -65,6 +66,12 @@ DESC_BASE = 0x80001000
 DESC_STRIDE = 64
 
 
+def _emit_metric(key: str, value, case_id: str = ""):
+    """Print a SIGNOFF_METRIC line for the signoff runner to capture."""
+    cid = case_id or os.environ.get("_FM_CASE_ID", "unknown")
+    print(f'SIGNOFF_METRIC {{"case": "{cid}", "key": "{key}", "value": {json.dumps(value)}}}')
+
+
 # ── Helpers ────────────────────────────────────────────────────────
 
 def write_mmul_descriptor(model: FuncModel, desc_addr: int,
@@ -87,22 +94,30 @@ def write_sfu_descriptor(model: FuncModel, desc_addr: int,
                           op: int, input_addr: int, output_addr: int,
                           input_sram: int, output_sram: int, size: int,
                           dim: int = 0, pos: int = 0):
-    """Write an SFU descriptor in the 15-word generic layout expected by firmware npu_firmware.c."""
+    """Write an SFU descriptor in the 15-word generic layout expected by firmware npu_firmware.c.
+    
+    Layout: src[0]=input, src[2]=output, src[8]=dim, src[9]=pos, src[10]=sfu_op.
+    """
     buf = struct.pack('<15I',
                       input_addr, 0, output_addr, 0,
                       input_sram, output_sram, 0, 0,
-                      dim, 0, 0, 0,
+                      dim, pos, op, 0,
                       1, dim, 1)
     model.host_write_data(desc_addr, np.frombuffer(buf, dtype=np.uint8))
 
 
 def write_vector_descriptor(model: FuncModel, desc_addr: int,
                              op: int, a_addr: int, b_addr: int, o_addr: int,
-                             dim: int):
-    """Write a Vector descriptor in the 15-word generic layout expected by firmware npu_firmware.c."""
+                             dim: int,
+                             a_sram: int = 0, b_sram: int = 0, o_sram: int = 0):
+    """Write a Vector descriptor in the 15-word generic layout expected by firmware npu_firmware.c.
+    
+    Layout: src[0]=a_addr, src[1]=b_addr, src[2]=o_addr, src[4]=a_sram, src[5]=b_sram,
+    src[6]=o_sram, src[8]=dim.
+    """
     buf = struct.pack('<15I',
                       a_addr, b_addr, o_addr, 0,
-                      0, 0, 0, 0,
+                      a_sram, b_sram, o_sram, 0,
                       dim, 0, 0, 0,
                       1, dim, 1)
     model.host_write_data(desc_addr, np.frombuffer(buf, dtype=np.uint8))
@@ -138,16 +153,16 @@ def schedule_chain(model: FuncModel, ops: list) -> int:
         desc = op['desc']
         if op_type == 'mmul':
             write_mmul_descriptor(model, desc_addr, **desc)
-            opcode = 0
+            opcode = int(EngineOp.MMUL)
         elif op_type == 'sfu':
             write_sfu_descriptor(model, desc_addr, **desc)
-            opcode = 1
+            opcode = int(EngineOp.SFU)
         elif op_type == 'vector':
             write_vector_descriptor(model, desc_addr, **desc)
-            opcode = 2
+            opcode = int(EngineOp.VECTOR)
         elif op_type == 'dma_copy':
             write_dma_copy_descriptor(model, desc_addr, **desc)
-            opcode = 3
+            opcode = int(EngineOp.DMA_COPY)
         else:
             raise ValueError(f"Unknown op type: {op_type}")
         write_cmd_entry(model, i, opcode, desc_addr, flags=op.get('flags', 0))
@@ -178,22 +193,24 @@ def run_one_op(gguf_path: str, layer: int, op: str, M: int = 1) -> bool:
     W_f32 = weights[target]
     K, N = W_f32.shape
 
-    # Quantize to row-major INT4 + per-block scales (C firmware reads row-major)
-    wgt_packed, wgt_scales, _ = quantize_int4_per_block(W_f32, 128)
-    wgt_bytes = wgt_packed.tobytes()
-    scale_bytes = wgt_scales.tobytes()
-
-    # The C firmware copies one contiguous weight blob via DMA.  Pack weights
-    # and scales back-to-back so the bridge can find scales at SCALE_ADDR.
-    combined_weight_blob = wgt_bytes + scale_bytes
-
     # Activation
     rng = np.random.RandomState(42)
     act = rng.randint(-128, 128, size=M * K, dtype=np.int8).reshape(M, K)
 
-    # Golden reference (row-major weights + scales)
+    # Quantize to row-major INT4 + per-block scales
+    wgt_packed, wgt_scales, _ = quantize_int4_per_block(W_f32, 128)
+
+    # Golden reference (computed BEFORE reordering — uses row-major weights/scales)
     mxu = GoldenMXU()
     golden = mxu.matmul_int4_per_block(act, wgt_packed, wgt_scales, M, K, N, group_size=128)
+
+    # Reorder for firmware's tiled DRAM layout (TILE_H=64, TILE_W=64)
+    wgt_packed, wgt_scales = _reorder_weights_to_firmware_tiles(wgt_packed, wgt_scales, K, N)
+    wgt_bytes = wgt_packed.tobytes()
+    scale_bytes = wgt_scales.tobytes()
+
+    # Pack weights and scales back-to-back for contiguous DMA
+    combined_weight_blob = wgt_bytes + scale_bytes
 
     SRAM_KB = 4096  # match firmware NPU_SRAM_SIZE
     model = FuncModel(sram_kb=SRAM_KB)
@@ -247,7 +264,6 @@ def run_one_op(gguf_path: str, layer: int, op: str, M: int = 1) -> bool:
     print(f"  [{'PASS' if ok else 'FAIL'}] L{layer} {op:12s} ({K}x{N})")
     if not ok:
         print(f"    max_diff={np.max(np.abs(out_fw - golden)):.2e}")
-    return ok
 
 
 SFU_OP_SOFTMAX = 0
@@ -423,7 +439,91 @@ def _read_tensor(model: FuncModel, addr: int, shape: tuple, dtype: type) -> np.n
 def _quantize_weight_for_mmul(W_f32: np.ndarray, group_size: int = 128
                               ) -> tuple:
     packed, scales, _ = quantize_int4_per_block(W_f32, group_size)
+    packed, scales = _reorder_weights_to_firmware_tiles(packed, scales,
+                                                         W_f32.shape[0], W_f32.shape[1])
     return packed, scales, packed.nbytes, scales.nbytes
+
+
+def _reorder_weights_to_firmware_tiles(packed: np.ndarray, scales: np.ndarray,
+                                       K: int, N: int,
+                                       tile_h: int = 64, tile_w: int = 64
+                                       ) -> tuple:
+    """Convert row-major packed INT4 weights to firmware's tiled DRAM layout.
+
+    Firmware expects weights and scales in TILE_H×TILE_W tiles, iterated as:
+        for each N-tile (stride TILE_W), for each K-tile (stride TILE_H):
+            DMA TILE_WEIGHT_BYTES of packed INT4 + TILE_SCALE_BYTES of float32.
+
+    Scale blocking: 2 K-tiles share 1 group_size=128 scale block, so the
+    scale slice for each (n_tile, k_tile) pair is scales[k_tile//2, n*W:n_end].
+    Partial tiles (K or N not multiples of TILE_H/TILE_W) are zero-padded to
+    full tile size so the firmware always reads fixed-size chunks.
+
+    Args:
+        packed: uint8 packed INT4 weights (row-major K×N)
+        scales: float32 per-block scales, shape (ceil(K/128), N)
+        K, N: original weight matrix dimensions
+        tile_h, tile_w: tile dimensions (default 64)
+
+    Returns:
+        reordered_packed: uint8 tiled weights (ceil(N/64)*ceil(K/64)*2048 bytes)
+        reordered_scales: float32 per-tile scales (flat)
+    """
+    TILE_WEIGHT_BYTES = tile_h * tile_w // 2
+    TILE_SCALE_BYTES = tile_w * 4
+    num_blocks = (K + tile_h - 1) // tile_h
+    num_n_tiles = (N + tile_w - 1) // tile_w
+
+    # Guard: if no tiling needed, return unchanged (preserves non-MMUL paths)
+    if num_blocks <= 1 and num_n_tiles <= 1:
+        return packed, scales
+
+    # Unpack to (K, N) int8
+    weights_int4 = GoldenMXU.unpack_int4(packed)
+    if len(weights_int4) < K * N:
+        weights_int4 = np.pad(weights_int4, (0, K * N - len(weights_int4)),
+                              constant_values=0)
+    W = weights_int4[:K * N].reshape(K, N)
+
+    reordered_chunks = []
+    reordered_scales_chunks = []
+
+    for n_tile in range(num_n_tiles):
+        n_start = n_tile * tile_w
+        n_end = min(n_start + tile_w, N)
+        n_width = n_end - n_start
+
+        for k_block in range(num_blocks):
+            k_start = k_block * tile_h
+            k_end = min(k_start + tile_h, K)
+            k_height = k_end - k_start
+
+            # Extract tile data (K×N slice)
+            tile = W[k_start:k_end, n_start:n_end]  # (k_height, n_width)
+
+            # Zero-pad to full tile size (firmware always reads full tile)
+            if k_height < tile_h or n_width < tile_w:
+                padded = np.zeros((tile_h, tile_w), dtype=np.int8)
+                padded[:k_height, :n_width] = tile
+                tile = padded
+
+            reordered_chunks.append(GoldenMXU.pack_int4(tile))
+
+            # Scales: 2 K-tiles share 1 group_size=128 scale block
+            group_idx = k_block // 2
+            tile_scales = scales[group_idx, n_start:n_end].astype(np.float32)
+
+            # Pad to full tile_w scales
+            if n_width < tile_w:
+                padded_scales = np.ones(tile_w, dtype=np.float32)
+                padded_scales[:n_width] = tile_scales
+                tile_scales = padded_scales
+
+            reordered_scales_chunks.append(tile_scales)
+
+    reordered_packed = np.concatenate(reordered_chunks)
+    reordered_scales = np.concatenate(reordered_scales_chunks)
+    return reordered_packed, reordered_scales
 
 
 def _add_mmul_op(ops: list, model: FuncModel,
@@ -543,6 +643,8 @@ def _quantize_weight_tile(W_f32: np.ndarray, n_start: int, n_end: int,
                           group_size: int = 128) -> tuple:
     tile = W_f32[:, n_start:n_end]
     packed, scales, _ = quantize_int4_per_block(tile, group_size)
+    K_tile, N_tile = tile.shape
+    packed, scales = _reorder_weights_to_firmware_tiles(packed, scales, K_tile, N_tile)
     return packed, scales
 
 
@@ -594,12 +696,19 @@ def _add_mmul_op_tiled(ops: list, model: FuncModel,
 def run_forward_pass(gguf_path: str, prompt: str, layers: int = 2,
                      reference_npz: str = None, seq_len: int = 4,
                      tolerance: float = 1e-1,
-                     log_fp=None) -> dict:
+                     log_fp=None,
+                     token_ids: list = None) -> dict:
     """Run a complete 2-layer Qwen2.5-1.5B forward pass through Spike firmware."""
     from sim.tokenizer import tokenize, embedding_lookup
 
     weights = load_weights_from_gguf(gguf_path)
-    token_ids = tokenize(prompt, gguf_path)
+    if token_ids is not None:
+        # Bypass HuggingFace tokenizer; caller-supplied raw integer IDs.
+        token_ids = [int(x) for x in token_ids]
+        if not token_ids:
+            raise ValueError("--token-ids must contain at least one integer ID")
+    else:
+        token_ids = tokenize(prompt, gguf_path)
     if seq_len == 1:
         token_ids = token_ids[:1]
     emb = embedding_lookup(token_ids, gguf_path).astype(np.float32)
@@ -832,6 +941,9 @@ def _launch_spike(model: FuncModel):
 
     env = os.environ.copy()
     env["PATH"] = str(PROJECT / "dtc_src") + ":" + env.get("PATH", "")
+    # Cadence CEREBRUS provides a libstdc++ with CXXABI_1.3.9+ required by the MMIO plugin
+    _cadence_lib = "/home/EDA/cadence/CEREBRUS22.15_P/tools.lnx86/lib/64bit"
+    env["LD_LIBRARY_PATH"] = _cadence_lib + ":" + env.get("LD_LIBRARY_PATH", "")
 
     cmd = [
         str(SPIKE_BIN),
@@ -862,6 +974,14 @@ def _cleanup_spike(proc: subprocess.Popen, server):
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()
+    else:
+        # Already exited — capture diagnostic output
+        out = proc.stdout.read() if proc.stdout else ""
+        err = proc.stderr.read() if proc.stderr else ""
+        if err:
+            print(f"[SPIKE_STDERR] {err[:2000]}", file=sys.stderr, flush=True)
+        if out:
+            print(f"[SPIKE_STDOUT] {out[:2000]}", file=sys.stderr, flush=True)
     server.shutdown()
     try:
         os.unlink(DEFAULT_SOCK_PATH)
@@ -1029,8 +1149,9 @@ def run_pcie_dma_smoke(direction: int = 0, len_bytes: int = 64) -> bool:
     return False
 
 
-def run_chain_smoke(op_types: list) -> list:
-    """Run a mixed-type command chain and verify each output."""
+def run_chain_smoke(op_types: list) -> tuple:
+    """Run a mixed-type command chain and verify each output.
+    Returns (results, completed) where completed=True if Spike dispatched all ops."""
     rng = np.random.RandomState(123)
     SRAM_KB = 4096
     model = FuncModel(sram_kb=SRAM_KB)
@@ -1062,16 +1183,34 @@ def run_chain_smoke(op_types: list) -> list:
 
     results = []
     if not done:
+        head = model.bridge._status.get(DOORBELL.BASE + DOORBELL.NPU_HEAD, 0)
+        print(f"  [FAIL] chain — timeout: NPU_HEAD={head}, expected={len(ops) % 64}")
         for t, _ in goldens:
-            print(f"  [FAIL] {t:12s} — timeout waiting for NPU_HEAD={len(ops) % 64}")
             results.append((t, False))
-        return results
+        return results, False
+
+    # Verify NPU_HEAD == len(ops) (mod 64)
+    head = model.bridge._status.get(DOORBELL.BASE + DOORBELL.NPU_HEAD, 0)
+    expected_head = len(ops) % 64
+    if head != expected_head:
+        print(f"  [FAIL] NPU_HEAD={head}, expected={expected_head}")
+        for t, _ in goldens:
+            results.append((t, False))
+        return results, False
+    print(f"  [INFO] NPU_HEAD={head} (expected={expected_head}) OK")
 
     for (t, (output_addr, golden, dtype)), _op in zip(goldens, ops):
         ok = _verify_output(model, output_addr, golden, dtype)
+        off = output_addr - Addr.DRAM_BASE
+        size = golden.size * np.dtype(dtype).itemsize
+        out_blob = bytes(model.dram[off:off + min(size, 256)])
+        has_data = not all(b == 0 for b in out_blob)
+        if not has_data:
+            print(f"  [FAIL] {t:12s} — zero output (CHAIN_NZ)")
+            ok = False
         results.append((t, ok))
         print(f"  [{'PASS' if ok else 'FAIL'}] {t:12s}")
-    return results
+    return results, True
 
 
 def load_chain_ops(path: str) -> list:
@@ -1106,8 +1245,9 @@ def run_chain_file(ops_file: str) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Spike NPU host adapter")
-    parser.add_argument("--model", default=str(Path.home() / "models" /
-                        "qwen2.5-1.5b-instruct-q4_k_m.gguf"),
+    parser.add_argument("--model", default=os.environ.get(
+                        "QWEN3B_GGUF",
+                        str(Path.home() / "models" / "qwen2.5-1.5b-instruct-q4_k_m.gguf")),
                         help="Path to GGUF model")
     parser.add_argument("--layers", type=int, default=2,
                         help="Number of layers to test")
@@ -1130,12 +1270,26 @@ def main() -> int:
                         help="Number of forward runs for determinism check")
     parser.add_argument("--evidence-dir", default=".omo/evidence",
                         help="Directory to save evidence files")
+    parser.add_argument("--token-ids", default=None,
+                        help="Comma-separated integer token IDs (e.g., 1,2,3,4). "
+                             "When provided, bypasses the HuggingFace tokenizer.")
     args = parser.parse_args()
+
+    if args.token_ids is not None:
+        try:
+            args.token_ids = [int(x.strip()) for x in args.token_ids.split(",")]
+        except ValueError as exc:
+            parser.error(f"--token-ids must be a comma-separated list of integers: {exc}")
+
+    case_id = os.environ.get("_FM_CASE_ID", "unknown")
 
     if args.mode == "mmul_smoke":
         ops = [o.strip() for o in args.ops.split(",")]
         passed = 0
         failed = 0
+
+        _emit_metric("spike.mode", "mmul_smoke", case_id)
+        t0 = time.time()
 
         print(f"{'='*70}")
         print(f"Spike Host: {Path(args.model).name}  layers={args.layers}  ops={ops}")
@@ -1149,15 +1303,29 @@ def main() -> int:
                 else:
                     failed += 1
 
+        elapsed = time.time() - t0
+        exit_code = 0 if failed == 0 else 1
+        _emit_metric("spike.exit_code", exit_code, case_id)
+        _emit_metric("spike.tolerance_result", "PASS" if failed == 0 else "FAIL", case_id)
+        _emit_metric("spike.elapsed_s", round(elapsed, 3), case_id)
+
         print(f"\n{'='*70}")
         print(f"Spike Host Summary: {passed} PASS, {failed} FAIL")
         print(f"{'='*70}")
-        return 0 if failed == 0 else 1
+        return exit_code
 
     if args.mode == "chain":
+        _emit_metric("spike.mode", "chain", case_id)
+        t0 = time.time()
+
         if args.ops_file:
             ok = run_chain_file(args.ops_file)
-            return 0 if ok else 1
+            elapsed = time.time() - t0
+            exit_code = 0 if ok else 1
+            _emit_metric("spike.exit_code", exit_code, case_id)
+            _emit_metric("spike.tolerance_result", "PASS" if ok else "FAIL", case_id)
+            _emit_metric("spike.elapsed_s", round(elapsed, 3), case_id)
+            return exit_code
 
         op_types = [o.strip().lower() for o in args.ops.split(",")]
         if op_types == ["q_proj", "k_proj", "v_proj"]:
@@ -1169,18 +1337,32 @@ def main() -> int:
         print(f"Spike Host Chain: ops={op_types}")
         print(f"{'='*70}")
 
-        results = run_chain_smoke(op_types)
+        results, completed = run_chain_smoke(op_types)
         passed = sum(1 for _, ok in results if ok)
         failed = len(results) - passed
 
+        elapsed = time.time() - t0
+        chain_ok = completed and failed == 0
+        exit_code = 0 if chain_ok else 1
+        _emit_metric("spike.exit_code", exit_code, case_id)
+        _emit_metric("spike.tolerance_result", "PASS" if chain_ok else "FAIL", case_id)
+        _emit_metric("spike.elapsed_s", round(elapsed, 3), case_id)
+
         print(f"\n{'='*70}")
         print(f"Spike Host Chain Summary: {passed} PASS, {failed} FAIL")
+        print(f"NPU_HEAD={'OK' if completed else 'TIMEOUT'}, AllOpsPassed={'YES' if (completed and failed == 0) else 'NO'}")
         print(f"{'='*70}")
-        return 0 if failed == 0 else 1
+        return exit_code
 
     if args.mode == "forward":
+        _emit_metric("spike.mode", "forward", case_id)
+        t0 = time.time()
+
         print(f"{'='*70}")
-        print(f"Spike Host Forward: {Path(args.model).name}  layers={args.layers}  prompt={args.prompt!r}")
+        if args.token_ids is not None:
+            print(f"Spike Host Forward: {Path(args.model).name}  layers={args.layers}  token_ids={args.token_ids}")
+        else:
+            print(f"Spike Host Forward: {Path(args.model).name}  layers={args.layers}  prompt={args.prompt!r}")
         print(f"{'='*70}")
 
         evidence_dir = Path(args.evidence_dir)
@@ -1209,6 +1391,7 @@ def main() -> int:
                 args.model, args.prompt, layers=args.layers,
                 reference_npz=args.reference, seq_len=args.seq_len,
                 tolerance=args.tolerance, log_fp=e2e_fp,
+                token_ids=args.token_ids,
             )
             run_results.append(result)
             _tee(f"Run {run + 1} overall: {'PASS' if result['ok'] else 'WARN'}")
@@ -1270,17 +1453,33 @@ def main() -> int:
         print(f"Spike Host Forward Summary: {'PASS' if all_ok else 'WARN'}  deterministic={'YES' if deterministic else 'NO'}")
         print(f"Evidence saved: {e2e_path}  {npz_path}")
         print(f"{'='*70}")
-        return 0 if all_ok else 1
+
+        elapsed = time.time() - t0
+        exit_code = 0 if all_ok else 1
+        _emit_metric("spike.exit_code", exit_code, case_id)
+        _emit_metric("spike.tolerance_result", "PASS" if all_ok else "FAIL", case_id)
+        _emit_metric("spike.elapsed_s", round(elapsed, 3), case_id)
+        return exit_code
 
     if args.mode == "pcie_dma":
+        _emit_metric("spike.mode", "pcie_dma", case_id)
+        t0 = time.time()
+
         print(f"{'='*70}")
         print("Spike Host PCIe DMA: opcode 7 dispatch smoke test")
         print(f"{'='*70}")
         ok = run_pcie_dma_smoke()
+
+        elapsed = time.time() - t0
+        exit_code = 0 if ok else 1
+        _emit_metric("spike.exit_code", exit_code, case_id)
+        _emit_metric("spike.tolerance_result", "PASS" if ok else "FAIL", case_id)
+        _emit_metric("spike.elapsed_s", round(elapsed, 3), case_id)
+
         print(f"{'='*70}")
         print(f"Spike Host PCIe DMA Summary: {'PASS' if ok else 'FAIL'}")
         print(f"{'='*70}")
-        return 0 if ok else 1
+        return exit_code
 
     return 1
 

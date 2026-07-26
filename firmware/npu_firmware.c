@@ -64,7 +64,8 @@ typedef struct __attribute__((packed)) {
     uint32_t size;
     uint32_t dim;          // head_dim for ROPE, elements for others
     uint32_t pos;          // position for ROPE
-    uint32_t _pad[4];
+    uint32_t sfu_op;       // SFU sub-operation (hardware op code)
+    uint32_t _pad[3];
 } sfu_desc_t;
 
 /* 操作描述符 — Vector */
@@ -108,38 +109,51 @@ static uint32_t g_cmd_count = 0;
 
 /* ── MMIO 读写原语 ───────────────────────────────────────────────── */
 
-static inline uint32_t mmio_read(uint32_t addr) {
-    return *(volatile uint32_t *)addr;
+static inline uint32_t mmio_read(volatile uint32_t *addr) {
+    uint32_t v = *addr;
+    __asm__ volatile("" ::: "memory");
+    return v;
 }
 
-static inline void mmio_write(uint32_t addr, uint32_t value) {
-    *(volatile uint32_t *)addr = value;
+static inline void mmio_write(volatile uint32_t *addr, uint32_t value) {
+    *addr = value;
+    __asm__ volatile("" ::: "memory");
 }
 
 /* ── 模块操作 ────────────────────────────────────────────────────── */
 
+/* The on-chip axi_cdma engine truncates single transfers at 64 KiB.
+ * Split larger copies into 64 KiB chunks so the full payload lands. */
+#define DMA_MAX_CHUNK 32768U
+
 static void dma_copy(uint32_t src, uint32_t dst, uint32_t size,
                      int channel) {
     npu_dma_t *dma = NPU_DMA;
-    if (channel == 0) {
-        /* Clear CH1_SIZE so the wrapper does not re-run a stale CH1 transfer. */
-        dma->CH1_SIZE  = 0;
-        dma->CH1_STRIDE = 0;
-        dma->CH0_SRC   = src;
-        dma->CH0_DST   = dst;
-        dma->CH0_SIZE  = size;
-        dma->CH0_STRIDE = 0;
-    } else {
-        /* Clear CH0_SIZE so the wrapper does not re-run a stale CH0 transfer. */
-        dma->CH0_SIZE  = 0;
-        dma->CH0_STRIDE = 0;
-        dma->CH1_SRC   = src;
-        dma->CH1_DST   = dst;
-        dma->CH1_SIZE  = size;
-        dma->CH1_STRIDE = 0;
+    while (size > 0) {
+        uint32_t chunk = size > DMA_MAX_CHUNK ? DMA_MAX_CHUNK : size;
+        if (channel == 0) {
+            /* Clear CH1_SIZE so the wrapper does not re-run a stale CH1 transfer. */
+            dma->CH1_SIZE  = 0;
+            dma->CH1_STRIDE = 0;
+            dma->CH0_SRC   = src;
+            dma->CH0_DST   = dst;
+            dma->CH0_SIZE  = chunk;
+            dma->CH0_STRIDE = 0;
+        } else {
+            /* Clear CH0_SIZE so the wrapper does not re-run a stale CH0 transfer. */
+            dma->CH0_SIZE  = 0;
+            dma->CH0_STRIDE = 0;
+            dma->CH1_SRC   = src;
+            dma->CH1_DST   = dst;
+            dma->CH1_SIZE  = chunk;
+            dma->CH1_STRIDE = 0;
+        }
+        npu_start(&dma->CMD);
+        npu_wait_done(&dma->STATUS);
+        src += chunk;
+        dst += chunk;
+        size -= chunk;
     }
-    npu_start(&dma->CMD);
-    npu_wait_done(&dma->STATUS);
 }
 
 static uint32_t pcie_dma_exec(uint32_t desc_sram_addr) {
@@ -179,7 +193,7 @@ static uint32_t pcie_dma_exec(uint32_t desc_sram_addr) {
 static void mxu_wrapper_preload(uint32_t w_addr, uint32_t i_addr,
                                 uint32_t o_addr, uint32_t k_tiles,
                                 uint32_t dim_n) {
-    volatile uint32_t *wrp = (volatile uint32_t *)NPU_MXU_BASE;
+    volatile uint32_t *wrp = (volatile uint32_t *)npu_mxu_base();
     wrp[MXU_WRP_WEIGHT_BASE / 4] = w_addr;
     wrp[MXU_WRP_ACT_BASE / 4]    = i_addr;
     wrp[MXU_WRP_OUT_BASE / 4]    = o_addr;
@@ -205,20 +219,9 @@ static void mxu_start(uint32_t i_addr, uint32_t w_addr, uint32_t o_addr,
     mxu->DIM1   = (N & 0xFFFF);
     npu_start(&mxu->CMD);
     npu_wait_done(&mxu->STATUS);
-}
-
-/* Map engine-level OpCode to hardware SFU_OP_* value. */
-static uint32_t sfu_hw_op(uint32_t opcode) {
-    switch (opcode) {
-    case 0x01: return 0;
-    case 0x02: return 1;
-    case 0x03: return 2;
-    case 0x04: return 3;
-    case 0x06: return 4;
-    case 0x05: return 5;
-    case 0x17: return 6;
-    default:   return 0;
-    }
+    /* Give the wrapper store-out FIFO time to drain to SRAM before the
+     * caller starts a DMA read of the output tile. */
+    for (volatile uint32_t d = 0; d < 2000; d++) __asm__ volatile("nop");
 }
 
 #define SFU_SCRATCH_IN  (NPU_SRAM_BASE + 0x80000)
@@ -260,7 +263,7 @@ static void sfu_start(uint32_t op, uint32_t i_addr, uint32_t o_addr,
 
 static void vec_wrapper_load_a(uint32_t a_addr, uint32_t o_addr,
                                uint32_t elements) {
-    volatile uint32_t *wrp = (volatile uint32_t *)NPU_VECTOR_BASE;
+    volatile uint32_t *wrp = (volatile uint32_t *)npu_vector_base();
     wrp[VEC_WRP_A_BASE / 4] = a_addr;
     wrp[VEC_WRP_O_BASE / 4] = o_addr;
     wrp[VEC_WRP_LEN / 4]    = elements & 0xFFFF;
@@ -269,7 +272,7 @@ static void vec_wrapper_load_a(uint32_t a_addr, uint32_t o_addr,
 }
 
 static void vec_wrapper_load_b(uint32_t b_addr, uint32_t elements) {
-    volatile uint32_t *wrp = (volatile uint32_t *)NPU_VECTOR_BASE;
+    volatile uint32_t *wrp = (volatile uint32_t *)npu_vector_base();
     wrp[VEC_WRP_B_BASE / 4] = b_addr;
     wrp[VEC_WRP_LEN / 4]    = elements & 0xFFFF;
     wrp[VEC_WRP_CMD / 4]    = 0x00000002;
@@ -277,7 +280,7 @@ static void vec_wrapper_load_b(uint32_t b_addr, uint32_t elements) {
 }
 
 static void vec_wrapper_store_o(uint32_t o_addr, uint32_t elements) {
-    volatile uint32_t *wrp = (volatile uint32_t *)NPU_VECTOR_BASE;
+    volatile uint32_t *wrp = (volatile uint32_t *)npu_vector_base();
     wrp[VEC_WRP_O_BASE / 4] = o_addr;
     wrp[VEC_WRP_LEN / 4]    = elements & 0xFFFF;
     wrp[VEC_WRP_CMD / 4]    = 0x00000004;
@@ -349,7 +352,8 @@ static void read_sfu_desc(uint32_t desc_addr, sfu_desc_t *desc) {
     desc->input_sram  = 0x00000000;
     desc->output_sram = 0x00018000;
     desc->dim         = src[8];
-    desc->pos         = 0;
+    desc->pos         = src[9];
+    desc->sfu_op      = src[10];
 }
 
 static void read_vector_desc(uint32_t desc_addr, vector_desc_t *desc) {
@@ -403,18 +407,27 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
             const uint32_t TILE_W = 64;
             const uint32_t TILE_WEIGHT_BYTES = TILE_H * TILE_W / 2;
             const uint32_t TILE_SCALE_BYTES  = TILE_W * 4;
+            const uint32_t SRAM_ALIGN = 64;
 
+            // Place activation first, then double-buffered weights/scales and
+            // output scratch, so large K does not clobber the scratch buffers.
             uint32_t act_sram  = 0x00000000;
-            uint32_t wbuf[2]   = {0x00010000, 0x00012000};
-            uint32_t sbuf[2]   = {0x00014000, 0x00015000};
-            uint32_t out_sram  = 0x00018000;
-
             uint32_t act_sram_abs = NPU_SRAM_BASE + act_sram;
+
+            dma_copy(desc.input_addr, act_sram_abs, desc.input_size, 0);
+
+            uint32_t act_end = (act_sram + desc.input_size + SRAM_ALIGN - 1)
+                               & ~(SRAM_ALIGN - 1);
+            uint32_t wbuf[2]   = {act_end, act_end + TILE_WEIGHT_BYTES};
+            uint32_t wbuf_end  = wbuf[1] + TILE_WEIGHT_BYTES;
+            uint32_t sbuf[2]   = {(wbuf_end + SRAM_ALIGN - 1) & ~(SRAM_ALIGN - 1),
+                                  ((wbuf_end + SRAM_ALIGN - 1) & ~(SRAM_ALIGN - 1))
+                                  + TILE_SCALE_BYTES};
+            uint32_t sbuf_end  = sbuf[1] + TILE_SCALE_BYTES;
+            uint32_t out_sram  = (sbuf_end + SRAM_ALIGN - 1) & ~(SRAM_ALIGN - 1);
 
             uint32_t num_blocks = (desc.K + TILE_H - 1) / TILE_H;
             uint32_t num_tiles  = (desc.N + TILE_W - 1) / TILE_W;
-
-            dma_copy(desc.input_addr, act_sram_abs, desc.input_size, 0);
 
             for (uint32_t n_tile = 0; n_tile < num_tiles; n_tile++) {
                 uint32_t n_start = n_tile * TILE_W;
@@ -441,7 +454,7 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
                         dma_copy(desc.scale_addr + scale_offset, s_addr_abs, TILE_SCALE_BYTES, 0);
                     }
 
-                    uint32_t act_offset     = act_sram + k_start * 64;
+                    uint32_t act_offset     = act_sram + k_start * desc.M;
                     uint32_t act_offset_abs = NPU_SRAM_BASE + act_offset;
                     uint32_t out_offset_abs = NPU_SRAM_BASE + out_offset;
                     uint32_t accumulate_ctrl = (k_block > 0) ? 4 : 0;
@@ -455,15 +468,13 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
             }
             status = 0;
         }
-    } else if (op == 0x01 || op == 0x02 || op == 0x03 || op == 0x04 ||
-               op == 0x06 || op == 0x17) {
+    } else if (op == 0x01) {  /* SFU — sub-op in descriptor src[10] */
         sfu_desc_t desc;
         NPU_DB->LAST_STATUS = 0x00004000 | (op & 0xFF);
         read_sfu_desc(cmd->desc_addr, &desc);
 
-        uint32_t hw_op = sfu_hw_op(op);
         NPU_DB->LAST_STATUS = 0x00004100 | (op & 0xFF);
-        sfu_start(hw_op, desc.input_addr, desc.output_addr, desc.dim, 0, desc.pos);
+        sfu_start(desc.sfu_op, desc.input_addr, desc.output_addr, desc.dim, 0, desc.pos);
         status = 0;
     } else if (op == 0x05) {  /* ROPE: dim packs (head_dim << 16) | elements */
         sfu_desc_t desc;
@@ -471,7 +482,7 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
 
         uint32_t elements  = desc.dim & 0xFFFF;
         uint32_t head_dim  = (desc.dim >> 16) & 0xFFFF;
-        sfu_start(sfu_hw_op(op), desc.input_addr, desc.output_addr,
+        sfu_start(5, desc.input_addr, desc.output_addr,
                   elements, head_dim, desc.pos);
         status = 0;
     } else if (op >= 0x0F && op <= 0x14) {  /* Vector: VADD/VMUL/VRED_MAX/VRED_SUM/VCONV/VRESID */

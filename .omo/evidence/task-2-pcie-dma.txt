@@ -1,0 +1,34 @@
+case_id: task-2-v3-pcie-dma
+utc_start: 2026-07-25T05:25:19.482554+00:00
+utc_end: 2026-07-25T05:25:21.213263+00:00
+elapsed_s: 1.731
+branch: main
+head: a02202c93f18b7ef792dc82c3c32bb5e9d565af7
+dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |  12 +-
+ .omo/notepads/phase6-rtl-verification/learnings.md |  32 +++
+ .../soc-verification-gaps-phase5/learnings.md      | 224 ++++++++++++++++++++
+argv: ["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_v3_pcie.py", "-q"]
+command_hash: 7c1f995d34d0ad4d
+exit_code: 0
+source_fingerprint: eab2bcfa430bff7ae45ffe2cfbeeaf64520a2aad7b906944e6582d31b5a8a5ff
+source_files (2):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_v3_pcie.py
+verdict: pass
+test_collected: 12
+test_passed: 12
+test_failed: 0
+test_skipped: 0
+test_xfailed: 0
+SIGNOFF_METRIC {"case": "task-2-v3-pcie-dma", "key": "tests.collected", "value": 12}
+SIGNOFF_METRIC {"case": "task-2-v3-pcie-dma", "key": "tests.passed", "value": 12}
+SIGNOFF_METRIC {"case": "task-2-v3-pcie-dma", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-2-v3-pcie-dma", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-2-v3-pcie-dma", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-2-v3-pcie-dma", "key": "evidence.verdict", "value": "pass"}
+
+--- STDOUT (first 8000 chars) ---
+............                                                             [100%]
+12 passed in 0.09s
+
+--- END ---

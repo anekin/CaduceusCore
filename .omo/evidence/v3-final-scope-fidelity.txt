@@ -1,0 +1,64 @@
+case_id: f4-scope-fidelity
+utc_start: 2026-07-25T06:03:39.135622+0000
+utc_end: 2026-07-25T06:03:39.135622+0000
+branch: main
+  head: 243a88dc1b6e6f9e67392cf597b6af166387122e
+  signoff_start_commit: e734154f8990626d2796c52559f802b4aef904b7
+  signoff_first_commit: 5df01d9
+commits_in_signoff_scope: 19
+changed_files_total: 23
+
+changed_files_by_category:
+  v3_harness (11):
+    - scripts/run_fm_env.sh
+    - scripts/run_func_model_signoff.py
+    - sim/mmio_bridge.py
+    - sim/spike_host.py
+    - sim/tests/test_func_model_signoff_v3.py
+    - sim/tests/test_func_model_signoff_v3_crossbar.py
+    - sim/tests/test_func_model_signoff_v3_doorbell.py
+    - sim/tests/test_func_model_signoff_v3_host.py
+    - sim/tests/test_func_model_signoff_v3_intc.py
+    - sim/tests/test_func_model_signoff_v3_integration.py
+    - sim/tests/test_func_model_signoff_v3_pcie.py
+
+  evidence_notepad (11):
+    - .omo/evidence/task-0-signoff-v3-runner.txt
+    - .omo/evidence/task-1b-spike-chain.txt
+    - .omo/evidence/task-1d-spike-pcie-dma.txt
+    - .omo/evidence/task-2-pcie-dma.txt
+    - .omo/evidence/task-3-crossbar.txt
+    - .omo/evidence/task-4-doorbell.txt
+    - .omo/evidence/task-5-intc.txt
+    - .omo/evidence/task-7-soc-integration.txt
+    - .omo/evidence/v3-final-scope-fidelity.txt
+    - .omo/notepads/func-model-signoff-v3/issues.md
+    - .omo/notepads/func-model-signoff-v3/learnings.md
+
+  bug_track (1):
+    - docs/bugs/bugs-soc-func-model.md
+
+  out_of_scope (0):
+    (none)
+
+rtl_changed: 0 files
+firmware_changed: 0 files
+spike_plugin_cc_changed: 0 files
+spike_plugin_h_changed: 0 files
+spike_plugin_so_changed: 0 files
+
+evidence.verdict: pass
+scope_fidelity_summary: |
+  All changed files are within allowed paths (sim/, scripts/, .omo/, docs/bugs/).
+  No RTL, firmware, or Spike plugin source/compiled files were modified.
+  The out-of-scope binary spike_src/plugins/npu_mmio_plugin.so has been restored to
+  its baseline state at commit e734154.
+
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "changed_files.total", "value": 23}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "changed_files.in_scope", "value": 23}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "changed_files.out_of_scope", "value": 0}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "rtl.changed", "value": 0}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "firmware.changed", "value": 0}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "spike_plugin_cc.changed", "value": 0}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "spike_plugin_h.changed", "value": 0}
+SIGNOFF_METRIC {"case": "f4-scope-fidelity", "key": "evidence.verdict", "value": "pass"}

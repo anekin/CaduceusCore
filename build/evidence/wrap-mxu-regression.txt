@@ -1,0 +1,10 @@
+
+=== MXU Wrapper Regression 2026-07-23 08:44:25 ===
+
+  test_apb_regmap_rw: PASS
+  test_mxu_preload_single_tile: PASS
+  test_mxu_single_tile_compute: PASS
+  test_mxu_store_out_burst: PASS
+  test_mxu_accumulate_mode: PASS
+
+Summary: 5 PASS, 0 FAIL (5 total)

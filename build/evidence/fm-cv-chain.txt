@@ -1,0 +1,17 @@
+======================================================================
+FM-2 MobileNetV3 Conv2D->VRESID->SiLU Chain Verification
+Timestamp: 2026-07-15T10:35:26Z
+Layer: MobileNetV3-Small features.0.0  (16@3x3 s2)
+Dims: M=12544 K=27 N=16  length=200704
+Expanded program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+======================================================================
+
+Op                      cos_sim  Verdict
+----------------------------------------
+conv2d                 0.994569     PASS
+vresid                 1.000000     PASS
+vconv                  1.000000     PASS
+silu                   1.000000     PASS
+silu_vs_torch          1.000000     PASS
+----------------------------------------
+Overall: PASS

@@ -1,0 +1,56 @@
+case_id: final-real-qa
+utc_start: 2026-07-24T14:11:52.000000+00:00
+utc_end: 2026-07-24T14:15:03.364418+00:00
+elapsed_s: 191.31
+branch: main
+head: 0e96ceb
+env_wrapper: scripts/run_fm_env.sh
+gguf_path: /home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf
+argv: ["bash", "scripts/run_fm_env.sh", "--", "python3", "-m", "pytest", "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_selective_loading_and_reference_inputs", "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_direct_projections", "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_tiled_projections", "sim/signoff/test_qwen25_3b_real_blk0.py::test_qwen25_3b_real_connected_blk0", "-v"]
+exit_code: 0
+verdict: pass
+test_collected: 4
+test_passed: 4
+test_failed: 0
+test_skipped: 0
+test_xfailed: 0
+SIGNOFF_METRIC {"case": "final-real-qa", "key": "gguf.sha256", "value": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d"}
+SIGNOFF_METRIC {"case": "final-real-qa", "key": "gguf.hidden", "value": 2048}
+SIGNOFF_METRIC {"case": "final-real-qa", "key": "gguf.intermediate", "value": 11008}
+SIGNOFF_METRIC {"case": "final-real-qa", "key": "tests.collected", "value": 4}
+SIGNOFF_METRIC {"case": "final-real-qa", "key": "tests.passed", "value": 4}
+SIGNOFF_METRIC {"case": "final-real-qa", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "final-real-qa", "key": "min_projection_cosine", "value": 0.9768144654042341}
+SIGNOFF_METRIC {"case": "final-real-qa", "key": "final_cosine", "value": 0.9883881615792555}
+SIGNOFF_METRIC {"case": "final-real-qa", "key": "evidence.verdict", "value": "pass"}
+
+# Verification log:
+#   GGUF SHA-256:     626b4a... (pinned) — matches `sha256sum` on disk ✓
+#                     sha256sum output: 626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d
+#   hidden=2048:       confirmed via K_proj.K=2048, Q_proj.N=2048, O_proj.K=2048 ✓
+#   intermediate=11008: confirmed via gate.N=11008, up.N=11008, down.K=11008 ✓
+#
+#   T4C1 (selective loading): PASS — 13 layer-0 tensors loaded, model.sha256 emitted ✓
+#   T4C2 (direct projections): PASS — 7 projections:
+#     Q_proj cosine=0.9989696731247228, V_proj cosine=0.9945660907150852,
+#     K_proj cosine=0.9999818574294884, O_proj cosine=0.9956863922408645,
+#     gate cosine=0.9973763273795546, up cosine=0.9962362627592843,
+#     down cosine=0.995567767878999 — all ≥ 0.96 ✓
+#     activation_scale present for all 7 projections ✓
+#     bias loaded for attn_q/attn_k/attn_v ✓
+#   T4C3 (tiled projections): PASS — 7 projections, total_tile_count=4704,
+#     all direct_agreement=true (bit-exact vs direct-MMIO), tile_counts recorded ✓
+#   T4C4 (connected blk0): PASS — 21 boundaries, min_cosine=0.9768144654042341,
+#     final_cosine=0.9883881615792555, overall_verdict=PASS ✓
+#     gamma multiply recorded (B02 attn, B14 ffn) ✓
+#     GQA repeat recorded (B07) ✓
+#     per-head softmax recorded (B09) ✓
+#
+#   Graded cosine policy: ≥0.96 → PASS — all projection cosines (7 direct + 7 tiled + 7 connected) ≥ 0.976 ✓
+#   Connected gate final_cosine: 0.9883881615792555 ≥ 0.96 ✓
+#   min_projection_cosine: 0.9768144654042341 (B19_down, Connected) ≥ 0.96 ✓
+#
+#   pytest: 4 collected, 4 passed, 0 failed ✓
+#
+#   VERDICT: pass — all four nodes pass, GGUF hash/dims match pinned values,
+#            all projection cosines ≥ 0.96 with sufficient margin.

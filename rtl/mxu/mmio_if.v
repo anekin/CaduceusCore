@@ -50,6 +50,7 @@ module mmio_if (
 
     // Register value outputs for controller
     output wire [1:0]  ctrl_dtype,
+    output wire        ctrl_acc_mode,
     output wire [15:0] dim0_m,
     output wire [15:0] dim0_k,
     output wire [15:0] dim1_n,
@@ -158,15 +159,16 @@ module mmio_if (
     //=========================================================================
     // Register value outputs for controller
     //=========================================================================
-    assign ctrl_dtype  = ctrl_reg[1:0];
-    assign dim0_m      = dim0_reg[15:0];
-    assign dim0_k      = dim0_reg[31:16];
-    assign dim1_n      = dim1_reg[15:0];
-    assign i_addr_o    = i_addr_reg;
-    assign w_addr_o    = w_addr_reg;
-    assign o_addr_o    = o_addr_reg;
-    assign bias_addr_o = bias_addr_reg;
+    assign ctrl_dtype   = ctrl_reg[1:0];
+    assign ctrl_acc_mode = ctrl_reg[2];
+    assign dim0_m       = dim0_reg[15:0];
+    assign dim0_k       = dim0_reg[31:16];
+    assign dim1_n       = dim1_reg[15:0];
+    assign i_addr_o     = i_addr_reg;
+    assign w_addr_o     = w_addr_reg;
+    assign o_addr_o     = o_addr_reg;
+    assign bias_addr_o  = bias_addr_reg;
     assign scale_addr_o = scale_addr_reg;
-    assign irq_en_o    = irq_en_reg[0];
+    assign irq_en_o     = irq_en_reg[0];
 
 endmodule

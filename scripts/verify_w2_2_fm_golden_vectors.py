@@ -222,7 +222,7 @@ def compare_outputs(hw: np.ndarray, ref: np.ndarray) -> Dict[str, Any]:
     rel_diff = abs_diff / (np.abs(ref_f) + 1e-12)
     max_abs = float(np.max(abs_diff))
     max_rel = float(np.max(rel_diff))
-    passes = bool(np.all(abs_diff < FP16_ATOL) or np.all(rel_diff < FP16_RTOL))
+    passes = bool(np.all((abs_diff <= FP16_ATOL) | (rel_diff <= FP16_RTOL)))
     return {
         "max_abs_err": max_abs,
         "max_rel_err": max_rel,

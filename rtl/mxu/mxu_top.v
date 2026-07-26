@@ -98,6 +98,7 @@ module mxu_top #(
     wire        cmd_start;
     wire        cmd_abort;
     wire [1:0]  ctrl_dtype;       // unused at top level
+    wire        ctrl_acc_mode;
     wire [15:0] dim0_m;
     wire [15:0] dim0_k;
     wire [15:0] dim1_n;
@@ -148,6 +149,7 @@ module mxu_top #(
         .cmd_start     (cmd_start),
         .cmd_abort     (cmd_abort),
         .ctrl_dtype    (ctrl_dtype),
+        .ctrl_acc_mode (ctrl_acc_mode),
         .dim0_m        (dim0_m),
         .dim0_k        (dim0_k),
         .dim1_n        (dim1_n),
@@ -170,6 +172,7 @@ module mxu_top #(
         .dim0_m            (dim0_m),
         .dim0_k            (dim0_k),
         .dim1_n            (dim1_n),
+        .ctrl_acc_mode     (ctrl_acc_mode),
         .irq_en            (irq_en),
         .status_busy       (status_busy),
         .status_done       (status_done),

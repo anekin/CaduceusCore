@@ -1,0 +1,60 @@
+case_id: task-1c-v3-spike-forward
+utc_start: 2026-07-26T02:55:54.660665+00:00
+utc_end: 2026-07-26T02:57:41.259606+00:00
+elapsed_s: 106.599
+branch: main
+head: df95dc5fc0ab2e33447db79513e4acde24013734
+dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |  19 +-
+ .omo/evidence/task-1b-spike-chain.txt              |  74 ++--
+ .omo/evidence/task-1d-spike-pcie-dma.txt           |  91 ++++-
+ .omo/evidenc
+argv: ["bash", "scripts/run_fm_env.sh", "--", "python3", "sim/spike_host.py", "--mode", "forward"]
+command_hash: 53cbb6d74ae2d794
+exit_code: 1
+source_fingerprint: be1454826f100974b78d41cc28bdcecef7af6b346fe31147b2ae5708a843adf4
+source_files (3):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_fm_env.sh
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_host.py
+verdict: fail
+SIGNOFF_METRIC {"case": "task-1c-v3-spike-forward", "key": "spike.mode", "value": "forward"}
+SIGNOFF_METRIC {"case": "task-1c-v3-spike-forward", "key": "tests.collected", "value": 0}
+SIGNOFF_METRIC {"case": "task-1c-v3-spike-forward", "key": "tests.passed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1c-v3-spike-forward", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1c-v3-spike-forward", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-1c-v3-spike-forward", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1c-v3-spike-forward", "key": "evidence.verdict", "value": "fail"}
+
+--- STDOUT (first 8000 chars) ---
+SIGNOFF_METRIC {"case": "task-1c-v3-spike-forward", "key": "spike.mode", "value": "forward"}
+======================================================================
+Spike Host Forward: qwen2.5-3b-instruct-q4_k_m.gguf  layers=2  prompt='Hello, world!'
+======================================================================
+Forward pass determinism check: 3 runs
+Model: /home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf
+Reference: llama_ref/refs/qwen_l0_l1_hidden.npz
+Tolerance: 1e-01
+
+--- Run 1/3 ---
+[NPU-PY] Loaded 435 tensors, 3397.1M elements in 81.5s
+
+--- STDERR (first 4000 chars) ---
+Traceback (most recent call last):
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_host.py", line 1488, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_host.py", line 1390, in main
+    result = run_forward_pass(
+             ^^^^^^^^^^^^^^^^^
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_host.py", line 729, in run_forward_pass
+    hidden = _forward_layer(hidden, weights, layer)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_host.py", line 404, in _forward_layer
+    attn_out = _forward_attention(q, k, v)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_host.py", line 381, in _forward_attention
+    q = q.reshape(seq_len, n_heads, head_dim).transpose(1, 0, 2)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: cannot reshape array of size 8192 into shape (4,12,128)
+
+--- END ---

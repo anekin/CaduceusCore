@@ -4,8 +4,9 @@
 Matches GoldenSFU._build_exp_lut / _build_gelu_lut semantics
 (golden_executor.py:307-319, 381-395).
 Covers:
-  - 256-entry exponential LUT for exp(x) over [-20, 0] in Q8.4 fixed-point.
+  - 256-entry exponential LUT for exp(x) over [-20, 0] in Q1.14 fixed-point.
   - 64-entry GELU LUT over [-4, 4] in signed Q3.12 fixed-point.
+  - 64-entry RoPE inv_freq LUT for head_dim=128 in signed Q0.30 fixed-point.
 
 Usage:
     python3 CaduceusCore/sim/scripts/gen_sfu_luts.py --luts exp
@@ -20,27 +21,27 @@ from pathlib import Path
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Q8.4 Fixed-Point Encoding
+# Q1.14 Fixed-Point Encoding (exp LUT)
 # ══════════════════════════════════════════════════════════════════════
-# 12-bit unsigned: 8 integer + 4 fraction bits.
-# Value = raw / 16.  Range: [0, 255.9375].
-# 1.0 → raw = 16 → hex 0x0010.
-# 0.0 → raw =  0 → hex 0x0000.
+# 15-bit unsigned: 1 integer + 14 fraction bits.
+# Value = raw / 16384.  Range: [0, 1.9999].
+# 1.0 → raw = 16384 → hex 0x4000.
+# 0.0 → raw =     0 → hex 0x0000.
 # Rounding: round-half-up (Python built-in round()).
 
-FP_FRAC_BITS = 4
-FP_SCALE = 1 << FP_FRAC_BITS  # 16
-MAX_U12 = 0xFFF  # 4095
+EXP_FRAC_BITS = 14
+EXP_SCALE = 1 << EXP_FRAC_BITS  # 16384
+MAX_U15 = 0x7FFF  # 32767
 
 
-def _quantize_q8_4(val: float) -> int:
-    """Quantize float to Q8.4 unsigned (12-bit), round-half-up, clamp."""
-    raw = round(val * FP_SCALE)
+def _quantize_q1_14(val: float) -> int:
+    """Quantize float to Q1.14 unsigned (15-bit), round-half-up, clamp."""
+    raw = round(val * EXP_SCALE)
     if raw < 0:
         return 0
-    if raw > MAX_U12:
-        return MAX_U12
-    return raw
+    if raw > MAX_U15:
+        return MAX_U15
+    return int(raw)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -53,16 +54,16 @@ EXP_LUT_X_MAX = 0.0
 
 
 def generate_exp_lut() -> list[int]:
-    """Generate 256-entry exp LUT in Q8.4.
+    """Generate 256-entry exp LUT in Q1.14.
 
     Domain: x ∈ [-20, 0], 256 linearly-spaced points.
     LUT stores exp(x) for each x.
     entry[0]   = exp(-20) ≈ 0
-    entry[255] = exp(0)   = 1.0 → Q8.4 = 16
+    entry[255] = exp(0)   = 1.0 → Q1.14 = 16384
     """
     xs = [EXP_LUT_X_MIN + i * (EXP_LUT_X_MAX - EXP_LUT_X_MIN) / (EXP_LUT_ENTRIES - 1)
           for i in range(EXP_LUT_ENTRIES)]
-    return [_quantize_q8_4(math.exp(x)) for x in xs]
+    return [_quantize_q1_14(math.exp(x)) for x in xs]
 
 
 def write_hex(path: Path, values: list[int], width: int = 3,
@@ -124,6 +125,47 @@ def generate_gelu_lut() -> list[int]:
 
 
 # ══════════════════════════════════════════════════════════════════════
+# RoPE inv_freq LUT — matches sfu_top.v theta generator
+# ══════════════════════════════════════════════════════════════════════
+
+ROPE_HEAD_DIM = 128
+ROPE_INV_FRAC = 30
+ROPE_INV_SCALE = 1 << ROPE_INV_FRAC
+ROPE_THETA_BASE = 10000.0
+
+
+def generate_rope_inv_freq_lut() -> list[int]:
+    """Generate 64-entry RoPE inv_freq LUT in signed Q0.30.
+
+    inv_freq[i] = 10000^(-2*i/128) for i = 0..63 (head_dim/2 pairs).
+    Values are positive and fit in 32-bit signed fixed-point Q0.30.
+    """
+    values = []
+    for i in range(ROPE_HEAD_DIM // 2):
+        val = ROPE_THETA_BASE ** (-2.0 * i / ROPE_HEAD_DIM)
+        values.append(int(round(val * ROPE_INV_SCALE)))
+    return values
+
+
+def validate_rope_inv_freq_lut(values: list[int]):
+    """Self-check: 64 entries, monotonic decreasing, endpoints correct."""
+    assert len(values) == ROPE_HEAD_DIM // 2, (
+        f"Expected {ROPE_HEAD_DIM // 2} entries, got {len(values)}"
+    )
+    assert values[0] == int(round(1.0 * ROPE_INV_SCALE)), (
+        f"entry[0] expected {int(round(1.0 * ROPE_INV_SCALE))}, got {values[0]}"
+    )
+    for i in range(1, len(values)):
+        assert values[i] < values[i - 1], (
+            f"Non-monotonic at entry {i}: {values[i]} >= {values[i - 1]}"
+        )
+        assert 0 <= values[i] < (1 << 31), (
+            f"entry[{i}] = {values[i]} out of 32-bit signed range"
+        )
+    print(f"rope_theta_inv_freq validation PASSED: {len(values)} entries, endpoints OK")
+
+
+# ══════════════════════════════════════════════════════════════════════
 # Validation
 # ══════════════════════════════════════════════════════════════════════
 
@@ -162,13 +204,13 @@ def validate_exp_lut(values: list[int]):
 
     # Endpoints
     assert values[0] == 0, f"entry[0] (exp(-20)) expected 0, got {values[0]}"
-    assert values[255] == _quantize_q8_4(1.0), (
-        f"entry[255] (exp(0)) expected {_quantize_q8_4(1.0)}, got {values[255]}"
+    assert values[255] == _quantize_q1_14(1.0), (
+        f"entry[255] (exp(0)) expected {_quantize_q1_14(1.0)}, got {values[255]}"
     )
 
     # All values in range
     for i, v in enumerate(values):
-        assert 0 <= v <= MAX_U12, f"entry[{i}] = {v} out of 12-bit range"
+        assert 0 <= v <= MAX_U15, f"entry[{i}] = {v} out of 15-bit range"
 
     print(f"exp_lut validation PASSED: {len(values)} entries, "
           f"monotonic, endpoints OK")
@@ -194,9 +236,9 @@ def main():
 
     if args.luts in ("exp", "all"):
         exp_vals = generate_exp_lut()
-        write_hex(out_dir / "exp_lut.hex", exp_vals)
+        write_hex(out_dir / "exp_lut.hex", exp_vals, width=4)
         validate_exp_lut(exp_vals)
-        print(f"Generated: {out_dir / 'exp_lut.hex'} ({len(exp_vals)} entries, Q8.4)")
+        print(f"Generated: {out_dir / 'exp_lut.hex'} ({len(exp_vals)} entries, Q1.14)")
 
     if args.luts in ("gelu", "all"):
         gelu_vals = generate_gelu_lut()
@@ -204,6 +246,13 @@ def main():
                   word_bits=16, signed=True)
         validate_gelu_lut(gelu_vals)
         print(f"Generated: {out_dir / 'gelu_lut.hex'} ({len(gelu_vals)} entries, signed Q3.12)")
+
+    if args.luts in ("exp", "all"):
+        rope_vals = generate_rope_inv_freq_lut()
+        write_hex(out_dir / "rope_theta_inv_freq.hex", rope_vals, width=8,
+                  word_bits=32, signed=True)
+        validate_rope_inv_freq_lut(rope_vals)
+        print(f"Generated: {out_dir / 'rope_theta_inv_freq.hex'} ({len(rope_vals)} entries, signed Q0.30)")
 
     return 0
 

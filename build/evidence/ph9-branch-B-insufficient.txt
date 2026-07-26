@@ -1,0 +1,53 @@
+=== P9 T4 Branch B — Insufficient RTL Fix Evidence ===
+Date: 2026-07-21T12:20:00Z
+
+RTL FIXES ATTEMPTED:
+  1. DIM0/DIM1 latch from mmio_we/mmio_addr/mmio_wdata → derive k_tiles,N
+  2. Hardcoded wrp_weight_base/act_base/out_base to DRAM addresses
+     (0x80020000/0x80010000/0x80030000) matching testbench layout
+
+RESULT:
+  Directed sweep cos_sim values IDENTICAL to T3 firmware path:
+    CASE 1: K=128 N=64 cs=0.726723
+    CASE 2: K=512 N=128 cs=0.394869
+    CASE 3: K=2048 N=256 cs=0.086044
+
+ROOT CAUSE CONFIRMED:
+  RISC-V GCC -O2 splits MMIO accesses across two base registers:
+    a4 = 0x40000000 (correct, MXU space)
+    a3 = 0x40003000 (wrong, DMA space)
+  
+  The wrapper register write path at 0x61c-0x640 (a4-based) is reachable
+  but conditional on s2≠0 then s2==0 — a contradictory condition that
+  makes this code path DEAD CODE. Only the a3-based path executes, and it
+  routes all writes to DMA space (paddr=0x3xx, page=3 → slave3=DMA).
+
+  Additionally, the MXU core DIM0/DIM1 writes at 0x66c/0x670 also use a4
+  base but are in a code block that requires the a4-based wrapper trigger
+  to have already fired — creating a circular dependency.
+
+  The wrapper and MXU never receive any properly-routed MMIO writes from
+  the firmware.  They operate on reset defaults only.
+
+WHY RTL-ONLY FIX IS INSUFFICIENT:
+  1. The firmware never sets any MMIO register in MXU or MXU wrapper space
+  2. The hardcoded DRAM bases allow preload to read from correct DRAM
+     addresses, but wrp_k_tiles stays at 1 (reset) and the DIM0 latch
+     never sees writes because the mmio_we path is gated by
+     apb_to_mxu_mmio=(paddr<0x30) with paddr=0x0C, but the a4-based
+     DIM0 write at 0x66c never executes.
+  3. Even if k_tiles were correct, the preload buffer depth parameters
+     (W_BUF_DEPTH=64, A_BUF_DEPTH=128) are insufficient for large K.
+
+NEXT STEP:
+  The fix requires firmware-level intervention:
+  - Use __asm__ volatile barriers or separate statement ordering
+  - Compile npu_firmware.c with -O1 or lower optimization
+  - Restructure mxu_wrapper_preload to use a single struct-based
+    volatile pointer (npu_mxu_t *) rather than raw uint32_t *
+    
+  This is a known RISC-V GCC optimization issue with volatile pointer
+  aliasing across different pointer types and base addresses.
+  
+  Recommended: Open a firmware-level fix task to resolve the GCC -O2
+  optimization, then re-run the T4 directed sweep.

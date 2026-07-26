@@ -1,0 +1,73 @@
+Command: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/simv_tb_vector_wrapper -l build/evidence/wv_vector_logs/test_vector_chunk_burst_8beat.log.dbg
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Jul 23 08:42 2026
+[VEC_WRP_STORE] chunk=0 beat=0 wlast=0 addr=0x20002000 data=0xffffffb600000013
+[VEC_WRP_STORE] chunk=0 beat=1 wlast=0 addr=0x20002040 data=0xffffffb400000044
+[VEC_WRP_STORE] chunk=0 beat=2 wlast=0 addr=0x20002080 data=0x0000004500000024
+[VEC_WRP_STORE] chunk=0 beat=3 wlast=0 addr=0x200020c0 data=0x00000027ffffff80
+[VEC_WRP_STORE] chunk=0 beat=4 wlast=0 addr=0x20002100 data=0xffffffb0ffffffc8
+[VEC_WRP_STORE] chunk=0 beat=5 wlast=0 addr=0x20002140 data=0xffffffc2ffffffe3
+[VEC_WRP_STORE] chunk=0 beat=6 wlast=0 addr=0x20002180 data=0x00000056ffffffe2
+[VEC_WRP_STORE] chunk=0 beat=7 wlast=1 addr=0x200021c0 data=0x0000003900000055
+[VEC_WRP_STORE] chunk=1 beat=0 wlast=0 addr=0x20002200 data=0x00000076ffffff76
+[VEC_WRP_STORE] chunk=1 beat=1 wlast=0 addr=0x20002240 data=0x00000079ffffffef
+[VEC_WRP_STORE] chunk=1 beat=2 wlast=0 addr=0x20002280 data=0xffffffe700000064
+[VEC_WRP_STORE] chunk=1 beat=3 wlast=0 addr=0x200022c0 data=0xfffffffeffffffa1
+[VEC_WRP_STORE] chunk=1 beat=4 wlast=0 addr=0x20002300 data=0x00000058ffffffcd
+[VEC_WRP_STORE] chunk=1 beat=5 wlast=0 addr=0x20002340 data=0x0000001900000013
+[VEC_WRP_STORE] chunk=1 beat=6 wlast=0 addr=0x20002380 data=0x0000001efffffffe
+[VEC_WRP_STORE] chunk=1 beat=7 wlast=1 addr=0x200023c0 data=0x000000490000002b
+[VEC_WRP_STORE] chunk=2 beat=0 wlast=0 addr=0x20002400 data=0x00000054ffffffcd
+[VEC_WRP_STORE] chunk=2 beat=1 wlast=0 addr=0x20002440 data=0x0000001dffffff5d
+[VEC_WRP_STORE] chunk=2 beat=2 wlast=0 addr=0x20002480 data=0x000000980000003a
+[VEC_WRP_STORE] chunk=2 beat=3 wlast=0 addr=0x200024c0 data=0x0000002300000040
+[VEC_WRP_STORE] chunk=2 beat=4 wlast=0 addr=0x20002500 data=0x0000004e00000033
+[VEC_WRP_STORE] chunk=2 beat=5 wlast=0 addr=0x20002540 data=0x000000180000005f
+[VEC_WRP_STORE] chunk=2 beat=6 wlast=0 addr=0x20002580 data=0xffffffb0ffffffd5
+[VEC_WRP_STORE] chunk=2 beat=7 wlast=1 addr=0x200025c0 data=0x000000120000002f
+[VEC_WRP_STORE] chunk=3 beat=0 wlast=0 addr=0x20002600 data=0x00000043ffffff8b
+[VEC_WRP_STORE] chunk=3 beat=1 wlast=0 addr=0x20002640 data=0xffffffd1fffffffe
+[VEC_WRP_STORE] chunk=3 beat=2 wlast=0 addr=0x20002680 data=0x0000006400000004
+[VEC_WRP_STORE] chunk=3 beat=3 wlast=0 addr=0x200026c0 data=0xfffffff300000029
+[VEC_WRP_STORE] chunk=3 beat=4 wlast=0 addr=0x20002700 data=0xfffffff0ffffffaf
+[VEC_WRP_STORE] chunk=3 beat=5 wlast=0 addr=0x20002740 data=0xffffff4d0000004d
+[VEC_WRP_STORE] chunk=3 beat=6 wlast=0 addr=0x20002780 data=0xffffffdd0000007f
+[VEC_WRP_STORE] chunk=3 beat=7 wlast=1 addr=0x200027c0 data=0x000000790000006f
+[VEC_WRP_STORE] chunk=4 beat=0 wlast=0 addr=0x20002800 data=0x0000002f00000030
+[VEC_WRP_STORE] chunk=4 beat=1 wlast=0 addr=0x20002840 data=0x0000004200000061
+[VEC_WRP_STORE] chunk=4 beat=2 wlast=0 addr=0x20002880 data=0xfffffff3ffffffe2
+[VEC_WRP_STORE] chunk=4 beat=3 wlast=0 addr=0x200028c0 data=0x00000011ffffff99
+[VEC_WRP_STORE] chunk=4 beat=4 wlast=0 addr=0x20002900 data=0xffffffbdffffffcb
+[VEC_WRP_STORE] chunk=4 beat=5 wlast=0 addr=0x20002940 data=0xffffffecffffffff
+[VEC_WRP_STORE] chunk=4 beat=6 wlast=0 addr=0x20002980 data=0x00000005ffffffca
+[VEC_WRP_STORE] chunk=4 beat=7 wlast=1 addr=0x200029c0 data=0x0000001400000029
+[VEC_WRP_STORE] chunk=5 beat=0 wlast=0 addr=0x20002a00 data=0x0000008f00000015
+[VEC_WRP_STORE] chunk=5 beat=1 wlast=0 addr=0x20002a40 data=0x0000006fffffffa7
+[VEC_WRP_STORE] chunk=5 beat=2 wlast=0 addr=0x20002a80 data=0x00000007ffffffeb
+[VEC_WRP_STORE] chunk=5 beat=3 wlast=0 addr=0x20002ac0 data=0x00000001ffffffd9
+[VEC_WRP_STORE] chunk=5 beat=4 wlast=0 addr=0x20002b00 data=0x0000001800000029
+[VEC_WRP_STORE] chunk=5 beat=5 wlast=0 addr=0x20002b40 data=0x0000004500000046
+[VEC_WRP_STORE] chunk=5 beat=6 wlast=0 addr=0x20002b80 data=0x0000003a00000035
+[VEC_WRP_STORE] chunk=5 beat=7 wlast=1 addr=0x20002bc0 data=0x0000002800000050
+[VEC_WRP_STORE] chunk=6 beat=0 wlast=0 addr=0x20002c00 data=0xfffffff200000064
+[VEC_WRP_STORE] chunk=6 beat=1 wlast=0 addr=0x20002c40 data=0xffffffa9ffffffe1
+[VEC_WRP_STORE] chunk=6 beat=2 wlast=0 addr=0x20002c80 data=0xffffffcd0000005f
+[VEC_WRP_STORE] chunk=6 beat=3 wlast=0 addr=0x20002cc0 data=0xffffffae00000009
+[VEC_WRP_STORE] chunk=6 beat=4 wlast=0 addr=0x20002d00 data=0x0000000f00000040
+[VEC_WRP_STORE] chunk=6 beat=5 wlast=0 addr=0x20002d40 data=0x0000006d0000007e
+[VEC_WRP_STORE] chunk=6 beat=6 wlast=0 addr=0x20002d80 data=0x00000005ffffffa3
+[VEC_WRP_STORE] chunk=6 beat=7 wlast=1 addr=0x20002dc0 data=0x00000008ffffff73
+[VEC_WRP_STORE] chunk=7 beat=0 wlast=0 addr=0x20002e00 data=0x00000039ffffffcc
+[VEC_WRP_STORE] chunk=7 beat=1 wlast=0 addr=0x20002e40 data=0xffffffe30000007d
+[VEC_WRP_STORE] chunk=7 beat=2 wlast=0 addr=0x20002e80 data=0x0000001bffffffef
+[VEC_WRP_STORE] chunk=7 beat=3 wlast=0 addr=0x20002ec0 data=0xffffff600000004f
+[VEC_WRP_STORE] chunk=7 beat=4 wlast=0 addr=0x20002f00 data=0x000000c2ffffff8f
+[VEC_WRP_STORE] chunk=7 beat=5 wlast=0 addr=0x20002f40 data=0xffffffc20000007b
+[VEC_WRP_STORE] chunk=7 beat=6 wlast=0 addr=0x20002f80 data=0xffffff99ffffffe4
+[VEC_WRP_STORE] chunk=7 beat=7 wlast=1 addr=0x20002fc0 data=0xffffffc4ffffffec
+$finish at simulation time              3210001
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 3210001 ps
+CPU Time:      0.880 seconds;       Data structure size:   9.1Mb
+Thu Jul 23 08:42:38 2026

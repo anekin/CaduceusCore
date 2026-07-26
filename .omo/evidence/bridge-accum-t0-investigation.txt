@@ -1,0 +1,132 @@
+bridge-accum-t0-investigation
+==============================
+
+Run information
+---------------
+Date: 2026-07-26
+Host: sz0001 (192.168.0.11)
+Command: env BBRIDGE_TRACE=2 bash scripts/run_fm_env.sh /NAS/Tools/anaconda3/bin/python3.12 sim/spike_host.py --mode mmul_smoke
+Model: /home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf
+Raw log: .omo/evidence/bridge-accum-t0-raw.log (10077 lines, 1367690 bytes)
+
+Note on environment
+-------------------
+The pre-existing spike_src/plugins/npu_mmio_plugin.so required GLIBC_2.32 /
+CXXABI_1.3.9, which sz0001's system glibc 2.17 does not provide. To run the
+Spike test on sz0001 the plugin was rebuilt in-place from the unchanged
+spike_src/plugins/npu_mmio_plugin.cc using devtoolset-9 g++ 9.3.1. No Spike
+C++ source was modified.
+
+Source worktree (only intentional changes by this investigation)
+----------------------------------------------------------------
+- sim/mmio_bridge.py           : added BBRIDGE_TRACE>=2 diagnostic logging
+- spike_src/plugins/npu_mmio_plugin.so : rebuilt binary artifact for sz0001 glibc 2.17
+
+Pre-existing modifications in the worktree (not made by this task):
+- firmware/npu_firmware.c
+- firmware/build/*
+These were present before T0 and were not edited by this investigation.
+
+Log pattern summary
+-------------------
+For every N-tile the firmware issues a k_block=0..N-1 chain.
+Observed across all chains:
+- k_block=0 : act_head non-zero, wgt_head non-zero, accumulate=False, fresh result.
+- k_block=1 : act_head non-zero (often equals wgt_head), accumulate=True,
+              existing read from o_abs, result changes versus k_block=0.
+- k_block>=2: act_head == 0000000000000000, wgt_head non-zero and changing,
+              accumulate=True, existing == k_block=1 result, result identical
+              to k_block=1 (STALE).
+
+This shows the accumulated output stops changing after the first two
+k_blocks because the activation tensor read by the bridge is all zeros for
+k_block>=2, so the matmul contribution is zero and accumulation adds nothing.
+
+Representative log excerpts (first N-tile, L0 Q_proj, K=2048 -> 32 k_blocks)
+---------------------------------------------------------------------------
+BBRIDGE_T2 k_block=0 M=1 K=64 N=64 accumulate=False raw_i=0x20000000 raw_w=0x20000800 raw_o=0x20001a00 raw_s=0x20001800 i_abs=0x20000000 w_abs=0x20000800 o_abs=0x20001a00 s_abs=0x20001800 act_head=e65c61df33bd6a4b wgt_head=df30f1e4020cff12
+BBRIDGE_T2_SCALE k_block=0 scale_head=495a293c92fa243c92784a3c498a0c3c
+BBRIDGE_T2_RESULT k_block=0 result=[-9.271810531616211, -1.8628586530685425, -25.543670654296875, 9.735906600952148]
+
+BBRIDGE_T2 k_block=1 M=1 K=64 N=64 accumulate=True  raw_i=0x20001000 raw_w=0x20001000 raw_o=0x20001a00 raw_s=0x20001900 i_abs=0x20001000 w_abs=0x20001000 o_abs=0x20001a00 s_abs=0x20001900 act_head=0200e1ff00ee00ef wgt_head=0200e1ff00ee00ef
+BBRIDGE_T2_SCALE k_block=1 scale_head=495a293c92fa243c92784a3c498a0c3c
+BBRIDGE_T2_ACC  k_block=1 existing=[-9.271810531616211, -1.8628586530685425, -25.543670654296875, 9.735906600952148]
+BBRIDGE_T2_RESULT k_block=1 result=[-6.088178634643555, -1.0371592044830322, -23.14624786376953, 13.870450973510742]
+
+BBRIDGE_T2 k_block=2 M=1 K=64 N=64 accumulate=True  raw_i=0x20002000 raw_w=0x20000800 raw_o=0x20001a00 raw_s=0x20001800 i_abs=0x20002000 w_abs=0x20000800 o_abs=0x20001a00 s_abs=0x20001800 act_head=0000000000000000 wgt_head=5effde40d0343f1f
+BBRIDGE_T2_SCALE k_block=2 scale_head=6e55303c0013083c92d90d3c5b7e313c
+BBRIDGE_T2_ACC  k_block=2 existing=[-6.088178634643555, -1.0371592044830322, -23.14624786376953, 13.870450973510742]
+BBRIDGE_T2_RESULT k_block=2 result=[-6.088178634643555, -1.0371592044830322, -23.14624786376953, 13.870450973510742]
+
+BBRIDGE_T2 k_block=3 M=1 K=64 N=64 accumulate=True  raw_i=0x20003000 raw_w=0x20001000 raw_o=0x20001a00 raw_s=0x20001900 i_abs=0x20003000 w_abs=0x20001000 o_abs=0x20001a00 s_abs=0x20001900 act_head=0000000000000000 wgt_head=3b14d0104cf4f120
+BBRIDGE_T2_SCALE k_block=3 scale_head=6e55303c0013083c92d90d3c5b7e313c
+BBRIDGE_T2_ACC  k_block=3 existing=[-6.088178634643555, -1.0371592044830322, -23.14624786376953, 13.870450973510742]
+BBRIDGE_T2_RESULT k_block=3 result=[-6.088178634643555, -1.0371592044830322, -23.14624786376953, 13.870450973510742]
+
+The pattern continues for k_block=4..31: act_head remains all zeros and the
+result stays at the k_block=1 value.
+
+Hypothesis verdicts
+-------------------
+
+H1: Bridge reads from crossbar SRAM but firmware DMA writes to Spike's private SRAM.
+    Status: ELIMINATED.
+    Observable: (a) raw_i/raw_w DO change per tile (true), but (b) act/wgt
+    first 8 bytes are NOT identical across k_block>=1. For k_block=1 act_head
+    is 0200e1ff00ee00ef, while for k_block>=2 act_head is 0000000000000000.
+    wgt_head also varies per tile. Therefore the strict condition required by
+    H1 does not hold.
+
+H2: _to_crossbar_addr(raw_o) translates to different physical addresses per tile.
+    Status: ELIMINATED.
+    Observable: o_abs is constant for all k_blocks within an N-tile
+    (e.g. 0x20001a00 for the first N-tile). It only changes between N-tiles,
+    which is expected because each N-tile has its own output column slice.
+
+H3: Scale address is wrong for k_block>=2; scales identical across tiles.
+    Status: ELIMINATED.
+    Observable: scale_head values differ per k_block and per double-buffer
+    phase. They are not identical across k_block>=1. Example: k_block=1
+    scale_head=495a293c..., k_block=2/3 scale_head=6e55303c...,
+    k_block=4/5 scale_head=6e76693c...
+
+H4: Address-space mismatch: I/W/O/S mapped to DRAM while firmware DMAs within SRAM.
+    Status: ELIMINATED.
+    Observable: All translated addresses i_abs/w_abs/o_abs/s_abs lie in the
+    SRAM range 0x20000000-0x2000ffff. None are in DRAM (0x80000000+).
+
+H5: Firmware/bridge fails to update raw_i/raw_w pointers for k_block>=2.
+    Status: ELIMINATED.
+    Observable: raw_i advances monotonically per k_block
+    (0x20000000 -> 0x20001000 -> 0x20002000 -> ...). raw_w toggles between
+    the two double-buffer addresses (0x20000800 / 0x20001000). The pointers
+    are NOT identical for k_block>=2.
+
+Newly discovered root cause
+---------------------------
+None of H1-H5 matches the logs. The captured data points to a firmware-side
+activation-address miscalculation in firmware/npu_firmware.c dispatch_cmd():
+
+    act_offset = act_sram + k_start * 64;   // current code
+
+For M=1, k_start = k_block * TILE_H = k_block * 64, so this places the
+k_block activation at 0x20000000 + k_block * 4096. The host supplies a
+contiguous M*K activation and the firmware DMAs it once to 0x20000000.
+Consequently:
+- k_block=0 reads activation from 0x20000000  (valid data).
+- k_block=1 reads from 0x20001000, which overlaps the weight double-buffer.
+- k_block>=2 reads from 0x20002000+, which contains zeros, making the
+  matmul contribution zero and freezing the accumulated result.
+
+The correct offset for a contiguous activation tile is
+act_sram + k_start * M (with M from the descriptor), which for M=1 is
+0x20000000 + k_block * 64.
+
+Because this root cause is a firmware addressing bug and is not covered by
+H1-H5, the T0 exit criteria require a replan before a fix is implemented.
+
+Final verdict
+-------------
+evidence.verdict: replan_required
+root_cause_confirmed: none_of_H1_H5
+newly_observed_root_cause: firmware activation offset miscalculation in dispatch_cmd() act_offset = act_sram + k_start * 64

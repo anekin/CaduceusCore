@@ -1,0 +1,79 @@
+BUG-FIX-T5-FM006 Evidence
+=========================
+Date: 2026-07-25
+Change: Added --token-ids fallback to sim/spike_host.py for offline tokenization.
+
+[TEST 1] Module import
+import ok
+
+[TEST 2] --token-ids accepted by argparse (expected to fail later on /dev/null GGUF, not on argument parsing)
+SIGNOFF_METRIC {"case": "unknown", "key": "spike.mode", "value": "forward"}
+======================================================================
+Spike Host Forward: null  layers=1  token_ids=[1, 2, 3]
+======================================================================
+Forward pass determinism check: 3 runs
+Model: /dev/null
+Reference: llama_ref/refs/qwen_l0_l1_hidden.npz
+Tolerance: 1e-01
+
+--- Run 1/3 ---
+Traceback (most recent call last):
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_host.py", line 1379, in <module>
+    sys.exit(main())
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_host.py", line 1281, in main
+    result = run_forward_pass(
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_host.py", line 608, in run_forward_pass
+    weights = load_weights_from_gguf(gguf_path)
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/ggml-npu/q4_dequant.py", line 179, in load_weights_from_gguf
+    reader = gguf.GGUFReader(gguf_path)
+  File "/home/zhengs/.local/lib/python3.10/site-packages/gguf/gguf_reader.py", line 133, in __init__
+    self.data = np.memmap(path, mode = mode)
+  File "/home/zhengs/.local/lib/python3.10/site-packages/numpy/_core/memmap.py", line 289, in __new__
+    mm = mmap.mmap(fid.fileno(), bytes, access=acc, offset=start)
+OSError: [Errno 22] Invalid argument
+
+[TEST 3] --token-ids malformed input rejected by argparse
+usage: spike_host.py [-h] [--model MODEL] [--layers LAYERS] [--ops OPS]
+                     [--mode {mmul_smoke,chain,forward,pcie_dma}]
+                     [--ops-file OPS_FILE] [--prompt PROMPT]
+                     [--reference REFERENCE] [--seq-len SEQ_LEN]
+                     [--tolerance TOLERANCE] [--runs RUNS]
+                     [--evidence-dir EVIDENCE_DIR] [--token-ids TOKEN_IDS]
+spike_host.py: error: --token-ids must be a comma-separated list of integers: invalid literal for int() with base 10: 'foo'
+
+[TEST 4] --help shows new --token-ids argument
+usage: spike_host.py [-h] [--model MODEL] [--layers LAYERS] [--ops OPS]
+                     [--mode {mmul_smoke,chain,forward,pcie_dma}]
+                     [--ops-file OPS_FILE] [--prompt PROMPT]
+                     [--reference REFERENCE] [--seq-len SEQ_LEN]
+                     [--tolerance TOLERANCE] [--runs RUNS]
+                     [--evidence-dir EVIDENCE_DIR] [--token-ids TOKEN_IDS]
+
+Spike NPU host adapter
+
+options:
+  -h, --help            show this help message and exit
+  --model MODEL         Path to GGUF model
+  --layers LAYERS       Number of layers to test
+  --ops OPS             Comma-separated list of ops
+  --mode {mmul_smoke,chain,forward,pcie_dma}
+                        Run mode
+  --ops-file OPS_FILE   JSON file with chain ops for --mode chain
+  --prompt PROMPT       Input prompt for --mode forward
+  --reference REFERENCE
+                        Reference hidden states .npz for --mode forward
+  --seq-len SEQ_LEN     Sequence length for --mode forward (1 or 4)
+  --tolerance TOLERANCE
+                        Max abs tolerance vs llama.cpp .npz reference
+  --runs RUNS           Number of forward runs for determinism check
+  --evidence-dir EVIDENCE_DIR
+                        Directory to save evidence files
+  --token-ids TOKEN_IDS
+                        Comma-separated integer token IDs (e.g., 1,2,3,4).
+                        When provided, bypasses the HuggingFace tokenizer.
+
+[SUMMARY]
+- Module imports successfully.
+- --token-ids 1,2,3 is accepted by argparse (subsequent GGUF load failure on /dev/null is expected).
+- --token-ids 1,foo,3 is rejected with a clear error message.
+- --help lists the new --token-ids option.
