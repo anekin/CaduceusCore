@@ -68,6 +68,7 @@ class SpikeFirmware:
     ):
         self.mod = sim_modules
         self.bridge = bridge
+        self.crossbar = sim_modules.get('crossbar')
         self.doorbell: Dict[str, int] = {"host_tail": 0, "npu_head": 0}
         self.ring_buffer_addr = 0x80000000
         self.ring_size = 16
@@ -233,6 +234,7 @@ class SpikeFirmware:
             sock_path=str(self._sock_path),
             ready_event=ready_event,
             register_signals=False,
+            crossbar=self.crossbar,
         )
         ready_event.wait(timeout=5.0)
 

@@ -928,7 +928,7 @@ def run_forward_pass(gguf_path: str, prompt: str, layers: int = 2,
 def _launch_spike(model: FuncModel):
     """Start bridge server, serialize DRAM, and launch Spike."""
     ready_event = threading.Event()
-    server = serve(model.bridge, sock_path=DEFAULT_SOCK_PATH, ready_event=ready_event)
+    server = serve(model.bridge, sock_path=DEFAULT_SOCK_PATH, crossbar=model.crossbar, ready_event=ready_event)
     ready_event.wait(timeout=5.0)
 
     ddr_path = PROJECT / "ddr.bin"
