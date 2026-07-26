@@ -188,7 +188,7 @@ class CrossbarModel:
 # ── APB Decoder ─────────────────────────────────────────────────────
 
 class APBDecoder:
-    """APB address decoder — 1 master -> 7 slaves, 4 KB windows.
+    """APB address decoder — 1 master -> 8 slaves, 4 KB windows.
 
     Matches rtl/soc/apb_decoder.v psel/paddr decode logic.
 
@@ -200,6 +200,7 @@ class APBDecoder:
         slave4 = PCIe      0x4000_4000–0x4000_4FFF
         slave5 = DOORBELL  0x4000_5000–0x4000_5FFF
         slave6 = INTC      0x4000_6000–0x4000_6FFF
+        slave7 = PCIE_DMA  0x4000_7000–0x4000_7FFF
     """
 
     SLAVES = {
@@ -210,6 +211,7 @@ class APBDecoder:
         4: ("PCIe", Addr.PCIE_BASE),
         5: ("DOORBELL", Addr.DOORBELL),
         6: ("INTC", Addr.INTC_BASE),
+        7: ("PCIE_DMA", Addr.PCIE_DMA_BASE),
     }
 
     def __init__(self):
@@ -218,20 +220,26 @@ class APBDecoder:
         }
 
     def decode(self, paddr: int) -> int:
-        """Decode APB address to slave index (0–6).
+        """Decode APB address to slave index (0–7).
 
         Args:
             paddr: 32-bit APB address.
 
         Returns:
-            Slave index 0–6.
+            Slave index 0–7.
 
         Raises:
-            ValueError: If paddr is out of the MMIO range.
+            ValueError: If paddr is out of the MMIO range or
+                        the page field exceeds 7.
         """
-        if not Addr.MXU_BASE <= paddr < Addr.INTC_BASE + 0x1000:
+        if not Addr.MXU_BASE <= paddr < Addr.PCIE_DMA_BASE + 0x1000:
             raise ValueError(f"APB address 0x{paddr:08x} out of MMIO range")
-        return (paddr >> 12) & 0xF
+        page = (paddr >> 12) & 0xF
+        if page > 7:
+            raise ValueError(
+                f"APB page {page} out of range (0–7) for address 0x{paddr:08x}"
+            )
+        return page
 
     def get_slave_name(self, slave_idx: int) -> str:
         """Return human-readable slave name for debug."""
@@ -239,5 +247,5 @@ class APBDecoder:
 
     @property
     def slave_map(self) -> dict:
-        """Return {idx: (base, size)} for all 7 slaves."""
+        """Return {idx: (base, size)} for all 8 slaves."""
         return self._slave_map.copy()
