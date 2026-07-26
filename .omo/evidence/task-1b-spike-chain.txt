@@ -1,16 +1,17 @@
 case_id: task-1b-v3-spike-chain
-utc_start: 2026-07-25T04:18:06.485748+00:00
-utc_end: 2026-07-25T04:18:09.141209+00:00
-elapsed_s: 2.655
+utc_start: 2026-07-26T02:44:53.612120+00:00
+utc_end: 2026-07-26T02:44:56.451021+00:00
+elapsed_s: 2.839
 branch: main
-head: 777b34db3628bc532004d9a6321c2a9ba8338bf4
-dirty_worktree: dirty:.omo/notepads/phase6-rtl-verification/learnings.md |  32 +++
- .../soc-verification-gaps-phase5/learnings.md      | 224 +++++++++++++++++++++
- build/evidence/fm-cv-chain.txt                     |   2 +
+head: df95dc5fc0ab2e33447db79513e4acde24013734
+dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |  19 +-
+ .omo/evidence/task-1b-spike-chain.txt              |  68 ++--
+ .omo/evidence/task-1d-spike-pcie-dma.txt           |  91 ++++-
+ .omo/evidenc
 argv: ["bash", "scripts/run_fm_env.sh", "--", "python3", "sim/spike_host.py", "--mode", "chain"]
 command_hash: 7f8aa2c3d0154c2e
 exit_code: 0
-source_fingerprint: fe91f13effeecaf38606b8a984e078698765d454aa8481c832d2f0423819f61f
+source_fingerprint: be1454826f100974b78d41cc28bdcecef7af6b346fe31147b2ae5708a843adf4
 source_files (3):
   - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_fm_env.sh
   - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
@@ -19,7 +20,7 @@ verdict: pass
 SIGNOFF_METRIC {"case": "task-1b-v3-spike-chain", "key": "spike.mode", "value": "chain"}
 SIGNOFF_METRIC {"case": "task-1b-v3-spike-chain", "key": "spike.exit_code", "value": 0}
 SIGNOFF_METRIC {"case": "task-1b-v3-spike-chain", "key": "spike.tolerance_result", "value": "PASS"}
-SIGNOFF_METRIC {"case": "task-1b-v3-spike-chain", "key": "spike.elapsed_s", "value": 1.185}
+SIGNOFF_METRIC {"case": "task-1b-v3-spike-chain", "key": "spike.elapsed_s", "value": 1.242}
 SIGNOFF_METRIC {"case": "task-1b-v3-spike-chain", "key": "tests.collected", "value": 0}
 SIGNOFF_METRIC {"case": "task-1b-v3-spike-chain", "key": "tests.passed", "value": 0}
 SIGNOFF_METRIC {"case": "task-1b-v3-spike-chain", "key": "tests.failed", "value": 0}
@@ -32,70 +33,87 @@ SIGNOFF_METRIC {"case": "task-1b-v3-spike-chain", "key": "spike.mode", "value": 
 ======================================================================
 Spike Host Chain: ops=['mmul', 'sfu', 'vector']
 ======================================================================
+  [INFO] NPU_HEAD=3 (expected=3) OK
   [PASS] mmul        
-  [FAIL] sfu         
-  [FAIL] vector      
+  [PASS] sfu         
+  [PASS] vector      
 SIGNOFF_METRIC {"case": "task-1b-v3-spike-chain", "key": "spike.exit_code", "value": 0}
 SIGNOFF_METRIC {"case": "task-1b-v3-spike-chain", "key": "spike.tolerance_result", "value": "PASS"}
-SIGNOFF_METRIC {"case": "task-1b-v3-spike-chain", "key": "spike.elapsed_s", "value": 1.185}
+SIGNOFF_METRIC {"case": "task-1b-v3-spike-chain", "key": "spike.elapsed_s", "value": 1.242}
 
 ======================================================================
-Spike Host Chain Summary: 1 PASS, 2 FAIL
+Spike Host Chain Summary: 3 PASS, 0 FAIL
+NPU_HEAD=OK, AllOpsPassed=YES
 ======================================================================
 
 --- STDERR (first 4000 chars) ---
 ----------------------------------------
 Exception occurred during processing of request from 
 Traceback (most recent call last):
-  File "/home/EDA/cadence/DDI22.34/INNOVUS221/tools.lnx86/voltus_components/xp_services/sgui/python3.10/lib/python3.10/socketserver.py", line 683, in process_request_thread
+  File "/NAS/Tools/anaconda3/lib/python3.12/socketserver.py", line 692, in process_request_thread
     self.finish_request(request, client_address)
-  File "/home/EDA/cadence/DDI22.34/INNOVUS221/tools.lnx86/voltus_components/xp_services/sgui/python3.10/lib/python3.10/socketserver.py", line 360, in finish_request
+  File "/NAS/Tools/anaconda3/lib/python3.12/socketserver.py", line 362, in finish_request
     self.RequestHandlerClass(request, client_address, self)
-  File "/home/EDA/cadence/DDI22.34/INNOVUS221/tools.lnx86/voltus_components/xp_services/sgui/python3.10/lib/python3.10/socketserver.py", line 747, in __init__
+  File "/NAS/Tools/anaconda3/lib/python3.12/socketserver.py", line 761, in __init__
     self.handle()
   File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 94, in handle
     response = _handle_request(bridge, line)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 73, in _handle_request
     bridge.handle("write", addr, value)
-  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 71, in handle
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 73, in handle
     return self._handle_intc(rw, addr, value)
-  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 542, in _handle_intc
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 590, in _handle_intc
     self._status[INTC.BASE + INTC.PENDING] &= ~value
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
 KeyError: 1073766400
 ----------------------------------------
 ----------------------------------------
 Exception occurred during processing of request from 
 Traceback (most recent call last):
-  File "/home/EDA/cadence/DDI22.34/INNOVUS221/tools.lnx86/voltus_components/xp_services/sgui/python3.10/lib/python3.10/socketserver.py", line 683, in process_request_thread
+  File "/NAS/Tools/anaconda3/lib/python3.12/socketserver.py", line 692, in process_request_thread
     self.finish_request(request, client_address)
-  File "/home/EDA/cadence/DDI22.34/INNOVUS221/tools.lnx86/voltus_components/xp_services/sgui/python3.10/lib/python3.10/socketserver.py", line 360, in finish_request
+  File "/NAS/Tools/anaconda3/lib/python3.12/socketserver.py", line 362, in finish_request
     self.RequestHandlerClass(request, client_address, self)
-  File "/home/EDA/cadence/DDI22.34/INNOVUS221/tools.lnx86/voltus_components/xp_services/sgui/python3.10/lib/python3.10/socketserver.py", line 747, in __init__
+  File "/NAS/Tools/anaconda3/lib/python3.12/socketserver.py", line 761, in __init__
     self.handle()
   File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 94, in handle
     response = _handle_request(bridge, line)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 73, in _handle_request
     bridge.handle("write", addr, value)
-  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 71, in handle
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 73, in handle
     return self._handle_intc(rw, addr, value)
-  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 542, in _handle_intc
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 590, in _handle_intc
     self._status[INTC.BASE + INTC.PENDING] &= ~value
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
 KeyError: 1073766400
 ----------------------------------------
 ----------------------------------------
 Exception occurred during processing of request from 
 Traceback (most recent call last):
-  File "/home/EDA/cadence/DDI22.34/INNOVUS221/tools.lnx86/voltus_components/xp_services/sgui/python3.10/lib/python3.10/socketserver.py", line 683, in process_request_thread
+  File "/NAS/Tools/anaconda3/lib/python3.12/socketserver.py", line 692, in process_request_thread
     self.finish_request(request, client_address)
-  File "/home/EDA/cadence/DDI22.34/INNOVUS221/tools.lnx86/voltus_components/xp_services/sgui/python3.10/lib/python3.10/socketserver.py", line 360, in finish_request
+  File "/NAS/Tools/anaconda3/lib/python3.12/socketserver.py", line 362, in finish_request
     self.RequestHandlerClass(request, client_address, self)
-  File "/home/EDA/cadence/DDI22.34/INNOVUS221/tools.lnx86/voltus_components/xp_services/sgui/python3.10/lib/python3.10/socketserver.py", line 747, in __init__
+  File "/NAS/Tools/anaconda3/lib/python3.12/socketserver.py", line 761, in __init__
     self.handle()
   File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 94, in handle
     response = _handle_request(bridge, line)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_mmio_server.py", line 73, in _handle_request
     bridge.handle("write", addr, value)
-  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 71, in handle
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 73, in handle
     return self._handle_intc(rw, addr, value)
-  File "/home/prj/zhengs/caduceuscore
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/mmio_bridge.py", line 590, in _handle_intc
+    self._status[INTC.BASE + INTC.PENDING] &= ~value
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 1073766400
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from 
+Tr
 --- END ---

@@ -1,5 +1,17 @@
 # func-model-signoff-v3 Learnings
 
+## 2026-07-25 F1 Final Review — APPROVE
+- Reviewer: Sisyphus-Junior
+- Review scope: `.omo/plans/func-model-signoff-v3.md` F1 section + `.omo/evidence/v3-final-plan-compliance.txt`
+- Re-ran `python3 scripts/run_func_model_signoff.py validate --v3` to confirm current state
+- Confirmed: 11 v3 cases discovered, 0 STALE, 0 MISSING
+- Confirmed: evidence file contains `evidence.verdict: pass`
+- Confirmed: required SIGNOFF_METRIC records present (`validate_v3.exit_code`, `validate_v3.stale_or_missing`, `cases.discovered`, `cases.ok`, `cases.fail`, `cases.stale`, `cases.missing`, `evidence.verdict`)
+- 3 FAIL verdicts observed (T1a, T1b, T1c); all documented with bug references (BUG-SOC-FM-005, BUG-SOC-FM-007, BUG-SOC-FM-006) and classified as non-blockers per plan
+- Plan checkbox F1 is marked complete (`- [x]`)
+- No code, test, runner, or evidence files modified during review
+- VERDICT: APPROVE
+
 ## 2026-07-25 F1 Plan Compliance Audit — PASS
 - Evidence: `.omo/evidence/v3-final-plan-compliance.txt` — `evidence.verdict: pass`
 - Validator: `python3 scripts/run_func_model_signoff.py validate --v3` (exit code 1 due to documented FAIL verdicts, not STALE/MISSING)
@@ -294,3 +306,33 @@
 - `changed_files_total`: 23 (was 27, now excludes the .so)
 - RTL/firmware/Spike plugin changes: all 0
 - Key lesson: compiled `.so` artifacts must never be committed inside the func-model signoff scope; use `.gitignore` or rebuild on demand outside the signoff branch
+
+## 2026-07-25 F2 Code Quality Review — FINAL REVIEW: PASS
+- Evidence: `.omo/evidence/v3-final-code-quality.txt` — `evidence.verdict: pass`
+- Scope: 7 new v3 test files + modified `scripts/run_func_model_signoff.py`
+- Re-verified compileall: exit code 0, no syntax errors
+- Re-verified pytest: 67/67 passed (combined direct v3 tests + runner unit tests)
+- Re-verified forbidden import scan (rtl/cocotb/vcs): no matches
+- F2 acceptance criteria met: code compiles, tests pass, no forbidden imports, v3 harness isolated from RTL-adjacent dependencies
+- Verdict: APPROVE
+
+## 2026-07-25 F4 Final Review — APPROVE
+- HEAD: `c742cce67ef0077f85f181c228f18ad4ae88c5b9`
+- **Evidence check**: `.omo/evidence/v3-final-scope-fidelity.txt` → `evidence.verdict: pass` (line 50) ✓
+- **git diff** `e734154f..HEAD --stat -- spike_src/ rtl/ firmware/` → no output ✓
+- **git diff** `e734154f..HEAD -- spike_src/plugins/npu_mmio_plugin.so` → no output (binary identical to baseline) ✓
+- **Path audit**: All 23 changed files under `sim/`, `scripts/`, `.omo/`, or `docs/bugs/` ✓
+- **RTL**: 0 files | **firmware**: 0 files | **spike_plugin_cc**: 0 files | **spike_plugin_h**: 0 files | **spike_plugin_so**: 0 files ✓
+- **Verdict**: F4 scope-fidelity acceptance criteria met
+
+## 2026-07-25 F3 Real Manual QA Final Review — APPROVE
+- Reviewer: Sisyphus-Junior final signoff audit
+- Evidence: `.omo/evidence/v3-final-real-qa.txt` → `evidence.verdict: pass` (line 10, line 25) ✓
+- Four required checks verified and recorded:
+  1. **Spike mmul_smoke run**: executed; exit_code=1, golden FAIL (0/6 projections). Failure matches documented known issue BUG-SOC-FM-005 and is explicitly classified as non-blocking in both the evidence file and the bug log.
+  2. **Host-CPU pytest**: exit_code=0, 4/4 passed (`test_host_write_command_dispatch`, `test_host_write_data_npu_readback`, `test_npu_to_host_readback`, `test_host_cpu_full_end_to_end`).
+  3. **MMIO plugin linkage**: runtime `ldd` with the Spike LD_LIBRARY_PATH reports no undefined symbols; default-system `ldd` warning is an environment/library-path quirk, not a plugin defect.
+  4. **Firmware ELF identity**: `firmware/build/npu_firmware_spike.elf` is ELF 32-bit LSB executable; `readelf -h` confirms Machine=0xf3 (RISC-V).
+- Bug-track confirmation: `docs/bugs/bugs-soc-func-model.md` contains BUG-SOC-FM-005 (2026-07-25, Major, "MMUL Golden Comparison: Bridge DMA→SRAM→MXU vs Direct Golden Precision Gap"), status Open/documented/no-fix-needed, impact explicitly states it does NOT block Func Model verification.
+- Review conclusion: F3 acceptance criteria are met; the documented known issue does not block the audit.
+- **VERDICT: APPROVE**

@@ -1,0 +1,105 @@
+Final Wave F3 Scope Fidelity — plan: func-model-bug-fix
+Generated: 2026-07-26
+Reviewer: Sisyphus-Junior (automated gate)
+
+evidence.verdict: pass
+
+VERDICT: APPROVE
+
+All changes introduced by the func-model-bug-fix work are limited to the allowed
+source directories. No RTL source files were modified. No Spike plugin C/C++/header
+source files were modified. The only spike_src/ change is the compiled binary
+`spike_src/plugins/npu_mmio_plugin.so`, which is a build artifact rebuilt for C++
+ABI compatibility.
+
+=== 1. Scope policy ===
+
+ALLOWED source scopes:
+  - sim/
+  - scripts/
+  - firmware/
+  - docs/bugs/
+  - .omo/
+  - sim/tests/
+
+BUILD ARTIFACTS (expected, not source changes):
+  - firmware/build/*
+  - spike_src/plugins/npu_mmio_plugin.so
+
+REJECTED scopes:
+  - rtl/ (any file)
+  - spike_src/ C/C++/header source files (.c, .cpp, .cc, .h, .hpp)
+
+=== 2. Changed files since base c3215f8^ (c742cce) ===
+
+Committed changes (git diff --name-only c3215f8^..HEAD):
+
+  ALLOWED   .omo/evidence/bug-fix-t0-opcode-enum.txt
+  ALLOWED   .omo/evidence/bug-fix-t1-fm007.txt
+  ALLOWED   .omo/evidence/bug-fix-t2-fm005.txt
+  ALLOWED   .omo/evidence/bug-fix-t5-fm006.txt
+  ALLOWED   .omo/notepads/func-model-bug-fix/learnings.md
+  ALLOWED   docs/bugs/bugs-soc-func-model.md
+  ARTIFACT  firmware/build/npu_firmware.elf
+  ARTIFACT  firmware/build/npu_firmware.hex
+  ARTIFACT  firmware/build/npu_firmware.map
+  ARTIFACT  firmware/build/npu_firmware.o
+  ARTIFACT  firmware/build/npu_firmware_spike.elf
+  ARTIFACT  firmware/build/npu_firmware_spike.map
+  ALLOWED   firmware/npu_firmware.c
+  ALLOWED   sim/mmio_bridge.py
+  ALLOWED   sim/models/pcie.py
+  ALLOWED   sim/opcodes.py
+  ALLOWED   sim/spike_host.py
+  ALLOWED   sim/tests/test_opcode_consistency.py
+  ARTIFACT  spike_src/plugins/npu_mmio_plugin.so
+
+Uncommitted working-tree changes (also part of bug-fix work):
+
+  ALLOWED   scripts/verify_descriptor_alignment.py
+  ALLOWED   .omo/evidence/bug-fix-t4-fm004.txt
+  ALLOWED   .omo/evidence/bug-fix-t6-regression.txt
+  ALLOWED   .omo/evidence/bug-fix-t7-plan-compliance.txt
+
+=== 3. Rejected-scope check ===
+
+  git diff --name-only c3215f8^..HEAD | grep '^rtl/'            -> NONE
+  git diff --name-only c3215f8^..HEAD | grep '^spike_src/.*\.(c|cpp|cc|h|hpp)$' -> NONE
+  git status --short rtl/ spike_src/ | grep -E '\.(c|cpp|cc|h|hpp|v|sv)$'        -> NONE
+
+No RTL files are modified. No Spike plugin C++ source files are modified.
+
+=== 4. Forbidden imports check ===
+
+Inspected changed Python source files:
+
+  sim/opcodes.py                         -> from enum import IntEnum
+  sim/tests/test_opcode_consistency.py   -> from opcodes import EngineOp
+  sim/spike_host.py                      -> stdlib + numpy + project-local modules only
+  sim/mmio_bridge.py                     -> stdlib + numpy + project-local modules only
+  sim/models/pcie.py                     -> stdlib + project-local modules only
+  scripts/verify_descriptor_alignment.py -> stdlib only
+
+Findings:
+  - No `os.system` usage.
+  - No `eval` or `exec` usage.
+  - No unsanctioned third-party imports.
+  - `subprocess` is used only in sim/spike_host.py for spawning the Spike simulator,
+    unchanged in nature from the pre-existing implementation.
+
+=== 5. Summary counts ===
+
+  ALLOWED files:   18
+  BUILD ARTIFACTS:  7
+  REJECTED files:   0
+
+=== 6. Notes / assumptions ===
+
+- Base commit used: c3215f8^ = c742cce67ef0077f85f181c228f18ad4ae88c5b9.
+- The compiled plugin binary `spike_src/plugins/npu_mmio_plugin.so` is classified as
+  a build artifact. It was rebuilt with `-D_GLIBCXX_USE_CXX11_ABI=0` to match the
+  Spike binary's old C++ ABI and is not a source-code change.
+- `scripts/verify_descriptor_alignment.py` has uncommitted T4 changes that are part
+  of the func-model-bug-fix work; it falls within the allowed `scripts/` scope.
+- F2 (real manual QA) and the final wave completion are out of scope for this F3
+  audit and were not marked complete.

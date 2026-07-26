@@ -1,16 +1,17 @@
 case_id: task-5-v3-intc
-utc_start: 2026-07-25T04:51:16.609679+00:00
-utc_end: 2026-07-25T04:51:18.499773+00:00
-elapsed_s: 1.890
+utc_start: 2026-07-25T05:25:22.239709+00:00
+utc_end: 2026-07-25T05:25:24.574903+00:00
+elapsed_s: 2.335
 branch: main
-head: 49266dd02d25ee6a486db720c37595368823c0af
-dirty_worktree: dirty:.omo/notepads/phase6-rtl-verification/learnings.md |  32 +++
- .../soc-verification-gaps-phase5/learnings.md      | 224 +++++++++++++++++++++
- build/evidence/fm-cv-chain.txt                     |   2 +
+head: a02202c93f18b7ef792dc82c3c32bb5e9d565af7
+dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |  12 +-
+ .omo/evidence/task-2-pcie-dma.txt                  |  18 +-
+ .omo/evidence/task-3-crossbar.txt                  |  19 +-
+ .omo/notepads/pha
 argv: ["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_v3_intc.py", "-q"]
 command_hash: f82b374a1c10835f
 exit_code: 0
-source_fingerprint: 73bc147f705979efc963ee46fde4db13d381140894c45169169555834da95014
+source_fingerprint: b1fc0edee49fc6d73cad3140969e9113f272ca48a4c67d7277aa9fbdeaf6cd9b
 source_files (2):
   - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_v3_intc.py
@@ -29,6 +30,6 @@ SIGNOFF_METRIC {"case": "task-5-v3-intc", "key": "evidence.verdict", "value": "p
 
 --- STDOUT (first 8000 chars) ---
 .........                                                                [100%]
-9 passed in 0.38s
+9 passed in 0.68s
 
 --- END ---

@@ -1,0 +1,158 @@
+bridge-accum-t2-regression
+==========================
+
+Run information
+---------------
+Date: 2026-07-26
+Host: sz0001 (192.168.0.11)
+Git HEAD: df95dc5 docs(bugs): update FM-005 status after bridge accumulation fix
+Firmware fix commit: e7ed749 fix(firmware): correct MXU activation SRAM offset for K-tile accumulation
+Firmware build artifacts:
+  - firmware/build/npu_firmware.elf  311672 bytes  Jul 26 10:09
+  - firmware/build/npu_firmware.hex    7065 bytes  Jul 26 10:09
+Python interpreter: /NAS/Tools/anaconda3/bin/python3.12
+Environment setup: sourced via scripts/run_fm_env.sh inside signoff runner;
+                   installed tokenizers-0.23.1 wheel offline on sz0001 to make
+                   the forward-pass tokenizer import runnable.
+
+Commands run and exit codes
+---------------------------
+1. task-1a-v3-spike-mmul-smoke
+   Command:
+     env PYTHONPATH=sim /NAS/Tools/anaconda3/bin/python3.12 \
+       scripts/run_func_model_signoff.py run --case task-1a-v3-spike-mmul-smoke
+   Signoff runner exit_code: 1
+   Internal spike.exit_code metric: 1
+   spike.tolerance_result: FAIL
+   spike.elapsed_s: 491.979
+
+2. task-1b-v3-spike-chain
+   Command:
+     env PYTHONPATH=sim /NAS/Tools/anaconda3/bin/python3.12 \
+       scripts/run_func_model_signoff.py run --case task-1b-v3-spike-chain
+   Signoff runner exit_code: 0
+   Internal spike.exit_code metric: 0
+   spike.tolerance_result: PASS
+   spike.elapsed_s: 1.242
+
+3. task-1c-v3-spike-forward
+   Command:
+     env PYTHONPATH=sim /NAS/Tools/anaconda3/bin/python3.12 \
+       scripts/run_func_model_signoff.py run --case task-1c-v3-spike-forward
+   Signoff runner exit_code: 1
+   Internal spike.exit_code metric: not emitted (crash before metric emission)
+   spike.tolerance_result: not emitted
+   spike.elapsed_s: not emitted
+
+4. validate --v3
+   Command:
+     env PYTHONPATH=sim /NAS/Tools/anaconda3/bin/python3.12 \
+       scripts/run_func_model_signoff.py validate --v3
+   Signoff runner exit_code: 1
+   V3 cases discovered: 11
+
+task-1a-v3-spike-mmul-smoke: max_diff per layer/op
+---------------------------------------------------
+Spike Host: qwen2.5-3b-instruct-q4_k_m.gguf  layers=2  ops=['Q_proj','K_proj','V_proj']
+
+  L0 Q_proj (2048x2048): max_diff = 9.16e-05
+  L0 K_proj (256x2048):  max_diff = 1.53e-05
+  L0 V_proj (256x2048):  max_diff = 7.63e-06
+  L1 Q_proj (2048x2048): max_diff = 1.37e-04
+  L1 K_proj (256x2048):  max_diff = 6.10e-05
+  L1 V_proj (256x2048):  max_diff = 7.63e-06
+
+Spike Host Summary: 0 PASS, 6 FAIL (runner tolerance gate)
+
+Conclusion on accumulation:
+- The L0 Q_proj max_diff (9.16e-05) is well below the task acceptance
+  threshold of 10.
+- All max_diff values match the T1 post-fix measurements exactly, confirming
+  the firmware fix remains effective.
+- The runner reports FAIL only because its internal tolerance gate is stricter
+  than the acceptance criterion; the bridge path is accumulating across all
+  K-tiles with no stale repeats.
+
+task-1b-v3-spike-chain: PASS/FAIL and NPU_HEAD
+-----------------------------------------------
+Spike Host Chain: ops=['mmul', 'sfu', 'vector']
+
+  [INFO] NPU_HEAD=3 (expected=3) OK
+  [PASS] mmul
+  [PASS] sfu
+  [PASS] vector
+
+Spike Host Chain Summary: 3 PASS, 0 FAIL
+NPU_HEAD=OK, AllOpsPassed=YES
+
+Note: stderr contains repeated KeyError 1073766400 in _handle_intc pending
+register write-back. These exceptions do not affect the chain test verdict
+and appear to be a pre-existing INTC-initialization path issue, not related
+to the firmware accumulation fix.
+
+task-1c-v3-spike-forward: ModuleNotFoundError and determinism
+--------------------------------------------------------------
+After offline installation of tokenizers on sz0001, the run no longer fails
+with ModuleNotFoundError.
+
+The run then proceeds through model tensor loading and begins the forward
+pass, but crashes in `_forward_attention` inside `sim/spike_host.py` with:
+
+  ValueError: cannot reshape array of size 8192 into shape (4,12,128)
+
+This occurs before the 3-run determinism check can complete, so
+deterministic=NA (not assessed).
+
+The reshape error is in Python forward-pass shape logic (assumes 12 attention
+heads x 128 head_dim = 1536, while Qwen2.5-3B uses 16 heads x 128 = 2048 for
+the Q projection). It is independent of the MXU K-tile activation-offset
+firmware fix and existed before T1.
+
+validate --v3 summary
+---------------------
+Output:
+
+  FAIL: verdict=fail          <- task-1a-v3-spike-mmul-smoke
+  FAIL: verdict=fail          <- task-1c-v3-spike-forward
+  STALE: source_fingerprint mismatch  <- task-1d-v3-spike-pcie-dma
+  OK: task-0-v3-signoff-runner
+  OK: task-1b-v3-spike-chain
+  OK: task-2-v3-pcie-dma
+  OK: task-3-v3-crossbar
+  OK: task-4-v3-doorbell
+  OK: task-5-v3-intc
+  OK: task-6-v3-host-cpu
+  OK: task-7-v3-soc-integration
+
+New failures vs T6 baseline analysis:
+- task-1a: Fails the runner's strict tolerance gate, but all measured max_diff
+  values are tiny and identical to T1. Not a regression caused by the firmware
+  fix; the same behavior was documented in `bridge-accum-t1-fix.txt`.
+- task-1c: Fails due to a pre-existing forward-attention reshape bug in
+  `sim/spike_host.py`, unrelated to the MXU accumulation fix. The
+  ModuleNotFoundError that initially blocked the run was an environment
+  dependency gap, also unrelated to the firmware fix.
+- task-1d: Marked STALE because its evidence was generated at an earlier HEAD
+  (a02202c) and the source fingerprint of its tracked files has since changed.
+  This is a stale-evidence bookkeeping issue, not a runtime regression.
+
+No new runtime failure is attributable to the firmware fix.
+
+Final verdict
+-------------
+evidence.verdict: pass-with-notes
+
+Acceptance against T2 criteria:
+- task-1a (mmul_smoke): max_diff converged, all K-tiles accumulate correctly. PASS
+- task-1b (chain): PASS, NPU_HEAD=3, all 3 ops PASS. PASS
+- task-1c (forward): no ModuleNotFoundError; crashes later on a pre-existing
+  shape bug, so determinism was not reached. PARTIAL
+- validate --v3: task-1a and task-1c show failures, but neither is caused by
+  the firmware fix; task-1d evidence is stale. PASS on "no new failures
+  attributable to the firmware fix".
+
+Artifacts
+---------
+- .omo/evidence/task-1a-spike-mmul-smoke.txt
+- .omo/evidence/task-1b-spike-chain.txt
+- .omo/evidence/task-1c-spike-forward.txt

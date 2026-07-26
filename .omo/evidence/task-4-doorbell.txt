@@ -1,16 +1,17 @@
 case_id: task-4-v3-doorbell
-utc_start: 2026-07-25T03:22:51.014152+00:00
-utc_end: 2026-07-25T03:22:53.233561+00:00
-elapsed_s: 2.219
+utc_start: 2026-07-25T05:25:22.189894+00:00
+utc_end: 2026-07-25T05:25:24.216106+00:00
+elapsed_s: 2.026
 branch: main
-head: a91c45dee244d3973cce958ddbc5431c633cb5f9
-dirty_worktree: dirty:.omo/notepads/phase6-rtl-verification/learnings.md |  32 +++
- .../soc-verification-gaps-phase5/learnings.md      | 224 +++++++++++++++++++++
- build/evidence/fm-cv-chain.txt                     |   2 +
+head: a02202c93f18b7ef792dc82c3c32bb5e9d565af7
+dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |  12 +-
+ .omo/evidence/task-2-pcie-dma.txt                  |  18 +-
+ .omo/evidence/task-3-crossbar.txt                  |  19 +-
+ .omo/notepads/pha
 argv: ["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_v3_doorbell.py", "-q"]
 command_hash: 1d8a0cbbb91fd9be
 exit_code: 0
-source_fingerprint: 5c89401c8adfb5280d869b14af64ce3d9760bf341e99ea7236c4c84d141e7170
+source_fingerprint: eb0c49922ae664ad0c6d71681f8d833ec79ad24f18edfbc3631d8cac607eb9b4
 source_files (2):
   - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/test_func_model_signoff_v3_doorbell.py
@@ -29,6 +30,6 @@ SIGNOFF_METRIC {"case": "task-4-v3-doorbell", "key": "evidence.verdict", "value"
 
 --- STDOUT (first 8000 chars) ---
 ........                                                                 [100%]
-8 passed in 0.64s
+8 passed in 0.46s
 
 --- END ---

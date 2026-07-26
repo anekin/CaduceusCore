@@ -1,0 +1,62 @@
+case_id: task-1a-v3-spike-mmul-smoke
+utc_start: 2026-07-26T02:36:19.412488+00:00
+utc_end: 2026-07-26T02:44:33.140610+00:00
+elapsed_s: 493.728
+branch: main
+head: e7ed7490ad06fc0e73bc8dc5ca58aac981a10694
+dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |  19 +-
+ .omo/evidence/task-1b-spike-chain.txt              |  68 ++--
+ .omo/evidence/task-1d-spike-pcie-dma.txt           |  91 ++++-
+ .omo/evidenc
+argv: ["bash", "scripts/run_fm_env.sh", "--", "python3", "sim/spike_host.py", "--mode", "mmul_smoke"]
+command_hash: 5dea14783df652df
+exit_code: 1
+source_fingerprint: be1454826f100974b78d41cc28bdcecef7af6b346fe31147b2ae5708a843adf4
+source_files (3):
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_fm_env.sh
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
+  - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/spike_host.py
+verdict: fail
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "spike.mode", "value": "mmul_smoke"}
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "spike.exit_code", "value": 1}
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "spike.tolerance_result", "value": "FAIL"}
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "spike.elapsed_s", "value": 491.979}
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "tests.collected", "value": 0}
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "tests.passed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "tests.failed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "tests.skipped", "value": 0}
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "tests.xfailed", "value": 0}
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "evidence.verdict", "value": "fail"}
+
+--- STDOUT (first 8000 chars) ---
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "spike.mode", "value": "mmul_smoke"}
+======================================================================
+Spike Host: qwen2.5-3b-instruct-q4_k_m.gguf  layers=2  ops=['Q_proj', 'K_proj', 'V_proj']
+======================================================================
+[NPU-PY] Loaded 435 tensors, 3397.1M elements in 81.4s
+  [FAIL] L0 Q_proj       (2048x2048)
+    max_diff=9.16e-05
+[NPU-PY] Loaded 435 tensors, 3397.1M elements in 79.9s
+  [FAIL] L0 K_proj       (256x2048)
+    max_diff=1.53e-05
+[NPU-PY] Loaded 435 tensors, 3397.1M elements in 79.7s
+  [FAIL] L0 V_proj       (256x2048)
+    max_diff=7.63e-06
+[NPU-PY] Loaded 435 tensors, 3397.1M elements in 79.2s
+  [FAIL] L1 Q_proj       (2048x2048)
+    max_diff=1.37e-04
+[NPU-PY] Loaded 435 tensors, 3397.1M elements in 79.5s
+  [FAIL] L1 K_proj       (256x2048)
+    max_diff=6.10e-05
+[NPU-PY] Loaded 435 tensors, 3397.1M elements in 79.3s
+  [FAIL] L1 V_proj       (256x2048)
+    max_diff=7.63e-06
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "spike.exit_code", "value": 1}
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "spike.tolerance_result", "value": "FAIL"}
+SIGNOFF_METRIC {"case": "task-1a-v3-spike-mmul-smoke", "key": "spike.elapsed_s", "value": 491.979}
+
+======================================================================
+Spike Host Summary: 0 PASS, 6 FAIL
+======================================================================
+
+--- END ---

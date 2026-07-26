@@ -5,6 +5,7 @@ routing to GoldenMXU/SFU/Vector/DMA simulators.
 Used by both RISCVMini (Python emulator) and Spike (when available).
 """
 
+import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional
 
@@ -27,6 +28,7 @@ class MMIOBridge:
         self._status: Dict[int, int] = {}
         self._trace: list = []
         self.tracer = None
+        self._mxu_k_block = 0
 
     @property
     def _crossbar(self) -> Optional[CrossbarModel]:
@@ -135,6 +137,11 @@ class MMIOBridge:
                 ctrl = self._status.get(MXU.BASE + MXU.CTRL, 0)
                 accumulate = bool(ctrl & 4)  # bit[2] = ACCUMULATE
 
+                if accumulate:
+                    self._mxu_k_block += 1
+                else:
+                    self._mxu_k_block = 0
+
                 M = (self._status.get(MXU.BASE + MXU.DIM0, 0)) & 0xFFFF
                 K = (self._status.get(MXU.BASE + MXU.DIM0, 0) >> 16) & 0xFFFF
                 N = self._status.get(MXU.BASE + MXU.DIM1, 0) & 0xFFFF
@@ -172,6 +179,8 @@ class MMIOBridge:
         wgt_packed_bytes = (K * N + 1) // 2
         xbar = self._crossbar
 
+        trace_level = int(os.environ.get('BBRIDGE_TRACE', '0'))
+
         if xbar is not None:
             i_abs = self._to_crossbar_addr(raw_i)
             w_abs = self._to_crossbar_addr(raw_w)
@@ -185,12 +194,31 @@ class MMIOBridge:
                 xbar.read(CrossbarModel.MASTER_MXU, w_abs, wgt_packed_bytes),
                 dtype=np.uint8)
 
+            if trace_level >= 2:
+                act_head = act.tobytes()[:8].hex()
+                wgt_head = wgt_packed.tobytes()[:8].hex()
+                print(
+                    f"BBRIDGE_T2 k_block={self._mxu_k_block} M={M} K={K} N={N} "
+                    f"accumulate={accumulate} "
+                    f"raw_i=0x{raw_i:08x} raw_w=0x{raw_w:08x} "
+                    f"raw_o=0x{raw_o:08x} raw_s=0x{raw_s:08x} "
+                    f"i_abs=0x{i_abs:08x} w_abs=0x{w_abs:08x} "
+                    f"o_abs=0x{o_abs:08x} s_abs=0x{s_abs:08x} "
+                    f"act_head={act_head} wgt_head={wgt_head}"
+                )
+
             if raw_s > 0:
                 num_blocks = (K + 127) // 128
                 scale_bytes = num_blocks * N * 4
                 scales = np.frombuffer(
                     xbar.read(CrossbarModel.MASTER_MXU, s_abs, scale_bytes),
                     dtype=np.float32).reshape(num_blocks, N)
+                if trace_level >= 2:
+                    scale_head = scales.tobytes()[:16].hex()
+                    print(
+                        f"BBRIDGE_T2_SCALE k_block={self._mxu_k_block} "
+                        f"scale_head={scale_head}"
+                    )
                 result = mxu.matmul_int4_per_block(act, wgt_packed, scales,
                                                    M, K, N, group_size=128)
                 result_bytes = result.astype(np.float32).tobytes()
@@ -204,10 +232,20 @@ class MMIOBridge:
                 existing = np.frombuffer(
                     xbar.read(CrossbarModel.MASTER_MXU, o_abs, len(result_bytes)),
                     dtype=dtype_out).reshape(M, N)
+                if trace_level >= 2:
+                    print(
+                        f"BBRIDGE_T2_ACC k_block={self._mxu_k_block} "
+                        f"existing={existing.flat[:4].tolist()}"
+                    )
                 result = existing + result
                 result_bytes = result.astype(dtype_out).tobytes()
 
             xbar.write(CrossbarModel.MASTER_MXU, o_abs, result_bytes)
+            if trace_level >= 2:
+                print(
+                    f"BBRIDGE_T2_RESULT k_block={self._mxu_k_block} "
+                    f"result={result.flat[:4].tolist()}"
+                )
             return
 
         i_off = self._translate_addr(raw_i)

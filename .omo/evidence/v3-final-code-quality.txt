@@ -1,0 +1,70 @@
+=== F2 Code Quality Review: func-model-signoff-v3 ===
+Date: 2026-07-25
+Reviewer: AI Oracle Agent (f2-code-quality)
+Context: func-model-signoff-v3 T0-T7 complete, F2 gate
+
+evidence.verdict: pass
+
+## 1. Scope
+Files reviewed:
+- sim/tests/test_func_model_signoff_v3.py
+- sim/tests/test_func_model_signoff_v3_pcie.py
+- sim/tests/test_func_model_signoff_v3_crossbar.py
+- sim/tests/test_func_model_signoff_v3_doorbell.py
+- sim/tests/test_func_model_signoff_v3_intc.py
+- sim/tests/test_func_model_signoff_v3_host.py
+- sim/tests/test_func_model_signoff_v3_integration.py
+- scripts/run_func_model_signoff.py
+
+## 2. Compile Check
+Command:
+  python3 -m compileall \
+    sim/tests/test_func_model_signoff_v3.py \
+    sim/tests/test_func_model_signoff_v3_pcie.py \
+    sim/tests/test_func_model_signoff_v3_crossbar.py \
+    sim/tests/test_func_model_signoff_v3_doorbell.py \
+    sim/tests/test_func_model_signoff_v3_intc.py \
+    sim/tests/test_func_model_signoff_v3_host.py \
+    sim/tests/test_func_model_signoff_v3_integration.py \
+    scripts/run_func_model_signoff.py
+Result: exit code 0, no syntax errors.
+
+## 3. New v3 Test File Direct Run
+Command:
+  PYTHONPATH=sim python3 -m pytest \
+    sim/tests/test_func_model_signoff_v3_intc.py \
+    sim/tests/test_func_model_signoff_v3_host.py \
+    sim/tests/test_func_model_signoff_v3_integration.py \
+    sim/tests/test_func_model_signoff_v3_pcie.py \
+    sim/tests/test_func_model_signoff_v3_crossbar.py \
+    sim/tests/test_func_model_signoff_v3_doorbell.py \
+    -q
+Result: 44 passed, 0 failed, 0 skipped (1.97s).
+
+## 4. v3 Runner Unit Tests
+Command:
+  python3 -m pytest sim/tests/test_func_model_signoff_v3.py -q
+Result: 23 passed, 0 failed, 0 skipped (26.29s).
+
+## 5. Stub Scan (TODO / FIXME / HACK / xxx)
+Command: grep -E "TODO|FIXME|HACK|xxx" sim/tests/test_func_model_signoff_v3*.py
+Result: no matches found.
+
+## 6. Forbidden Import Scan (rtl / cocotb / vcs)
+Command: grep -E "^\s*(from|import)\s+(rtl|cocotb|vcs)" sim/tests/test_func_model_signoff_v3*.py
+Result: no matches found.
+
+## 7. Quality Notes
+- All changed Python files compile cleanly.
+- All new v3 test files pass when run directly.
+- The v3 runner unit-test suite passes.
+- No stub markers remain in new v3 test files.
+- No RTL, Cocotb, or VCS imports appear in new v3 test files, preserving the func-model harness isolation from RTL-adjacent dependencies.
+
+## 8. Verdict Rationale
+PASS because:
+- compileall exit code == 0
+- direct pytest run: 44/44 passed
+- runner unit tests: 23/23 passed
+- zero TODO/FIXME/HACK/xxx stubs
+- zero forbidden imports

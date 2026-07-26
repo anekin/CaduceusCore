@@ -1,0 +1,65 @@
+Scope Fidelity Audit — Bridge Accumulation Fix (Wave F3)
+=======================================================
+Date:       2026-07-26
+Base:       cc285db (fix(bug-fm-007): unify opcode numbering between spike_host and firmware)
+HEAD:       df95dc5 (docs(bugs): update FM-005 status after bridge accumulation fix)
+Branch:     main
+Range:      cc285db..df95dc5
+
+Commits in range:
+  412a282  fix(bug-fm-005): pre-tile weights for firmware-compatible DRAM layout
+  aecd440  docs(bug-fm-005): evidence and learnings for weight tiling fix
+  e7ed749  fix(firmware): correct MXU activation SRAM offset for K-tile accumulation
+  df95dc5  docs(bugs): update FM-005 status after bridge accumulation fix
+
+Changed Files
+=============
+1. .omo/evidence/bug-fix-t2-fm005.txt       # aecd440: evidence for weight tiling fix
+2. .omo/notepads/func-model-bug-fix/learnings.md  # aecd440: learnings update
+3. docs/bugs/bugs-soc-func-model.md         # df95dc5: FM-005 status update (T3)
+4. firmware/npu_firmware.c                  # e7ed749: activation offset fix (T1)
+5. sim/mmio_bridge.py                       # 412a282: _run_mxu_compute docstring
+6. sim/spike_host.py                        # 412a282: weight pre-tiling + reorder logic
+
+Categorization
+==============
+
+Allowed paths:
+  [PASS] .omo/evidence/bug-fix-t2-fm005.txt       → .omo/ directory
+  [PASS] .omo/notepads/func-model-bug-fix/learnings.md → .omo/ directory
+  [PASS] docs/bugs/bugs-soc-func-model.md          → docs/bugs/ directory
+  [PASS] firmware/npu_firmware.c                   → intentional firmware fix per plan constraints
+  [PASS] sim/mmio_bridge.py                        → func model sim/ directory (docstring addition;
+                                                         T0 BBRIDGE_TRACE diagnostic logging is
+                                                         uncommitted — present in working tree only)
+  [PASS] sim/spike_host.py                         → func model sim/ directory (weight reorder
+                                                         infrastructure; part of T2 fix)
+
+Build artifacts (noted, not rejected):
+  [NOTE] firmware/build/npu_firmware.elf           → build artifact
+  [NOTE] firmware/build/npu_firmware.hex           → build artifact
+  [NOTE] firmware/build/npu_firmware.map           → build artifact
+  [NOTE] firmware/build/npu_firmware.o             → build artifact
+  [NOTE] firmware/build/npu_firmware_spike.elf     → build artifact
+  [NOTE] firmware/build/npu_firmware_spike.map     → build artifact
+  [NOTE] spike_src/plugins/npu_mmio_plugin.so      → build artifact
+
+Rejected paths (must be empty):
+  [PASS] rtl/ — no files modified          (0 hits)
+  [PASS] spike_src/ C/C++ sources          (0 hits; .so binary is a build artifact,
+         matching *.c/cpp/cc/h/hpp)          not a source change)
+
+Summary
+=======
+Committed source changes:   6 files
+  Allowed paths:            6/6
+  Rejected (rtl/):          0
+  Rejected (spike_src/ C++): 0
+  Build artifacts (noted):  7
+
+Uncommitted modifications in working tree:
+  sim/mmio_bridge.py        — T0 BBRIDGE_TRACE diagnostic logging (temporary)
+  scripts/verify_descriptor_alignment.py — unrelated verification script
+  (various .omo/ and build/ evidence files — pre-existing)
+
+evidence.verdict: pass
