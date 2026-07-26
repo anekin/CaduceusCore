@@ -20,7 +20,7 @@ import struct
 from sim.func_model import FuncModel
 from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector
 from sim.regmap import Addr, MXU, SFU, VECTOR, DOORBELL, INTC
-from sim.engine.isa import OpCode
+from engine.isa import OpCode
 from models.crossbar import CrossbarModel
 
 # ── Helpers ──────────────────────────────────────────────────────────────

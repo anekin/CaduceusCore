@@ -26,7 +26,7 @@ import pytest
 from sim.func_model import FuncModel, DualPathChecker
 from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector, GoldenDMA
 from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, INTC, DOORBELL
-from sim.engine.isa import OpCode
+from engine.isa import OpCode
 from models.crossbar import CrossbarModel
 
 # ── Helpers ──────────────────────────────────────────────────────────────

@@ -3888,3 +3888,62 @@
 [22:02:18] Step 4: Generating summary...
 [22:02:18]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
 [22:02:18] === Iteration 308 Complete ===
+[16:02:32] === Overnight Loop Started ===
+[16:02:32] === Iteration 309 ===
+[16:02:32]   Self-check: clean
+[16:02:32]   Staleness: all checks healthy
+[16:02:32] Step 1: Checking model consistency...
+[16:02:32]   All models consistent ✅
+[16:02:32] Step 2: Running parameter sweep...
+[16:02:32]   Baseline: 22 tok/s
+[16:02:32] Step 3: Running E2E validation...
+[16:02:32]   E2E: 22.0 tok/s, target: ✅
+[16:02:32] Step 4: Generating summary...
+[16:02:32]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[16:02:32] === Iteration 309 Complete ===
+[18:03:15] === Overnight Loop Started ===
+[18:03:15] === Iteration 310 ===
+[18:03:15]   Self-check: clean
+[18:03:15]   Staleness: all checks healthy
+[18:03:15] Step 1: Checking model consistency...
+[18:03:15]   Found 2 issues:
+[18:03:15]     - broken import: /Users/zheng/npu/sim/tests/test_func_model_signoff_v3_integration.py:29:from sim.engine.isa import OpCode → should be from engine
+[18:03:15]     - broken import: /Users/zheng/npu/sim/tests/test_func_model_signoff_v3_host.py:23:from sim.engine.isa import OpCode → should be from engine
+[18:03:15]   Fixing: broken import: /Users/zheng/npu/sim/tests/test_func_model_signoff_v3_integration.py:29:from sim.engine.isa import OpCode → should be from engine
+[18:03:15]     Fixed broken import in /Users/zheng/npu/sim/tests/test_func_model_signoff_v3_integration.py: from sim.engine.isa import → from engine.isa import
+[18:03:15]   Fixing: broken import: /Users/zheng/npu/sim/tests/test_func_model_signoff_v3_host.py:23:from sim.engine.isa import OpCode → should be from engine
+[18:03:15]     Fixed broken import in /Users/zheng/npu/sim/tests/test_func_model_signoff_v3_host.py: from sim.engine.isa import → from engine.isa import
+[18:03:15]   Fixed 2/2 issues
+[18:03:15] Step 2: Running parameter sweep...
+[18:03:15]   Baseline: 22 tok/s
+[18:03:15] Step 3: Running E2E validation...
+[18:03:15]   E2E: 22.0 tok/s, target: ✅
+[18:03:15] Step 4: Generating summary...
+[18:03:15]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[18:03:15] === Iteration 310 Complete ===
+[20:03:50] === Overnight Loop Started ===
+[20:03:50] === Iteration 311 ===
+[20:03:50]   Self-check: clean
+[20:03:50]   Staleness: all checks healthy
+[20:03:50] Step 1: Checking model consistency...
+[20:03:50]   All models consistent ✅
+[20:03:50] Step 2: Running parameter sweep...
+[20:03:50]   Baseline: 22 tok/s
+[20:03:50] Step 3: Running E2E validation...
+[20:03:50]   E2E: 22.0 tok/s, target: ✅
+[20:03:50] Step 4: Generating summary...
+[20:03:50]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[20:03:50] === Iteration 311 Complete ===
+[22:03:22] === Overnight Loop Started ===
+[22:03:22] === Iteration 312 ===
+[22:03:22]   Self-check: clean
+[22:03:22]   Staleness: all checks healthy
+[22:03:22] Step 1: Checking model consistency...
+[22:03:22]   All models consistent ✅
+[22:03:22] Step 2: Running parameter sweep...
+[22:03:22]   Baseline: 22 tok/s
+[22:03:22] Step 3: Running E2E validation...
+[22:03:22]   E2E: 22.0 tok/s, target: ✅
+[22:03:22] Step 4: Generating summary...
+[22:03:22]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[22:03:22] === Iteration 312 Complete ===
