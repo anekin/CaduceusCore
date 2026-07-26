@@ -78,7 +78,11 @@ class FuncModel:
     def _create_firmware(sim_modules: dict, bridge: MMIOBridge, use_spike: Optional[bool]) -> "NPUFirmware":
         if use_spike is None:
             env = os.environ.get("CADUCEUS_USE_SPIKE", "").lower()
-            use_spike = env in ("1", "true", "yes")
+            if not env:
+                # No explicit preference: default to NPUFirmware. Spike is
+                # opt-in via use_spike=True or CADUCEUS_USE_SPIKE=1.
+                return NPUFirmware(sim_modules=sim_modules, bridge=bridge)
+            use_spike = env not in ("0", "false", "no")
 
         if use_spike is False:
             return NPUFirmware(sim_modules=sim_modules, bridge=bridge)

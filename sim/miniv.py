@@ -444,6 +444,13 @@ class NPUFirmware:
                        'dma': GoldenDMA, 'dram': bytearray, 'sram': bytearray}
         bridge: MMIOBridge instance for register communication
         """
+        import warnings
+        warnings.warn(
+            "NPUFirmware is deprecated; use Spike + real firmware ELF for golden "
+            "reference verification. NPUFirmware remains available for fast smoke tests.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.mod = sim_modules
         self.bridge = bridge
         self.doorbell = {'host_tail': 0, 'npu_head': 0}
@@ -553,7 +560,13 @@ class NPUFirmware:
         return {'opcode': opcode, 'desc_addr': desc_addr, 'flags': flags}
 
     def _dispatch(self, cmd: dict) -> dict:
-        """Dispatch command to NPU modules via MMIO."""
+        """DEPRECATED — Dispatch command to NPU modules via MMIO.
+
+        Deprecated: Use ``sim/spike_host.py`` (Spike + real firmware ELF) as the
+        golden reference path for firmware dispatch logic. NPUFirmware remains
+        available for fast smoke tests but is not guaranteed to match the real
+        C firmware behaviour.
+        """
         from sim.regmap import MXU, SFU, VECTOR, DMA
 
         desc = self._read_descriptor(cmd['desc_addr'])
