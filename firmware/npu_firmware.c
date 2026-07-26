@@ -454,7 +454,7 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
                         dma_copy(desc.scale_addr + scale_offset, s_addr_abs, TILE_SCALE_BYTES, 0);
                     }
 
-                    uint32_t act_offset     = act_sram + k_start * 64;
+                    uint32_t act_offset     = act_sram + k_start * desc.M;
                     uint32_t act_offset_abs = NPU_SRAM_BASE + act_offset;
                     uint32_t out_offset_abs = NPU_SRAM_BASE + out_offset;
                     uint32_t accumulate_ctrl = (k_block > 0) ? 4 : 0;
