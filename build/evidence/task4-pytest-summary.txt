@@ -1,0 +1,24 @@
+Task 4 — Full pytest Regression Summary
+=======================================
+Date: 2026-07-27
+Command: PYTHONPATH=sim python -m pytest sim/tests/ -q --tb=short --ignore=sim/tests/test_cv_conv2d_rtl.py --ignore=sim/tests/test_soc_pcie_dma.py --ignore=sim/tests/wrapper
+Result: 866 passed, 8 failed, 99 warnings in 130.77s
+
+Pre-existing failures (all in test_engines.py — engine model assertion drift, confirmed on baseline commit d6b1adc):
+- test_tensor_core_decode
+- test_os_systolic_decode
+- test_systolic_vs_mxumodel_decode
+- test_systolic_vs_mxumodel_prefill
+- test_gmma_decode
+- test_gmma_tma_overlap
+- test_systolic_npu_sim_baseline
+- test_block_npu_sim_baseline
+
+Pre-existing collection errors (cocotb not installed):
+- sim/tests/test_cv_conv2d_rtl.py
+- sim/tests/test_soc_pcie_dma.py
+- sim/tests/wrapper/test_mxu_wrapper.py
+- sim/tests/wrapper/test_sfu_wrapper.py
+- sim/tests/wrapper/test_vector_wrapper.py
+
+No regressions introduced by gap-closure Tasks 1-4.

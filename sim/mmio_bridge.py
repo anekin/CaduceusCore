@@ -595,7 +595,12 @@ class MMIOBridge:
     # ── Helpers ─────────────────────────────────────────────────────
 
     def _get_mem(self, addr: int):
-        """Get the bytearray backing a given address, with offset translation."""
+        """Fallback-only: Get the bytearray backing a given address.
+
+        DEPRECATED: Prefer CrossbarModel (``self._crossbar.read/write``) for all
+        memory access. This method exists solely for backward compatibility when
+        no CrossbarModel instance is available in ``self.modules``.
+        """
         if addr >= Addr.DRAM_BASE:
             return self.modules.get('dram')
         elif addr < 0x40000000:
@@ -603,7 +608,12 @@ class MMIOBridge:
         return None
 
     def _translate_addr(self, addr: int) -> int:
-        """Convert absolute address to buffer offset."""
+        """Fallback-only: Convert absolute address to buffer offset.
+
+        DEPRECATED: Prefer CrossbarModel (``self._crossbar.read/write``) for all
+        memory access. This method exists solely for backward compatibility when
+        no CrossbarModel instance is available in ``self.modules``.
+        """
         if addr >= Addr.DRAM_BASE:
             return addr - Addr.DRAM_BASE
         if 0x20000000 <= addr < 0x20400000:

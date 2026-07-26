@@ -1,0 +1,6 @@
+Task 4 — FuncModel crossbar+pcie Assertion
+============================================
+Date: 2026-07-27
+Command: PYTHONPATH=sim python3 -c "from sim.func_model import FuncModel; fm = FuncModel(); assert fm.crossbar is not None; assert fm.pcie is not None; print('FuncModel crossbar+pcie OK')"
+Result: FuncModel crossbar+pcie OK ✅
+Exit code: 0

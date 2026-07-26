@@ -1,0 +1,21 @@
+Task 4 — CrossbarModel Routing Audit
+=====================================
+Date: 2026-07-27
+File audited: sim/mmio_bridge.py
+
+Engine data paths verified:
+1. _run_mxu_compute (L167-244): Uses crossbar.read/write(MASTER_MXU, ...) when xbar is not None. Falls back to sram + _translate_addr when crossbar unavailable. ✅ CORRECT
+2. _run_sfu_compute (L317-328): Uses crossbar.read/write(MASTER_SFU, ...) when xbar is not None. Falls back to sram + _translate_addr when crossbar unavailable. ✅ CORRECT
+3. _run_vector_compute (L415-427): Uses crossbar.read/write(MASTER_VEC, ...) when xbar is not None. Falls back to sram + _translate_addr when crossbar unavailable. ✅ CORRECT
+4. _run_dma_transfer (L519-525): Uses crossbar.read/write(MASTER_DMA, ...) when xbar is not None. Falls back to _get_mem + _translate_addr when crossbar unavailable. ✅ CORRECT
+
+Docstring updates:
+- _get_mem() (L597): Marked "Fallback-only" with DEPRECATED notice pointing to CrossbarModel
+- _translate_addr() (L605): Marked "Fallback-only" with DEPRECATED notice pointing to CrossbarModel
+
+CrossbarModel integration verification:
+- _crossbar property (L34): Returns self.modules.get('crossbar') — returns None-safe
+- _to_crossbar_addr() (L43): Correctly maps SRAM-relative and absolute addresses
+- All 4 master IDs match crossbar MASTER constants: MASTER_MXU, MASTER_SFU, MASTER_VEC, MASTER_DMA
+- FuncModel().crossbar is not None ✅
+- FuncModel().pcie is not None ✅

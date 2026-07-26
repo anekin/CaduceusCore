@@ -1,0 +1,19 @@
+Task 4 — Spike E2E Results
+============================
+Date: 2026-07-27
+
+1. mmul_smoke:
+   Command: PYTHONPATH=sim python3 sim/spike_host.py --mode mmul_smoke --model ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf --layers 1 --ops Q_proj
+   Result: FAIL (tolerance: max_diff=1.07e+03)
+   Status: PRE-EXISTING — confirmed same result on baseline commit d6b1adc (before gap-closure Tasks 1-4)
+   Elapsed: 59.2s
+
+2. forward:
+   Command: PYTHONPATH=sim python3 sim/spike_host.py --mode forward --layers 2 --token-ids 1,2,3 --model ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf --reference llama_ref/refs/qwen_l0_l1_hidden.npz
+   Result: WARN (tolerance failures, deterministic=YES)
+   Status: COMPLETES WITHOUT CRASH — main process finishes normally
+   Pre-existing issue: INTC KeyError at mmio_bridge.py:590 (self._status[INTC.BASE + INTC.PENDING] accessed before initialization)
+   Elapsed: 368.1s
+   Op coverage: MMUL:48, SFU_RMSNorm:4, SFU_SiLU:2, Vector_ADD:4, Vector_MUL:2, DMA_COPY:66
+   3/3 runs deterministic (bit-identical)
+   Evidence saved to: .omo/evidence/e2e-task-14-e2e.txt, .omo/evidence/e2e-task-14-npz-compare.txt
