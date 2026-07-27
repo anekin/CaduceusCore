@@ -1,0 +1,8 @@
+Internal ctest changing into directory: /home/prj/zhengs/caduceuscore/CaduceusCore/build/software
+Test project /home/prj/zhengs/caduceuscore/CaduceusCore/build/software
+    Start 2: runtime_abi_negative
+1/1 Test #2: runtime_abi_negative .............   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.02 sec
