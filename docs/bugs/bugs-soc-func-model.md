@@ -122,11 +122,11 @@ Func Model default parameter (`entries=256`) was copied from the RTL ROM size wi
 
 | Metric | Value |
 |--------|:-----:|
-| Total bugs | 7 |
+| Total bugs | 8 |
 | Open | 0 |
-| Fixed | 7 |
+| Fixed | 8 |
 | Critical | 0 |
-| Major | 5 |
+| Major | 6 |
 | Minor | 2 |
 | Has fix plan / implemented | 0/0 |
 
@@ -438,3 +438,33 @@ The same case produced a PASS during the original T1 wave only because the earli
 - `.omo/evidence/bug-fix-t1-fm007.txt` — 3-op chain (mmul, sfu, vector): 3 PASS, 0 FAIL, NPU_HEAD=3; 4-op chain (mmul, sfu, vector, dma_copy): 4 PASS, 0 FAIL, NPU_HEAD=4.
 - `make -C firmware`: 0 errors, 0 warnings.
 - `python3 scripts/run_func_model_signoff.py run --case task-1b-v3-spike-chain`: exit 0, all ops PASS.
+
+---
+
+### 2026-07-27 [Major] INTC PENDING KeyError on ACK-before-PENDING (BUG-SOC-FM-008)
+
+**Case**: Spike forward pass — MMIO server logs `KeyError: 1073766400`
+**Status**: Fixed
+
+#### Description
+
+`_handle_intc` at `sim/mmio_bridge.py:590` used `self._status[INTC.BASE + INTC.PENDING] &= ~value`, 
+which raises `KeyError` when INTC.ACK is written before any INTC.PENDING write has populated the key.
+
+#### Root Cause
+
+`_handle_intc` assumed PENDING register was pre-initialized via a prior write. 
+When Spike firmware issues ACK before PENDING register has been touched, `self._status` dict has no key 
+(starts empty per `__post_init__`), causing `KeyError` on the `&=` operation.
+
+#### Fix Commit
+
+`72ccbf7` — Changed `self._status[key] &= ~value` to `self._status[key] = self._status.get(key, 0) & ~value`, 
+matching the safe `.get(..., 0)` pattern already used in `_set_irq()` (lines 625-626).
+
+#### Evidence
+
+- `test_intc_keyerror_fix.py`: 4 new regression tests (ACK-before-PENDING no-crash, set-then-ACK, multi-ACK, normal-flow)
+- `test_func_model_signoff_v3_intc.py`: 9/9 PASS (no regression)
+- Total: 13/13 INTC tests PASS
+- `.omo/evidence/task1-intc-keyerror-fix.txt`: traceback, diff, test output

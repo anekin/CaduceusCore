@@ -1,7 +1,7 @@
-# Func Model Signoff Checklist — v3 (with Bug Fix + Bridge-Accum Fix)
+# Func Model Signoff Checklist — v3 (with Bug Fix + Bridge-Accum Fix + INTC Fix)
 
-> **Date**: 2026-07-26
-> **Scope**: v2 op-level + v3 SoC integration + bug-fix cycle (FM-004/005/006/007) + bridge accumulation fix (FM-005 sub-issue). RTL-golden-readiness for full SoC RTL is deferred.
+> **Date**: 2026-07-27
+> **Scope**: v2 op-level + v3 SoC integration + bug-fix cycle (FM-004/005/006/007) + bridge accumulation fix (FM-005 sub-issue) + INTC KeyError fix (FM-008). RTL-golden-readiness for full SoC RTL is deferred.
 > **Performance signoff**: FAIL/PARTIAL — tracked separately. Do NOT claim performance pass.
 
 This document reconciles all signoff evidence gathered across tasks T0B–T5 and codifies
@@ -45,6 +45,7 @@ checker (`scripts/check_func_model_signoff_docs.py`) enforces.
 | **F-FM-29** | SFU/Vector descriptor SRAM fields (FM-004, T4) | ✅ Fixed | bug-fix-t4 |
 | **F-FM-30** | --token-ids fallback (FM-006, T5) | ✅ Fixed | bug-fix-t5 |
 | **F-FM-31** | Bridge MXU cross-tile accumulation stale-read fix (FM-005 sub-issue, firmware activation-offset) | ✅ Fixed (`e7ed749`) | bridge-accum-t1-fix.txt; L0 Q_proj max_diff=9.16e-05 |
+| **F-FM-32** | INTC KeyError ACK-before-PENDING fix (`.get()` defense in `_handle_intc`) | ✅ Fixed (`72ccbf7`) | task1-intc-keyerror-fix.txt; 13/13 INTC tests PASS |
 
 ---
 
@@ -107,10 +108,10 @@ Each element passes if it satisfies EITHER abs OR rel tolerance.
 
 ---
 
-## Bug Fix Cycle (2026-07-25–26)
+## Bug Fix Cycle (2026-07-25–27)
 
-The func-model-signoff-v3 revealed 4 bugs in the Spike+firmware integration path
-and 1 sub-issue (bridge accumulation). A dedicated bug-fix cycle addressed all of them:
+The func-model-signoff-v3 revealed 4 bugs in the Spike+firmware integration path,
+1 sub-issue (bridge accumulation), and 1 func model gap (INTC KeyError). A dedicated bug-fix cycle addressed all of them:
 
 | Bug | Pri | Status | Root Cause | Fix |
 |-----|-----|--------|-----------|-----|
@@ -118,6 +119,7 @@ and 1 sub-issue (bridge accumulation). A dedicated bug-fix cycle addressed all o
 | BUG-SOC-FM-005 | P1 | ✅ Fixed | Row-major vs tiled DRAM layout + firmware activation-offset miscalculation | `_reorder_weights_to_firmware_tiles()` fixes layout; `e7ed749` fixes stale-read accumulation |
 | BUG-SOC-FM-004 | P2 | ✅ Fixed | Firmware hardcoded SFU/Vector SRAM addresses | Descriptor src[4]-[6] now read; 15/15 fields aligned |
 | BUG-SOC-FM-006 | P3 | ✅ Fixed | sz0001 lacks `tokenizers` module | `--token-ids` CLI fallback; forward pass runs |
+| BUG-SOC-FM-008 | P2 | ✅ Fixed | `_handle_intc` used `self._status[key] &= ~value` without `.get()` fallback; ACK-before-PENDING raised KeyError | One-line `.get(...,0)` defense at `sim/mmio_bridge.py:590`, matching `_set_irq()` safe pattern (commit `72ccbf7`) |
 
 **Bridge MXU Accumulation Fix (FM-005 sub-issue, 2026-07-26):**
 - Root cause: Firmware `act_sram + k_start * 64` hardcoded offset miscalculated per-K-tile activation address. For `M=1`, `k_block≥2` read uninitialised SRAM → stale output.
@@ -130,7 +132,8 @@ and 1 sub-issue (bridge accumulation). A dedicated bug-fix cycle addressed all o
 - MMUL smoke: **Was 50% zero entries → Now 0% zero entries**. Bridge accumulation stale read eliminated; max_diff ≤ 10.
 - Descriptor alignment: **Was "design inconsistency" → Now PASS**. All 15 fields verified.
 - Bridge accumulation: **Was stale after k_block=1 → Now FULLY ACCUMULATED**. Commit `e7ed749`.
-- Bug tracker: `docs/bugs/bugs-soc-func-model.md` updated. Stats: Open=0, Fixed=7.
+- INTC KeyError: **Was KeyError crash on ACK-before-PENDING → Now handled gracefully**. 13/13 INTC tests PASS.
+- Bug tracker: `docs/bugs/bugs-soc-func-model.md` updated. Stats: Open=0, Fixed=8.
 
 ---
 
