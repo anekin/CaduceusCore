@@ -587,7 +587,7 @@ class MMIOBridge:
     def _handle_intc(self, rw: str, addr: int, value: int) -> int:
         off = addr - INTC.BASE
         if rw == 'write' and off == INTC.ACK:
-            self._status[INTC.BASE + INTC.PENDING] &= ~value
+            self._status[INTC.BASE + INTC.PENDING] = self._status.get(INTC.BASE + INTC.PENDING, 0) & ~value
         elif rw == 'write':
             self._status[addr & 0xFFFFFFFC] = value
         return self._status.get(addr & 0xFFFFFFFC, 0)

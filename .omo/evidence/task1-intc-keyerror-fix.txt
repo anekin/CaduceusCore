@@ -1,0 +1,72 @@
+Evidence: Task 1 — INTC ACK-before-PENDING KeyError Fix
+=======================================================
+Date: 2026-07-27
+Files changed: sim/mmio_bridge.py (line 590), sim/tests/test_intc_keyerror_fix.py (new)
+
+1. PRE-FIX TRACEBACK
+--------------------
+When bridge.handle('write', INTC.BASE + INTC.ACK, 1 << 0) is called
+before any INTC.PENDING write, the unmodified code raises:
+
+  sim/mmio_bridge.py:590: KeyError: 1073766400
+
+Full traceback (from test run against unmodified code):
+
+  sim/tests/test_intc_keyerror_fix.py:28:
+  sim/mmio_bridge.py:73: in handle
+      return self._handle_intc(rw, addr, value)
+  sim/mmio_bridge.py:590: in _handle_intc
+      self._status[INTC.BASE + INTC.PENDING] &= ~value
+  KeyError: 1073766400
+
+1073766400 decimal = 0x40006000 = INTC.BASE + INTC.PENDING
+(self._status dict is empty when ACK arrives before any PENDING write)
+
+2. APPLIED DIFF
+---------------
+--- a/sim/mmio_bridge.py
++++ b/sim/mmio_bridge.py
+@@ -587,7 +587,7 @@ class MMIOBridge:
+     def _handle_intc(self, rw: str, addr: int, value: int) -> int:
+         off = addr - INTC.BASE
+         if rw == 'write' and off == INTC.ACK:
+-            self._status[INTC.BASE + INTC.PENDING] &= ~value
++            self._status[INTC.BASE + INTC.PENDING] = self._status.get(INTC.BASE + INTC.PENDING, 0) & ~value
+         elif rw == 'write':
+             self._status[addr & 0xFFFFFFFC] = value
+         return self._status.get(addr & 0xFFFFFFFC, 0)
+
+The fix mirrors the safe .get() pattern already used in _set_irq (lines 625-626).
+
+3. POST-FIX TEST RESULTS
+------------------------
+$ PYTHONPATH=sim python3 -m pytest sim/tests/test_intc_keyerror_fix.py sim/tests/test_func_model_signoff_v3_intc.py -v
+
+collected 13 items
+
+test_intc_keyerror_fix.py::test_ack_before_pending_no_crash       PASSED
+test_intc_keyerror_fix.py::test_ack_clears_correct_bit            PASSED
+test_intc_keyerror_fix.py::test_ack_preserves_other_bits          PASSED
+test_intc_keyerror_fix.py::test_multiple_consecutive_acks_no_crash PASSED
+test_func_model_signoff_v3_intc.py::test_interrupt_delivery       PASSED
+test_func_model_signoff_v3_intc.py::test_intc_source_mxu          PASSED
+test_func_model_signoff_v3_intc.py::test_intc_source_sfu          PASSED
+test_func_model_signoff_v3_intc.py::test_intc_source_vector       PASSED
+test_func_model_signoff_v3_intc.py::test_intc_source_dma          PASSED
+test_func_model_signoff_v3_intc.py::test_intc_source_pcie         PASSED
+test_func_model_signoff_v3_intc.py::test_intc_source_pcie_dma     PASSED
+test_func_model_signoff_v3_intc.py::test_intc_source_host_doorbell PASSED
+test_func_model_signoff_v3_intc.py::test_intc_priority            PASSED
+
+13 passed in 0.72s
+
+compileall sim/mmio_bridge.py sim/tests/test_intc_keyerror_fix.py: OK (zero errors)
+
+4. SUMMARY
+----------
+Bug:     _handle_intc uses `self._status[key] &= ~value` which crashes with
+         KeyError when the ACK write arrives before PENDING has been written.
+Fix:     Replaced with `self._status[key] = self._status.get(key, 0) & ~value`,
+         matching the existing safe pattern in _set_irq.
+Tests:   4 new unit tests + 9 existing INTC regression tests = 13/13 PASS.
+Issue:   .omo/notepads/func-model-gap-closure/issues.md Issue 003 status updated.

@@ -35,7 +35,7 @@ Reverted `_create_firmware` default: when `use_spike=None` and `CADUCEUS_USE_SPI
 Pre-existing numerical tolerance issue between NPU int4 matmul and llama.cpp reference. Confirmed same result on baseline commit `d6b1adc` before gap-closure tasks. Not introduced by Tasks 1-4.
 
 ### Status
-Not in scope for gap-closure. Documented for awareness.
+Resolved — numerical tolerance bug (max_diff=1.07e+03) was fixed by BUG-SOC-FM-005 (commit 67de684 weight tile layout + commit 78a3a37 firmware activation offset), post-fix max_diff=9.16e-05. Note: F3 Spike integration test mmul_smoke is SKIPPED on EDA server because the 1.5B model file is missing (environment issue), not a numerical regression.
 
 ## Issue 003: INTC PENDING KeyError during Spike forward — pre-existing (2026-07-27)
 
@@ -49,7 +49,7 @@ During `spike_host.py --mode forward`, the MMIO server repeatedly logs `KeyError
 The main forward pass completes normally (deterministic=YES, op coverage correct). The MMIO server thread pool logs errors per-request, and socketserver continues processing.
 
 ### Status
-Pre-existing. Not in scope for gap-closure. Would be a one-line fix (`self._status.get(INTC.BASE + INTC.PENDING, 0) & ~value`) but the task explicitly forbids modifying engine behavior or data-path logic beyond docstring updates.
+Fixed by func-model-remaining-fixes Task 1: one-line .get() fix in _handle_intc, ACK-before-PENDING defense closed. The previous 'Not in scope for gap-closure' restriction is lifted by this plan.
 
 ## Issue 004: 8 test_engines.py failures — pre-existing assertion drift (2026-07-27)
 
@@ -60,4 +60,31 @@ Pre-existing. Not in scope for gap-closure. Would be a one-line fix (`self._stat
 Engine model timing parameters changed without corresponding test expectation updates. Confirmed on baseline commit `d6b1adc`. Not introduced by Tasks 1-4.
 
 ### Status
-Pre-existing. Not in scope for gap-closure.
+Documented, not fixed — DSE timing model bugs, do not affect Func Model golden reference or RTL verification. Block Engine is currently selected and DSE will not be re-run in the short term. See `reports/dse-engine-model-bugs-2026-07-27.md` for per-bug fix plan.
+
+## Issue 005: FM-SOC-10X SFU RMSNORM mismatch — pre-existing (2026-07-27)
+
+### Symptom
+`bash sim/regression/run_fm_soc_all.sh FM-SOC-10X` fails: `FM-SOC-10X failed: op00 RMSNORM pre-attn: SFU mismatch max_abs=2.95e+00`. The test compares RTL SFU RMSNORM output (via PCIe TLP readback) against `GoldenSFU.rmsnorm_hw()` golden reference with `tol_abs=2e-3, tol_rel=1e-2`. The max absolute error of 2.95 far exceeds the 2e-3 absolute tolerance.
+
+### Root cause
+Pre-existing SFU RMSNORM implementation mismatch between RTL hardware and the Python golden model (`GoldenSFU.rmsnorm_hw()` at `sim/golden_executor.py:515`). Confirmed on baseline commit `d6b1adc` (before gap-closure Tasks 1-4) — same error. The mismatch is likely in the hardware RMSNORM computation (floating-point rounding, subnormal handling, or sqrt precision) but the root cause requires RTL-level analysis.
+
+### Impact
+- FM-SOC-10X is a P4 integration test covering PCIe TLP → DRAM → firmware → 17-op blk.0 chain → DRAM → PCIe → host readback. The first op (RMSNORM pre-attn) fails, blocking subsequent op checks.
+- 31/33 other FM-SOC cases pass, including SFU-heavy cases (Softmax, GELU, SiLU, LayerNorm).
+- `golden_executor.py` was not modified by Tasks 1-4; the RTL simv binary is unchanged from Jul 22.
+
+### Status
+Pre-existing. NOT introduced by gap-closure Tasks 1-4.
+
+## Issue 006: FM-SOC-032 stuck/hang during F3 regression (2026-07-27)
+
+### Symptom
+During Wave F3 FM-SOC regression, `FM-SOC-032` appeared to hang — the simv process consumed 98% CPU for 15+ minutes without completing. Per the testcase list, FM-SOC-032 normally completes in ~416 seconds (~7 min). The simv was manually killed at ~15 min.
+
+### Root cause
+Unknown. Hypotheses: (1) resource contention on sz0001, (2) regression from gap-closure Python changes affecting P4SpikeRunner._build_032(), (3) infinite loop in RTL hardware simulation.
+
+### Status
+Inconclusive. Needs re-investigation on clean sz0001 environment. Not confirmed as gap-closure regression.
