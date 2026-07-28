@@ -1,24 +1,44 @@
 /* NPU MMIO Register Map — Firmware header
- * 与 sim/regmap.py 保持同步。
+ * Now includes the authoritative generated ABI (gen/npu_abi_firmware.h)
+ * and retains legacy struct/field naming for backward compatibility.
+ *
+ * This file is no longer the sole source of truth for base addresses,
+ * descriptor sizes, and engine opcodes — those are generated from
+ * spec/npu_abi.json via scripts/gen_npu_abi.py.
+ *
+ * DO NOT hand-edit base address or opcode values here; update the
+ * schema and regenerate gen/npu_abi_firmware.h instead.
  */
 
 #ifndef NPU_REGMAP_H
 #define NPU_REGMAP_H
 
+/* ── Generated ABI contract (NPU_ABI_* namespace, no struct types) ── */
+#include "../gen/npu_abi_firmware.h"
+
 #include <stdint.h>
 
-/* ── Base Addresses ─────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+ * Base Addresses — legacy aliases to generated constants
+ * ══════════════════════════════════════════════════════════════════════ */
+#define NPU_MXU_BASE       NPU_ABI_MXU_BASE
+#define NPU_SFU_BASE       NPU_ABI_SFU_BASE
+#define NPU_VECTOR_BASE    NPU_ABI_VECTOR_BASE
+#define NPU_DMA_BASE       NPU_ABI_DMA_BASE
+#define NPU_PCIE_BASE      NPU_ABI_PCIE_BASE
+#define NPU_DOORBELL_BASE  NPU_ABI_DOORBELL_BASE
+#define NPU_INTC_BASE      NPU_ABI_INTC_BASE
+#define NPU_PCIE_DMA_BASE  NPU_ABI_PCIE_DMA_BASE
+#define NPU_SRAM_BASE      NPU_ABI_SRAM_BASE
+#define NPU_SRAM_SIZE      NPU_ABI_SRAM_SIZE
 
-#define NPU_MXU_BASE       0x40000000UL
-#define NPU_SFU_BASE       0x40001000UL
-#define NPU_VECTOR_BASE    0x40002000UL
-#define NPU_DMA_BASE       0x40003000UL
-#define NPU_PCIE_BASE      0x40004000UL
-#define NPU_DOORBELL_BASE  0x40005000UL
-#define NPU_INTC_BASE      0x40006000UL
-#define NPU_PCIE_DMA_BASE  0x40007000UL
-#define NPU_SRAM_BASE      0x20000000UL
-#define NPU_SRAM_SIZE      (4 * 1024 * 1024)
+/* ── Engine Opcode Aliases (old names → ABI names) ─────────────────── */
+#define OP_PCIE_DMA        NPU_ABI_ENGINE_OP_PCIE_DMA
+
+/* ══════════════════════════════════════════════════════════════════════
+ * Struct type definitions — legacy field names preserved for
+ * firmware compatibility. Offsets match gen/npu_abi.h structs.
+ * ══════════════════════════════════════════════════════════════════════ */
 
 /* ── MXU Registers ──────────────────────────────────────────────── */
 
@@ -49,6 +69,8 @@ typedef struct {
     volatile uint32_t IRQ_EN;     /* 0x1C: bit0=irq enable */
 } npu_sfu_t;
 
+/* ── SFU Sub-Opcodes ────────────────────────────────────────────── */
+
 #define SFU_OP_SOFTMAX   0
 #define SFU_OP_LAYERNORM 1
 #define SFU_OP_GELU      2
@@ -70,14 +92,16 @@ typedef struct {
     volatile uint32_t IRQ_EN;     /* 0x1C: bit0=irq enable */
 } npu_vector_t;
 
+/* ── Vector Sub-Opcodes ─────────────────────────────────────────── */
+
 #define VEC_OP_ADD   0
 #define VEC_OP_MUL   1
 #define VEC_OP_MAX   2
-#define VEC_OP_SUM   3
+#define VEC_OP_SUM   3     /* ABI name: VEC_OP_SUM_REDUCE */
 #define VEC_OP_CONV  4
-#define VEC_OP_RESID 5
+#define VEC_OP_RESID 5     /* ABI name: VEC_OP_RESID_ADD */
 
-#define OP_PCIE_DMA 7
+/* ── Wrapper Offsets (SoC internal, not in ABI schema) ──────────── */
 
 #define MXU_WRP_WEIGHT_BASE 0x30
 #define MXU_WRP_ACT_BASE    0x34
@@ -121,13 +145,16 @@ typedef struct {
  * RD_ERR_CODE and WR_ERR_CODE are status/debug registers.  sizeof() is
  * therefore 36, which exceeds the 32-byte doorbell descriptor budget; the
  * firmware descriptor struct pcie_dma_desc_t is kept separately at 24 bytes.
+ *
+ * NOTE: gen/npu_abi.h names these fields CTRL/STATUS; legacy firmware
+ * code uses PCIE_CTRL/PCIE_STATUS. This struct preserves the legacy names.
  */
 typedef struct __attribute__((packed)) {
     volatile uint32_t PCIE_CTRL;         /* 0x00: [0]=start_rd, [1]=start_wr,
-                                                 [2]=abort, [3]=irq_en */
+                                                  [2]=abort, [3]=irq_en */
     volatile uint32_t PCIE_STATUS;       /* 0x04: [0]=rd_busy, [1]=wr_busy,
-                                                 [2]=rd_done, [3]=wr_done,
-                                                 [4]=error */
+                                                  [2]=rd_done, [3]=wr_done,
+                                                  [4]=error */
     volatile uint32_t PCIE_ADDR_LO;      /* 0x08: PCIe address [31:0] */
     volatile uint32_t PCIE_ADDR_HI;      /* 0x0C: PCIe address [63:32] */
     volatile uint32_t AXI_ADDR;          /* 0x10: Local AXI address */
@@ -176,7 +203,8 @@ typedef struct {
 #define INTC_HOST    (1 << 5)
 #define INTC_TIMER   (1 << 6)
 
-/* ── Compiler-stable module base pointers ─────────────────────────
+/* ══════════════════════════════════════════════════════════════════════
+ * Compiler-stable module base pointers
  *
  * RISC-V GCC -O2 common-subexpression-eliminates (or otherwise derives)
  * plain integer-cast base pointers, causing some MMIO sequences to compute
@@ -184,7 +212,7 @@ typedef struct {
  * own base.  The inline-asm loaders below force each base into its own
  * register as an opaque value; GCC cannot CSE across them because it does
  * not see the immediate relationship between the lui results.
- */
+ * ══════════════════════════════════════════════════════════════════════ */
 
 static inline npu_mxu_t *npu_mxu_base(void) {
     npu_mxu_t *p;
@@ -236,7 +264,7 @@ static inline npu_intc_t *npu_intc_base(void) {
 #define NPU_DB        (npu_doorbell_base())
 #define NPU_INTC      (npu_intc_base())
 
-/* ── Helpers ─────────────────────────────────────────────────────── */
+/* ── Spin-wait helpers ─────────────────────────────────────────── */
 
 static inline void npu_wait_done(volatile uint32_t *status_reg) {
     while (*status_reg & 1)
@@ -247,5 +275,61 @@ static inline void npu_start(volatile uint32_t *cmd_reg) {
     *cmd_reg = 1;
     __asm__ volatile("" ::: "memory");
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+ * ABI Consistency Checks (compile-time)
+ *
+ * These static assertions verify that the legacy macros and struct
+ * offsets in this file match the generated ABI contract.  Any mismatch
+ * is a build-time error.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+_Static_assert(NPU_MXU_BASE      == 0x40000000UL, "ABI: MXU base mismatch");
+_Static_assert(NPU_SFU_BASE      == 0x40001000UL, "ABI: SFU base mismatch");
+_Static_assert(NPU_VECTOR_BASE   == 0x40002000UL, "ABI: Vector base mismatch");
+_Static_assert(NPU_DMA_BASE      == 0x40003000UL, "ABI: DMA base mismatch");
+_Static_assert(NPU_DOORBELL_BASE == 0x40005000UL, "ABI: Doorbell base mismatch");
+_Static_assert(NPU_INTC_BASE     == 0x40006000UL, "ABI: INTC base mismatch");
+_Static_assert(NPU_PCIE_DMA_BASE == 0x40007000UL, "ABI: PCIe DMA base mismatch");
+_Static_assert(NPU_SRAM_BASE     == 0x20000000UL, "ABI: SRAM base mismatch");
+
+/* Verify struct layout matches ABI register offsets */
+_Static_assert(__builtin_offsetof(npu_mxu_t, CTRL)        == 0x00, "ABI: MXU.CTRL offset");
+_Static_assert(__builtin_offsetof(npu_mxu_t, CMD)         == 0x04, "ABI: MXU.CMD offset");
+_Static_assert(__builtin_offsetof(npu_mxu_t, STATUS)      == 0x08, "ABI: MXU.STATUS offset");
+_Static_assert(__builtin_offsetof(npu_mxu_t, IRQ_EN)      == 0x28, "ABI: MXU.IRQ_EN offset");
+
+_Static_assert(__builtin_offsetof(npu_sfu_t, CTRL)        == 0x00, "ABI: SFU.CTRL offset");
+_Static_assert(__builtin_offsetof(npu_sfu_t, POS)         == 0x18, "ABI: SFU.POS offset");
+
+_Static_assert(__builtin_offsetof(npu_vector_t, CTRL)     == 0x00, "ABI: VECTOR.CTRL offset");
+_Static_assert(__builtin_offsetof(npu_vector_t, DIM)      == 0x18, "ABI: VECTOR.DIM offset");
+
+_Static_assert(__builtin_offsetof(npu_doorbell_t, HOST_TAIL)    == 0x00, "ABI: DOORBELL.HOST_TAIL offset");
+_Static_assert(__builtin_offsetof(npu_doorbell_t, LAST_STATUS) == 0x10, "ABI: DOORBELL.LAST_STATUS offset");
+_Static_assert(__builtin_offsetof(npu_doorbell_t, COMPLETION_STATUS) == 0x14, "ABI: DOORBELL.COMPLETION_STATUS offset");
+
+_Static_assert(__builtin_offsetof(npu_intc_t, PENDING)   == 0x00, "ABI: INTC.PENDING offset");
+_Static_assert(__builtin_offsetof(npu_intc_t, ACK)       == 0x0C, "ABI: INTC.ACK offset");
+
+_Static_assert(sizeof(npu_pcie_dma_t) == 36, "ABI: PCIe DMA sizeof must be 36 bytes");
+
+/* Known Discrepancy: DOORBELL COMPLETION_STATUS
+ * COMPLETION_STATUS is declared as [16] uint32 (64 bytes at offset 0x14)
+ * in the ABI schema. Firmware writes COMPLETION_STATUS[cmd_id] where
+ * cmd_id ranges up to RING_ENTRIES-1 (1023). RTL doorbell.v implements
+ * only LAST_STATUS at 0x10 with no COMPLETION_STATUS array.
+ * Resolution TBD in a future ABI revision. */
+
+/* Known Discrepancy: SFU SRAM hardcoding
+ * read_sfu_desc() in firmware hardcodes input_sram=0x00000000,
+ * output_sram=0x00018000, ignoring descriptor fields [4]/[5].
+ * Python host writes valid SRAM values at these offsets.
+ * Not an alignment bug but a design inconsistency. */
+
+/* Known Discrepancy: PCIE_DMA sizeof
+ * sizeof(npu_pcie_dma_t) == 36 bytes, but the doorbell descriptor path
+ * only uses 8 registers (32 bytes). RD_ERR_CODE/WR_ERR_CODE at 0x1C/0x20
+ * are status/debug registers outside the descriptor budget. */
 
 #endif /* NPU_REGMAP_H */

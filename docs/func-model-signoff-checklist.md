@@ -230,3 +230,81 @@ remain unimplemented.
   Six paths (`PCIE-TLP`, `XBAR-ARB`, `APB-MMIO`, `IBEX-AXI`, `IRQ-CHAIN`,
   `IBEX-FIRMWARE`) are pre-specified in `docs/soc-fm-gap-spec.md` with full
   API designs and testability plans. They are future work, not blockers.
+
+---
+
+## Task 22: Scoped Software Signoff Aggregation
+
+> **Date**: 2026-07-28
+> **Scope**: Software stack packaging and evidence aggregation across all seven
+>   CI tiers (L0–L5 + Framework). Hardware signoff (FPGA, full RTL replay,
+>   performance) is explicitly NOT claimed.
+> **Evidence report**: `.omo/evidence/task-22-release-signoff.json`
+> **Aggregator**: `scripts/aggregate_software_signoff.py`
+> **Build script**: `scripts/build_software_release.py`
+
+This section documents the Task 22 package-and-signoff step. It does **not**
+supersede the v3 Func Model signoff above; it is an additive software-stack
+signoff that aggregates evidence from Tasks 1–21 into a versioned JSON report.
+
+### Tier Mapping
+
+| Tier | Tasks | CI Job | Description |
+|------|-------|--------|-------------|
+| **L0** | 1, 2 | `l0_abi` | ABI v1.0 schema (`spec/npu_abi.json`), generated artifacts, binding migration |
+| **L1** | 3, 7 | `l1_runtime` | Stable C Host Runtime ABI (`cad_device_t`, etc.) + core/mock transport |
+| **L2** | 4, 8, 9, 13, 14 | `l2_func_model` | Func Model device server, versioned protocol, adapter protocol, fault injection, differential |
+| **L3** | 6, 12 | `l3_spike` | Spike RISC-V simulator + firmware ELF toolchain manifest |
+| **L4** | 10, 18 | `l4_rtl_skeleton` | RTL DUT adapter interface + RTL transport conformance (FakeDUT; no real VCS/cocotb in CI) |
+| **L5** | 19, 20 | `l5_fpga_nogo` | FPGA transport interface (VFIO/UIO/vendor) + structured NO-GO evidence |
+| **Framework** | 5, 15, 16, 17, 21 | `framework_qwen_executorch` | llama.cpp dependency lock, ggml lifecycle/ops CSV, Qwen2.5-3B software gates, ExecuTorch delegate |
+
+### Aggregation Results
+
+The evidence aggregator reads all `.omo/evidence/task-*-*.json` / `.log` / `.csv`
+files for Tasks 1–21, classifies them into the seven tiers above, and produces
+a deterministic JSON signoff report.
+
+| Tier | Expected Status | Rationale |
+|------|:--------------:|-----------|
+| L0 | PASS | ABI schema 19/19 tests, generation idempotent |
+| L1 | PASS | CTest 6/6+, Python conformance 17/17 |
+| L2 | PASS | Device protocol 9/9, fault/differential tests pass |
+| L3 | PASS (check) | Spike manifest present; actual rebuild requires `dtc` + `riscv-gcc` |
+| L4 | PASS | RTL adapter 6/6 scenarios (FakeDUT); transport conformance passes |
+| L5 | **BLOCKED** | **Task 20 FPGA is NO-GO** — no FPGA platform available in this phase |
+| Framework | PASS | Qwen 3B software gates pass (mock transport); ExecuTorch delegate tests pass |
+| **Overall** | **BLOCKED** | L5 blockade propagates to overall status per aggregator rules |
+
+### What Is NOT Claimed
+
+- **FPGA PASS** — Task 20 is intentionally BLOCKED/NO-GO because no FPGA
+  platform is available. The aggregator correctly reports overall BLOCKED when
+  L5 is required with `--require l0,l1,l2,l3,l4,l5,framework`.
+- **Full RTL replay PASS** — The RTL adapter (L4) proves the adapter interface
+  contract through FakeDUT scenarios, but does not replay the FM-SOC vector
+  suite through a live VCS/cocotb simulation in CI.
+- **Performance signoff** — Performance remains FAIL/PARTIAL as stated in the
+  v3 signoff scope. The software aggregator does not include performance metrics.
+- **ABI v2+ or FSA architecture** — The aggregator validates the v1 Block/
+  bootstrap ABI. Future ABI versions require a new schema generation cycle.
+
+### CI Integration
+
+The `.github/workflows/caduceus-core-ci.yml` workflow implements the tiered
+signoff as eight independent jobs:
+
+1. `l0_abi` — ABI schema pytest + `gen_npu_abi.py --check`
+2. `l1_runtime` — CMake build + CTest + Python conformance
+3. `l2_func_model` — Device protocol, fault injection, scenario tests
+4. `l3_spike` — Spike manifest check + toolchain tests (may skip when tools absent)
+5. `l4_rtl_skeleton` — RTL adapter conformance + transport tests
+6. `l5_fpga_nogo` — FPGA NO-GO signoff (`continue-on-error: true`)
+7. `framework_qwen_executorch` — Qwen gates + ExecuTorch delegate
+8. `release_aggregator` — Runs after all tiers; executes the reproducible build
+   and the evidence aggregator, uploads the signoff JSON as an artifact.
+
+L5 uses `continue-on-error: true` so the BLOCKED verdict does not fail the
+workflow. All other jobs fail on test/command failure per standard CI semantics.
+The `release_aggregator` job `needs` all seven tier jobs to ensure evidence is
+complete before the aggregation runs.

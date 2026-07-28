@@ -1,0 +1,15 @@
+{
+    "name": "llama.cpp",
+    "repository": "https://github.com/ggml-org/llama.cpp",
+    "commit": "88b47a755c72fed4b22fba0fd262e2d7b7d01583",
+    "retrieval_method": "git clone --recurse-submodules",
+    "license": "MIT",
+    "pinned_on": "2026-07-27",
+    "purpose": "Official OSS inference framework backend integration surface for CaduceusCore NPU",
+    "backend_directory": "ggml/src/ggml-npu",
+    "build_flags": {
+        "GGML_NPU": "ON",
+        "GGML_BACKEND_DL": "ON"
+    },
+    "local_backend_source": "ggml-npu/"
+}

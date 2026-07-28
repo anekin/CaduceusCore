@@ -9,6 +9,7 @@ Public API:
         Scenario, Action, Observation, ToleranceConfig, Provenance,
         OperationClass, EvidenceRecord, DUTAdapter, Scoreboard, ScoreboardResult,
         FakeDUTAdapter, migrate_testcase_config,
+        FaultClass, FaultInjector, FaultInjectionRecord,
     )
 """
 
@@ -19,6 +20,13 @@ from sim.verification.scenario import Scenario, Action, EvidenceRecord
 from sim.verification.dut_adapter import DUTAdapter, FakeDUTAdapter
 from sim.verification.scoreboard import Scoreboard, ScoreboardResult
 from sim.verification.migration import migrate_testcase_config
+from sim.verification.rtl_adapter import RTLAdapter
+from sim.verification.fm_adapter import FuncModelAdapter
+from sim.verification.fault_injector import (
+    FaultClass,
+    FaultInjector,
+    FaultInjectionRecord,
+)
 
 __all__ = [
     "Scenario",
@@ -30,7 +38,12 @@ __all__ = [
     "EvidenceRecord",
     "DUTAdapter",
     "FakeDUTAdapter",
+    "FuncModelAdapter",
     "Scoreboard",
     "ScoreboardResult",
     "migrate_testcase_config",
+    "RTLAdapter",
+    "FaultClass",
+    "FaultInjector",
+    "FaultInjectionRecord",
 ]

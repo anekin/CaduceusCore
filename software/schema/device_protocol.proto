@@ -1,0 +1,154 @@
+// CaduceusCore Func Model Device Protocol
+//
+// Versioned binary protocol over a reliable byte stream (Unix socket first).
+// Every message carries a DeviceHeader with magic, protocol version, request id,
+// opcode, payload length, status, and CRC32 checksum.
+//
+// License: Apache-2.0 (Protocol Buffers)
+
+syntax = "proto3";
+
+package caduceus.device;
+
+option cc_enable_arenas = true;
+
+// ── Protocol constants (also present in the header) ────────────────────────
+
+// Magic value 'CADU' = 0x43414455
+message ProtocolConstants {
+  // This message exists only to anchor constants in generated code.
+  // Real constants are defined by the header field defaults below.
+}
+
+// ── Opcodes ───────────────────────────────────────────────────────────────
+
+enum DeviceOpcode {
+  // Device lifecycle
+  OPCODE_DEVICE_RESET = 0;
+  OPCODE_DEVICE_CAPS  = 1;
+
+  // Buffer lifecycle
+  OPCODE_BUFFER_ALLOC  = 10;
+  OPCODE_BUFFER_FREE   = 11;
+  OPCODE_BUFFER_READ   = 12;
+  OPCODE_BUFFER_WRITE  = 13;
+  OPCODE_BUFFER_SIZE   = 14;
+
+  // Command submission
+  OPCODE_SUBMIT = 20;
+
+  // Fence lifecycle
+  OPCODE_FENCE_CREATE  = 30;
+  OPCODE_FENCE_DESTROY = 31;
+  OPCODE_FENCE_WAIT    = 32;
+  OPCODE_FENCE_POLL    = 33;
+  OPCODE_FENCE_STATUS  = 34;
+}
+
+// ── Status codes (responses) ──────────────────────────────────────────────
+
+enum DeviceStatus {
+  STATUS_OK = 0;
+
+  // Message-level errors
+  STATUS_INVALID_MESSAGE       = 1;
+  STATUS_CHECKSUM_MISMATCH     = 2;
+  STATUS_VERSION_MISMATCH      = 3;
+  STATUS_REQUEST_OUT_OF_ORDER  = 4;
+
+  // Operation errors
+  STATUS_UNKNOWN_OPCODE   = 10;
+  STATUS_INVALID_HANDLE   = 11;
+  STATUS_INVALID_ARGUMENT = 12;
+  STATUS_OUT_OF_MEMORY    = 13;
+  STATUS_TIMEOUT          = 14;
+  STATUS_NOT_READY        = 15;
+  STATUS_DEVICE_LOST      = 16;
+  STATUS_BUSY             = 17;
+}
+
+// ── Header ────────────────────────────────────────────────────────────────
+//
+// Present in every request and response.  The checksum is a CRC-32/IEEE
+// calculated over the serialized DeviceMessage bytes with this field set to 0.
+// payload_length must equal the length of the payload bytes field.
+
+message DeviceHeader {
+  uint32 magic             = 1;  // 0x43414455 ('CADU')
+  uint32 protocol_version  = 2;  // 1
+  uint64 request_id        = 3;  // client-controlled, strictly monotonic
+  uint32 opcode            = 4;  // DeviceOpcode
+  uint32 payload_length    = 5;  // len(payload) in bytes
+  uint32 status            = 6;  // DeviceStatus in responses; 0 in requests
+  uint32 checksum          = 7;  // CRC-32 over serialized message (checksum=0)
+}
+
+// ── Request payloads ──────────────────────────────────────────────────────
+
+message DeviceResetRequest  {}
+message DeviceCapsRequest   {}
+
+message BufferAllocRequest  { uint64 size   = 1; }
+message BufferFreeRequest   { uint64 handle = 1; }
+message BufferReadRequest   { uint64 handle = 1; uint64 offset = 2; uint64 size = 3; }
+message BufferWriteRequest  { uint64 handle = 1; uint64 offset = 2; bytes  data  = 3; }
+message BufferSizeRequest   { uint64 handle = 1; }
+
+// cmd_blob is a sequence of firmware ring-buffer entries (24 bytes each)
+// followed by the descriptors they point to (60 bytes each).  The server
+// writes descriptors into device DRAM, enqueues entries, and dispatches.
+message SubmitRequest {
+  uint32 cmd_count = 1;
+  bytes  cmd_blob  = 2;
+  uint64 fence_handle = 3;  // 0 if no fence
+}
+
+message FenceCreateRequest  {}
+message FenceDestroyRequest { uint64 handle = 1; }
+message FenceWaitRequest    { uint64 handle = 1; uint64 timeout_ns = 2; }
+message FencePollRequest    { uint64 handle = 1; }
+message FenceStatusRequest  { uint64 handle = 1; }
+
+// ── Response payloads ─────────────────────────────────────────────────────
+
+message DeviceResetResponse {}
+message DeviceCapsResponse {
+  uint32 abi_major              = 1;
+  uint32 abi_minor              = 2;
+  uint32 max_buffers            = 3;
+  uint64 max_buffer_size        = 4;
+  uint32 max_queues             = 5;
+  uint32 max_command_lists      = 6;
+  uint32 max_command_list_entries = 7;
+  string device_name            = 8;
+  string transport_name         = 9;
+}
+
+message BufferAllocResponse { uint64 handle = 1; uint64 size = 2; }
+message BufferFreeResponse  {}
+message BufferReadResponse  { bytes data = 1; }
+message BufferWriteResponse {}
+message BufferSizeResponse  { uint64 size = 1; }
+
+message SubmitResponse      {}
+
+message FenceCreateResponse { uint64 handle = 1; }
+message FenceDestroyResponse {}
+message FenceWaitResponse   { bool signalled = 1; }
+message FencePollResponse   { bool signalled = 1; }
+message FenceStatusResponse { uint32 status = 1; }  // 0=not ready, 1=completed, 2=error
+
+message ErrorResponse {
+  uint32 code    = 1;  // DeviceStatus
+  string message = 2;
+}
+
+// ── Top-level message ─────────────────────────────────────────────────────
+//
+// The header describes the payload.  For extensibility the payload is an
+// opaque byte blob whose interpretation depends on header.opcode.
+
+message DeviceMessage {
+  DeviceHeader header  = 1;
+  bytes        payload = 2;
+}

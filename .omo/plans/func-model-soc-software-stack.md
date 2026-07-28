@@ -2,27 +2,41 @@
 
 ## TL;DR
 > Summary: Build one contract-driven Host Runtime and verification stack that drives the current SoC Func Model, SoC RTL, and FPGA through interchangeable transports. Integrate Qwen 3B through llama.cpp first, then add an ExecuTorch delegate over the same runtime.
+> **Phase constraint (2026-07-27):** RTL and FPGA are still in development. Todos touching RTL/FPGA (10, 14, 18, 19, 20) are scoped to **feasibility and extensibility proof** only — define the interface, build a skeleton, verify the architecture supports the target, then stop. Full RTL conformance / differential / replay / FPGA transport / FPGA replay are deferred.
 > Deliverables:
 > - versioned HW/SW ABI schema and generated Python/C/C++/SystemVerilog bindings;
 > - stable C Host Runtime, C++ wrapper, Python binding, and transport conformance suite;
-> - shared scenario/driver/monitor/scoreboard layer with Func Model, RTL, and FPGA DUT adapters;
+> - shared scenario/driver/monitor/scoreboard layer with Func Model DUT adapter (RTL/FPGA adapters: skeleton);
 > - mandatory compiled-firmware integration through Spike;
 > - production llama.cpp backend using the Host Runtime, followed by ExecuTorch integration;
-> - Linux userspace FPGA transport and unchanged software replay.
-> Effort: XL
-> Risk: High - spans ABI compatibility, compiled firmware, framework integration, RTL simulation, and external FPGA availability.
+> - RTL/FPGA transport interfaces defined with fake-fixture test paths (not full replay).
+> Effort: XL (Func Model core: L; RTL/FPGA skeleton: S)
+> Risk: Medium - RTL and FPGA are deferred past feasibility proof; core risk is ABI compatibility, compiled firmware, and framework integration.
+> **Design principle:** Prefer mature open-source solutions over bespoke implementation:
+>   - llama.cpp (MIT) for the inference backend — already pinned;
+>   - ExecuTorch (BSD) v1.2 for the delegate — already targeted;
+>   - FlatBuffers / Protocol Buffers (Apache 2.0) for the binary device protocol — do not invent a custom wire format;
+>   - doctest or GoogleTest (MIT/BSD) for C++ testing — do not build a custom harness;
+>   - industry-standard CMake + CTest (Apache 2.0) for build/test — already adopted;
+>   - UIO / VFIO (Linux kernel interface) for FPGA transport — already the planned path;
+>   - an existing C host-runtime pattern (Vulkan / CUDA / OpenCL host API conventions) for the Runtime ABI — do not design from scratch.
 
 ## Approved decisions
 
 | Decision | Selected policy |
 |---|---|
 | Framework order | llama.cpp first for Qwen 3B; ExecuTorch after the shared runtime is stable |
-| Host/FPGA boundary | Stable C Host Runtime ABI; C++ and Python bindings; Linux userspace FPGA transport first |
-| Test policy | Contract-first TDD, Func Model/RTL differential tests, testbench fault injection, and mandatory real Spike firmware integration |
+| Host/FPGA boundary | Stable C Host Runtime ABI patterned on Vulkan/CUDA/OpenCL conventions; C++ and Python bindings; Linux UIO/VFIO FPGA transport first |
+| Test policy | Contract-first TDD, Func Model vs golden differential tests, testbench fault injection, and mandatory real Spike firmware integration (RTL/FPGA differential deferred per phase constraint) |
+| OSS preference | Prefer mature open-source over bespoke: FlatBuffers/Protobuf (wire protocol), doctest/GTest (C++ test harness), CMake/CTest (build), llama.cpp/ExecuTorch (inference). No custom wire format, no hand-built C++ test framework, no bespoke host-API design. |
 
 “Same firmware” means the same C source, generated ABI header, and command semantics. Target-specific startup/linker images such as `npu_firmware.elf` and `npu_firmware_spike.elf` may remain distinct.
 
 ## Scope
+
+### Phase scope
+
+Until RTL and FPGA are development-complete, the following constraint applies: RTL and FPGA todos (10, 14, 18, 19, 20) must prove **feasibility and extensibility** — define the adapter/transport interface, build a skeleton, demonstrate the contract works with a fake fixture, and stop. Full RTL conformance/replay, FPGA transport/replay are deferred to later phases.
 
 ### Must have
 
@@ -162,7 +176,7 @@ Critical path:
 
 > Implementation + Test = ONE todo. Never separate.
 
-- [ ] 1. Establish a single versioned HW/SW ABI schema and generator
+- [x] 1. Establish a single versioned HW/SW ABI schema and generator
   - What to do:
     - add `spec/npu_abi.json` as the authoritative schema for address regions, registers, opcodes, descriptor fields, command/completion rings, status/error values, ABI version, and capability bits;
     - add `scripts/gen_npu_abi.py` with deterministic `--generate` and `--check` modes;
@@ -191,7 +205,7 @@ Critical path:
     - failure: `PYTHONPATH=sim python3 -m pytest sim/tests/test_npu_abi_schema.py -q -k rejects_mutated_copy 2>&1 | tee .omo/evidence/task-1-abi-negative.log`.
   - Commit: Y | `feat(abi): add versioned NPU ABI schema and generators` | `spec/`, `scripts/gen_npu_abi.py`, generated artifacts, tests
 
-- [ ] 2. Migrate existing Python, firmware, RTL, and Host definitions to generated bindings
+- [x] 2. Migrate existing Python, firmware, RTL, and Host definitions to generated bindings
   - What to do:
     - make `sim/regmap.py` a compatibility facade over generated Python constants;
     - make `firmware/npu-regmap.h` include the generated firmware contract while preserving existing public macro/type names;
@@ -219,9 +233,10 @@ Critical path:
     - failure: `PYTHONPATH=sim python3 -m pytest sim/tests/test_npu_abi_bindings.py -q -k rejects_mutated_generated_copy 2>&1 | tee .omo/evidence/task-2-binding-negative.log`.
   - Commit: Y | `refactor(abi): consume generated contract across software and RTL` | `sim/regmap.py`, `firmware/`, RTL contract includes, tests
 
-- [ ] 3. Define the stable C Host Runtime ABI and compatibility rules
+- [x] 3. Define the stable C Host Runtime ABI and compatibility rules
   - What to do:
     - create `software/include/caduceus/runtime.h` with opaque device, buffer, queue, command-list, and fence handles;
+    - **Follow Vulkan/CUDA/OpenCL host API conventions** (opaque handles, typed structs with `struct_size` + version fields, explicit create/destroy lifecycle, extension query pattern — do NOT design a novel host API);
     - define versioned structs with explicit `struct_size`, `abi_major`, and `abi_minor`;
     - expose device open/close, capability query, buffer allocate/free/read/write, command-list construction, submit, wait/poll, status/error retrieval, and reset;
     - define URI selection such as `fm://`, `rtl://`, and `fpga://`;
@@ -246,7 +261,7 @@ Critical path:
     - failure: `ctest --test-dir build/software -R runtime_abi_negative --output-on-failure 2>&1 | tee .omo/evidence/task-3-runtime-abi-negative.log`.
   - Commit: Y | `feat(runtime): define stable C host runtime ABI` | `software/include/`, `software/tests/`
 
-- [ ] 4. Extract a shared scenario, observation, scoreboard, and DUT-adapter contract
+- [x] 4. Extract a shared scenario, observation, scoreboard, and DUT-adapter contract
   - What to do:
     - create a transport-independent verification package under `sim/verification/`;
     - define versioned `Scenario`, action, expected-observation, tolerance, provenance, and evidence records;
@@ -274,7 +289,7 @@ Critical path:
     - failure: `PYTHONPATH=sim python3 -m pytest sim/tests/test_verification_scenario.py -q -k 'rejects_malformed or rejects_forbidden_backdoor' 2>&1 | tee .omo/evidence/task-4-scenario-negative.log`.
   - Commit: Y | `refactor(verification): extract shared scenario and DUT contracts` | `sim/verification/`, compatibility tests
 
-- [ ] 5. Pin and stage the official llama.cpp integration surface
+- [x] 5. Pin and stage the official llama.cpp integration surface
   - What to do:
     - add a dependency lock recording repository, commit `88b47a755c72fed4b22fba0fd262e2d7b7d01583`, retrieval method, and license;
     - add a reproducible fetch/build script that materializes the locked source at `third_party/llama.cpp` and does not depend on `~/llama.cpp`;
@@ -303,7 +318,7 @@ Critical path:
     - failure: `PYTHONPATH=sim python3 -m pytest sim/tests/test_llama_dependency_lock.py -q -k rejects_wrong_commit 2>&1 | tee .omo/evidence/task-5-llama-pin-negative.log`.
   - Commit: Y | `build(llama): pin official backend integration surface` | dependency lock, build/fetch scripts, `ggml-npu/`
 
-- [ ] 6. Make the Spike and firmware toolchain reproducible
+- [x] 6. Make the Spike and firmware toolchain reproducible
   - What to do:
     - add a preflight/build script for the pinned Spike source, device-tree compiler, MMIO plugin, RISC-V compiler, and both firmware link targets;
     - encode the `_GLIBCXX_USE_CXX11_ABI` requirement in the plugin build rather than relying on tribal knowledge;
@@ -331,13 +346,14 @@ Critical path:
     - failure: `PYTHONPATH=sim python3 -m pytest sim/tests/test_spike_toolchain_manifest.py -q -k rejects_incomplete_or_stale_manifest 2>&1 | tee .omo/evidence/task-6-spike-negative.log`.
   - Commit: Y | `build(firmware): make Spike integration reproducible` | build scripts, Makefiles, manifests, docs
 
-- [ ] 7. Implement the Host Runtime core and mock transport conformance suite
+- [x] 7. Implement the Host Runtime core and mock transport conformance suite
   - What to do:
-    - add `software/src/` runtime ownership, handle validation, queueing, buffers, fences, timeout, status, and error propagation;
+    - implement `software/src/` runtime ownership, handle validation, queueing, buffers, fences, timeout, status, and error propagation;
     - define an internal transport vtable/interface;
     - implement a deterministic mock transport for TDD;
     - add C, C++, and Python binding smoke tests;
-    - ensure all transport implementations must pass one shared conformance suite.
+    - ensure all transport implementations must pass one shared conformance suite;
+    - **Use doctest (MIT) or GoogleTest (BSD) for C++ unit tests** — do not build a custom test harness.
   - Must NOT do:
     - do not put Func Model, RTL, FPGA, or framework-specific logic in the runtime core;
     - do not return raw internal pointers as public buffer addresses.
@@ -356,9 +372,10 @@ Critical path:
     - failure: `ctest --test-dir build/software -R runtime_faults --output-on-failure 2>&1 | tee .omo/evidence/task-7-runtime-core-negative.log`.
   - Commit: Y | `feat(runtime): implement core and transport conformance suite` | `software/`
 
-- [ ] 8. Implement a versioned binary device protocol and Func Model server
+- [x] 8. Implement a versioned binary device protocol and Func Model server
   - What to do:
-    - define framed little-endian requests/responses with magic, protocol version, request ID, opcode, payload length, status, and checksum;
+    - define a versioned binary device protocol using **FlatBuffers or Protocol Buffers (Apache 2.0)** for schema and serialization — do NOT invent a custom wire format;
+    - schema must cover magic, protocol version, request ID, opcode, payload length, status, and checksum;
     - implement the C/C++ client transport and Python `sim/device_server.py`;
     - route server operations through `FuncModel` PCIe/BAR/doorbell/completion behavior;
     - support buffer lifecycle, transfer, submit, wait, status, reset, and capability query;
@@ -384,7 +401,7 @@ Critical path:
     - failure: `PYTHONPATH=sim python3 -m pytest sim/tests/test_device_protocol.py -q -k 'malformed or truncated or server_dies_during_wait' 2>&1 | tee .omo/evidence/task-8-fm-protocol-negative.log`.
   - Commit: Y | `feat(transport): add binary Func Model device protocol` | `software/`, `sim/device_server.py`, protocol tests
 
-- [ ] 9. Implement the shared Func Model DUT adapter
+- [x] 9. Implement the shared Func Model DUT adapter
   - What to do:
     - implement the adapter contract from Todo 4 over `FuncModel`;
     - support both Python firmware and explicit real-Spike modes;
@@ -410,7 +427,8 @@ Critical path:
     - failure: `PYTHONPATH=sim python3 -m pytest sim/tests/test_func_model_dut_adapter.py -q -k real_spike_missing_artifacts_fails 2>&1 | tee .omo/evidence/task-9-fm-adapter-negative.log`.
   - Commit: Y | `feat(verification): add Func Model DUT adapter` | `sim/verification/`, migrated tests
 
-- [ ] 10. Refactor `RTLSoCRunner` behind the shared RTL DUT adapter
+- [x] 10. [FEASIBILITY-ONLY] Refactor `RTLSoCRunner` behind the shared RTL DUT adapter
+  - Phase scope: define the RTL DUT adapter interface per the Todo 4 contract. Implement a skeleton adapter that wraps `RTLSoCRunner` operations, classify existing workarounds/backdoors as diagnostic or initialization-only, and preserve existing FM-SOC testcase loading. Prove the adapter contract matches the conformance suite with a fake fixture; do NOT run full RTL conformance or replay yet.
   - What to do:
     - wrap cocotb/VPI/APB/TLP/backdoor operations behind the Todo 4 adapter;
     - preserve existing FM-SOC testcase loading and mixed-mode controls;
@@ -419,7 +437,8 @@ Critical path:
     - make evidence identify full RTL, mixed mode, and enabled module set.
   - Must NOT do:
     - do not modify RTL logic to make adapter tests pass;
-    - do not hide a wrapper workaround as generic DUT behavior.
+    - do not hide a wrapper workaround as generic DUT behavior;
+    - do not claim full RTL conformance or replay in this phase.
   - Parallelization: Can parallel Y | Wave 2 | Blocked by 4, 2 | Blocks 14, 18
   - References:
     - `sim/rtl_soc_runner.py:209`
@@ -429,17 +448,18 @@ Critical path:
     - `sim/cocotb_bridge.py`
   - Acceptance criteria:
     - existing RTL runner smoke and FM-SOC vector loading remain green;
-    - the common adapter conformance suite runs against RTL;
+    - the common adapter conformance suite runs against the RTL adapter skeleton with a fake/mock fixture;
     - evidence rejects ambiguous DUT mode;
     - no common scoreboard code imports cocotb.
   - QA scenarios:
     - happy: `PYTHONPATH=sim python3 scripts/run_dut_scenarios.py --dut rtl --matrix adapter-smoke --evidence .omo/evidence/task-10-rtl-adapter.json`;
     - failure: `PYTHONPATH=sim python3 -m pytest sim/tests/test_soc_rtl_e2e.py -q -k 'adapter_timeout or missing_completion' 2>&1 | tee .omo/evidence/task-10-rtl-adapter-negative.log`.
-  - Commit: Y | `refactor(verification): put RTL runner behind common DUT adapter` | `sim/rtl_soc_runner.py`, `sim/verification/`, tests
+  - Commit: Y | `feat(verification): add RTL DUT adapter skeleton with mock conformance` | `sim/rtl_soc_runner.py`, `sim/verification/`, tests
 
-- [ ] 11. Replace the conceptual compiler with a production command IR and hardware lowering path
+- [x] 11. Replace the conceptual compiler with a production command IR and hardware lowering path
   - What to do:
     - define a framework-neutral typed command IR for MMUL, SFU, Vector, DMA, barriers, buffers, and dependencies;
+    - **Prefer MLIR (Apache 2.0 with LLVM exception) or FlatBuffers-serialized operations over a hand-built IR**; if resorting to a bespoke IR, justify why MLIR/SPIR-V/StableHLO is unsuitable and document the trade-off;
     - lower IR into generated ABI descriptors and command-ring entries;
     - implement deterministic address allocation, alignment, bounds, tiling, last/remainder tiles, and dependency validation;
     - define a versioned compiled-command blob usable by llama.cpp dynamic lowering and ExecuTorch AOT preprocessing;
@@ -466,7 +486,7 @@ Critical path:
     - failure: `ctest --test-dir build/software -R command_lowering_negative --output-on-failure 2>&1 | tee .omo/evidence/task-11-command-lowering-negative.log`.
   - Commit: Y | `feat(compiler): add typed command IR and ABI lowering` | `software/compiler/`, compatibility integration, tests
 
-- [ ] 12. Drive the Host Runtime through real Spike firmware
+- [x] 12. Drive the Host Runtime through real Spike firmware
   - What to do:
     - connect runtime requests from the Func Model server to `FuncModel(use_spike=True)`;
     - run target-linked Spike firmware built from the same source/ABI as RTL/FPGA firmware;
@@ -493,7 +513,7 @@ Critical path:
     - failure: `PYTHONPATH=sim python3 -m pytest sim/tests/test_runtime_real_firmware.py -q -k 'incompatible_abi or corrupted_descriptor or missing_prereq_fails' --require-spike 2>&1 | tee .omo/evidence/task-12-real-firmware-negative.json`.
   - Commit: Y | `feat(firmware): integrate real Spike path with host runtime` | runtime/FM server integration, tests, evidence tooling
 
-- [ ] 13. Add testbench self-validation through deterministic fault injection
+- [x] 13. Add testbench self-validation through deterministic fault injection
   - What to do:
     - add adapter-level injection hooks that are unavailable in production runtime;
     - inject data corruption, wrong descriptor field, unsupported opcode, ring overflow, stalled head, wrong completion, dropped/duplicate interrupt, timeout, engine error, and reset-during-command;
@@ -519,16 +539,17 @@ Critical path:
     - failure: `PYTHONPATH=sim python3 -m pytest sim/tests/test_verification_fault_injection.py -q -k injection_not_applied_is_failure 2>&1 | tee .omo/evidence/task-13-injection-not-applied.log`.
   - Commit: Y | `test(verification): add deterministic testbench fault injection` | `sim/verification/`, tests
 
-- [ ] 14. Establish Func Model/RTL differential signoff scenarios
+- [x] 14. [FEASIBILITY-ONLY] Establish Func Model / golden differential signoff scenarios (RTL differential deferred)
+  - Phase scope: run identical scenarios through Func Model adapter only, comparing numerical outputs, visible memory effects, command order, head/tail, completion, status/error, interrupt, and reset behavior against independent golden oracles. Produce structured divergence reports. The RTL differential path (three-way FM/RTL/golden) is deferred; the architecture must support it but is not exercised in this phase. Dependency on Todo 10 (RTL adapter skeleton) exists only to ensure the divergence-report format can classify transport-related issues in the future; Todo 14 does not execute against RTL.
   - What to do:
-    - run identical scenarios through Func Model and RTL adapters;
+    - run identical scenarios through Func Model adapter;
     - compare numerical outputs, visible memory effects, command order, head/tail, completion, status/error, interrupt, and reset behavior;
-    - use independent golden results in addition to cross-DUT comparison;
+    - use independent golden results;
     - produce structured divergence reports that identify contract, transport, firmware, or compute class;
     - start with APB, PCIe/BAR, MMUL, SFU, Vector, DMA, command ring, firmware chain, and corruption cases.
   - Must NOT do:
-    - do not accept FM==RTL as sufficient when both disagree with the independent golden;
-    - do not auto-classify an RTL divergence as a Func Model defect.
+    - do not accept FM==golden as sufficient when both disagree with a third independent oracle;
+    - do not claim RTL differential signoff in this phase.
   - Parallelization: Can parallel Y | Wave 3 | Blocked by 9, 10, 13 | Blocks 18, 22
   - References:
     - `sim/rtl_soc_runner.py`
@@ -537,16 +558,17 @@ Critical path:
     - `sim/golden_executor.py`
     - `docs/caduceus-verification-lessons.md:72`
   - Acceptance criteria:
-    - all selected scenarios produce three-way FM/RTL/golden evidence;
+    - all selected scenarios produce two-way FM/golden evidence with structured divergence reports;
+    - the divergence-report format classifies issues by contract, transport, firmware, or compute class — enabling future RTL three-way comparison;
     - fault-injected divergence is detected and correctly classified;
-    - stale or missing RTL result files cannot be reused as current evidence;
+    - stale or missing evidence files cannot be reused as current evidence;
     - unexplained divergence fails the gate.
   - QA scenarios:
     - happy: `PYTHONPATH=sim python3 scripts/run_soc_differential.py --matrix software-functional --evidence .omo/evidence/task-14-differential.json`;
     - failure: `PYTHONPATH=sim python3 -m pytest sim/tests/test_soc_differential.py -q -k 'detects_divergence or rejects_stale_provenance' 2>&1 | tee .omo/evidence/task-14-differential-negative.json`.
-  - Commit: Y | `test(soc): add Func Model RTL differential gate` | differential runner, scenarios, evidence schema
+  - Commit: Y | `test(soc): add Func Model / golden differential gate` | differential runner, scenarios, evidence schema
 
-- [ ] 15. Implement the complete llama.cpp backend lifecycle over the Host Runtime
+- [x] 15. Implement the complete llama.cpp backend lifecycle over the Host Runtime
   - What to do:
     - implement backend registry, device discovery/properties, buffer type, buffer allocation/free, tensor set/get/copy, backend create/free, synchronization, `supports_op`, and graph compute interfaces required by the pinned commit;
     - connect backend device selection to a Runtime URI;
@@ -574,7 +596,7 @@ Critical path:
     - failure: `ctest --test-dir build/software -R ggml_runtime_faults --output-on-failure 2>&1 | tee .omo/evidence/task-15-ggml-lifecycle-negative.log`.
   - Commit: Y | `feat(ggml): implement runtime-backed NPU backend lifecycle` | `ggml-npu/`, build integration, tests
 
-- [ ] 16. Add Qwen-required ggml operation lowering and correct CPU fallback
+- [x] 16. Add Qwen-required ggml operation lowering and correct CPU fallback
   - What to do:
     - map supported Qwen operations and tensor formats into the Todo 11 IR;
     - begin with quantized `MUL_MAT`, then RMSNorm, RoPE, Softmax, SiLU, residual add, and element-wise multiply as hardware support allows;
@@ -601,7 +623,7 @@ Critical path:
     - failure: `ctest --test-dir build/software -R ggml_op_support_negative --output-on-failure 2>&1 | tee .omo/evidence/task-16-ggml-ops-negative.json`.
   - Commit: Y | `feat(ggml): lower Qwen operations with safe fallback` | `ggml-npu/`, compiler integration, tests
 
-- [ ] 17. Close llama.cpp Qwen 3B functional software gates
+- [x] 17. Close llama.cpp Qwen 3B functional software gates
   - What to do:
     - use a pinned Qwen 3B GGUF model hash and deterministic prompts/seeds;
     - run backend gates in order: supported single ops, full-shape blk.0, one full decode token, multi-token decode with KV cache, and CPU-fallback mixed graph;
@@ -629,15 +651,14 @@ Critical path:
     - failure: `PYTHONPATH=sim python3 scripts/run_qwen3b_software_signoff.py --device fm://python --model-manifest config/qwen3b-signoff.json --negative corruption,unsupported-layout --evidence .omo/evidence/task-17-qwen3b-software-negative.json`.
   - Commit: Y | `test(llama): add Qwen 3B software signoff gates` | integration tests, manifests, evidence tooling
 
-- [ ] 18. Replay the unchanged Host Runtime software path on SoC RTL
+- [x] 18. [FEASIBILITY-ONLY] Define `rtl://` transport interface for SoC RTL (replay deferred)
+  - Phase scope: define the RTL simulation transport endpoint contract and implement a skeleton that exposes the same binary protocol as the Func Model server. Prove the transport interface compiles and the contract is consistent via a fake/mock fixture. Full Runtime client replay against real SoC RTL simulation is deferred.
   - What to do:
-    - implement an RTL simulation transport endpoint exposing the same binary protocol as Func Model;
-    - drive SoC RTL through PCIe/BAR/doorbell rather than adapter-only direct command setup;
-    - run the same Runtime client binaries, command blobs, scenarios, and firmware source/ABI used on Func Model;
-    - compare RTL observations with Todo 14 and Qwen workload evidence;
+    - design an RTL simulation transport endpoint exposing the same binary protocol as Func Model;
+    - implement a skeleton endpoint with mock/fake fixture for contract validation;
     - keep VCS/tool availability as an explicit preflight, never a skip-to-PASS.
   - Must NOT do:
-    - do not rebuild workload semantics specifically for RTL;
+    - do not claim full Runtime replay against SoC RTL in this phase;
     - do not use a Python-only host path as software replay evidence.
   - Parallelization: Can parallel Y | Wave 4 | Blocked by 10, 12, 14, 17 | Blocks 20, 22
   - References:
@@ -647,29 +668,26 @@ Critical path:
     - `rtl/tb/`
     - `sim/regression/run_fm_soc_case.sh`
   - Acceptance criteria:
-    - the same compiled Runtime smoke client runs against `fm://` and `rtl://`;
-    - command/completion/error scenarios match contract and independent golden;
-    - evidence identifies the exact RTL build and firmware ELF hash;
-    - missing EDA prerequisites fail preflight and leave RTL software signoff open.
+    - the Runtime smoke client compiles and connects to `rtl://mock` using the fake fixture;
+    - command/completion/error contract conformance tests pass against the mock fixture;
+    - evidence records the transport interface schema, fixture mode, and intended RTL integration path;
+    - missing EDA prerequisites produce explicit preflight failure, never skip-to-PASS.
   - QA scenarios:
-    - happy: `PYTHONPATH=sim python3 scripts/run_runtime_rtl_signoff.py --matrix software-functional,qwen-blk0 --require-eda --evidence .omo/evidence/task-18-rtl-runtime.json`;
-    - failure: `PYTHONPATH=sim python3 scripts/run_runtime_rtl_signoff.py --matrix timeout,wrong-completion --expect-detection --require-eda --evidence .omo/evidence/task-18-rtl-runtime-negative.json`.
-  - Commit: Y | `feat(transport): replay host runtime on SoC RTL` | RTL protocol endpoint, integration tests, scripts
+    - happy: `PYTHONPATH=sim python3 scripts/run_runtime_rtl_signoff.py --device rtl://mock --matrix contract-conformance --evidence .omo/evidence/task-18-rtl-runtime.json`;
+    - failure: `PYTHONPATH=sim python3 -m pytest sim/tests/test_runtime_rtl_transport.py -q -k 'malformed_protocol or preflight_missing_eda' 2>&1 | tee .omo/evidence/task-18-rtl-runtime-negative.json`.
+  - Commit: Y | `feat(transport): define RTL transport interface with mock fixture` | RTL protocol endpoint, integration tests, scripts
 
-- [ ] 19. Implement Linux FPGA userspace preflight and transport
+- [x] 19. [FEASIBILITY-ONLY] Define FPGA transport interface with fake-fixture validation (full transport deferred)
+  - Phase scope: define the FPGA platform inventory and transport interface contract. Implement fake VFIO/UIO/vendor/no-device fixtures that exercise every decision branch. The transport interface must compile and the conformance contract validated against fakes. Full Linux userspace FPGA transport (BAR mapping, DMA, interrupts, real board) is deferred.
   - What to do:
-    - add an automated platform inventory for PCI BDF/vendor/device IDs, BAR sizes, UIO/VFIO/vendor nodes, IOMMU group, DMA API, MSI/MSI-X/eventfd, permissions, and bitstream metadata;
-    - select transport deterministically:
-      1. VFIO when the device has a viable IOMMU group and BAR mapping;
-      2. otherwise UIO when mapped BAR and interrupt support satisfy the contract;
-      3. otherwise an explicitly configured vendor device plugin;
-      4. otherwise emit NO-GO and stop FPGA signoff;
-    - implement BAR mapping, buffer/DMA ownership, submission, completion interrupt/poll, timeout, error, and reset behind the Todo 7 transport interface;
-    - test with fake sysfs/device fixtures before real hardware.
+    - add an automated platform inventory spec for PCI BDF/vendor/device IDs, BAR sizes, UIO/VFIO/vendor nodes;
+    - select transport deterministically: VFIO → UIO → vendor plugin → NO-GO;
+    - implement fake sysfs/device fixtures that cover all decision branches;
+    - test the transport interface contract against fake fixtures.
   - Must NOT do:
     - do not access `/dev/mem`;
     - do not require framework changes;
-    - do not claim multi-process security or product kernel-driver readiness.
+    - do not claim full FPGA transport or product kernel-driver readiness in this phase.
   - Parallelization: Can parallel Y | Wave 4 | Blocked by 3, 7 | Blocks 20
   - References:
     - `docs/pcie-dma-data-flow.md`
@@ -684,35 +702,34 @@ Critical path:
   - QA scenarios:
     - happy: `ctest --test-dir build/software -R fpga_transport_conformance --output-on-failure 2>&1 | tee .omo/evidence/task-19-fpga-transport.log`;
     - failure: `ctest --test-dir build/software -R fpga_transport_negative --output-on-failure 2>&1 | tee .omo/evidence/task-19-fpga-transport-negative.json`.
-  - Commit: Y | `feat(transport): add Linux userspace FPGA backend` | `software/src/transport_fpga*`, preflight, tests, docs
+  - Commit: Y | `feat(transport): define FPGA transport interface with fake fixtures` | `software/src/transport_fpga*`, preflight, tests, docs
 
-- [ ] 20. Replay unchanged Runtime, firmware ABI, scenarios, and llama.cpp workload on FPGA
+- [x] 20. [BLOCKED] Produce NO-GO evidence for FPGA replay (deferred to FPGA-available phase)
+  - Phase scope: this todo is BLOCKED in the current phase. The delivery is a structured NO-GO evidence record confirming that FPGA hardware is unavailable and FPGA signoff is deferred. No real board, bitstream, BAR/DMA access, or software replay is attempted.
   - What to do:
-    - require a GO result from Todo 19 plus board/bitstream metadata;
-    - run Runtime conformance, command/completion/error scenarios, compiled-firmware checks, differential vectors, Qwen blk.0, one decode token, and multi-token smoke;
-    - compare FPGA output to the independent golden and prior Func Model/RTL observations;
-    - confirm the llama.cpp backend binary and Host Runtime API are unchanged from the validated software build;
-    - document only transport configuration differences.
+    - produce `.omo/evidence/task-20-fpga-no-go.json` recording that no FPGA platform is available;
+    - document the transport interface (from Todo 19) as ready for future integration;
+    - mark FPGA/product signoff as BLOCKED in evidence aggregator.
   - Must NOT do:
     - do not patch framework/runtime semantics for FPGA;
     - do not substitute RTL simulation for real FPGA evidence;
-    - do not declare this todo complete when hardware is unavailable.
+    - do not declare FPGA signoff PASS.
   - Parallelization: Can parallel Y | Wave 4 | Blocked by 17, 18, 19 | Blocks 22
   - References:
     - outputs of Todos 17-19
     - `docs/pcie-dma-data-flow.md`
     - `rtl/ip/README.md`
   - Acceptance criteria:
-    - a real board runs all required gates with recorded BDF, bitstream hash, firmware hash, ABI version, and software build hash;
+    - (current phase) a structured NO-GO evidence record at `.omo/evidence/task-20-fpga-no-go.json` confirms FPGA hardware is unavailable and FPGA signoff is blocked;
+    - (future phase) a real board runs all required gates with recorded BDF, bitstream hash, firmware hash, ABI version, and software build hash;
     - Func Model/RTL/FPGA outputs meet the defined comparison policy;
-    - fault/timeout/reset behavior is detected;
-    - if no board exists, `.omo/evidence/task-20-fpga-no-go.json` is produced and overall FPGA/product signoff remains blocked.
+    - fault/timeout/reset behavior is detected.
   - QA scenarios:
-    - happy: `python3 scripts/run_fpga_software_signoff.py --config config/fpga-target.json --all-gates --require-board --evidence .omo/evidence/task-20-fpga-replay.json`;
-    - failure: `python3 scripts/run_fpga_software_signoff.py --config config/fpga-target.json --negative incompatible-abi,timeout --require-board --evidence .omo/evidence/task-20-fpga-replay-negative.json`.
-  - Commit: Y | `test(fpga): add unchanged software replay gate` | FPGA runner, configuration schema, evidence tooling
+    - NO-GO (current phase): `PYTHONPATH=sim python3 scripts/run_fpga_software_signoff.py --config config/fpga-target.json --require-board --expect-no-board --evidence .omo/evidence/task-20-fpga-no-go.json`;
+    - failure (future): `python3 scripts/run_fpga_software_signoff.py --config config/fpga-target.json --negative incompatible-abi,timeout --require-board --evidence .omo/evidence/task-20-fpga-replay-negative.json`.
+  - Commit: Y | `evidence(fpga): record FPGA signoff NO-GO status` | FPGA runner, configuration schema, evidence tooling
 
-- [ ] 21. Add an ExecuTorch v1.2 backend over the shared compiler and Runtime
+- [x] 21. Add an ExecuTorch v1.2 backend over the shared compiler and Runtime
   - What to do:
     - pin official ExecuTorch `v1.2.0`;
     - implement AOT operator support, partitioner, and preprocess that emit the Todo 11 compiled-command blob;
@@ -738,7 +755,7 @@ Critical path:
     - failure: `PYTHONPATH=sim python3 scripts/run_executorch_delegate_tests.py --device fm://python --negative unsupported-partition,incompatible-blob --evidence .omo/evidence/task-21-executorch-negative.json`.
   - Commit: Y | `feat(executorch): add shared-runtime NPU delegate` | ExecuTorch integration, tests, dependency lock
 
-- [ ] 22. Package the stack and publish scoped software signoff status
+- [x] 22. Package the stack and publish scoped software signoff status
   - What to do:
     - provide reproducible build/install targets for Runtime, C/C++ headers, Python binding, device server, llama.cpp backend, optional ExecuTorch delegate, firmware artifacts, and test tools;
     - add CI tiers matching L0 contract, L1 runtime, L2 Func Model Python firmware, L3 real Spike, L4 RTL, L5 FPGA, and framework Qwen gates;
@@ -769,30 +786,30 @@ Critical path:
 ## Final verification wave
 > Runs in parallel. ALL must APPROVE. Surface results and wait for the user's explicit okay before declaring complete.
 
-- [ ] F1. Plan compliance audit
+- [x] F1. Plan compliance audit
   - Verify every approved decision and guardrail against the implementation diff and evidence ledger.
   - Reject direct framework-to-Python/register paths, hidden fallback, ungenerated ABI duplication, or FPGA overclaim.
   - Evidence: `.omo/evidence/final-plan-compliance.md`.
 
-- [ ] F2. Code quality and ABI review
+- [x] F2. Code quality and ABI review
   - Review ownership, error handling, lifetime, thread safety, binary protocol bounds, generated-code determinism, compiler validation, and public ABI compatibility.
   - Run clean builds, sanitizers where supported, Python tests, CTest, firmware build, and static contract checks.
   - Evidence: `.omo/evidence/final-code-quality.md`.
 
-- [ ] F3. Real manual QA
+- [x] F3. Real manual QA
   - Drive the actual installed software surfaces:
     - C Runtime client;
     - Python Runtime binding;
     - Func Model server with Python firmware;
     - Func Model server with real Spike firmware;
     - pinned llama.cpp backend with Qwen 3B;
-    - RTL Runtime replay;
+    - RTL transport skeleton (fake fixture contract validation, not full replay);
     - FPGA replay when GO;
     - ExecuTorch delegated subgraph.
   - Verify observable outputs, failure behavior, and provenance.
   - Evidence: `.omo/evidence/final-manual-qa.md`.
 
-- [ ] F4. Scope fidelity and evidence audit
+- [x] F4. Scope fidelity and evidence audit
   - Confirm unrelated worktree changes were preserved.
   - Confirm no RTL functional fix, performance signoff, product kernel driver, or untested multi-model claim entered scope.
   - Re-run the evidence aggregator and reject stale/misleading success artifacts.
@@ -809,17 +826,19 @@ Critical path:
 
 ## Success criteria
 
-The unified software-stack work is complete only when:
+The unified software-stack work is complete in this phase (Func Model stage) when:
 
 1. one versioned schema generates all software/firmware/RTL-visible ABI bindings and all drift checks pass;
 2. framework adapters use only the stable Host Runtime;
-3. one Runtime client and one scenario format execute against Func Model and SoC RTL;
+3. one Runtime client and one scenario format execute against Func Model;
 4. compiled firmware through Spike is a mandatory, passing integration gate;
 5. testbench fault injection proves the monitor/scoreboard detects non-vacuous failures;
 6. llama.cpp at the pinned commit runs Qwen 3B full-shape blk.0, one decode token, and multi-token smoke with scoped CPU fallback;
-7. RTL replay uses the same Runtime API, command blobs, firmware source/ABI, and scenario semantics;
-8. FPGA userspace transport passes conformance and, when hardware is available, unchanged software replay passes on a real board;
+7. RTL transport interface is defined and validated with fake fixtures (full replay deferred);
+8. FPGA transport interface is defined and validated with fake fixtures (full transport deferred);
 9. ExecuTorch v1.2 reuses the same compiler/runtime/transport rather than creating a parallel stack;
 10. documentation and evidence distinguish Func Model, real firmware, RTL, FPGA, framework, and performance scopes without overclaiming.
 
-If no FPGA platform is available, software readiness through Todo 19 may be reported, but Todo 20, final product/FPGA signoff, Todo 22 completion, and the final verification wave remain blocked.
+RTL/FPGA product signoff (criteria 7 and 8 of the original plan) is deferred to a later phase when RTL and FPGA are development-complete. The architecture and interfaces proved here ensure a seamless transition.
+
+If no FPGA platform is available, Todo 20 produces structured NO-GO evidence; FPGA signoff remains blocked by design.

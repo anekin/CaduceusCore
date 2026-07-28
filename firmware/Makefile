@@ -16,10 +16,10 @@ ARCH          = rv32im
 ABI           = ilp32
 
 CFLAGS        = -march=$(ARCH) -mabi=$(ABI) \
-                -Wall -Wextra -O2 -g3 \
+                -Wall -Wextra -O2 -g3 -fno-inline \
                 -ffreestanding -nostdlib -nodefaultlibs \
                 -fno-common -fno-builtin \
-                -I.
+                -I. -I../gen
 
 LDFLAGS        = -march=$(ARCH) -mabi=$(ABI) \
                 -nostdlib -nodefaultlibs \
@@ -30,6 +30,8 @@ SPIKE_LDFLAGS  = -march=$(ARCH) -mabi=$(ABI) \
                 -nostdlib -nodefaultlibs \
                 -T spike_link.ld \
                 -Wl,-Map=$(TARGET)_spike.map
+
+ABI_HEADER     = ../gen/npu_abi_firmware.h
 
 SRCS           = startup.S npu_firmware.c test_data.S
 OBJS           = $(patsubst %.S,$(BUILD_DIR)/%.o,$(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS)))
@@ -44,7 +46,10 @@ $(BUILD_DIR):
 $(BUILD_DIR)/%.o: %.S | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
+# Firmware C sources depend on the generated ABI header (Todo 1 artifact).
+# The | order-only ensures the header exists; timestamp tracking forces
+# rebuild when the ABI schema changes.
+$(BUILD_DIR)/%.o: %.c $(ABI_HEADER) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(TARGET).elf: $(OBJS) link.ld

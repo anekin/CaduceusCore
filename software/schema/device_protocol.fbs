@@ -1,0 +1,164 @@
+// CaduceusCore Func Model Device Protocol
+//
+// Versioned binary protocol over a reliable byte stream (Unix socket first).
+// Every message carries a fixed-layout MessageHeader with magic, protocol
+// version, request id, opcode, payload length, status, and CRC32 checksum.
+//
+// License: Apache-2.0 (FlatBuffers)
+
+namespace caduceus_device_protocol;
+
+// ── Fixed-layout header ───────────────────────────────────────────────────
+// Checksum is CRC-32/IEEE over the serialized DeviceMessage bytes with this
+// struct's checksum field set to 0.
+struct MessageHeader {
+  magic:uint32;             // 0x43414455 ('CADU')
+  protocol_version:uint32;  // 1
+  request_id:uint64;
+  opcode:uint32;
+  payload_length:uint32;    // length of payload vector in bytes
+  status:uint32;            // DeviceStatus in responses
+  checksum:uint32;          // CRC-32 with checksum=0
+}
+
+// ── Opcodes ───────────────────────────────────────────────────────────────
+
+enum DeviceOpcode : uint32 {
+  OPCODE_DEVICE_RESET = 0,
+  OPCODE_DEVICE_CAPS  = 1,
+
+  OPCODE_BUFFER_ALLOC  = 10,
+  OPCODE_BUFFER_FREE   = 11,
+  OPCODE_BUFFER_READ   = 12,
+  OPCODE_BUFFER_WRITE  = 13,
+  OPCODE_BUFFER_SIZE   = 14,
+
+  OPCODE_SUBMIT = 20,
+
+  OPCODE_FENCE_CREATE  = 30,
+  OPCODE_FENCE_DESTROY = 31,
+  OPCODE_FENCE_WAIT    = 32,
+  OPCODE_FENCE_POLL    = 33,
+  OPCODE_FENCE_STATUS  = 34
+}
+
+// ── Status codes ──────────────────────────────────────────────────────────
+
+enum DeviceStatus : uint32 {
+  STATUS_OK = 0,
+
+  STATUS_INVALID_MESSAGE       = 1,
+  STATUS_CHECKSUM_MISMATCH     = 2,
+  STATUS_VERSION_MISMATCH      = 3,
+  STATUS_REQUEST_OUT_OF_ORDER  = 4,
+
+  STATUS_UNKNOWN_OPCODE   = 10,
+  STATUS_INVALID_HANDLE   = 11,
+  STATUS_INVALID_ARGUMENT = 12,
+  STATUS_OUT_OF_MEMORY    = 13,
+  STATUS_TIMEOUT          = 14,
+  STATUS_NOT_READY        = 15,
+  STATUS_DEVICE_LOST      = 16,
+  STATUS_BUSY             = 17
+}
+
+// ── Request payloads ──────────────────────────────────────────────────────
+
+table DeviceResetRequest  {}
+table DeviceCapsRequest   {}
+
+table BufferAllocRequest  { size:uint64; }
+table BufferFreeRequest   { handle:uint64; }
+table BufferReadRequest   { handle:uint64; offset:uint64; size:uint64; }
+table BufferWriteRequest  { handle:uint64; offset:uint64; data:[ubyte]; }
+table BufferSizeRequest   { handle:uint64; }
+
+// cmd_blob is a sequence of firmware ring-buffer entries (24 bytes each)
+// followed by the descriptors they point to (60 bytes each).
+table SubmitRequest {
+  cmd_count:uint32;
+  cmd_blob:[ubyte];
+  fence_handle:uint64;
+}
+
+table FenceCreateRequest  {}
+table FenceDestroyRequest { handle:uint64; }
+table FenceWaitRequest    { handle:uint64; timeout_ns:uint64; }
+table FencePollRequest    { handle:uint64; }
+table FenceStatusRequest  { handle:uint64; }
+
+// ── Response payloads ─────────────────────────────────────────────────────
+
+table DeviceResetResponse {}
+table DeviceCapsResponse {
+  abi_major:uint32;
+  abi_minor:uint32;
+  max_buffers:uint32;
+  max_buffer_size:uint64;
+  max_queues:uint32;
+  max_command_lists:uint32;
+  max_command_list_entries:uint32;
+  device_name:string;
+  transport_name:string;
+}
+
+table BufferAllocResponse { handle:uint64; size:uint64; }
+table BufferFreeResponse  {}
+table BufferReadResponse  { data:[ubyte]; }
+table BufferWriteResponse {}
+table BufferSizeResponse  { size:uint64; }
+
+table SubmitResponse      {}
+
+table FenceCreateResponse { handle:uint64; }
+table FenceDestroyResponse {}
+table FenceWaitResponse   { signalled:bool; }
+table FencePollResponse   { signalled:bool; }
+table FenceStatusResponse { status:uint32; }  // 0=not ready, 1=completed, 2=error
+
+table ErrorResponse {
+  code:uint32;    // DeviceStatus
+  message:string;
+}
+
+// ── Top-level messages ────────────────────────────────────────────────────
+
+union RequestPayload {
+  DeviceResetRequest,
+  DeviceCapsRequest,
+  BufferAllocRequest,
+  BufferFreeRequest,
+  BufferReadRequest,
+  BufferWriteRequest,
+  BufferSizeRequest,
+  SubmitRequest,
+  FenceCreateRequest,
+  FenceDestroyRequest,
+  FenceWaitRequest,
+  FencePollRequest,
+  FenceStatusRequest
+}
+
+union ResponsePayload {
+  DeviceResetResponse,
+  DeviceCapsResponse,
+  BufferAllocResponse,
+  BufferFreeResponse,
+  BufferReadResponse,
+  BufferWriteResponse,
+  BufferSizeResponse,
+  SubmitResponse,
+  FenceCreateResponse,
+  FenceDestroyResponse,
+  FenceWaitResponse,
+  FencePollResponse,
+  FenceStatusResponse,
+  ErrorResponse
+}
+
+table DeviceMessage {
+  header:MessageHeader;
+  payload:[ubyte];
+}
+
+root_type DeviceMessage;

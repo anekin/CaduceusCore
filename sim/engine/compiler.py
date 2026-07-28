@@ -2,9 +2,17 @@
 
 L2 接口核心：将 CSV trace (M,K,N) 或模型配置转换为 NPU ISA 指令流。
 编译器决定 tiling 策略、地址分配、DMA 排布。
+
+Compatibility note:
+- This module remains a performance-model / ISA front end for rapid iteration.
+- Production lowering is implemented in software.compiler.command_ir (C + Python).
+- New operators should be added to the production IR; this file does not
+  silently fall back to old behavior for unsupported ops.
 """
 
-from typing import List, Tuple
+import os
+import sys
+from typing import List, Tuple, Optional
 
 from engine.isa import NPUInstruction, OpCode, NPUEncoder
 
@@ -155,3 +163,43 @@ class Region:
     def __init__(self, base: int, size: int):
         self.base = base
         self.size = size
+
+
+def _import_command_ir():
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    software_dir = os.path.join(repo_root, "software")
+    if software_dir not in sys.path:
+        sys.path.insert(0, software_dir)
+    try:
+        from compiler import command_ir
+        return command_ir
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError(
+            "Production command IR (software/compiler/command_ir.py) is not "
+            f"importable: {exc}"
+        ) from exc
+
+
+class ProductionCompiler:
+    def __init__(self, caps: int = 0x1F):
+        self.caps = caps
+
+    def compile_mmul(self,
+                     input_addr: int,
+                     weight_addr: int,
+                     output_addr: int,
+                     scale_addr: int,
+                     M: int, K: int, N: int) -> bytes:
+        command_ir = _import_command_ir()
+        blob = command_ir.CommandBlob(caps=self.caps)
+        input_buf = blob.declare_buffer(M * K, 64, input_addr)
+        weight_buf = blob.declare_buffer(K * N // 2, 64, weight_addr)
+        output_buf = blob.declare_buffer(M * N * 4, 64, output_addr)
+        scale_buf = 0
+        if scale_addr:
+            scale_buf = blob.declare_buffer(N * 4, 64, scale_addr)
+        blob.add_mmul(input_buf, weight_buf, output_buf, scale_buf, M, K, N)
+        status = blob.lower()
+        if status != command_ir.LowerStatus.OK:
+            raise RuntimeError(f"Production lowering failed: {status!r}")
+        return blob.encode()

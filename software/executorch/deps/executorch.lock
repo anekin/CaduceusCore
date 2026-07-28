@@ -1,0 +1,8 @@
+{
+  "framework": "executorch",
+  "version": "v1.2.0",
+  "commit": "fb89c0a0f0e9a7bcdc8c2f55b5d3a6e8e7e5f1d3",
+  "source": "https://github.com/pytorch/executorch",
+  "caduceus_delegate_version": "1.0.0",
+  "note": "Pinned for CaduceusCore NPU delegate. Delegate reuses Todo 11 command IR + Host Runtime; no second compiler/transport introduced."
+}

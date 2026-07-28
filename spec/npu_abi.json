@@ -1,0 +1,1855 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "caduceus-npu-abi-v1",
+  "title": "CaduceusCore NPU Hardware/Software ABI Schema",
+  "description": "Single authoritative source for MMIO registers, opcodes, descriptor layouts, ring buffers, and capability bits. All generated bindings derive from this file.",
+  "abi": {
+    "major": 1,
+    "minor": 0,
+    "version_string": "1.0",
+    "compatibility": {
+      "major_break": "Any register offset change, opcode value renumbering, address region remapping, descriptor field reordering, ring layout change, or capability bit reassignment.",
+      "minor_add": "New registers in reserved offsets, new opcodes in unused value slots, new descriptor fields at end of layout, new capability bits, new address regions in previously reserved space."
+    },
+    "endianness": "little",
+    "register_width": 32,
+    "address_granularity": 4,
+    "description": "CaduceusCore NPU ABI version 1.0 \u2014 RTL Phase 3 SoC integration baseline."
+  },
+  "address_regions": {
+    "BOOT_ROM": {
+      "base": "0x00000000",
+      "size": "0x00010000",
+      "description": "Ibex reset vector + firmware boot ROM (64 KB)"
+    },
+    "IBEX_DMEM": {
+      "base": "0x00010000",
+      "size": "0x00010000",
+      "description": "Ibex data memory: stack + .data/.bss (64 KB)"
+    },
+    "SRAM": {
+      "base": "0x20000000",
+      "size": "0x00400000",
+      "description": "NPU unified compute buffer SRAM (4 MB)"
+    },
+    "MXU": {
+      "base": "0x40000000",
+      "size": "0x00001000",
+      "description": "Matrix Multiply Unit MMIO (4 KB)"
+    },
+    "SFU": {
+      "base": "0x40001000",
+      "size": "0x00001000",
+      "description": "Special Function Unit MMIO (4 KB)"
+    },
+    "VECTOR": {
+      "base": "0x40002000",
+      "size": "0x00001000",
+      "description": "Vector Engine MMIO (4 KB)"
+    },
+    "DMA": {
+      "base": "0x40003000",
+      "size": "0x00001000",
+      "description": "DMA Engine MMIO (4 KB)"
+    },
+    "PCIE": {
+      "base": "0x40004000",
+      "size": "0x00001000",
+      "description": "PCIe EP MMIO (4 KB)"
+    },
+    "DOORBELL": {
+      "base": "0x40005000",
+      "size": "0x00001000",
+      "description": "Host\u2194NPU doorbell ring buffer control (4 KB)"
+    },
+    "INTC": {
+      "base": "0x40006000",
+      "size": "0x00001000",
+      "description": "Interrupt controller MMIO (4 KB)"
+    },
+    "PCIE_DMA": {
+      "base": "0x40007000",
+      "size": "0x00001000",
+      "description": "PCIe DMA Engine MMIO (4 KB)"
+    },
+    "DRAM": {
+      "base": "0x80000000",
+      "size": "0x80000000",
+      "description": "Host DDR DRAM data space (2 GB)"
+    }
+  },
+  "modules": {
+    "MXU": {
+      "base": "0x40000000",
+      "description": "Matrix Multiply Unit \u2014 INT4\u00d7INT8\u2192INT32, 64\u00d764 broadcast MAC array with tile iterator.",
+      "registers": {
+        "CTRL":       { "offset": "0x00", "width": 32, "access": "rw", "reset": "0x00000000", "description": "Control register", "fields": { "DTYPE": { "bits": [0, 1], "description": "Data type: 0=INT4xINT8, 1=INT8xINT8, 2=BF16" } } },
+        "CMD": {
+          "offset": "0x04",
+          "width": 32,
+          "access": "wo",
+          "reset": "0x00000000",
+          "description": "Command register",
+          "fields": {
+            "START": {
+              "bits": [
+                0,
+                0
+              ],
+              "description": "Start computation"
+            },
+            "ABORT": {
+              "bits": [
+                1,
+                1
+              ],
+              "description": "Abort current operation"
+            }
+          }
+        },
+        "STATUS": {
+          "offset": "0x08",
+          "width": 32,
+          "access": "ro",
+          "reset": "0x00000000",
+          "description": "Status register",
+          "fields": {
+            "BUSY": {
+              "bits": [
+                0,
+                0
+              ],
+              "description": "Engine busy"
+            },
+            "DONE": {
+              "bits": [
+                1,
+                1
+              ],
+              "description": "Operation complete"
+            },
+            "ERROR": {
+              "bits": [
+                2,
+                2
+              ],
+              "description": "Operation error"
+            }
+          }
+        },
+        "DIM0": {
+          "offset": "0x0C",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Dimension 0: [15:0]=M rows, [31:16]=K inner dimension"
+        },
+        "DIM1": {
+          "offset": "0x10",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Dimension 1: [15:0]=N columns, [31:16]=reserved"
+        },
+        "I_ADDR": {
+          "offset": "0x14",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Input activation SRAM byte address"
+        },
+        "W_ADDR": {
+          "offset": "0x18",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Weight SRAM byte address"
+        },
+        "O_ADDR": {
+          "offset": "0x1C",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Output SRAM byte address"
+        },
+        "BIAS_ADDR": {
+          "offset": "0x20",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Bias SRAM byte address (0 = no bias)"
+        },
+        "SCALE_ADDR": {
+          "offset": "0x24",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Scale SRAM byte address (0 = no scale)"
+        },
+        "IRQ_EN": {
+          "offset": "0x28",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Interrupt enable: bit[0]=completion IRQ"
+        }
+      }
+    },
+    "SFU": {
+      "base": "0x40001000",
+      "description": "Special Function Unit \u2014 7 FP16 operators (Softmax, LayerNorm, GELU, ReLU, SiLU, RoPE, RMSNorm).",
+      "registers": {
+        "CTRL": {
+          "offset": "0x00",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Operation select",
+          "fields": {
+            "OP": {
+              "bits": [
+                0,
+                3
+              ],
+              "description": "0=SOFTMAX, 1=LAYERNORM, 2=GELU, 3=RELU, 4=SILU, 5=ROPE, 6=RMSNORM"
+            }
+          }
+        },
+        "CMD": {
+          "offset": "0x04",
+          "width": 32,
+          "access": "wo",
+          "reset": "0x00000000",
+          "description": "Start command",
+          "fields": {
+            "START": {
+              "bits": [
+                0,
+                0
+              ],
+              "description": "Start SFU operation"
+            }
+          }
+        },
+        "STATUS": {
+          "offset": "0x08",
+          "width": 32,
+          "access": "ro",
+          "reset": "0x00000000",
+          "description": "Status",
+          "fields": {
+            "BUSY": {
+              "bits": [
+                0,
+                0
+              ],
+              "description": "Busy"
+            },
+            "DONE": {
+              "bits": [
+                1,
+                1
+              ],
+              "description": "Done"
+            }
+          }
+        },
+        "I_ADDR": {
+          "offset": "0x0C",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Input SRAM byte address"
+        },
+        "O_ADDR": {
+          "offset": "0x10",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Output SRAM byte address"
+        },
+        "DIM": {
+          "offset": "0x14",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "[15:0]=elements, [31:16]=head_dim (RoPE)"
+        },
+        "POS": {
+          "offset": "0x18",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Position (RoPE)"
+        },
+        "IRQ_EN": {
+          "offset": "0x1C",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Interrupt enable: bit[0]=completion IRQ"
+        }
+      }
+    },
+    "VECTOR": {
+      "base": "0x40002000",
+      "description": "Vector Engine \u2014 128-wide INT32 SIMD with 6 operators (ADD, MUL, MAX, SUM_REDUCE, CONV_F32, RESID_ADD).",
+      "registers": {
+        "CTRL": {
+          "offset": "0x00",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Operation select",
+          "fields": {
+            "OP": {
+              "bits": [
+                0,
+                3
+              ],
+              "description": "0=ADD, 1=MUL, 2=MAX, 3=SUM, 4=CONV, 5=RESID"
+            }
+          }
+        },
+        "CMD": {
+          "offset": "0x04",
+          "width": 32,
+          "access": "wo",
+          "reset": "0x00000000",
+          "description": "Start command",
+          "fields": {
+            "START": {
+              "bits": [
+                0,
+                0
+              ],
+              "description": "Start"
+            }
+          }
+        },
+        "STATUS": {
+          "offset": "0x08",
+          "width": 32,
+          "access": "ro",
+          "reset": "0x00000000",
+          "description": "Status",
+          "fields": {
+            "BUSY": {
+              "bits": [
+                0,
+                0
+              ],
+              "description": "Busy"
+            },
+            "DONE": {
+              "bits": [
+                1,
+                1
+              ],
+              "description": "Done"
+            }
+          }
+        },
+        "A_ADDR": {
+          "offset": "0x0C",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Operand A SRAM byte address"
+        },
+        "B_ADDR": {
+          "offset": "0x10",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Operand B SRAM byte address (unused for unary ops)"
+        },
+        "O_ADDR": {
+          "offset": "0x14",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Output SRAM byte address"
+        },
+        "DIM": {
+          "offset": "0x18",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "[15:0]=element count"
+        },
+        "IRQ_EN": {
+          "offset": "0x1C",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Interrupt enable: bit[0]=completion IRQ"
+        }
+      }
+    },
+    "DMA": {
+      "base": "0x40003000",
+      "description": "Direct Memory Access \u2014 axi_cdma engine with 2 channels (ch0: DRAM\u2192SRAM load, ch1: SRAM\u2192DRAM store) and descriptor chain mode.",
+      "registers": {
+        "CTRL": {
+          "offset": "0x00",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "[0]=linked_list_en, [1:2]=channel_mode"
+        },
+        "CMD": {
+          "offset": "0x04",
+          "width": 32,
+          "access": "wo",
+          "reset": "0x00000000",
+          "description": "bit[0]=START, bit[1]=ABORT"
+        },
+        "STATUS": {
+          "offset": "0x08",
+          "width": 32,
+          "access": "ro",
+          "reset": "0x00000000",
+          "description": "bit[0]=BUSY, bit[1]=DONE, [7:4]=active_channel"
+        },
+        "CH0_SRC": {
+          "offset": "0x10",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Channel 0: DRAM source address"
+        },
+        "CH0_DST": {
+          "offset": "0x14",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Channel 0: SRAM destination address"
+        },
+        "CH0_SIZE": {
+          "offset": "0x18",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Channel 0: transfer bytes"
+        },
+        "CH0_STRIDE": {
+          "offset": "0x1C",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Channel 0: 2D stride"
+        },
+        "CH1_SRC": {
+          "offset": "0x20",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Channel 1: SRAM source address"
+        },
+        "CH1_DST": {
+          "offset": "0x24",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Channel 1: DRAM destination address"
+        },
+        "CH1_SIZE": {
+          "offset": "0x28",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Channel 1: transfer bytes"
+        },
+        "CH1_STRIDE": {
+          "offset": "0x2C",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Channel 1: 2D stride"
+        },
+        "DESC_ADDR": {
+          "offset": "0x30",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Descriptor chain base address (DRAM)"
+        },
+        "DESC_CNT": {
+          "offset": "0x34",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Descriptor count"
+        },
+        "IRQ_EN": {
+          "offset": "0x38",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Interrupt enable: bit[0]=completion IRQ"
+        }
+      }
+    },
+    "PCIE_DMA": {
+      "base": "0x40007000",
+      "description": "PCIe DMA Engine \u2014 host\u2194NPU data transfer over PCIe Gen4 x4.",
+      "note": "sizeof(npu_pcie_dma_t) == 36 bytes; doorbell descriptor path uses first 8 registers (32 bytes). RD_ERR_CODE and WR_ERR_CODE are status/debug registers.",
+      "registers": {
+        "CTRL": {
+          "offset": "0x00",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "bit[0]=start_rd, [1]=start_wr, [2]=abort, [3]=irq_en"
+        },
+        "STATUS": {
+          "offset": "0x04",
+          "width": 32,
+          "access": "ro",
+          "reset": "0x00000000",
+          "description": "bit[0]=rd_busy, [1]=wr_busy, [2]=rd_done, [3]=wr_done, [4]=error"
+        },
+        "PCIE_ADDR_LO": {
+          "offset": "0x08",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Host PCIe address [31:0]"
+        },
+        "PCIE_ADDR_HI": {
+          "offset": "0x0C",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Host PCIe address [63:32]"
+        },
+        "AXI_ADDR": {
+          "offset": "0x10",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "NPU AXI address"
+        },
+        "LEN": {
+          "offset": "0x14",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Transfer length in bytes"
+        },
+        "TAG": {
+          "offset": "0x18",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Descriptor tag"
+        },
+        "RD_ERR_CODE": {
+          "offset": "0x1C",
+          "width": 32,
+          "access": "ro",
+          "reset": "0x00000000",
+          "description": "Read descriptor error code"
+        },
+        "WR_ERR_CODE": {
+          "offset": "0x20",
+          "width": 32,
+          "access": "ro",
+          "reset": "0x00000000",
+          "description": "Write descriptor error code"
+        }
+      }
+    },
+    "DOORBELL": {
+      "base": "0x40005000",
+      "description": "Host\u2194NPU doorbell \u2014 ring buffer head/tail pointers and completion status.",
+      "notes": {
+        "KNOWN_DISCREPANCY": "COMPLETION_STATUS is declared as 16 entries (64 bytes at offset 0x14) in both regmap.py and npu-regmap.h, but firmware accesses COMPLETION_STATUS[cmd_id] where cmd_id can range up to RING_ENTRIES-1 (1023). This means writes for cmd_id >= 16 overflow the declared register window. The current RTL doorbell.v implements only a single LAST_STATUS register at offset 0x10 and no COMPLETION_STATUS array. This discrepancy must be resolved in a future ABI revision."
+      },
+      "registers": {
+        "HOST_TAIL": {
+          "offset": "0x00",
+          "width": 32,
+          "access": "wo",
+          "reset": "0x00000000",
+          "description": "Host writes after appending command entries; triggers NPU wakeup"
+        },
+        "NPU_HEAD": {
+          "offset": "0x04",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "NPU firmware updates head (consumed pointer)"
+        },
+        "HOST_HEAD": {
+          "offset": "0x08",
+          "width": 32,
+          "access": "ro",
+          "reset": "0x00000000",
+          "description": "NPU updates \u2192 host reads completion"
+        },
+        "NPU_TAIL": {
+          "offset": "0x0C",
+          "width": 32,
+          "access": "ro",
+          "reset": "0x00000000",
+          "description": "Host updates \u2192 NPU sees new commands"
+        },
+        "LAST_STATUS": {
+          "offset": "0x10",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Last command status (0=done, non-zero=error). Used by firmware for debug tracking."
+        },
+        "COMPLETION_STATUS": {
+          "offset": "0x14",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "array_size": 16,
+          "description": "Per-ring-index completion status array. WARNING: array_size=16 per ABI declaration; firmware indexes up to RING_ENTRIES (1024)."
+        }
+      }
+    },
+    "INTC": {
+      "base": "0x40006000",
+      "description": "Interrupt Controller \u2014 7-source priority-based interrupt handling.",
+      "registers": {
+        "PENDING": {
+          "offset": "0x00",
+          "width": 32,
+          "access": "ro",
+          "reset": "0x00000000",
+          "description": "Pending IRQ bits: bit0=MXU, 1=SFU, 2=VECTOR, 3=DMA, 4=PCIE, 5=HOST, 6=TIMER"
+        },
+        "ENABLE": {
+          "offset": "0x04",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "IRQ enable mask"
+        },
+        "THRESHOLD": {
+          "offset": "0x08",
+          "width": 32,
+          "access": "rw",
+          "reset": "0x00000000",
+          "description": "Priority threshold"
+        },
+        "ACK": {
+          "offset": "0x0C",
+          "width": 32,
+          "access": "wo",
+          "reset": "0x00000000",
+          "description": "Write 1 to clear corresponding IRQ"
+        }
+      }
+    }
+  },
+  "opcodes": {
+    "description": "Engine-level opcodes used by the firmware command dispatch table (dispatch_cmd() in npu_firmware.c). These are the Host-side command ring opcodes, not the ISA instruction opcodes.",
+    "values": {
+      "MMUL": {
+        "value": 0,
+        "engine": "MXU",
+        "description": "Matrix multiply (INT4\u00d7INT8\u2192INT32)"
+      },
+      "SFU_SOFTMAX": {
+        "value": 1,
+        "engine": "SFU",
+        "description": "Softmax activation"
+      },
+      "SFU_LAYERNORM": {
+        "value": 2,
+        "engine": "SFU",
+        "description": "Layer Normalization"
+      },
+      "SFU_GELU": {
+        "value": 3,
+        "engine": "SFU",
+        "description": "GELU activation"
+      },
+      "SFU_RELU": {
+        "value": 4,
+        "engine": "SFU",
+        "description": "ReLU activation"
+      },
+      "ROPE": {
+        "value": 5,
+        "engine": "SFU",
+        "description": "RoPE positional encoding"
+      },
+      "SFU_SILU": {
+        "value": 6,
+        "engine": "SFU",
+        "description": "SiLU activation"
+      },
+      "PCIE_DMA": {
+        "value": 7,
+        "engine": "PCIE_DMA",
+        "description": "PCIe DMA host\u2194NPU data transfer"
+      },
+      "DMA_COPY": {
+        "value": 9,
+        "engine": "DMA",
+        "description": "DRAM\u2192SRAM data copy"
+      },
+      "DMA_ST": {
+        "value": 10,
+        "engine": "DMA",
+        "description": "SRAM\u2192DRAM data store"
+      },
+      "VADD": {
+        "value": 15,
+        "engine": "VECTOR",
+        "description": "Vector element-wise addition"
+      },
+      "VMUL": {
+        "value": 16,
+        "engine": "VECTOR",
+        "description": "Vector element-wise multiplication"
+      },
+      "VRED_MAX": {
+        "value": 17,
+        "engine": "VECTOR",
+        "description": "Vector reduce max"
+      },
+      "VRED_SUM": {
+        "value": 18,
+        "engine": "VECTOR",
+        "description": "Vector reduce sum"
+      },
+      "VCONV": {
+        "value": 19,
+        "engine": "VECTOR",
+        "description": "INT32\u2192FP16 type conversion"
+      },
+      "VRESID": {
+        "value": 20,
+        "engine": "VECTOR",
+        "description": "Residual add: dst = src_a + src_b"
+      },
+      "DMA_COPY_LDD": {
+        "value": 21,
+        "engine": "DMA",
+        "description": "DMA load (descriptor chain mode)"
+      },
+      "DMA_COPY_STD": {
+        "value": 22,
+        "engine": "DMA",
+        "description": "DMA store (descriptor chain mode)"
+      },
+      "SFU_RMSNORM": {
+        "value": 23,
+        "engine": "SFU",
+        "description": "RMS Normalization (two-pass)"
+      }
+    }
+  },
+  "isa_opcodes": {
+    "description": "NPU Instruction Set Architecture opcodes (5-bit field). Used by the CISC-style 32-bit fixed-length instruction encoder/decoder in sim/engine/isa.py.",
+    "bit_width": 5,
+    "values": {
+      "MMUL": {
+        "value": 0,
+        "description": "Matrix multiply"
+      },
+      "SOFTMAX": {
+        "value": 1,
+        "description": "Softmax activation"
+      },
+      "LAYERNORM": {
+        "value": 2,
+        "description": "Layer Normalization"
+      },
+      "GELU": {
+        "value": 3,
+        "description": "GELU activation"
+      },
+      "RELU": {
+        "value": 4,
+        "description": "ReLU activation"
+      },
+      "ROPE": {
+        "value": 5,
+        "description": "RoPE positional encoding"
+      },
+      "SILU": {
+        "value": 6,
+        "description": "SiLU activation"
+      },
+      "MAXPOOL": {
+        "value": 7,
+        "description": "Max Pooling 2x2"
+      },
+      "AVGPOOL": {
+        "value": 8,
+        "description": "Avg Pooling 2x2"
+      },
+      "DMA_LD": {
+        "value": 9,
+        "description": "DRAM \u2192 SRAM load"
+      },
+      "DMA_ST": {
+        "value": 10,
+        "description": "SRAM \u2192 DRAM store"
+      },
+      "KV_LOAD": {
+        "value": 11,
+        "description": "Load KV cache for token"
+      },
+      "KV_STORE": {
+        "value": 12,
+        "description": "Store computed KV to DRAM"
+      },
+      "BARRIER": {
+        "value": 13,
+        "description": "Pipeline sync barrier"
+      },
+      "NOP": {
+        "value": 14,
+        "description": "No operation"
+      },
+      "VADD": {
+        "value": 15,
+        "description": "Vector element-wise add"
+      },
+      "VMUL": {
+        "value": 16,
+        "description": "Vector element-wise multiply"
+      },
+      "VRED_MAX": {
+        "value": 17,
+        "description": "Vector reduce max"
+      },
+      "VRED_SUM": {
+        "value": 18,
+        "description": "Vector reduce sum"
+      },
+      "VCONV": {
+        "value": 19,
+        "description": "INT32 \u2192 BF16 type convert"
+      },
+      "VRESID": {
+        "value": 20,
+        "description": "Residual connection add"
+      },
+      "DMA_LDD": {
+        "value": 21,
+        "description": "DMA load (descriptor chain)"
+      },
+      "DMA_STD": {
+        "value": 22,
+        "description": "DMA store (descriptor chain)"
+      },
+      "RMSNORM": {
+        "value": 23,
+        "description": "RMS Normalization (two-pass FPU)"
+      },
+      "VCONV_F16_I32": {
+        "value": 24,
+        "description": "FP16 \u2192 INT32 type conversion"
+      }
+    }
+  },
+  "descriptors": {
+    "description": "Descriptor layouts for each engine operation type. Field offsets are byte offsets from the descriptor base address in DRAM. All descriptors are little-endian packed uint32 arrays.",
+    "MMUL": {
+      "id": "MMUL",
+      "packed_size": 60,
+      "field_count": 15,
+      "fields": [
+        {
+          "index": 0,
+          "name": "input_addr",
+          "offset": 0,
+          "width": 32,
+          "type": "uint32",
+          "description": "DRAM activation address"
+        },
+        {
+          "index": 1,
+          "name": "weight_addr",
+          "offset": 4,
+          "width": 32,
+          "type": "uint32",
+          "description": "DRAM weight address"
+        },
+        {
+          "index": 2,
+          "name": "output_addr",
+          "offset": 8,
+          "width": 32,
+          "type": "uint32",
+          "description": "DRAM output address"
+        },
+        {
+          "index": 3,
+          "name": "scale_addr",
+          "offset": 12,
+          "width": 32,
+          "type": "uint32",
+          "description": "DRAM scale address (0=none)"
+        },
+        {
+          "index": 4,
+          "name": "input_sram",
+          "offset": 16,
+          "width": 32,
+          "type": "uint32",
+          "description": "SRAM activation target address"
+        },
+        {
+          "index": 5,
+          "name": "weight_sram",
+          "offset": 20,
+          "width": 32,
+          "type": "uint32",
+          "description": "SRAM weight target address"
+        },
+        {
+          "index": 6,
+          "name": "output_sram",
+          "offset": 24,
+          "width": 32,
+          "type": "uint32",
+          "description": "SRAM output target address"
+        },
+        {
+          "index": 7,
+          "name": "scale_sram",
+          "offset": 28,
+          "width": 32,
+          "type": "uint32",
+          "description": "SRAM scale target address"
+        },
+        {
+          "index": 8,
+          "name": "input_size",
+          "offset": 32,
+          "width": 32,
+          "type": "uint32",
+          "description": "Activation size in bytes"
+        },
+        {
+          "index": 9,
+          "name": "weight_size",
+          "offset": 36,
+          "width": 32,
+          "type": "uint32",
+          "description": "Weight size in bytes"
+        },
+        {
+          "index": 10,
+          "name": "output_size",
+          "offset": 40,
+          "width": 32,
+          "type": "uint32",
+          "description": "Output size in bytes"
+        },
+        {
+          "index": 11,
+          "name": "scale_size",
+          "offset": 44,
+          "width": 32,
+          "type": "uint32",
+          "description": "Scale size in bytes"
+        },
+        {
+          "index": 12,
+          "name": "M",
+          "offset": 48,
+          "width": 32,
+          "type": "uint32",
+          "description": "Row dimension"
+        },
+        {
+          "index": 13,
+          "name": "K",
+          "offset": 52,
+          "width": 32,
+          "type": "uint32",
+          "description": "Inner dimension"
+        },
+        {
+          "index": 14,
+          "name": "N",
+          "offset": 56,
+          "width": 32,
+          "type": "uint32",
+          "description": "Column dimension"
+        }
+      ]
+    },
+    "SFU": {
+      "id": "SFU",
+      "packed_size": 60,
+      "field_count": 15,
+      "notes": [
+        "Firmware reads: src[0]=input_addr, src[2]=output_addr, src[8]=dim, src[9]=pos, src[10]=sfu_op.",
+        "Firmware hardcodes input_sram=0x00000000, output_sram=0x00018000, ignoring descriptor fields [4]/[5].",
+        "Python spike_host writes valid SRAM values at [4]/[5] but firmware ignores them \u2014 known design inconsistency."
+      ],
+      "fields": [
+        {
+          "index": 0,
+          "name": "input_addr",
+          "offset": 0,
+          "width": 32,
+          "type": "uint32",
+          "description": "DRAM input activation address"
+        },
+        {
+          "index": 1,
+          "name": "_reserved_1",
+          "offset": 4,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved; Python writes 0"
+        },
+        {
+          "index": 2,
+          "name": "output_addr",
+          "offset": 8,
+          "width": 32,
+          "type": "uint32",
+          "description": "DRAM output address"
+        },
+        {
+          "index": 3,
+          "name": "_reserved_3",
+          "offset": 12,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved; Python writes 0"
+        },
+        {
+          "index": 4,
+          "name": "input_sram",
+          "offset": 16,
+          "width": 32,
+          "type": "uint32",
+          "description": "SRAM input (firmware ignores, uses hardcoded value)"
+        },
+        {
+          "index": 5,
+          "name": "output_sram",
+          "offset": 20,
+          "width": 32,
+          "type": "uint32",
+          "description": "SRAM output (firmware ignores, uses hardcoded value)"
+        },
+        {
+          "index": 6,
+          "name": "_reserved_6",
+          "offset": 24,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 7,
+          "name": "_reserved_7",
+          "offset": 28,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 8,
+          "name": "dim",
+          "offset": 32,
+          "width": 32,
+          "type": "uint32",
+          "description": "Elements (low 16) | head_dim (high 16 for RoPE)"
+        },
+        {
+          "index": 9,
+          "name": "pos",
+          "offset": 36,
+          "width": 32,
+          "type": "uint32",
+          "description": "Position (RoPE only)"
+        },
+        {
+          "index": 10,
+          "name": "sfu_op",
+          "offset": 40,
+          "width": 32,
+          "type": "uint32",
+          "description": "SFU hardware sub-opcode (0-6)"
+        },
+        {
+          "index": 11,
+          "name": "_reserved_11",
+          "offset": 44,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 12,
+          "name": "_unused_12",
+          "offset": 48,
+          "width": 32,
+          "type": "uint32",
+          "description": "Unused (Python writes 1)"
+        },
+        {
+          "index": 13,
+          "name": "_unused_13",
+          "offset": 52,
+          "width": 32,
+          "type": "uint32",
+          "description": "Unused (Python writes dim)"
+        },
+        {
+          "index": 14,
+          "name": "_unused_14",
+          "offset": 56,
+          "width": 32,
+          "type": "uint32",
+          "description": "Unused (Python writes 1)"
+        }
+      ]
+    },
+    "VECTOR": {
+      "id": "VECTOR",
+      "packed_size": 60,
+      "field_count": 15,
+      "fields": [
+        {
+          "index": 0,
+          "name": "a_addr",
+          "offset": 0,
+          "width": 32,
+          "type": "uint32",
+          "description": "DRAM operand A address"
+        },
+        {
+          "index": 1,
+          "name": "b_addr",
+          "offset": 4,
+          "width": 32,
+          "type": "uint32",
+          "description": "DRAM operand B address"
+        },
+        {
+          "index": 2,
+          "name": "o_addr",
+          "offset": 8,
+          "width": 32,
+          "type": "uint32",
+          "description": "DRAM output address"
+        },
+        {
+          "index": 3,
+          "name": "_reserved_3",
+          "offset": 12,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 4,
+          "name": "a_sram",
+          "offset": 16,
+          "width": 32,
+          "type": "uint32",
+          "description": "SRAM operand A"
+        },
+        {
+          "index": 5,
+          "name": "b_sram",
+          "offset": 20,
+          "width": 32,
+          "type": "uint32",
+          "description": "SRAM operand B"
+        },
+        {
+          "index": 6,
+          "name": "o_sram",
+          "offset": 24,
+          "width": 32,
+          "type": "uint32",
+          "description": "SRAM output"
+        },
+        {
+          "index": 7,
+          "name": "_reserved_7",
+          "offset": 28,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 8,
+          "name": "dim",
+          "offset": 32,
+          "width": 32,
+          "type": "uint32",
+          "description": "Element count"
+        },
+        {
+          "index": 9,
+          "name": "_reserved_9",
+          "offset": 36,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 10,
+          "name": "_reserved_10",
+          "offset": 40,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 11,
+          "name": "_reserved_11",
+          "offset": 44,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 12,
+          "name": "_unused_12",
+          "offset": 48,
+          "width": 32,
+          "type": "uint32",
+          "description": "Unused (Python writes 1)"
+        },
+        {
+          "index": 13,
+          "name": "_unused_13",
+          "offset": 52,
+          "width": 32,
+          "type": "uint32",
+          "description": "Unused (Python writes dim)"
+        },
+        {
+          "index": 14,
+          "name": "_unused_14",
+          "offset": 56,
+          "width": 32,
+          "type": "uint32",
+          "description": "Unused (Python writes 1)"
+        }
+      ]
+    },
+    "DMA_COPY": {
+      "id": "DMA_COPY",
+      "packed_size": 60,
+      "field_count": 15,
+      "notes": [
+        "Firmware reads: src[0]=src_addr, src[2]=dst_addr, src[8]=size."
+      ],
+      "fields": [
+        {
+          "index": 0,
+          "name": "src_addr",
+          "offset": 0,
+          "width": 32,
+          "type": "uint32",
+          "description": "DRAM source address"
+        },
+        {
+          "index": 1,
+          "name": "_reserved_1",
+          "offset": 4,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 2,
+          "name": "dst_addr",
+          "offset": 8,
+          "width": 32,
+          "type": "uint32",
+          "description": "DRAM/SRAM destination address"
+        },
+        {
+          "index": 3,
+          "name": "_reserved_3",
+          "offset": 12,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 4,
+          "name": "_reserved_4",
+          "offset": 16,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 5,
+          "name": "_reserved_5",
+          "offset": 20,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 6,
+          "name": "_reserved_6",
+          "offset": 24,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 7,
+          "name": "_reserved_7",
+          "offset": 28,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 8,
+          "name": "size",
+          "offset": 32,
+          "width": 32,
+          "type": "uint32",
+          "description": "Transfer size in bytes"
+        },
+        {
+          "index": 9,
+          "name": "_reserved_9",
+          "offset": 36,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 10,
+          "name": "_reserved_10",
+          "offset": 40,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 11,
+          "name": "_reserved_11",
+          "offset": 44,
+          "width": 32,
+          "type": "uint32",
+          "description": "Reserved"
+        },
+        {
+          "index": 12,
+          "name": "_unused_12",
+          "offset": 48,
+          "width": 32,
+          "type": "uint32",
+          "description": "Unused (Python writes 1)"
+        },
+        {
+          "index": 13,
+          "name": "_unused_13",
+          "offset": 52,
+          "width": 32,
+          "type": "uint32",
+          "description": "Unused (Python writes size)"
+        },
+        {
+          "index": 14,
+          "name": "_unused_14",
+          "offset": 56,
+          "width": 32,
+          "type": "uint32",
+          "description": "Unused (Python writes 1)"
+        }
+      ]
+    },
+    "PCIE_DMA": {
+      "id": "PCIE_DMA",
+      "packed_size": 24,
+      "field_count": 6,
+      "notes": [
+        "Uses 6-word descriptor (24 bytes) \u2014 smaller than the 15-word generic layout.",
+        "Direction: 0 = host\u2192NPU read, 1 = NPU\u2192host write."
+      ],
+      "fields": [
+        {
+          "index": 0,
+          "name": "pcie_addr_lo",
+          "offset": 0,
+          "width": 32,
+          "type": "uint32",
+          "description": "PCIe target address [31:0]"
+        },
+        {
+          "index": 1,
+          "name": "pcie_addr_hi",
+          "offset": 4,
+          "width": 32,
+          "type": "uint32",
+          "description": "PCIe target address [63:32]"
+        },
+        {
+          "index": 2,
+          "name": "axi_addr",
+          "offset": 8,
+          "width": 32,
+          "type": "uint32",
+          "description": "Local AXI source/destination address"
+        },
+        {
+          "index": 3,
+          "name": "len",
+          "offset": 12,
+          "width": 32,
+          "type": "uint32",
+          "description": "Transfer length in bytes"
+        },
+        {
+          "index": 4,
+          "name": "direction",
+          "offset": 16,
+          "width": 32,
+          "type": "uint32",
+          "description": "0=host\u2192NPU, 1=NPU\u2192host"
+        },
+        {
+          "index": 5,
+          "name": "_pad",
+          "offset": 20,
+          "width": 32,
+          "type": "uint32",
+          "description": "Padding"
+        }
+      ]
+    }
+  },
+  "rings": {
+    "command": {
+      "entry_size": 32,
+      "field_count": 8,
+      "description": "Command ring entries (cmd_entry_t). Firmware reads opcode, desc_addr, flags from ring buffer in DRAM.",
+      "fields": [
+        {
+          "index": 0,
+          "name": "opcode",
+          "offset": 0,
+          "width": 32,
+          "type": "uint32",
+          "description": "Engine-level opcode (see opcodes table)"
+        },
+        {
+          "index": 1,
+          "name": "desc_addr",
+          "offset": 4,
+          "width": 32,
+          "type": "uint32",
+          "description": "Operation descriptor DRAM address"
+        },
+        {
+          "index": 2,
+          "name": "flags",
+          "offset": 8,
+          "width": 32,
+          "type": "uint32",
+          "description": "bit0=irq_on_completion, bit1=immediate_exec"
+        },
+        {
+          "index": 3,
+          "name": "_pad_3",
+          "offset": 12,
+          "width": 32,
+          "type": "uint32",
+          "description": "Padding"
+        },
+        {
+          "index": 4,
+          "name": "_pad_4",
+          "offset": 16,
+          "width": 32,
+          "type": "uint32",
+          "description": "Padding"
+        },
+        {
+          "index": 5,
+          "name": "_pad_5",
+          "offset": 20,
+          "width": 32,
+          "type": "uint32",
+          "description": "Padding"
+        },
+        {
+          "index": 6,
+          "name": "_pad_6",
+          "offset": 24,
+          "width": 32,
+          "type": "uint32",
+          "description": "Padding"
+        },
+        {
+          "index": 7,
+          "name": "_pad_7",
+          "offset": 28,
+          "width": 32,
+          "type": "uint32",
+          "description": "Padding"
+        }
+      ]
+    },
+    "completion": {
+      "entry_size": 32,
+      "field_count": 8,
+      "description": "Completion ring entries (completion_t). Firmware writes completion status after each command.",
+      "fields": [
+        {
+          "index": 0,
+          "name": "cmd_id",
+          "offset": 0,
+          "width": 32,
+          "type": "uint32",
+          "description": "Command ID (ring index)"
+        },
+        {
+          "index": 1,
+          "name": "status",
+          "offset": 4,
+          "width": 32,
+          "type": "uint32",
+          "description": "Completion status (0=success, non-zero=error)"
+        },
+        {
+          "index": 2,
+          "name": "_pad_2",
+          "offset": 8,
+          "width": 32,
+          "type": "uint32",
+          "description": "Padding"
+        },
+        {
+          "index": 3,
+          "name": "_pad_3",
+          "offset": 12,
+          "width": 32,
+          "type": "uint32",
+          "description": "Padding"
+        },
+        {
+          "index": 4,
+          "name": "_pad_4",
+          "offset": 16,
+          "width": 32,
+          "type": "uint32",
+          "description": "Padding"
+        },
+        {
+          "index": 5,
+          "name": "_pad_5",
+          "offset": 20,
+          "width": 32,
+          "type": "uint32",
+          "description": "Padding"
+        },
+        {
+          "index": 6,
+          "name": "_pad_6",
+          "offset": 24,
+          "width": 32,
+          "type": "uint32",
+          "description": "Padding"
+        },
+        {
+          "index": 7,
+          "name": "_pad_7",
+          "offset": 28,
+          "width": 32,
+          "type": "uint32",
+          "description": "Padding"
+        }
+      ]
+    },
+    "configuration": {
+      "ring_buffer_addr": "0x80000000",
+      "ring_entries": 1024,
+      "cmd_entry_size": 32,
+      "completion_ring_addr": "0x80008000",
+      "completion_entry_size": 32,
+      "description": "Firmware ring buffer configuration. Ring buffer starts at DRAM_BASE (0x80000000). Completion ring follows immediately after the command ring (ring_entries \u00d7 cmd_entry_size bytes)."
+    }
+  },
+  "status_codes": {
+    "description": "Standard completion status codes. Non-zero values indicate error conditions.",
+    "values": {
+      "SUCCESS": {
+        "value": 0,
+        "description": "Command completed successfully"
+      },
+      "GENERIC_ERROR": {
+        "value": 1,
+        "description": "Generic / unknown error"
+      },
+      "TIMEOUT": {
+        "value": 2,
+        "description": "Operation timed out"
+      },
+      "CORRUPTED_DESCRIPTOR": {
+        "value": 3,
+        "description": "Descriptor validation failed (zero dimensions)"
+      },
+      "UNKNOWN_OPCODE": {
+        "value": 4,
+        "description": "Unrecognized engine opcode"
+      }
+    }
+  },
+  "capability_bits": {
+    "description": "Device capability bitmask. Read by host during device discovery.",
+    "bits": {
+      "MXU_SUPPORTED": {
+        "bit": 0,
+        "description": "Matrix multiply unit present"
+      },
+      "SFU_SUPPORTED": {
+        "bit": 1,
+        "description": "Special function unit present"
+      },
+      "VECTOR_SUPPORTED": {
+        "bit": 2,
+        "description": "Vector engine present"
+      },
+      "DMA_SUPPORTED": {
+        "bit": 3,
+        "description": "DMA engine present"
+      },
+      "PCIE_SUPPORTED": {
+        "bit": 4,
+        "description": "PCIe endpoint present"
+      },
+      "INTC_SUPPORTED": {
+        "bit": 5,
+        "description": "Interrupt controller present"
+      },
+      "DOORBELL_SUPPORTED": {
+        "bit": 6,
+        "description": "Doorbell ring buffer supported"
+      },
+      "INT4_SUPPORTED": {
+        "bit": 7,
+        "description": "INT4 weight quantization supported"
+      },
+      "INT8_SUPPORTED": {
+        "bit": 8,
+        "description": "INT8 activation supported"
+      },
+      "BF16_SUPPORTED": {
+        "bit": 9,
+        "description": "BF16 data type supported"
+      },
+      "FP16_SUPPORTED": {
+        "bit": 10,
+        "description": "FP16 SFU operations supported"
+      },
+      "ROPE_SUPPORTED": {
+        "bit": 11,
+        "description": "RoPE positional encoding supported"
+      },
+      "RMSNORM_SUPPORTED": {
+        "bit": 12,
+        "description": "RMS Normalization supported"
+      },
+      "DESCRIPTOR_CHAIN": {
+        "bit": 13,
+        "description": "DMA descriptor chain mode supported"
+      }
+    }
+  },
+  "sfu_sub_opcodes": {
+    "description": "SFU hardware control register OP field values (SFU.CTRL [3:0]).",
+    "values": {
+      "SOFTMAX": {
+        "value": 0,
+        "description": "Softmax activation"
+      },
+      "LAYERNORM": {
+        "value": 1,
+        "description": "Layer Normalization"
+      },
+      "GELU": {
+        "value": 2,
+        "description": "GELU activation"
+      },
+      "RELU": {
+        "value": 3,
+        "description": "ReLU activation"
+      },
+      "SILU": {
+        "value": 4,
+        "description": "SiLU activation"
+      },
+      "ROPE": {
+        "value": 5,
+        "description": "RoPE positional encoding"
+      },
+      "RMSNORM": {
+        "value": 6,
+        "description": "RMS Normalization"
+      }
+    }
+  },
+  "vector_sub_opcodes": {
+    "description": "Vector hardware control register OP field values (VECTOR.CTRL [3:0]).",
+    "values": {
+      "ADD": {
+        "value": 0,
+        "description": "Element-wise INT32 addition"
+      },
+      "MUL": {
+        "value": 1,
+        "description": "Element-wise INT32 multiplication"
+      },
+      "MAX": {
+        "value": 2,
+        "description": "Element-wise max"
+      },
+      "SUM_REDUCE": {
+        "value": 3,
+        "description": "Tree reduction sum"
+      },
+      "CONV": {
+        "value": 4,
+        "description": "INT32 \u2192 FP16 type conversion"
+      },
+      "RESID_ADD": {
+        "value": 5,
+        "description": "Saturating INT32 residual add"
+      }
+    }
+  },
+  "mxu_dtype": {
+    "description": "MXU data type configuration (MXU.CTRL [1:0]).",
+    "values": {
+      "INT4xINT8": {
+        "value": 0,
+        "description": "INT4 weights \u00d7 INT8 activations \u2192 INT32 accumulation"
+      },
+      "INT8xINT8": {
+        "value": 1,
+        "description": "INT8 weights \u00d7 INT8 activations \u2192 INT32 accumulation"
+      },
+      "BF16": {
+        "value": 2,
+        "description": "BF16 \u00d7 BF16 \u2192 FP32 accumulation (planned)"
+      }
+    }
+  },
+  "intc_mappings": {
+    "description": "Interrupt controller source bit assignments.",
+    "sources": {
+      "MXU": {
+        "bit": 0,
+        "description": "MXU completion interrupt"
+      },
+      "SFU": {
+        "bit": 1,
+        "description": "SFU completion interrupt"
+      },
+      "VECTOR": {
+        "bit": 2,
+        "description": "Vector engine completion interrupt"
+      },
+      "DMA": {
+        "bit": 3,
+        "description": "DMA completion interrupt"
+      },
+      "PCIE": {
+        "bit": 4,
+        "description": "PCIe event interrupt"
+      },
+      "HOST": {
+        "bit": 5,
+        "description": "Host doorbell interrupt"
+      },
+      "TIMER": {
+        "bit": 6,
+        "description": "Timer interrupt"
+      }
+    }
+  },
+  "known_discrepancies": {
+    "description": "Known contract discrepancies across Python/C/RTL that will be resolved in future ABI revisions.",
+    "items": [
+      {
+        "id": "DOORBELL_COMPLETION_STATUS_SIZE",
+        "severity": "high",
+        "description": "DOORBELL.COMPLETION_STATUS declared as 16 entries (offset 0x14, 64 bytes) in both regmap.py and npu-regmap.h. Firmware writes COMPLETION_STATUS[cmd_id] where cmd_id ranges up to RING_ENTRIES-1 (1023). RTL doorbell.v implements only LAST_STATUS at 0x10 and no COMPLETION_STATUS array. Resolution: define HW doorbell window vs firmware SRAM-backed completion array as separate concepts, or expand the hardware register window.",
+        "sources": [
+          "sim/regmap.py:146",
+          "firmware/npu-regmap.h:159",
+          "firmware/npu_firmware.c:391"
+        ],
+        "files": [
+          "spec/npu_abi.json",
+          "sim/regmap.py",
+          "firmware/npu-regmap.h",
+          "rtl/soc/doorbell.v"
+        ]
+      },
+      {
+        "id": "SFU_SRAM_HARDCODE",
+        "severity": "medium",
+        "description": "SFU firmware read_sfu_desc() hardcodes input_sram=0x00000000, output_sram=0x00018000, ignoring descriptor fields [4]/[5]. Python spike_host writes valid SRAM values at these offsets. This is a design inconsistency \u2014 firmware should either use descriptor SRAM fields or the descriptor layout should document them as firmware-ignored.",
+        "sources": [
+          "firmware/npu_firmware.c:348-357",
+          "sim/spike_host.py:93-106"
+        ],
+        "files": [
+          "spec/npu_abi.json",
+          "firmware/npu_firmware.c",
+          "sim/spike_host.py"
+        ]
+      },
+      {
+        "id": "SFU_POS_HARDCODE",
+        "severity": "low",
+        "description": "SFU read_sfu_desc() hardcodes pos=0 for non-ROPE ops. The descriptor field at offset 9 is only used by ROPE dispatch. For current forward passes (pos=0), this is correct but not architecturally clean.",
+        "sources": [
+          "firmware/npu_firmware.c:348-357"
+        ],
+        "files": [
+          "spec/npu_abi.json",
+          "firmware/npu_firmware.c"
+        ]
+      },
+      {
+        "id": "PCIE_DMA_DOORBELL_SIZE_DISCREPANCY",
+        "severity": "medium",
+        "description": "sizeof(npu_pcie_dma_t) == 36 bytes (9 registers), but doorbell descriptor path uses only first 8 registers (32 bytes). RD_ERR_CODE and WR_ERR_CODE at offsets 0x1C/0x20 are status/debug registers outside the descriptor budget.",
+        "sources": [
+          "firmware/npu-regmap.h:125-138"
+        ],
+        "files": [
+          "spec/npu_abi.json",
+          "firmware/npu-regmap.h"
+        ]
+      }
+    ]
+  },
+  "generated_artifacts": {
+    "description": "Paths for generated bindings (produced by scripts/gen_npu_abi.py --generate).",
+    "marker": "DO NOT EDIT \u2014 generated by scripts/gen_npu_abi.py from spec/npu_abi.json",
+    "paths": {
+      "python": "gen/npu_abi.py",
+      "c_header": "gen/npu_abi.h",
+      "firmware": "gen/npu_abi_firmware.h",
+      "sv_package": "gen/npu_abi_pkg.sv",
+      "markdown": "gen/npu_abi.md"
+    }
+  }
+}

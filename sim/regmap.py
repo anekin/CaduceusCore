@@ -1,183 +1,244 @@
 """
-NPU MMIO Register Map — Func Model 与 RTL 共用规格。
+NPU MMIO Register Map — Compatibility facade over generated gen/npu_abi.py.
 
-每个模块 4KB 地址空间。寄存器 32-bit。
+This file is no longer the authoritative source. All ABI constants come from
+spec/npu_abi.json via scripts/gen_npu_abi.py → gen/npu_abi.py.
+DO NOT edit register offsets here — update the schema and regenerate.
 """
 
-from dataclasses import dataclass
-from enum import IntEnum
+import gen.npu_abi as _abi
+from gen.npu_abi import (  # noqa: F401 — re-export for consumers
+    EngineOp, OpCode, StatusCode, SFUOp, VectorOp, MXUDType,
+    CAP_MXU_SUPPORTED, CAP_SFU_SUPPORTED, CAP_VECTOR_SUPPORTED,
+    CAP_DMA_SUPPORTED, CAP_PCIE_SUPPORTED, CAP_INTC_SUPPORTED,
+    CAP_DOORBELL_SUPPORTED, CAP_INT4_SUPPORTED, CAP_INT8_SUPPORTED,
+    CAP_BF16_SUPPORTED, CAP_FP16_SUPPORTED, CAP_ROPE_SUPPORTED,
+    CAP_RMSNORM_SUPPORTED, CAP_DESCRIPTOR_CHAIN,
+    INTC_MXU, INTC_SFU, INTC_VECTOR, INTC_DMA, INTC_PCIE,
+    INTC_HOST, INTC_TIMER,
+    RING_ENTRIES, CMD_ENTRY_SIZE, COMPLETION_ENTRY_SIZE,
+    DESC_DMA_COPY_SIZE, DESC_MMUL_SIZE, DESC_PCIE_DMA_SIZE,
+    DESC_SFU_SIZE, DESC_VECTOR_SIZE,
+)
 from typing import Dict, List, Tuple
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Address map
+# Address map — compatibility layer: provide both old _BASE names and
+# new ABI-standard names, all derived from the generated contract.
 # ══════════════════════════════════════════════════════════════════════
 
 class Addr:
     """Base addresses (byte-addressable, 32-bit aligned)."""
-    MXU_BASE     = 0x4000_0000
-    SFU_BASE     = 0x4000_1000
-    VECTOR_BASE  = 0x4000_2000
-    DMA_BASE     = 0x4000_3000
-    PCIE_BASE    = 0x4000_4000
-    PCIE_DMA_BASE= 0x4000_7000
-    DOORBELL     = 0x4000_5000
-    INTC_BASE    = 0x4000_6000
-    DRAM_BASE    = 0x8000_0000   # DDR start
-    SRAM_BASE    = 0x2000_0000   # Local SRAM start (4 MB)
-    SRAM_SIZE    = 4 * 1024 * 1024  # 4 MB
+    # ── Standard ABI names (match gen/npu_abi.py) ──
+    BOOT_ROM      = 0x0000_0000
+    IBEX_DMEM     = 0x0001_0000
+    MXU           = 0x4000_0000
+    SFU           = 0x4000_1000
+    VECTOR        = 0x4000_2000
+    DMA           = 0x4000_3000
+    PCIE          = 0x4000_4000
+    DOORBELL      = 0x4000_5000
+    INTC          = 0x4000_6000
+    PCIE_DMA      = 0x4000_7000
+    SRAM          = 0x2000_0000
+    DRAM          = 0x8000_0000
+
+    # ── Backward-compatible _BASE aliases ──
+    MXU_BASE      = MXU
+    SFU_BASE      = SFU
+    VECTOR_BASE   = VECTOR
+    DMA_BASE      = DMA
+    PCIE_BASE     = PCIE
+    PCIE_DMA_BASE = PCIE_DMA
+    DOORBELL_BASE = DOORBELL
+    INTC_BASE     = INTC
+    DRAM_BASE     = DRAM
+    SRAM_BASE     = SRAM
+    SRAM_SIZE     = 4 * 1024 * 1024  # 4 MB (not in gen Addr)
 
 
 # ══════════════════════════════════════════════════════════════════════
-# MXU — Matrix Multiply Unit  (0x4000_0000)
+# Runtime sanity — facade must match generated contract exactly
+# ══════════════════════════════════════════════════════════════════════
+
+def _check_facade_consistency() -> None:
+    """Verify the facade addresses match the generated contract."""
+    _checks: list[tuple[str, int, int]] = [
+        ("MXU",      Addr.MXU,      _abi.Addr.MXU),
+        ("SFU",      Addr.SFU,      _abi.Addr.SFU),
+        ("VECTOR",   Addr.VECTOR,   _abi.Addr.VECTOR),
+        ("DMA",      Addr.DMA,      _abi.Addr.DMA),
+        ("PCIE",     Addr.PCIE,     _abi.Addr.PCIE),
+        ("DOORBELL", Addr.DOORBELL, _abi.Addr.DOORBELL),
+        ("INTC",     Addr.INTC,     _abi.Addr.INTC),
+        ("PCIE_DMA", Addr.PCIE_DMA, _abi.Addr.PCIE_DMA),
+        ("SRAM",     Addr.SRAM,     _abi.Addr.SRAM),
+        ("DRAM",     Addr.DRAM,     _abi.Addr.DRAM),
+        ("BOOT_ROM", Addr.BOOT_ROM, _abi.Addr.BOOT_ROM),
+        ("IBEX_DMEM",Addr.IBEX_DMEM,_abi.Addr.IBEX_DMEM),
+    ]
+    for name, facade_val, gen_val in _checks:
+        if facade_val != gen_val:
+            raise AssertionError(
+                f"regmap facade mismatch: Addr.{name}=0x{facade_val:08X} "
+                f"but gen/npu_abi.py has 0x{gen_val:08X}"
+            )
+
+_check_facade_consistency()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Re-export module classes with explicit attributes for AST parsers
+# (check_mmio_map.py uses Python AST, which cannot see imported attrs)
 # ══════════════════════════════════════════════════════════════════════
 
 class MXU:
-    BASE = Addr.MXU_BASE
+    BASE = Addr.MXU
+    CTRL        = 0x00
+    CMD         = 0x04
+    STATUS      = 0x08
+    DIM0        = 0x0C
+    DIM1        = 0x10
+    I_ADDR      = 0x14
+    W_ADDR      = 0x18
+    O_ADDR      = 0x1C
+    BIAS_ADDR   = 0x20
+    SCALE_ADDR  = 0x24
+    IRQ_EN      = 0x28
 
-    # Offsets
-    CTRL    = 0x00   # R/W: 控制 [1:0]=dtype(0=INT4xINT8,1=INT8xINT8,2=BF16)
-    CMD     = 0x04   # W:   bit[0]=START, bit[1]=ABORT
-    STATUS  = 0x08   # R:   bit[0]=BUSY, bit[1]=DONE, bit[2]=ERROR
-    DIM0    = 0x0C   # R/W: [15:0]=M, [31:16]=K (矩阵维度 A: M×K)
-    DIM1    = 0x10   # R/W: [15:0]=N, [31:16]=reserved (矩阵维度 B: K×N)
-    I_ADDR  = 0x14   # R/W: SRAM 中 activation 起始地址
-    W_ADDR  = 0x18   # R/W: SRAM 中 weight 起始地址
-    O_ADDR  = 0x1C   # R/W: SRAM 中 output 起始地址
-    BIAS_ADDR = 0x20 # R/W: SRAM 中 bias 起始地址 (0 = no bias)
-    SCALE_ADDR=0x24  # R/W: SRAM 中 scale 起始地址 (0 = no scale)
-    IRQ_EN  = 0x28   # R/W: bit[0]=完成中断使能
-
-
-# ══════════════════════════════════════════════════════════════════════
-# SFU — Special Function Unit  (0x4000_1000)
-# ══════════════════════════════════════════════════════════════════════
 
 class SFU:
-    BASE = Addr.SFU_BASE
+    BASE = Addr.SFU
+    CTRL    = 0x00
+    CMD     = 0x04
+    STATUS  = 0x08
+    I_ADDR  = 0x0C
+    O_ADDR  = 0x10
+    DIM     = 0x14
+    POS     = 0x18
+    IRQ_EN  = 0x1C
 
-    CTRL    = 0x00   # R/W: [3:0]=OP (0=SOFTMAX,1=LAYERNORM,2=GELU,3=RELU,4=SILU,5=ROPE,6=RMSNORM)
-    CMD     = 0x04   # W:   bit[0]=START
-    STATUS  = 0x08   # R:   bit[0]=BUSY, bit[1]=DONE
-    I_ADDR  = 0x0C   # R/W: SRAM 中输入起始地址
-    O_ADDR  = 0x10   # R/W: SRAM 中输出起始地址
-    DIM     = 0x14   # R/W: [15:0]=elements, [31:16]=head_dim (ROPE)
-    POS     = 0x18   # R/W: position (ROPE)
-    IRQ_EN  = 0x1C   # R/W: bit[0]=完成中断使能
-
-
-# ══════════════════════════════════════════════════════════════════════
-# VECTOR — Vector Unit  (0x4000_2000)
-# ══════════════════════════════════════════════════════════════════════
 
 class VECTOR:
-    BASE = Addr.VECTOR_BASE
+    BASE = Addr.VECTOR
+    CTRL    = 0x00
+    CMD     = 0x04
+    STATUS  = 0x08
+    A_ADDR  = 0x0C
+    B_ADDR  = 0x10
+    O_ADDR  = 0x14
+    DIM     = 0x18
+    IRQ_EN  = 0x1C
 
-    CTRL    = 0x00   # R/W: [3:0]=OP(0=ADD,1=MUL,2=MAX,3=SUM,4=CONV,5=RESID)
-    CMD     = 0x04   # W:   bit[0]=START
-    STATUS  = 0x08   # R:   bit[0]=BUSY, bit[1]=DONE
-    A_ADDR  = 0x0C   # R/W: SRAM 中操作数 A 地址
-    B_ADDR  = 0x10   # R/W: SRAM 中操作数 B 地址 (单目运算忽略)
-    O_ADDR  = 0x14   # R/W: SRAM 中输出地址
-    DIM     = 0x18   # R/W: [15:0]=elements
-    IRQ_EN  = 0x1C   # R/W: bit[0]=完成中断使能
-
-
-# ══════════════════════════════════════════════════════════════════════
-# PCIE_DMA — PCIe DMA Engine  (0x4000_7000)
-# ══════════════════════════════════════════════════════════════════════
-
-class PCIE_DMA:
-    BASE = Addr.PCIE_DMA_BASE
-
-    CTRL        = 0x00  # R/W: bit[0]=start_rd, [1]=start_wr, [2]=abort, [3]=irq_en
-    STATUS      = 0x04  # R:   bit[0]=rd_busy, [1]=wr_busy, [2]=rd_done, [3]=wr_done, [4]=error
-    PCIE_ADDR_LO= 0x08  # R/W: host PCIe address [31:0]
-    PCIE_ADDR_HI= 0x0C  # R/W: host PCIe address [63:32]
-    AXI_ADDR    = 0x10  # R/W: NPU AXI address
-    LEN         = 0x14  # R/W: transfer length in bytes
-    TAG         = 0x18  # R/W: descriptor tag
-    RD_ERR_CODE = 0x1C  # R:   read descriptor error code
-    WR_ERR_CODE = 0x20  # R:   write descriptor error code
-
-
-# ══════════════════════════════════════════════════════════════════════
-# DMA — Direct Memory Access  (0x4000_3000)
-# ══════════════════════════════════════════════════════════════════════
 
 class DMA:
-    BASE = Addr.DMA_BASE
+    BASE = Addr.DMA
+    CTRL       = 0x00
+    CMD        = 0x04
+    STATUS     = 0x08
+    CH0_SRC    = 0x10
+    CH0_DST    = 0x14
+    CH0_SIZE   = 0x18
+    CH0_STRIDE = 0x1C
+    CH1_SRC    = 0x20
+    CH1_DST    = 0x24
+    CH1_SIZE   = 0x28
+    CH1_STRIDE = 0x2C
+    DESC_ADDR  = 0x30
+    DESC_CNT   = 0x34
+    IRQ_EN     = 0x38
 
-    CTRL    = 0x00   # R/W: [0]=linked_list_en, [1:2]=channel_mode
-    CMD     = 0x04   # W:   bit[0]=START, bit[1]=ABORT
-    STATUS  = 0x08   # R:   bit[0]=BUSY, bit[1]=DONE, [7:4]=active_channel
-
-    # Channel 0 — Weight/Data load
-    CH0_SRC  = 0x10  # R/W: DRAM 源地址 (0x8000_0000+)
-    CH0_DST  = 0x14  # R/W: SRAM 目标地址
-    CH0_SIZE = 0x18  # R/W: 传输字节数
-    CH0_STRIDE=0x1C  # R/W: 2D stride
-
-    # Channel 1 — Output store
-    CH1_SRC  = 0x20  # R/W: SRAM 源地址
-    CH1_DST  = 0x24  # R/W: DRAM 目标地址
-    CH1_SIZE = 0x28  # R/W: 传输字节数
-    CH1_STRIDE=0x2C  # R/W: 2D stride
-
-    # Descriptor mode (linked list)
-    DESC_ADDR= 0x30  # R/W: 描述符链基地址 (DRAM)
-    DESC_CNT = 0x34  # R/W: 描述符数量
-
-    IRQ_EN  = 0x38   # R/W: bit[0]=完成中断使能
-
-
-# ══════════════════════════════════════════════════════════════════════
-# DOORBELL — Host↔NPU 通知  (0x4000_5000)
-# ══════════════════════════════════════════════════════════════════════
 
 class DOORBELL:
     BASE = Addr.DOORBELL
+    HOST_TAIL          = 0x00
+    NPU_HEAD           = 0x04
+    HOST_HEAD          = 0x08
+    NPU_TAIL           = 0x0C
+    LAST_STATUS        = 0x10
+    COMPLETION_STATUS  = 0x14  # array of 16 uint32 per ABI; firmware uses up to 1024
 
-    HOST_TAIL   = 0x00  # W: Host 写完 CMD 后更新 tail → 触发 NPU 唤醒
-    NPU_HEAD    = 0x04  # R/W: NPU 固件更新 head（已消费到哪）
-    HOST_HEAD   = 0x08  # R: NPU 更新 → Host 看到完成
-    NPU_TAIL    = 0x0C  # R: Host 更新 → NPU 看到新 CMD (只读)
-    LAST_STATUS = 0x10  # R/W: last command status (0=done, non-zero=error)
-    COMPLETION_STATUS = 0x14  # per-ring-index status array (16 x uint32)
-
-
-# ══════════════════════════════════════════════════════════════════════
-# INTC — 中断控制器  (0x4001_1000)
-# ══════════════════════════════════════════════════════════════════════
 
 class INTC:
-    BASE = Addr.INTC_BASE
+    BASE = Addr.INTC
+    PENDING   = 0x00
+    ENABLE    = 0x04
+    THRESHOLD = 0x08
+    ACK       = 0x0C
 
-    PENDING  = 0x00  # R: 各模块中断 pending: bit0=MXU,1=SFU,2=VECTOR,3=DMA,8=HOST
-    ENABLE   = 0x04  # R/W: 中断使能 mask
-    THRESHOLD= 0x08  # R/W: 优先级阈值
-    ACK      = 0x0C  # W: 写 1 清除对应中断
+
+class PCIE_DMA:
+    BASE = Addr.PCIE_DMA
+    CTRL         = 0x00
+    STATUS       = 0x04
+    PCIE_ADDR_LO = 0x08
+    PCIE_ADDR_HI = 0x0C
+    AXI_ADDR     = 0x10
+    LEN          = 0x14
+    TAG          = 0x18
+    RD_ERR_CODE  = 0x1C
+    WR_ERR_CODE  = 0x20
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Validation
+# Runtime sanity for module offsets — match generated contract
+# ══════════════════════════════════════════════════════════════════════
+
+def _check_module_offsets() -> None:
+    """Verify that facade module offsets match the generated contract."""
+    _mod_checks: list[tuple[str, type, type]] = [
+        ("MXU",      MXU,      _abi.MXU),
+        ("SFU",      SFU,      _abi.SFU),
+        ("VECTOR",   VECTOR,   _abi.VECTOR),
+        ("DMA",      DMA,      _abi.DMA),
+        ("DOORBELL", DOORBELL, _abi.DOORBELL),
+        ("INTC",     INTC,     _abi.INTC),
+        ("PCIE_DMA", PCIE_DMA, _abi.PCIE_DMA),
+    ]
+    for mod_name, facade_cls, gen_cls in _mod_checks:
+        gen_attrs = {k: v for k, v in vars(gen_cls).items()
+                     if not k.startswith('_')}
+        for attr_name, gen_val in gen_attrs.items():
+            if not isinstance(gen_val, int):
+                continue
+            facade_val = getattr(facade_cls, attr_name, None)
+            if facade_val is None:
+                # Facade has extra attrs (BASE) — not an error
+                continue
+            if isinstance(facade_val, int) and facade_val != gen_val:
+                raise AssertionError(
+                    f"regmap facade mismatch: {mod_name}.{attr_name}"
+                    f"=0x{facade_val:02X} but gen has 0x{gen_val:02X}"
+                )
+
+_check_module_offsets()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Validation (unchanged from original)
 # ══════════════════════════════════════════════════════════════════════
 
 def validate():
     """检查地址空间无冲突。"""
     regions: List[Tuple[str, int, int]] = [
-        ("MXU",    Addr.MXU_BASE,    0x1000),
-        ("SFU",    Addr.SFU_BASE,    0x1000),
-        ("VECTOR", Addr.VECTOR_BASE, 0x1000),
-        ("DMA",    Addr.DMA_BASE,    0x1000),
-        ("DOORBELL", Addr.DOORBELL,  0x1000),
-        ("INTC",   Addr.INTC_BASE,   0x1000),
+        ("MXU",      Addr.MXU,      0x1000),
+        ("SFU",      Addr.SFU,      0x1000),
+        ("VECTOR",   Addr.VECTOR,   0x1000),
+        ("DMA",      Addr.DMA,      0x1000),
+        ("PCIE",     Addr.PCIE,     0x1000),
+        ("DOORBELL", Addr.DOORBELL, 0x1000),
+        ("INTC",     Addr.INTC,     0x1000),
+        ("PCIE_DMA", Addr.PCIE_DMA, 0x1000),
     ]
 
     for i, (name_a, base_a, size_a) in enumerate(regions):
         for name_b, base_b, size_b in regions[i+1:]:
             if base_a < base_b + size_b and base_a + size_a > base_b:
-                raise ValueError(f"地址冲突: {name_a} [{base_a:08x}] vs {name_b} [{base_b:08x}]")
+                raise ValueError(
+                    f"地址冲突: {name_a} [{base_a:08x}]"
+                    f" vs {name_b} [{base_b:08x}]"
+                )
 
     print("✅ 地址空间无冲突")
     return regions
@@ -192,8 +253,11 @@ def print_map():
     print()
 
     # Per-module registers
-    for mod_name, mod in [("MXU", MXU), ("SFU", SFU), ("VECTOR", VECTOR), ("DMA", DMA),
-                           ("DOORBELL", DOORBELL), ("INTC", INTC)]:
+    for mod_name, mod in [
+        ("MXU", MXU), ("SFU", SFU), ("VECTOR", VECTOR),
+        ("DMA", DMA), ("DOORBELL", DOORBELL), ("INTC", INTC),
+        ("PCIE_DMA", PCIE_DMA),
+    ]:
         print(f"\n{mod_name} (0x{mod.BASE:08X}):")
         for attr in dir(mod):
             if attr.startswith('_') or attr == 'BASE':

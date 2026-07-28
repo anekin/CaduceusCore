@@ -1,0 +1,99 @@
+{
+  "manifest_version": "1.0.0",
+  "model": {
+    "name": "Qwen2.5-3B-Instruct-Q4_K_M",
+    "default_path": "/home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf",
+    "sha256": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d",
+    "architecture": "qwen2",
+    "block_count": 36,
+    "hidden_size": 2048,
+    "intermediate_size": 5888,
+    "num_attention_heads": 32,
+    "num_key_value_heads": 2,
+    "head_dim": 64,
+    "vocab_size": 151936
+  },
+  "llama_cpp": {
+    "commit": "88b47a755c72fed4b22fba0fd262e2d7b7d01583",
+    "abi_version": "1.0"
+  },
+  "paths": {
+    "llama_cli": "build/llama/bin/llama",
+    "test_backend_ops": "build/llama/bin/test-backend-ops",
+    "dump_hidden_states": "llama_ref/dump_hidden_states",
+    "npu_backend_so": "build/llama/bin/libggml-npu.so",
+    "cpu_backend_so_glob": "build/llama/bin/libggml-cpu-*.so"
+  },
+  "prompts": {
+    "prefill": "Hello",
+    "decode": "The quick brown fox"
+  },
+  "determinism": {
+    "seed": 42,
+    "temperature": 0.0,
+    "top_k": 1,
+    "top_p": 0.0
+  },
+  "tolerances": {
+    "hidden_max_abs_diff": 1e-5,
+    "hidden_cos_sim_min": 0.9999,
+    "decode_text_match": true
+  },
+  "gates": {
+    "supported_single_ops": {
+      "enabled": true,
+      "op_list": ["MUL_MAT", "ADD", "MUL", "RMS_NORM", "SOFT_MAX", "ROPE"],
+      "min_pass_ratio": 0.95
+    },
+    "full_shape_blk0": {
+      "enabled": true,
+      "layer": 0,
+      "n_tokens": 2,
+      "expected_nodes": {
+        "supported": 21,
+        "fallback": 0
+      }
+    },
+    "single_decode_token": {
+      "enabled": true,
+      "prompt": "prefill",
+      "n_predict": 1,
+      "expected_nodes": {
+        "supported": 38,
+        "fallback": 0
+      }
+    },
+    "multi_token_decode_with_kv": {
+      "enabled": true,
+      "prompt": "prefill",
+      "n_predict": 3,
+      "expected_nodes": {
+        "supported": 38,
+        "fallback": 0
+      }
+    },
+    "cpu_fallback_mixed_graph": {
+      "enabled": true,
+      "supported_ops": ["MUL_MAT", "ADD", "MUL", "RMS_NORM", "SOFT_MAX", "ROPE"],
+      "unsupported_op_probe": {
+        "name": "ROPE",
+        "mode": 40
+      },
+      "expected_nodes": {
+        "supported": 38,
+        "fallback": 7
+      }
+    }
+  },
+  "negative_checks": {
+    "model_hash_mismatch": {
+      "enabled": true,
+      "description": "Detects tampered or substituted GGUF model file"
+    },
+    "unsupported_device_uri": {
+      "enabled": true,
+      "uri": "fm://unsupported-backend",
+      "description": "Detects unsupported FuncModel transport URI"
+    }
+  }
+}

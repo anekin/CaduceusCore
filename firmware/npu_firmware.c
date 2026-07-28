@@ -30,15 +30,15 @@
 #define COMPLETION_RING_ADDR (DRAM_BASE + RING_ENTRIES * CMD_DESC_SIZE)
 
 /* 命令描述符结构 (与 Host 约定) */
-typedef struct __attribute__((packed)) {
+typedef struct __attribute__((packed, aligned(4))) {
     uint32_t opcode;       // engine-level OpCode (MMUL/SFU/Vector/DMA)
     uint32_t desc_addr;    // 操作描述符的 DRAM 地址
     uint32_t flags;        // bit0=中断完成, bit1=立即执行
     uint32_t _pad[5];      // 对齐到 32B
 } cmd_entry_t;
 
-/* 操作描述符 — MMUL (matches Func Model host_write_descriptor 15-word layout) */
-typedef struct __attribute__((packed)) {
+/* 操作描述符 — MMUL (15-word ABI layout, see NPU_ABI_DESC_MMUL_*) */
+typedef struct __attribute__((packed, aligned(4))) {
     uint32_t input_addr;
     uint32_t weight_addr;
     uint32_t output_addr;
@@ -54,47 +54,97 @@ typedef struct __attribute__((packed)) {
     uint32_t M, K, N;
 } mmul_desc_t;
 
-/* 操作描述符 — SFU */
-typedef struct __attribute__((packed)) {
-    uint32_t op;           // SFU_OP_*
+/* 操作描述符 — SFU (15-word ABI layout, see NPU_ABI_DESC_SFU_*) */
+typedef struct __attribute__((packed, aligned(4))) {
     uint32_t input_addr;
+    uint32_t _reserved_1;
     uint32_t output_addr;
+    uint32_t _reserved_3;
     uint32_t input_sram;
     uint32_t output_sram;
-    uint32_t size;
+    uint32_t _reserved_6;
+    uint32_t _reserved_7;
     uint32_t dim;          // head_dim for ROPE, elements for others
     uint32_t pos;          // position for ROPE
     uint32_t sfu_op;       // SFU sub-operation (hardware op code)
-    uint32_t _pad[3];
+    uint32_t _reserved_11;
+    uint32_t _unused_12;
+    uint32_t _unused_13;
+    uint32_t _unused_14;
 } sfu_desc_t;
 
-/* 操作描述符 — Vector */
-typedef struct __attribute__((packed)) {
-    uint32_t op;
+/* 操作描述符 — Vector (15-word ABI layout, see NPU_ABI_DESC_VECTOR_*) */
+typedef struct __attribute__((packed, aligned(4))) {
     uint32_t a_addr;
     uint32_t b_addr;
     uint32_t o_addr;
+    uint32_t _reserved_3;
+    uint32_t a_sram;
+    uint32_t b_sram;
+    uint32_t o_sram;
+    uint32_t _reserved_7;
     uint32_t dim;
-    uint32_t _pad[3];
+    uint32_t _reserved_9;
+    uint32_t _reserved_10;
+    uint32_t _reserved_11;
+    uint32_t _unused_12;
+    uint32_t _unused_13;
+    uint32_t _unused_14;
 } vector_desc_t;
 
-/* 操作描述符 — DMA_COPY */
-typedef struct __attribute__((packed)) {
+/* 操作描述符 — DMA_COPY (15-word ABI layout, see NPU_ABI_DESC_DMA_COPY_*) */
+typedef struct __attribute__((packed, aligned(4))) {
     uint32_t src_addr;
+    uint32_t _reserved_1;
     uint32_t dst_addr;
+    uint32_t _reserved_3;
+    uint32_t _reserved_4;
+    uint32_t _reserved_5;
+    uint32_t _reserved_6;
+    uint32_t _reserved_7;
     uint32_t size;
-    uint32_t _pad[5];
+    uint32_t _reserved_9;
+    uint32_t _reserved_10;
+    uint32_t _reserved_11;
+    uint32_t _unused_12;
+    uint32_t _unused_13;
+    uint32_t _unused_14;
 } dma_copy_desc_t;
 
-/* 操作描述符 — PCIe DMA */
-typedef struct __attribute__((packed)) {
+/* 操作描述符 — PCIe DMA (6-word ABI layout, see NPU_ABI_DESC_PCIE_DMA_*) */
+typedef struct __attribute__((packed, aligned(4))) {
     uint32_t pcie_addr_lo;   /* PCIe target address [31:0] */
     uint32_t pcie_addr_hi;   /* PCIe target address [63:32] */
     uint32_t axi_addr;       /* Local AXI source/destination */
     uint32_t len;            /* Transfer bytes */
     uint32_t direction;      /* 0=host→NPU (read), 1=NPU→host (write) */
-    uint32_t _pad[1];
+    uint32_t _pad;
 } pcie_dma_desc_t;
+
+/* Compile-time ABI layout checks for descriptor structs */
+_Static_assert(sizeof(mmul_desc_t) == NPU_ABI_DESC_MMUL_PACKED_SIZE, "MMUL desc size");
+_Static_assert(__builtin_offsetof(mmul_desc_t, input_addr) == NPU_ABI_DESC_MMUL_input_addr_OFFSET, "MMUL input_addr offset");
+_Static_assert(__builtin_offsetof(mmul_desc_t, input_size)  == NPU_ABI_DESC_MMUL_input_size_OFFSET,  "MMUL input_size offset");
+_Static_assert(__builtin_offsetof(mmul_desc_t, M)           == NPU_ABI_DESC_MMUL_M_OFFSET,           "MMUL M offset");
+
+_Static_assert(sizeof(sfu_desc_t) == NPU_ABI_DESC_SFU_PACKED_SIZE, "SFU desc size");
+_Static_assert(__builtin_offsetof(sfu_desc_t, input_addr)  == NPU_ABI_DESC_SFU_input_addr_OFFSET,  "SFU input_addr offset");
+_Static_assert(__builtin_offsetof(sfu_desc_t, output_addr) == NPU_ABI_DESC_SFU_output_addr_OFFSET, "SFU output_addr offset");
+_Static_assert(__builtin_offsetof(sfu_desc_t, dim)         == NPU_ABI_DESC_SFU_dim_OFFSET,         "SFU dim offset");
+_Static_assert(__builtin_offsetof(sfu_desc_t, sfu_op)      == NPU_ABI_DESC_SFU_sfu_op_OFFSET,      "SFU sfu_op offset");
+
+_Static_assert(sizeof(vector_desc_t) == NPU_ABI_DESC_VECTOR_PACKED_SIZE, "VECTOR desc size");
+_Static_assert(__builtin_offsetof(vector_desc_t, a_addr) == NPU_ABI_DESC_VECTOR_a_addr_OFFSET, "VECTOR a_addr offset");
+_Static_assert(__builtin_offsetof(vector_desc_t, b_addr) == NPU_ABI_DESC_VECTOR_b_addr_OFFSET, "VECTOR b_addr offset");
+_Static_assert(__builtin_offsetof(vector_desc_t, o_addr) == NPU_ABI_DESC_VECTOR_o_addr_OFFSET, "VECTOR o_addr offset");
+_Static_assert(__builtin_offsetof(vector_desc_t, dim)    == NPU_ABI_DESC_VECTOR_dim_OFFSET,    "VECTOR dim offset");
+
+_Static_assert(sizeof(dma_copy_desc_t) == NPU_ABI_DESC_DMA_COPY_PACKED_SIZE, "DMA_COPY desc size");
+_Static_assert(__builtin_offsetof(dma_copy_desc_t, src_addr) == NPU_ABI_DESC_DMA_COPY_src_addr_OFFSET, "DMA_COPY src_addr offset");
+_Static_assert(__builtin_offsetof(dma_copy_desc_t, dst_addr) == NPU_ABI_DESC_DMA_COPY_dst_addr_OFFSET, "DMA_COPY dst_addr offset");
+_Static_assert(__builtin_offsetof(dma_copy_desc_t, size)     == NPU_ABI_DESC_DMA_COPY_size_OFFSET,     "DMA_COPY size offset");
+
+_Static_assert(sizeof(pcie_dma_desc_t) == NPU_ABI_DESC_PCIE_DMA_PACKED_SIZE, "PCIE_DMA desc size");
 
 /* 完成条目 */
 typedef struct __attribute__((packed)) {
@@ -324,51 +374,48 @@ static void vector_start(uint32_t op, uint32_t a_addr, uint32_t b_addr,
 /* ── 描述符读取 ──────────────────────────────────────────────────── */
 
 static void read_mmul_desc(uint32_t desc_addr, mmul_desc_t *desc) {
-    volatile uint32_t *src = (volatile uint32_t *)(uintptr_t)desc_addr;
-    desc->input_addr  = src[0];
-    desc->weight_addr = src[1];
-    desc->output_addr = src[2];
-    desc->scale_addr  = src[3];
-    desc->input_sram  = src[4];
-    desc->weight_sram = src[5];
-    desc->output_sram = src[6];
-    desc->scale_sram  = src[7];
-    desc->input_size  = src[8];
-    desc->weight_size = src[9];
-    desc->output_size = src[10];
-    desc->scale_size  = src[11];
-    desc->M = src[12];
-    desc->K = src[13];
-    desc->N = src[14];
+    volatile const mmul_desc_t *src = (volatile const mmul_desc_t *)(uintptr_t)desc_addr;
+    desc->input_addr  = src->input_addr;
+    desc->weight_addr = src->weight_addr;
+    desc->output_addr = src->output_addr;
+    desc->scale_addr  = src->scale_addr;
+    desc->input_sram  = src->input_sram;
+    desc->weight_sram = src->weight_sram;
+    desc->output_sram = src->output_sram;
+    desc->scale_sram  = src->scale_sram;
+    desc->input_size  = src->input_size;
+    desc->weight_size = src->weight_size;
+    desc->output_size = src->output_size;
+    desc->scale_size  = src->scale_size;
+    desc->M = src->M;
+    desc->K = src->K;
+    desc->N = src->N;
 }
 
-/* SFU/Vector/DMA descriptors are stored in the same 15-word layout as MMUL
- * (host_write_descriptor).  Extract the relevant fields here.
- */
 static void read_sfu_desc(uint32_t desc_addr, sfu_desc_t *desc) {
-    volatile uint32_t *src = (volatile uint32_t *)(uintptr_t)desc_addr;
-    desc->input_addr  = src[0];
-    desc->output_addr = src[2];
+    volatile const sfu_desc_t *src = (volatile const sfu_desc_t *)(uintptr_t)desc_addr;
+    desc->input_addr  = src->input_addr;
+    desc->output_addr = src->output_addr;
     desc->input_sram  = 0x00000000;
     desc->output_sram = 0x00018000;
-    desc->dim         = src[8];
-    desc->pos         = src[9];
-    desc->sfu_op      = src[10];
+    desc->dim         = src->dim;
+    desc->pos         = src->pos;
+    desc->sfu_op      = src->sfu_op;
 }
 
 static void read_vector_desc(uint32_t desc_addr, vector_desc_t *desc) {
-    volatile uint32_t *src = (volatile uint32_t *)(uintptr_t)desc_addr;
-    desc->a_addr = src[0];
-    desc->b_addr = src[1];
-    desc->o_addr = src[2];
-    desc->dim    = src[8];
+    volatile const vector_desc_t *src = (volatile const vector_desc_t *)(uintptr_t)desc_addr;
+    desc->a_addr = src->a_addr;
+    desc->b_addr = src->b_addr;
+    desc->o_addr = src->o_addr;
+    desc->dim    = src->dim;
 }
 
 static void read_dma_copy_desc(uint32_t desc_addr, dma_copy_desc_t *desc) {
-    volatile uint32_t *src = (volatile uint32_t *)(uintptr_t)desc_addr;
-    desc->src_addr = src[0];
-    desc->dst_addr = src[2];
-    desc->size     = src[8];
+    volatile const dma_copy_desc_t *src = (volatile const dma_copy_desc_t *)(uintptr_t)desc_addr;
+    desc->src_addr = src->src_addr;
+    desc->dst_addr = src->dst_addr;
+    desc->size     = src->size;
 }
 
 /* ── 命令消费 ────────────────────────────────────────────────────── */

@@ -6,10 +6,14 @@ observations (from the DUT adapter) and produces a comparison result.
 Critical design rule: the scoreboard MUST NOT read expected output from
 the DUT under test. Expected values come only from the scenario's
 expected_observations field, never from the DUT adapter.
+
+Todo 13: scoreboard can classify fault symptoms from observations.
+This classification operates only on Observation objects and has zero
+DUT-specific knowledge.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
 
@@ -344,3 +348,76 @@ class Scoreboard:
                 obs_id,
                 f"Data mismatch: {'; '.join(diffs[:5])}" if diffs else "No data found",
             )
+
+    # ── Fault classification (Todo 13) ──────────────────────────────
+
+    @staticmethod
+    def classify_faults(observations: List[Observation]) -> Set[str]:
+        """Classify fault symptoms from observation data.
+
+        Examines observations for known fault signatures and returns
+        the set of detected fault classes. This method operates ONLY
+        on Observation objects — it has zero DUT-specific knowledge.
+
+        Each fault class has one or more signature keys in Observation.data
+        that indicate its presence. For example:
+            - data_corruption: observation data contains incompatible values
+            - wrong_completion: "status" value is unexpected
+            - timeout: observation data has a "timeout" marker
+            - dropped_interrupt: observation data has an "irq_dropped" marker
+
+        Args:
+            observations: List of Observation objects to examine.
+
+        Returns:
+            Set of fault class strings detected.
+        """
+        detected: Set[str] = set()
+        for obs in observations:
+            obs_data = getattr(obs, "data", {}) or {}
+            obs_meta = getattr(obs, "metadata", {}) or {}
+
+            combined = {**obs_data, **obs_meta}
+
+            # Completion status: unexpected status indicates wrong_completion or engine_error
+            status = combined.get("status")
+            if status is not None and isinstance(status, int) and status not in (0, 0x2):
+                if status == 0xDEAD:
+                    detected.add("engine_error")
+                else:
+                    detected.add("wrong_completion")
+
+            # Timeout marker
+            if combined.get("timeout") is True:
+                detected.add("timeout")
+
+            # Interrupt markers
+            if combined.get("irq_dropped") is True or combined.get("interrupt_dropped") is True:
+                detected.add("dropped_interrupt")
+            if combined.get("irq_duplicate") is True or combined.get("interrupt_duplicate") is True:
+                detected.add("duplicated_interrupt")
+
+            # Descriptor/opcode errors
+            if combined.get("desc_error") is True:
+                detected.add("wrong_descriptor")
+            if combined.get("unsupported_opcode") is True or combined.get("opcode_error") is True:
+                detected.add("unsupported_opcode")
+
+            # Ring overflow
+            if combined.get("ring_overflow") is True:
+                detected.add("ring_overflow")
+
+            # Stalled head
+            if combined.get("stalled_head") is True or combined.get("head_stalled") is True:
+                detected.add("stalled_head")
+
+            # Reset during command
+            if combined.get("reset_during_cmd") is True:
+                detected.add("reset_during_command")
+
+            # Data corruption: check for corruption markers or mismatched data
+            raw_hex = combined.get("raw_hex")
+            if raw_hex and isinstance(raw_hex, str) and "__DATA_CORRUPTED__" in raw_hex:
+                detected.add("data_corruption")
+
+        return detected

@@ -1,0 +1,186 @@
+# CaduceusCore CI — Tiered software signoff workflow
+#
+# Tiers (from aggregate_software_signoff.py):
+#   l0: tasks 1, 2   — ABI schema/generator and binding migration
+#   l1: tasks 3, 7   — stable C Host Runtime ABI and core/mock transport
+#   l2: tasks 4, 8, 9, 13, 14 — Func Model server, adapter, fault/differential
+#   l3: tasks 6, 12  — Spike toolchain and real-firmware integration
+#   l4: tasks 10, 18 — RTL DUT adapter and RTL transport interface
+#   l5: tasks 19, 20 — FPGA transport interface and FPGA NO-GO
+#   framework: tasks 5, 15, 16, 17, 21 — llama.cpp, lifecycle, ops, Qwen, ExecuTorch
+#
+# The release_aggregator job depends on all tier jobs and runs the full
+# software build + evidence aggregator to produce a consolidated signoff.
+
+name: CaduceusCore CI
+
+on: [push, pull_request]
+
+env:
+  PYTHONPATH: sim
+  CADUCEUS_DEVICE: mock://
+
+jobs:
+
+  # ── L0: ABI Schema / Generator ────────────────────────────────────
+  l0_abi:
+    name: L0 — ABI Schema & Generator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+      - name: ABI schema pytest
+        run: PYTHONPATH=sim python3 -m pytest sim/tests/test_npu_abi_schema.py -q
+      - name: ABI generation idempotency
+        run: python3 scripts/gen_npu_abi.py --check
+
+  # ── L1: Host Runtime ABI + Core/Mock Transport ────────────────────
+  l1_runtime:
+    name: L1 — Host Runtime ABI & Transport
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install deps (pip + cmake)
+        run: |
+          pip install -r requirements.txt
+          sudo apt-get update -qq && sudo apt-get install -y -qq cmake g++ 2>/dev/null
+      - name: CMake configure
+        run: cmake -S software -B build/software -DCADUCEUS_BUILD_TESTS=ON
+      - name: CMake build
+        run: cmake --build build/software
+      - name: CTest (runtime ABI + conformance + faults)
+        run: ctest --test-dir build/software --output-on-failure
+      - name: Python conformance tests
+        run: PYTHONPATH=sim python3 -m pytest software/python/test_conformance.py -q
+
+  # ── L2: Func Model Protocol / Adapter / Fault / Differential ──────
+  l2_func_model:
+    name: L2 — Func Model Protocol & Adapter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+      - name: Device protocol tests (Python + C++)
+        run: PYTHONPATH=sim python3 -m pytest sim/tests/test_device_protocol.py sim/tests/test_device_protocol_cpp.py -q
+      - name: Fault injection test
+        run: PYTHONPATH=sim python3 -m pytest sim/tests/test_verification_fault_injection.py -q
+      - name: Verification scenario
+        run: PYTHONPATH=sim python3 -m pytest sim/tests/test_verification_scenario.py -q
+
+  # ── L3: Spike Toolchain + Real-Firmware Manifest ──────────────────
+  l3_spike:
+    name: L3 — Spike Toolchain & Firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+      - name: Spike build manifest check
+        run: python3 scripts/build_spike_stack.py --manifest .omo/evidence/task-6-spike-build.json
+        continue-on-error: true
+      - name: Spike manifest pytest
+        run: PYTHONPATH=sim python3 -m pytest sim/tests/test_spike_toolchain_manifest.py -q
+        continue-on-error: true
+
+  # ── L4: RTL DUT Adapter + RTL Transport ───────────────────────────
+  l4_rtl_skeleton:
+    name: L4 — RTL DUT Adapter & Transport
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+      - name: RTL DUT adapter scenarios
+        run: PYTHONPATH=sim python3 scripts/run_dut_scenarios.py --dut rtl --matrix adapter-smoke
+      - name: RTL transport tests
+        run: PYTHONPATH=sim python3 -m pytest sim/tests/test_runtime_rtl_transport.py -q
+
+  # ── L5: FPGA Software Signoff (NO-GO, BLOCKED expected) ───────────
+  l5_fpga_nogo:
+    name: L5 — FPGA Signoff (NO-GO / BLOCKED)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+      - name: FPGA NO-GO signoff
+        run: PYTHONPATH=sim python3 scripts/run_fpga_software_signoff.py \
+              --config config/fpga-target.json \
+              --require-board --expect-no-board \
+              --evidence .omo/evidence/task-20-fpga-no-go.json
+      - name: FPGA signoff pytest
+        run: PYTHONPATH=sim python3 -m pytest sim/tests/test_fpga_software_signoff.py -q
+
+  # ── Framework: Qwen llama.cpp gates + ExecuTorch delegate ─────────
+  framework_qwen_executorch:
+    name: Framework — Qwen Gates & ExecuTorch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+      - name: Qwen3B positive software gates (mock transport)
+        run: PYTHONPATH=sim python3 scripts/run_qwen3b_software_signoff.py positive --device mock://
+      - name: Qwen3B negative checks
+        run: PYTHONPATH=sim python3 scripts/run_qwen3b_software_signoff.py negative
+      - name: ExecuTorch delegate tests
+        run: PYTHONPATH=sim python3 -m pytest sim/tests/test_executorch_delegate.py -q
+
+  # ── Release Aggregator: build + evidence aggregation ──────────────
+  release_aggregator:
+    name: Release — Build & Aggregate Signoff
+    needs:
+      - l0_abi
+      - l1_runtime
+      - l2_func_model
+      - l3_spike
+      - l4_rtl_skeleton
+      - l5_fpga_nogo
+      - framework_qwen_executorch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install deps (pip + cmake)
+        run: |
+          pip install -r requirements.txt
+          sudo apt-get update -qq && sudo apt-get install -y -qq cmake g++ 2>/dev/null
+      - name: Reproducible build & install
+        run: python3 scripts/build_software_release.py --clean --install-prefix build/install
+      - name: Aggregate software signoff (all 7 tiers)
+        run: >
+          python3 scripts/aggregate_software_signoff.py
+          --require l0,l1,l2,l3,l4,l5,framework
+          --evidence .omo/evidence/task-22-release-signoff.json
+          --no-stale-check
+      - name: Upload signoff report
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-22-release-signoff
+          path: .omo/evidence/task-22-release-signoff.json

@@ -1,0 +1,94 @@
+{
+  "manifest_version": "1.0.0",
+  "target_board": {
+    "label": "CaduceusCore FPGA Prototype v0.1",
+    "pci_bdf": "0000:01:00.0",
+    "pci_domain": 0,
+    "pci_bus": 1,
+    "pci_device": 0,
+    "pci_function": 0,
+    "vendor_id": 51966,
+    "vendor_id_hex": "0xCAFE",
+    "device_id": 48879,
+    "device_id_hex": "0xBEEF",
+    "subsystem_vendor": 0,
+    "subsystem_device": 0
+  },
+  "bar_map": [
+    {
+      "index": 0,
+      "label": "BAR0-SRAM",
+      "min_size": 4194304,
+      "min_size_hex": "0x00400000",
+      "description": "4 MB SRAM — NPU unified compute buffer"
+    },
+    {
+      "index": 1,
+      "label": "BAR1-DRAM",
+      "min_size": 2147483648,
+      "min_size_hex": "0x80000000",
+      "description": "2 GB DRAM — main data space"
+    },
+    {
+      "index": 2,
+      "label": "BAR2-MMIO",
+      "min_size": 65536,
+      "min_size_hex": "0x00010000",
+      "description": "64 KB MMIO — NPU register map"
+    }
+  ],
+  "bitstream": {
+    "filename": "caduceus_fpga_v0_1.bit",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "build_timestamp": "",
+    "build_toolchain": ""
+  },
+  "firmware": {
+    "filename": "npu_firmware.elf",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "abi_version": "1.0.0"
+  },
+  "transport_interfaces": {
+    "vfio": {
+      "supported": true,
+      "ready": true,
+      "notes": "VFIO userspace PCIe MMIO + DMA path; fake-fixture validated in Todo 19"
+    },
+    "uio": {
+      "supported": true,
+      "ready": true,
+      "notes": "UIO-based userspace MMIO path; fake-fixture validated in Todo 19"
+    },
+    "vendor_plugin": {
+      "supported": true,
+      "ready": true,
+      "notes": "Vendor-specific kernel plugin path; fake-fixture validated in Todo 19"
+    },
+    "fpga_none": {
+      "supported": true,
+      "ready": true,
+      "notes": "Structured NO-GO path when no board is available; validated in Todo 19"
+    }
+  },
+  "expected_capabilities": {
+    "buffer_max_size": 1073741824,
+    "max_buffers": 4096,
+    "max_queues": 8,
+    "max_command_lists": 256,
+    "fence_modes": ["interrupt", "poll"],
+    "uri_scheme": "fpga://"
+  },
+  "abi": {
+    "version": "1.0.0",
+    "abi_major": 1,
+    "abi_minor": 0
+  },
+  "deferred_items": [
+    "real BAR mmap via VFIO/UIO on physical FPGA board",
+    "DMA descriptor submission and completion",
+    "interrupt-based fence from physical MSI-X",
+    "bitstream programming and verification",
+    "firmware upload to NPU and boot handshake",
+    "full PCIe Gen4 x4 link training and throughput measurement"
+  ]
+}

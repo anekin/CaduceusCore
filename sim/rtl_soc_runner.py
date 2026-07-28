@@ -112,6 +112,20 @@ try:
 except Exception:
     GOLDEN_AVAILABLE = False
 
+# ── Todo 10: delegate scenario-independent scoreboard to cocotb-free module
+try:
+    from sim.verification.scoreboard import Scoreboard, ScoreboardResult
+    from sim.verification.observation import Observation, ObservationType
+    from sim.verification.tolerance import ToleranceConfig
+    SCOREBOARD_AVAILABLE = True
+except Exception:
+    SCOREBOARD_AVAILABLE = False
+    Scoreboard = None
+    ScoreboardResult = None
+    Observation = None
+    ObservationType = None
+    ToleranceConfig = None
+
 logger = logging.getLogger("rtl_soc_runner")
 
 # ── Address shorthand (mirrors cocotb_bridge constants) ─────────────────
@@ -737,6 +751,37 @@ class RTLSoCRunner:
         logger.info(f"RTLSoCRunner: {case_id} — {status}")
 
         return passed
+
+    # ── Todo 10: Scoreboard-based comparison (scenario-independent) ──
+
+    def compare_outputs(
+        self,
+        expected_observations: list,
+        actual_observations: list,
+    ) -> "ScoreboardResult":
+        if not SCOREBOARD_AVAILABLE:
+            raise RuntimeError(
+                "Scoreboard not available; install sim/verification/"
+            )
+        scoreboard = Scoreboard()
+        return scoreboard.compare(expected_observations, actual_observations)
+
+    def _build_observation_from_readback(
+        self,
+        obs_id: str,
+        obs_type: "ObservationType",
+        address: int,
+        size: int,
+        raw_data: bytes,
+        dtype: str = "int32",
+    ) -> "Observation":
+        return Observation(
+            observation_id=obs_id,
+            observation_type=obs_type,
+            address=address,
+            size=size,
+            data={"raw_hex": raw_data.hex(), "dtype": dtype},
+        )
 
     def summary(self) -> Dict:
         """Return a summary dictionary of case results."""
