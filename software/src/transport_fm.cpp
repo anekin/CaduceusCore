@@ -539,10 +539,13 @@ static int fm_fence_status(void *tpriv, cad_transport_fence_t *fence) {
 static int fm_submit(void *tpriv, void *cmd_data, uint32_t cmd_count,
                      cad_transport_fence_t *fence) {
     fm_transport_t *tr = (fm_transport_t *)tpriv;
-    (void)cmd_data;
 
     cd::SubmitRequestT req;
     req.cmd_count = cmd_count;
+    if (cmd_data && cmd_count > 0) {
+        const uint8_t *src = (const uint8_t *)cmd_data;
+        req.cmd_blob.assign(src, src + cmd_count);
+    }
     req.fence_handle = fence ? *(uint64_t *)fence : 0;
     flatbuffers::FlatBufferBuilder inner_fbb;
     auto root = cd::SubmitRequest::Pack(inner_fbb, &req);

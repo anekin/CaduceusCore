@@ -59,6 +59,17 @@ if(CADUCEUS_BUILD_SHARED)
     target_compile_features(caduceus_runtime_shared PUBLIC c_std_11)
     target_link_libraries(caduceus_runtime_shared PUBLIC caduceus_runtime_headers)
     set_target_properties(caduceus_runtime_shared PROPERTIES OUTPUT_NAME "caduceus_runtime")
+
+    # Create development symlink so Python ctypes binding can find the shared
+    # library via its fallback path (build/software/libcaduceus_runtime.so).
+    # Recreated on every build to stay in sync.
+    add_custom_command(TARGET caduceus_runtime_shared POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/build"
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "../../build/software/libcaduceus_runtime.so"
+            "${CMAKE_CURRENT_SOURCE_DIR}/build/libcaduceus_runtime.so"
+        COMMENT "Creating symlink software/build/libcaduceus_runtime.so for Python ctypes"
+    )
 endif()
 
 # ── Production command IR / lowering / blob codec ──────────────────
@@ -131,6 +142,16 @@ if(CADUCEUS_BUILD_TESTS)
     target_compile_options(test_runtime_conformance PRIVATE -Wall -Wextra)
     add_test(NAME runtime_conformance COMMAND test_runtime_conformance)
 
+    # --- ExecuteBlob conformance tests ---
+
+    add_executable(test_execute_blob_conformance
+        tests/test_execute_blob_conformance.c
+    )
+    target_link_libraries(test_execute_blob_conformance PRIVATE caduceus_runtime_core)
+    target_compile_features(test_execute_blob_conformance PRIVATE c_std_11)
+    target_compile_options(test_execute_blob_conformance PRIVATE -Wall -Wextra)
+    add_test(NAME execute_blob_conformance COMMAND test_execute_blob_conformance)
+
     # --- NEW: C fault/negative tests ---
 
     add_executable(test_runtime_faults
@@ -140,6 +161,48 @@ if(CADUCEUS_BUILD_TESTS)
     target_compile_features(test_runtime_faults PRIVATE c_std_11)
     target_compile_options(test_runtime_faults PRIVATE -Wall -Wextra)
     add_test(NAME runtime_faults COMMAND test_runtime_faults)
+
+    # --- W2-T8: fpga:// explicitly unsupported (no silent mock fallback) ---
+
+    add_executable(test_unsupported_uri
+        tests/test_unsupported_uri.c
+    )
+    target_link_libraries(test_unsupported_uri PRIVATE caduceus_runtime_core)
+    target_compile_features(test_unsupported_uri PRIVATE c_std_11)
+    target_compile_options(test_unsupported_uri PRIVATE -Wall -Wextra)
+    add_test(NAME unsupported_uri COMMAND test_unsupported_uri)
+
+    # --- W2-T2: Command data serialization tests ---
+
+    add_executable(test_cmd_serialization
+        tests/test_cmd_serialization.c
+    )
+    target_link_libraries(test_cmd_serialization PRIVATE caduceus_runtime_core)
+    target_compile_features(test_cmd_serialization PRIVATE c_std_11)
+    target_compile_options(test_cmd_serialization PRIVATE -Wall -Wextra)
+    add_test(NAME cmd_serialization COMMAND test_cmd_serialization)
+
+    add_executable(test_cmd_serialization_negative
+        tests/test_cmd_serialization_negative.c
+    )
+    target_link_libraries(test_cmd_serialization_negative PRIVATE caduceus_runtime_core)
+    target_compile_features(test_cmd_serialization_negative PRIVATE c_std_11)
+    target_compile_options(test_cmd_serialization_negative PRIVATE -Wall -Wextra)
+    add_test(NAME cmd_serialization_negative COMMAND test_cmd_serialization_negative)
+
+    # --- W2-T9: FM transport cmd_blob forwarding test ---
+
+    add_executable(test_fm_transport_blob
+        tests/test_fm_transport_blob.cpp
+    )
+    target_include_directories(test_fm_transport_blob PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../gen/device_protocol
+        /tmp/flatbuffers-25.2.10/include
+    )
+    target_link_libraries(test_fm_transport_blob PRIVATE caduceus_runtime_core)
+    target_compile_features(test_fm_transport_blob PRIVATE cxx_std_17)
+    target_compile_options(test_fm_transport_blob PRIVATE -Wall)
+    add_test(NAME fm_transport COMMAND test_fm_transport_blob)
 
     # --- ggml Runtime fault propagation tests ---
 

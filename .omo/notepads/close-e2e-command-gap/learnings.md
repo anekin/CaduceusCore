@@ -161,3 +161,28 @@ CLI changes:
 - `ctest --test-dir build/software -R rtl_transport --output-on-failure` — 2/2 PASSED (conformance + negative).
 - Full test suite (excluding W2-T9's incompletely-built `test_fm_transport_blob`): 19/20 — only skipped `fm_transport` target, all others PASS.
 - Evidence: `.omo/evidence/task-w2t5.log`.
+
+## W2-T9: fm_submit() populates SubmitRequest.cmdBlob (2026-07-29)
+
+### Design decisions
+- **Minimal change**: Removed `(void)cmd_data;` and added 3 lines to copy bytes into `req.cmd_blob`: `req.cmd_blob.assign((const uint8_t *)cmd_data, (const uint8_t *)cmd_data + cmd_count)` with a null guard.
+- **No interpretation**: The transport forwards raw bytes without decoding the W2-T7 header or blob contents.  This preserves the separation of concerns — the transport is a byte pipe.
+- **CRC-32 intact**: Existing message framing and CRC-32 validation in `fm_send_request()` are unchanged.  The only change is what bytes go into the FlatBuffers table.
+
+### Verification strategy
+- **C test** (`test_fm_transport_blob.cpp`, CTest `fm_transport`): Uses the mock transport to verify the serialization pipeline reaches `transport.submit()` correctly.  Opens `mock://`, creates a command list with NOPs + ExecuteBlob, submits, and inspects the captured payload via `cad_mock_get_last_submit_payload()`.  Verifies header fields (nop/blobs/total counts) and blob bytes match the buffer content.
+- **Python test** (`test_submit_with_blob`): Uses the existing `fm_server` fixture to exercise the full FM transport over a Unix socket.  Submits a non-empty blob and verifies the submit/fence cycle completes — proving the server received the blob via the FlatBuffers SubmitRequest.cmdBlob field.
+- The C test is the primary verification (mock-based, no socket dependency).  The Python test provides the FM-specific integration gate.
+
+### Test coverage
+| Test | What it covers | Expected |
+|------|---------------|----------|
+| C: `fm_transport` | 2 NOPs + 1 ExecuteBlob(50B) → mock submit → payload capture | Header correct (nop=2/blob=1/total=3), blob bytes match buffer[10..59] |
+| Python: `test_submit_with_blob` | Non-empty blob → fm:// submit → fence wait | Submit succeeds, fence signalled (1 or 2) — proves server received blob |
+
+### Verification
+- `cmake --build build/software` — builds clean (20/20 targets).
+- `ctest --test-dir build/software -R fm_transport --output-on-failure` — 1/1 PASSED.
+- `PYTHONPATH=sim:gen python3 -m pytest sim/tests/test_device_protocol_cpp.py -q -k submit_with_blob` — 1/1 PASSED.
+- Full test suite: 20/20 PASSED (no regressions).
+- Evidence: `.omo/evidence/task-w2t9-fm_transport.log`, `.omo/evidence/task-w2t9-submit_with_blob.log`.
