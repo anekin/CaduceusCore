@@ -39,6 +39,12 @@ static const uint32_t PROTO_VERSION = 1U;
 static int g_fake_fixture_enabled = 1; /* default: fake fixture ON */
 static int g_missing_eda_mode = 0;     /* 0=pass, 1=no-vcs, 2=no-simv, 3=both */
 
+/* ── Submit capture (test surface) ──────────────────────────────────────── */
+
+static int g_rtl_capture_mode = 0;          /* 0=normal, 1=capture-only */
+static std::vector<uint8_t> g_rtl_last_submit_blob;
+static uint32_t g_rtl_last_submit_cmd_count = 0;
+
 /* ── CRC-32/IEEE ─────────────────────────────────────────────────────────── */
 
 static uint32_t crc32_table[256];
@@ -645,12 +651,23 @@ static int rtl_fence_status(void *tpriv, cad_transport_fence_t *fence) {
 
 static int rtl_submit(void *tpriv, void *cmd_data, uint32_t cmd_count,
                       cad_transport_fence_t *fence) {
-    rtl_transport_t *tr = (rtl_transport_t *)tpriv;
-    (void)cmd_data;
-
     cd::SubmitRequestT req;
     req.cmd_count = cmd_count;
     req.fence_handle = fence ? *(uint64_t *)fence : 0;
+
+    if (cmd_data) {
+        uint8_t *bytes = (uint8_t *)cmd_data;
+        req.cmd_blob.assign(bytes, bytes + cmd_count);
+    }
+
+    /* Capture for test verification — return early without socket I/O */
+    if (g_rtl_capture_mode) {
+        g_rtl_last_submit_blob = req.cmd_blob;
+        g_rtl_last_submit_cmd_count = req.cmd_count;
+        return CAD_TR_SUCCESS;
+    }
+
+    rtl_transport_t *tr = (rtl_transport_t *)tpriv;
     flatbuffers::FlatBufferBuilder inner;
     auto root = cd::SubmitRequest::Pack(inner, &req);
     inner.Finish(root);
@@ -669,6 +686,15 @@ void cad_rtl_set_fake_fixture(int enabled) {
 
 void cad_rtl_set_missing_eda(int mode) {
     g_missing_eda_mode = mode;
+}
+
+void cad_rtl_set_capture_mode(int enabled) {
+    g_rtl_capture_mode = enabled ? 1 : 0;
+}
+
+const void *cad_rtl_get_last_submit_blob(uint32_t *size) {
+    if (size) *size = g_rtl_last_submit_cmd_count;
+    return g_rtl_last_submit_blob.empty() ? NULL : g_rtl_last_submit_blob.data();
 }
 
 int cad_transport_rtl_init(void **tpriv, const char *uri) {

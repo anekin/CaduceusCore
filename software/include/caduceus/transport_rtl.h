@@ -74,6 +74,24 @@ void cad_rtl_set_fake_fixture(int enabled);
  */
 void cad_rtl_set_missing_eda(int mode);
 
+/*
+ * Enable or disable capture-only mode for submit.
+ *
+ * When enabled (non-zero), rtl_submit() populates cmd_blob but returns
+ * CAD_TR_SUCCESS *without* sending over the socket.  The last submit's
+ * cmd_blob bytes can be read via cad_rtl_get_last_submit_blob().
+ *
+ * Default: disabled (0).  For unit/integration testing only.
+ */
+void cad_rtl_set_capture_mode(int enabled);
+
+/*
+ * Return the last submit's cmd_blob bytes captured in capture mode.
+ * size receives the byte count (or 0 if no submission has occurred).
+ * Returns NULL if no blob has been captured.
+ */
+const void *cad_rtl_get_last_submit_blob(uint32_t *size);
+
 #ifdef __cplusplus
 }
 #endif

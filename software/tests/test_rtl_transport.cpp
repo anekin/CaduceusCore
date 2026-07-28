@@ -130,7 +130,48 @@ TEST(fake_fixture_toggle) {
     g_tests_passed++; /* if we get here without crash, it's a pass */
 }
 
+/* ── Submit blob-forwarding test ──────────────────────────────────────────── */
+
+TEST(submit_populates_cmd_blob) {
+    cad_rtl_set_capture_mode(1);
+
+    uint8_t payload[28];
+    uint32_t *hdr = (uint32_t *)payload;
+    hdr[0] = 2;
+    hdr[1] = 1;
+    hdr[2] = 3;
+    for (int i = 12; i < 28; i++) {
+        payload[i] = (uint8_t)i;
+    }
+
+    int err = cad_transport_rtl_ops.submit(
+        (void *)&err /* any non-NULL tpriv is safe in capture mode */,
+        payload, 28, NULL);
+    CHECK(err == CAD_TR_SUCCESS, "submit in capture mode returns SUCCESS");
+
+    uint32_t blob_size = 0;
+    const uint8_t *blob = (const uint8_t *)cad_rtl_get_last_submit_blob(&blob_size);
+    CHECK(blob != NULL, "captured blob not NULL");
+    CHECK(blob_size == 28, "captured blob size = 28");
+
+    int match = (blob != NULL) ? (memcmp(blob, payload, 28) == 0) : 0;
+    CHECK(match, "captured blob bytes match payload");
+
+    if (blob) {
+        const uint32_t *chdr = (const uint32_t *)blob;
+        CHECK(chdr[0] == 2, "captured nop_count = 2");
+        CHECK(chdr[1] == 1, "captured blob_count = 1");
+        CHECK(chdr[2] == 3, "captured total_cmd_count = 3");
+    } else {
+        g_tests_failed += 3;
+    }
+
+    cad_rtl_set_capture_mode(0);
+}
+
 /* ── Runner ───────────────────────────────────────────────────────────────── */
+
+#include <stdint.h>
 
 int main(void) {
     test_preflight_vcs_missing();
@@ -140,6 +181,7 @@ int main(void) {
     test_preflight_unsupported_uri();
     test_vtable_has_all_functions();
     test_fake_fixture_toggle();
+    test_submit_populates_cmd_blob();
 
     printf("RTL transport conformance: %d passed, %d failed\n",
            g_tests_passed, g_tests_failed);
