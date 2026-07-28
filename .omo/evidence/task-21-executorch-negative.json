@@ -1,0 +1,17 @@
+{
+  "task": "task-21-executorch-negative",
+  "device": "fm://python",
+  "cases": [
+    {
+      "case": "unsupported-partition",
+      "supported_count": 1,
+      "unsupported_count": 1,
+      "cpu_partitions": 1
+    },
+    {
+      "case": "incompatible-blob",
+      "caught_error": "bad magic: expected 0x43414442, got 0x44414544"
+    }
+  ],
+  "verdict": "PASS"
+}

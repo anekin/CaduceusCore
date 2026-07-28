@@ -1,0 +1,20 @@
+{
+  "task": "task-21-executorch",
+  "device": "fm://python",
+  "case": "qwen-subgraph",
+  "op_count": 7,
+  "supported_count": 7,
+  "npu_partitions": 1,
+  "semantic_hash": "e5f827f2a1a8aecdb8538e6e495dbf85eda5bcefbb20033ce9b83964d2a17d98",
+  "blobs": [
+    {
+      "partition_id": 0,
+      "commands": 7,
+      "buffers": 18,
+      "blob_hash": "96ff870e8636bf0b0c08bc28e3591952b920d2fbbbd6d4488e35edfc6c0d8ca9",
+      "blob_size_bytes": 1284
+    }
+  ],
+  "verdict": "PASS",
+  "note": "ExecuTorch v1.2 AOT delegate reuses Todo 11 command IR. No second descriptor compiler or transport stack introduced."
+}

@@ -1,0 +1,76 @@
+{
+  "task": 18,
+  "phase": "feasibility-only",
+  "transport": "rtl",
+  "transport_schema": {
+    "protocol": "FlatBuffers DeviceMessage",
+    "magic": "0x43414455 (CADU)",
+    "version": 1,
+    "framing": "length-prefixed (4-byte BE uint32 + payload)",
+    "checksum": "CRC-32/IEEE over wire bytes with checksum field zeroed",
+    "header_layout": "32 bytes: magic(4) + version(4) + request_id(8) + opcode(4) + payload_length(4) + status(4) + checksum(4)"
+  },
+  "fixture_mode": "mock",
+  "intended_rtl_integration_path": "rtl:// (bare) performs EDA preflight (VCS + simv_soc_top), then connects to the SoC RTL simulator via Unix socket. rtl://mock connects to the Python mock endpoint for contract validation. Full SoC RTL replay is deferred.",
+  "timestamp": "2026-07-28T01:42:55.017012+00:00",
+  "records": [
+    {
+      "matrix": "contract-conformance",
+      "device": "rtl://mock",
+      "tests_run": 8,
+      "tests_passed": 8,
+      "tests_failed": 0,
+      "verdict": "pass",
+      "results": [
+        {
+          "test": "protocol_magic",
+          "passed": true,
+          "expected": "0x43414455",
+          "actual": "0x43414455"
+        },
+        {
+          "test": "protocol_version",
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        {
+          "test": "request_id_echo",
+          "passed": true,
+          "expected": 777,
+          "actual": 777
+        },
+        {
+          "test": "opcode_echo",
+          "passed": true,
+          "expected": 10,
+          "actual": 10
+        },
+        {
+          "test": "status_ok",
+          "passed": true,
+          "expected": 0,
+          "actual": 0
+        },
+        {
+          "test": "checksum_valid",
+          "passed": true,
+          "expected": 236902751,
+          "actual": 236902751
+        },
+        {
+          "test": "buffer_alloc_handle",
+          "passed": true,
+          "expected": "> 0",
+          "actual": 1
+        },
+        {
+          "test": "bad_magic_rejected",
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        }
+      ]
+    }
+  ]
+}

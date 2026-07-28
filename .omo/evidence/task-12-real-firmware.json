@@ -1,0 +1,72 @@
+{
+  "dut": "fm",
+  "firmware_mode": "spike",
+  "prerequisites": {
+    "abi_firmware_header_hash": "9201dfa1cfed0d44aa94c37a4ce5d82ffeea12cda7efd9f2b150473f19b04465",
+    "abi_schema_hash": "cfa2ce4713a8ab2fc773ded40a9343e72260972964d84678e19267481bb3d491",
+    "abi_version": "1.0",
+    "firmware_rtl_elf_hash": "92130843b63bf71dea679dca51c0912476bce8fe348bc4a88b337631f7277498",
+    "firmware_spike_elf_hash": "b837e2628bb4497b50e9d613476aa156f30f29fe749d39cb2b07677260008165",
+    "plugin_so_hash": "f955043db35533f6270741b3c02bc59e09e98f28d1adbc0858a866707572ea73",
+    "spike_binary_hash": "427eb20f1daa86168f1ee9678ad29e82fa6d26dcaeb50981503e8edfbfe927cf"
+  },
+  "results": [
+    {
+      "details": "M=1 K=128 N=64",
+      "passed": true,
+      "scenario": "mmul_smoke",
+      "status_word": "0x00002000"
+    },
+    {
+      "details": "dim=64 sfu_op=6",
+      "passed": true,
+      "scenario": "sfu_rmsnorm",
+      "status_word": "0x00002000"
+    },
+    {
+      "details": "dim=16 op=0x0F",
+      "passed": true,
+      "scenario": "vector_vadd",
+      "status_word": "0x00002000"
+    },
+    {
+      "details": "size=64B opcode=9 status=OK",
+      "passed": true,
+      "scenario": "dma_copy",
+      "status_word": "0x00002000"
+    },
+    {
+      "details": "3/3 commands completed",
+      "passed": true,
+      "scenario": "chain_mmul_sfu_vector"
+    },
+    {
+      "details": "M=0 error status=1",
+      "passed": true,
+      "scenario": "corrupted_descriptor",
+      "status_word": "0x00002001"
+    },
+    {
+      "details": "opcode 0xFF error status=1",
+      "passed": true,
+      "scenario": "unknown_opcode",
+      "status_word": "0x00002001"
+    },
+    {
+      "details": "M=1 K=128 N=64",
+      "passed": true,
+      "scenario": "mmul_smoke",
+      "status_word": "0x00002000"
+    },
+    {
+      "details": "no_pending=True timeout_detected=False",
+      "passed": true,
+      "scenario": "timeout_behavior"
+    }
+  ],
+  "scenarios_fail": 0,
+  "scenarios_pass": 9,
+  "scenarios_total": 9,
+  "task": "task-12-real-firmware",
+  "timestamp": "2026-07-28T03:39:08.800821+00:00"
+}

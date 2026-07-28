@@ -1,0 +1,106 @@
+{
+  "task": 20,
+  "phase": "blocked",
+  "verdict": "blocked",
+  "reason": "no_fpga_platform_available",
+  "description": "FPGA platform is not available in the current development phase. No real FPGA board, bitstream, BAR/DMA access, or software replay is attempted. FPGA signoff is deferred to the FPGA-available phase.",
+  "transport_interface_readiness": {
+    "status": "ready",
+    "task_19_reference": "Todo 19 \u2014 FPGA transport interface defined with fake-fixture validation",
+    "paths": {
+      "vfio": {
+        "ready": true,
+        "validated": true,
+        "notes": "Fake VFIO open/close, buffer lifecycle, interrupt fence, and BAR validation all pass"
+      },
+      "uio": {
+        "ready": true,
+        "validated": true,
+        "notes": "Fake UIO open, poll-based fence (immediate NOT_READY, non-zero timeout resolves), and buffer ops pass"
+      },
+      "vendor_plugin": {
+        "ready": true,
+        "validated": true,
+        "notes": "Fake vendor plugin open, interrupt-like fence, and buffer lifecycle pass"
+      },
+      "fpga_none": {
+        "ready": true,
+        "validated": true,
+        "notes": "Structured NO-GO path: init returns CAD_TR_ERR_UNSUP, transport reports CAD_FPGA_NONE"
+      }
+    },
+    "conformance": {
+      "tests_run": 17,
+      "tests_passed": 17,
+      "coverage": [
+        "inventory identity",
+        "inventory BAR specs",
+        "VFIO open/close, buffer lifecycle, interrupt fence",
+        "UIO open, poll unsignalled, wait resolves",
+        "VENDOR open, interrupt fence",
+        "NO-DEVICE structured NO-GO",
+        "BAR size validation (default, larger, undersized)",
+        "device reset zeroes backing store",
+        "multiple submissions",
+        "URI variants (vfio, uio, vendor explicit)"
+      ]
+    }
+  },
+  "target_config": {
+    "path": "config/fpga-target.json",
+    "sha256": "b70f17bd6ea4814c45cdc0f05cce294bdc09c016140463c8287539bbb13a811e",
+    "board": {
+      "label": "CaduceusCore FPGA Prototype v0.1",
+      "bdf": "0000:01:00.0",
+      "vendor_id": "0xCAFE",
+      "device_id": "0xBEEF"
+    },
+    "abi_version": "1.0.0",
+    "bitstream_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "firmware_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "probe_result": {
+    "board_found": false,
+    "pci_bdf_probed": "0000:01:00.0",
+    "vendor_id_expected": "0xCAFE",
+    "device_id_expected": "0xBEEF",
+    "transport_paths_available": [
+      "vfio",
+      "uio",
+      "vendor_plugin"
+    ],
+    "transport_paths_actual": [],
+    "error": "No compatible FPGA board detected on any transport path",
+    "error_type": "CAD_TR_ERR_UNSUP"
+  },
+  "deferred_items": [
+    "real BAR mmap via VFIO/UIO on physical FPGA board",
+    "DMA descriptor submission and completion",
+    "interrupt-based fence from physical MSI-X",
+    "bitstream programming and verification",
+    "firmware upload to NPU and boot handshake",
+    "full PCIe Gen4 x4 link training and throughput measurement"
+  ],
+  "blocking_dependencies": [
+    "FPGA bitstream (hardware team, TBD)",
+    "Physical board assembly and power-on",
+    "PCIe Gen4 x4 link training on target platform",
+    "VFIO/UIO driver binding for FPGA function",
+    "Bitstream hash verification",
+    "Firmware upload and boot handshake",
+    "BAR mmap and DMA descriptor submission"
+  ],
+  "future_signoff_requirements": {
+    "required_gates": [
+      "board_probe: BDF matches config, vendor/device IDs match",
+      "bitstream_hash: programmed bitstream SHA-256 matches config",
+      "firmware_hash: loaded firmware ELF SHA-256 matches config",
+      "bar_access: all expected BARs mmap-able with correct sizes",
+      "dma_submission: at least one complete descriptor cycle",
+      "interrupt_test: MSI-X or UIO poll-based fence resolves",
+      "abi_version: firmware ABI version is compatible"
+    ],
+    "comparison_policy": "Func Model output is golden reference; FPGA output must match within tolerance. RTL simulation vs FPGA cross-check also required."
+  },
+  "timestamp": "2026-07-28T02:20:20.682314+00:00"
+}

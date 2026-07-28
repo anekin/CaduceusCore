@@ -1,0 +1,17 @@
+{
+  "checks": [
+    {
+      "description": "Detects tampered or substituted GGUF model file",
+      "detected": true,
+      "name": "model_hash_mismatch"
+    },
+    {
+      "description": "Detects unsupported FuncModel transport URI",
+      "detected": true,
+      "name": "unsupported_device_uri",
+      "uri": "fm://unsupported-backend"
+    }
+  ],
+  "utc": "2026-07-28T03:36:15Z",
+  "verdict": "pass"
+}

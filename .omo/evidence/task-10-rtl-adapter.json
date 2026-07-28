@@ -1,0 +1,648 @@
+{
+  "dut_type": "rtl",
+  "phase": "feasibility-only",
+  "records": [
+    {
+      "abi_version": 2,
+      "actual_observations": [
+        {
+          "address": 1073741824,
+          "data": {
+            "value": 1
+          },
+          "observation_id": "mxu_ctrl",
+          "observation_type": "mmio_value"
+        }
+      ],
+      "dut_adapter": "FakeDUT",
+      "firmware_mode": "fake",
+      "metadata": {
+        "failed_checks": 0,
+        "failures": [],
+        "passed_checks": 1,
+        "scenario_id": "adapter-smoke-mmio"
+      },
+      "record_id": "ev_adapter-smoke-mmio_20260727T105723",
+      "timestamp": "2026-07-27T10:57:23.888388+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [
+        {
+          "address": 256,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "48454c4c4f5f5352414d5f544553545f31323334353637383930414243444546"
+          },
+          "observation_id": "sram_data",
+          "observation_type": "sram_data",
+          "size": 32
+        }
+      ],
+      "dut_adapter": "FakeDUT",
+      "firmware_mode": "fake",
+      "metadata": {
+        "failed_checks": 0,
+        "failures": [],
+        "passed_checks": 1,
+        "scenario_id": "adapter-smoke-sram"
+      },
+      "record_id": "ev_adapter-smoke-sram_20260727T105723",
+      "timestamp": "2026-07-27T10:57:23.888461+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [
+        {
+          "address": 8192,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
+          },
+          "observation_id": "dram_data",
+          "observation_type": "dram_data",
+          "size": 128
+        }
+      ],
+      "dut_adapter": "FakeDUT",
+      "firmware_mode": "fake",
+      "metadata": {
+        "failed_checks": 0,
+        "failures": [],
+        "passed_checks": 1,
+        "scenario_id": "adapter-smoke-dram"
+      },
+      "record_id": "ev_adapter-smoke-dram_20260727T105723",
+      "timestamp": "2026-07-27T10:57:23.888507+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [
+        {
+          "data": {
+            "status": 2
+          },
+          "observation_id": "completion",
+          "observation_type": "completion_status"
+        }
+      ],
+      "dut_adapter": "FakeDUT",
+      "firmware_mode": "fake",
+      "metadata": {
+        "failed_checks": 0,
+        "failures": [],
+        "passed_checks": 1,
+        "scenario_id": "adapter-smoke-doorbell"
+      },
+      "record_id": "ev_adapter-smoke-doorbell_20260727T105723",
+      "timestamp": "2026-07-27T10:57:23.888553+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [
+        {
+          "address": 1073741824,
+          "data": {
+            "value": 3735928559
+          },
+          "observation_id": "mxu_ctrl",
+          "observation_type": "mmio_value"
+        },
+        {
+          "address": 1073745920,
+          "data": {
+            "value": 3405691582
+          },
+          "observation_id": "sfu_ctrl",
+          "observation_type": "mmio_value"
+        },
+        {
+          "address": 0,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "01020304010203040102030401020304"
+          },
+          "observation_id": "sram_0",
+          "observation_type": "sram_data",
+          "size": 16
+        },
+        {
+          "address": 256,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "ffeeddccffeeddccffeeddccffeeddcc"
+          },
+          "observation_id": "sram_100",
+          "observation_type": "sram_data",
+          "size": 16
+        },
+        {
+          "data": {
+            "status": 2
+          },
+          "observation_id": "completion",
+          "observation_type": "completion_status"
+        }
+      ],
+      "dut_adapter": "FakeDUT",
+      "firmware_mode": "fake",
+      "metadata": {
+        "failed_checks": 0,
+        "failures": [],
+        "passed_checks": 5,
+        "scenario_id": "adapter-smoke-multi"
+      },
+      "record_id": "ev_adapter-smoke-multi_20260727T105723",
+      "timestamp": "2026-07-27T10:57:23.888638+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [],
+      "dut_adapter": "FakeDUT",
+      "firmware_mode": "fake",
+      "metadata": {
+        "failed_checks": 0,
+        "failures": [],
+        "passed_checks": 0,
+        "scenario_id": "adapter-smoke-diag-reject"
+      },
+      "record_id": "ev_adapter-smoke-diag-reject_20260727T105723",
+      "timestamp": "2026-07-27T10:57:23.888680+00:00",
+      "verdict": "pass"
+    }
+  ],
+  "scenario_details": {
+    "adapter-smoke-diag-reject": {
+      "actions": [],
+      "description": "Diagnostic action rejection \u2014 tested at adapter level, not via scenario validation",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [],
+          "dut_adapter": "FakeDUT",
+          "firmware_mode": "fake",
+          "metadata": {
+            "failed_checks": 0,
+            "failures": [],
+            "passed_checks": 0,
+            "scenario_id": "adapter-smoke-diag-reject"
+          },
+          "record_id": "ev_adapter-smoke-diag-reject_20260727T105723",
+          "timestamp": "2026-07-27T10:57:23.888680+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [],
+      "metadata": {},
+      "provenance": {
+        "created_at": "2026-07-27T10:57:23.888295+00:00"
+      },
+      "scenario_id": "adapter-smoke-diag-reject",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "adapter-smoke-doorbell": {
+      "actions": [
+        {
+          "action_type": "doorbell",
+          "classification": "frontdoor",
+          "parameters": {
+            "host_tail": 3
+          }
+        },
+        {
+          "action_type": "wait_irq",
+          "classification": "frontdoor",
+          "parameters": {
+            "source": 0
+          }
+        }
+      ],
+      "description": "Doorbell backdoor write, trigger IRQ, verify completion",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [
+            {
+              "data": {
+                "status": 2
+              },
+              "observation_id": "completion",
+              "observation_type": "completion_status"
+            }
+          ],
+          "dut_adapter": "FakeDUT",
+          "firmware_mode": "fake",
+          "metadata": {
+            "failed_checks": 0,
+            "failures": [],
+            "passed_checks": 1,
+            "scenario_id": "adapter-smoke-doorbell"
+          },
+          "record_id": "ev_adapter-smoke-doorbell_20260727T105723",
+          "timestamp": "2026-07-27T10:57:23.888553+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [
+        {
+          "data": {
+            "status": 2
+          },
+          "observation_id": "completion",
+          "observation_type": "completion_status"
+        }
+      ],
+      "metadata": {},
+      "provenance": {
+        "created_at": "2026-07-27T10:57:23.888247+00:00"
+      },
+      "scenario_id": "adapter-smoke-doorbell",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "adapter-smoke-dram": {
+      "actions": [
+        {
+          "action_type": "dram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f",
+            "offset": 8192
+          }
+        }
+      ],
+      "description": "DRAM preload via init backdoor, verify readback",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [
+            {
+              "address": 8192,
+              "data": {
+                "dtype": "int32",
+                "raw_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
+              },
+              "observation_id": "dram_data",
+              "observation_type": "dram_data",
+              "size": 128
+            }
+          ],
+          "dut_adapter": "FakeDUT",
+          "firmware_mode": "fake",
+          "metadata": {
+            "failed_checks": 0,
+            "failures": [],
+            "passed_checks": 1,
+            "scenario_id": "adapter-smoke-dram"
+          },
+          "record_id": "ev_adapter-smoke-dram_20260727T105723",
+          "timestamp": "2026-07-27T10:57:23.888507+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [
+        {
+          "address": 8192,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
+          },
+          "observation_id": "dram_data",
+          "observation_type": "dram_data",
+          "size": 128
+        }
+      ],
+      "metadata": {},
+      "provenance": {
+        "created_at": "2026-07-27T10:57:23.888227+00:00"
+      },
+      "scenario_id": "adapter-smoke-dram",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "adapter-smoke-mmio": {
+      "actions": [
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741824,
+            "value": 1
+          }
+        }
+      ],
+      "description": "MMIO write to MXU CTRL, read back, compare",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [
+            {
+              "address": 1073741824,
+              "data": {
+                "value": 1
+              },
+              "observation_id": "mxu_ctrl",
+              "observation_type": "mmio_value"
+            }
+          ],
+          "dut_adapter": "FakeDUT",
+          "firmware_mode": "fake",
+          "metadata": {
+            "failed_checks": 0,
+            "failures": [],
+            "passed_checks": 1,
+            "scenario_id": "adapter-smoke-mmio"
+          },
+          "record_id": "ev_adapter-smoke-mmio_20260727T105723",
+          "timestamp": "2026-07-27T10:57:23.888388+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [
+        {
+          "address": 1073741824,
+          "data": {
+            "value": 1
+          },
+          "observation_id": "mxu_ctrl",
+          "observation_type": "mmio_value"
+        }
+      ],
+      "metadata": {},
+      "provenance": {
+        "created_at": "2026-07-27T10:57:23.888161+00:00"
+      },
+      "scenario_id": "adapter-smoke-mmio",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "adapter-smoke-multi": {
+      "actions": [
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741824,
+            "value": 3735928559
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073745920,
+            "value": 3405691582
+          }
+        },
+        {
+          "action_type": "sram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "01020304010203040102030401020304",
+            "offset": 0
+          }
+        },
+        {
+          "action_type": "sram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "ffeeddccffeeddccffeeddccffeeddcc",
+            "offset": 256
+          }
+        },
+        {
+          "action_type": "poll_status",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741832,
+            "mask": 2,
+            "timeout_cycles": 100
+          }
+        }
+      ],
+      "description": "Sequential MMIO writes + SRAM preloads, verify all",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [
+            {
+              "address": 1073741824,
+              "data": {
+                "value": 3735928559
+              },
+              "observation_id": "mxu_ctrl",
+              "observation_type": "mmio_value"
+            },
+            {
+              "address": 1073745920,
+              "data": {
+                "value": 3405691582
+              },
+              "observation_id": "sfu_ctrl",
+              "observation_type": "mmio_value"
+            },
+            {
+              "address": 0,
+              "data": {
+                "dtype": "int32",
+                "raw_hex": "01020304010203040102030401020304"
+              },
+              "observation_id": "sram_0",
+              "observation_type": "sram_data",
+              "size": 16
+            },
+            {
+              "address": 256,
+              "data": {
+                "dtype": "int32",
+                "raw_hex": "ffeeddccffeeddccffeeddccffeeddcc"
+              },
+              "observation_id": "sram_100",
+              "observation_type": "sram_data",
+              "size": 16
+            },
+            {
+              "data": {
+                "status": 2
+              },
+              "observation_id": "completion",
+              "observation_type": "completion_status"
+            }
+          ],
+          "dut_adapter": "FakeDUT",
+          "firmware_mode": "fake",
+          "metadata": {
+            "failed_checks": 0,
+            "failures": [],
+            "passed_checks": 5,
+            "scenario_id": "adapter-smoke-multi"
+          },
+          "record_id": "ev_adapter-smoke-multi_20260727T105723",
+          "timestamp": "2026-07-27T10:57:23.888638+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [
+        {
+          "address": 1073741824,
+          "data": {
+            "value": 3735928559
+          },
+          "observation_id": "mxu_ctrl",
+          "observation_type": "mmio_value"
+        },
+        {
+          "address": 1073745920,
+          "data": {
+            "value": 3405691582
+          },
+          "observation_id": "sfu_ctrl",
+          "observation_type": "mmio_value"
+        },
+        {
+          "address": 0,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "01020304010203040102030401020304"
+          },
+          "observation_id": "sram_0",
+          "observation_type": "sram_data",
+          "size": 16
+        },
+        {
+          "address": 256,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "ffeeddccffeeddccffeeddccffeeddcc"
+          },
+          "observation_id": "sram_100",
+          "observation_type": "sram_data",
+          "size": 16
+        },
+        {
+          "address": 1073741832,
+          "data": {
+            "status": 2
+          },
+          "observation_id": "completion",
+          "observation_type": "completion_status"
+        }
+      ],
+      "metadata": {},
+      "provenance": {
+        "created_at": "2026-07-27T10:57:23.888285+00:00"
+      },
+      "scenario_id": "adapter-smoke-multi",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "adapter-smoke-sram": {
+      "actions": [
+        {
+          "action_type": "sram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "48454c4c4f5f5352414d5f544553545f31323334353637383930414243444546",
+            "offset": 256
+          }
+        }
+      ],
+      "description": "SRAM preload via init backdoor, verify readback",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [
+            {
+              "address": 256,
+              "data": {
+                "dtype": "int32",
+                "raw_hex": "48454c4c4f5f5352414d5f544553545f31323334353637383930414243444546"
+              },
+              "observation_id": "sram_data",
+              "observation_type": "sram_data",
+              "size": 32
+            }
+          ],
+          "dut_adapter": "FakeDUT",
+          "firmware_mode": "fake",
+          "metadata": {
+            "failed_checks": 0,
+            "failures": [],
+            "passed_checks": 1,
+            "scenario_id": "adapter-smoke-sram"
+          },
+          "record_id": "ev_adapter-smoke-sram_20260727T105723",
+          "timestamp": "2026-07-27T10:57:23.888461+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [
+        {
+          "address": 256,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "48454c4c4f5f5352414d5f544553545f31323334353637383930414243444546"
+          },
+          "observation_id": "sram_data",
+          "observation_type": "sram_data",
+          "size": 32
+        }
+      ],
+      "metadata": {},
+      "provenance": {
+        "created_at": "2026-07-27T10:57:23.888201+00:00"
+      },
+      "scenario_id": "adapter-smoke-sram",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    }
+  },
+  "scenarios_error": 0,
+  "scenarios_fail": 0,
+  "scenarios_pass": 6,
+  "scenarios_total": 6,
+  "task": "task-10-rtl-adapter",
+  "timestamp": "2026-07-27T10:57:23.888849+00:00"
+}

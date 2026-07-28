@@ -1,0 +1,928 @@
+{
+  "dut_type": "fm",
+  "firmware_mode": "python",
+  "phase": "feasibility-only",
+  "records": [
+    {
+      "adapter_name": "FuncModel",
+      "detected_faults": [],
+      "divergences": [],
+      "gate_pass": true,
+      "golden_name": "MemoryGoldenOracle",
+      "injection_applied": false,
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 0,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 1
+        },
+        "backdoor_classification": {},
+        "dram_mb": 64,
+        "expected_fault": null,
+        "fault_class": null,
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "golden_inputs": null,
+        "injection_applied": false,
+        "scenario_content_hash": "cc82942f56fe531f",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "scenario_id": "diff-apb-mmio",
+      "scoreboard": {
+        "failed_checks": 0,
+        "failures": [],
+        "passed": true,
+        "passed_checks": 1,
+        "total_checks": 1
+      }
+    },
+    {
+      "adapter_name": "FuncModel",
+      "detected_faults": [],
+      "divergences": [],
+      "gate_pass": true,
+      "golden_name": "MemoryGoldenOracle",
+      "injection_applied": false,
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 0,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 2
+        },
+        "backdoor_classification": {},
+        "dram_mb": 64,
+        "expected_fault": null,
+        "fault_class": null,
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "golden_inputs": null,
+        "injection_applied": false,
+        "scenario_content_hash": "970e86871673bf60",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "scenario_id": "diff-pcie-bar",
+      "scoreboard": {
+        "failed_checks": 0,
+        "failures": [],
+        "passed": true,
+        "passed_checks": 1,
+        "total_checks": 1
+      }
+    },
+    {
+      "adapter_name": "FuncModel",
+      "detected_faults": [],
+      "divergences": [],
+      "gate_pass": true,
+      "golden_name": "GoldenExecutorOracle",
+      "injection_applied": false,
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 2,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 11
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "dram_mb": 64,
+        "expected_fault": null,
+        "fault_class": null,
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "golden_inputs": "mmul",
+        "injection_applied": false,
+        "scenario_content_hash": "3950787f6a03a9c3",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "scenario_id": "diff-mmul",
+      "scoreboard": {
+        "failed_checks": 0,
+        "failures": [],
+        "passed": true,
+        "passed_checks": 1,
+        "total_checks": 1
+      }
+    },
+    {
+      "adapter_name": "FuncModel",
+      "detected_faults": [],
+      "divergences": [],
+      "gate_pass": true,
+      "golden_name": "GoldenExecutorOracle",
+      "injection_applied": false,
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 3,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 17
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "dram_mb": 64,
+        "expected_fault": null,
+        "fault_class": null,
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "golden_inputs": "sfu_softmax",
+        "injection_applied": false,
+        "scenario_content_hash": "0488de3f5a8d253c",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "scenario_id": "diff-sfu-softmax",
+      "scoreboard": {
+        "failed_checks": 0,
+        "failures": [],
+        "passed": true,
+        "passed_checks": 1,
+        "total_checks": 1
+      }
+    },
+    {
+      "adapter_name": "FuncModel",
+      "detected_faults": [],
+      "divergences": [],
+      "gate_pass": true,
+      "golden_name": "GoldenExecutorOracle",
+      "injection_applied": false,
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 5,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 24
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "dram_mb": 64,
+        "expected_fault": null,
+        "fault_class": null,
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "golden_inputs": "vector_vadd",
+        "injection_applied": false,
+        "scenario_content_hash": "78c0c8e019b64c4f",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "scenario_id": "diff-vector-add",
+      "scoreboard": {
+        "failed_checks": 0,
+        "failures": [],
+        "passed": true,
+        "passed_checks": 1,
+        "total_checks": 1
+      }
+    },
+    {
+      "adapter_name": "FuncModel",
+      "detected_faults": [],
+      "divergences": [],
+      "gate_pass": true,
+      "golden_name": "GoldenExecutorOracle",
+      "injection_applied": false,
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 6,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 29
+        },
+        "backdoor_classification": {
+          "dram_preload": "backdoor_write_bytes",
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "dram_mb": 64,
+        "expected_fault": null,
+        "fault_class": null,
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "golden_inputs": "dma_copy",
+        "injection_applied": false,
+        "scenario_content_hash": "1ad9c010dd17b186",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "scenario_id": "diff-dma-copy",
+      "scoreboard": {
+        "failed_checks": 0,
+        "failures": [],
+        "passed": true,
+        "passed_checks": 1,
+        "total_checks": 1
+      }
+    },
+    {
+      "adapter_name": "FuncModel",
+      "detected_faults": [],
+      "divergences": [],
+      "gate_pass": true,
+      "golden_name": "MemoryGoldenOracle",
+      "injection_applied": false,
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 6,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 31
+        },
+        "backdoor_classification": {
+          "dram_preload": "backdoor_write_bytes",
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "dram_mb": 64,
+        "expected_fault": null,
+        "fault_class": null,
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "golden_inputs": null,
+        "injection_applied": false,
+        "scenario_content_hash": "bfda5f3abeda9207",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "scenario_id": "diff-command-ring",
+      "scoreboard": {
+        "failed_checks": 0,
+        "failures": [],
+        "passed": true,
+        "passed_checks": 1,
+        "total_checks": 1
+      }
+    },
+    {
+      "adapter_name": "FuncModel",
+      "detected_faults": [],
+      "divergences": [
+        {
+          "actual": {
+            "dtype": "int32",
+            "raw_hex": "55555555aaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "classification": "transport",
+          "expected": {
+            "dtype": "int32",
+            "raw_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "explanation": "INT32 bit-exact mismatch (4 bytes differ)",
+          "observation_id": "sram_corrupt"
+        }
+      ],
+      "gate_pass": true,
+      "golden_name": "MemoryGoldenOracle",
+      "injection_applied": true,
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 7,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 31
+        },
+        "backdoor_classification": {
+          "dram_preload": "backdoor_write_bytes",
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "dram_mb": 64,
+        "expected_fault": "data_corruption",
+        "fault_class": "data_corruption",
+        "fault_injection_records": [
+          {
+            "detected_by_scoreboard": false,
+            "detected_classification": null,
+            "fault_class": "data_corruption",
+            "injection_applied": true,
+            "injection_params": {
+              "count": 4,
+              "offset": 0
+            }
+          }
+        ],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "golden_inputs": null,
+        "injection_applied": true,
+        "scenario_content_hash": "5e34cdc6b7ea241a",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "scenario_id": "diff-fault-data-corruption",
+      "scoreboard": {
+        "failed_checks": 1,
+        "failures": [
+          {
+            "actual_hex": "55555555aaaaaaaaaaaaaaaaaaaaaaaa",
+            "expected_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "message": "INT32 bit-exact mismatch (4 bytes differ)",
+            "observation_id": "sram_corrupt"
+          }
+        ],
+        "passed": false,
+        "passed_checks": 0,
+        "total_checks": 1
+      }
+    }
+  ],
+  "scenario_details": {
+    "diff-apb-mmio": {
+      "actions": [
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741824,
+            "value": 305419896
+          }
+        }
+      ],
+      "description": "APB MMIO write/readback to MXU CTRL",
+      "evidence": [],
+      "expected_observations": [
+        {
+          "address": 1073741824,
+          "data": {
+            "value": 305419896
+          },
+          "observation_id": "mxu_ctrl",
+          "observation_type": "mmio_value"
+        }
+      ],
+      "metadata": {
+        "scenario_content_hash": ""
+      },
+      "provenance": {
+        "created_at": "2026-07-27T23:40:45.181495+00:00"
+      },
+      "scenario_id": "diff-apb-mmio",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "diff-command-ring": {
+      "actions": [
+        {
+          "action_type": "doorbell",
+          "classification": "frontdoor",
+          "parameters": {
+            "host_tail": 1
+          }
+        },
+        {
+          "action_type": "wait_irq",
+          "classification": "frontdoor",
+          "parameters": {
+            "source": 8
+          }
+        }
+      ],
+      "description": "Host doorbell write triggers firmware dispatch path",
+      "evidence": [],
+      "expected_observations": [
+        {
+          "address": 1073762304,
+          "data": {
+            "value": 1
+          },
+          "observation_id": "host_tail",
+          "observation_type": "mmio_value"
+        }
+      ],
+      "metadata": {
+        "scenario_content_hash": ""
+      },
+      "provenance": {
+        "created_at": "2026-07-27T23:40:45.196334+00:00"
+      },
+      "scenario_id": "diff-command-ring",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "diff-dma-copy": {
+      "actions": [
+        {
+          "action_type": "dram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "000102030405060708090a0b0c0d0e0f",
+            "offset": 12288
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073754128,
+            "value": 2147495936
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073754132,
+            "value": 536907776
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073754136,
+            "value": 16
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073754116,
+            "value": 1
+          }
+        },
+        {
+          "action_type": "poll_status",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073754120,
+            "mask": 2,
+            "timeout_cycles": 100000
+          }
+        }
+      ],
+      "description": "DMA load DRAM\u2192SRAM through MMIO frontdoor",
+      "evidence": [],
+      "expected_observations": [
+        {
+          "address": 36864,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "000102030405060708090a0b0c0d0e0f"
+          },
+          "observation_id": "dma_sram",
+          "observation_type": "sram_data",
+          "size": 16
+        }
+      ],
+      "metadata": {
+        "scenario_content_hash": ""
+      },
+      "provenance": {
+        "created_at": "2026-07-27T23:40:45.196321+00:00"
+      },
+      "scenario_id": "diff-dma-copy",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "diff-fault-data-corruption": {
+      "actions": [
+        {
+          "action_type": "sram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "offset": 40960
+          }
+        }
+      ],
+      "description": "Fault-injected SRAM data corruption detected as divergence",
+      "evidence": [],
+      "expected_observations": [
+        {
+          "address": 40960,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "observation_id": "sram_corrupt",
+          "observation_type": "sram_data",
+          "size": 16
+        }
+      ],
+      "metadata": {
+        "expected_classification": "data_corruption",
+        "fault_class": "data_corruption",
+        "fault_params": {
+          "count": 4,
+          "offset": 0
+        },
+        "scenario_content_hash": ""
+      },
+      "provenance": {
+        "created_at": "2026-07-27T23:40:45.196346+00:00"
+      },
+      "scenario_id": "diff-fault-data-corruption",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "diff-mmul": {
+      "actions": [
+        {
+          "action_type": "sram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "01fcfe05fefdfe00",
+            "offset": 4096
+          }
+        },
+        {
+          "action_type": "sram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "c23bcff164194c03eef801aa9af7ce1f",
+            "offset": 8192
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741824,
+            "value": 0
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741836,
+            "value": 524289
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741840,
+            "value": 4
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741844,
+            "value": 536875008
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741848,
+            "value": 536879104
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741852,
+            "value": 536883200
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741860,
+            "value": 0
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741828,
+            "value": 1
+          }
+        },
+        {
+          "action_type": "poll_status",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741832,
+            "mask": 2,
+            "timeout_cycles": 100000
+          }
+        }
+      ],
+      "description": "MMUL INT4xINT8\u2192INT32 through MMIO frontdoor",
+      "evidence": [],
+      "expected_observations": [
+        {
+          "address": 12288,
+          "data": {
+            "dtype": "int32"
+          },
+          "observation_id": "mmul_out",
+          "observation_type": "sram_data",
+          "size": 16
+        }
+      ],
+      "metadata": {
+        "scenario_content_hash": ""
+      },
+      "provenance": {
+        "created_at": "2026-07-27T23:40:45.196148+00:00"
+      },
+      "scenario_id": "diff-mmul",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "diff-pcie-bar": {
+      "actions": [
+        {
+          "action_type": "pcie_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 2147487744,
+            "data_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+          }
+        }
+      ],
+      "description": "PCIe TLP write to DRAM, read back via obs backdoor",
+      "evidence": [],
+      "expected_observations": [
+        {
+          "address": 4096,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+          },
+          "observation_id": "pcie_dram",
+          "observation_type": "dram_data",
+          "size": 32
+        }
+      ],
+      "metadata": {
+        "scenario_content_hash": ""
+      },
+      "provenance": {
+        "created_at": "2026-07-27T23:40:45.181530+00:00"
+      },
+      "scenario_id": "diff-pcie-bar",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "diff-sfu-softmax": {
+      "actions": [
+        {
+          "action_type": "sram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "00bcefbadeb9cdb877b755b566b244ac442c663255357737cd38de39ef3a003c",
+            "offset": 16384
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073745920,
+            "value": 0
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073745932,
+            "value": 536887296
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073745936,
+            "value": 536891392
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073745940,
+            "value": 16
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073745924,
+            "value": 1
+          }
+        },
+        {
+          "action_type": "poll_status",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073745928,
+            "mask": 2,
+            "timeout_cycles": 100000
+          }
+        }
+      ],
+      "description": "SFU Softmax through MMIO frontdoor",
+      "evidence": [],
+      "expected_observations": [
+        {
+          "address": 20480,
+          "data": {
+            "dtype": "fp16"
+          },
+          "observation_id": "softmax_out",
+          "observation_type": "sram_data",
+          "size": 32
+        }
+      ],
+      "metadata": {
+        "scenario_content_hash": ""
+      },
+      "provenance": {
+        "created_at": "2026-07-27T23:40:45.196259+00:00"
+      },
+      "scenario_id": "diff-sfu-softmax",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": false
+      }
+    },
+    "diff-vector-add": {
+      "actions": [
+        {
+          "action_type": "sram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "0000000001000000020000000300000004000000050000000600000007000000",
+            "offset": 24576
+          }
+        },
+        {
+          "action_type": "sram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "00000000020000000400000006000000080000000a0000000c0000000e000000",
+            "offset": 28672
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073750016,
+            "value": 0
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073750028,
+            "value": 536895488
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073750032,
+            "value": 536899584
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073750036,
+            "value": 536903680
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073750040,
+            "value": 8
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073750020,
+            "value": 1
+          }
+        },
+        {
+          "action_type": "poll_status",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073750024,
+            "mask": 2,
+            "timeout_cycles": 100000
+          }
+        }
+      ],
+      "description": "Vector element-wise ADD through MMIO frontdoor",
+      "evidence": [],
+      "expected_observations": [
+        {
+          "address": 32768,
+          "data": {
+            "dtype": "int32"
+          },
+          "observation_id": "vadd_out",
+          "observation_type": "sram_data",
+          "size": 32
+        }
+      ],
+      "metadata": {
+        "scenario_content_hash": ""
+      },
+      "provenance": {
+        "created_at": "2026-07-27T23:40:45.196298+00:00"
+      },
+      "scenario_id": "diff-vector-add",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    }
+  },
+  "scenarios_error": 0,
+  "scenarios_fail": 0,
+  "scenarios_pass": 8,
+  "scenarios_total": 8,
+  "task": "task-14-differential",
+  "test_matrix": "software-functional",
+  "timestamp": "2026-07-27T23:40:45.292018+00:00"
+}

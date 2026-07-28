@@ -1,0 +1,1307 @@
+{
+  "dut_type": "fm",
+  "firmware_mode": "python",
+  "phase": "conformance",
+  "records": [
+    {
+      "abi_version": 2,
+      "actual_observations": [
+        {
+          "address": 512,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "fefefefe010101010101010101010101"
+          },
+          "observation_id": "sram_corrupt",
+          "observation_type": "sram_data",
+          "size": 16
+        }
+      ],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 1,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 0
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "classification_correct": true,
+        "detected_faults": [],
+        "dram_mb": 64,
+        "expected_classification": "data_corruption",
+        "failed_checks": 1,
+        "failures": [
+          {
+            "message": "Missing raw_hex data for comparison",
+            "observation_id": "sram_corrupt"
+          }
+        ],
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "injection_applied": true,
+        "passed_checks": 0,
+        "scenario_id": "fault-data-corruption",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fault-data-corruption_20260727T225226",
+      "timestamp": "2026-07-27T22:52:26.389930+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 1,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 1
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "classification_correct": true,
+        "detected_faults": [],
+        "dram_mb": 64,
+        "expected_classification": "wrong_descriptor",
+        "failed_checks": 0,
+        "failures": [],
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "injection_applied": true,
+        "passed_checks": 0,
+        "scenario_id": "fault-wrong-descriptor",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fault-wrong-descriptor_20260727T225226",
+      "timestamp": "2026-07-27T22:52:26.390046+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 1,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 2
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "classification_correct": true,
+        "detected_faults": [],
+        "dram_mb": 64,
+        "expected_classification": "unsupported_opcode",
+        "failed_checks": 0,
+        "failures": [],
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "injection_applied": true,
+        "passed_checks": 0,
+        "scenario_id": "fault-unsupported-opcode",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fault-unsupported-opcode_20260727T225226",
+      "timestamp": "2026-07-27T22:52:26.390118+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 1,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 3
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "classification_correct": true,
+        "detected_faults": [],
+        "dram_mb": 64,
+        "expected_classification": "ring_overflow",
+        "failed_checks": 0,
+        "failures": [],
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "injection_applied": true,
+        "passed_checks": 0,
+        "scenario_id": "fault-ring-overflow",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fault-ring-overflow_20260727T225226",
+      "timestamp": "2026-07-27T22:52:26.390173+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 1,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 5
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "classification_correct": true,
+        "detected_faults": [],
+        "dram_mb": 64,
+        "expected_classification": "stalled_head",
+        "failed_checks": 0,
+        "failures": [],
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "injection_applied": true,
+        "passed_checks": 0,
+        "scenario_id": "fault-stalled-head",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fault-stalled-head_20260727T225226",
+      "timestamp": "2026-07-27T22:52:26.390299+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [
+        {
+          "data": {
+            "status": 15
+          },
+          "observation_id": "comp",
+          "observation_type": "completion_status"
+        }
+      ],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 1,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 6
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "classification_correct": true,
+        "detected_faults": [
+          "wrong_completion"
+        ],
+        "dram_mb": 64,
+        "expected_classification": "wrong_completion",
+        "failed_checks": 1,
+        "failures": [
+          {
+            "actual": 15,
+            "expected": 2,
+            "message": "Completion status mismatch",
+            "observation_id": "comp"
+          }
+        ],
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "injection_applied": true,
+        "passed_checks": 0,
+        "scenario_id": "fault-wrong-completion",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fault-wrong-completion_20260727T225226",
+      "timestamp": "2026-07-27T22:52:26.390367+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 1,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 8
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "classification_correct": true,
+        "detected_faults": [],
+        "dram_mb": 64,
+        "expected_classification": "dropped_interrupt",
+        "failed_checks": 0,
+        "failures": [],
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "injection_applied": true,
+        "passed_checks": 0,
+        "scenario_id": "fault-dropped-interrupt",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fault-dropped-interrupt_20260727T225226",
+      "timestamp": "2026-07-27T22:52:26.390446+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 1,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 10
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "classification_correct": true,
+        "detected_faults": [],
+        "dram_mb": 64,
+        "expected_classification": "duplicated_interrupt",
+        "failed_checks": 0,
+        "failures": [],
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "injection_applied": true,
+        "passed_checks": 0,
+        "scenario_id": "fault-duplicated-interrupt",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fault-duplicated-interrupt_20260727T225226",
+      "timestamp": "2026-07-27T22:52:26.390574+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 1,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 11
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "classification_correct": true,
+        "detected_faults": [],
+        "dram_mb": 64,
+        "expected_classification": "timeout",
+        "failed_checks": 0,
+        "failures": [],
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "injection_applied": true,
+        "passed_checks": 0,
+        "scenario_id": "fault-timeout",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fault-timeout_20260727T225226",
+      "timestamp": "2026-07-27T22:52:26.390619+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [
+        {
+          "data": {
+            "status": 57005
+          },
+          "observation_id": "comp",
+          "observation_type": "completion_status"
+        }
+      ],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 1,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 12
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "classification_correct": true,
+        "detected_faults": [
+          "engine_error"
+        ],
+        "dram_mb": 64,
+        "expected_classification": "engine_error",
+        "failed_checks": 1,
+        "failures": [
+          {
+            "actual": 57005,
+            "expected": 2,
+            "message": "Completion status mismatch",
+            "observation_id": "comp"
+          }
+        ],
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "injection_applied": true,
+        "passed_checks": 0,
+        "scenario_id": "fault-engine-error",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fault-engine-error_20260727T225226",
+      "timestamp": "2026-07-27T22:52:26.390676+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 0,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 0
+        },
+        "backdoor_classification": {},
+        "classification_correct": true,
+        "detected_faults": [],
+        "dram_mb": 64,
+        "expected_classification": "reset_during_command",
+        "failed_checks": 0,
+        "failures": [],
+        "fault_injection_records": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "injection_applied": true,
+        "passed_checks": 0,
+        "scenario_id": "fault-reset-during-command",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fault-reset-during-command_20260727T225226",
+      "timestamp": "2026-07-27T22:52:26.431967+00:00",
+      "verdict": "pass"
+    }
+  ],
+  "scenario_details": {
+    "fault-data-corruption": {
+      "actions": [
+        {
+          "action_type": "sram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "01010101010101010101010101010101",
+            "offset": 512
+          }
+        }
+      ],
+      "description": "Data corruption in SRAM preload",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [
+            {
+              "address": 512,
+              "data": {
+                "dtype": "int32",
+                "raw_hex": "fefefefe010101010101010101010101"
+              },
+              "observation_id": "sram_corrupt",
+              "observation_type": "sram_data",
+              "size": 16
+            }
+          ],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 1,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 0
+            },
+            "backdoor_classification": {
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "classification_correct": true,
+            "detected_faults": [],
+            "dram_mb": 64,
+            "expected_classification": "data_corruption",
+            "failed_checks": 1,
+            "failures": [
+              {
+                "message": "Missing raw_hex data for comparison",
+                "observation_id": "sram_corrupt"
+              }
+            ],
+            "fault_injection_records": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "injection_applied": true,
+            "passed_checks": 0,
+            "scenario_id": "fault-data-corruption",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fault-data-corruption_20260727T225226",
+          "timestamp": "2026-07-27T22:52:26.389930+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [
+        {
+          "address": 512,
+          "data": {
+            "dtype": "int32"
+          },
+          "observation_id": "sram_corrupt",
+          "observation_type": "sram_data",
+          "size": 16
+        }
+      ],
+      "metadata": {
+        "expected_classification": "data_corruption",
+        "fault_class": "data_corruption",
+        "fault_params": {
+          "count": 4,
+          "offset": 0
+        }
+      },
+      "provenance": {
+        "created_at": "2026-07-27T22:52:26.382860+00:00"
+      },
+      "scenario_id": "fault-data-corruption",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fault-dropped-interrupt": {
+      "actions": [
+        {
+          "action_type": "doorbell",
+          "classification": "frontdoor",
+          "parameters": {
+            "desc_addr": 2147483648,
+            "host_tail": 1,
+            "opcode": 1
+          }
+        },
+        {
+          "action_type": "wait_irq",
+          "classification": "frontdoor",
+          "parameters": {
+            "source": 8
+          }
+        }
+      ],
+      "description": "Dropped interrupt injection",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 1,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 8
+            },
+            "backdoor_classification": {
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "classification_correct": true,
+            "detected_faults": [],
+            "dram_mb": 64,
+            "expected_classification": "dropped_interrupt",
+            "failed_checks": 0,
+            "failures": [],
+            "fault_injection_records": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "injection_applied": true,
+            "passed_checks": 0,
+            "scenario_id": "fault-dropped-interrupt",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fault-dropped-interrupt_20260727T225226",
+          "timestamp": "2026-07-27T22:52:26.390446+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [],
+      "metadata": {
+        "expected_classification": "dropped_interrupt",
+        "fault_class": "dropped_interrupt",
+        "fault_params": {}
+      },
+      "provenance": {
+        "created_at": "2026-07-27T22:52:26.389694+00:00"
+      },
+      "scenario_id": "fault-dropped-interrupt",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fault-duplicated-interrupt": {
+      "actions": [
+        {
+          "action_type": "doorbell",
+          "classification": "frontdoor",
+          "parameters": {
+            "desc_addr": 2147483648,
+            "host_tail": 1,
+            "opcode": 1
+          }
+        },
+        {
+          "action_type": "wait_irq",
+          "classification": "frontdoor",
+          "parameters": {
+            "source": 8
+          }
+        }
+      ],
+      "description": "Duplicated interrupt injection",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 1,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 10
+            },
+            "backdoor_classification": {
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "classification_correct": true,
+            "detected_faults": [],
+            "dram_mb": 64,
+            "expected_classification": "duplicated_interrupt",
+            "failed_checks": 0,
+            "failures": [],
+            "fault_injection_records": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "injection_applied": true,
+            "passed_checks": 0,
+            "scenario_id": "fault-duplicated-interrupt",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fault-duplicated-interrupt_20260727T225226",
+          "timestamp": "2026-07-27T22:52:26.390574+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [],
+      "metadata": {
+        "expected_classification": "duplicated_interrupt",
+        "fault_class": "duplicated_interrupt",
+        "fault_params": {}
+      },
+      "provenance": {
+        "created_at": "2026-07-27T22:52:26.389704+00:00"
+      },
+      "scenario_id": "fault-duplicated-interrupt",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fault-engine-error": {
+      "actions": [
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741824,
+            "value": 1
+          }
+        }
+      ],
+      "description": "Engine error fault injection",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [
+            {
+              "data": {
+                "status": 57005
+              },
+              "observation_id": "comp",
+              "observation_type": "completion_status"
+            }
+          ],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 1,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 12
+            },
+            "backdoor_classification": {
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "classification_correct": true,
+            "detected_faults": [
+              "engine_error"
+            ],
+            "dram_mb": 64,
+            "expected_classification": "engine_error",
+            "failed_checks": 1,
+            "failures": [
+              {
+                "actual": 57005,
+                "expected": 2,
+                "message": "Completion status mismatch",
+                "observation_id": "comp"
+              }
+            ],
+            "fault_injection_records": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "injection_applied": true,
+            "passed_checks": 0,
+            "scenario_id": "fault-engine-error",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fault-engine-error_20260727T225226",
+          "timestamp": "2026-07-27T22:52:26.390676+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [
+        {
+          "data": {
+            "status": 2
+          },
+          "observation_id": "comp",
+          "observation_type": "completion_status"
+        }
+      ],
+      "metadata": {
+        "expected_classification": "engine_error",
+        "fault_class": "engine_error",
+        "fault_params": {}
+      },
+      "provenance": {
+        "created_at": "2026-07-27T22:52:26.389728+00:00"
+      },
+      "scenario_id": "fault-engine-error",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fault-reset-during-command": {
+      "actions": [
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741824,
+            "value": 1
+          }
+        }
+      ],
+      "description": "Reset during command execution",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 0,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 0
+            },
+            "backdoor_classification": {},
+            "classification_correct": true,
+            "detected_faults": [],
+            "dram_mb": 64,
+            "expected_classification": "reset_during_command",
+            "failed_checks": 0,
+            "failures": [],
+            "fault_injection_records": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "injection_applied": true,
+            "passed_checks": 0,
+            "scenario_id": "fault-reset-during-command",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fault-reset-during-command_20260727T225226",
+          "timestamp": "2026-07-27T22:52:26.431967+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [],
+      "metadata": {
+        "expected_classification": "reset_during_command",
+        "fault_class": "reset_during_command",
+        "fault_params": {}
+      },
+      "provenance": {
+        "created_at": "2026-07-27T22:52:26.389735+00:00"
+      },
+      "scenario_id": "fault-reset-during-command",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fault-ring-overflow": {
+      "actions": [
+        {
+          "action_type": "doorbell",
+          "classification": "frontdoor",
+          "parameters": {
+            "host_tail": 1
+          }
+        }
+      ],
+      "description": "Ring buffer overflow injection",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 1,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 3
+            },
+            "backdoor_classification": {
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "classification_correct": true,
+            "detected_faults": [],
+            "dram_mb": 64,
+            "expected_classification": "ring_overflow",
+            "failed_checks": 0,
+            "failures": [],
+            "fault_injection_records": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "injection_applied": true,
+            "passed_checks": 0,
+            "scenario_id": "fault-ring-overflow",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fault-ring-overflow_20260727T225226",
+          "timestamp": "2026-07-27T22:52:26.390173+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [],
+      "metadata": {
+        "expected_classification": "ring_overflow",
+        "fault_class": "ring_overflow",
+        "fault_params": {
+          "overflow_by": 10
+        }
+      },
+      "provenance": {
+        "created_at": "2026-07-27T22:52:26.382910+00:00"
+      },
+      "scenario_id": "fault-ring-overflow",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fault-stalled-head": {
+      "actions": [
+        {
+          "action_type": "doorbell",
+          "classification": "frontdoor",
+          "parameters": {
+            "desc_addr": 2147483648,
+            "host_tail": 1,
+            "opcode": 1
+          }
+        },
+        {
+          "action_type": "wait_irq",
+          "classification": "frontdoor",
+          "parameters": {
+            "source": 8
+          }
+        }
+      ],
+      "description": "Stalled head during IRQ dispatch",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 1,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 5
+            },
+            "backdoor_classification": {
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "classification_correct": true,
+            "detected_faults": [],
+            "dram_mb": 64,
+            "expected_classification": "stalled_head",
+            "failed_checks": 0,
+            "failures": [],
+            "fault_injection_records": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "injection_applied": true,
+            "passed_checks": 0,
+            "scenario_id": "fault-stalled-head",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fault-stalled-head_20260727T225226",
+          "timestamp": "2026-07-27T22:52:26.390299+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [],
+      "metadata": {
+        "expected_classification": "stalled_head",
+        "fault_class": "stalled_head",
+        "fault_params": {}
+      },
+      "provenance": {
+        "created_at": "2026-07-27T22:52:26.382920+00:00"
+      },
+      "scenario_id": "fault-stalled-head",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fault-timeout": {
+      "actions": [
+        {
+          "action_type": "poll_status",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741832,
+            "mask": 2,
+            "timeout_cycles": 10
+          }
+        }
+      ],
+      "description": "Timeout fault injection",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 1,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 11
+            },
+            "backdoor_classification": {
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "classification_correct": true,
+            "detected_faults": [],
+            "dram_mb": 64,
+            "expected_classification": "timeout",
+            "failed_checks": 0,
+            "failures": [],
+            "fault_injection_records": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "injection_applied": true,
+            "passed_checks": 0,
+            "scenario_id": "fault-timeout",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fault-timeout_20260727T225226",
+          "timestamp": "2026-07-27T22:52:26.390619+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [],
+      "metadata": {
+        "expected_classification": "timeout",
+        "fault_class": "timeout",
+        "fault_params": {}
+      },
+      "provenance": {
+        "created_at": "2026-07-27T22:52:26.389715+00:00"
+      },
+      "scenario_id": "fault-timeout",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fault-unsupported-opcode": {
+      "actions": [
+        {
+          "action_type": "doorbell",
+          "classification": "frontdoor",
+          "parameters": {
+            "desc_addr": 2147487744,
+            "host_tail": 1,
+            "opcode": 5
+          }
+        }
+      ],
+      "description": "Unsupported opcode injected",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 1,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 2
+            },
+            "backdoor_classification": {
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "classification_correct": true,
+            "detected_faults": [],
+            "dram_mb": 64,
+            "expected_classification": "unsupported_opcode",
+            "failed_checks": 0,
+            "failures": [],
+            "fault_injection_records": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "injection_applied": true,
+            "passed_checks": 0,
+            "scenario_id": "fault-unsupported-opcode",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fault-unsupported-opcode_20260727T225226",
+          "timestamp": "2026-07-27T22:52:26.390118+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [],
+      "metadata": {
+        "expected_classification": "unsupported_opcode",
+        "fault_class": "unsupported_opcode",
+        "fault_params": {}
+      },
+      "provenance": {
+        "created_at": "2026-07-27T22:52:26.382899+00:00"
+      },
+      "scenario_id": "fault-unsupported-opcode",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fault-wrong-completion": {
+      "actions": [
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741824,
+            "value": 1
+          }
+        }
+      ],
+      "description": "Wrong completion status injected",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [
+            {
+              "data": {
+                "status": 15
+              },
+              "observation_id": "comp",
+              "observation_type": "completion_status"
+            }
+          ],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 1,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 6
+            },
+            "backdoor_classification": {
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "classification_correct": true,
+            "detected_faults": [
+              "wrong_completion"
+            ],
+            "dram_mb": 64,
+            "expected_classification": "wrong_completion",
+            "failed_checks": 1,
+            "failures": [
+              {
+                "actual": 15,
+                "expected": 2,
+                "message": "Completion status mismatch",
+                "observation_id": "comp"
+              }
+            ],
+            "fault_injection_records": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "injection_applied": true,
+            "passed_checks": 0,
+            "scenario_id": "fault-wrong-completion",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fault-wrong-completion_20260727T225226",
+          "timestamp": "2026-07-27T22:52:26.390367+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [
+        {
+          "data": {
+            "status": 2
+          },
+          "observation_id": "comp",
+          "observation_type": "completion_status"
+        }
+      ],
+      "metadata": {
+        "expected_classification": "wrong_completion",
+        "fault_class": "wrong_completion",
+        "fault_params": {
+          "wrong_status": 15
+        }
+      },
+      "provenance": {
+        "created_at": "2026-07-27T22:52:26.389654+00:00"
+      },
+      "scenario_id": "fault-wrong-completion",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fault-wrong-descriptor": {
+      "actions": [
+        {
+          "action_type": "doorbell",
+          "classification": "frontdoor",
+          "parameters": {
+            "desc_addr": 2147487744,
+            "host_tail": 1,
+            "opcode": 5
+          }
+        }
+      ],
+      "description": "Wrong descriptor field (opcode/address)",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 1,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 1
+            },
+            "backdoor_classification": {
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "classification_correct": true,
+            "detected_faults": [],
+            "dram_mb": 64,
+            "expected_classification": "wrong_descriptor",
+            "failed_checks": 0,
+            "failures": [],
+            "fault_injection_records": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "injection_applied": true,
+            "passed_checks": 0,
+            "scenario_id": "fault-wrong-descriptor",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fault-wrong-descriptor_20260727T225226",
+          "timestamp": "2026-07-27T22:52:26.390046+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [],
+      "metadata": {
+        "expected_classification": "wrong_descriptor",
+        "fault_class": "wrong_descriptor",
+        "fault_params": {
+          "wrong_addr": 2415919104,
+          "wrong_opcode": 136
+        }
+      },
+      "provenance": {
+        "created_at": "2026-07-27T22:52:26.382888+00:00"
+      },
+      "scenario_id": "fault-wrong-descriptor",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    }
+  },
+  "scenarios_error": 0,
+  "scenarios_fail": 0,
+  "scenarios_pass": 11,
+  "scenarios_total": 11,
+  "task": "task-9-fm-adapter",
+  "test_matrix": "fault-injection",
+  "timestamp": "2026-07-27T22:52:26.432147+00:00"
+}

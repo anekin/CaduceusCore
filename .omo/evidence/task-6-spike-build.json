@@ -1,0 +1,40 @@
+{
+  "abi": {
+    "firmware_header": "/home/prj/zhengs/caduceuscore/CaduceusCore/gen/npu_abi_firmware.h",
+    "major": 1,
+    "minor": 0,
+    "version_string": "1.0"
+  },
+  "artifacts": {
+    "npu_firmware_elf": {
+      "path": "/home/prj/zhengs/caduceuscore/CaduceusCore/firmware/build/npu_firmware.elf",
+      "sha256": "92130843b63bf71dea679dca51c0912476bce8fe348bc4a88b337631f7277498"
+    },
+    "npu_firmware_spike_elf": {
+      "path": "/home/prj/zhengs/caduceuscore/CaduceusCore/firmware/build/npu_firmware_spike.elf",
+      "sha256": "b837e2628bb4497b50e9d613476aa156f30f29fe749d39cb2b07677260008165"
+    },
+    "plugin_so": {
+      "path": "/home/prj/zhengs/caduceuscore/CaduceusCore/spike_src/plugins/npu_mmio_plugin.so",
+      "sha256": "f955043db35533f6270741b3c02bc59e09e98f28d1adbc0858a866707572ea73"
+    },
+    "spike_binary": {
+      "path": "/home/prj/zhengs/caduceuscore/CaduceusCore/spike_src/build/spike",
+      "sha256": "427eb20f1daa86168f1ee9678ad29e82fa6d26dcaeb50981503e8edfbfe927cf"
+    }
+  },
+  "build_timestamp": "2026-07-27T22:01:52Z",
+  "compilers": {
+    "cxx": "11.4.0",
+    "dtc": "1.8.1-g66e1201c",
+    "riscv_gcc": "10.2.0"
+  },
+  "firmware": {
+    "source_files_hash": "1682cc0b77304cf712db9837e740969c91d86b8520b73e78d756df9ee809ad5f"
+  },
+  "manifest_schema_version": 1,
+  "spike": {
+    "source_commit": "1412bbec3176ed514acf3b6784c1bd07bb904e24",
+    "source_path": "/home/prj/zhengs/caduceuscore/CaduceusCore/spike_src"
+  }
+}

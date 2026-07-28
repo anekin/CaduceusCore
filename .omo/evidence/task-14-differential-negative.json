@@ -1,0 +1,9 @@
+..                                                                       [100%]
+=============================== warnings summary ===============================
+sim/tests/test_soc_differential.py::test_detects_divergence_with_injected_data_corruption
+sim/tests/test_soc_differential.py::test_detects_divergence_with_injected_data_corruption
+  /home/prj/zhengs/caduceuscore/CaduceusCore/sim/func_model.py:88: DeprecationWarning: NPUFirmware is deprecated; use Spike + real firmware ELF for golden reference verification. NPUFirmware remains available for fast smoke tests.
+    return NPUFirmware(sim_modules=sim_modules, bridge=bridge)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2 passed, 6 deselected, 2 warnings in 0.17s

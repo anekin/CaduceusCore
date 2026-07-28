@@ -1,0 +1,762 @@
+{
+  "dut_type": "fm",
+  "firmware_mode": "python",
+  "phase": "conformance",
+  "records": [
+    {
+      "abi_version": 2,
+      "actual_observations": [
+        {
+          "address": 1073741824,
+          "data": {
+            "value": 1
+          },
+          "observation_id": "mxu_ctrl",
+          "observation_type": "mmio_value"
+        }
+      ],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 0,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 1
+        },
+        "backdoor_classification": {},
+        "dram_mb": 64,
+        "failed_checks": 0,
+        "failures": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "passed_checks": 1,
+        "scenario_id": "fm-mmio-frontdoor",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fm-mmio-frontdoor_20260727T212726",
+      "timestamp": "2026-07-27T21:27:26.116496+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [
+        {
+          "address": 65536,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+          },
+          "observation_id": "pcie_data",
+          "observation_type": "dram_data",
+          "size": 64
+        }
+      ],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 0,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 2
+        },
+        "backdoor_classification": {},
+        "dram_mb": 64,
+        "failed_checks": 0,
+        "failures": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "passed_checks": 1,
+        "scenario_id": "fm-pcie-frontdoor",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fm-pcie-frontdoor_20260727T212726",
+      "timestamp": "2026-07-27T21:27:26.116587+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [
+        {
+          "address": 512,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "5352414d5f4241434b444f4f525f544553545f5352414d5f4241434b444f4f525f544553545f"
+          },
+          "observation_id": "sram_bk",
+          "observation_type": "sram_data",
+          "size": 38
+        }
+      ],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 1,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 2
+        },
+        "backdoor_classification": {
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "dram_mb": 64,
+        "failed_checks": 0,
+        "failures": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "passed_checks": 1,
+        "scenario_id": "fm-sram-backdoor",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fm-sram-backdoor_20260727T212726",
+      "timestamp": "2026-07-27T21:27:26.116625+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [
+        {
+          "address": 16384,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+          },
+          "observation_id": "dram_bk",
+          "observation_type": "dram_data",
+          "size": 256
+        }
+      ],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 2,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 2
+        },
+        "backdoor_classification": {
+          "dram_preload": "backdoor_write_bytes",
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "dram_mb": 64,
+        "failed_checks": 0,
+        "failures": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "passed_checks": 1,
+        "scenario_id": "fm-dram-backdoor",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fm-dram-backdoor_20260727T212726",
+      "timestamp": "2026-07-27T21:27:26.116660+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [
+        {
+          "address": 1073741824,
+          "data": {
+            "value": 3405691582
+          },
+          "observation_id": "mxu_ctrl",
+          "observation_type": "mmio_value"
+        },
+        {
+          "address": 1073745920,
+          "data": {
+            "value": 3735928559
+          },
+          "observation_id": "sfu_ctrl",
+          "observation_type": "mmio_value"
+        },
+        {
+          "address": 768,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "4242424242424242424242424242424242424242424242424242424242424242"
+          },
+          "observation_id": "sram_multi",
+          "observation_type": "sram_data",
+          "size": 32
+        }
+      ],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 3,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 4
+        },
+        "backdoor_classification": {
+          "dram_preload": "backdoor_write_bytes",
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "dram_mb": 64,
+        "failed_checks": 0,
+        "failures": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "passed_checks": 3,
+        "scenario_id": "fm-multi-action",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fm-multi-action_20260727T212726",
+      "timestamp": "2026-07-27T21:27:26.116722+00:00",
+      "verdict": "pass"
+    },
+    {
+      "abi_version": 2,
+      "actual_observations": [],
+      "dut_adapter": "FuncModel",
+      "firmware_mode": "python",
+      "metadata": {
+        "abi_version": 1,
+        "action_counts": {
+          "allowed_init_backdoor": 3,
+          "allowed_obs_backdoor": 0,
+          "diagnostic": 0,
+          "frontdoor": 4
+        },
+        "backdoor_classification": {
+          "dram_preload": "backdoor_write_bytes",
+          "sram_preload": "backdoor_write_bytes"
+        },
+        "dram_mb": 64,
+        "failed_checks": 0,
+        "failures": [],
+        "firmware_class": "NPUFirmware",
+        "firmware_mode": "python",
+        "passed_checks": 0,
+        "scenario_id": "fm-diag-reject",
+        "spike_available": false,
+        "sram_kb": 512
+      },
+      "record_id": "ev_fm-diag-reject_20260727T212726",
+      "timestamp": "2026-07-27T21:27:26.116747+00:00",
+      "verdict": "pass"
+    }
+  ],
+  "scenario_details": {
+    "fm-diag-reject": {
+      "actions": [],
+      "description": "Diagnostic action rejection \u2014 tested at adapter level",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 3,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 4
+            },
+            "backdoor_classification": {
+              "dram_preload": "backdoor_write_bytes",
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "dram_mb": 64,
+            "failed_checks": 0,
+            "failures": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "passed_checks": 0,
+            "scenario_id": "fm-diag-reject",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fm-diag-reject_20260727T212726",
+          "timestamp": "2026-07-27T21:27:26.116747+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [],
+      "metadata": {},
+      "provenance": {
+        "created_at": "2026-07-27T21:27:26.116361+00:00"
+      },
+      "scenario_id": "fm-diag-reject",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fm-dram-backdoor": {
+      "actions": [
+        {
+          "action_type": "dram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+            "offset": 16384
+          }
+        }
+      ],
+      "description": "DRAM init backdoor preload, obs backdoor readback verify",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [
+            {
+              "address": 16384,
+              "data": {
+                "dtype": "int32",
+                "raw_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+              },
+              "observation_id": "dram_bk",
+              "observation_type": "dram_data",
+              "size": 256
+            }
+          ],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 2,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 2
+            },
+            "backdoor_classification": {
+              "dram_preload": "backdoor_write_bytes",
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "dram_mb": 64,
+            "failed_checks": 0,
+            "failures": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "passed_checks": 1,
+            "scenario_id": "fm-dram-backdoor",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fm-dram-backdoor_20260727T212726",
+          "timestamp": "2026-07-27T21:27:26.116660+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [
+        {
+          "address": 16384,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+          },
+          "observation_id": "dram_bk",
+          "observation_type": "dram_data",
+          "size": 256
+        }
+      ],
+      "metadata": {},
+      "provenance": {
+        "created_at": "2026-07-27T21:27:26.116333+00:00"
+      },
+      "scenario_id": "fm-dram-backdoor",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fm-mmio-frontdoor": {
+      "actions": [
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741824,
+            "value": 1
+          }
+        }
+      ],
+      "description": "MMIO frontdoor write to MXU CTRL, read back via MMIO",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [
+            {
+              "address": 1073741824,
+              "data": {
+                "value": 1
+              },
+              "observation_id": "mxu_ctrl",
+              "observation_type": "mmio_value"
+            }
+          ],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 0,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 1
+            },
+            "backdoor_classification": {},
+            "dram_mb": 64,
+            "failed_checks": 0,
+            "failures": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "passed_checks": 1,
+            "scenario_id": "fm-mmio-frontdoor",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fm-mmio-frontdoor_20260727T212726",
+          "timestamp": "2026-07-27T21:27:26.116496+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [
+        {
+          "address": 1073741824,
+          "data": {
+            "value": 1
+          },
+          "observation_id": "mxu_ctrl",
+          "observation_type": "mmio_value"
+        }
+      ],
+      "metadata": {},
+      "provenance": {
+        "created_at": "2026-07-27T21:27:26.116240+00:00"
+      },
+      "scenario_id": "fm-mmio-frontdoor",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fm-multi-action": {
+      "actions": [
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073741824,
+            "value": 3405691582
+          }
+        },
+        {
+          "action_type": "mmio_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 1073745920,
+            "value": 3735928559
+          }
+        },
+        {
+          "action_type": "sram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "4242424242424242424242424242424242424242424242424242424242424242",
+            "offset": 768
+          }
+        }
+      ],
+      "description": "Sequential frontdoor MMIO writes + backdoor SRAM preloads, verify all",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [
+            {
+              "address": 1073741824,
+              "data": {
+                "value": 3405691582
+              },
+              "observation_id": "mxu_ctrl",
+              "observation_type": "mmio_value"
+            },
+            {
+              "address": 1073745920,
+              "data": {
+                "value": 3735928559
+              },
+              "observation_id": "sfu_ctrl",
+              "observation_type": "mmio_value"
+            },
+            {
+              "address": 768,
+              "data": {
+                "dtype": "int32",
+                "raw_hex": "4242424242424242424242424242424242424242424242424242424242424242"
+              },
+              "observation_id": "sram_multi",
+              "observation_type": "sram_data",
+              "size": 32
+            }
+          ],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 3,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 4
+            },
+            "backdoor_classification": {
+              "dram_preload": "backdoor_write_bytes",
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "dram_mb": 64,
+            "failed_checks": 0,
+            "failures": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "passed_checks": 3,
+            "scenario_id": "fm-multi-action",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fm-multi-action_20260727T212726",
+          "timestamp": "2026-07-27T21:27:26.116722+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [
+        {
+          "address": 1073741824,
+          "data": {
+            "value": 3405691582
+          },
+          "observation_id": "mxu_ctrl",
+          "observation_type": "mmio_value"
+        },
+        {
+          "address": 1073745920,
+          "data": {
+            "value": 3735928559
+          },
+          "observation_id": "sfu_ctrl",
+          "observation_type": "mmio_value"
+        },
+        {
+          "address": 768,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "4242424242424242424242424242424242424242424242424242424242424242"
+          },
+          "observation_id": "sram_multi",
+          "observation_type": "sram_data",
+          "size": 32
+        }
+      ],
+      "metadata": {},
+      "provenance": {
+        "created_at": "2026-07-27T21:27:26.116353+00:00"
+      },
+      "scenario_id": "fm-multi-action",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fm-pcie-frontdoor": {
+      "actions": [
+        {
+          "action_type": "pcie_write",
+          "classification": "frontdoor",
+          "parameters": {
+            "address": 2147549184,
+            "data_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+          }
+        }
+      ],
+      "description": "PCIe TLP frontdoor write to DRAM, readback via obs backdoor",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [
+            {
+              "address": 65536,
+              "data": {
+                "dtype": "int32",
+                "raw_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+              },
+              "observation_id": "pcie_data",
+              "observation_type": "dram_data",
+              "size": 64
+            }
+          ],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 0,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 2
+            },
+            "backdoor_classification": {},
+            "dram_mb": 64,
+            "failed_checks": 0,
+            "failures": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "passed_checks": 1,
+            "scenario_id": "fm-pcie-frontdoor",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fm-pcie-frontdoor_20260727T212726",
+          "timestamp": "2026-07-27T21:27:26.116587+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [
+        {
+          "address": 65536,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+          },
+          "observation_id": "pcie_data",
+          "observation_type": "dram_data",
+          "size": 64
+        }
+      ],
+      "metadata": {},
+      "provenance": {
+        "created_at": "2026-07-27T21:27:26.116287+00:00"
+      },
+      "scenario_id": "fm-pcie-frontdoor",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    },
+    "fm-sram-backdoor": {
+      "actions": [
+        {
+          "action_type": "sram_preload",
+          "classification": "allowed_init_backdoor",
+          "parameters": {
+            "data_hex": "5352414d5f4241434b444f4f525f544553545f5352414d5f4241434b444f4f525f544553545f",
+            "offset": 512
+          }
+        }
+      ],
+      "description": "SRAM init backdoor preload, obs backdoor readback verify",
+      "evidence": [
+        {
+          "abi_version": 2,
+          "actual_observations": [
+            {
+              "address": 512,
+              "data": {
+                "dtype": "int32",
+                "raw_hex": "5352414d5f4241434b444f4f525f544553545f5352414d5f4241434b444f4f525f544553545f"
+              },
+              "observation_id": "sram_bk",
+              "observation_type": "sram_data",
+              "size": 38
+            }
+          ],
+          "dut_adapter": "FuncModel",
+          "firmware_mode": "python",
+          "metadata": {
+            "abi_version": 1,
+            "action_counts": {
+              "allowed_init_backdoor": 1,
+              "allowed_obs_backdoor": 0,
+              "diagnostic": 0,
+              "frontdoor": 2
+            },
+            "backdoor_classification": {
+              "sram_preload": "backdoor_write_bytes"
+            },
+            "dram_mb": 64,
+            "failed_checks": 0,
+            "failures": [],
+            "firmware_class": "NPUFirmware",
+            "firmware_mode": "python",
+            "passed_checks": 1,
+            "scenario_id": "fm-sram-backdoor",
+            "spike_available": false,
+            "sram_kb": 512
+          },
+          "record_id": "ev_fm-sram-backdoor_20260727T212726",
+          "timestamp": "2026-07-27T21:27:26.116625+00:00",
+          "verdict": "pass"
+        }
+      ],
+      "expected_observations": [
+        {
+          "address": 512,
+          "data": {
+            "dtype": "int32",
+            "raw_hex": "5352414d5f4241434b444f4f525f544553545f5352414d5f4241434b444f4f525f544553545f"
+          },
+          "observation_id": "sram_bk",
+          "observation_type": "sram_data",
+          "size": 38
+        }
+      ],
+      "metadata": {},
+      "provenance": {
+        "created_at": "2026-07-27T21:27:26.116301+00:00"
+      },
+      "scenario_id": "fm-sram-backdoor",
+      "scenario_version": 1,
+      "tolerance": {
+        "fp16_abs_tol": 0.002,
+        "fp16_rel_tol": 0.01,
+        "fp32_abs_tol": 1e-05,
+        "fp32_rel_tol": 0.0001,
+        "int32_bit_exact": true
+      }
+    }
+  },
+  "scenarios_error": 0,
+  "scenarios_fail": 0,
+  "scenarios_pass": 6,
+  "scenarios_total": 6,
+  "task": "task-9-fm-adapter",
+  "test_matrix": "software-smoke",
+  "timestamp": "2026-07-27T21:27:26.120210+00:00"
+}

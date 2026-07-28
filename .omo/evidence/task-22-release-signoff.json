@@ -1,0 +1,675 @@
+{
+  "blocked_items": [
+    "l5: task 20 is BLOCKED"
+  ],
+  "error_count": 0,
+  "hash_mismatches": [],
+  "missing_evidence": [],
+  "overall_status": "BLOCKED",
+  "report_type": "software_signoff_aggregation",
+  "report_version": "1.0",
+  "stale_rejected": [],
+  "tiers": {
+    "framework": {
+      "status": "PASS",
+      "task_verdicts": [
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "tasks": {
+        "15": {
+          "evidence_files": [
+            "task-15-ggml-lifecycle.log"
+          ],
+          "file_details": [
+            {
+              "file": "task-15-ggml-lifecycle.log",
+              "fingerprint": "7a064f59bb32d79a404972d6a190c9e07a31f3f14fc57cced71b6a0399fb3e18",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "16": {
+          "evidence_files": [
+            "task-16-ggml-ops.csv"
+          ],
+          "file_details": [
+            {
+              "file": "task-16-ggml-ops.csv",
+              "fingerprint": "cfad22a56a92c1ffd6ef3bf336abf837e825fbc4f47c556c20d116dd61f03ccc",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "17": {
+          "evidence_files": [
+            "task-17-qwen3b-software-positive.json",
+            "task-17-qwen3b-software.json"
+          ],
+          "file_details": [
+            {
+              "file": "task-17-qwen3b-software-positive.json",
+              "fingerprint": "f88e0256a307bfea13ac0549b03e545c40e52ce9e6476b8f5672224228832418",
+              "verdict": "pass"
+            },
+            {
+              "file": "task-17-qwen3b-software.json",
+              "fingerprint": "0b4b4315b840991bafec329731a196fe46a65005ee06d343158859f1546362e2",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "21": {
+          "evidence_files": [
+            "task-21-executorch.json"
+          ],
+          "file_details": [
+            {
+              "file": "task-21-executorch.json",
+              "fingerprint": "07d72d4757bd3b258f0a5e3659b3bd121dd3b2ba610bb1e8850b81ca1f369f80",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "5": {
+          "evidence_files": [
+            "task-5-llama-pin.log"
+          ],
+          "file_details": [
+            {
+              "file": "task-5-llama-pin.log",
+              "fingerprint": "6980467f1d2c7ec72e02673fcb735079e29ece0244a1ecd80cd47a27bbef5c3a",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        }
+      }
+    },
+    "l0": {
+      "status": "PASS",
+      "task_verdicts": [
+        "pass",
+        "pass"
+      ],
+      "tasks": {
+        "1": {
+          "evidence_files": [
+            "task-1-abi-generate.log"
+          ],
+          "file_details": [
+            {
+              "file": "task-1-abi-generate.log",
+              "fingerprint": "26b85c8ac228de8393ac095be093e251e084901ef22961342214da3d4b74a4b1",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "2": {
+          "evidence_files": [
+            "task-2-binding-migration.log"
+          ],
+          "file_details": [
+            {
+              "file": "task-2-binding-migration.log",
+              "fingerprint": "be265220152ae68ebd07757c4d2d7c2af438a405138aed4822539e714df551dd",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        }
+      }
+    },
+    "l1": {
+      "status": "PASS",
+      "task_verdicts": [
+        "pass",
+        "pass"
+      ],
+      "tasks": {
+        "3": {
+          "evidence_files": [
+            "task-3-runtime-abi.log"
+          ],
+          "file_details": [
+            {
+              "file": "task-3-runtime-abi.log",
+              "fingerprint": "d9893e68692bfb1c27d2bfd6313184484b97b8ec482559b60290ec5d28165aa5",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "7": {
+          "evidence_files": [
+            "task-7-runtime-core.log"
+          ],
+          "file_details": [
+            {
+              "file": "task-7-runtime-core.log",
+              "fingerprint": "eb9f140a84de59835edd4f7ed5e9db9fd935b090c01f943cb52da61a738eb4f4",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        }
+      }
+    },
+    "l2": {
+      "status": "PASS",
+      "task_verdicts": [
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "tasks": {
+        "13": {
+          "evidence_files": [
+            "task-13-fault-injection.json"
+          ],
+          "file_details": [
+            {
+              "file": "task-13-fault-injection.json",
+              "fingerprint": "6447235751cf685d30713d98eadf2141346419b61413a6b77f46c0c7a96ddfa7",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "14": {
+          "evidence_files": [
+            "task-14-differential.json"
+          ],
+          "file_details": [
+            {
+              "file": "task-14-differential.json",
+              "fingerprint": "28790035a40316465941e3e7e184c1b3e4f8a7ade7ed826fbbcff6104478152a",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "4": {
+          "evidence_files": [
+            "task-4-scenario-roundtrip.log"
+          ],
+          "file_details": [
+            {
+              "file": "task-4-scenario-roundtrip.log",
+              "fingerprint": "7a82d97251148e412603a9f0dd72801237316f7e854b737eb23803cb33382c39",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "8": {
+          "evidence_files": [
+            "task-8-fm-protocol.log"
+          ],
+          "file_details": [
+            {
+              "file": "task-8-fm-protocol.log",
+              "fingerprint": "55146192b7ba44728d7c5d1ebe68a5e23edd7b30ad0a8f911571737cd9aff81c",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "9": {
+          "evidence_files": [
+            "task-9-fm-adapter.json"
+          ],
+          "file_details": [
+            {
+              "file": "task-9-fm-adapter.json",
+              "fingerprint": "42711e0f9f7d5d23dcf15e0b34349b50ec2791d1e1c03ce723dc0719e6e84cff",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        }
+      }
+    },
+    "l3": {
+      "status": "PASS",
+      "task_verdicts": [
+        "pass",
+        "pass"
+      ],
+      "tasks": {
+        "12": {
+          "evidence_files": [
+            "task-12-real-firmware.json"
+          ],
+          "file_details": [
+            {
+              "file": "task-12-real-firmware.json",
+              "fingerprint": "3a3ddc902fd25834ca59c35cc4818dc28ecd1d89c530544fba3fffbfb205c29c",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "6": {
+          "evidence_files": [
+            "task-6-spike-build.json"
+          ],
+          "file_details": [
+            {
+              "file": "task-6-spike-build.json",
+              "fingerprint": "fd50ebd61055c13191d1310671eb8cd18cb67c6c2d715b8118ae5bba282954ec",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        }
+      }
+    },
+    "l4": {
+      "status": "PASS",
+      "task_verdicts": [
+        "pass",
+        "pass"
+      ],
+      "tasks": {
+        "10": {
+          "evidence_files": [
+            "task-10-rtl-adapter-verify.json",
+            "task-10-rtl-adapter.json"
+          ],
+          "file_details": [
+            {
+              "file": "task-10-rtl-adapter-verify.json",
+              "fingerprint": "031e02221b2467d86c19aa228b6a1798544ec76dc762fd8bf8b881de4e3a26c5",
+              "verdict": "pass"
+            },
+            {
+              "file": "task-10-rtl-adapter.json",
+              "fingerprint": "c920bfa6e4210e608990250e1ba55f33a17190b8a269f27478e19ce751d5d276",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "18": {
+          "evidence_files": [
+            "task-18-rtl-runtime.json"
+          ],
+          "file_details": [
+            {
+              "file": "task-18-rtl-runtime.json",
+              "fingerprint": "0c24ccba2bbb6e0d84ba636df42c3a4ab38d8f4b891398e162fd42ca2fdd52ac",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        }
+      }
+    },
+    "l5": {
+      "status": "BLOCKED",
+      "task_verdicts": [
+        "pass",
+        "blocked"
+      ],
+      "tasks": {
+        "19": {
+          "evidence_files": [
+            "task-19-fpga-transport.log"
+          ],
+          "file_details": [
+            {
+              "file": "task-19-fpga-transport.log",
+              "fingerprint": "833c79d4e8e30efd8b8ab46044b55a809d2c217220f5caa9372472bc56070f3b",
+              "verdict": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "20": {
+          "evidence_files": [
+            "task-20-fpga-no-go.json"
+          ],
+          "file_details": [
+            {
+              "file": "task-20-fpga-no-go.json",
+              "fingerprint": "2dae3d6529887a412a10bcce065131693d428defea3e6b5809d5b494a789d3d4",
+              "verdict": "blocked"
+            }
+          ],
+          "verdict": "blocked"
+        }
+      }
+    }
+  },
+  "tiers_required": [
+    "framework",
+    "l0",
+    "l1",
+    "l2",
+    "l3",
+    "l4",
+    "l5"
+  ],
+  "timestamp": "2026-07-28T03:57:38.764943+00:00",
+  "unrelated_worktree_preserved": true,
+  "worktree_dirty_paths": [
+    "?? .github/",
+    "?? .omo/drafts/func-model-gap-closure.md",
+    "?? .omo/drafts/func-model-remaining-fixes.md",
+    "?? .omo/drafts/update-docs-intc-fix.md",
+    "?? .omo/evidence/final-code-quality.md",
+    "?? .omo/evidence/final-manual-qa.md",
+    "?? .omo/evidence/final-plan-compliance.md",
+    "?? .omo/evidence/final-scope-fidelity.md",
+    "?? .omo/evidence/task-10-rtl-adapter-verify.json",
+    "?? .omo/evidence/task-10-rtl-adapter.json",
+    "?? .omo/evidence/task-12-real-firmware.json",
+    "?? .omo/evidence/task-13-fault-injection.json",
+    "?? .omo/evidence/task-14-differential-negative.json",
+    "?? .omo/evidence/task-14-differential-rerun.json",
+    "?? .omo/evidence/task-14-differential.json",
+    "?? .omo/evidence/task-16-ggml-ops.csv",
+    "?? .omo/evidence/task-17-qwen3b-software-negative-rerun.json",
+    "?? .omo/evidence/task-17-qwen3b-software-negative.json",
+    "?? .omo/evidence/task-17-qwen3b-software-positive-rerun.json",
+    "?? .omo/evidence/task-17-qwen3b-software-positive.json",
+    "?? .omo/evidence/task-17-qwen3b-software.json",
+    "?? .omo/evidence/task-18-rtl-runtime-negative.json",
+    "?? .omo/evidence/task-18-rtl-runtime.json",
+    "?? .omo/evidence/task-20-fpga-no-go.json",
+    "?? .omo/evidence/task-21-executorch-negative.json",
+    "?? .omo/evidence/task-21-executorch.json",
+    "?? .omo/evidence/task-22-release-signoff-negative.json",
+    "?? .omo/evidence/task-22-release-signoff-rerun.json",
+    "?? .omo/evidence/task-22-release-signoff.json",
+    "?? .omo/evidence/task-6-spike-build.json",
+    "?? .omo/evidence/task-9-fm-adapter.json",
+    "?? .omo/evidence/update-signoff-checklist-diff.txt",
+    "?? .omo/notepads/func-model-soc-software-stack/issues.md",
+    "?? .omo/notepads/func-model-soc-software-stack/problems.md",
+    "?? .omo/notepads/update-docs-intc-fix/",
+    "?? .omo/plans/func-model-gap-closure.md",
+    "?? .omo/plans/func-model-remaining-fixes.md",
+    "?? .omo/plans/update-docs-intc-fix.md",
+    "?? .venv_deps/",
+    "?? .venv_pytest/",
+    "?? CaduceusCore/",
+    "?? build/evidence/bug005-vector-manual.dbg",
+    "?? build/evidence/f1-fail-summary.txt",
+    "?? build/evidence/f2-ast.txt",
+    "?? build/evidence/f2-file-diff.txt",
+    "?? build/evidence/f3-checklist.txt",
+    "?? build/evidence/f3-final-summary.txt",
+    "?? build/evidence/f3-fmsoc-part1.txt",
+    "?? build/evidence/f3-mmulsmoke-skip.txt",
+    "?? build/evidence/f3-plugin-build.txt",
+    "?? build/evidence/f4-gate.txt",
+    "?? build/evidence/fix-005-sfu-conclusion.txt",
+    "?? build/evidence/fix-module-regression.txt",
+    "?? build/evidence/fix-mxu-module-regression.txt",
+    "?? build/evidence/fix-wv001-fail.txt",
+    "?? build/evidence/fullchain-pipeline.txt.bak",
+    "?? build/evidence/p9_direct_sweep_results.xml",
+    "?? build/evidence/p9_firmware_sweep_results.xml",
+    "?? build/evidence/ph9-causality-results.xml",
+    "?? build/evidence/ph9-probe-case1-direct-K2048-N64.jsonl",
+    "?? build/evidence/ph9-probe-case1-firmware-K2048-N64.jsonl",
+    "?? build/evidence/ph9-t4b-elapsed.txt",
+    "?? build/evidence/rbf-start-commit.txt",
+    "?? build/evidence/sfv-P1-sweep-summary.json",
+    "?? build/evidence/sfv-P1-vector-sweep-summary.json",
+    "?? build/evidence/sfv-P1AV-summary.md",
+    "?? build/evidence/sfv-P1LN1024_r3-summary.md",
+    "?? build/evidence/sfv-P1LN128_r3-summary.md",
+    "?? build/evidence/sfv-P1LN16_r3-summary.md",
+    "?? build/evidence/sfv-P1LN2048_r3-summary.md",
+    "?? build/evidence/sfv-P1LN256_r3-summary.md",
+    "?? build/evidence/sfv-P1LN32_r3-summary.md",
+    "?? build/evidence/sfv-P1LN4096_r3-summary.md",
+    "?? build/evidence/sfv-P1LN512_r3-summary.md",
+    "?? build/evidence/sfv-P1LN64_r3-summary.md",
+    "?? build/evidence/sfv-P1RN1024_r3-summary.md",
+    "?? build/evidence/sfv-P1RN128_r3-summary.md",
+    "?? build/evidence/sfv-P1RN16_r3-summary.md",
+    "?? build/evidence/sfv-P1RN2048_r3-summary.md",
+    "?? build/evidence/sfv-P1RN256_r3-summary.md",
+    "?? build/evidence/sfv-P1RN32_r3-summary.md",
+    "?? build/evidence/sfv-P1RN4096_r3-summary.md",
+    "?? build/evidence/sfv-P1RN512_r3-summary.md",
+    "?? build/evidence/sfv-P1RN64_r3-summary.md",
+    "?? build/evidence/sfv-P1RP1024_r3-summary.md",
+    "?? build/evidence/sfv-P1RP128_r3-summary.md",
+    "?? build/evidence/sfv-P1RP16_r3-summary.md",
+    "?? build/evidence/sfv-P1RP2048_r3-summary.md",
+    "?? build/evidence/sfv-P1RP256_r3-summary.md",
+    "?? build/evidence/sfv-P1RP32_r3-summary.md",
+    "?? build/evidence/sfv-P1RP4096_r3-summary.md",
+    "?? build/evidence/sfv-P1RP512_r3-summary.md",
+    "?? build/evidence/sfv-P1RP64_r3-summary.md",
+    "?? build/evidence/sfv-P1SM1024_r3-summary.md",
+    "?? build/evidence/sfv-P1SM128_r3-summary.md",
+    "?? build/evidence/sfv-P1SM16_r3-summary.md",
+    "?? build/evidence/sfv-P1SM2048_r3-summary.md",
+    "?? build/evidence/sfv-P1SM256_r3-summary.md",
+    "?? build/evidence/sfv-P1SM32_r3-summary.md",
+    "?? build/evidence/sfv-P1SM4096_r3-summary.md",
+    "?? build/evidence/sfv-P1SM512_r3-summary.md",
+    "?? build/evidence/sfv-P1SM64_r3-summary.md",
+    "?? build/evidence/sfv-P2-back-to-back-summary.json",
+    "?? build/evidence/sfv-P3-edge-cases-summary.json",
+    "?? build/evidence/sfv-SFV-DRY-add-1024_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-add-128_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-add-16_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-add-2048_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-add-256_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-add-32_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-add-4096_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-add-512_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-add-64_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-conv-1024_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-conv-128_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-conv-16_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-conv-2048_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-conv-256_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-conv-32_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-conv-4096_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-conv-512_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-conv-64_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-softmax-1_mzeros-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-sum-1024_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-sum-128_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-sum-16_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-sum-2048_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-sum-256_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-sum-32_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-sum-4096_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-sum-512_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-sum-64_r3-summary.md",
+    "?? build/evidence/sfv-SFV-DRY-summary.md",
+    "?? build/evidence/sfv-SFV-P1-softmax-16_r3-summary.md",
+    "?? build/evidence/sfv-SFV-P29-add-1-summary.md",
+    "?? build/evidence/sfv-SFV-P29-add-1_mzeros-summary.md",
+    "?? build/evidence/sfv-SFV-P29-conv-1-summary.md",
+    "?? build/evidence/sfv-SFV-P29-layernorm-1-summary.md",
+    "?? build/evidence/sfv-SFV-P29-rmsnorm-1-summary.md",
+    "?? build/evidence/sfv-SFV-P29-rope-1-summary.md",
+    "?? build/evidence/sfv-SFV-P29-softmax-1-summary.md",
+    "?? build/evidence/sfv-SFV-P29-softmax-1_mzeros-summary.md",
+    "?? build/evidence/sfv-SFV-P29-sum-1-summary.md",
+    "?? build/evidence/sfv-SFV-P30-add-4096-summary.md",
+    "?? build/evidence/sfv-SFV-P30-conv-4096-summary.md",
+    "?? build/evidence/sfv-SFV-P30-layernorm-4096-summary.md",
+    "?? build/evidence/sfv-SFV-P30-rmsnorm-4096-summary.md",
+    "?? build/evidence/sfv-SFV-P30-rope-4096-summary.md",
+    "?? build/evidence/sfv-SFV-P30-softmax-4096-summary.md",
+    "?? build/evidence/sfv-SFV-P30-sum-4096-summary.md",
+    "?? build/evidence/sfv-SFV-P31-add-128_mzeros-summary.md",
+    "?? build/evidence/sfv-SFV-P31-conv-128_mzeros-summary.md",
+    "?? build/evidence/sfv-SFV-P31-layernorm-128_mzeros-summary.md",
+    "?? build/evidence/sfv-SFV-P31-rmsnorm-128_mzeros-summary.md",
+    "?? build/evidence/sfv-SFV-P31-rope-128_mzeros-summary.md",
+    "?? build/evidence/sfv-SFV-P31-softmax-128_mzeros-summary.md",
+    "?? build/evidence/sfv-SFV-P31-sum-128_mzeros-summary.md",
+    "?? build/evidence/sfv-SFV-P32-add-128_mmaxval-summary.md",
+    "?? build/evidence/sfv-SFV-P32-conv-128_mmaxval-summary.md",
+    "?? build/evidence/sfv-SFV-P32-layernorm-128_mmaxval-summary.md",
+    "?? build/evidence/sfv-SFV-P32-rmsnorm-128_mmaxval-summary.md",
+    "?? build/evidence/sfv-SFV-P32-rope-128_mmaxval-summary.md",
+    "?? build/evidence/sfv-SFV-P32-softmax-128_mmaxval-summary.md",
+    "?? build/evidence/sfv-SFV-P32-sum-128_mmaxval-summary.md",
+    "?? build/evidence/sfv-SFV-P33-add-128_msparse-summary.md",
+    "?? build/evidence/sfv-SFV-P33-conv-128_msparse-summary.md",
+    "?? build/evidence/sfv-SFV-P33-layernorm-128_msparse-summary.md",
+    "?? build/evidence/sfv-SFV-P33-rmsnorm-128_msparse-summary.md",
+    "?? build/evidence/sfv-SFV-P33-rope-128_msparse-summary.md",
+    "?? build/evidence/sfv-SFV-P33-softmax-128_msparse-summary.md",
+    "?? build/evidence/sfv-SFV-P33-sum-128_msparse-summary.md",
+    "?? build/evidence/sfv-SFV-P34-add-128_mrepeated-summary.md",
+    "?? build/evidence/sfv-SFV-P34-conv-128_mrepeated-summary.md",
+    "?? build/evidence/sfv-SFV-P34-layernorm-128_mrepeated-summary.md",
+    "?? build/evidence/sfv-SFV-P34-rmsnorm-128_mrepeated-summary.md",
+    "?? build/evidence/sfv-SFV-P34-rope-128_mrepeated-summary.md",
+    "?? build/evidence/sfv-SFV-P34-softmax-128_mrepeated-summary.md",
+    "?? build/evidence/sfv-SFV-P34-sum-128_mrepeated-summary.md",
+    "?? build/evidence/w3-rtl-review-gate.txt",
+    "?? build/evidence/w4-perf-p0.txt.bak",
+    "?? build/evidence/w4-perf-p1.txt.bak",
+    "?? build/evidence/w4-perf-p2.txt.bak",
+    "?? build/evidence/w4-perf-p3.txt.bak",
+    "?? build/evidence/w4-perf-p4.txt.bak",
+    "?? build/evidence/w4-perf-review-gate.txt",
+    "?? build/evidence/wrap-sfu-regression.txt",
+    "?? build/evidence/wv-f2-rbf.txt",
+    "?? build/evidence/wv-f3-rbf.txt",
+    "?? build/evidence/wv-f4-rbf.txt",
+    "?? build/install/",
+    "?? build/llama/",
+    "?? build/p9_simv_soc_top",
+    "?? build/run_quick.sh",
+    "?? build/run_sfu_debug.sh",
+    "?? build/software/",
+    "?? config/",
+    "?? deps/",
+    "?? docs/bugs/BUG-MXU-P9-001-doorbell-divergence.md",
+    "?? dtc_src",
+    "?? gen/",
+    "?? reports/dse-engine-model-bugs-2026-07-27.md",
+    "?? rtl/include/",
+    "?? rtl/testcase-list-perf.md.bak.2591890",
+    "?? scripts/aggregate_software_signoff.py",
+    "?? scripts/build_software_release.py",
+    "?? scripts/build_spike_stack.py",
+    "?? scripts/fetch_llama_cpp.py",
+    "?? scripts/gen_npu_abi.py",
+    "?? scripts/run_dut_scenarios.py",
+    "?? scripts/run_executorch_delegate_tests.py",
+    "?? scripts/run_fpga_software_signoff.py",
+    "?? scripts/run_installed_smoke_tests.py",
+    "?? scripts/run_qwen3b_software_signoff.py",
+    "?? scripts/run_runtime_rtl_signoff.py",
+    "?? scripts/run_runtime_spike_signoff.py",
+    "?? scripts/run_soc_differential.py",
+    "?? sim/device_protocol.py",
+    "?? sim/device_server.py",
+    "?? sim/rtl_protocol_endpoint.py",
+    "?? sim/signoff/qwen3b_signoff.py",
+    "?? sim/signoff/qwen3b_signoff_config.py",
+    "?? sim/signoff/qwen3b_signoff_gates.py",
+    "?? sim/signoff/qwen3b_signoff_io.py",
+    "?? sim/signoff/qwen3b_signoff_runner.py",
+    "?? sim/tests/test_device_protocol.py",
+    "?? sim/tests/test_device_protocol_cpp.py",
+    "?? sim/tests/test_executorch_delegate.py",
+    "?? sim/tests/test_fpga_software_signoff.py",
+    "?? sim/tests/test_func_model_dut_adapter.py",
+    "?? sim/tests/test_llama_dependency_lock.py",
+    "?? sim/tests/test_npu_abi_bindings.py",
+    "?? sim/tests/test_npu_abi_schema.py",
+    "?? sim/tests/test_qwen3b_software_signoff.py",
+    "?? sim/tests/test_runtime_real_firmware.py",
+    "?? sim/tests/test_runtime_rtl_transport.py",
+    "?? sim/tests/test_soc_differential.py",
+    "?? sim/tests/test_software_signoff_aggregator.py",
+    "?? sim/tests/test_spike_toolchain_manifest.py",
+    "?? sim/tests/test_verification_fault_injection.py",
+    "?? sim/verification/differential.py",
+    "?? sim/verification/fault_injector.py",
+    "?? sim/verification/fm_adapter.py",
+    "?? sim/verification/rtl_adapter.py",
+    "?? software/build/",
+    "?? software/compiler/",
+    "?? software/executorch/",
+    "?? software/include/caduceus/cad_transport.h",
+    "?? software/include/caduceus/transport_fm.h",
+    "?? software/include/caduceus/transport_fpga.h",
+    "?? software/include/caduceus/transport_mock_test.h",
+    "?? software/include/caduceus/transport_rtl.h",
+    "?? software/python/",
+    "?? software/schema/",
+    "?? software/src/runtime_core.c",
+    "?? software/src/runtime_core.h",
+    "?? software/src/transport_fm.cpp",
+    "?? software/src/transport_fpga.cpp",
+    "?? software/src/transport_mock.c",
+    "?? software/src/transport_rtl.cpp",
+    "?? software/tests/doctest.h",
+    "?? software/tests/test_abi_layout.cpp",
+    "?? software/tests/test_command_lowering.cpp",
+    "?? software/tests/test_command_lowering_negative.cpp",
+    "?? software/tests/test_executorch_backend.cpp",
+    "?? software/tests/test_fpga_transport.cpp",
+    "?? software/tests/test_fpga_transport_negative.cpp",
+    "?? software/tests/test_ggml_op_support_negative.cpp",
+    "?? software/tests/test_ggml_runtime_faults.c",
+    "?? software/tests/test_rtl_transport.cpp",
+    "?? software/tests/test_rtl_transport_negative.cpp",
+    "?? software/tests/test_runtime_conformance.c",
+    "?? software/tests/test_runtime_conformance.cpp",
+    "?? software/tests/test_runtime_faults.c",
+    "?? spec/",
+    "?? third_party/",
+    "M .omo/evidence/e2e-task-14-e2e.txt",
+    "M .omo/evidence/e2e-task-14-npz-compare.txt",
+    "M .omo/evidence/task-0-signoff-v3-runner.txt",
+    "M .omo/notepads/func-model-gap-closure/learnings.md",
+    "M .omo/notepads/func-model-soc-software-stack/learnings.md",
+    "M .omo/notepads/phase6-rtl-verification/learnings.md",
+    "M .omo/plans/func-model-soc-software-stack.md",
+    "M build/evidence/fm-cv-chain.txt",
+    "M build/evidence/w3-4-mobilenetv3-fm.txt",
+    "M docs/func-model-signoff-checklist.md",
+    "M firmware/Makefile",
+    "M firmware/build/npu_firmware.elf",
+    "M firmware/build/npu_firmware.hex",
+    "M firmware/build/npu_firmware.map",
+    "M firmware/build/npu_firmware.o",
+    "M firmware/build/npu_firmware_spike.elf",
+    "M firmware/build/npu_firmware_spike.map",
+    "M firmware/npu-regmap.h",
+    "M firmware/npu_firmware.c",
+    "M ggml-npu/CMakeLists.txt",
+    "M ggml-npu/ggml-npu.cpp",
+    "M ggml-npu/ggml-npu.h",
+    "M llama_ref/llama.cpp",
+    "M sim/check_mmio_map.py",
+    "M sim/engine/compiler.py",
+    "M sim/regmap.py",
+    "M sim/rtl_soc_runner.py",
+    "M sim/tests/conftest.py",
+    "M sim/verification/__init__.py",
+    "M sim/verification/scoreboard.py",
+    "M software/CMakeLists.txt",
+    "M spike_src/plugins/npu_mmio_plugin.so"
+  ]
+}

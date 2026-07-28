@@ -1,0 +1,27 @@
+Per-element comparison: Spike DRAM vs llama_ref/refs/qwen_l0_l1_hidden.npz
+Tolerance: 1e-01
+
+--- l_out_0 ---
+shape: (3, 1536)
+max_abs: 6.050125e+00
+max_rel: 4.268064e+01
+mean_abs: 4.208875e-01
+mean_rel: 1.071975e+00
+worst_idx: (1, 609)
+spike: 1.00000000e+00
+ref:   7.05012465e+00
+diff:  6.05012465e+00
+rel:   8.58158529e-01
+
+--- l_out_1 ---
+shape: (3, 1536)
+max_abs: 2.889692e+03
+max_rel: 3.913316e+03
+mean_abs: 8.544898e+00
+mean_rel: 9.556031e+00
+worst_idx: (0, 664)
+spike: -2.89500000e+03
+ref:   -5.30774689e+00
+diff:  2.88969214e+03
+rel:   5.44429138e+02
+
