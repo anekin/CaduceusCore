@@ -56,6 +56,12 @@ const mock_op_log_entry_t *cad_mock_get_op_log(cad_device_t device,
                                                  uint32_t *count);
 void cad_mock_clear_op_log(cad_device_t device);
 
+/* Return the last serialized payload passed to mock_submit().
+ * The returned pointer is valid until the next cad_mock_reset() or
+ * mock_submit() call. size receives the payload size in bytes, or 0
+ * if no payload has been submitted. */
+const void *cad_mock_get_last_submit_payload(uint32_t *size);
+
 #ifdef __cplusplus
 }
 #endif

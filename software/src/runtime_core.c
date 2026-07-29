@@ -43,7 +43,7 @@ static const cad_transport_reg_t transport_registry[] = {
 static const size_t transport_registry_count =
     sizeof(transport_registry) / sizeof(transport_registry[0]);
 
-/* Resolve a URI to transport ops. Falls back to mock. */
+/* Resolve a URI to transport ops. */
 static const cad_transport_reg_t *find_transport(const char *uri) {
     if (!uri) return NULL;
     for (size_t i = 0; i < transport_registry_count; i++) {
@@ -51,10 +51,6 @@ static const cad_transport_reg_t *find_transport(const char *uri) {
         if (strncmp(uri, transport_registry[i].scheme, slen) == 0) {
             return &transport_registry[i];
         }
-    }
-    /* fpga:// → map to mock for now (FPGA transport not yet registered) */
-    if (strncmp(uri, "fpga://", 7) == 0) {
-        return &transport_registry[2]; /* mock */
     }
     return NULL;
 }
@@ -72,7 +68,7 @@ const char *cadErrorString(cad_error_t error) {
     case CAD_ERROR_OUT_OF_MEMORY:   return "Out of memory";
     case CAD_ERROR_NOT_READY:       return "Not ready";
     case CAD_ERROR_DEVICE_BUSY:     return "Device busy";
-    case CAD_ERROR_UNSUPPORTED:     return "Unsupported";
+    case CAD_ERROR_UNSUPPORTED:     return "fpga:// transport not yet implemented — no FPGA platform available";
     default:                        return "Unknown error";
     }
 }
@@ -92,6 +88,12 @@ cad_error_t cadDeviceOpen(const cad_device_open_info_t *open_info,
     cad_error_t abi_err = check_abi_compat(open_info->abi_major,
                                             open_info->abi_minor);
     if (abi_err != CAD_SUCCESS) return abi_err;
+
+    /* fpga:// is reserved for a future Linux userspace FPGA transport but is
+     * not yet implemented; there is no FPGA platform available in this build. */
+    if (strncmp(open_info->uri, "fpga://", 7) == 0) {
+        return CAD_ERROR_UNSUPPORTED;
+    }
 
     const cad_transport_reg_t *reg = find_transport(open_info->uri);
     if (!reg) return CAD_ERROR_INVALID_ARGUMENT;
@@ -242,6 +244,21 @@ cad_error_t cadBufferWrite(cad_buffer_t buffer,
     return trerr_to_cad(tr_err);
 }
 
+cad_error_t cadBufferGetDeviceAddress(cad_buffer_t buffer, uint64_t *addr) {
+    if (!validate_buffer(buffer)) return CAD_ERROR_INVALID_HANDLE;
+    if (!addr) return CAD_ERROR_INVALID_ARGUMENT;
+
+    /* Only FuncModel transport maps buffers into a device-visible DRAM window. */
+    if (strncmp(buffer->device->transport_name, "FuncModel", 9) != 0) {
+        return CAD_ERROR_UNSUPPORTED;
+    }
+
+    /* FM transport stores the device-physical address as the buffer handle
+     * (the value returned by the server's buffer allocator). */
+    *addr = *(uint64_t *)buffer->backend_buf;
+    return CAD_SUCCESS;
+}
+
 /* ── Command list lifecycle ──────────────────────────────────────── */
 
 cad_error_t cadCommandListCreate(cad_device_t device,
@@ -253,11 +270,18 @@ cad_error_t cadCommandListCreate(cad_device_t device,
                            CAD_COMMAND_LIST_CREATE_INFO_STRUCT_SIZE))
         return CAD_ERROR_INVALID_ARGUMENT;
 
+    uint32_t max = ci->max_entries > 0 ? ci->max_entries : 65536;
+
     cad_command_list_impl_t *cl = calloc(1, sizeof(*cl));
     if (!cl) return CAD_ERROR_OUT_OF_MEMORY;
+    cl->blob_entries = calloc(max, sizeof(*cl->blob_entries));
+    if (!cl->blob_entries) {
+        free(cl);
+        return CAD_ERROR_OUT_OF_MEMORY;
+    }
     cl->magic = CAD_MAGIC_COMMAND_LIST;
     cl->device = device;
-    cl->max_entries = ci->max_entries > 0 ? ci->max_entries : 65536;
+    cl->max_entries = max;
     cl->entry_count = 0;
     cl->submitted = 0;
     *cmd_list = cl;
@@ -267,6 +291,7 @@ cad_error_t cadCommandListCreate(cad_device_t device,
 cad_error_t cadCommandListDestroy(cad_command_list_t cmd_list) {
     if (!validate_command_list(cmd_list)) return CAD_ERROR_INVALID_HANDLE;
     cmd_list->magic = CAD_MAGIC_DEAD;
+    free(cmd_list->blob_entries);
     free(cmd_list);
     return CAD_SUCCESS;
 }
@@ -275,6 +300,22 @@ cad_error_t cadCommandListAppendNop(cad_command_list_t cmd_list) {
     if (!validate_command_list(cmd_list)) return CAD_ERROR_INVALID_HANDLE;
     if (cmd_list->entry_count >= cmd_list->max_entries)
         return CAD_ERROR_OUT_OF_MEMORY;
+    cmd_list->entry_count++;
+    return CAD_SUCCESS;
+}
+
+cad_error_t cadCommandListAppendExecuteBlob(cad_command_list_t cmd_list,
+                                            cad_buffer_t blob_buffer,
+                                            uint64_t blob_offset,
+                                            uint64_t blob_size) {
+    if (!validate_command_list(cmd_list)) return CAD_ERROR_INVALID_HANDLE;
+    if (!blob_buffer) return CAD_ERROR_INVALID_ARGUMENT;
+    if (cmd_list->entry_count >= cmd_list->max_entries)
+        return CAD_ERROR_OUT_OF_MEMORY;
+    cad_blob_entry_t *entry = &cmd_list->blob_entries[cmd_list->entry_count];
+    entry->blob_buf = blob_buffer;
+    entry->offset = blob_offset;
+    entry->size = blob_size;
     cmd_list->entry_count++;
     return CAD_SUCCESS;
 }
@@ -316,13 +357,54 @@ cad_error_t cadQueueSubmit(cad_queue_t queue,
     cad_transport_fence_t *tr_fence = NULL;
     if (fence) tr_fence = fence->backend_fence;
 
-    /* Build transport command data: just the entry count for mock */
-    /* (In a real implementation, this would be a serialized command buffer.) */
+    uint32_t nop_count = 0;
+    uint32_t blob_count = 0;
+    uint64_t total_blob_bytes = 0;
+
+    for (uint32_t i = 0; i < cmd_list->entry_count; i++) {
+        cad_blob_entry_t *e = &cmd_list->blob_entries[i];
+        if (e->blob_buf == NULL) {
+            nop_count++;
+        } else {
+            if (!validate_buffer(e->blob_buf)) {
+                return CAD_ERROR_INVALID_HANDLE;
+            }
+            blob_count++;
+            total_blob_bytes += e->size;
+        }
+    }
+
+    if (total_blob_bytes > (uint64_t)(UINT32_MAX - 12)) {
+        return CAD_ERROR_OUT_OF_MEMORY;
+    }
+    uint32_t ser_size = (uint32_t)(12 + total_blob_bytes);
+    uint8_t *ser = malloc(ser_size);
+    if (!ser) return CAD_ERROR_OUT_OF_MEMORY;
+
+    /* Serialized format: nop_count | blob_count | total_cmd_count | raw blobs */
+    uint32_t *hdr = (uint32_t *)ser;
+    hdr[0] = nop_count;
+    hdr[1] = blob_count;
+    hdr[2] = cmd_list->entry_count;
+
+    uint8_t *blob_dst = ser + 12;
+    for (uint32_t i = 0; i < cmd_list->entry_count; i++) {
+        cad_blob_entry_t *e = &cmd_list->blob_entries[i];
+        if (e->blob_buf != NULL) {
+            cad_error_t rerr = cadBufferRead(e->blob_buf, e->offset,
+                                              e->size, blob_dst);
+            (void)rerr;
+            blob_dst += e->size;
+        }
+    }
+
     int tr_err = queue->device->transport.submit(
         queue->device->transport_priv,
-        cmd_list,
-        cmd_list->entry_count,
+        ser,
+        ser_size,
         tr_fence);
+
+    free(ser);  /* always freed — no leak on success or failure */
 
     if (tr_err != CAD_TR_SUCCESS) {
         return trerr_to_cad(tr_err);
@@ -419,6 +501,34 @@ cad_error_t cadFenceGetStatus(cad_fence_t fence,
     case 1: *status = CAD_FENCE_COMPLETED; break;
     case 2: *status = CAD_FENCE_ERROR;     break;
     default:*status = CAD_FENCE_NOT_READY; break;
+    }
+    return CAD_SUCCESS;
+}
+
+cad_error_t cadFenceGetExecutionStats(cad_fence_t fence,
+                                       cad_execution_stats_t *stats) {
+    if (!validate_fence(fence)) return CAD_ERROR_INVALID_HANDLE;
+    if (!stats) return CAD_ERROR_INVALID_ARGUMENT;
+
+    int (*fn)(void *, cad_transport_fence_t *,
+              uint32_t *, uint32_t *, uint32_t *, uint32_t *,
+              uint64_t *, uint64_t *) =
+        fence->device->transport.fence_get_exec_stats;
+
+    if (!fn) {
+        return CAD_ERROR_NOT_READY;
+    }
+
+    int err = fn(fence->device->transport_priv,
+                 fence->backend_fence,
+                 &stats->mmul_ops,
+                 &stats->sfu_ops,
+                 &stats->vector_ops,
+                 &stats->dma_ops,
+                 &stats->dma_bytes_read,
+                 &stats->dma_bytes_written);
+    if (err != 0) {
+        return CAD_ERROR_NOT_READY;
     }
     return CAD_SUCCESS;
 }

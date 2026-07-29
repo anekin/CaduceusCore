@@ -5,7 +5,8 @@
  *   - Opaque handles (cad_device_t, cad_buffer_t, …)
  *   - Typed versioned structs with struct_size + abi_major/abi_minor
  *   - Explicit create/destroy lifecycle, no implicit allocation
- *   - URI-based device selection (fm://, rtl://, fpga://)
+ *   - URI-based device selection (fm://, rtl://, mock://; fpga:// is reserved
+ *     for a future Linux userspace FPGA transport but not yet available)
  *   - Extension query pattern via capability structs
  *
  * ABI Version: Major 1, Minor 0
@@ -80,7 +81,9 @@ typedef struct cad_device_open_info_t {
     uint32_t    struct_size;
     uint32_t    abi_major;           /* client-requested major version */
     uint32_t    abi_minor;           /* client-requested minor version */
-    const char *uri;                 /* "fm://", "rtl://", "fpga://", "mock://" */
+    const char *uri;                 /* "fm://", "rtl://", "mock://";
+                                      * "fpga://" is reserved and returns
+                                      * CAD_ERROR_UNSUPPORTED. */
 } cad_device_open_info_t;
 
 /* ── Device capabilities ─────────────────────────────────────────── */
@@ -202,6 +205,24 @@ cad_error_t cadBufferWrite(cad_buffer_t buffer,
                             uint64_t size,
                             const void *data);
 
+/*
+ * Return the device-visible physical address of a buffer.
+ *
+ * For `fm://` devices, the address is the DRAM window address assigned
+ * by the device server (starting at 0x80100000).  This address can be
+ * passed as the host_addr parameter to cad_buffer_declare().
+ *
+ * Returns:
+ *   CAD_SUCCESS             – addr populated with device physical address
+ *   CAD_ERROR_INVALID_HANDLE – buffer is NULL, invalid (freed), or mock
+ *   CAD_ERROR_INVALID_ARGUMENT – addr is NULL
+ *   CAD_ERROR_UNSUPPORTED   – transport does not expose device addresses
+ *                             (e.g. mock, fpga, or a transport with no
+ *                             DRAM window mapping)
+ */
+cad_error_t cadBufferGetDeviceAddress(cad_buffer_t buffer,
+                                       uint64_t *addr);
+
 /* ── Command list lifecycle ──────────────────────────────────────── */
 
 /* Create a command list.  Command lists are recording-only; they do not
@@ -218,6 +239,22 @@ cad_error_t cadCommandListDestroy(cad_command_list_t cmd_list);
 /* Append a no-op marker to the command list (for testing fence
  * signalling without hardware work). */
 cad_error_t cadCommandListAppendNop(cad_command_list_t cmd_list);
+
+/* Append an opaque ExecuteBlob entry to the command list.
+ *
+ * The runtime records a reference to (blob_buffer, blob_offset, blob_size)
+ * without interpreting the blob contents.  The blob is consumed by the
+ * firmware at submission time.
+ *
+ * Returns:
+ *   CAD_SUCCESS               – entry recorded
+ *   CAD_ERROR_INVALID_HANDLE  – cmd_list is NULL, invalid, or already submitted
+ *   CAD_ERROR_INVALID_ARGUMENT – blob_buffer is NULL
+ *   CAD_ERROR_OUT_OF_MEMORY   – command list is full (entry_count >= max_entries) */
+cad_error_t cadCommandListAppendExecuteBlob(cad_command_list_t cmd_list,
+                                            cad_buffer_t blob_buffer,
+                                            uint64_t blob_offset,
+                                            uint64_t blob_size);
 
 /* ── Queue lifecycle ─────────────────────────────────────────────── */
 
@@ -267,6 +304,33 @@ cad_error_t cadFencePoll(cad_fence_t fence);
 /* Query the fence's current status. */
 cad_error_t cadFenceGetStatus(cad_fence_t fence,
                                cad_fence_status_t *status);
+
+/* ── Execution statistics ────────────────────────────────────────── */
+
+typedef struct cad_execution_stats_t {
+    uint32_t mmul_ops;           /* number of MMUL operations executed */
+    uint32_t sfu_ops;            /* number of SFU operations executed */
+    uint32_t vector_ops;         /* number of Vector operations executed */
+    uint32_t dma_ops;            /* number of DMA operations executed */
+    uint64_t dma_bytes_read;     /* total bytes read by DMA */
+    uint64_t dma_bytes_written;  /* total bytes written by DMA */
+} cad_execution_stats_t;
+
+/*
+ * Retrieve execution statistics for a fence.
+ *
+ * Stats are populated by the transport during submit response processing
+ * and reflect the actual commands submitted (not hardcoded constants).
+ *
+ * Returns:
+ *   CAD_SUCCESS              – stats populated
+ *   CAD_ERROR_NOT_READY       – fence is valid but no stats available
+ *                               (e.g., NOP-only submit, mock transport)
+ *   CAD_ERROR_INVALID_HANDLE  – fence is NULL, invalid, or freed
+ *   CAD_ERROR_INVALID_ARGUMENT – stats ptr is NULL
+ */
+cad_error_t cadFenceGetExecutionStats(cad_fence_t fence,
+                                       cad_execution_stats_t *stats);
 
 /* ── Error information ───────────────────────────────────────────── */
 

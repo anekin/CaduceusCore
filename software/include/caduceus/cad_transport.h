@@ -68,6 +68,18 @@ typedef struct cad_transport_ops_t {
     int (*submit)(void *tpriv, void *cmd_data, uint32_t cmd_count,
                   cad_transport_fence_t *fence);
 
+    /* Get execution stats for a fence. Stats are populated by the
+     * transport during submit response processing. Returns 0 on
+     * success, -1 if no stats available. */
+    int (*fence_get_exec_stats)(void *tpriv,
+                                cad_transport_fence_t *fence,
+                                uint32_t *mmul_ops,
+                                uint32_t *sfu_ops,
+                                uint32_t *vector_ops,
+                                uint32_t *dma_ops,
+                                uint64_t *dma_bytes_read,
+                                uint64_t *dma_bytes_written);
+
 } cad_transport_ops_t;
 
 /* ── Transport error → cad_error_t mapping ──────────────────────── */

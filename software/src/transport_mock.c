@@ -23,6 +23,10 @@ static int g_mock_pending_ticks = 0;  /* ticks before fence signals */
 static int g_mock_next_submit_error = 0; /* 0=ok, else cad_error_t */
 static int g_mock_tick_counter = 0;
 
+/* Last-submit payload capture (for test verification) */
+static void *g_mock_last_cmd_data = NULL;
+static uint32_t g_mock_last_cmd_size = 0;
+
 /* Public API to configure mock behavior (called by tests) */
 void cad_mock_set_pending_ticks(int n) { g_mock_pending_ticks = n; }
 void cad_mock_set_next_submit_error(int e) { g_mock_next_submit_error = e; }
@@ -31,6 +35,9 @@ void cad_mock_reset(void) {
     g_mock_pending_ticks = 0;
     g_mock_next_submit_error = 0;
     g_mock_tick_counter = 0;
+    free(g_mock_last_cmd_data);
+    g_mock_last_cmd_data = NULL;
+    g_mock_last_cmd_size = 0;
 }
 int cad_mock_get_tick(void) { return g_mock_tick_counter; }
 
@@ -259,7 +266,18 @@ static int mock_fence_status(void *tpriv, cad_transport_fence_t *f) {
 static int mock_submit(void *tpriv, void *cmd_data, uint32_t cmd_count,
                         cad_transport_fence_t *fence) {
     mock_device_t *md = (mock_device_t *)tpriv;
-    (void)cmd_data;  /* opaque to transport */
+
+    /* Capture serialized payload for test verification */
+    free(g_mock_last_cmd_data);
+    g_mock_last_cmd_data = NULL;
+    g_mock_last_cmd_size = 0;
+    if (cmd_data && cmd_count > 0) {
+        g_mock_last_cmd_data = malloc(cmd_count);
+        if (g_mock_last_cmd_data) {
+            memcpy(g_mock_last_cmd_data, cmd_data, cmd_count);
+            g_mock_last_cmd_size = cmd_count;
+        }
+    }
 
     /* Check fault injection */
     if (g_mock_next_submit_error != 0) {
@@ -279,6 +297,12 @@ static int mock_submit(void *tpriv, void *cmd_data, uint32_t cmd_count,
     }
 
     return CAD_TR_SUCCESS;
+}
+
+/* Retrieve the last captured submit payload (test-only) */
+const void *cad_mock_get_last_submit_payload(uint32_t *size) {
+    if (size) *size = g_mock_last_cmd_size;
+    return g_mock_last_cmd_data;
 }
 
 /* ── Transport constructor ──────────────────────────────────────── */
@@ -307,4 +331,5 @@ const cad_transport_ops_t cad_transport_mock_ops = {
     .fence_poll    = mock_fence_poll,
     .fence_status  = mock_fence_status,
     .submit        = mock_submit,
+    .fence_get_exec_stats = NULL,  /* mock has no execution stats */
 };

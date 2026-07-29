@@ -46,12 +46,21 @@ typedef struct cad_queue_impl_t {
     uint32_t     seq_counter;              /* monotonic submit counter */
 } cad_queue_impl_t;
 
+/* Opaque blob reference stored per command-list entry.
+ * The runtime does NOT interpret blob contents. */
+typedef struct cad_blob_entry_t {
+    cad_buffer_t blob_buf;
+    uint64_t     offset;
+    uint64_t     size;
+} cad_blob_entry_t;
+
 typedef struct cad_command_list_impl_t {
-    uint32_t     magic;
-    cad_device_t device;
-    uint32_t     max_entries;
-    uint32_t     entry_count;
-    int          submitted;  /* 1 = ownership transferred to queue */
+    uint32_t         magic;
+    cad_device_t     device;
+    uint32_t         max_entries;
+    uint32_t         entry_count;
+    int              submitted;     /* 1 = ownership transferred to queue */
+    cad_blob_entry_t *blob_entries; /* array of max_entries, allocated on create */
 } cad_command_list_impl_t;
 
 typedef struct cad_fence_impl_t {
