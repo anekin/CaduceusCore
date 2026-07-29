@@ -11,12 +11,58 @@ from ctypes import (
     POINTER,
     Structure,
     c_char,
+    c_int,
+    c_uint8,
     c_uint32,
     c_uint64,
     c_void_p,
     byref,
     pointer,
 )
+
+
+class LibCommandIR:
+    """Load the command_ir shared library (libcaduceus_command_ir.so).
+
+    Search order:
+      1. Same directory as libcaduceus_runtime.so
+      2. Install prefix: <module>/../../lib/libcaduceus_command_ir.so
+      3. Standard system paths via ctypes.util.find_library
+      4. Development fallback: build/software/libcaduceus_command_ir.so
+    """
+
+    _instance = None
+
+    @classmethod
+    def get(cls):
+        if cls._instance is None:
+            lib_path = cls._find_lib()
+            cls._instance = ctypes.CDLL(lib_path)
+        return cls._instance
+
+    @classmethod
+    def _find_lib(cls):
+        import ctypes.util
+
+        # Same directory as the runtime lib
+        runtime_path = os.environ.get("CADUCEUS_RUNTIME_LIB")
+        if runtime_path:
+            runtime_dir = os.path.dirname(runtime_path)
+            cand = os.path.join(runtime_dir, "libcaduceus_command_ir.so")
+            if os.path.isfile(cand):
+                return cand
+
+        module_dir = os.path.dirname(os.path.abspath(__file__))
+        prefix_lib = os.path.join(module_dir, "..", "..", "lib",
+                                  "libcaduceus_command_ir.so")
+        if os.path.isfile(prefix_lib):
+            return prefix_lib
+
+        sys_lib = ctypes.util.find_library("caduceus_command_ir")
+        if sys_lib:
+            return sys_lib
+
+        return "build/software/libcaduceus_command_ir.so"
 
 
 class LibRuntime:
@@ -217,6 +263,11 @@ def _setup_prototypes(lib):
 
     lib.cadCommandListAppendNop.argtypes = [CadCommandList]
     lib.cadCommandListAppendNop.restype = c_uint32
+
+    lib.cadCommandListAppendExecuteBlob.argtypes = [
+        CadCommandList, CadBuffer, c_uint64, c_uint64,
+    ]
+    lib.cadCommandListAppendExecuteBlob.restype = c_uint32
 
     lib.cadQueueCreate.argtypes = [
         CadDevice,
@@ -494,3 +545,293 @@ def mock_advance_ticks(n):
 
 def mock_reset():
     _lib.cad_mock_reset()
+
+
+# ── Command Blob / Lowering / Encoding API ──────────────────────────
+
+
+class CommandBlob:
+    """Pythonic wrapper around cad_command_blob_t.
+
+    Usage:
+        blob = CommandBlob(CAD_CAP_MXU | CAD_CAP_SFU | CAD_CAP_VECTOR | CAD_CAP_DMA)
+        input_id = blob.declare_buffer(size=64, host_addr=0x80100000)
+        weight_id = blob.declare_buffer(size=32, host_addr=0x80100040)
+        ...
+        blob.mmul(input_id, weight_id, output_id, scale_id, M=1, K=64, N=64)
+        blob.lower()
+        encoded = blob.encode()
+        # Write encoded to a device buffer, then submit via CommandList + ExecuteBlob
+    """
+
+    def __init__(self, caps):
+        blob = _lib_ci.cad_command_blob_create(c_uint32(caps))
+        if not blob:
+            raise RuntimeError("cad_command_blob_create returned NULL")
+        self._handle = blob
+        self._lowered = False
+
+    def destroy(self):
+        if self._handle:
+            _lib_ci.cad_command_blob_destroy(self._handle)
+            self._handle = None
+
+    @property
+    def handle(self):
+        return self._handle
+
+    def release(self):
+        h = self._handle
+        self._handle = None
+        return h
+
+    def declare_buffer(self, size, host_addr=0, alignment=64):
+        bid = _lib_ci.cad_buffer_declare(
+            self._handle,
+            c_uint64(size),
+            c_uint32(alignment),
+            c_uint64(host_addr),
+        )
+        if bid == CAD_BUFFER_INVALID:
+            raise RuntimeError("cad_buffer_declare returned CAD_BUFFER_INVALID")
+        return bid
+
+    def mmul(self, input_id, weight_id, output_id, scale_id, M, K, N,
+             dep_count=0, deps=None):
+        _check_blob_op(
+            _lib_ci.cad_op_mmul(
+                self._handle,
+                c_uint32(input_id), c_uint32(weight_id),
+                c_uint32(output_id), c_uint32(scale_id),
+                c_uint32(M), c_uint32(K), c_uint32(N),
+                c_uint32(dep_count),
+                _deps_array(deps, dep_count),
+            )
+        )
+
+    def sfu(self, sfu_op, input_id, output_id, elements, head_dim=0, pos=0,
+            dep_count=0, deps=None):
+        _check_blob_op(
+            _lib_ci.cad_op_sfu(
+                self._handle,
+                c_uint32(sfu_op),
+                c_uint32(input_id), c_uint32(output_id),
+                c_uint32(elements), c_uint32(head_dim), c_uint32(pos),
+                c_uint32(dep_count),
+                _deps_array(deps, dep_count),
+            )
+        )
+
+    def vector(self, vec_op, a_id, b_id, output_id, elements,
+               dep_count=0, deps=None):
+        _check_blob_op(
+            _lib_ci.cad_op_vector(
+                self._handle,
+                c_uint32(vec_op),
+                c_uint32(a_id), c_uint32(b_id), c_uint32(output_id),
+                c_uint32(elements),
+                c_uint32(dep_count),
+                _deps_array(deps, dep_count),
+            )
+        )
+
+    def dma_copy(self, src_id, src_offset, dst_id, dst_offset, size,
+                 dep_count=0, deps=None):
+        _check_blob_op(
+            _lib_ci.cad_op_dma_copy(
+                self._handle,
+                c_uint32(src_id), c_uint64(src_offset),
+                c_uint32(dst_id), c_uint64(dst_offset),
+                c_uint64(size),
+                c_uint32(dep_count),
+                _deps_array(deps, dep_count),
+            )
+        )
+
+    def barrier(self):
+        _check_blob_op(_lib_ci.cad_op_barrier(self._handle))
+
+    def lower(self):
+        ls = _lib_ci.cad_command_blob_lower(self._handle)
+        if ls != CAD_LOWER_OK:
+            msg = _lib_ci.cad_lower_status_string(ls)
+            raise RuntimeError(f"cad_command_blob_lower: {msg}")
+        self._lowered = True
+
+    def encode(self):
+        if not self._lowered:
+            raise RuntimeError("must lower() before encode()")
+        out_buf = POINTER(c_uint8)()
+        out_size = c_size_t()
+        rc = _lib_ci.cad_command_blob_encode(
+            self._handle, byref(out_buf), byref(out_size)
+        )
+        if rc != 0 or not out_buf or out_size.value == 0:
+            raise RuntimeError("cad_command_blob_encode failed")
+        data = bytes((c_uint8 * out_size.value).from_address(
+            ctypes.addressof(out_buf.contents)
+        ))
+        _lib_ci.cad_command_blob_encoded_free(out_buf)
+        return data
+
+    @property
+    def num_commands(self):
+        return _lib_ci.cad_command_blob_num_commands(self._handle)
+
+    @property
+    def num_buffers(self):
+        return _lib_ci.cad_command_blob_num_buffers(self._handle)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.destroy()
+
+
+# Command blob constants
+CAD_CAP_MXU = (1 << 0)
+CAD_CAP_SFU = (1 << 1)
+CAD_CAP_VECTOR = (1 << 2)
+CAD_CAP_DMA = (1 << 3)
+CAD_CAP_PCIE = (1 << 4)
+
+CAD_OP_MMUL = 0x00
+CAD_OP_SFU_RMSNORM = 0x17
+CAD_OP_SFU_SOFTMAX = 0x01
+CAD_OP_SFU_LAYERNORM = 0x02
+CAD_OP_SFU_GELU = 0x03
+CAD_OP_SFU_SILU = 0x06
+CAD_OP_VADD = 0x0F
+CAD_OP_VMUL = 0x10
+CAD_OP_DMA_COPY = 0x09
+CAD_OP_BARRIER = 0xFF
+
+CAD_BUFFER_INVALID = 0
+
+CAD_LOWER_OK = 0
+
+_LOWER_STATUS = {
+    0: "OK",
+    1: "INVALID_SHAPE",
+    2: "INVALID_ALIGNMENT",
+    3: "BUFFER_OVERLAP",
+    4: "ADDRESS_OVERFLOW",
+    5: "UNSUPPORTED_OP",
+    6: "BAD_TILE",
+    7: "INVALID_DEPENDENCY",
+    8: "OUT_OF_MEMORY",
+    9: "INVALID_BLOB",
+}
+
+
+def _deps_array(deps, count):
+    if count == 0 or deps is None:
+        return None
+    return (c_uint32 * len(deps))(*deps)
+
+
+def _check_blob_op(rc):
+    if rc != 0:
+        raise RuntimeError(f"command blob operation failed: rc={rc}")
+
+
+# ── Command list: AppendExecuteBlob extension ───────────────────────
+
+
+def _setup_command_ir_prototypes(lib):
+    lib.cad_command_blob_create.argtypes = [c_uint32]
+    lib.cad_command_blob_create.restype = c_void_p
+
+    lib.cad_command_blob_destroy.argtypes = [c_void_p]
+    lib.cad_command_blob_destroy.restype = None
+
+    lib.cad_buffer_declare.argtypes = [
+        c_void_p, c_uint64, c_uint32, c_uint64,
+    ]
+    lib.cad_buffer_declare.restype = c_uint32
+
+    lib.cad_op_mmul.argtypes = [
+        c_void_p,
+        c_uint32, c_uint32, c_uint32, c_uint32,
+        c_uint32, c_uint32, c_uint32,
+        c_uint32, c_void_p,
+    ]
+    lib.cad_op_mmul.restype = c_int
+
+    lib.cad_op_sfu.argtypes = [
+        c_void_p,
+        c_uint32, c_uint32, c_uint32,
+        c_uint32, c_uint32, c_uint32,
+        c_uint32, c_void_p,
+    ]
+    lib.cad_op_sfu.restype = c_int
+
+    lib.cad_op_vector.argtypes = [
+        c_void_p,
+        c_uint32, c_uint32, c_uint32, c_uint32,
+        c_uint32, c_uint32, c_void_p,
+    ]
+    lib.cad_op_vector.restype = c_int
+
+    lib.cad_op_dma_copy.argtypes = [
+        c_void_p,
+        c_uint32, c_uint64, c_uint32, c_uint64,
+        c_uint64, c_uint32, c_void_p,
+    ]
+    lib.cad_op_dma_copy.restype = c_int
+
+    lib.cad_op_barrier.argtypes = [c_void_p]
+    lib.cad_op_barrier.restype = c_int
+
+    lib.cad_command_blob_lower.argtypes = [c_void_p]
+    lib.cad_command_blob_lower.restype = c_uint32
+
+    lib.cad_command_blob_encode.argtypes = [
+        c_void_p, POINTER(POINTER(c_uint8)), POINTER(c_size_t),
+    ]
+    lib.cad_command_blob_encode.restype = c_int
+
+    lib.cad_command_blob_encoded_free.argtypes = [c_void_p]
+    lib.cad_command_blob_encoded_free.restype = None
+
+    lib.cad_command_blob_num_commands.argtypes = [c_void_p]
+    lib.cad_command_blob_num_commands.restype = c_size_t
+
+    lib.cad_command_blob_num_buffers.argtypes = [c_void_p]
+    lib.cad_command_blob_num_buffers.restype = c_size_t
+
+    lib.cad_lower_status_string.argtypes = [c_uint32]
+    lib.cad_lower_status_string.restype = ctypes.c_char_p
+
+    lib.cad_test_set_buffer_phys_addr.argtypes = [
+        c_void_p, c_uint32, c_uint64,
+    ]
+    lib.cad_test_set_buffer_phys_addr.restype = c_int
+
+
+c_size_t = c_uint64
+_lib_ci = LibCommandIR.get()
+_setup_command_ir_prototypes(_lib_ci)
+
+
+def append_execute_blob(cmd_list, blob_buffer, blob_offset, blob_size):
+    err = _lib.cadCommandListAppendExecuteBlob(
+        cmd_list.handle if hasattr(cmd_list, 'handle') else cmd_list,
+        blob_buffer.handle if hasattr(blob_buffer, 'handle') else blob_buffer,
+        c_uint64(blob_offset),
+        c_uint64(blob_size),
+    )
+    if err != CAD_SUCCESS:
+        name = _ERROR_NAMES.get(err, f"UNKNOWN({err})")
+        raise RuntimeError(f"cadCommandListAppendExecuteBlob error: {name} ({err})")
+
+
+def test_set_buffer_phys_addr(blob, buffer_id, addr):
+    rc = _lib_ci.cad_test_set_buffer_phys_addr(
+        blob.handle if hasattr(blob, 'handle') else blob,
+        c_uint32(buffer_id),
+        c_uint64(addr),
+    )
+    if rc != 0:
+        raise RuntimeError(f"cad_test_set_buffer_phys_addr failed: rc={rc}")
