@@ -108,7 +108,20 @@ table BufferReadResponse  { data:[ubyte]; }
 table BufferWriteResponse {}
 table BufferSizeResponse  { size:uint64; }
 
-table SubmitResponse      {}
+// Per-engine execution counts populated by the device server after processing.
+// Always optional — SubmitResponse without exec_stats remains valid.
+table ExecutionStats {
+  mmul_ops:uint32;            // Number of MMUL (matrix multiply) operations executed
+  sfu_ops:uint32;             // Number of SFU (special function) operations executed
+  vector_ops:uint32;          // Number of Vector operations executed
+  dma_ops:uint32;             // Number of DMA operations executed
+  dma_bytes_read:uint64;      // Total bytes read by DMA operations
+  dma_bytes_written:uint64;   // Total bytes written by DMA operations
+}
+
+table SubmitResponse {
+  exec_stats:ExecutionStats;  // optional — only populated when stats are available
+}
 
 table FenceCreateResponse { handle:uint64; }
 table FenceDestroyResponse {}

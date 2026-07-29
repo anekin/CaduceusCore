@@ -24,11 +24,28 @@ class SubmitResponse(object):
     def Init(self, buf, pos):
         self._tab = flatbuffers.table.Table(buf, pos)
 
+    # SubmitResponse
+    def ExecStats(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
+        if o != 0:
+            x = self._tab.Indirect(o + self._tab.Pos)
+            from caduceus_device_protocol.ExecutionStats import ExecutionStats
+            obj = ExecutionStats()
+            obj.Init(self._tab.Bytes, x)
+            return obj
+        return None
+
 def SubmitResponseStart(builder):
-    builder.StartObject(0)
+    builder.StartObject(1)
 
 def Start(builder):
     SubmitResponseStart(builder)
+
+def SubmitResponseAddExecStats(builder, execStats):
+    builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(execStats), 0)
+
+def AddExecStats(builder, execStats):
+    SubmitResponseAddExecStats(builder, execStats)
 
 def SubmitResponseEnd(builder):
     return builder.EndObject()
@@ -41,7 +58,7 @@ class SubmitResponseT(object):
 
     # SubmitResponseT
     def __init__(self):
-        pass
+        self.execStats = None  # type: ExecutionStatsT
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -64,9 +81,15 @@ class SubmitResponseT(object):
     def _UnPack(self, submitResponse):
         if submitResponse is None:
             return
+        if submitResponse.ExecStats() is not None:
+            self.execStats = submitResponse.ExecStats().UnPack()
 
     # SubmitResponseT
     def Pack(self, builder):
+        if self.execStats is not None:
+            execStats = self.execStats.Pack(builder)
         SubmitResponseStart(builder)
+        if self.execStats is not None:
+            SubmitResponseAddExecStats(builder, execStats)
         submitResponse = SubmitResponseEnd(builder)
         return submitResponse

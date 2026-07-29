@@ -97,6 +97,10 @@ struct BufferSizeResponse;
 struct BufferSizeResponseBuilder;
 struct BufferSizeResponseT;
 
+struct ExecutionStats;
+struct ExecutionStatsBuilder;
+struct ExecutionStatsT;
+
 struct SubmitResponse;
 struct SubmitResponseBuilder;
 struct SubmitResponseT;
@@ -2192,15 +2196,135 @@ inline ::flatbuffers::Offset<BufferSizeResponse> CreateBufferSizeResponse(
 
 ::flatbuffers::Offset<BufferSizeResponse> CreateBufferSizeResponse(::flatbuffers::FlatBufferBuilder &_fbb, const BufferSizeResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
+struct ExecutionStatsT : public ::flatbuffers::NativeTable {
+  typedef ExecutionStats TableType;
+  uint32_t mmul_ops = 0;
+  uint32_t sfu_ops = 0;
+  uint32_t vector_ops = 0;
+  uint32_t dma_ops = 0;
+  uint64_t dma_bytes_read = 0;
+  uint64_t dma_bytes_written = 0;
+};
+
+struct ExecutionStats FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef ExecutionStatsT NativeTableType;
+  typedef ExecutionStatsBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_MMUL_OPS = 4,
+    VT_SFU_OPS = 6,
+    VT_VECTOR_OPS = 8,
+    VT_DMA_OPS = 10,
+    VT_DMA_BYTES_READ = 12,
+    VT_DMA_BYTES_WRITTEN = 14
+  };
+  uint32_t mmul_ops() const {
+    return GetField<uint32_t>(VT_MMUL_OPS, 0);
+  }
+  uint32_t sfu_ops() const {
+    return GetField<uint32_t>(VT_SFU_OPS, 0);
+  }
+  uint32_t vector_ops() const {
+    return GetField<uint32_t>(VT_VECTOR_OPS, 0);
+  }
+  uint32_t dma_ops() const {
+    return GetField<uint32_t>(VT_DMA_OPS, 0);
+  }
+  uint64_t dma_bytes_read() const {
+    return GetField<uint64_t>(VT_DMA_BYTES_READ, 0);
+  }
+  uint64_t dma_bytes_written() const {
+    return GetField<uint64_t>(VT_DMA_BYTES_WRITTEN, 0);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_MMUL_OPS, 4) &&
+           VerifyField<uint32_t>(verifier, VT_SFU_OPS, 4) &&
+           VerifyField<uint32_t>(verifier, VT_VECTOR_OPS, 4) &&
+           VerifyField<uint32_t>(verifier, VT_DMA_OPS, 4) &&
+           VerifyField<uint64_t>(verifier, VT_DMA_BYTES_READ, 8) &&
+           VerifyField<uint64_t>(verifier, VT_DMA_BYTES_WRITTEN, 8) &&
+           verifier.EndTable();
+  }
+  ExecutionStatsT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(ExecutionStatsT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<ExecutionStats> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const ExecutionStatsT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct ExecutionStatsBuilder {
+  typedef ExecutionStats Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_mmul_ops(uint32_t mmul_ops) {
+    fbb_.AddElement<uint32_t>(ExecutionStats::VT_MMUL_OPS, mmul_ops, 0);
+  }
+  void add_sfu_ops(uint32_t sfu_ops) {
+    fbb_.AddElement<uint32_t>(ExecutionStats::VT_SFU_OPS, sfu_ops, 0);
+  }
+  void add_vector_ops(uint32_t vector_ops) {
+    fbb_.AddElement<uint32_t>(ExecutionStats::VT_VECTOR_OPS, vector_ops, 0);
+  }
+  void add_dma_ops(uint32_t dma_ops) {
+    fbb_.AddElement<uint32_t>(ExecutionStats::VT_DMA_OPS, dma_ops, 0);
+  }
+  void add_dma_bytes_read(uint64_t dma_bytes_read) {
+    fbb_.AddElement<uint64_t>(ExecutionStats::VT_DMA_BYTES_READ, dma_bytes_read, 0);
+  }
+  void add_dma_bytes_written(uint64_t dma_bytes_written) {
+    fbb_.AddElement<uint64_t>(ExecutionStats::VT_DMA_BYTES_WRITTEN, dma_bytes_written, 0);
+  }
+  explicit ExecutionStatsBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<ExecutionStats> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<ExecutionStats>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<ExecutionStats> CreateExecutionStats(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t mmul_ops = 0,
+    uint32_t sfu_ops = 0,
+    uint32_t vector_ops = 0,
+    uint32_t dma_ops = 0,
+    uint64_t dma_bytes_read = 0,
+    uint64_t dma_bytes_written = 0) {
+  ExecutionStatsBuilder builder_(_fbb);
+  builder_.add_dma_bytes_written(dma_bytes_written);
+  builder_.add_dma_bytes_read(dma_bytes_read);
+  builder_.add_dma_ops(dma_ops);
+  builder_.add_vector_ops(vector_ops);
+  builder_.add_sfu_ops(sfu_ops);
+  builder_.add_mmul_ops(mmul_ops);
+  return builder_.Finish();
+}
+
+::flatbuffers::Offset<ExecutionStats> CreateExecutionStats(::flatbuffers::FlatBufferBuilder &_fbb, const ExecutionStatsT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
 struct SubmitResponseT : public ::flatbuffers::NativeTable {
   typedef SubmitResponse TableType;
+  std::unique_ptr<caduceus_device_protocol::ExecutionStatsT> exec_stats{};
+  SubmitResponseT() = default;
+  SubmitResponseT(const SubmitResponseT &o);
+  SubmitResponseT(SubmitResponseT&&) FLATBUFFERS_NOEXCEPT = default;
+  SubmitResponseT &operator=(SubmitResponseT o) FLATBUFFERS_NOEXCEPT;
 };
 
 struct SubmitResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef SubmitResponseT NativeTableType;
   typedef SubmitResponseBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_EXEC_STATS = 4
+  };
+  const caduceus_device_protocol::ExecutionStats *exec_stats() const {
+    return GetPointer<const caduceus_device_protocol::ExecutionStats *>(VT_EXEC_STATS);
+  }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_EXEC_STATS) &&
+           verifier.VerifyTable(exec_stats()) &&
            verifier.EndTable();
   }
   SubmitResponseT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -2212,6 +2336,9 @@ struct SubmitResponseBuilder {
   typedef SubmitResponse Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
+  void add_exec_stats(::flatbuffers::Offset<caduceus_device_protocol::ExecutionStats> exec_stats) {
+    fbb_.AddOffset(SubmitResponse::VT_EXEC_STATS, exec_stats);
+  }
   explicit SubmitResponseBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -2224,8 +2351,10 @@ struct SubmitResponseBuilder {
 };
 
 inline ::flatbuffers::Offset<SubmitResponse> CreateSubmitResponse(
-    ::flatbuffers::FlatBufferBuilder &_fbb) {
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<caduceus_device_protocol::ExecutionStats> exec_stats = 0) {
   SubmitResponseBuilder builder_(_fbb);
+  builder_.add_exec_stats(exec_stats);
   return builder_.Finish();
 }
 
@@ -3182,6 +3311,56 @@ inline ::flatbuffers::Offset<BufferSizeResponse> CreateBufferSizeResponse(::flat
       _size);
 }
 
+inline ExecutionStatsT *ExecutionStats::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::unique_ptr<ExecutionStatsT>(new ExecutionStatsT());
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void ExecutionStats::UnPackTo(ExecutionStatsT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = mmul_ops(); _o->mmul_ops = _e; }
+  { auto _e = sfu_ops(); _o->sfu_ops = _e; }
+  { auto _e = vector_ops(); _o->vector_ops = _e; }
+  { auto _e = dma_ops(); _o->dma_ops = _e; }
+  { auto _e = dma_bytes_read(); _o->dma_bytes_read = _e; }
+  { auto _e = dma_bytes_written(); _o->dma_bytes_written = _e; }
+}
+
+inline ::flatbuffers::Offset<ExecutionStats> ExecutionStats::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const ExecutionStatsT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return CreateExecutionStats(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<ExecutionStats> CreateExecutionStats(::flatbuffers::FlatBufferBuilder &_fbb, const ExecutionStatsT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const ExecutionStatsT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _mmul_ops = _o->mmul_ops;
+  auto _sfu_ops = _o->sfu_ops;
+  auto _vector_ops = _o->vector_ops;
+  auto _dma_ops = _o->dma_ops;
+  auto _dma_bytes_read = _o->dma_bytes_read;
+  auto _dma_bytes_written = _o->dma_bytes_written;
+  return caduceus_device_protocol::CreateExecutionStats(
+      _fbb,
+      _mmul_ops,
+      _sfu_ops,
+      _vector_ops,
+      _dma_ops,
+      _dma_bytes_read,
+      _dma_bytes_written);
+}
+
+inline SubmitResponseT::SubmitResponseT(const SubmitResponseT &o)
+      : exec_stats((o.exec_stats) ? new caduceus_device_protocol::ExecutionStatsT(*o.exec_stats) : nullptr) {
+}
+
+inline SubmitResponseT &SubmitResponseT::operator=(SubmitResponseT o) FLATBUFFERS_NOEXCEPT {
+  std::swap(exec_stats, o.exec_stats);
+  return *this;
+}
+
 inline SubmitResponseT *SubmitResponse::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
   auto _o = std::unique_ptr<SubmitResponseT>(new SubmitResponseT());
   UnPackTo(_o.get(), _resolver);
@@ -3191,6 +3370,7 @@ inline SubmitResponseT *SubmitResponse::UnPack(const ::flatbuffers::resolver_fun
 inline void SubmitResponse::UnPackTo(SubmitResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
+  { auto _e = exec_stats(); if (_e) { if(_o->exec_stats) { _e->UnPackTo(_o->exec_stats.get(), _resolver); } else { _o->exec_stats = std::unique_ptr<caduceus_device_protocol::ExecutionStatsT>(_e->UnPack(_resolver)); } } else if (_o->exec_stats) { _o->exec_stats.reset(); } }
 }
 
 inline ::flatbuffers::Offset<SubmitResponse> SubmitResponse::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const SubmitResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -3201,8 +3381,10 @@ inline ::flatbuffers::Offset<SubmitResponse> CreateSubmitResponse(::flatbuffers:
   (void)_rehasher;
   (void)_o;
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const SubmitResponseT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _exec_stats = _o->exec_stats ? CreateExecutionStats(_fbb, _o->exec_stats.get(), _rehasher) : 0;
   return caduceus_device_protocol::CreateSubmitResponse(
-      _fbb);
+      _fbb,
+      _exec_stats);
 }
 
 inline FenceCreateResponseT *FenceCreateResponse::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
