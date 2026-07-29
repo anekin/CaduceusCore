@@ -181,7 +181,7 @@ class TestIncompatibleABI:
                 fake_path = Path(tf.name)
             # The file was deleted by NamedTemporaryFile, so it doesn't exist
             from sim.mmio_bridge import MMIOBridge
-            from sim.models.crossbar import CrossbarModel
+            from models.crossbar import CrossbarModel
 
             # Testing that _spike_available returns False when artifacts missing
             from sim.spike_firmware import _is_spike_available
