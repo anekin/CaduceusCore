@@ -15,6 +15,20 @@ ggml_add_backend_library(ggml-npu
     ggml-npu.cpp
 )
 
+# ── Test executable: single MMUL via fm:// ──────────────────────────
+#
+# Builds a one-node ggml graph (F32 activation x Q4_0 weight) and
+# exercises the NPU backend's real fm:// submission path.  Verifies
+# that the expected NPU execution log lines appear in stderr.
+add_executable(test_npu_single_mmul
+    test_npu_single_mmul.cpp
+)
+target_link_libraries(test_npu_single_mmul PRIVATE ggml)
+target_include_directories(test_npu_single_mmul PRIVATE
+    ${CMAKE_SOURCE_DIR}/ggml/include
+    ${CMAKE_SOURCE_DIR}/ggml/src
+)
+
 # Include path computation — relative to third_party/llama.cpp/ggml/src/ggml-npu/
 set(_SW_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../software/include")
 set(_SW_SRC     "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../software/src")
