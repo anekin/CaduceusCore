@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace cd = caduceus_device_protocol;
@@ -61,10 +62,20 @@ static uint32_t crc32_compute(const uint8_t *data, size_t len) {
 
 /* ── Transport state ────────────────────────────────────────────────────── */
 
+struct fm_exec_stats_t {
+    uint32_t mmul_ops = 0;
+    uint32_t sfu_ops = 0;
+    uint32_t vector_ops = 0;
+    uint32_t dma_ops = 0;
+    uint64_t dma_bytes_read = 0;
+    uint64_t dma_bytes_written = 0;
+};
+
 typedef struct {
     int sock_fd;
     uint64_t next_request_id;
     char sock_path[108]; /* sockaddr_un.sun_path max */
+    std::unordered_map<uint64_t, fm_exec_stats_t> fence_stats;
 } fm_transport_t;
 
 /* ── Socket helpers ─────────────────────────────────────────────────────── */
@@ -315,19 +326,18 @@ static int fm_send_request(fm_transport_t *tr, cd::DeviceOpcode opcode,
 /* ── Vtable: device lifecycle ───────────────────────────────────────────── */
 
 static int fm_device_init(void *tpriv, const char *uri) {
-    fm_transport_t *tr = (fm_transport_t *)calloc(1, sizeof(*tr));
-    if (!tr) return CAD_TR_ERR_NOMEM;
+    fm_transport_t *tr = new fm_transport_t();
     tr->sock_fd = -1;
 
     int err = fm_parse_uri(uri, tr->sock_path, sizeof(tr->sock_path));
     if (err != CAD_TR_SUCCESS) {
-        free(tr);
+        delete tr;
         return err;
     }
 
     tr->sock_fd = fm_connect(tr->sock_path);
     if (tr->sock_fd < 0) {
-        free(tr);
+        delete tr;
         return CAD_TR_ERR_LOST;
     }
     tr->next_request_id = 1;
@@ -340,7 +350,7 @@ static void fm_device_fini(void *tpriv) {
     fm_transport_t *tr = (fm_transport_t *)tpriv;
     if (!tr) return;
     if (tr->sock_fd >= 0) close(tr->sock_fd);
-    free(tr);
+    delete tr;
 }
 
 static int fm_device_reset(void *tpriv) {
@@ -551,12 +561,52 @@ static int fm_submit(void *tpriv, void *cmd_data, uint32_t cmd_count,
     auto root = cd::SubmitRequest::Pack(inner_fbb, &req);
     inner_fbb.Finish(root);
     cd::DeviceMessageT resp;
-    return fm_send_request(tr, cd::DeviceOpcode_OPCODE_SUBMIT, inner_fbb, &resp);
+    int err = fm_send_request(tr, cd::DeviceOpcode_OPCODE_SUBMIT, inner_fbb, &resp);
+    if (err != CAD_TR_SUCCESS) return err;
+
+    /* Parse exec_stats from SubmitResponse and cache on the fence. */
+    if (fence && resp.payload.size() > 0) {
+        auto sr = flatbuffers::GetRoot<cd::SubmitResponse>(resp.payload.data());
+        auto es = sr->exec_stats();
+        if (es) {
+            fm_exec_stats_t stats;
+            stats.mmul_ops = es->mmul_ops();
+            stats.sfu_ops = es->sfu_ops();
+            stats.vector_ops = es->vector_ops();
+            stats.dma_ops = es->dma_ops();
+            stats.dma_bytes_read = es->dma_bytes_read();
+            stats.dma_bytes_written = es->dma_bytes_written();
+            tr->fence_stats[*(uint64_t *)fence] = stats;
+        }
+    }
+
+    return CAD_TR_SUCCESS;
 }
 
 /* ── Vtable export (C linkage for runtime core) ──────────────────────────── */
 
 extern "C" {
+
+static int fm_fence_get_exec_stats_fn(void *tpriv,
+    cad_transport_fence_t *fence,
+    uint32_t *mmul_ops,
+    uint32_t *sfu_ops,
+    uint32_t *vector_ops,
+    uint32_t *dma_ops,
+    uint64_t *dma_bytes_read,
+    uint64_t *dma_bytes_written) {
+    fm_transport_t *tr = (fm_transport_t *)tpriv;
+    if (!fence) return -1;
+    auto it = tr->fence_stats.find(*(uint64_t *)fence);
+    if (it == tr->fence_stats.end()) return -1;
+    if (mmul_ops)         *mmul_ops         = it->second.mmul_ops;
+    if (sfu_ops)          *sfu_ops          = it->second.sfu_ops;
+    if (vector_ops)       *vector_ops       = it->second.vector_ops;
+    if (dma_ops)          *dma_ops          = it->second.dma_ops;
+    if (dma_bytes_read)   *dma_bytes_read   = it->second.dma_bytes_read;
+    if (dma_bytes_written)*dma_bytes_written= it->second.dma_bytes_written;
+    return 0;
+}
 
 const cad_transport_ops_t cad_transport_fm_ops = {
     .name          = "FuncModel",
@@ -574,6 +624,7 @@ const cad_transport_ops_t cad_transport_fm_ops = {
     .fence_poll    = fm_fence_poll,
     .fence_status  = fm_fence_status,
     .submit        = fm_submit,
+    .fence_get_exec_stats = fm_fence_get_exec_stats_fn,
 };
 
 int cad_transport_fm_init(void **tpriv, const char *uri) {

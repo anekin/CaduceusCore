@@ -452,6 +452,7 @@ const cad_transport_ops_t cad_transport_fpga_ops = {
     .fence_poll    = fpga_fence_poll,
     .fence_status  = fpga_fence_status,
     .submit        = fpga_submit,
+    .fence_get_exec_stats = NULL,
 };
 
 int cad_transport_fpga_init(void **tpriv, const char *uri) {

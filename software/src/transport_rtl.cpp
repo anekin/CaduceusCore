@@ -719,6 +719,7 @@ const cad_transport_ops_t cad_transport_rtl_ops = {
     .fence_poll    = rtl_fence_poll,
     .fence_status  = rtl_fence_status,
     .submit        = rtl_submit,
+    .fence_get_exec_stats = NULL,
 };
 
 } /* extern "C" */
