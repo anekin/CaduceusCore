@@ -1,13 +1,18 @@
 # CaduceusCore CI — Tiered software signoff workflow
 #
 # Tiers (from aggregate_software_signoff.py):
-#   l0: tasks 1, 2   — ABI schema/generator and binding migration
-#   l1: tasks 3, 7   — stable C Host Runtime ABI and core/mock transport
-#   l2: tasks 4, 8, 9, 13, 14 — Func Model server, adapter, fault/differential
-#   l3: tasks 6, 12  — Spike toolchain and real-firmware integration
-#   l4: tasks 10, 18 — RTL DUT adapter and RTL transport interface
-#   l5: tasks 19, 20 — FPGA transport interface and FPGA NO-GO
-#   framework: tasks 5, 15, 16, 17, 21 — llama.cpp, lifecycle, ops, Qwen, ExecuTorch
+#   l0: tasks 1, 2   — ABI schema/generator and binding migration [mock://]
+#   l1: tasks 3, 7   — stable C Host Runtime ABI and core/mock transport [mock://]
+#   l2: tasks 4, 8, 9, 13, 14 — Func Model server, adapter, fault/differential [mock://]
+#   l3: tasks 6, 12  — Spike toolchain and real-firmware integration [Spike sim, no real device]
+#   l4: tasks 10, 18 — RTL DUT adapter and RTL transport interface [RTL sim, no real device]
+#   l5: tasks 19, 20 — FPGA transport interface and FPGA NO-GO [REAL board — expected BLOCKED]
+#   framework: tasks 5, 15, 16, 17, 21 — llama.cpp, lifecycle, ops, Qwen, ExecuTorch [mock://]
+#
+# Device tiers: CADUCEUS_DEVICE=mock:// is the global default. L3 and L4 use
+# simulation environments (Spike/RTL) with no real hardware. L5 is the only
+# tier that requires a physical FPGA board — it is expected to stay BLOCKED
+# until FPGA bring-up completes (see task 19/20).
 #
 # The release_aggregator job depends on all tier jobs and runs the full
 # software build + evidence aggregator to produce a consolidated signoff.
@@ -91,10 +96,8 @@ jobs:
         run: pip install -r requirements.txt
       - name: Spike build manifest check
         run: python3 scripts/build_spike_stack.py --manifest .omo/evidence/task-6-spike-build.json
-        continue-on-error: true
       - name: Spike manifest pytest
         run: PYTHONPATH=sim python3 -m pytest sim/tests/test_spike_toolchain_manifest.py -q
-        continue-on-error: true
 
   # ── L4: RTL DUT Adapter + RTL Transport ───────────────────────────
   l4_rtl_skeleton:
@@ -124,6 +127,8 @@ jobs:
           python-version: "3.10"
       - name: Install Python deps
         run: pip install -r requirements.txt
+      - name: L5 expected blocked annotation
+        run: echo "::notice::L5 FPGA signoff expected BLOCKED — no FPGA board in CI"
       - name: FPGA NO-GO signoff
         run: PYTHONPATH=sim python3 scripts/run_fpga_software_signoff.py \
               --config config/fpga-target.json \
@@ -171,6 +176,17 @@ jobs:
         run: |
           pip install -r requirements.txt
           sudo apt-get update -qq && sudo apt-get install -y -qq cmake g++ 2>/dev/null
+      - name: Verify release artifact is a real file (not symlink)
+        run: |
+          if [ -L "software/build/libcaduceus_runtime.so" ]; then
+            echo "::error::software/build/libcaduceus_runtime.so is a symlink (not a real file)"
+            exit 1
+          fi
+          if [ ! -f "software/build/libcaduceus_runtime.so" ]; then
+            echo "::error::software/build/libcaduceus_runtime.so does not exist"
+            exit 1
+          fi
+          echo "::notice::software/build/libcaduceus_runtime.so is a real file"
       - name: Reproducible build & install
         run: python3 scripts/build_software_release.py --clean --install-prefix build/install
       - name: Aggregate software signoff (all 7 tiers)
@@ -178,7 +194,7 @@ jobs:
           python3 scripts/aggregate_software_signoff.py
           --require l0,l1,l2,l3,l4,l5,framework
           --evidence .omo/evidence/task-22-release-signoff.json
-          --no-stale-check
+          --allow-stale
       - name: Upload signoff report
         uses: actions/upload-artifact@v4
         with:
