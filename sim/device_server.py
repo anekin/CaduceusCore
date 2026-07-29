@@ -88,6 +88,13 @@ RING_SLOT_SIZE = 32   # bytes per slot in DRAM ring buffer
 RING_ENTRY_SIZE = 24  # bytes of payload carried in the protocol cmd_blob
 RING_SIZE = 16
 
+# Blob flattening constants.
+CAD_BLOB_MAGIC = 0x43414442   # "CADB" little-endian
+CAD_DESC_WORDS = 15
+CAD_DESC_BYTES = CAD_DESC_WORDS * 4   # 60 bytes per descriptor
+CAD_CMD_ENTRY_BYTES = 32              # 8 × uint32 ring entry in blob
+DESC_ADDR_BASE = 0x80F00000           # DRAM base for descriptors (unused above buffer window)
+
 
 def _payload_bytes(msg: DeviceMessageT) -> bytes:
     """Return the message payload as bytes."""
@@ -117,6 +124,7 @@ class _BufferAllocator:
     def __init__(self, base: int, end: int):
         self._lock = threading.Lock()
         self._regions = [_BufferRegion(base, end - base, free=True)]
+        self._sizes: dict[int, int] = {}  # addr → allocated size
 
     def alloc(self, size: int) -> Optional[int]:
         with self._lock:
@@ -133,6 +141,7 @@ class _BufferAllocator:
                         region.size = size
                         self._regions.append(remaining)
                         self._regions.sort(key=lambda r: r.addr)
+                    self._sizes[addr] = size
                     return addr
             return None
 
@@ -141,9 +150,14 @@ class _BufferAllocator:
             for region in self._regions:
                 if region.addr == addr and not region.free:
                     region.free = True
+                    self._sizes.pop(addr, None)
                     self._coalesce()
                     return True
             return False
+
+    def size_of(self, addr: int) -> int:
+        with self._lock:
+            return self._sizes.get(addr, 0)
 
     def _coalesce(self) -> None:
         self._regions.sort(key=lambda r: r.addr)
@@ -263,7 +277,10 @@ class FmDeviceServer:
 
     def start(self) -> None:
         """Create FuncModel and start the worker thread."""
-        self._model = FuncModel(use_spike=(self.use_spike or None))
+        if self.use_spike:
+            self._model = FuncModel(use_spike=True, sram_kb=4096)
+        else:
+            self._model = FuncModel()
         self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
         self._worker_thread.start()
 
@@ -302,19 +319,135 @@ class FmDeviceServer:
                             pass
 
     def _execute_on_model(self, cmd_count: int, cmd_blob: bytes) -> None:
-        """Write descriptors + ring entries and run the firmware loop."""
+        """Write descriptors + ring entries and run the firmware loop.
+
+        Auto-detects between two formats:
+        1. W2-T7 headered format: {uint32 nop_count, uint32 blob_count,
+           uint32 total_cmd_count, raw blob bytes...} where each blob is
+           a cad_command_blob_t encoded binary.
+        2. Legacy flat format: ring_entries (24B each) || descriptors
+           (60B each).
+        """
         if self._model is None:
             raise RuntimeError("model not initialized")
 
+        # Detect W2-T7 headered format: first blob starts with CADB magic
+        # at offset 12 (after 3×uint32 header).
+        if (len(cmd_blob) >= 16
+                and struct.unpack_from("<I", cmd_blob, 12)[0] == CAD_BLOB_MAGIC):
+            ring_data, desc_data, actual_count = self._flatten_blobs(cmd_blob)
+            self._execute_flat(ring_data, desc_data, actual_count)
+            return
+
+        # Legacy flat format.
         ring_bytes = cmd_count * RING_ENTRY_SIZE
         desc_bytes = cmd_count * 60
         if len(cmd_blob) < ring_bytes + desc_bytes:
             raise ValueError("cmd_blob too short")
+        self._execute_flat(
+            cmd_blob[:ring_bytes],
+            cmd_blob[ring_bytes: ring_bytes + desc_bytes],
+            cmd_count,
+        )
+
+    def _flatten_blobs(self, cmd_blob: bytes):
+        """Parse W2-T7 serialized format and flatten to legacy layout.
+
+        Returns (ring_data, desc_data, total_cmd_count) where ring_data
+        has 24B entries and desc_data has 60B entries — matching the
+        format expected by _execute_flat().
+        """
+        nop_count, blob_count, total_cmd_count = struct.unpack_from(
+            "<III", cmd_blob, 0
+        )
+        blob_offset = 12  # past 3×uint32 header
+
+        flat_ring = bytearray()
+        flat_desc = bytearray()
+        flat_cmd_count = 0
+
+        for _ in range(blob_count):
+            if blob_offset + 64 > len(cmd_blob):
+                raise ValueError("blob too short for header")
+            blk = cmd_blob[blob_offset:]
+
+            magic = struct.unpack_from("<I", blk, 0)[0]
+            if magic != CAD_BLOB_MAGIC:
+                raise ValueError(f"bad blob magic: {magic:#x}")
+
+            cmd_count_here = struct.unpack_from("<I", blk, 20)[0]
+            desc_size = struct.unpack_from("<I", blk, 24)[0]
+            desc_off = struct.unpack_from("<I", blk, 28)[0]
+            cmd_size = struct.unpack_from("<I", blk, 32)[0]
+            cmd_off = struct.unpack_from("<I", blk, 36)[0]
+            bt_size = struct.unpack_from("<I", blk, 40)[0]
+            bt_off = struct.unpack_from("<I", blk, 44)[0]
+
+            blob_end = blob_offset + max(
+                64, bt_off + bt_size, cmd_off + cmd_size, desc_off + desc_size
+            )
+            if blob_end > len(cmd_blob):
+                raise ValueError("blob directory out of bounds")
+
+            ring_raw = blk[cmd_off: cmd_off + cmd_size]
+            desc_raw = blk[desc_off: desc_off + desc_size]
+
+            for i in range(cmd_count_here):
+                ring_entry = ring_raw[i * 32: (i + 1) * 32]
+                opcode = struct.unpack_from("<I", ring_entry, 0)[0]
+                desc_offset = struct.unpack_from("<I", ring_entry, 4)[0]
+                flags = struct.unpack_from("<I", ring_entry, 8)[0]
+
+                desc_addr = DESC_ADDR_BASE + desc_offset
+
+                # 24B flat ring entry: opcode + desc_addr + flags + pad
+                # All three fields are uint32_t (matches firmware cmd_entry_t).
+                entry_24 = struct.pack("<III", opcode, desc_addr, flags)
+                entry_24 += b"\x00" * 12
+                flat_ring.extend(entry_24)
+
+                # Descriptor: 60B
+                desc_bytes_here = desc_raw[
+                    desc_offset: desc_offset + CAD_DESC_BYTES
+                ]
+                if len(desc_bytes_here) != CAD_DESC_BYTES:
+                    desc_bytes_here = desc_bytes_here.ljust(CAD_DESC_BYTES, b"\x00")
+                flat_desc.extend(desc_bytes_here)
+
+                flat_cmd_count += 1
+
+            blob_offset = blob_end
+
+        _ = nop_count  # NOPs carry no work; already counted in total_cmd_count.
+        return bytes(flat_ring), bytes(flat_desc), flat_cmd_count
+
+    def _execute_flat(self, ring_data, desc_data, cmd_count):
+        """Core execution: write ring entries + descriptors, run firmware.
+
+        Returns an ExecutionStatsT with per-engine op counts derived from
+        the command ring entries and descriptor data.
+        """
+        from caduceus_device_protocol.ExecutionStats import ExecutionStatsT
+
+        stats = ExecutionStatsT()
+        stats.mmulOps = 0
+        stats.sfuOps = 0
+        stats.vectorOps = 0
+        stats.dmaOps = 0
+        stats.dmaBytesRead = 0
+        stats.dmaBytesWritten = 0
+
+        # Opcode constants matching firmware and command_ir.h.
+        OP_MMUL       = 0x00
+        OP_SFU        = 0x01
+        OP_VECTOR_ADD = 0x0F
+        OP_VECTOR_MUL = 0x0E
+        OP_DMA_COPY   = 0x09
+
+        OP_SFU_SILU = 0x06
 
         with self._model_lock:
             model = self._model
-            ring_data = cmd_blob[:ring_bytes]
-            desc_data = cmd_blob[ring_bytes: ring_bytes + desc_bytes]
 
             tail = model.firmware.doorbell["host_tail"]
             if tail + cmd_count > RING_SIZE:
@@ -323,7 +456,7 @@ class FmDeviceServer:
             for i in range(cmd_count):
                 entry_offset = i * RING_ENTRY_SIZE
                 opcode, desc_addr, flags = struct.unpack_from(
-                    "<IQI", ring_data, entry_offset
+                    "<III", ring_data, entry_offset
                 )
                 desc_offset = i * 60
                 descriptor = desc_data[desc_offset: desc_offset + 60]
@@ -331,8 +464,47 @@ class FmDeviceServer:
                 model.pcie.tlp_write(desc_addr, descriptor)
 
                 ring_idx_addr = RING_BUFFER_ADDR + (tail + i) * RING_SLOT_SIZE
-                entry = struct.pack("<IQI", opcode, desc_addr, flags) + b"\x00" * 8
+                entry = struct.pack("<III", opcode, desc_addr, flags) + b"\x00" * 12
                 model.pcie.tlp_write(ring_idx_addr, entry)
+
+                # ── Track per-engine stats from the command descriptor ──
+                if opcode == OP_MMUL:
+                    stats.mmulOps += 1
+                    # MMUL descriptor: bytes at offsets 0:4 are input size (M*K),
+                    # offsets 4:8 are weight size (K*N), offsets 8:12 are output size (M*N)
+                    # DMA reads: input + weight + scale; DMA writes: output.
+                    # Read from descriptor for DMA byte tracking.
+                    # Input (INT8 M×K), Weight (INT4 packed K×N/2), Scale (float32 N).
+                    if len(descriptor) >= 12:
+                        inp_bytes = struct.unpack_from("<I", descriptor, 0)[0]
+                        wt_bytes  = struct.unpack_from("<I", descriptor, 4)[0]
+                        out_bytes = struct.unpack_from("<I", descriptor, 8)[0]
+                        scale_bytes = struct.unpack_from("<I", descriptor, 20)[0]
+                        stats.dmaBytesRead += inp_bytes + wt_bytes + scale_bytes
+                        stats.dmaBytesWritten += out_bytes
+                elif opcode == OP_SFU or opcode == OP_SFU_SILU:
+                    stats.sfuOps += 1
+                    # SFU descriptor: input bytes at offset 4, output at offset 8
+                    if len(descriptor) >= 12:
+                        sf_in = struct.unpack_from("<I", descriptor, 4)[0]
+                        sf_out = struct.unpack_from("<I", descriptor, 8)[0]
+                        stats.dmaBytesRead += sf_in
+                        stats.dmaBytesWritten += sf_out
+                elif opcode == OP_VECTOR_ADD or opcode == OP_VECTOR_MUL:
+                    stats.vectorOps += 1
+                    if len(descriptor) >= 20:
+                        va = struct.unpack_from("<I", descriptor, 4)[0]
+                        vb = struct.unpack_from("<I", descriptor, 8)[0]
+                        vo = struct.unpack_from("<I", descriptor, 12)[0]
+                        stats.dmaBytesRead += va + vb
+                        stats.dmaBytesWritten += vo
+                elif opcode == OP_DMA_COPY:
+                    stats.dmaOps += 1
+                    # DMA descriptor: src bytes at offset 8, dst bytes at offset 12
+                    if len(descriptor) >= 16:
+                        dst_bytes = struct.unpack_from("<I", descriptor, 12)[0]
+                        stats.dmaBytesRead += dst_bytes
+                        stats.dmaBytesWritten += dst_bytes
 
             new_tail = (tail + cmd_count) % RING_SIZE
             model.firmware.doorbell["host_tail"] = new_tail
@@ -343,8 +515,9 @@ class FmDeviceServer:
             )
             model.bridge._set_irq(8)  # HOST doorbell interrupt
 
-            # Run firmware dispatch loop.
             model.firmware.run_loop(max_commands=cmd_count)
+
+        return stats
 
     # ── Request handling ──────────────────────────────────────────────────
 
@@ -558,7 +731,6 @@ class FmDeviceServer:
 
     def _do_buffer_size(self, rid: int, msg: DeviceMessageT) -> bytearray:
         req = unpack_table(BufferSizeRequestT, _payload_bytes(msg))
-        # Size is not tracked per-handle in the simple allocator; return max.
         if not self._buffers.contains(req.handle):
             return self._error_response(
                 rid, DeviceOpcode.OPCODE_BUFFER_SIZE, DeviceStatus.STATUS_INVALID_HANDLE, "bad handle"
@@ -569,7 +741,7 @@ class FmDeviceServer:
         resp.header.opcode = DeviceOpcode.OPCODE_BUFFER_SIZE
         resp.header.status = DeviceStatus.STATUS_OK
         inner = BufferSizeResponseT()
-        inner.size = 0
+        inner.size = self._buffers.size_of(req.handle)
         _set_payload(resp, pack_table(inner))
         return build_message(resp)
 
@@ -579,11 +751,53 @@ class FmDeviceServer:
             return self._error_response(
                 rid, DeviceOpcode.OPCODE_SUBMIT, DeviceStatus.STATUS_INVALID_HANDLE, "bad fence"
             )
+
+        cmd_blob = bytes(req.cmdBlob)
+        cmd_count = req.cmdCount
+
+        # Compute execution stats from the submitted blob by flattening
+        # it through the same code path used during execution.
+        from caduceus_device_protocol.ExecutionStats import ExecutionStatsT
+        stats = ExecutionStatsT()
+        stats.mmulOps = 0
+        stats.sfuOps = 0
+        stats.vectorOps = 0
+        stats.dmaOps = 0
+        stats.dmaBytesRead = 0
+        stats.dmaBytesWritten = 0
+        stats_populated = 0
+
+        # If blob uses W2-T7 headered format, flatten and count ops.
+        if (len(cmd_blob) >= 16
+                and struct.unpack_from("<I", cmd_blob, 12)[0] == CAD_BLOB_MAGIC):
+            try:
+                ring_data, desc_data, actual_count = self._flatten_blobs(cmd_blob)
+                # Count per-engine ops from the ring entries + descriptors.
+                self._count_blob_stats(ring_data, desc_data, actual_count, stats)
+                stats_populated = 1
+            except Exception:
+                pass  # stats remain zero on parse failure
+        else:
+            # Legacy flat format: count from ring + descriptor data.
+            ring_bytes = cmd_count * RING_ENTRY_SIZE
+            desc_bytes = cmd_count * 60
+            if len(cmd_blob) >= ring_bytes + desc_bytes:
+                try:
+                    self._count_blob_stats(
+                        cmd_blob[:ring_bytes],
+                        cmd_blob[ring_bytes: ring_bytes + desc_bytes],
+                        cmd_count,
+                        stats,
+                    )
+                    stats_populated = 1
+                except Exception:
+                    pass
+
         self._cmd_queue.put(
             _PendingCommand(
                 fence_handle=req.fenceHandle or 0,
-                cmd_count=req.cmdCount,
-                cmd_blob=bytes(req.cmdBlob),
+                cmd_count=cmd_count,
+                cmd_blob=cmd_blob,
             )
         )
         resp = DeviceMessageT()
@@ -591,8 +805,60 @@ class FmDeviceServer:
         resp.header.requestId = rid
         resp.header.opcode = DeviceOpcode.OPCODE_SUBMIT
         resp.header.status = DeviceStatus.STATUS_OK
-        _set_payload(resp, pack_table(SubmitResponseT()))
+        inner = SubmitResponseT()
+        if stats_populated:
+            inner.execStats = stats
+        _set_payload(resp, pack_table(inner))
         return build_message(resp)
+
+    @staticmethod
+    def _count_blob_stats(ring_data, desc_data, cmd_count, stats):
+        """Count per-engine ops and DMA bytes from flattened ring entries."""
+        OP_MMUL       = 0x00
+        OP_SFU        = 0x01
+        OP_SFU_SILU   = 0x06
+        OP_VECTOR_ADD = 0x0F
+        OP_VECTOR_MUL = 0x0E
+        OP_DMA_COPY   = 0x09
+
+        for i in range(cmd_count):
+            offset = i * RING_ENTRY_SIZE
+            if offset + 12 > len(ring_data):
+                break
+            opcode = struct.unpack_from("<I", ring_data, offset)[0]
+            d_off = i * 60
+            desc = desc_data[d_off: d_off + 60] if d_off + 60 <= len(desc_data) else b""
+
+            if opcode == OP_MMUL:
+                stats.mmulOps += 1
+                if len(desc) >= 24:
+                    inp = struct.unpack_from("<I", desc, 0)[0]
+                    wt  = struct.unpack_from("<I", desc, 4)[0]
+                    out = struct.unpack_from("<I", desc, 8)[0]
+                    sc  = struct.unpack_from("<I", desc, 20)[0]
+                    stats.dmaBytesRead += inp + wt + sc
+                    stats.dmaBytesWritten += out
+            elif opcode in (OP_SFU, OP_SFU_SILU):
+                stats.sfuOps += 1
+                if len(desc) >= 12:
+                    sf_in = struct.unpack_from("<I", desc, 4)[0]
+                    sf_out = struct.unpack_from("<I", desc, 8)[0]
+                    stats.dmaBytesRead += sf_in
+                    stats.dmaBytesWritten += sf_out
+            elif opcode in (OP_VECTOR_ADD, OP_VECTOR_MUL):
+                stats.vectorOps += 1
+                if len(desc) >= 16:
+                    va = struct.unpack_from("<I", desc, 4)[0]
+                    vb = struct.unpack_from("<I", desc, 8)[0]
+                    vo = struct.unpack_from("<I", desc, 12)[0]
+                    stats.dmaBytesRead += va + vb
+                    stats.dmaBytesWritten += vo
+            elif opcode == OP_DMA_COPY:
+                stats.dmaOps += 1
+                if len(desc) >= 16:
+                    db = struct.unpack_from("<I", desc, 12)[0]
+                    stats.dmaBytesRead += db
+                    stats.dmaBytesWritten += db
 
     def _do_fence_create(self, rid: int, msg: DeviceMessageT) -> bytearray:
         req = unpack_table(FenceCreateRequestT, _payload_bytes(msg))
