@@ -460,7 +460,7 @@ def test_cli_rejects_invalid_tier(tmp_path: Path) -> None:
         [sys.executable, "scripts/aggregate_software_signoff.py",
          "--require", "l0,invalid_tier",
          "--evidence", str(tmp_path / "out.json"),
-         "--no-stale-check"],
+         "--allow-stale"],
         cwd=str(Path(__file__).resolve().parents[2]),
         capture_output=True, text=True, timeout=30,
     )
@@ -482,7 +482,7 @@ def test_cli_fail_tier_exits_1(tmp_path: Path) -> None:
          "--require", "l0",
          "--evidence", str(out_file),
          "--evidence-dir", str(base),
-         "--no-stale-check"],
+         "--allow-stale"],
         cwd=str(Path(__file__).resolve().parents[2]),
         capture_output=True, text=True, timeout=30,
     )
@@ -505,9 +505,118 @@ def test_cli_pass_or_blocked_exits_0(tmp_path: Path) -> None:
          "--require", "l0",
          "--evidence", str(out_file),
          "--evidence-dir", str(base),
-         "--no-stale-check"],
+         "--allow-stale"],
         cwd=str(Path(__file__).resolve().parents[2]),
         capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0
     assert json.loads(out_file.read_text())["overall_status"] == "PASS"
+
+
+# ---------------------------------------------------------------------------
+# Negative tests for assume-pass fallbacks (W1-T1)
+# ---------------------------------------------------------------------------
+def test_empty_json_object_returns_fail(tmp_path: Path) -> None:
+    """An empty JSON object {} with no recognized pattern should return fail."""
+    base = tmp_path / "evidence"
+    base.mkdir(parents=True, exist_ok=True)
+    f = base / "task-9-fm-adapter.json"
+    f.write_text(json.dumps({"task": 9, "not_a_verdict": "anything"}))
+    verdict = _extract_verdict_from_json(json.loads(f.read_text()), 9)
+    assert verdict == "fail", f"expected 'fail' for empty JSON, got '{verdict}'"
+
+
+def test_log_over_20_bytes_no_verdict_returns_partial(tmp_path: Path) -> None:
+    """A log file > 20 bytes with no verdict pattern should return partial."""
+    base = tmp_path / "evidence"
+    base.mkdir(parents=True, exist_ok=True)
+    f = base / "task-1-abi-generate.log"
+    # Content > 20 bytes with no pass/fail/blocked keywords
+    f.write_text("This log file exists but has no test results or verdict info.\n")
+    assert len(f.read_text()) > 20
+    content = f.read_text()
+    verdict = _extract_verdict_from_log(content, 1)
+    assert verdict == "partial", f"expected 'partial' for featureless log, got '{verdict}'"
+
+
+def test_unknown_verdict_in_record_returns_fail(tmp_path: Path) -> None:
+    """A JSON record with a non-standard verdict value should return fail (not pass)."""
+    data = {
+        "records": [
+            {"verdict": "inconclusive", "scenario_id": "test-1"},
+        ],
+    }
+    verdict = _extract_verdict_from_json(data, 9)
+    assert verdict == "fail", f"expected 'fail' for unknown verdict 'inconclusive', got '{verdict}'"
+
+
+def test_allow_stale_cli_accepts_stale_evidence(tmp_path: Path) -> None:
+    """With --allow-stale, stale evidence should be accepted (not rejected)."""
+    import subprocess
+    import sys
+    import time
+    base = tmp_path / "evidence"
+    base.mkdir(parents=True, exist_ok=True)
+    # Create stale task-1 evidence (25 hours old)
+    now = time.time()
+    f = base / "task-1-abi-generate.log"
+    f.write_text("Build: clean\nTests: 10/10 passed\n✅ All checks PASSED\nverdict: pass\n")
+    os.utime(str(f), (now - 25 * 3600, now - 25 * 3600))
+    # Create fresh task-2 evidence
+    f2 = base / "task-2-binding-migration.log"
+    f2.write_text("Build: clean\nTests: 10/10 passed\n✅ All checks PASSED\nverdict: pass\n")
+    out_file = tmp_path / "report.json"
+    result = subprocess.run(
+        [sys.executable, "scripts/aggregate_software_signoff.py",
+         "--require", "l0",
+         "--evidence", str(out_file),
+         "--evidence-dir", str(base),
+         "--allow-stale"],
+        cwd=str(Path(__file__).resolve().parents[2]),
+        capture_output=True, text=True, timeout=30,
+    )
+    # With --allow-stale, stale should not cause FAIL
+    report = json.loads(out_file.read_text())
+    assert len(report["stale_rejected"]) == 0, "stale evidence should not be rejected with --allow-stale"
+
+
+def test_strict_exits_nonzero_on_partial(tmp_path: Path) -> None:
+    """With --strict, a PARTIAL overall status should exit non-zero."""
+    import subprocess
+    import sys
+    base = tmp_path / "evidence"
+    base.mkdir(parents=True, exist_ok=True)
+    # Create a partial scenario: task-1 pass, task-2 missing
+    _make_fake_evidence_tree(base, {1: {"name": "task-1-abi-generate.log", "verdict": "pass"}})
+    out_file = tmp_path / "report.json"
+    result = subprocess.run(
+        [sys.executable, "scripts/aggregate_software_signoff.py",
+         "--require", "l0",
+         "--evidence", str(out_file),
+         "--evidence-dir", str(base),
+         "--allow-stale",
+         "--strict"],
+        cwd=str(Path(__file__).resolve().parents[2]),
+        capture_output=True, text=True, timeout=30,
+    )
+    report = json.loads(out_file.read_text())
+    # Task 1 is pass, task 2 is missing → overall is FAIL or PARTIAL
+    assert report["overall_status"] != "PASS", "should be non-PASS with missing task"
+    assert result.returncode != 0, f"expected non-zero exit with --strict, got {result.returncode}"
+
+
+def test_corrupted_evidence_fails_clear_error(tmp_path: Path) -> None:
+    """A corrupted evidence file must fail with a clear error, not silent pass."""
+    base = tmp_path / "evidence"
+    base.mkdir(parents=True, exist_ok=True)
+    _make_fake_evidence_tree(base, {
+        2: {"name": "task-2-binding-migration.log", "verdict": "pass"},
+    })
+    corrupted = base / "task-1-abi-generate.json"
+    corrupted.write_text("{this is not valid json")
+
+    report = aggregate({"l0"}, stale_reject=False, evidence_dir=base)
+    assert report["tiers"]["l0"]["tasks"]["1"]["verdict"] != "pass"
+    assert report["tiers"]["l0"]["tasks"]["1"]["verdict"] in ("missing", "fail")
+    assert report["tiers"]["l0"]["status"] != "PASS"
+    assert report["error_count"] > 0

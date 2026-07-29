@@ -203,7 +203,7 @@ def _extract_verdict_from_json(data: dict, task_num: int) -> str:
                     elif v in FAIL_INDICATORS:
                         verdicts.append("fail")
                     else:
-                        verdicts.append("pass")  # non-standard → assume pass
+                        verdicts.append("fail")  # non-standard → explicit fail
             if verdicts:
                 if "blocked" in verdicts:
                     return "blocked"
@@ -232,7 +232,7 @@ def _extract_verdict_from_json(data: dict, task_num: int) -> str:
             all_pass = all(g.get("passed", False) for g in gates)
             return "pass" if all_pass else "fail"
 
-    return "pass"
+    return "fail"  # catch-all: no recognized pattern → explicit fail
 
 
 def _extract_verdict_from_log(content: str, task_num: int) -> str:
@@ -292,7 +292,7 @@ def _extract_verdict_from_log(content: str, task_num: int) -> str:
 
     # If nothing found, but file exists and is non-trivial → partial
     if len(content) > 20:
-        return "pass"  # existence is evidence of passing
+        return "partial"  # log exists but no verdict found → partial
 
     return "missing"
 
@@ -323,8 +323,8 @@ def _extract_verdict_from_csv(filepath: Path) -> str:
             if any(v in FAIL_INDICATORS for v in verdicts):
                 return "fail"
             return "partial"
-        # No verdict column → file exists and is non-trivial → pass
-        return "pass"
+        # No verdict column → explicit fail
+        return "fail"
     except Exception:
         return "missing"
 
@@ -342,8 +342,10 @@ def extract_verdict(filepath: Path, task_num: int) -> str:
             content = filepath.read_text()
             return _extract_verdict_from_log(content, task_num)
         else:
-            return "pass" if filepath.stat().st_size > 0 else "missing"
-    except (json.JSONDecodeError, OSError, ValueError) as exc:
+            return "missing"  # unknown extension → explicit missing
+    except json.JSONDecodeError:
+        return "corrupted"
+    except (OSError, ValueError):
         return "missing"
 
 
@@ -479,6 +481,7 @@ def aggregate(
     stale_evidence: List[Dict[str, str]] = []
     hash_mismatches: List[str] = []
     missing_evidence: List[str] = []
+    corrupted_evidence: List[Dict[str, str]] = []
     all_verdicts: Dict[str, str] = {}
 
     for tier_name in TIER_ORDER:
@@ -544,6 +547,12 @@ def aggregate(
 
                 # Extract verdict
                 verdict = extract_verdict(ef, tn)
+                if verdict == "corrupted":
+                    corrupted_evidence.append({
+                        "file": fname,
+                        "task": task_key,
+                        "reason": "file is corrupted or unreadable",
+                    })
                 file_verdicts.append(verdict)
                 file_details.append({
                     "file": fname,
@@ -554,6 +563,8 @@ def aggregate(
             # Determine task-level verdict
             if "blocked" in file_verdicts:
                 task_v = "blocked"
+            elif "corrupted" in file_verdicts:
+                task_v = "fail"
             elif "hash_mismatch" in file_verdicts:
                 task_v = "fail"
             elif "stale" in file_verdicts:
@@ -580,7 +591,7 @@ def aggregate(
                 blocked_items.append(f"{tier_name}: task {tn} is BLOCKED")
             elif task_v == "missing":
                 tier_missing = True
-            elif task_v == "fail" or task_v == "hash_mismatch" or task_v == "stale":
+            elif task_v in ("fail", "hash_mismatch", "stale", "corrupted"):
                 tier_failed = True
 
         # Determine tier status
@@ -623,10 +634,11 @@ def aggregate(
         "stale_rejected": stale_evidence,
         "hash_mismatches": hash_mismatches,
         "missing_evidence": missing_evidence,
+        "corrupted_evidence": corrupted_evidence,
         "blocked_items": sorted(blocked_items),
         "unrelated_worktree_preserved": has_dirty,
         "worktree_dirty_paths": sorted(dirty_paths) if has_dirty else [],
-        "error_count": len(stale_evidence) + len(hash_mismatches) + len(missing_evidence),
+        "error_count": len(stale_evidence) + len(hash_mismatches) + len(missing_evidence) + len(corrupted_evidence),
     }
 
     return report
@@ -650,9 +662,14 @@ def main() -> None:
         help="Path to write the aggregated signoff JSON report",
     )
     parser.add_argument(
-        "--no-stale-check",
+        "--allow-stale",
         action="store_true",
-        help="Disable staleness check",
+        help="Allow stale evidence files (default: reject staleness)",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero on PARTIAL or any non-PASS overall status",
     )
     parser.add_argument(
         "--evidence-dir",
@@ -670,7 +687,7 @@ def main() -> None:
         sys.exit(2)
 
     evidence_dir = Path(args.evidence_dir) if args.evidence_dir else None
-    report = aggregate(required_tiers, stale_reject=not args.no_stale_check,
+    report = aggregate(required_tiers, stale_reject=not args.allow_stale,
                        evidence_dir=evidence_dir)
 
     # Write output
@@ -696,7 +713,9 @@ def main() -> None:
             print(f"  - {bi}")
     print(f"\nReport written to: {out_path}")
 
-    # Exit 0 for PASS/PARTIAL/BLOCKED, exit 1 for FAIL
+    # Exit 0 for PASS, exit 1 otherwise (with --strict) or only for FAIL (default)
+    if args.strict:
+        sys.exit(0 if overall == "PASS" else 1)
     if overall == "FAIL":
         sys.exit(1)
     sys.exit(0)
