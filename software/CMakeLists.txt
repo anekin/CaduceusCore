@@ -304,9 +304,101 @@ if(CADUCEUS_BUILD_TESTS)
     target_compile_options(test_rtl_transport_negative PRIVATE -Wall)
     add_test(NAME rtl_transport_negative COMMAND test_rtl_transport_negative)
 
+    # --- W3-T1: End-to-end FM submit via Host Runtime ---
+
+    add_executable(test_fm_e2e_submit
+        tests/test_fm_e2e_submit.c
+    )
+    target_include_directories(test_fm_e2e_submit PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/compiler
+        ${CMAKE_CURRENT_SOURCE_DIR}/../gen
+    )
+    target_link_libraries(test_fm_e2e_submit PRIVATE
+        caduceus_runtime_core
+        caduceus_command_ir
+    )
+    target_compile_features(test_fm_e2e_submit PRIVATE c_std_11)
+    target_compile_options(test_fm_e2e_submit PRIVATE -Wall -Wextra)
+
+    # --- W3-T3: Single non-NOP MMUL end-to-end hard gate (happy path) ---
+
+    add_executable(test_fm_e2e_mmul
+        tests/test_fm_e2e_mmul.c
+    )
+    target_include_directories(test_fm_e2e_mmul PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/compiler
+        ${CMAKE_CURRENT_SOURCE_DIR}/../gen
+    )
+    target_link_libraries(test_fm_e2e_mmul PRIVATE
+        caduceus_runtime_core
+        caduceus_command_ir
+    )
+    target_compile_features(test_fm_e2e_mmul PRIVATE c_std_11)
+    target_compile_options(test_fm_e2e_mmul PRIVATE -Wall -Wextra)
+
+    # --- W3-T4: MMUL negative-path tests (--negative flag) -----------
+    # Exercises corrupted weight, zero-dimension, fence timeout, and
+    # device reset recovery through the real fm:// transport.
+
+    add_test(NAME mmul_negative COMMAND
+        bash "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/run_mmul_negative_test.sh"
+        "$<TARGET_FILE:test_fm_e2e_mmul>"
+    )
+
+    # --- W4-T1: 4-op chain end-to-end hard gate (MMUL→SFU→VADD→DMA_COPY) ---
+
+    add_executable(test_fm_e2e_chain
+        tests/test_fm_e2e_chain.c
+    )
+    target_include_directories(test_fm_e2e_chain PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/compiler
+        ${CMAKE_CURRENT_SOURCE_DIR}/../gen
+    )
+    target_link_libraries(test_fm_e2e_chain PRIVATE
+        caduceus_runtime_core
+        caduceus_command_ir
+    )
+    target_compile_features(test_fm_e2e_chain PRIVATE c_std_11)
+    target_compile_options(test_fm_e2e_chain PRIVATE -Wall -Wextra)
+    add_test(NAME test_fm_e2e_chain COMMAND
+        bash "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/run_chain_test.sh"
+        "$<TARGET_FILE:test_fm_e2e_chain>"
+    )
+
+    # --- W3-T5: Buffer lifecycle edge-case tests (mock + FM-compatible) ---
+
+    add_executable(test_buffer_lifecycle_fm
+        tests/test_buffer_lifecycle_fm.c
+    )
+    target_link_libraries(test_buffer_lifecycle_fm PRIVATE caduceus_runtime_core)
+    target_compile_features(test_buffer_lifecycle_fm PRIVATE c_std_11)
+    target_compile_options(test_buffer_lifecycle_fm PRIVATE -Wall -Wextra)
+    # Default: mock:// (runtime-level validation before transport)
+    add_test(NAME buffer_edge_cases COMMAND test_buffer_lifecycle_fm mock://)
+
     # ── ExecuTorch NPU backend tests ───────────────────────────────
 
     add_subdirectory(executorch)
+
+    # --- W5-T2: Execution stats (FM server returns real op/byte counts) ---
+
+    add_executable(test_execution_stats
+        tests/test_execution_stats.c
+    )
+    target_include_directories(test_execution_stats PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/compiler
+        ${CMAKE_CURRENT_SOURCE_DIR}/../gen
+    )
+    target_link_libraries(test_execution_stats PRIVATE
+        caduceus_runtime_core
+        caduceus_command_ir
+    )
+    target_compile_features(test_execution_stats PRIVATE c_std_11)
+    target_compile_options(test_execution_stats PRIVATE -Wall -Wextra)
+    add_test(NAME execution_stats COMMAND
+        bash "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/run_execution_stats_test.sh"
+        "$<TARGET_FILE:test_execution_stats>"
+    )
 endif()
 
 # ── Install rules ────────────────────────────────────────────────────

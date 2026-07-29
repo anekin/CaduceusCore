@@ -45,6 +45,9 @@ build/p4_full_rtl/
 build/run/
 build/wave1/
 
+# CMake build output (Python ctypes development symlink)
+software/build/
+
 # Generated benchmark output
 results/
 
