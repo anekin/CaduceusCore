@@ -44,9 +44,18 @@ def _positive_args(parser: argparse.ArgumentParser) -> None:
         "--evidence", default=str(_EVIDENCE_DIR / "task-17-qwen3b-software-positive.json"),
         help="Path for the positive evidence JSON file",
     )
+    parser.add_argument(
+        "--gate", default=None, dest="gate_filter",
+        help="Run only the named gate (e.g. single_decode_token, full_shape_blk0). "
+             "When omitted, all enabled gates run.",
+    )
 
 
 def _negative_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--device", default=_env_device(),
+        help="Caduceus device URI for the NPU backend (default: $CADUCEUS_DEVICE or mock://)",
+    )
     parser.add_argument(
         "--evidence", default=str(_EVIDENCE_DIR / "task-17-qwen3b-software-negative.json"),
         help="Path for the negative evidence JSON file",
@@ -75,14 +84,17 @@ def main(argv: list[str] | None = None) -> int:
     combined = _EVIDENCE_DIR / "task-17-qwen3b-software.json"
 
     if args.command == "positive":
-        payload = run_positive_signoff(config, args.device, Path(args.evidence))
+        payload = run_positive_signoff(
+            config, args.device, Path(args.evidence),
+            gate_filter=getattr(args, "gate_filter", None),
+        )
         write_combined_evidence(combined)
         print(f"Positive signoff verdict: {payload['verdict']}")
         print(f"Evidence written to: {args.evidence}")
         return 0 if payload["verdict"] == "pass" else 1
 
     if args.command == "negative":
-        payload = run_negative_signoff(config, Path(args.evidence))
+        payload = run_negative_signoff(config, Path(args.evidence), args.device)
         write_combined_evidence(combined)
         print(f"Negative signoff verdict: {payload['verdict']}")
         print(f"Evidence written to: {args.evidence}")

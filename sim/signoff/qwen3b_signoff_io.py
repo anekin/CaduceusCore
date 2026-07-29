@@ -151,6 +151,7 @@ def _run_llama_cli_decode(
     env: dict[str, str],
     prompt: str,
     n_predict: int,
+    timeout: float = 900.0,
 ) -> str:
     """Run llama cli in single-turn mode and return the generated text."""
     cmd = [
@@ -164,7 +165,7 @@ def _run_llama_cli_decode(
         "--top-p", str(config.top_p),
         "--single-turn",
     ]
-    proc = _run(cmd, workdir, env, timeout=900.0)
+    proc = _run(cmd, workdir, env, timeout=timeout)
     if proc.returncode != 0:
         raise SignoffError(f"llama cli failed: {proc.stderr[-1000:]}")
     return _parse_generated_text(proc.stdout, prompt)

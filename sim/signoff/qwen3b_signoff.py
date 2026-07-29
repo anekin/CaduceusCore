@@ -16,6 +16,7 @@ from signoff.qwen3b_signoff_gates import (
     gate_cpu_fallback_mixed_graph,
     gate_decode_tokens,
     gate_full_shape_blk0,
+    gate_single_decode_token_spike,
     gate_supported_single_ops,
 )
 from signoff.qwen3b_signoff_runner import (
@@ -44,6 +45,7 @@ __all__ = [
     "gate_cpu_fallback_mixed_graph",
     "gate_decode_tokens",
     "gate_full_shape_blk0",
+    "gate_single_decode_token_spike",
     "gate_supported_single_ops",
     "load_config",
     "managed_device_server",
