@@ -49,7 +49,51 @@ Func Model 上每个模块的 cycle 计数是真实的：
 
 ---
 
-## 三、统一软件栈：同一套 Runtime，三个后端
+## 三、从串行到并行：软件不必等 RTL
+
+前面讲的是 Func Model 作为验证工具的价值。但这个方法学还有一个容易被忽视的好处——它改变了芯片和软件开发的时序关系。
+
+### 传统流程：串行等待
+
+```
+架构设计 → RTL 开发 → RTL 验证（EDA 工具，极慢）→ FPGA 联调 → 软件开发
+           ↑                        ↑
+           3-6 个月                  EDA 仿真跑一次 regression 可能以天计
+```
+
+软件团队在 RTL 验证通过之前基本只能看文档、写设计。真正能在硬件上跑软件，要等到 FPGA 可用——这通常是项目启动后半年甚至更久。在此之前，软件和硬件的接口问题完全无法暴露。
+
+### Func Model 驱动的流程：并行推进
+
+```
+架构设计 → Func Model 开发（Python，迭代快）
+              ├→ 软件栈开发（Runtime / 固件 / 编译器 / llama.cpp）← 同时进行
+              └→ RTL 开发                                     ← 同时进行
+                         ↓
+              Func Model 签收通过 ← 软件栈已在此之上验证完毕
+                         ↓
+              RTL 验证 —— 对比 Func Model，而非从零摸索
+```
+
+**关键的时序变化：软件开发的起点从「FPGA 可用」提前到了「Func Model 可用」。**
+
+Python 写的 Func Model，修改一行代码、跑一次回归的时间以秒计。RTL 的 EDA 仿真，编译一次 testbench 加跑完回归，时间以小时甚至天计。两者的迭代速度差了两个数量级。在 Func Model 上开发软件栈——调试固件的 dispatch 逻辑、验证 Host Runtime 的 doorbell 协议、对接 llama.cpp 的 MUL_MAT 后端——每次修改几秒就能看到结果。同样的工作如果在 RTL 仿真器上做，编译等十分钟、跑仿真半小时、看波形一小时，一天调不了三轮。
+
+CaduceusCore 的实际情况是：Func Model Signoff v3 通过时，整个软件栈（Host Runtime + 固件 + llama.cpp 后端 + ExecuTorch 代理）已经在 Func Model 上完成了端到端验证。Qwen3B 跑通不是在 FPGA 上、不是在 RTL 仿真器上，而是在一个 Python 程序里。而此时 RTL 开发仍在进行中。
+
+### 更早暴露软硬件接口问题
+
+这个并行流程还有一个连带收益：**软硬件结合部的 bug 在 Func Model 阶段就暴露了，而不是等到 RTL 联调。**
+
+RTL 仿真和 EDA 工具的运行成本远高于 Python 程序。在 Func Model 上发现一个固件 doorbell 协议的边界条件问题，修改固件、重新编译 Spike、跑一次回归只需要几分钟。如果同样的问题到 RTL 阶段才发现，每一次调试循环都涉及 testbench 重编译和仿真器重启，成本高一个数量级。
+
+这里有一个具体的数据：Func Model Signoff v3 阶段共发现 7 个软硬件接口 bug，涉及 opcode 编号不一致（固件用枚举值 3，spike_host 传数值 5）、activation SRAM 偏移计算错误（硬编码 64 而非 desc.M）、weight tiling 布局与固件不兼容等。这些 bug 如果在 RTL 阶段才发现，每次定位需要重新 trace 几十万周期的波形。在 Func Model 阶段，Python 的 assert 和 print 一步定位。
+
+Func Model 开发成本本身很低——Python 工程，不需要 EDA 工具 license，不需要仿真加速器。它把「找软硬件接口 bug」的工作从昂贵的 RTL 验证阶段前移到了廉价的模型开发阶段，本质上是一种风险前置。
+
+---
+
+## 四、统一软件栈：同一套 Runtime，三个后端
 
 只靠 Func Model 把硬件行为定准还不够——还需要保证软件在不同阶段看到的硬件行为是一致的。
 
@@ -68,7 +112,7 @@ CaduceusCore 的做法是定义一套稳定的 C Host Runtime ABI，通过 URI �
 
 ---
 
-## 四、ABI 单源生成：一个 JSON，五个 Target
+## 五、ABI 单源生成：一个 JSON，五个 Target
 
 统一 Runtime 的前提是硬件接口定义不能有多份拷贝。寄存器地址、opcode 编号、descriptor 布局、ring buffer 协议——这些信息如果分散在 SystemVerilog 头文件、C 头文件、Python 常量、固件宏定义里，同步必然出问题。
 
@@ -102,7 +146,7 @@ CaduceusCore 的做法是把所有硬件/软件接口定义收进一份 JSON：
 
 ---
 
-## 五、验证闭环：共享场景 + 差分对比
+## 六、验证闭环：共享场景 + 差分对比
 
 有了 Golden Reference 和统一 Runtime，验证的核心流程变得简洁：
 
@@ -122,7 +166,7 @@ Scenario（同一个测试场景）
 
 ---
 
-## 六、Agent 自动验证：零人工干预
+## 七、Agent 自动验证：零人工干预
 
 上述所有验证，从 plan 分解到 evidence 生成，全部由 Agent 自动完成。
 
@@ -140,7 +184,7 @@ Func Model Signoff v2（算子数学正确性）和 v3（SoC 集成通路）共�
 
 ---
 
-## 七、方法和工业实践的对齐
+## 八、方法和工业实践的对齐
 
 虽然 Agent 自动化是独特的，但 CaduceusCore 的方法论在几个关键点上和工业最佳实践对齐：
 
@@ -157,7 +201,7 @@ Func Model Signoff v2（算子数学正确性）和 v3（SoC 集成通路）共�
 
 ---
 
-## 八、当前状态和已知局限
+## 九、当前状态和已知局限
 
 截至 2026 年 7 月底：
 
@@ -179,7 +223,7 @@ Func Model Signoff v2（算子数学正确性）和 v3（SoC 集成通路）共�
 
 ---
 
-## 九、总结
+## 十、总结
 
 CaduceusCore 的验证方法学可以概括为三句话：
 
