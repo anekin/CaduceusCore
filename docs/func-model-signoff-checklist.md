@@ -265,22 +265,27 @@ The evidence aggregator reads all `.omo/evidence/task-*-*.json` / `.log` / `.csv
 files for Tasks 1–21, classifies them into the seven tiers above, and produces
 a deterministic JSON signoff report.
 
-| Tier | Expected Status | Rationale |
+| Tier | Strict-Mode Status | Rationale |
 |------|:--------------:|-----------|
-| L0 | PASS | ABI schema 19/19 tests, generation idempotent |
-| L1 | PASS | CTest 6/6+, Python conformance 17/17 |
+| L0 | PASS | ABI schema generation idempotent; binding migration 13/13 + abi_layout pass |
+| L1 | PASS | CTest 15/15, Python conformance 17/17 (mock transport) |
 | L2 | PASS | Device protocol 9/9, fault/differential tests pass |
-| L3 | PASS (check) | Spike manifest present; actual rebuild requires `dtc` + `riscv-gcc` |
+| L3 | PASS | Spike manifest present; firmware artifacts verified by SHA-256; `dtc` + `riscv-gcc` available |
 | L4 | PASS | RTL adapter 6/6 scenarios (FakeDUT); transport conformance passes |
 | L5 | **BLOCKED** | **Task 20 FPGA is NO-GO** — no FPGA platform available in this phase |
-| Framework | PASS | Qwen 3B software gates pass (mock transport); ExecuTorch delegate tests pass |
-| **Overall** | **BLOCKED** | L5 blockade propagates to overall status per aggregator rules |
+| Framework | **BLOCKED** | **Task 15 ggml lifecycle is BLOCKED** — `fm://python` device server prerequisite unavailable; Tasks 5, 16, 17, 21 PASS |
+| **Overall** | **BLOCKED** | L5 and Framework blockades propagate per aggregator rules |
 
 ### What Is NOT Claimed
 
 - **FPGA PASS** — Task 20 is intentionally BLOCKED/NO-GO because no FPGA
   platform is available. The aggregator correctly reports overall BLOCKED when
   L5 is required with `--require l0,l1,l2,l3,l4,l5,framework`.
+- **Task 15 ggml lifecycle PASS** — Task 15 is BLOCKED because the
+  `fm://python` Func Model device server is not available in this environment
+  (`cadDeviceOpen(fm://python) failed: Device lost`). The evidence file is
+  preserved with an explicit `VERDICT: BLOCKED` annotation and
+  `blocked_reason: prerequisite unavailable`.
 - **Full RTL replay PASS** — The RTL adapter (L4) proves the adapter interface
   contract through FakeDUT scenarios, but does not replay the FM-SOC vector
   suite through a live VCS/cocotb simulation in CI.
@@ -308,3 +313,80 @@ L5 uses `continue-on-error: true` so the BLOCKED verdict does not fail the
 workflow. All other jobs fail on test/command failure per standard CI semantics.
 The `release_aggregator` job `needs` all seven tier jobs to ensure evidence is
 complete before the aggregation runs.
+
+---
+
+## Clean-Checkout Bootstrap
+
+> **Date**: 2026-07-29
+> **Scope**: Reproducible clean-checkout bootstrap scripts for CI and developer onboarding.
+> **Requires**: Ubuntu 22.04 (or compatible) with git, python3, and pip pre-installed.
+
+Two bootstrap scripts ensure that a fresh clone of CaduceusCore can be built
+from scratch with zero manual setup beyond base OS tooling.
+
+### `scripts/ci_bootstrap.sh` — Software Baseline
+
+Installs missing system packages (cmake, g++, flatc), Python dependencies,
+builds the C/C++ Host Runtime with tests, and performs a reproducible release
+build.  This is the **mandatory** baseline for all CI tiers.
+
+**What it does:**
+
+| Step | Command | Purpose |
+|------|---------|---------|
+| 1 | `apt-get install cmake g++ flatbuffers-compiler` | System build tools (best-effort; already-installed tools are skipped) |
+| 2 | `pip install -r requirements.txt` | Python test/model dependencies |
+| 3 | `cmake -S software -B build/software -DCADUCEUS_BUILD_TESTS=ON` | CMake configure |
+| 4 | `cmake --build build/software` | Build Host Runtime + tests |
+| 5 | `ctest --test-dir build/software --output-on-failure` | Run C/C++ test suite |
+| 6 | `python3 scripts/build_software_release.py --clean --install-prefix build/install` | Release build & install |
+
+**When to run:**
+- After a fresh `git clone`
+- After `git clean -fdx` or switching branches with build-system changes
+- In CI as the first step of any job that needs a compiled Host Runtime
+- Before running `scripts/aggregate_software_signoff.py`
+
+**Expected output:** exit 0, all steps PASS.  Installed artifacts at
+`build/install/lib/libcaduceus_runtime.so` and `build/install/include/`.
+
+**Firmware is NOT included** — the RISC-V cross-compiler is optional.
+See `ci_bootstrap_firmware.sh` below.
+
+### `scripts/ci_bootstrap_firmware.sh` — Firmware Build
+
+Builds the NPU bare-metal firmware (`npu_firmware.elf`, `npu_firmware_spike.elf`)
+when the RISC-V cross-compiler is available.  Gracefully skips with exit 0 if
+the toolchain is missing.
+
+**Prerequisites (Ubuntu 22.04):**
+```bash
+sudo apt-get install -y gcc-riscv64-unknown-elf
+```
+
+**What it does:**
+- Checks for `riscv64-unknown-elf-gcc`, `objcopy`, `objdump`, `size`
+- If found: runs `make -C firmware clean && make -C firmware all`
+- If missing: prints a clear skip message with install instructions, exits 0
+
+**When to run:**
+- Before CI tier L3 (Spike simulation / real-firmware signoff)
+- Before running `scripts/run_runtime_spike_signoff.py`
+- After installing or upgrading the RISC-V toolchain
+
+**Expected output:** exit 0 (PASS or gracefully SKIPPED).  On a machine
+without the RISC-V toolchain the script prints the install command and exits 0.
+This is intentional — the firmware build is not required for the software
+baseline.
+
+### Running Both (Typical Developer Workflow)
+
+```bash
+# Build everything that can be built (software + optional firmware)
+bash scripts/ci_bootstrap.sh 2>&1 | tee .omo/evidence/task-w1t5-bootstrap.log
+bash scripts/ci_bootstrap_firmware.sh 2>&1 | tee .omo/evidence/task-w1t5-firmware.log
+```
+
+The software baseline must pass.  The firmware script may skip — that is
+expected and not an error.
