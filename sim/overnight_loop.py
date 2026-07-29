@@ -437,8 +437,8 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
                 if t > 0:
                     batch_tok_values.append(t)
     # Use raw values for interop projection (rounding before multiply inflates by ~2 tok/s)
-    _batch_raw_min = min(batch_tok_values) if batch_tok_values else e2e.get('tok_s', 22) * 0.5
-    _batch_raw_max = max(batch_tok_values) if batch_tok_values else e2e.get('tok_s', 22) * 0.8
+    _batch_raw_min = min(batch_tok_values) if batch_tok_values else e2e.get('tok_s', TARGET_TOK_S) * 0.5
+    _batch_raw_max = max(batch_tok_values) if batch_tok_values else e2e.get('tok_s', TARGET_TOK_S) * 0.8
     batch_min = round(_batch_raw_min)
     batch_max = round(_batch_raw_max)
     interop_min = round(_batch_raw_min * 4) if batch_tok_values else batch_min * 4

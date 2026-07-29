@@ -31,7 +31,7 @@ if _PACKAGE_ROOT not in sys.path:
 
 from sim.func_model import FuncModel
 from sim.mmio_bridge import MMIOBridge
-from sim.models.crossbar import CrossbarModel
+from models.crossbar import CrossbarModel
 
 
 DEFAULT_SOCK_PATH = "/tmp/npu_mmio.sock"
