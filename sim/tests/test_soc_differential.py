@@ -132,6 +132,7 @@ def test_detects_divergence_with_injected_data_corruption(adapter, memory_oracle
             "fault_class": "data_corruption",
             "fault_params": {"offset": 0, "count": 4},
             "expected_classification": "data_corruption",
+            "expected_detector": "data_corruption",
         },
     )
     inputs = {

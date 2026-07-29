@@ -30,6 +30,10 @@ from sim.verification import (
     FaultInjector,
     FaultInjectionRecord,
 )
+from sim.verification.differential import (
+    MemoryGoldenOracle,
+    run_differential_scenario,
+)
 from sim.verification.dut_adapter import (
     DUTConnectionError,
     DUTTimeoutError,
@@ -733,3 +737,190 @@ class TestFullFaultClassificationCoverage:
                 injection_applied=True,
             )
             assert record.fault_class == fault_name
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Anti-vacuity scenarios (W4-T4 / Todo 19)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestAntiVacuityGate:
+    """Anti-vacuity tests: prove the detector actually fired, not just
+    that the mutation was applied.
+
+    Scenario A: no-fault → no false positive.
+    Scenario B: corruption injected, wrong detector specified → FAIL.
+    Scenario C: corruption injected, correct detector specified → PASS.
+    """
+
+    @staticmethod
+    async def _run_differential(adapter, scenario, oracle, inputs):
+        return await run_differential_scenario(adapter, scenario, oracle, inputs)
+
+    @staticmethod
+    def _make_adapter():
+        return FuncModelAdapter(firmware_mode="python")
+
+    def test_anti_vacuity_no_fault_no_false_positive(self):
+        """Scenario A: no fault injection → scoreboard passes → anti-vacuity gate PASS."""
+        data = b"\xAA\xBB\xCC\xDD" * 4
+        offset = 0x1000
+        scenario = Scenario(
+            scenario_id="anti-vacuity-no-fault",
+            actions=[Action.sram_preload(offset, data)],
+            expected_observations=[
+                Observation(
+                    observation_id="sram_data",
+                    observation_type=ObservationType.sram_data,
+                    address=offset,
+                    size=len(data),
+                    data={"raw_hex": data.hex(), "dtype": "int32"},
+                ),
+            ],
+            tolerance=ToleranceConfig(int32_bit_exact=True),
+            metadata={"expected_detector": "no_fault"},
+        )
+        inputs = {
+            "oracle": "memory",
+            "expected_specs": [{
+                "observation_id": "sram_data",
+                "observation_type": "sram_data",
+                "address": offset,
+                "size": len(data),
+                "raw_hex": data.hex(),
+                "dtype": "int32",
+            }],
+        }
+
+        async def _run():
+            adapter = self._make_adapter()
+            await adapter.connect()
+            try:
+                report = await self._run_differential(
+                    adapter, scenario, MemoryGoldenOracle(), inputs
+                )
+                return report
+            finally:
+                await adapter.disconnect()
+
+        report = asyncio.run(_run())
+
+        assert report.gate_pass is True
+        assert report.injection_applied is False
+        assert report.expected_detector == "no_fault"
+        assert report.detection_hit is True
+        assert report.detector_failure_reason == ""
+        assert report.scoreboard_result.passed is True
+
+    def test_anti_vacuity_corruption_wrong_detector_fails(self):
+        """Scenario B: data corruption injected, wrong detector specified → FAIL."""
+        data = b"\x01\x02\x03\x04" * 4
+        offset = 0x2000
+        scenario = Scenario(
+            scenario_id="anti-vacuity-wrong-detector",
+            actions=[Action.sram_preload(offset, data)],
+            expected_observations=[
+                Observation(
+                    observation_id="sram_data",
+                    observation_type=ObservationType.sram_data,
+                    address=offset,
+                    size=len(data),
+                    data={"raw_hex": data.hex(), "dtype": "int32"},
+                ),
+            ],
+            tolerance=ToleranceConfig(int32_bit_exact=True),
+            metadata={
+                "fault_class": "data_corruption",
+                "fault_params": {"offset": 0, "count": 4},
+                "expected_detector": "wrong_completion",
+            },
+        )
+        inputs = {
+            "oracle": "memory",
+            "expected_specs": [{
+                "observation_id": "sram_data",
+                "observation_type": "sram_data",
+                "address": offset,
+                "size": len(data),
+                "raw_hex": data.hex(),
+                "dtype": "int32",
+            }],
+        }
+
+        async def _run():
+            adapter = self._make_adapter()
+            await adapter.connect()
+            try:
+                import sys
+                adapter.enable_fault(FaultClass.data_corruption, offset=0, count=4)
+                report = await self._run_differential(
+                    adapter, scenario, MemoryGoldenOracle(), inputs
+                )
+                return report
+            finally:
+                await adapter.disconnect()
+
+        report = asyncio.run(_run())
+
+        assert report.gate_pass is False, "Wrong detector should cause gate fail"
+        assert report.injection_applied is True
+        assert report.expected_detector == "wrong_completion"
+        assert report.detection_hit is False
+        assert report.detector_failure_reason is not None
+        assert "wrong detector" in report.detector_failure_reason
+        assert len(report.divergences) > 0
+
+    def test_anti_vacuity_corruption_correct_detector_passes(self):
+        """Scenario C: data corruption injected, correct detector specified → PASS."""
+        data = b"\x11\x22\x33\x44" * 4
+        offset = 0x3000
+        scenario = Scenario(
+            scenario_id="anti-vacuity-correct-detector",
+            actions=[Action.sram_preload(offset, data)],
+            expected_observations=[
+                Observation(
+                    observation_id="sram_data",
+                    observation_type=ObservationType.sram_data,
+                    address=offset,
+                    size=len(data),
+                    data={"raw_hex": data.hex(), "dtype": "int32"},
+                ),
+            ],
+            tolerance=ToleranceConfig(int32_bit_exact=True),
+            metadata={
+                "fault_class": "data_corruption",
+                "fault_params": {"offset": 0, "count": 4},
+                "expected_detector": "scoreboard_mismatch",
+            },
+        )
+        inputs = {
+            "oracle": "memory",
+            "expected_specs": [{
+                "observation_id": "sram_data",
+                "observation_type": "sram_data",
+                "address": offset,
+                "size": len(data),
+                "raw_hex": data.hex(),
+                "dtype": "int32",
+            }],
+        }
+
+        async def _run():
+            adapter = self._make_adapter()
+            await adapter.connect()
+            try:
+                adapter.enable_fault(FaultClass.data_corruption, offset=0, count=4)
+                report = await self._run_differential(
+                    adapter, scenario, MemoryGoldenOracle(), inputs
+                )
+                return report
+            finally:
+                await adapter.disconnect()
+
+        report = asyncio.run(_run())
+
+        assert report.gate_pass is True, "Correct detector should make gate pass"
+        assert report.injection_applied is True
+        assert report.expected_detector == "scoreboard_mismatch"
+        assert report.detection_hit is True
+        assert report.detector_failure_reason == ""

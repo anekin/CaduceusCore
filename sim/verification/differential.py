@@ -69,6 +69,9 @@ class DivergenceReport:
     divergences: List[Divergence] = field(default_factory=list)
     detected_faults: Set[str] = field(default_factory=set)
     injection_applied: bool = False
+    expected_detector: Optional[str] = None
+    detection_hit: bool = False
+    detector_failure_reason: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -97,6 +100,9 @@ class DivergenceReport:
             ],
             "detected_faults": sorted(self.detected_faults),
             "injection_applied": self.injection_applied,
+            "expected_detector": self.expected_detector,
+            "detection_hit": self.detection_hit,
+            "detector_failure_reason": self.detector_failure_reason,
             "metadata": dict(sorted(self.metadata.items())),
         }
 
@@ -419,6 +425,87 @@ def load_evidence(path: Path) -> Dict[str, Any]:
     return data
 
 
+def _check_anti_vacuity(
+    expected_detector: Optional[str],
+    detected_faults: Set[str],
+    injection_applied: bool,
+    scoreboard_result: ScoreboardResult,
+    injected_fault_class: Optional[str] = None,
+) -> tuple[bool, str]:
+    """Verify that the expected detector actually fired.
+
+    This is the anti-vacuity gate: a fault-injection test must prove that
+    a specific checker detected the fault, not just that the mutation was
+    applied.
+
+    Args:
+        expected_detector: The detector name that must fire (e.g. "data_corruption",
+            "scoreboard_mismatch", "no_fault").
+        detected_faults: Fault classes detected by Scoreboard.classify_faults().
+        injection_applied: Whether a fault was actually injected.
+        scoreboard_result: The full scoreboard comparison result.
+        injected_fault_class: The FaultClass actually injected (from scenario
+            metadata "fault_class"). Used to verify the expected detector
+            matches what was injected.
+
+    Returns:
+        (detection_hit, reason). detection_hit is True when the expected
+        detector fired, False otherwise. reason is empty string on success
+        or an explanation on failure.
+    """
+    if expected_detector is None:
+        return True, ""
+
+    # "no_fault" detector: verify no false positive when no injection occurred
+    if expected_detector == "no_fault":
+        if injection_applied:
+            return False, "anti-vacuity: unexpected injection applied to no-fault scenario"
+        if not scoreboard_result.passed:
+            return False, "anti-vacuity: false positive — scoreboard mismatch without fault injection"
+        if len(detected_faults) > 0:
+            return False, f"anti-vacuity: false positive — fault classifier detected {sorted(detected_faults)} without injection"
+        return True, ""
+
+    # All other detectors require injection
+    if not injection_applied:
+        return False, f"anti-vacuity: injection was not applied (expected detector '{expected_detector}')"
+
+    # "scoreboard_mismatch" detector: any scoreboard mismatch counts
+    if expected_detector == "scoreboard_mismatch":
+        if not scoreboard_result.passed:
+            return True, ""
+        return False, "anti-vacuity: injection applied but scoreboard reported no mismatch"
+
+    # "any_detector": any detection mechanism counts
+    if expected_detector == "any_detector":
+        if len(detected_faults) > 0:
+            return True, ""
+        if not scoreboard_result.passed:
+            return True, ""
+        return False, "anti-vacuity: injection applied but no detector fired"
+
+    # Specific fault-class detector:
+    # Verify the injected fault MATCHES the expected detector
+    if injected_fault_class is not None and injected_fault_class != expected_detector:
+        return False, (
+            f"anti-vacuity: injection applied as '{injected_fault_class}' "
+            f"but expected detector '{expected_detector}' — wrong detector specified"
+        )
+
+    # Check if the specific fault was classified
+    if expected_detector in detected_faults:
+        return True, ""
+
+    # Fallback: scoreboard mismatch counts as implicit detection
+    if not scoreboard_result.passed:
+        return True, ""
+
+    return False, (
+        f"anti-vacuity: injection applied but no detector fired "
+        f"(expected '{expected_detector}', detected {sorted(detected_faults)})"
+    )
+
+
 async def run_differential_scenario(
     adapter,
     scenario: Scenario,
@@ -488,10 +575,27 @@ async def run_differential_scenario(
     # Gate passes only when scoreboard passes and there is no unexplained divergence.
     gate_pass = result.passed and len(divergences) == 0 and not missing_golden
 
-    # If a fault was injected, the scenario passes only if the fault was detected
-    # or recorded. This is the negative-test contract from Todo 13.
+    # ── Anti-vacuity gate (Todo 19 / W4-T4) ───────────────────────────
+    expected_detector = scenario.metadata.get("expected_detector")
     expected_fault = scenario.metadata.get("expected_classification")
-    if expected_fault is not None:
+    detection_hit = True
+    detector_failure: Optional[str] = None
+
+    if expected_detector is not None:
+        detection_hit, detector_failure = _check_anti_vacuity(
+            expected_detector, detected_faults, injection_applied, result,
+            injected_fault_class=fault_class_str,
+        )
+        gate_pass = detection_hit
+        if not detection_hit:
+            divergences.append(Divergence(
+                observation_id="*",
+                expected=expected_detector,
+                actual="not_detected",
+                classification=DivergenceClass.firmware,
+                explanation=detector_failure,
+            ))
+    elif expected_fault is not None:
         fault_recorded = expected_fault in detected_faults or injection_applied
         gate_pass = fault_recorded
 
@@ -504,6 +608,9 @@ async def run_differential_scenario(
         divergences=divergences,
         detected_faults=detected_faults,
         injection_applied=injection_applied,
+        expected_detector=expected_detector,
+        detection_hit=detection_hit,
+        detector_failure_reason=detector_failure,
         metadata={
             "scenario_content_hash": scenario_content_hash(scenario),
             "expected_fault": expected_fault,
