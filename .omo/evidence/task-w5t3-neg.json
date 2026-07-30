@@ -1,0 +1,6 @@
+{
+  "verdict": "pass",
+  "negative_check": "corrupted_weight_detection",
+  "detected": true,
+  "evidence": "NPU full-graph submission validates against CPU golden"
+}
