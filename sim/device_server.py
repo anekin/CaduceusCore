@@ -258,7 +258,8 @@ class FmDeviceServer:
         self._buffers = _BufferAllocator(DRAM_BUFFER_BASE, DRAM_BUFFER_END)
         self._fences = _FenceTable()
         self._request_lock = threading.Lock()
-        self._last_request_id = 0
+        self._next_conn_id = 0
+        self._per_conn_last_id: dict[int, int] = {}
         self._cmd_queue: queue.Queue[_PendingCommand] = queue.Queue()
         self._worker_thread: Optional[threading.Thread] = None
         self._shutdown = threading.Event()
@@ -519,17 +520,30 @@ class FmDeviceServer:
 
         return stats
 
+    # ── Connection management ─────────────────────────────────────────────
+
+    def _allocate_conn_id(self) -> int:
+        with self._request_lock:
+            conn_id = self._next_conn_id
+            self._next_conn_id += 1
+            self._per_conn_last_id[conn_id] = 0
+            return conn_id
+
+    def _release_conn_id(self, conn_id: int) -> None:
+        with self._request_lock:
+            self._per_conn_last_id.pop(conn_id, None)
+
     # ── Request handling ──────────────────────────────────────────────────
 
-    def _next_request_id_ok(self, request_id: int) -> bool:
+    def _next_request_id_ok(self, conn_id: int, request_id: int) -> bool:
         with self._request_lock:
-            if request_id <= self._last_request_id:
+            last = self._per_conn_last_id.get(conn_id, 0)
+            if request_id <= last:
                 return False
-            self._last_request_id = request_id
+            self._per_conn_last_id[conn_id] = request_id
             return True
 
-    def _handle_message(self, wire: bytes) -> bytearray:
-        """Parse one request and return the response wire bytes."""
+    def _handle_message(self, wire: bytes, conn_id: int = 0) -> bytearray:
         try:
             msg, computed_checksum = parse_message(wire)
         except Exception as exc:
@@ -541,7 +555,6 @@ class FmDeviceServer:
         opcode = h.opcode
         rid = h.requestId
 
-        # Magic / version / checksum / ordering checks, in deterministic order.
         if h.magic != MAGIC:
             print(f"DEBUG: bad magic rid={rid} opcode={opcode} magic={h.magic:#x}")
             return self._error_response(
@@ -564,22 +577,23 @@ class FmDeviceServer:
             return self._error_response(
                 rid, opcode, DeviceStatus.STATUS_INVALID_MESSAGE, str(exc)
             )
-        if not self._next_request_id_ok(rid):
-            print(f"DEBUG: request out of order rid={rid} last={self._last_request_id}")
+        if not self._next_request_id_ok(conn_id, rid):
+            last = self._per_conn_last_id.get(conn_id, 0)
+            print(f"DEBUG: request out of order rid={rid} conn={conn_id} last={last}")
             return self._error_response(
                 rid, opcode, DeviceStatus.STATUS_INVALID_MESSAGE, "request out of order"
             )
 
         try:
-            return self._dispatch(opcode, rid, msg)
+            return self._dispatch(opcode, rid, msg, conn_id=conn_id)
         except Exception as exc:
             return self._error_response(
                 rid, opcode, DeviceStatus.STATUS_INVALID_MESSAGE, str(exc)
             )
 
-    def _dispatch(self, opcode: int, rid: int, msg: DeviceMessageT) -> bytearray:
+    def _dispatch(self, opcode: int, rid: int, msg: DeviceMessageT, conn_id: int = 0) -> bytearray:
         if opcode == DeviceOpcode.OPCODE_DEVICE_RESET:
-            return self._do_device_reset(rid, msg)
+            return self._do_device_reset(rid, msg, conn_id=conn_id)
         if opcode == DeviceOpcode.OPCODE_DEVICE_CAPS:
             return self._do_device_caps(rid, msg)
         if opcode == DeviceOpcode.OPCODE_BUFFER_ALLOC:
@@ -628,13 +642,13 @@ class FmDeviceServer:
 
     # ── Operation implementations ─────────────────────────────────────────
 
-    def _do_device_reset(self, rid: int, msg: DeviceMessageT) -> bytearray:
+    def _do_device_reset(self, rid: int, msg: DeviceMessageT, conn_id: int = 0) -> bytearray:
         req = unpack_table(DeviceResetRequestT, _payload_bytes(msg))
         self._buffers = _BufferAllocator(DRAM_BUFFER_BASE, DRAM_BUFFER_END)
         self._fences.error_all()
         self._fences.clear()
         with self._request_lock:
-            self._last_request_id = 0
+            self._per_conn_last_id[conn_id] = 0
         resp = DeviceMessageT()
         resp.header = MessageHeaderT()
         resp.header.requestId = rid
@@ -951,6 +965,7 @@ class FmDeviceServer:
 class _FmRequestHandler(socketserver.BaseRequestHandler):
     def handle(self) -> None:
         server: FmDeviceServer = self.server.fm_server
+        conn_id = server._allocate_conn_id()
         sock = self.request
         try:
             while True:
@@ -960,9 +975,10 @@ class _FmRequestHandler(socketserver.BaseRequestHandler):
                     break
                 if not wire:
                     break
-                response = server._handle_message(wire)
+                response = server._handle_message(wire, conn_id=conn_id)
                 send_framed(sock, response)
         finally:
+            server._release_conn_id(conn_id)
             try:
                 sock.close()
             except Exception:
