@@ -225,6 +225,7 @@ cad_error_t cadBufferRead(cad_buffer_t buffer,
                            uint64_t offset, uint64_t size, void *data) {
     if (!validate_buffer(buffer)) return CAD_ERROR_INVALID_HANDLE;
     if (!data) return CAD_ERROR_INVALID_ARGUMENT;
+    if (offset > (uint64_t)SIZE_MAX - size) return CAD_ERROR_INVALID_ARGUMENT;
     if (offset + size > buffer->size) return CAD_ERROR_INVALID_ARGUMENT;
     int tr_err = buffer->device->transport.buffer_read(
         buffer->device->transport_priv, buffer->backend_buf,
@@ -237,6 +238,7 @@ cad_error_t cadBufferWrite(cad_buffer_t buffer,
                             const void *data) {
     if (!validate_buffer(buffer)) return CAD_ERROR_INVALID_HANDLE;
     if (!data) return CAD_ERROR_INVALID_ARGUMENT;
+    if (offset > (uint64_t)SIZE_MAX - size) return CAD_ERROR_INVALID_ARGUMENT;
     if (offset + size > buffer->size) return CAD_ERROR_INVALID_ARGUMENT;
     int tr_err = buffer->device->transport.buffer_write(
         buffer->device->transport_priv, buffer->backend_buf,

@@ -115,12 +115,19 @@ static int test_offset_overflow(const char *uri) {
     /* Write with offset+size > buffer_size */
     assert(cadBufferWrite(buf, 254, 3, data) == CAD_ERROR_INVALID_ARGUMENT);
 
-    /* Large overflow: offset near UINT64_MAX */
-    assert(cadBufferRead(buf, (uint64_t)(-1), 1, data) == CAD_ERROR_INVALID_ARGUMENT);
+    /* Large overflow: offset = UINT64_MAX */
+    assert(cadBufferRead(buf, UINT64_MAX, 1, data) == CAD_ERROR_INVALID_ARGUMENT);
+    assert(cadBufferWrite(buf, UINT64_MAX, 1, data) == CAD_ERROR_INVALID_ARGUMENT);
+
+    /* Overflow in offset+size itself (100 + (UINT64_MAX - 50) wraps) */
+    assert(cadBufferRead(buf, 100, UINT64_MAX - 50, data) == CAD_ERROR_INVALID_ARGUMENT);
+    assert(cadBufferWrite(buf, 100, UINT64_MAX - 50, data) == CAD_ERROR_INVALID_ARGUMENT);
 
     /* Exact boundary should still work */
     assert(cadBufferRead(buf, 0, 256, data) == CAD_SUCCESS);
     assert(cadBufferWrite(buf, 0, 256, data) == CAD_SUCCESS);
+    assert(cadBufferRead(buf, 255, 1, data) == CAD_SUCCESS);
+    assert(cadBufferWrite(buf, 255, 1, data) == CAD_SUCCESS);
 
     assert(cadBufferFree(buf) == CAD_SUCCESS);
     assert(cadDeviceClose(dev) == CAD_SUCCESS);
