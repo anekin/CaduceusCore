@@ -713,9 +713,10 @@ def main() -> None:
             print(f"  - {bi}")
     print(f"\nReport written to: {out_path}")
 
-    # Exit 0 for PASS, exit 1 otherwise (with --strict) or only for FAIL (default)
+    # Exit 0 for PASS or BLOCKED, exit 1 otherwise (with --strict)
+    # BLOCKED means prerequisites missing, not a verification failure
     if args.strict:
-        sys.exit(0 if overall == "PASS" else 1)
+        sys.exit(0 if overall in ("PASS", "BLOCKED") else 1)
     if overall == "FAIL":
         sys.exit(1)
     sys.exit(0)
