@@ -158,3 +158,24 @@ PYTHONPATH=sim:gen python3 scripts/run_qwen3b_software_signoff.py positive \
 
 **Verification**: 17/19 mock transport tests pass with zero ASan leaks. 2 intentional use-after-free tests (`runtime_abi_negative`, `buffer_edge_cases`) abort under ASan as expected; pass in non-ASan builds.
 
+## Todo 13: Structured leveled logging across Runtime/Transport/Server — committed 2026-07-30
+
+**Commit**: `feat(logging): structured leveled logging across Runtime/Transport/Server`
+
+**Files changed**:
+- `software/include/caduceus/runtime.h`: Added `CAD_LOG_TRACE/DEBUG/INFO/WARN/ERROR` level constants and a `CAD_LOG(level, fmt, ...)` macro.  The macro respects `CADUCEUS_LOG_LEVEL` (default `WARN`) via an inline env-level cache, and uses a compile-time `CADUCEUS_LOG_LEVEL_MIN` threshold so release builds can strip TRACE/DEBUG by defining it to `CAD_LOG_INFO`.  Log format is `[caduceus][LEVEL] file:line:func: message` on stderr.
+- `software/src/runtime_core.c`: Replaced the single `fprintf(stderr, "cadDeviceOpen: ...")` diagnostic with `CAD_LOG(CAD_LOG_ERROR, ...)`.  Added `CAD_LOG_DEBUG`/`CAD_LOG_TRACE` calls for device open/close, buffer allocation, and queue submit (entry counts / blob bytes).
+- `software/src/transport_fm.cpp`: Replaced no-op/no raw `printf`; added `CAD_LOG_DEBUG` on connect, `CAD_LOG_ERROR` on connect/build/send/recv failures, and `CAD_LOG_TRACE` on every request (opcode + request id) and submit.
+- `sim/device_server.py`: Added `LOGGER = logging.getLogger("caduceus.device")`, configured level from `CADUCEUS_LOG_LEVEL` in `main()`, and replaced all `print` debug diagnostics with `LOGGER.debug`; server listen/shutdown messages use `LOGGER.info`.
+- `software/CMakeLists.txt`: Added `fm_e2e_mmul` CTest target using new `scripts/run_mmul_happy_test.sh`.
+- `scripts/run_mmul_happy_test.sh`: New wrapper that starts the Python FM device server and runs `test_fm_e2e_mmul` without `--negative`.
+
+**Verification**:
+- `cmake --build build/software -j4` — Build: 0 errors (Release).
+- `CADUCEUS_LOG_LEVEL=TRACE ctest --test-dir build/software -R fm_e2e_mmul --output-on-failure` — Passed; `LastTest.log` shows `[caduceus][TRACE]` lines for `fm_send_request`, `cadBufferAllocate`, `cadQueueSubmit`, and `cadDeviceClose`.
+- `CADUCEUS_LOG_LEVEL=WARN ctest --test-dir build/software -R fm_e2e_mmul --output-on-failure` — Passed; no `[caduceus][TRACE/DEBUG/INFO]` lines in the log.
+- `PYTHONPATH=sim:gen CADUCEUS_LOG_LEVEL=DEBUG python3 sim/device_server.py --sock /tmp/caduceus_log.sock` — Starts and emits `[caduceus.device] [INFO] ... listening ...`.
+- `ctest --test-dir build/software --output-on-failure -j4` — 27/28 tests pass; the only incomplete test is `test_fm_e2e_chain`, which times out due to a pre-existing functional mismatch unrelated to logging.
+
+**Rationale**: The runtime, FM transport, and Python device server previously emitted ad-hoc `printf`/`fprintf` diagnostics.  A single level-filtered macro keeps user-facing error semantics intact (the broken-socket test still sees "FM transport" in stderr) while routing diagnostic chatter through DEBUG/TRACE.  The env var gives operators a single knob, and the compile-time minimum keeps the option open for release builds to strip verbose logs entirely.
+

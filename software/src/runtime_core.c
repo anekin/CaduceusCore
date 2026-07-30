@@ -135,7 +135,7 @@ cad_error_t cadDeviceOpen(const cad_device_open_info_t *open_info,
             char ebuf[256];
             cad_error_t ce = trerr_to_cad(tr_err);
             reg->ops->transportErrorToString(NULL, ce, ebuf, sizeof(ebuf));
-            fprintf(stderr, "cadDeviceOpen: %s\n", ebuf);
+            CAD_LOG(CAD_LOG_ERROR, "cadDeviceOpen: %s", ebuf);
         }
         free(d);
         return trerr_to_cad(tr_err);
@@ -170,11 +170,14 @@ cad_error_t cadDeviceOpen(const cad_device_open_info_t *open_info,
             sizeof(caps->transport_name) - 1);
     caps->transport_name[sizeof(caps->transport_name) - 1] = '\0';
 
+    CAD_LOG(CAD_LOG_DEBUG, "opened device %s (transport %s)",
+            caps->device_name, caps->transport_name);
     return CAD_SUCCESS;
 }
 
 cad_error_t cadDeviceClose(cad_device_t device) {
     if (!validate_device(device)) return CAD_ERROR_INVALID_HANDLE;
+    CAD_LOG(CAD_LOG_TRACE, "closing device");
     device->transport.device_fini(device->transport_priv);
     device->magic = CAD_MAGIC_DEAD;
     free(device);
@@ -238,6 +241,8 @@ cad_error_t cadBufferAllocate(cad_device_t device,
     b->backend_buf = bbuf;
     b->size = device->transport.buffer_size(device->transport_priv, bbuf);
     *buffer = b;
+    CAD_LOG(CAD_LOG_TRACE, "buffer allocated size=%llu",
+            (unsigned long long)create_info->size);
     return CAD_SUCCESS;
 }
 
@@ -407,6 +412,11 @@ cad_error_t cadQueueSubmit(cad_queue_t queue,
             total_blob_bytes += e->size;
         }
     }
+
+    CAD_LOG(CAD_LOG_TRACE,
+            "submit entries=%u nop=%u blob=%u total_blob_bytes=%llu",
+            cmd_list->entry_count, nop_count, blob_count,
+            (unsigned long long)total_blob_bytes);
 
     if (total_blob_bytes > (uint64_t)(UINT32_MAX - 12)) {
         return CAD_ERROR_OUT_OF_MEMORY;

@@ -12,6 +12,7 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -285,20 +286,37 @@ static int fm_send_request(fm_transport_t *tr, cd::DeviceOpcode opcode,
     if (tr->sock_fd < 0) return CAD_TR_ERR_LOST;
 
     uint64_t rid = tr->next_request_id++;
+    CAD_LOG(CAD_LOG_TRACE, "FM send opcode=%u rid=%" PRIu64,
+            (unsigned)opcode, rid);
     cd::DeviceMessageT req;
     int err = fm_build_request(&req, opcode, rid, inner_fbb);
-    if (err != CAD_TR_SUCCESS) return err;
+    if (err != CAD_TR_SUCCESS) {
+        CAD_LOG(CAD_LOG_ERROR, "FM build_request failed: %d", err);
+        return err;
+    }
 
     err = fm_send_message(tr->sock_fd, &req);
-    if (err != CAD_TR_SUCCESS) return err;
+    if (err != CAD_TR_SUCCESS) {
+        CAD_LOG(CAD_LOG_ERROR, "FM send_message failed: %d", err);
+        return err;
+    }
 
     err = fm_recv_message(tr->sock_fd, response);
-    if (err != CAD_TR_SUCCESS) return err;
+    if (err != CAD_TR_SUCCESS) {
+        CAD_LOG(CAD_LOG_ERROR, "FM recv_message failed: %d", err);
+        return err;
+    }
 
     err = fm_validate_response_header(response);
-    if (err != CAD_TR_SUCCESS) return err;
+    if (err != CAD_TR_SUCCESS) {
+        CAD_LOG(CAD_LOG_ERROR, "FM validate_response_header failed: %d", err);
+        return err;
+    }
 
-    if (response->header->request_id() != rid) return CAD_TR_ERR_INVAL;
+    if (response->header->request_id() != rid) {
+        CAD_LOG(CAD_LOG_ERROR, "FM request id mismatch");
+        return CAD_TR_ERR_INVAL;
+    }
 
     if (response->header->status() != (uint32_t)cd::DeviceStatus_STATUS_OK) {
         std::unique_ptr<cd::ErrorResponseT> err_msg(
@@ -342,10 +360,13 @@ static int fm_device_init(void *tpriv, const char *uri) {
 
     tr->sock_fd = fm_connect(tr->sock_path);
     if (tr->sock_fd < 0) {
+        CAD_LOG(CAD_LOG_ERROR, "FM connect failed: %s", tr->sock_path);
         delete tr;
         return CAD_TR_ERR_LOST;
     }
     tr->next_request_id = 1;
+
+    CAD_LOG(CAD_LOG_DEBUG, "FM connected to %s", tr->sock_path);
 
     *(fm_transport_t **)tpriv = tr;
     return CAD_TR_SUCCESS;
@@ -561,6 +582,9 @@ static int fm_fence_status(void *tpriv, cad_transport_fence_t *fence) {
 static int fm_submit(void *tpriv, void *cmd_data, uint32_t cmd_count,
                      cad_transport_fence_t *fence) {
     fm_transport_t *tr = (fm_transport_t *)tpriv;
+
+    CAD_LOG(CAD_LOG_TRACE, "FM submit cmd_count=%u fence=%p",
+            cmd_count, (void *)fence);
 
     cd::SubmitRequestT req;
     req.cmd_count = cmd_count;

@@ -47,6 +47,73 @@ typedef enum cad_error_t {
     CAD_ERROR_UNSUPPORTED      = 9,
 } cad_error_t;
 
+/* ── Structured logging ─────────────────────────────────────────── */
+
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define CAD_LOG_TRACE 0
+#define CAD_LOG_DEBUG 1
+#define CAD_LOG_INFO  2
+#define CAD_LOG_WARN  3
+#define CAD_LOG_ERROR 4
+
+#ifndef CADUCEUS_LOG_LEVEL_MIN
+/* By default all levels are compiled in and filtered at runtime.  Release
+ * builds that want to strip TRACE/DEBUG entirely can define
+ * CADUCEUS_LOG_LEVEL_MIN=CAD_LOG_INFO at compile time. */
+# define CADUCEUS_LOG_LEVEL_MIN CAD_LOG_TRACE
+#endif
+
+static inline int cad_log_level_from_env(void) {
+    static int cached = -1;
+    if (cached < 0) {
+        const char *env = getenv("CADUCEUS_LOG_LEVEL");
+        int level = CAD_LOG_WARN;
+        if (env) {
+            if (strcmp(env, "TRACE") == 0)       level = CAD_LOG_TRACE;
+            else if (strcmp(env, "DEBUG") == 0)  level = CAD_LOG_DEBUG;
+            else if (strcmp(env, "INFO") == 0)   level = CAD_LOG_INFO;
+            else if (strcmp(env, "WARN") == 0)   level = CAD_LOG_WARN;
+            else if (strcmp(env, "ERROR") == 0)  level = CAD_LOG_ERROR;
+        }
+        cached = level;
+    }
+    return cached;
+}
+
+static inline int cad_log_enabled(int level) {
+    return level >= cad_log_level_from_env();
+}
+
+static inline void cad_log_emit(int level, const char *file, int line,
+                                const char *func, const char *fmt, ...) {
+    const char *tag;
+    switch (level) {
+    case CAD_LOG_TRACE: tag = "TRACE"; break;
+    case CAD_LOG_DEBUG: tag = "DEBUG"; break;
+    case CAD_LOG_INFO:  tag = "INFO";  break;
+    case CAD_LOG_WARN:  tag = "WARN";  break;
+    case CAD_LOG_ERROR: tag = "ERROR"; break;
+    default:            tag = "????";  break;
+    }
+    fprintf(stderr, "[caduceus][%s] %s:%d:%s: ", tag, file, line, func);
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fprintf(stderr, "\n");
+}
+
+#define CAD_LOG(level, fmt, ...) \
+    do { \
+        if ((level) < CADUCEUS_LOG_LEVEL_MIN) break; \
+        if (!cad_log_enabled(level)) break; \
+        cad_log_emit((level), __FILE__, __LINE__, __func__, (fmt), ##__VA_ARGS__); \
+    } while (0)
+
 /* ── Fence status ────────────────────────────────────────────────── */
 
 typedef enum cad_fence_status_t {

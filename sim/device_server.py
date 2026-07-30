@@ -10,6 +10,7 @@ and compute is dispatched by the firmware run-loop, not by the server itself.
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import queue
 import socket
@@ -75,6 +76,8 @@ from sim.device_protocol import (
 )
 from sim.func_model import FuncModel
 
+
+LOGGER = logging.getLogger("caduceus.device")
 
 DEFAULT_SOCK_PATH = "/tmp/caduceus_fm.sock"
 
@@ -580,30 +583,30 @@ class FmDeviceServer:
         rid = h.requestId
 
         if h.magic != MAGIC:
-            print(f"DEBUG: bad magic rid={rid} opcode={opcode} magic={h.magic:#x}")
+            LOGGER.debug("bad magic rid=%s opcode=%s magic=%#x", rid, opcode, h.magic)
             return self._error_response(
                 rid, opcode, DeviceStatus.STATUS_INVALID_MESSAGE, "bad magic"
             )
         if h.protocolVersion != PROTOCOL_VERSION:
-            print(f"DEBUG: version mismatch rid={rid} version={h.protocolVersion}")
+            LOGGER.debug("version mismatch rid=%s version=%s", rid, h.protocolVersion)
             return self._error_response(
                 rid, opcode, DeviceStatus.STATUS_INVALID_MESSAGE, "version mismatch"
             )
         if h.checksum != computed_checksum:
-            print(f"DEBUG: checksum mismatch rid={rid} claimed={h.checksum} computed={computed_checksum}")
+            LOGGER.debug("checksum mismatch rid=%s claimed=%s computed=%s", rid, h.checksum, computed_checksum)
             return self._error_response(
                 rid, opcode, DeviceStatus.STATUS_INVALID_MESSAGE, "checksum mismatch"
             )
         try:
             validate_header(msg)
         except Exception as exc:
-            print(f"DEBUG: validate_header failed rid={rid}: {exc}")
+            LOGGER.debug("validate_header failed rid=%s: %s", rid, exc)
             return self._error_response(
                 rid, opcode, DeviceStatus.STATUS_INVALID_MESSAGE, str(exc)
             )
         if not self._next_request_id_ok(conn_id, rid):
             last = self._per_conn_last_id.get(conn_id, 0)
-            print(f"DEBUG: request out of order rid={rid} conn={conn_id} last={last}")
+            LOGGER.debug("request out of order rid=%s conn=%s last=%s", rid, conn_id, last)
             return self._error_response(
                 rid, opcode, DeviceStatus.STATUS_INVALID_MESSAGE, "request out of order"
             )
@@ -1081,8 +1084,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    level_name = os.environ.get("CADUCEUS_LOG_LEVEL", "WARN").upper()
+    level_map = {
+        "TRACE": logging.DEBUG,
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARN": logging.WARNING,
+        "ERROR": logging.ERROR,
+    }
+    log_level = level_map.get(level_name, logging.WARNING)
+    logging.basicConfig(
+        level=log_level,
+        format="[%(name)s] [%(levelname)s] %(filename)s:%(lineno)d: %(message)s",
+    )
+
     server = serve(sock_path=args.sock, use_spike=args.spike)
-    print(f"FM device server listening on {args.sock}", flush=True)
+    LOGGER.info("FM device server listening on %s", args.sock)
 
     try:
         server.serve_forever()
@@ -1095,7 +1112,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             os.unlink(args.sock)
         except FileNotFoundError:
             pass
-        print("FM device server shut down", flush=True)
+        LOGGER.info("FM device server shut down")
     return 0
 
 

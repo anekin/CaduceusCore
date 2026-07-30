@@ -381,6 +381,12 @@ if(CADUCEUS_BUILD_TESTS)
         "$<TARGET_FILE:test_fm_e2e_mmul>"
     )
 
+    # --- W3-T3: Single non-NOP MMUL end-to-end hard gate (happy path) ---
+    add_test(NAME fm_e2e_mmul COMMAND
+        bash "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/run_mmul_happy_test.sh"
+        "$<TARGET_FILE:test_fm_e2e_mmul>"
+    )
+
     # --- W4-T1: 4-op chain end-to-end hard gate (MMUL→SFU→VADD→DMA_COPY) ---
 
     add_executable(test_fm_e2e_chain
