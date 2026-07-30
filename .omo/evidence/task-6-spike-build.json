@@ -1,4 +1,5 @@
 {
+  "verdict": "pass",
   "abi": {
     "firmware_header": "/home/prj/zhengs/caduceuscore/CaduceusCore/gen/npu_abi_firmware.h",
     "major": 1,

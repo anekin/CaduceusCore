@@ -1,68 +1,23 @@
 {
   "blocked_items": [
+    "framework: task 15 is BLOCKED",
     "l5: task 20 is BLOCKED"
   ],
   "corrupted_evidence": [],
-  "error_count": 9,
+  "error_count": 0,
   "hash_mismatches": [],
   "missing_evidence": [],
   "overall_status": "BLOCKED",
   "report_type": "software_signoff_aggregation",
   "report_version": "1.0",
-  "stale_rejected": [
-    {
-      "file": "task-1-abi-generate.log",
-      "reason": "older than 24 hours",
-      "task": "1"
-    },
-    {
-      "file": "task-2-binding-migration.log",
-      "reason": "older than 24 hours",
-      "task": "2"
-    },
-    {
-      "file": "task-7-runtime-core.log",
-      "reason": "older than 24 hours",
-      "task": "7"
-    },
-    {
-      "file": "task-6-spike-build.json",
-      "reason": "older than 24 hours",
-      "task": "6"
-    },
-    {
-      "file": "task-10-rtl-adapter-verify.json",
-      "reason": "older than 24 hours",
-      "task": "10"
-    },
-    {
-      "file": "task-10-rtl-adapter.json",
-      "reason": "older than 24 hours",
-      "task": "10"
-    },
-    {
-      "file": "task-5-llama-pin.log",
-      "reason": "older than 24 hours",
-      "task": "5"
-    },
-    {
-      "file": "task-15-ggml-lifecycle.log",
-      "reason": "older than 24 hours",
-      "task": "15"
-    },
-    {
-      "file": "task-16-ggml-ops.csv",
-      "reason": "older than 24 hours",
-      "task": "16"
-    }
-  ],
+  "stale_rejected": [],
   "tiers": {
     "framework": {
-      "status": "FAIL",
+      "status": "BLOCKED",
       "task_verdicts": [
-        "fail",
-        "fail",
-        "fail",
+        "pass",
+        "blocked",
+        "pass",
         "pass",
         "pass"
       ],
@@ -75,10 +30,10 @@
             {
               "file": "task-15-ggml-lifecycle.log",
               "fingerprint": "9b895f2008faf3fe100724822249c8fcadd15869f9d1e5c0abd850971e7e7d45",
-              "verdict": "stale"
+              "verdict": "blocked"
             }
           ],
-          "verdict": "fail"
+          "verdict": "blocked"
         },
         "16": {
           "evidence_files": [
@@ -87,11 +42,11 @@
           "file_details": [
             {
               "file": "task-16-ggml-ops.csv",
-              "fingerprint": "b98c150579a3897d908413cfd9a0bb47582c6dd9dd93a0ef50ef0905b45229a1",
-              "verdict": "stale"
+              "fingerprint": "57acb31bb93ab3a486f1ccfba48b751ed8f62e4e7e33b9c0799eec74445dfea6",
+              "verdict": "pass"
             }
           ],
-          "verdict": "fail"
+          "verdict": "pass"
         },
         "17": {
           "evidence_files": [
@@ -101,12 +56,12 @@
           "file_details": [
             {
               "file": "task-17-qwen3b-software-positive.json",
-              "fingerprint": "79b16b6c2fc4c23f86200c5182b403f331601c809314461b50648f09e1e03221",
+              "fingerprint": "f88e0256a307bfea13ac0549b03e545c40e52ce9e6476b8f5672224228832418",
               "verdict": "pass"
             },
             {
               "file": "task-17-qwen3b-software.json",
-              "fingerprint": "6b43d64df527bcc63b792312d176b8af0196bf652ecbb0b9974a4ec3f2d4db19",
+              "fingerprint": "ca4707014369360fdf308d57b65f22a917f07b43b32fad87da01d5d167de01d4",
               "verdict": "pass"
             }
           ],
@@ -132,19 +87,19 @@
           "file_details": [
             {
               "file": "task-5-llama-pin.log",
-              "fingerprint": "dc12e077eb435d495305557a5a0050e550df97b7ba03314188eed4158327c2c6",
-              "verdict": "stale"
+              "fingerprint": "d75beaac012e071937892a2678614924ae8ece8768c040c6da70425f0fe670df",
+              "verdict": "pass"
             }
           ],
-          "verdict": "fail"
+          "verdict": "pass"
         }
       }
     },
     "l0": {
-      "status": "FAIL",
+      "status": "PASS",
       "task_verdicts": [
-        "fail",
-        "fail"
+        "pass",
+        "pass"
       ],
       "tasks": {
         "1": {
@@ -155,10 +110,10 @@
             {
               "file": "task-1-abi-generate.log",
               "fingerprint": "0c2dd0856d32ed78c0770172dc883030cb36e330494270770fda6470ace9622f",
-              "verdict": "stale"
+              "verdict": "pass"
             }
           ],
-          "verdict": "fail"
+          "verdict": "pass"
         },
         "2": {
           "evidence_files": [
@@ -168,18 +123,18 @@
             {
               "file": "task-2-binding-migration.log",
               "fingerprint": "e562e6f05254d67e5a90382555f6aa14a65724bd23fe94d4ccf006e64fb4e551",
-              "verdict": "stale"
+              "verdict": "pass"
             }
           ],
-          "verdict": "fail"
+          "verdict": "pass"
         }
       }
     },
     "l1": {
-      "status": "FAIL",
+      "status": "PASS",
       "task_verdicts": [
         "pass",
-        "fail"
+        "pass"
       ],
       "tasks": {
         "3": {
@@ -203,10 +158,10 @@
             {
               "file": "task-7-runtime-core.log",
               "fingerprint": "c72f3ede51987fa72973cec148d600b2f04902f847a448183d0e969f08569edf",
-              "verdict": "stale"
+              "verdict": "pass"
             }
           ],
-          "verdict": "fail"
+          "verdict": "pass"
         }
       }
     },
@@ -288,9 +243,9 @@
       }
     },
     "l3": {
-      "status": "FAIL",
+      "status": "PASS",
       "task_verdicts": [
-        "fail",
+        "pass",
         "pass"
       ],
       "tasks": {
@@ -315,17 +270,17 @@
             {
               "file": "task-6-spike-build.json",
               "fingerprint": "cbdcd7fc577218ba221aabd341d8294c425d25d9354bd7144e6971a898cd74f0",
-              "verdict": "stale"
+              "verdict": "pass"
             }
           ],
-          "verdict": "fail"
+          "verdict": "pass"
         }
       }
     },
     "l4": {
-      "status": "FAIL",
+      "status": "PASS",
       "task_verdicts": [
-        "fail",
+        "pass",
         "pass"
       ],
       "tasks": {
@@ -337,16 +292,16 @@
           "file_details": [
             {
               "file": "task-10-rtl-adapter-verify.json",
-              "fingerprint": "6df3848ebb2443a917b6a7d5983b1808ace89cc609cf8f35ee806c7ccb0b9c58",
-              "verdict": "stale"
+              "fingerprint": "031e02221b2467d86c19aa228b6a1798544ec76dc762fd8bf8b881de4e3a26c5",
+              "verdict": "pass"
             },
             {
               "file": "task-10-rtl-adapter.json",
-              "fingerprint": "bae6e5c0ccee963ab69dbd706abd407b3f16f50afca1daa30e3dc77d9fe5afed",
-              "verdict": "stale"
+              "fingerprint": "c920bfa6e4210e608990250e1ba55f33a17190b8a269f27478e19ce751d5d276",
+              "verdict": "pass"
             }
           ],
-          "verdict": "fail"
+          "verdict": "pass"
         },
         "18": {
           "evidence_files": [
@@ -408,15 +363,16 @@
     "l4",
     "l5"
   ],
-  "timestamp": "2026-07-30T07:33:12.051821+00:00",
+  "timestamp": "2026-07-30T16:59:47.354876+00:00",
   "unrelated_worktree_preserved": true,
   "worktree_dirty_paths": [
-    "?? .omo/evidence/task-w1t2-happy.json",
+    "?? .omo/evidence/task-w3t11-mock.json",
+    "?? .omo/evidence/task-w3t11.json",
+    "?? .omo/evidence/task-w3t14.json",
     "?? .omo/evidence/task-w3t2-real-firmware-runtime.json",
     "?? .omo/evidence/task-w4t3-equivalence.md",
     "?? .omo/evidence/task-w5t3-neg.json",
     "?? .omo/evidence/task-w5t5.json",
-    "?? .omo/notepads/func-model-sw-stack-improvements/decisions.md",
     "?? .omo/notepads/func-model-sw-stack-improvements/issues.md",
     "?? .omo/plans/func-model-sw-stack-improvements.md",
     "?? .venv_deps/",
@@ -577,26 +533,14 @@
     "?? build/run_sfu_debug.sh",
     "?? build/software-asan/",
     "?? build/software/",
-    "?? build/software_stale/",
     "?? dtc_src",
     "?? rtl/testcase-list-perf.md.bak.2591890",
-    "?? scripts/check_flatc_version.sh",
     "?? third_party/",
-    "M .omo/evidence/final-code-quality.md",
-    "M .omo/evidence/final-manual-qa.md",
-    "M .omo/evidence/final-plan-compliance.md",
-    "M .omo/evidence/final-scope-fidelity.md",
-    "M .omo/evidence/task-10-rtl-adapter-verify.json",
-    "M .omo/evidence/task-10-rtl-adapter.json",
     "M .omo/evidence/task-16-ggml-ops.csv",
-    "M .omo/evidence/task-17-qwen3b-software-positive.json",
     "M .omo/evidence/task-17-qwen3b-software.json",
     "M .omo/evidence/task-22-release-signoff-rerun.json",
-    "M .omo/evidence/task-22-release-signoff.json",
     "M .omo/evidence/task-6-spike-build.json",
-    "M requirements.txt",
-    "M scripts/aggregate_software_signoff.py",
-    "M software/src/runtime_core.c",
+    "M ggml-npu/ggml-npu.cpp",
     "m llama_ref/llama.cpp"
   ]
 }
