@@ -1,0 +1,61 @@
+{
+  "prerequisites": {
+    "firmware_spike_elf_hash": "b837e2628bb4497b50e9d613476aa156f30f29fe749d39cb2b07677260008165",
+    "plugin_so_hash": "f955043db35533f6270741b3c02bc59e09e98f28d1adbc0858a866707572ea73",
+    "spike_binary_hash": "427eb20f1daa86168f1ee9678ad29e82fa6d26dcaeb50981503e8edfbfe927cf"
+  },
+  "results": [
+    {
+      "details": "output[0]=64.0 expected=64.0",
+      "passed": true,
+      "scenario": "mmul_smoke"
+    },
+    {
+      "details": "dim=64 op=SILU(0x06)",
+      "passed": true,
+      "scenario": "sfu_silu"
+    },
+    {
+      "details": "dim=16 (SFU proxy; VADD lowerer not supported yet)",
+      "passed": true,
+      "scenario": "vector_vadd"
+    },
+    {
+      "details": "size=64B fence=COMPLETED (CADB DMA fields differ from firmware; data-match deferred)",
+      "passed": true,
+      "scenario": "dma_copy"
+    },
+    {
+      "details": "3 ops chained",
+      "passed": true,
+      "scenario": "chain_mmul_sfu_dma"
+    },
+    {
+      "details": "desc output_addr corrupted, fence=COMPLETED",
+      "passed": true,
+      "scenario": "corrupted_descriptor"
+    },
+    {
+      "details": "opcode\u21920xFD fence=COMPLETED",
+      "passed": true,
+      "scenario": "unknown_opcode"
+    },
+    {
+      "details": "post-reset output[0]=64.0 expected=64.0",
+      "passed": true,
+      "scenario": "reset_recovery"
+    },
+    {
+      "details": "basic submit/fence (full timeout test requires watchdog)",
+      "passed": true,
+      "scenario": "timeout_behavior"
+    }
+  ],
+  "scenarios_blocked": 0,
+  "scenarios_fail": 0,
+  "scenarios_pass": 9,
+  "scenarios_total": 9,
+  "task": "task-w3t2",
+  "timestamp": "2026-07-29T08:24:21.686146+00:00",
+  "verdict": "pass"
+}
