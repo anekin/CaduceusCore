@@ -28,6 +28,7 @@ extern const cad_transport_ops_t cad_transport_fm_ops;
  * Accepted URI forms:
  *   fm://                -> default Unix socket
  *   fm://python          -> default Unix socket
+ *   fm://spike           -> default Unix socket (I-009)
  *   fm://unix?path=...   -> explicit Unix socket path
  *
  * Returns 0 on success, negative cad_transport error code on failure.

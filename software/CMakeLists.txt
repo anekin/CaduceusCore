@@ -172,6 +172,16 @@ if(CADUCEUS_BUILD_TESTS)
     target_compile_options(test_unsupported_uri PRIVATE -Wall -Wextra)
     add_test(NAME unsupported_uri COMMAND test_unsupported_uri)
 
+    # --- I-009: fm://spike must be accepted (not UNSUPPORTED) ---
+
+    add_executable(test_spike_uri
+        tests/test_spike_uri.c
+    )
+    target_link_libraries(test_spike_uri PRIVATE caduceus_runtime_core)
+    target_compile_features(test_spike_uri PRIVATE c_std_11)
+    target_compile_options(test_spike_uri PRIVATE -Wall -Wextra)
+    add_test(NAME spike_uri COMMAND test_spike_uri)
+
     # --- W2-T2: Command data serialization tests ---
 
     add_executable(test_cmd_serialization

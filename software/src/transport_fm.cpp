@@ -83,8 +83,9 @@ typedef struct {
 static int fm_parse_uri(const char *uri, char *path_out, size_t path_size) {
     if (!uri) return CAD_TR_ERR_INVAL;
 
-    /* fm:// or fm://python -> default */
-    if (strcmp(uri, "fm://") == 0 || strcmp(uri, "fm://python") == 0) {
+    /* fm://, fm://python, or fm://spike -> default */
+    if (strcmp(uri, "fm://") == 0 || strcmp(uri, "fm://python") == 0
+        || strcmp(uri, "fm://spike") == 0) {
         strncpy(path_out, CAD_TRANSPORT_FM_DEFAULT_SOCK_PATH, path_size - 1);
         path_out[path_size - 1] = '\0';
         return CAD_TR_SUCCESS;
