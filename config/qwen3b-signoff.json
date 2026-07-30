@@ -1,5 +1,25 @@
 {
-  "manifest_version": "1.0.0",
+  "manifest_version": "1.1.0",
+  "evidence_schema": {
+    "npu_ops": {
+      "type": "object",
+      "description": "Aggregate NPU engine operation counts aggregated across all signoff gates.",
+      "properties": {
+        "MMUL": {"type": "integer", "description": "Total MMUL operations dispatched to NPU"},
+        "SFU": {"type": "integer", "description": "Total SFU operations dispatched to NPU"},
+        "VECTOR": {"type": "integer", "description": "Total vector operations dispatched to NPU"}
+      }
+    },
+    "cpu_fallback_ops": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "List of operations that fell back to CPU execution across the signoff run."
+    },
+    "cpu_fallback_ops_note": {
+      "type": "string",
+      "description": "Explanation when cpu_fallback_ops cannot be precisely determined."
+    }
+  },
   "model": {
     "name": "Qwen2.5-3B-Instruct-Q4_K_M",
     "default_path": "/home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf",

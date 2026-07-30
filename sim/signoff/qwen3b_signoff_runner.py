@@ -72,6 +72,31 @@ def run_positive_signoff(
                 gates.append(gate_cpu_fallback_mixed_graph(config, resolved_uri, base_env))
 
     all_passed = all(g.passed for g in gates)
+
+    total_mmul = 0
+    total_sfu = 0
+    total_vector = 0
+    for g in gates:
+        m = g.metrics
+        total_mmul += int(m.get("mmul_ops", 0))
+        total_sfu += int(m.get("sfu_ops", 0))
+        total_vector += int(m.get("vector_ops", 0))
+
+    npu_ops: dict[str, int] = {
+        "MMUL": total_mmul,
+        "SFU": total_sfu,
+        "VECTOR": total_vector,
+    }
+    cpu_fallback_ops: list[str] = []
+    cpu_fallback_ops_note = (
+        "Per-op CPU/NPU dispatch data is not available from the "
+        "llama CLI stderr; only aggregate per-engine stats are "
+        "captured. When a gate returns_proc=True and the NPU "
+        "backend emits '[NPU] Execution stats:' lines, mmul/sfu/"
+        "vector counts appear in that gate's metrics and are "
+        "summed here."
+    )
+
     payload: dict[str, object] = {
         "manifest": str(config.model_path),
         "model_sha256": config.model_sha256,
@@ -81,6 +106,9 @@ def run_positive_signoff(
         "device_uri": device_uri,
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "verdict": "pass" if all_passed else "fail",
+        "npu_ops": npu_ops,
+        "cpu_fallback_ops": cpu_fallback_ops,
+        "cpu_fallback_ops_note": cpu_fallback_ops_note,
         "gates": [
             {"name": g.name, "passed": g.passed, "metrics": g.metrics}
             for g in gates
