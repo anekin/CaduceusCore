@@ -361,6 +361,7 @@ TEST(fence_lifecycle) {
     assert(cadFenceWait(fence, CAD_TIMEOUT_INFINITE) == CAD_SUCCESS);
 
     assert(cadFenceDestroy(fence) == CAD_SUCCESS);
+    assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
     assert(cadQueueDestroy(queue) == CAD_SUCCESS);
     assert(cadDeviceClose(device) == CAD_SUCCESS);
 }

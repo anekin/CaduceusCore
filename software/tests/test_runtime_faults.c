@@ -76,8 +76,8 @@ FAULT_TEST(submit_consumed_command_list) {
     /* Second submit of same command list: fails (submitted flag) */
     assert(cadQueueSubmit(queue, cl, NULL) == CAD_ERROR_INVALID_HANDLE);
 
-    /* Can't destroy a submitted command list */
-    assert(cadCommandListDestroy(cl) == CAD_ERROR_INVALID_HANDLE);
+    /* Destroy succeeds even after submit (transport owns the serialized data) */
+    assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
 
     assert(cadQueueDestroy(queue) == CAD_SUCCESS);
     assert(cadDeviceClose(dev) == CAD_SUCCESS);

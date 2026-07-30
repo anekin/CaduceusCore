@@ -141,3 +141,20 @@ PYTHONPATH=sim:gen python3 scripts/run_qwen3b_software_signoff.py positive \
 - `ctest --test-dir build/software --output-on-failure -j4` — 26/27 passed (1 pending test requires device server)
 
 **Rationale**: Transport error codes (`CAD_TR_ERR_LOST`, etc.) are generic and don't tell the user *where* the failure occurred. The new vtable method lets each transport prepend its own context ("FM transport: socket write failed", "RTL transport: EDA preflight failed", etc.) while the public `cadErrorString()` remains a pure, transport-agnostic fallback. The `cadDeviceOpen` stderr diagnostic bridges the gap for init failures where no device handle exists.
+
+## Todo 9: Fix ASan mock transport test leaks — committed 2026-07-30
+
+**Commit**: `test(runtime): add cadDeviceClose to all mock transport tests (ASan)`
+
+**Root cause**: Three categories of leaks identified by ASan:
+
+1. **Mock transport `device_fini` never freed `tpriv`** (`software/src/transport_mock.c`): ~24KB per device open.
+2. **Command list lifecycle**: `validate_command_list()` checked `!cl->submitted`, preventing destroy after submit. `cadQueueSubmit()` never freed submitted lists.
+3. **`cad_transport.h` header dependency**: `transportErrorToString` used `cad_error_t` without it being visible; changed to `int`.
+
+**Key fix**: Removed `!cl->submitted` from `validate_command_list()` (pushed to `cadQueueSubmit`/append functions), allowing `cadCommandListDestroy()` on submitted lists. Tests updated to call destroy after successful submit.
+
+**Changed files**: `transport_mock.c`, `runtime_core.h`, `runtime_core.c`, `runtime_stubs.c`, `cad_transport.h`, `transport_fm.cpp`, `runtime.hpp`, plus C/C++ test files for cmd-list lifecycle.
+
+**Verification**: 17/19 mock transport tests pass with zero ASan leaks. 2 intentional use-after-free tests (`runtime_abi_negative`, `buffer_edge_cases`) abort under ASan as expected; pass in non-ASan builds.
+

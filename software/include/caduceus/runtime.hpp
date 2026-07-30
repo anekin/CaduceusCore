@@ -257,6 +257,7 @@ public:
         }
         /* Success — consume ownership so caller can't double-free. */
         cmd_list.release();
+        cadCommandListDestroy(raw);
     }
 
 private:

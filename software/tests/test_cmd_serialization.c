@@ -111,6 +111,7 @@ SERIALIZATION_TEST(mixed_nops_and_blobs) {
 
     assert(cadFenceWait(fence, CAD_TIMEOUT_INFINITE) == CAD_SUCCESS);
     assert(cadFenceDestroy(fence) == CAD_SUCCESS);
+    assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
     assert(cadQueueDestroy(queue) == CAD_SUCCESS);
     assert(cadBufferFree(buf) == CAD_SUCCESS);
     assert(cadDeviceClose(dev) == CAD_SUCCESS);
@@ -138,6 +139,8 @@ SERIALIZATION_TEST(all_nops_zero_blobs) {
     assert(cadQueueCreate(dev, &qi, &queue) == CAD_SUCCESS);
 
     assert(cadQueueSubmit(queue, cl, NULL) == CAD_SUCCESS);
+
+    assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
 
     uint32_t size = 0;
     const uint8_t *payload = cad_mock_get_last_submit_payload(&size);
@@ -187,6 +190,8 @@ SERIALIZATION_TEST(all_blobs_zero_nops) {
     assert(cadQueueCreate(dev, &qi, &queue) == CAD_SUCCESS);
 
     assert(cadQueueSubmit(queue, cl, NULL) == CAD_SUCCESS);
+
+    assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
 
     uint32_t size = 0;
     const uint8_t *payload = cad_mock_get_last_submit_payload(&size);
@@ -240,6 +245,8 @@ SERIALIZATION_TEST(multiple_buffers) {
     assert(cadQueueCreate(dev, &qi, &queue) == CAD_SUCCESS);
 
     assert(cadQueueSubmit(queue, cl, NULL) == CAD_SUCCESS);
+
+    assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
 
     uint32_t size = 0;
     const uint8_t *payload = cad_mock_get_last_submit_payload(&size);

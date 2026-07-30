@@ -124,6 +124,7 @@ static int mock_device_init(void *tpriv, const char *uri) {
 static void mock_device_fini(void *tpriv) {
     mock_device_t *md = (mock_device_t *)tpriv;
     md->initialized = 0;
+    free(tpriv);
 }
 
 static int mock_device_reset(void *tpriv) {

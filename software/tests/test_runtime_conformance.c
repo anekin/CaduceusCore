@@ -178,6 +178,7 @@ CONFORMANCE_TEST(queue_submit_immediate_fence) {
     assert(cadFenceWait(fence, CAD_TIMEOUT_IMMEDIATE) == CAD_SUCCESS);
 
     assert(cadFenceDestroy(fence) == CAD_SUCCESS);
+    assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
     assert(cadQueueDestroy(queue) == CAD_SUCCESS);
     assert(cadDeviceClose(dev) == CAD_SUCCESS);
 }
@@ -223,6 +224,7 @@ CONFORMANCE_TEST(fence_delayed_completion) {
     assert(status == CAD_FENCE_COMPLETED);
 
     assert(cadFenceDestroy(fence) == CAD_SUCCESS);
+    assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
     assert(cadQueueDestroy(queue) == CAD_SUCCESS);
     assert(cadDeviceClose(dev) == CAD_SUCCESS);
 }
@@ -261,6 +263,7 @@ CONFORMANCE_TEST(fence_infinite_wait) {
     assert(cadFenceWait(fence, CAD_TIMEOUT_INFINITE) == CAD_SUCCESS);
 
     assert(cadFenceDestroy(fence) == CAD_SUCCESS);
+    assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
     assert(cadQueueDestroy(queue) == CAD_SUCCESS);
     assert(cadDeviceClose(dev) == CAD_SUCCESS);
 }
@@ -305,6 +308,7 @@ CONFORMANCE_TEST(fence_immediate_timeout) {
     assert(cadFenceWait(fence, CAD_TIMEOUT_INFINITE) == CAD_SUCCESS);
 
     assert(cadFenceDestroy(fence) == CAD_SUCCESS);
+    assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
     assert(cadQueueDestroy(queue) == CAD_SUCCESS);
     assert(cadDeviceClose(dev) == CAD_SUCCESS);
 }
@@ -332,7 +336,7 @@ CONFORMANCE_TEST(queue_ordering) {
         assert(cadCommandListCreate(dev, &ci, &cl) == CAD_SUCCESS);
         assert(cadCommandListAppendNop(cl) == CAD_SUCCESS);
         assert(cadQueueSubmit(q1, cl, NULL) == CAD_SUCCESS);
-        /* cl is consumed */
+        assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
     }
 
     /* Verify op log shows 3 submits */

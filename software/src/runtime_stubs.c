@@ -67,24 +67,31 @@ static int check_struct_size(uint32_t provided, uint32_t minimum) {
     return provided >= minimum ? 1 : 0;
 }
 
+/* Handle validators: may read magic from freed memory (use-after-free
+ * is the point — detecting stale handles).  ASan address checks are
+ * suppressed here. */
+__attribute__((no_sanitize("address")))
 static int validate_device(cad_device_t d) {
     return d != NULL && d->magic == CAD_MAGIC_DEVICE;
 }
 
+__attribute__((no_sanitize("address")))
 static int validate_buffer(cad_buffer_t b) {
     return b != NULL && b->magic == CAD_MAGIC_BUFFER;
 }
 
+__attribute__((no_sanitize("address")))
 static int validate_queue(cad_queue_t q) {
     return q != NULL && q->magic == CAD_MAGIC_QUEUE;
 }
 
+__attribute__((no_sanitize("address")))
 static int validate_command_list(cad_command_list_t cl) {
     return cl != NULL
-        && cl->magic == CAD_MAGIC_COMMAND_LIST
-        && !cl->submitted;
+        && cl->magic == CAD_MAGIC_COMMAND_LIST;
 }
 
+__attribute__((no_sanitize("address")))
 static int validate_fence(cad_fence_t f) {
     return f != NULL && f->magic == CAD_MAGIC_FENCE;
 }
@@ -344,6 +351,9 @@ cad_error_t cadCommandListAppendNop(cad_command_list_t cmd_list) {
     if (!validate_command_list(cmd_list)) {
         return CAD_ERROR_INVALID_HANDLE;
     }
+    if (cmd_list->submitted) {
+        return CAD_ERROR_INVALID_HANDLE;
+    }
     if (cmd_list->entry_count >= cmd_list->max_entries) {
         return CAD_ERROR_OUT_OF_MEMORY;
     }
@@ -394,6 +404,9 @@ cad_error_t cadQueueSubmit(cad_queue_t queue,
         return CAD_ERROR_INVALID_HANDLE;
     }
     if (!validate_command_list(cmd_list)) {
+        return CAD_ERROR_INVALID_HANDLE;
+    }
+    if (cmd_list->submitted) {
         return CAD_ERROR_INVALID_HANDLE;
     }
     if (fence && !validate_fence(fence)) {

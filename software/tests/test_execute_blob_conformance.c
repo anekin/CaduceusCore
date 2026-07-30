@@ -101,6 +101,7 @@ CONFORMANCE_TEST(execute_blob_happy_path) {
     assert(status == CAD_FENCE_COMPLETED);
 
     assert(cadFenceDestroy(fence) == CAD_SUCCESS);
+    assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
     assert(cadQueueDestroy(queue) == CAD_SUCCESS);
     assert(cadBufferFree(blob_buf) == CAD_SUCCESS);
     assert(cadDeviceClose(dev) == CAD_SUCCESS);
@@ -210,6 +211,7 @@ CONFORMANCE_TEST(execute_blob_double_submit_blocked) {
     /* Fence cleanup */
     assert(cadFenceWait(fence, CAD_TIMEOUT_INFINITE) == CAD_SUCCESS);
     assert(cadFenceDestroy(fence) == CAD_SUCCESS);
+    assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
     assert(cadQueueDestroy(queue) == CAD_SUCCESS);
     assert(cadBufferFree(blob_buf) == CAD_SUCCESS);
     assert(cadDeviceClose(dev) == CAD_SUCCESS);
