@@ -1021,6 +1021,7 @@ static int npu_submit_graph_fm(
     /* ── 8. Execution stats ── */
     {
         cad_execution_stats_t stats = {};
+        stats.struct_size = CAD_EXECUTION_STATS_STRUCT_SIZE;
         if (cadFenceGetExecutionStats(fence, &stats) == CAD_SUCCESS) {
             fprintf(stderr, "[NPU] Execution stats: mmul=%u sfu=%u vec=%u "
                     "dma=%u dma_rd=%lu dma_wr=%lu\n",

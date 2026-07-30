@@ -159,6 +159,7 @@ static void test_mmul_stats(cad_device_t dev) {
 
     cad_execution_stats_t stats;
     memset(&stats, 0, sizeof(stats));
+    stats.struct_size = CAD_EXECUTION_STATS_STRUCT_SIZE;
     cad_error_t s_err = cadFenceGetExecutionStats(fence, &stats);
     TASSERT(s_err == CAD_SUCCESS, "get execution stats succeeds");
     printf("  mmul_ops=%u sfu_ops=%u vector_ops=%u dma_ops=%u\n",
@@ -208,6 +209,7 @@ static void test_nop_zero_stats(cad_device_t dev) {
 
     cad_execution_stats_t stats;
     memset(&stats, 0xFF, sizeof(stats));
+    stats.struct_size = CAD_EXECUTION_STATS_STRUCT_SIZE;
     cad_error_t s_err = cadFenceGetExecutionStats(fence, &stats);
     printf("  err=%s mmul=%u sfu=%u vec=%u dma=%u dma_r=%lu dma_w=%lu\n",
            cadErrorString(s_err),
@@ -233,6 +235,26 @@ static void test_invalid_fence(void) {
     cad_execution_stats_t stats;
     cad_error_t err = cadFenceGetExecutionStats(NULL, &stats);
     TASSERT(err == CAD_ERROR_INVALID_HANDLE, "NULL fence -> INVALID_HANDLE");
+}
+
+/* ── Test 5: struct_size too small returns CAD_ERROR_INVALID_ARGUMENT */
+
+static void test_struct_size_too_small(cad_device_t dev) {
+    printf("--- Test 5: struct_size=0 returns CAD_ERROR_INVALID_ARGUMENT ---\n");
+
+    cad_fence_create_info_t fi = {0};
+    fi.struct_size = CAD_FENCE_CREATE_INFO_STRUCT_SIZE;
+    cad_fence_t fence = NULL;
+    TASSERT(cadFenceCreate(dev, &fi, &fence) == CAD_SUCCESS, "create fence");
+
+    cad_execution_stats_t stats;
+    memset(&stats, 0, sizeof(stats));
+    stats.struct_size = 0;
+    cad_error_t err = cadFenceGetExecutionStats(fence, &stats);
+    TASSERT(err == CAD_ERROR_INVALID_ARGUMENT,
+            "struct_size=0 -> INVALID_ARGUMENT");
+
+    cadFenceDestroy(fence);
 }
 
 /* ── Test 4: NULL stats returns CAD_ERROR_INVALID_ARGUMENT ───────── */
@@ -276,6 +298,7 @@ int main(int argc, char *argv[]) {
            caps.transport_name);
 
     test_null_stats(dev);
+    test_struct_size_too_small(dev);
     test_nop_zero_stats(dev);
     test_mmul_stats(dev);
 

@@ -307,7 +307,10 @@ cad_error_t cadFenceGetStatus(cad_fence_t fence,
 
 /* ── Execution statistics ────────────────────────────────────────── */
 
+#define CAD_EXECUTION_STATS_STRUCT_SIZE (sizeof(cad_execution_stats_t))
+
 typedef struct cad_execution_stats_t {
+    uint32_t struct_size;        /* must be set to CAD_EXECUTION_STATS_STRUCT_SIZE */
     uint32_t mmul_ops;           /* number of MMUL operations executed */
     uint32_t sfu_ops;            /* number of SFU operations executed */
     uint32_t vector_ops;         /* number of Vector operations executed */
@@ -327,7 +330,7 @@ typedef struct cad_execution_stats_t {
  *   CAD_ERROR_NOT_READY       – fence is valid but no stats available
  *                               (e.g., NOP-only submit, mock transport)
  *   CAD_ERROR_INVALID_HANDLE  – fence is NULL, invalid, or freed
- *   CAD_ERROR_INVALID_ARGUMENT – stats ptr is NULL
+ *   CAD_ERROR_INVALID_ARGUMENT – stats ptr is NULL or struct_size too small
  */
 cad_error_t cadFenceGetExecutionStats(cad_fence_t fence,
                                        cad_execution_stats_t *stats);

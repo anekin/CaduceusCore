@@ -511,6 +511,9 @@ cad_error_t cadFenceGetExecutionStats(cad_fence_t fence,
                                        cad_execution_stats_t *stats) {
     if (!validate_fence(fence)) return CAD_ERROR_INVALID_HANDLE;
     if (!stats) return CAD_ERROR_INVALID_ARGUMENT;
+    if (!check_struct_size(stats->struct_size,
+                           CAD_EXECUTION_STATS_STRUCT_SIZE))
+        return CAD_ERROR_INVALID_ARGUMENT;
 
     int (*fn)(void *, cad_transport_fence_t *,
               uint32_t *, uint32_t *, uint32_t *, uint32_t *,
