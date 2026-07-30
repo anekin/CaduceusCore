@@ -1248,6 +1248,19 @@ static enum ggml_status npu_graph_compute(
         } else {
             fprintf(stderr, "[NPU] Full graph end-to-end validation FAILED\n");
         }
+    } else {
+        // ── 3b. Per-op dispatch for mock / unavailable devices ──
+        // npu_submit_graph_fm was not called; produce per-op dispatch
+        // stderr lines so the signoff parser can populate npu_ops_executed
+        // and cpu_fallback_ops fields.
+        const char *reason = ctx && ctx->is_mock
+            ? "mock device (no real NPU)"
+            : "device not available";
+        for (int i = 0; i < cgraph->n_nodes; i++) {
+            struct ggml_tensor * node = cgraph->nodes[i];
+            if (is_layout_op(node->op)) continue;
+            npu_log_op_dispatch(i, node, false, reason);
+        }
     }
 
     // ── 4. Strict mode: hard-fail on silent CPU fallback ──
