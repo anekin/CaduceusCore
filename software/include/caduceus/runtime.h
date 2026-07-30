@@ -341,6 +341,24 @@ cad_error_t cadFenceGetExecutionStats(cad_fence_t fence,
  * is valid for the lifetime of the process. */
 const char *cadErrorString(cad_error_t error);
 
+/*
+ * Return a transport-aware error string for a device.
+ *
+ * If the device's transport provides a transportErrorToString vtable method,
+ * that method is called to produce a transport-specific error message (e.g.
+ * "FM transport: socket write failed").  Otherwise falls back to the generic
+ * cadErrorString().
+ *
+ * The result is written into buf (at most len bytes, always NUL-terminated)
+ * and returns buf for convenience in printf-style call chains.
+ *
+ * Returns:
+ *   buf          – always, with a NUL-terminated error string
+ *   empty string – if device is NULL or invalid
+ */
+const char *cadDeviceErrorString(cad_device_t device, cad_error_t error,
+                                  char *buf, size_t len);
+
 #ifdef __cplusplus
 }
 #endif

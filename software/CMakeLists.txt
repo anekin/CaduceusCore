@@ -121,6 +121,8 @@ if(CADUCEUS_BUILD_TESTS)
     target_link_libraries(test_runtime_abi_negative PRIVATE caduceus_runtime_stubs)
     target_compile_features(test_runtime_abi_negative PRIVATE cxx_std_17)
     add_test(NAME runtime_abi_negative COMMAND test_runtime_abi_negative)
+    set_tests_properties(runtime_abi_negative PROPERTIES
+        ENVIRONMENT "ASAN_OPTIONS=halt_on_error=0")
 
     add_executable(test_abi_layout
         tests/test_abi_layout.cpp
@@ -161,6 +163,9 @@ if(CADUCEUS_BUILD_TESTS)
     target_compile_features(test_runtime_faults PRIVATE c_std_11)
     target_compile_options(test_runtime_faults PRIVATE -Wall -Wextra)
     add_test(NAME runtime_faults COMMAND test_runtime_faults)
+    # Intentional use-after-free tests (buffer_use_after_free, etc.)
+    set_tests_properties(runtime_faults PROPERTIES
+        ENVIRONMENT "ASAN_OPTIONS=halt_on_error=0")
 
     # --- W2-T8: fpga:// explicitly unsupported (no silent mock fallback) ---
 
@@ -199,6 +204,9 @@ if(CADUCEUS_BUILD_TESTS)
     target_compile_features(test_cmd_serialization_negative PRIVATE c_std_11)
     target_compile_options(test_cmd_serialization_negative PRIVATE -Wall -Wextra)
     add_test(NAME cmd_serialization_negative COMMAND test_cmd_serialization_negative)
+    # Intentional freed-buffer-submit tests
+    set_tests_properties(cmd_serialization_negative PROPERTIES
+        ENVIRONMENT "ASAN_OPTIONS=halt_on_error=0")
 
     # --- W2-T9: FM transport cmd_blob forwarding test ---
 
@@ -223,6 +231,9 @@ if(CADUCEUS_BUILD_TESTS)
     target_compile_features(test_ggml_runtime_faults PRIVATE c_std_11)
     target_compile_options(test_ggml_runtime_faults PRIVATE -Wall -Wextra)
     add_test(NAME ggml_runtime_faults COMMAND test_ggml_runtime_faults)
+    # Intentional use-after-free tests (queue_create_on_closed_device)
+    set_tests_properties(ggml_runtime_faults PROPERTIES
+        ENVIRONMENT "ASAN_OPTIONS=halt_on_error=0")
 
     # --- ggml op support negative tests (command IR validation) ---
 
@@ -330,6 +341,21 @@ if(CADUCEUS_BUILD_TESTS)
     target_compile_features(test_fm_e2e_submit PRIVATE c_std_11)
     target_compile_options(test_fm_e2e_submit PRIVATE -Wall -Wextra)
 
+    # W3-T8a: Broken socket → FM transport error context in stderr
+    add_test(NAME fm_e2e_broken_socket COMMAND
+        bash -c "$<TARGET_FILE:test_fm_e2e_submit> fm://unix?path=/tmp/nonexistent_caduceus.sock 2>&1 | grep -qE 'FM transport|transport'"
+    )
+
+    # --- W3-T8: FM transport error context (broken socket) ---
+
+    add_executable(test_fm_transport_error
+        tests/test_fm_transport_error.c
+    )
+    target_link_libraries(test_fm_transport_error PRIVATE caduceus_runtime_core)
+    target_compile_features(test_fm_transport_error PRIVATE c_std_11)
+    target_compile_options(test_fm_transport_error PRIVATE -Wall -Wextra)
+    add_test(NAME fm_transport_error COMMAND test_fm_transport_error)
+
     # --- W3-T3: Single non-NOP MMUL end-to-end hard gate (happy path) ---
 
     add_executable(test_fm_e2e_mmul
@@ -385,6 +411,9 @@ if(CADUCEUS_BUILD_TESTS)
     target_compile_options(test_buffer_lifecycle_fm PRIVATE -Wall -Wextra)
     # Default: mock:// (runtime-level validation before transport)
     add_test(NAME buffer_edge_cases COMMAND test_buffer_lifecycle_fm mock://)
+    # Intentional use-after-free test (test_use_after_free)
+    set_tests_properties(buffer_edge_cases PROPERTIES
+        ENVIRONMENT "ASAN_OPTIONS=halt_on_error=0")
 
     # ── ExecuTorch NPU backend tests ───────────────────────────────
 

@@ -16,6 +16,7 @@
 
 #include "runtime_core.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -73,6 +74,25 @@ const char *cadErrorString(cad_error_t error) {
     }
 }
 
+const char *cadDeviceErrorString(cad_device_t device, cad_error_t error,
+                                  char *buf, size_t len) {
+    if (!buf || len == 0) return "";
+    if (!validate_device(device)) {
+        strncpy(buf, cadErrorString(error), len - 1);
+        buf[len - 1] = '\0';
+        return buf;
+    }
+
+    if (device->transport.transportErrorToString) {
+        return device->transport.transportErrorToString(
+            device->transport_priv, error, buf, len);
+    }
+
+    strncpy(buf, cadErrorString(error), len - 1);
+    buf[len - 1] = '\0';
+    return buf;
+}
+
 /* ── Device lifecycle ────────────────────────────────────────────── */
 
 cad_error_t cadDeviceOpen(const cad_device_open_info_t *open_info,
@@ -108,6 +128,15 @@ cad_error_t cadDeviceOpen(const cad_device_open_info_t *open_info,
     void *tpriv = NULL;
     int tr_err = reg->init_fn(&tpriv, open_info->uri);
     if (tr_err != CAD_TR_SUCCESS) {
+        /* Emit a transport-specific diagnostic before returning the
+         * generic cad_error_t.  This makes "FM transport" visible in
+         * broken-socket tests without changing the public ABI. */
+        if (reg->ops->transportErrorToString) {
+            char ebuf[256];
+            cad_error_t ce = trerr_to_cad(tr_err);
+            reg->ops->transportErrorToString(NULL, ce, ebuf, sizeof(ebuf));
+            fprintf(stderr, "cadDeviceOpen: %s\n", ebuf);
+        }
         free(d);
         return trerr_to_cad(tr_err);
     }
@@ -300,6 +329,7 @@ cad_error_t cadCommandListDestroy(cad_command_list_t cmd_list) {
 
 cad_error_t cadCommandListAppendNop(cad_command_list_t cmd_list) {
     if (!validate_command_list(cmd_list)) return CAD_ERROR_INVALID_HANDLE;
+    if (cmd_list->submitted) return CAD_ERROR_INVALID_HANDLE;
     if (cmd_list->entry_count >= cmd_list->max_entries)
         return CAD_ERROR_OUT_OF_MEMORY;
     cmd_list->entry_count++;
@@ -311,6 +341,7 @@ cad_error_t cadCommandListAppendExecuteBlob(cad_command_list_t cmd_list,
                                             uint64_t blob_offset,
                                             uint64_t blob_size) {
     if (!validate_command_list(cmd_list)) return CAD_ERROR_INVALID_HANDLE;
+    if (cmd_list->submitted) return CAD_ERROR_INVALID_HANDLE;
     if (!blob_buffer) return CAD_ERROR_INVALID_ARGUMENT;
     if (cmd_list->entry_count >= cmd_list->max_entries)
         return CAD_ERROR_OUT_OF_MEMORY;
@@ -353,6 +384,7 @@ cad_error_t cadQueueSubmit(cad_queue_t queue,
                             cad_fence_t fence) {
     if (!validate_queue(queue)) return CAD_ERROR_INVALID_HANDLE;
     if (!validate_command_list(cmd_list)) return CAD_ERROR_INVALID_HANDLE;
+    if (cmd_list->submitted) return CAD_ERROR_INVALID_HANDLE;
     if (fence && !validate_fence(fence)) return CAD_ERROR_INVALID_HANDLE;
 
     /* Resolve transport fence if provided */

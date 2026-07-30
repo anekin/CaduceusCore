@@ -57,6 +57,11 @@ static cad_error_t open_fm_device(const char *uri, cad_device_t *dev,
     return cadDeviceOpen(&oi, dev, caps);
 }
 
+static const char *fm_error_string(cad_device_t dev, cad_error_t err) {
+    static char buf[256];
+    return cadDeviceErrorString(dev, err, buf, sizeof(buf));
+}
+
 static cad_buffer_t alloc_buffer(cad_device_t dev, uint64_t size) {
     cad_buffer_create_info_t bi = {0};
     bi.struct_size = CAD_BUFFER_CREATE_INFO_STRUCT_SIZE;
@@ -65,7 +70,7 @@ static cad_buffer_t alloc_buffer(cad_device_t dev, uint64_t size) {
     cad_error_t err = cadBufferAllocate(dev, &bi, &buf);
     if (err != CAD_SUCCESS) {
         fprintf(stderr, "FAIL: cadBufferAllocate(size=%lu) -> %s\n",
-                (unsigned long)size, cadErrorString(err));
+                (unsigned long)size, fm_error_string(dev, err));
         exit(1);
     }
     return buf;
@@ -132,7 +137,8 @@ int main(int argc, char *argv[]) {
         err = cadBufferWrite(scale_buf, 0, SCALE_SIZE, scale_data);
         free(scale_data);
         if (err != CAD_SUCCESS) {
-            fprintf(stderr, "FAIL: scale write -> %s\n", cadErrorString(err));
+            fprintf(stderr, "FAIL: scale write -> %s\n",
+                    fm_error_string(dev, err));
             return 1;
         }
     }
@@ -187,7 +193,8 @@ int main(int argc, char *argv[]) {
     cad_command_blob_encoded_free(encoded);
     cad_command_blob_destroy(blob);
     if (err != CAD_SUCCESS) {
-        fprintf(stderr, "FAIL: cmd_buf write -> %s\n", cadErrorString(err));
+        fprintf(stderr, "FAIL: cmd_buf write -> %s\n",
+                fm_error_string(dev, err));
         return 1;
     }
 
@@ -200,14 +207,14 @@ int main(int argc, char *argv[]) {
     err = cadCommandListCreate(dev, &ci, &cl);
     if (err != CAD_SUCCESS) {
         fprintf(stderr, "FAIL: cadCommandListCreate -> %s\n",
-                cadErrorString(err));
+                fm_error_string(dev, err));
         return 1;
     }
 
     err = cadCommandListAppendExecuteBlob(cl, cmd_buf, 0, enc_size);
     if (err != CAD_SUCCESS) {
         fprintf(stderr, "FAIL: append ExecuteBlob -> %s\n",
-                cadErrorString(err));
+                fm_error_string(dev, err));
         return 1;
     }
 
@@ -219,7 +226,7 @@ int main(int argc, char *argv[]) {
     err = cadQueueCreate(dev, &qi, &queue);
     if (err != CAD_SUCCESS) {
         fprintf(stderr, "FAIL: cadQueueCreate -> %s\n",
-                cadErrorString(err));
+                fm_error_string(dev, err));
         return 1;
     }
 
@@ -229,14 +236,14 @@ int main(int argc, char *argv[]) {
     err = cadFenceCreate(dev, &fi, &fence);
     if (err != CAD_SUCCESS) {
         fprintf(stderr, "FAIL: cadFenceCreate -> %s\n",
-                cadErrorString(err));
+                fm_error_string(dev, err));
         return 1;
     }
 
     err = cadQueueSubmit(queue, cl, fence);
     if (err != CAD_SUCCESS) {
         fprintf(stderr, "FAIL: cadQueueSubmit -> %s\n",
-                cadErrorString(err));
+                fm_error_string(dev, err));
         cadFenceDestroy(fence);
         return 1;
     }
@@ -245,7 +252,7 @@ int main(int argc, char *argv[]) {
     err = cadFenceWait(fence, CAD_TIMEOUT_INFINITE);
     if (err != CAD_SUCCESS) {
         fprintf(stderr, "FAIL: cadFenceWait -> %s\n",
-                cadErrorString(err));
+                fm_error_string(dev, err));
         cadFenceDestroy(fence);
         return 1;
     }
@@ -254,7 +261,7 @@ int main(int argc, char *argv[]) {
     err = cadFenceGetStatus(fence, &fs);
     if (err != CAD_SUCCESS || fs != CAD_FENCE_COMPLETED) {
         fprintf(stderr, "FAIL: fence status=%d (err=%s)\n",
-                (int)fs, cadErrorString(err));
+                (int)fs, fm_error_string(dev, err));
         cadFenceDestroy(fence);
         return 1;
     }
@@ -267,7 +274,7 @@ int main(int argc, char *argv[]) {
     err = cadBufferRead(output_buf, 0, OUTPUT_SIZE, output);
     if (err != CAD_SUCCESS) {
         fprintf(stderr, "FAIL: cadBufferRead -> %s\n",
-                cadErrorString(err));
+                fm_error_string(dev, err));
         free(output);
         return 1;
     }
@@ -307,7 +314,7 @@ int main(int argc, char *argv[]) {
     err = cadDeviceClose(dev);
     if (err != CAD_SUCCESS) {
         fprintf(stderr, "FAIL: cadDeviceClose -> %s\n",
-                cadErrorString(err));
+                fm_error_string(dev, err));
         return 1;
     }
 

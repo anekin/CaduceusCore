@@ -8,6 +8,7 @@
 #include "caduceus/transport_fm.h"
 
 #include "device_protocol_generated.h"
+#include "caduceus/runtime.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -609,6 +610,41 @@ static int fm_fence_get_exec_stats_fn(void *tpriv,
     return 0;
 }
 
+/* ── Transport error → string ─────────────────────────────────────── */
+
+static const char *fm_transportErrorToString(void *tpriv, int error,
+                                              char *buf, size_t len) {
+    (void)tpriv;
+    const char *base = cadErrorString((cad_error_t)error);
+    switch (error) {
+    case CAD_ERROR_DEVICE_LOST:
+        snprintf(buf, len, "FM transport: socket write failed (%s)", base);
+        break;
+    case CAD_ERROR_TIMEOUT:
+        snprintf(buf, len, "FM transport: timeout (%s)", base);
+        break;
+    case CAD_ERROR_INVALID_ARGUMENT:
+        snprintf(buf, len, "FM transport: invalid protocol message (%s)", base);
+        break;
+    case CAD_ERROR_OUT_OF_MEMORY:
+        snprintf(buf, len, "FM transport: out of memory (%s)", base);
+        break;
+    case CAD_ERROR_NOT_READY:
+        snprintf(buf, len, "FM transport: device not ready (%s)", base);
+        break;
+    case CAD_ERROR_DEVICE_BUSY:
+        snprintf(buf, len, "FM transport: device busy (%s)", base);
+        break;
+    case CAD_ERROR_UNSUPPORTED:
+        snprintf(buf, len, "FM transport: unsupported operation (%s)", base);
+        break;
+    default:
+        snprintf(buf, len, "FM transport: %s", base);
+        break;
+    }
+    return buf;
+}
+
 const cad_transport_ops_t cad_transport_fm_ops = {
     .name          = "FuncModel",
     .device_init   = fm_device_init,
@@ -626,6 +662,7 @@ const cad_transport_ops_t cad_transport_fm_ops = {
     .fence_status  = fm_fence_status,
     .submit        = fm_submit,
     .fence_get_exec_stats = fm_fence_get_exec_stats_fn,
+    .transportErrorToString = fm_transportErrorToString,
 };
 
 int cad_transport_fm_init(void **tpriv, const char *uri) {

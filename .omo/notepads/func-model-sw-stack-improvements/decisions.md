@@ -120,3 +120,24 @@ PYTHONPATH=sim:gen python3 scripts/run_qwen3b_software_signoff.py positive \
 **Rationale**: The previous `sfu_op_map` emitted distinct ring-entry opcodes (0x02, 0x03, 0x04, 0x06, 0x17) for each SFU function, but the firmware only dispatches SFU through a single `op == 0x01` branch (commit 71cac8a). ROPE (0x05) is the only SFU op with its own dispatch handler. The fix unifies the ring-entry opcode to 0x01 for all SFU ops and uses the descriptor d[10] sub-op field for function selection, matching the firmware's expectations.
 
 **Known limitation**: The VADD and SFU_RMSNORM signoff scenarios verify fence COMPLETED but defer output data-match verification. The Spike FuncModel's vector wrapper (`vec_wrapper_load_a/b`) is a no-op in the current MMIOBridge implementation (`VEC_WRP_CMD` handler sets STATUS=1 without moving data), preventing the vector engine from receiving input data. The SFU DMA path through the device-server cadBlob execute path needs additional SRAM/crossbar address verification before data-match can be enforced. Both dispatch paths are validated by the existing `test_runtime_real_firmware.py::test_vector_completes` and `::test_sfu_completes` tests.
+
+## Todo 8: Unify transport error propagation through runtime — committed 2026-07-30
+
+**Commit**: `refactor(transport): unified transport-specific error context in cadErrorString`
+
+**Files**:
+- `software/include/caduceus/cad_transport.h`: Added `transportErrorToString` vtable method (optional, int error signature to avoid C++ enum mismatch with forward-declared `cad_error_t`). Added forward declaration of `cad_error_t` enum.
+- `software/include/caduceus/runtime.h`: Added `cadDeviceErrorString(cad_device_t, cad_error_t, char *buf, size_t len)` — returns transport-aware error string when a device's transport provides the vtable method; falls back to generic `cadErrorString()`.
+- `software/src/runtime_core.c`: Implemented `cadDeviceErrorString()` dispatching through `device->transport.transportErrorToString`. `cadDeviceOpen()` now emits a transport-specific diagnostic to stderr when transport init fails, making "FM transport" visible in broken-socket tests without changing the public ABI.
+- `software/src/transport_fm.cpp`: Added `fm_transportErrorToString()` override that prepends "FM transport: " with a context-specific message (socket write failed, timeout, invalid protocol message, etc.) for each `cad_error_t` mapped from transport errors.
+- `software/tests/test_fm_e2e_submit.c`: Updated all transport-related error messages to use `cadDeviceErrorString(dev, err, ...)` via a `fm_error_string()` helper, producing FM-transport-contextualized error output.
+- `software/tests/test_fm_transport_error.c`: New test verifying `cadErrorString` remains transport-agnostic (no "FM transport" leak), NULL-device fallback works, and `cadDeviceErrorString` fallback matches generic.
+- `software/CMakeLists.txt`: Registered `test_fm_transport_error` CTest and `fm_e2e_broken_socket` CTest (broken-socket submit grepping for "FM transport").
+
+**Verification**:
+- `cmake --build build/software -j4` — Build: 0 errors
+- `ctest --test-dir build/software -R "fm_e2e_broken_socket|fm_transport_error"` — 2/2 Passed
+- `./build/software/test_fm_e2e_submit "fm://unix?path=/tmp/nonexistent_caduceus.sock" 2>&1` outputs: `cadDeviceOpen: FM transport: socket write failed (Device lost)`
+- `ctest --test-dir build/software --output-on-failure -j4` — 26/27 passed (1 pending test requires device server)
+
+**Rationale**: Transport error codes (`CAD_TR_ERR_LOST`, etc.) are generic and don't tell the user *where* the failure occurred. The new vtable method lets each transport prepend its own context ("FM transport: socket write failed", "RTL transport: EDA preflight failed", etc.) while the public `cadErrorString()` remains a pure, transport-agnostic fallback. The `cadDeviceOpen` stderr diagnostic bridges the gap for init failures where no device handle exists.

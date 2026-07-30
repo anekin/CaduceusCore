@@ -80,6 +80,16 @@ typedef struct cad_transport_ops_t {
                                 uint64_t *dma_bytes_read,
                                 uint64_t *dma_bytes_written);
 
+    /* Translate a cad_error_t into a transport-specific error string.
+     * Fills buf[0..len-1] and returns buf.  When NULL, the runtime
+     * falls back to the generic cadErrorString().  FM transport
+     * prepends "FM transport: " with a socket-operation reason;
+     * other transports may add their own context.
+     * The error parameter is int (not cad_error_t) to avoid C++ type
+     * mismatch with the forward-declared enum. */
+    const char *(*transportErrorToString)(void *tpriv, int error,
+                                          char *buf, size_t len);
+
 } cad_transport_ops_t;
 
 /* ── Transport error → cad_error_t mapping ──────────────────────── */
