@@ -97,8 +97,12 @@ def _run_dump_hidden_states(
     env: dict[str, str],
     prompt: str,
     n_predict: int,
-) -> Path:
-    """Run dump_hidden_states and convert the raw dumps into an .npz file."""
+) -> tuple[Path, str]:
+    """Run dump_hidden_states and convert the raw dumps into an .npz file.
+
+    Returns the path to the generated .npz and the raw stderr of
+    dump_hidden_states so callers can parse backend per-op dispatch logs.
+    """
     refs_dir = workdir / "refs"
     refs_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -116,7 +120,7 @@ def _run_dump_hidden_states(
     npz_proc = _run([sys.executable, str(save_npz)], workdir, env)
     if npz_proc.returncode != 0:
         raise SignoffError(f"save_npz.py failed: {npz_proc.stderr[-1000:]}")
-    return workdir / "refs" / "qwen_l0_l1_hidden.npz"
+    return workdir / "refs" / "qwen_l0_l1_hidden.npz", proc.stderr
 
 
 def _compare_hidden(

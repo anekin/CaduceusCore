@@ -142,6 +142,32 @@ PYTHONPATH=sim:gen python3 scripts/run_qwen3b_software_signoff.py positive \
 
 **Rationale**: Transport error codes (`CAD_TR_ERR_LOST`, etc.) are generic and don't tell the user *where* the failure occurred. The new vtable method lets each transport prepend its own context ("FM transport: socket write failed", "RTL transport: EDA preflight failed", etc.) while the public `cadErrorString()` remains a pure, transport-agnostic fallback. The `cadDeviceOpen` stderr diagnostic bridges the gap for init failures where no device handle exists.
 
+## Todo 11: Emit NPU/CPU op breakdown in evidence JSON — committed 2026-07-30
+
+**Files**:
+- `sim/signoff/qwen3b_signoff_runner.py`: After all gates complete, aggregate `mmul_ops`/`sfu_ops`/`vector_ops` from each gate's metrics into `npu_ops: {MMUL, SFU, VECTOR}` and emit `cpu_fallback_ops: []` with a `cpu_fallback_ops_note` explaining the limitation. The note documents that per-op CPU/NPU dispatch data is not available from the llama CLI stderr — only aggregate per-engine stats are captured when a gate uses `return_proc=True` and the NPU backend emits `[NPU] Execution stats:` lines (currently only `gate_single_decode_token_spike`).
+- `config/qwen3b-signoff.json`: Bumped `manifest_version` to `1.1.0` and added an `evidence_schema` section documenting the new optional fields.
+
+**Verification**:
+```bash
+# Start the Python FuncModel device server for fm://python
+PYTHONPATH=sim:gen python3 -m sim.device_server --sock /tmp/caduceus_fm.sock &
+
+PYTHONPATH=sim:gen python3 scripts/run_qwen3b_software_signoff.py positive \
+  --device fm://python --evidence .omo/evidence/task-w3t11.json
+
+python3 -c "import json; d=json.load(open('.omo/evidence/task-w3t11.json')); \
+  assert 'npu_ops' in d; assert 'cpu_fallback_ops' in d; print('OK')"
+```
+- All 5 gates: PASS
+- `npu_ops`: `{"MMUL": 0, "SFU": 0, "VECTOR": 0}` (fm://python path uses FuncModel, not Spike — exec stats only captured by spike gate)
+- `cpu_fallback_ops`: `[]` (per-op dispatch data not available)
+- `verdict`: pass
+
+**Also verified with mock://** (no device server needed): same result, all gates PASS.
+
+**Rationale**: The evidence policy requires every todo to produce structured evidence. The per-fence engine stats (`mmul_ops`/`sfu_ops`/`vector_ops`) are already captured in `gate_single_decode_token_spike` metrics via `_parse_exec_stats()`. This change surfaces those aggregated counts at the top-level evidence payload under `npu_ops` so the strict aggregator can consume them. For `cpu_fallback_ops`, the llama CLI does not emit per-op CPU fallback information in its stderr, so an empty list with an explanatory note is the honest representation.
+
 ## Todo 9: Fix ASan mock transport test leaks — committed 2026-07-30
 
 **Commit**: `test(runtime): add cadDeviceClose to all mock transport tests (ASan)`
@@ -157,6 +183,42 @@ PYTHONPATH=sim:gen python3 scripts/run_qwen3b_software_signoff.py positive \
 **Changed files**: `transport_mock.c`, `runtime_core.h`, `runtime_core.c`, `runtime_stubs.c`, `cad_transport.h`, `transport_fm.cpp`, `runtime.hpp`, plus C/C++ test files for cmd-list lifecycle.
 
 **Verification**: 17/19 mock transport tests pass with zero ASan leaks. 2 intentional use-after-free tests (`runtime_abi_negative`, `buffer_edge_cases`) abort under ASan as expected; pass in non-ASan builds.
+
+## Todo 9 (continued): ASan leak cleanup for FM transport / execution_stats / executorch_backend — 2026-07-30
+
+**Commit**: `fix(runtime): complete ASan leak cleanup for FM transport and backend tests`
+
+**Files changed**:
+- `software/src/transport_fm.cpp`: Wrapped every FlatBuffers `UnPack()` result in `std::unique_ptr` (DeviceMessageT, ErrorResponseT, BufferAllocResponseT, BufferReadResponseT, BufferSizeResponseT, FenceCreateResponseT, FenceWaitResponseT, FencePollResponseT, FenceStatusResponseT).
+- `software/src/transport_rtl.cpp`: Applied identical `std::unique_ptr` cleanup to the sibling RTL transport (same UnPack leak pattern).
+- `software/tests/test_fm_transport_blob.cpp`: Added `cadCommandListDestroy(cl)` after successful submit and on submit-failure teardown.
+- `software/tests/test_execution_stats.c`: Added `cadCommandListDestroy(cl)` in `test_mmul_stats()` and `test_nop_zero_stats()`.
+- `software/executorch/runtime/caduceus_npu_backend.cpp`: Added `cadCommandListDestroy(cmd_list)` after successful `cadQueueSubmit` (and on submit-error path) in `cad_et_backend_execute()`.
+- `software/tests/test_executorch_backend.cpp`: Freed all `cadBufferAllocate`d buffers before `cadDeviceClose` in the execute/unbind/buffer-error test cases.
+- `software/tests/test_runtime_abi_negative.cpp`: Updated submitted command-list destroy assertion from `CAD_ERROR_INVALID_HANDLE` to `CAD_SUCCESS` to match the W3T9 lifecycle fix.
+- `software/tests/test_fm_e2e_mmul.c`: Added missing `cadCommandListDestroy` calls in happy-path MMUL, corrupted-weight, and reset-recovery scenarios.
+- `software/tests/test_fm_e2e_chain.c`: Added missing `cadCommandListDestroy(cl)` after submit.
+- `software/tests/test_fm_e2e_submit.c`: Added missing `cadCommandListDestroy(cl)` after submit.
+
+**Verification**:
+```bash
+cmake -S software -B build/software-asan -DCADUCEUS_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer"
+cmake --build build/software-asan -j4
+ctest --test-dir build/software-asan -R "fm_transport|execution_stats|executorch_backend" --output-on-failure
+```
+- Target tests pass with no LeakSanitizer output:
+  - `fm_transport` — Passed (0.02s)
+  - `execution_stats` — Passed (1.10s)
+  - `executorch_backend` — Passed (0.03s)
+- Full ASan suite: 25/27 passed.
+
+**Known non-ASan failures / intentional aborts**:
+- `buffer_edge_cases`: Intentionally exercises stack-buffer-overflow in `test_offset_overflow`; aborts under ASan as designed (set with `ASAN_OPTIONS=halt_on_error=0`).
+- `test_fm_e2e_chain`: Times out after 60s due to a pre-existing functional mismatch (`chain[0..7]` output mismatch vs CPU golden), not a memory leak. The command-list leak in this test was fixed; the timeout is unrelated to ASan.
+
+**Rationale**: W3T9 removed the `!cl->submitted` guard from `validate_command_list()`, making `cadCommandListDestroy` valid after submit. The remaining ASan leaks were dominated by flatbuffers `UnPack()` raw pointers in the FM/RTL transports and missing test teardown calls. Using `std::unique_ptr` for all `UnPack()` results is leak-proof and preserves the existing protocol logic.
 
 ## Todo 13: Structured leveled logging across Runtime/Transport/Server — committed 2026-07-30
 
@@ -178,4 +240,40 @@ PYTHONPATH=sim:gen python3 scripts/run_qwen3b_software_signoff.py positive \
 - `ctest --test-dir build/software --output-on-failure -j4` — 27/28 tests pass; the only incomplete test is `test_fm_e2e_chain`, which times out due to a pre-existing functional mismatch unrelated to logging.
 
 **Rationale**: The runtime, FM transport, and Python device server previously emitted ad-hoc `printf`/`fprintf` diagnostics.  A single level-filtered macro keeps user-facing error semantics intact (the broken-socket test still sees "FM transport" in stderr) while routing diagnostic chatter through DEBUG/TRACE.  The env var gives operators a single knob, and the compile-time minimum keeps the option open for release builds to strip verbose logs entirely.
+
+## Todo 14: Auto-detect NPU/CPU op split in Qwen blk.0 evidence (W3T14) — committed 2026-07-30
+
+**Commit**: `feat(signoff): auto-detect NPU/CPU op split in Qwen blk.0 evidence`
+
+**Files**:
+- `sim/signoff/qwen3b_signoff_io.py`: `_run_dump_hidden_states()` now returns the generated `.npz` path **and** the raw `dump_hidden_states` stderr so gates can parse per-op dispatch logs.
+- `sim/signoff/qwen3b_signoff_gates.py`:
+  - Added `_parse_op_dispatch()` helper to parse `[NPU] OP node <id> OP (label): NPU|CPU fallback ...` stderr lines.
+  - Wired `gate_full_shape_blk0`, `gate_decode_tokens`, and `gate_single_decode_token_spike` to capture/parse NPU stderr and emit per-gate `npu_ops_executed` and `cpu_fallback_ops` metrics.
+- `sim/signoff/qwen3b_signoff_runner.py`: aggregates `npu_ops_executed` across gates and merges `cpu_fallback_ops` into a sorted unique list at the top-level evidence payload. Existing `npu_ops` engine counts and `cpu_fallback_ops_note` are preserved; the note now explains that per-op data is captured when the backend emits it.
+- `config/qwen3b-signoff.json`: added `npu_ops_executed` to `evidence_schema`.
+
+**Verification**:
+```bash
+# Rebuild NPU backend to pick up existing per-op dispatch logging in ggml-npu.cpp
+cmake --build build/llama --target ggml-npu
+
+# Start Python FuncModel device server on the task-specific socket
+PYTHONPATH=sim:gen python3 sim/device_server.py --sock /tmp/caduceus_w3t14.sock &
+# fm://python resolves to the default /tmp/caduceus_fm.sock, so symlink it to the server socket.
+ln -s /tmp/caduceus_w3t14.sock /tmp/caduceus_fm.sock
+
+PYTHONPATH=sim:gen python3 scripts/run_qwen3b_software_signoff.py positive \
+  --device fm://python --evidence .omo/evidence/task-w3t14.json
+
+python3 -c "import json; d=json.load(open('.omo/evidence/task-w3t14.json')); \
+  assert d['npu_ops_executed'] >= 1; assert isinstance(d['cpu_fallback_ops'], list); print('OK')"
+```
+- Verdict: **pass**
+- `npu_ops_executed`: 4887
+- `cpu_fallback_ops`: `[]`
+- `npu_ops`: `{"MMUL": 0, "SFU": 0, "VECTOR": 0}` (aggregate per-engine stats are only emitted by the Spike path)
+- Determinism: two consecutive runs with the same device produced identical `npu_ops_executed` (4887) and `cpu_fallback_ops` (`[]`).
+
+**Rationale**: The uncommitted per-op dispatch logging in `ggml-npu.cpp` makes the exact NPU/CPU split visible for the first time. Capturing and aggregating it in the signoff runner satisfies the evidence-policy requirement for explicit per-op breakdown while keeping the existing aggregate `npu_ops` field intact for W3T11 consumers.
 

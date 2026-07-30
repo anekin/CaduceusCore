@@ -10,6 +10,10 @@
         "VECTOR": {"type": "integer", "description": "Total vector operations dispatched to NPU"}
       }
     },
+    "npu_ops_executed": {
+      "type": "integer",
+      "description": "Total number of individual ops dispatched to the NPU across signoff gates, parsed from '[NPU] OP node' stderr lines."
+    },
     "cpu_fallback_ops": {
       "type": "array",
       "items": {"type": "string"},
@@ -17,7 +21,7 @@
     },
     "cpu_fallback_ops_note": {
       "type": "string",
-      "description": "Explanation when cpu_fallback_ops cannot be precisely determined."
+      "description": "Explanation of how per-op NPU/CPU dispatch data was captured or why it is unavailable."
     }
   },
   "model": {

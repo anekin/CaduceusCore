@@ -76,25 +76,28 @@ def run_positive_signoff(
     total_mmul = 0
     total_sfu = 0
     total_vector = 0
+    total_npu_ops_executed = 0
+    cpu_fallback_ops_set: set[str] = set()
     for g in gates:
         m = g.metrics
         total_mmul += int(m.get("mmul_ops", 0))
         total_sfu += int(m.get("sfu_ops", 0))
         total_vector += int(m.get("vector_ops", 0))
+        total_npu_ops_executed += int(m.get("npu_ops_executed", 0))
+        cpu_fallback_ops_set.update(m.get("cpu_fallback_ops", []) or [])
 
     npu_ops: dict[str, int] = {
         "MMUL": total_mmul,
         "SFU": total_sfu,
         "VECTOR": total_vector,
     }
-    cpu_fallback_ops: list[str] = []
+    cpu_fallback_ops = sorted(cpu_fallback_ops_set)
     cpu_fallback_ops_note = (
-        "Per-op CPU/NPU dispatch data is not available from the "
-        "llama CLI stderr; only aggregate per-engine stats are "
-        "captured. When a gate returns_proc=True and the NPU "
-        "backend emits '[NPU] Execution stats:' lines, mmul/sfu/"
-        "vector counts appear in that gate's metrics and are "
-        "summed here."
+        "Per-op CPU/NPU dispatch data is captured from '[NPU] OP node' "
+        "stderr lines emitted by the NPU backend when available. "
+        "npu_ops_executed sums NPU-dispatched ops across gates, and "
+        "cpu_fallback_ops is the sorted unique set of CPU fallback "
+        "reasons. Aggregate engine counts remain in npu_ops."
     )
 
     payload: dict[str, object] = {
@@ -107,6 +110,7 @@ def run_positive_signoff(
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "verdict": "pass" if all_passed else "fail",
         "npu_ops": npu_ops,
+        "npu_ops_executed": total_npu_ops_executed,
         "cpu_fallback_ops": cpu_fallback_ops,
         "cpu_fallback_ops_note": cpu_fallback_ops_note,
         "gates": [

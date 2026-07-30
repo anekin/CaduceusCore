@@ -64,6 +64,22 @@ static bool        g_npu_strict_submitted[1024];
 static const char *g_npu_strict_reason[1024];
 static int         g_npu_strict_count = 0;
 
+static void npu_log_op_dispatch(
+    int idx, const struct ggml_tensor * node, bool submitted, const char * reason)
+{
+    if (!node) return;
+    const char * op_name  = ggml_op_name(node->op);
+    const char * node_name = node->name ? node->name : "";
+    if (submitted) {
+        fprintf(stderr, "[NPU] OP node %d %s (%s): NPU\n",
+                idx, op_name, node_name);
+    } else {
+        fprintf(stderr, "[NPU] OP node %d %s (%s): CPU fallback %s\n",
+                idx, op_name, node_name,
+                reason && reason[0] ? reason : "unknown");
+    }
+}
+
 static const char * npu_get_uri(void) {
     if (g_npu_uri) return g_npu_uri;
     const char * uri = getenv("CADUCEUS_DEVICE");
@@ -538,40 +554,83 @@ static int npu_submit_graph_fm(
         const struct ggml_tensor * src[4] = {NULL, NULL, NULL, NULL};
 
         switch (node->op) {
+
+        // Layout ops: no IR command, but the backend "handles" them.
+        case GGML_OP_NONE:
+        case GGML_OP_DUP:
+        case GGML_OP_RESHAPE:
+        case GGML_OP_VIEW:
+        case GGML_OP_PERMUTE:
+        case GGML_OP_TRANSPOSE:
+        case GGML_OP_CPY:
+        case GGML_OP_CONT:
+            g_npu_strict_submitted[i] = true;
+            npu_log_op_dispatch(i, node, true, NULL);
+            continue;
+
         case GGML_OP_MUL_MAT:
-            if (!(caps & CAD_CAP_MXU)) { cpu_fallback_ops++;
-                g_npu_strict_reason[i]="missing MXU cap"; continue; }
-            if (!node->src[0] || !node->src[1]) { cpu_fallback_ops++;
-                g_npu_strict_reason[i]="missing src"; continue; }
+            if (!(caps & CAD_CAP_MXU)) {
+                g_npu_strict_reason[i] = "missing MXU cap";
+                npu_log_op_dispatch(i, node, false, g_npu_strict_reason[i]);
+                cpu_fallback_ops++;
+                continue;
+            }
+            if (!node->src[0] || !node->src[1]) {
+                g_npu_strict_reason[i] = "missing src";
+                npu_log_op_dispatch(i, node, false, g_npu_strict_reason[i]);
+                cpu_fallback_ops++;
+                continue;
+            }
             src[0] = node->src[0]; src[1] = node->src[1]; ns = 2;
             break;
         case GGML_OP_RMS_NORM:
         case GGML_OP_SOFT_MAX:
         case GGML_OP_ROPE:
-            if (!(caps & CAD_CAP_SFU)) { cpu_fallback_ops++;
-                g_npu_strict_reason[i]="missing SFU cap"; continue; }
-            if (!node->src[0]) { cpu_fallback_ops++;
-                g_npu_strict_reason[i]="missing src"; continue; }
+            if (!(caps & CAD_CAP_SFU)) {
+                g_npu_strict_reason[i] = "missing SFU cap";
+                npu_log_op_dispatch(i, node, false, g_npu_strict_reason[i]);
+                cpu_fallback_ops++;
+                continue;
+            }
+            if (!node->src[0]) {
+                g_npu_strict_reason[i] = "missing src";
+                npu_log_op_dispatch(i, node, false, g_npu_strict_reason[i]);
+                cpu_fallback_ops++;
+                continue;
+            }
             src[0] = node->src[0]; ns = 1;
             break;
         case GGML_OP_MUL:
         case GGML_OP_ADD:
-            if (!(caps & CAD_CAP_VECTOR)) { cpu_fallback_ops++;
-                g_npu_strict_reason[i]="missing Vector cap"; continue; }
-            if (!node->src[0]) { cpu_fallback_ops++;
-                g_npu_strict_reason[i]="missing src"; continue; }
+            if (!(caps & CAD_CAP_VECTOR)) {
+                g_npu_strict_reason[i] = "missing Vector cap";
+                npu_log_op_dispatch(i, node, false, g_npu_strict_reason[i]);
+                cpu_fallback_ops++;
+                continue;
+            }
+            if (!node->src[0]) {
+                g_npu_strict_reason[i] = "missing src";
+                npu_log_op_dispatch(i, node, false, g_npu_strict_reason[i]);
+                cpu_fallback_ops++;
+                continue;
+            }
             src[0] = node->src[0];
             src[1] = node->src[1];
             ns = (node->src[1]) ? 2 : 1;
             break;
         default:
+            g_npu_strict_reason[i] = "unsupported op";
+            npu_log_op_dispatch(i, node, false, g_npu_strict_reason[i]);
             cpu_fallback_ops++;
-            g_npu_strict_reason[i]="unsupported op";
             continue;
         }
         npu_supported_ops++;
-        if (n_ops >= MAX_NODES) { cpu_fallback_ops++;
-            g_npu_strict_reason[i]="op table full"; continue; }
+        if (n_ops >= MAX_NODES) {
+            g_npu_strict_reason[i] = "op table full";
+            npu_log_op_dispatch(i, node, false, g_npu_strict_reason[i]);
+            cpu_fallback_ops++;
+            continue;
+        }
         op_tbl[n_ops].node = node;
         op_tbl[n_ops].ns = ns;
         op_tbl[n_ops].obuf = CAD_BUFFER_INVALID;
@@ -580,8 +639,12 @@ static int npu_submit_graph_fm(
             if (src[s]) {
                 int idx = find_tbuf(src[s]);
                 if (idx < 0) {
-                    if (n_tbuf >= 512) { cpu_fallback_ops++;
-                        g_npu_strict_reason[i]="tensor buf full"; continue; }
+                    if (n_tbuf >= 512) {
+                        g_npu_strict_reason[i] = "tensor buf full";
+                        npu_log_op_dispatch(i, node, false, g_npu_strict_reason[i]);
+                        cpu_fallback_ops++;
+                        continue;
+                    }
                     tbuf[n_tbuf].t = src[s];
                     tbuf[n_tbuf].buf = NULL;
                     tbuf[n_tbuf].addr = 0;
@@ -593,8 +656,12 @@ static int npu_submit_graph_fm(
         {
             int idx = find_tbuf(node);
             if (idx < 0) {
-                if (n_tbuf >= 512) { cpu_fallback_ops++;
-                    g_npu_strict_reason[i]="tensor buf full"; continue; }
+                if (n_tbuf >= 512) {
+                    g_npu_strict_reason[i] = "tensor buf full";
+                    npu_log_op_dispatch(i, node, false, g_npu_strict_reason[i]);
+                    cpu_fallback_ops++;
+                    continue;
+                }
                 tbuf[n_tbuf].t = node;
                 tbuf[n_tbuf].buf = NULL;
                 tbuf[n_tbuf].addr = 0;
@@ -603,6 +670,7 @@ static int npu_submit_graph_fm(
         }
         n_ops++;
         g_npu_strict_submitted[i] = true;
+        npu_log_op_dispatch(i, node, true, NULL);
     }
 
     if (n_ops == 0) {

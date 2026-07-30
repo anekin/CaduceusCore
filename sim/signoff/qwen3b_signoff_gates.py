@@ -85,17 +85,22 @@ def gate_full_shape_blk0(
     n_predict = gate["n_tokens"]
     with _backend_workdir(config.bundle, CPU_BACKEND_NAME) as cpu_wd:
         cpu_env = _llama_env(base_env, None)
-        cpu_npz = _run_dump_hidden_states(config, cpu_wd, cpu_env, prompt, n_predict)
+        cpu_npz, _ = _run_dump_hidden_states(config, cpu_wd, cpu_env, prompt, n_predict)
         with _backend_workdir(config.bundle, NPU_BACKEND_NAME) as npu_wd:
             npu_env = _llama_env(base_env, device_uri)
-            npu_npz = _run_dump_hidden_states(config, npu_wd, npu_env, prompt, n_predict)
+            npu_npz, npu_stderr = _run_dump_hidden_states(
+                config, npu_wd, npu_env, prompt, n_predict
+            )
             metrics = _compare_hidden(
                 cpu_npz, npu_npz, "l_out_0",
                 config.hidden_max_abs_diff, config.hidden_cos_sim_min,
             )
+            dispatch = _parse_op_dispatch(npu_stderr)
             expected = gate["expected_nodes"]
             metrics["expected_supported_nodes"] = expected["supported"]
             metrics["expected_fallback_nodes"] = expected["fallback"]
+            metrics["npu_ops_executed"] = dispatch["npu_ops_executed"]
+            metrics["cpu_fallback_ops"] = dispatch["cpu_fallback_ops"]
             return GateResult(
                 name="full_shape_blk0",
                 passed=bool(metrics["passed"]),
@@ -115,9 +120,16 @@ def gate_decode_tokens(
     prompt = config.prompts[prompt_key]
     n_predict = gate["n_predict"]
     with _backend_workdir(config.bundle, CPU_BACKEND_NAME) as cpu_wd:
-        cpu_text = _run_llama_cli_decode(config, cpu_wd, _llama_env(base_env, None), prompt, n_predict)
+        cpu_text = _run_llama_cli_decode(
+            config, cpu_wd, _llama_env(base_env, None), prompt, n_predict
+        )
         with _backend_workdir(config.bundle, NPU_BACKEND_NAME) as npu_wd:
-            npu_text = _run_llama_cli_decode(config, npu_wd, _llama_env(base_env, device_uri), prompt, n_predict)
+            npu_proc = _run_llama_cli_decode(
+                config, npu_wd, _llama_env(base_env, device_uri), prompt, n_predict,
+                return_proc=True,
+            )
+            npu_text = _parse_generated_text(npu_proc.stdout, prompt)
+            dispatch = _parse_op_dispatch(npu_proc.stderr)
             expected = gate["expected_nodes"]
             metrics: dict[str, str | int | float | bool] = {
                 "cpu_text": cpu_text,
@@ -125,6 +137,8 @@ def gate_decode_tokens(
                 "text_match": cpu_text == npu_text,
                 "expected_supported_nodes": expected["supported"],
                 "expected_fallback_nodes": expected["fallback"],
+                "npu_ops_executed": dispatch["npu_ops_executed"],
+                "cpu_fallback_ops": dispatch["cpu_fallback_ops"],
             }
             return GateResult(
                 name=gate_name,
@@ -150,6 +164,35 @@ def _parse_exec_stats(stderr: str) -> dict[str, int]:
         totals["dma_bytes_read"] += int(match.group(5))
         totals["dma_bytes_written"] += int(match.group(6))
     return totals
+
+
+def _parse_op_dispatch(stderr: str) -> dict[str, int | list[str]]:
+    """Parse '[NPU] OP node ...' stderr lines.
+
+    Returns:
+        npu_ops_executed: number of ops dispatched to the NPU.
+        cpu_fallback_ops: list of "OP (label): reason" strings for CPU fallbacks.
+    """
+    pattern = re.compile(
+        r"^\[NPU\] OP node \d+ ([A-Z_][A-Z0-9_]*) \(([^)]+)\): (NPU|CPU fallback.*?)\s*$",
+        re.MULTILINE,
+    )
+    npu_ops_executed = 0
+    cpu_fallback_ops: list[str] = []
+    clean = _strip_ansi(stderr)
+    for match in pattern.finditer(clean):
+        op_name = match.group(1)
+        label = match.group(2)
+        tail = match.group(3)
+        if tail == "NPU":
+            npu_ops_executed += 1
+        elif tail.startswith("CPU fallback"):
+            reason = tail[len("CPU fallback"):].lstrip(" :")
+            cpu_fallback_ops.append(f"{op_name} ({label}): {reason}")
+    return {
+        "npu_ops_executed": npu_ops_executed,
+        "cpu_fallback_ops": cpu_fallback_ops,
+    }
 
 
 def gate_single_decode_token_spike(
@@ -205,6 +248,7 @@ def gate_single_decode_token_spike(
             )
             npu_text = _parse_generated_text(npu_proc.stdout, prompt)
             stats = _parse_exec_stats(npu_proc.stderr)
+            dispatch = _parse_op_dispatch(npu_proc.stderr)
             expected = gate["expected_nodes"]
             passed = cpu_text != "" and cpu_text == npu_text
             metrics: dict[str, str | int | float | bool] = {
@@ -226,6 +270,8 @@ def gate_single_decode_token_spike(
                 "dma_bytes_written": stats["dma_bytes_written"],
                 "mmul_positive": stats["mmul"] > 0,
                 "sfu_positive": stats["sfu"] > 0,
+                "npu_ops_executed": dispatch["npu_ops_executed"],
+                "cpu_fallback_ops": dispatch["cpu_fallback_ops"],
             }
             return GateResult(
                 name="single_decode_token_spike",
