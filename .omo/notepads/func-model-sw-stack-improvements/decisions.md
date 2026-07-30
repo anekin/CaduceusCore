@@ -1,4 +1,32 @@
 
+## Todo 2: Debug full-model blk.0 dispatch on fm://spike (I-008) — committed 2026-07-30
+
+**Commit**: `fix(spike): debug full-model blk.0 dispatch to exercise MXU/SFU (I-008)`
+
+**Files**:
+- `sim/device_server.py`:
+  - Fixed `_count_blob_stats()` and `_execute_flat()` descriptor byte offsets (treating address fields as sizes previously produced near-zero op counts).
+  - Expanded opcode coverage to match the firmware/compiler ring-entry opcodes: SFU 1-6/23, Vector 15-20, DMA 9-10/21-22.
+  - Enlarged the DRAM buffer window from 15 MiB to 48 MiB and moved `DESC_ADDR_BASE` above the window to avoid `cadBufferAllocate` collisions on second and subsequent graph submissions.
+- `sim/signoff/qwen3b_signoff_gates.py`: added `_parse_exec_stats()` and wired `gate_single_decode_token_spike` to capture per-fence engine stats from llama stderr, emitting `mmul_ops`/`sfu_ops`/`vector_ops`/`dma_ops` and `mmul_positive`/`sfu_positive` booleans.
+- `sim/signoff/qwen3b_signoff_io.py`: `_run_llama_cli_decode()` now optionally returns the full `CompletedProcess` so the gate can inspect stderr without changing existing callers.
+- `.omo/evidence/task-w1t2-happy.json` / `.omo/evidence/task-w1t2-happy.log`: refreshed evidence for the fixed run.
+
+**Verification**:
+```bash
+PYTHONPATH=sim:gen python3 sim/device_server.py --spike --sock /tmp/caduceus_w1t2.sock &
+sleep 2
+PYTHONPATH=sim:gen python3 scripts/run_qwen3b_software_signoff.py positive \
+  --device fm://spike --gate single_decode_token --evidence .omo/evidence/task-w1t2-happy.json
+```
+- Verdict: **pass**
+- `mmul_ops`: 105, `sfu_ops`: 432, `vector_ops`: 753, `dma_ops`: 0
+- `mmul_positive`: true, `sfu_positive`: true
+- CPU/NPU text match: "Hello" == "Hello"
+- Two consecutive submissions against the same manual server both pass with no `cadBufferAllocate` failures.
+
+**Rationale**: The signoff gate was already executing a full-model decode token through Spike, but the device-server side was not counting most engine ops and was running out of the small DRAM buffer window as soon as a second graph was submitted. Fixing descriptor offsets and opcode coverage produced accurate execution stats, and expanding/moving the buffer window removed the allocation collision that blocked repeated submissions.
+
 ## I-009: fm://spike URI routing (W1T3) — committed 2026-07-30
 
 **Commit**: `b2d151a fix(runtime): URI prefix match for fm:// to avoid fpga false match (I-009)`

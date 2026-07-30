@@ -1,0 +1,36 @@
+{
+  "abi_version": "1.0",
+  "backend_hash": "2ba39f87a5cb79473f4bc255c85fd982",
+  "device_uri": "fm://unix?path=/tmp/caduceus_w1t2.sock",
+  "gates": [
+    {
+      "metrics": {
+        "cpu_text": "Hello",
+        "dma_bytes_read": 664522240,
+        "dma_bytes_written": 72757248,
+        "dma_ops": 0,
+        "expected_fallback_nodes": 0,
+        "expected_supported_nodes": 38,
+        "firmware_elf_sha256": "b837e2628bb4497b50e9d613476aa156f30f29fe749d39cb2b07677260008165",
+        "mmul_ops": 105,
+        "mmul_positive": true,
+        "n_predict": 1,
+        "npu_text": "Hello",
+        "prompt": "Hello",
+        "sfu_ops": 432,
+        "sfu_positive": true,
+        "spike_binary_sha256": "427eb20f1daa86168f1ee9678ad29e82fa6d26dcaeb50981503e8edfbfe927cf",
+        "text_match": true,
+        "vector_ops": 753,
+        "verdict": "pass"
+      },
+      "name": "single_decode_token_spike",
+      "passed": true
+    }
+  ],
+  "llama_commit": "88b47a755c72fed4b22fba0fd262e2d7b7d01583",
+  "manifest": "/home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf",
+  "model_sha256": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d",
+  "utc": "2026-07-30T09:24:56Z",
+  "verdict": "pass"
+}

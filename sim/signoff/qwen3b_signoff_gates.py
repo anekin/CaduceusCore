@@ -18,6 +18,7 @@ from signoff.qwen3b_signoff_io import (
     _backend_workdir,
     _compare_hidden,
     _llama_env,
+    _parse_generated_text,
     _run,
     _run_dump_hidden_states,
     _run_llama_cli_decode,
@@ -132,6 +133,25 @@ def gate_decode_tokens(
             )
 
 
+def _parse_exec_stats(stderr: str) -> dict[str, int]:
+    """Sum per-engine op counts across all '[NPU] Execution stats:' lines."""
+    pattern = re.compile(
+        r"\[NPU\] Execution stats: "
+        r"mmul=(\d+) sfu=(\d+) vec=(\d+) dma=(\d+) "
+        r"dma_rd=(\d+) dma_wr=(\d+)"
+    )
+    totals = {"mmul": 0, "sfu": 0, "vector": 0, "dma": 0,
+              "dma_bytes_read": 0, "dma_bytes_written": 0}
+    for match in pattern.finditer(stderr):
+        totals["mmul"] += int(match.group(1))
+        totals["sfu"] += int(match.group(2))
+        totals["vector"] += int(match.group(3))
+        totals["dma"] += int(match.group(4))
+        totals["dma_bytes_read"] += int(match.group(5))
+        totals["dma_bytes_written"] += int(match.group(6))
+    return totals
+
+
 def gate_single_decode_token_spike(
     config: SignoffConfig, device_uri: str, base_env: dict[str, str]
 ) -> GateResult:
@@ -178,13 +198,17 @@ def gate_single_decode_token_spike(
             config, cpu_wd, _llama_env(base_env, None), prompt, n_predict
         )
         with _backend_workdir(config.bundle, NPU_BACKEND_NAME) as npu_wd:
-            npu_text = _run_llama_cli_decode(
+            npu_proc = _run_llama_cli_decode(
                 config, npu_wd, _llama_env(base_env, device_uri), prompt, n_predict,
                 timeout=_SPIKE_DECODE_TIMEOUT,
+                return_proc=True,
             )
+            npu_text = _parse_generated_text(npu_proc.stdout, prompt)
+            stats = _parse_exec_stats(npu_proc.stderr)
             expected = gate["expected_nodes"]
+            passed = cpu_text != "" and cpu_text == npu_text
             metrics: dict[str, str | int | float | bool] = {
-                "verdict": "pass" if (cpu_text != "" and cpu_text == npu_text) else "fail",
+                "verdict": "pass" if passed else "fail",
                 "cpu_text": cpu_text,
                 "npu_text": npu_text,
                 "text_match": cpu_text == npu_text,
@@ -194,10 +218,18 @@ def gate_single_decode_token_spike(
                 "expected_fallback_nodes": expected["fallback"],
                 "firmware_elf_sha256": firmware_hash,
                 "spike_binary_sha256": spike_hash,
+                "mmul_ops": stats["mmul"],
+                "sfu_ops": stats["sfu"],
+                "vector_ops": stats["vector"],
+                "dma_ops": stats["dma"],
+                "dma_bytes_read": stats["dma_bytes_read"],
+                "dma_bytes_written": stats["dma_bytes_written"],
+                "mmul_positive": stats["mmul"] > 0,
+                "sfu_positive": stats["sfu"] > 0,
             }
             return GateResult(
                 name="single_decode_token_spike",
-                passed=cpu_text != "" and cpu_text == npu_text,
+                passed=passed,
                 metrics=metrics,
             )
 

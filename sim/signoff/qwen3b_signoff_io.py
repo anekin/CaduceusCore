@@ -152,8 +152,13 @@ def _run_llama_cli_decode(
     prompt: str,
     n_predict: int,
     timeout: float = 900.0,
-) -> str:
-    """Run llama cli in single-turn mode and return the generated text."""
+    return_proc: bool = False,
+) -> str | subprocess.CompletedProcess[str]:
+    """Run llama cli in single-turn mode and return the generated text.
+
+    If *return_proc* is True, returns the completed process so callers can
+    inspect stderr (e.g. for per-fence execution stats).
+    """
     cmd = [
         str(workdir / "llama"), "cli",
         "-m", str(config.model_path),
@@ -168,6 +173,8 @@ def _run_llama_cli_decode(
     proc = _run(cmd, workdir, env, timeout=timeout)
     if proc.returncode != 0:
         raise SignoffError(f"llama cli failed: {proc.stderr[-1000:]}")
+    if return_proc:
+        return proc
     return _parse_generated_text(proc.stdout, prompt)
 
 

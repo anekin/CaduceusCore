@@ -79,8 +79,11 @@ from sim.func_model import FuncModel
 DEFAULT_SOCK_PATH = "/tmp/caduceus_fm.sock"
 
 # DRAM region used for host-visible buffers (BAR1, 0x80000000+).
+# Keep the first 1 MiB free for the firmware ring/completion area, then use a
+# large window for host buffers.  Descriptors live above the buffer window to
+# avoid address collisions with allocated buffers.
 DRAM_BUFFER_BASE = Addr.DRAM + 0x0010_0000  # 1 MiB above base
-DRAM_BUFFER_END = Addr.DRAM + 0x0100_0000   # 16 MiB total window
+DRAM_BUFFER_END = Addr.DRAM + 0x0300_0000   # 48 MiB buffer window
 
 # Firmware ring buffer layout (matches NPUFirmware defaults).
 RING_BUFFER_ADDR = 0x8000_0000
@@ -93,7 +96,7 @@ CAD_BLOB_MAGIC = 0x43414442   # "CADB" little-endian
 CAD_DESC_WORDS = 15
 CAD_DESC_BYTES = CAD_DESC_WORDS * 4   # 60 bytes per descriptor
 CAD_CMD_ENTRY_BYTES = 32              # 8 × uint32 ring entry in blob
-DESC_ADDR_BASE = 0x80F00000           # DRAM base for descriptors (unused above buffer window)
+DESC_ADDR_BASE = Addr.DRAM + 0x0300_0000  # above buffer window, avoids collision
 
 
 def _payload_bytes(msg: DeviceMessageT) -> bytes:
@@ -441,11 +444,24 @@ class FmDeviceServer:
         # Opcode constants matching firmware and command_ir.h.
         OP_MMUL       = 0x00
         OP_SFU        = 0x01
-        OP_VECTOR_ADD = 0x0F
-        OP_VECTOR_MUL = 0x0E
+        OP_SFU_LAYERNORM = 0x02
+        OP_SFU_GELU   = 0x03
+        OP_SFU_RELU   = 0x04
+        OP_ROPE       = 0x05
+        OP_SFU_SILU   = 0x06
+        OP_PCIE_DMA   = 0x07
         OP_DMA_COPY   = 0x09
-
-        OP_SFU_SILU = 0x06
+        OP_DMA_ST     = 0x0A
+        OP_VECTOR_ADD = 0x0F
+        OP_VECTOR_MUL = 0x10
+        OP_VRED_MAX   = 0x11
+        OP_VRED_SUM   = 0x12
+        OP_VCONV      = 0x13
+        OP_VRESID     = 0x14
+        OP_DMA_COPY_LDD = 0x15
+        OP_DMA_COPY_STD = 0x16
+        OP_SFU_RMSNORM = 0x17
+        OP_BARRIER    = 0xFF
 
         with self._model_lock:
             model = self._model
@@ -469,43 +485,51 @@ class FmDeviceServer:
                 model.pcie.tlp_write(ring_idx_addr, entry)
 
                 # ── Track per-engine stats from the command descriptor ──
+                # Descriptor layout matches compiler/lower.c and firmware npu_firmware.c.
                 if opcode == OP_MMUL:
                     stats.mmulOps += 1
-                    # MMUL descriptor: bytes at offsets 0:4 are input size (M*K),
-                    # offsets 4:8 are weight size (K*N), offsets 8:12 are output size (M*N)
-                    # DMA reads: input + weight + scale; DMA writes: output.
-                    # Read from descriptor for DMA byte tracking.
-                    # Input (INT8 M×K), Weight (INT4 packed K×N/2), Scale (float32 N).
-                    if len(descriptor) >= 12:
-                        inp_bytes = struct.unpack_from("<I", descriptor, 0)[0]
-                        wt_bytes  = struct.unpack_from("<I", descriptor, 4)[0]
-                        out_bytes = struct.unpack_from("<I", descriptor, 8)[0]
-                        scale_bytes = struct.unpack_from("<I", descriptor, 20)[0]
+                    # MMUL descriptor: sizes at offsets 32/36/40/44 (bytes).
+                    if len(descriptor) >= 48:
+                        inp_bytes = struct.unpack_from("<I", descriptor, 32)[0]
+                        wt_bytes = struct.unpack_from("<I", descriptor, 36)[0]
+                        out_bytes = struct.unpack_from("<I", descriptor, 40)[0]
+                        scale_bytes = struct.unpack_from("<I", descriptor, 44)[0]
                         stats.dmaBytesRead += inp_bytes + wt_bytes + scale_bytes
                         stats.dmaBytesWritten += out_bytes
-                elif opcode == OP_SFU or opcode == OP_SFU_SILU:
+                elif opcode in (
+                    OP_SFU, OP_SFU_LAYERNORM, OP_SFU_GELU, OP_SFU_RELU,
+                    OP_ROPE, OP_SFU_SILU, OP_SFU_RMSNORM,
+                ):
                     stats.sfuOps += 1
-                    # SFU descriptor: input bytes at offset 4, output at offset 8
-                    if len(descriptor) >= 12:
-                        sf_in = struct.unpack_from("<I", descriptor, 4)[0]
-                        sf_out = struct.unpack_from("<I", descriptor, 8)[0]
-                        stats.dmaBytesRead += sf_in
-                        stats.dmaBytesWritten += sf_out
-                elif opcode == OP_VECTOR_ADD or opcode == OP_VECTOR_MUL:
+                    # SFU descriptor: dim at offset 32 (elements in low 16 bits).
+                    if len(descriptor) >= 36:
+                        dim = struct.unpack_from("<I", descriptor, 32)[0]
+                        elements = dim & 0xFFFF
+                        stats.dmaBytesRead += elements * 2
+                        stats.dmaBytesWritten += elements * 2
+                elif opcode in (
+                    OP_VECTOR_ADD, OP_VECTOR_MUL, OP_VRED_MAX, OP_VRED_SUM,
+                    OP_VCONV, OP_VRESID,
+                ):
                     stats.vectorOps += 1
-                    if len(descriptor) >= 20:
-                        va = struct.unpack_from("<I", descriptor, 4)[0]
-                        vb = struct.unpack_from("<I", descriptor, 8)[0]
-                        vo = struct.unpack_from("<I", descriptor, 12)[0]
-                        stats.dmaBytesRead += va + vb
-                        stats.dmaBytesWritten += vo
-                elif opcode == OP_DMA_COPY:
+                    # Vector descriptor: element count at offset 32.
+                    if len(descriptor) >= 36:
+                        elements = struct.unpack_from("<I", descriptor, 32)[0]
+                        stats.dmaBytesRead += elements * 4
+                        stats.dmaBytesWritten += elements * 4
+                elif opcode in (OP_DMA_COPY, OP_DMA_ST, OP_DMA_COPY_LDD, OP_DMA_COPY_STD):
                     stats.dmaOps += 1
-                    # DMA descriptor: src bytes at offset 8, dst bytes at offset 12
+                    # DMA descriptor: transfer size at offset 32.
+                    if len(descriptor) >= 36:
+                        db = struct.unpack_from("<I", descriptor, 32)[0]
+                        stats.dmaBytesRead += db
+                        stats.dmaBytesWritten += db
+                elif opcode == OP_PCIE_DMA:
+                    # PCIe DMA descriptor is 6 words; length at offset 12.
                     if len(descriptor) >= 16:
-                        dst_bytes = struct.unpack_from("<I", descriptor, 12)[0]
-                        stats.dmaBytesRead += dst_bytes
-                        stats.dmaBytesWritten += dst_bytes
+                        db = struct.unpack_from("<I", descriptor, 12)[0]
+                        stats.dmaBytesRead += db
+                        stats.dmaBytesWritten += db
 
             new_tail = (tail + cmd_count) % RING_SIZE
             model.firmware.doorbell["host_tail"] = new_tail
@@ -814,6 +838,7 @@ class FmDeviceServer:
                 cmd_blob=cmd_blob,
             )
         )
+
         resp = DeviceMessageT()
         resp.header = MessageHeaderT()
         resp.header.requestId = rid
@@ -828,12 +853,27 @@ class FmDeviceServer:
     @staticmethod
     def _count_blob_stats(ring_data, desc_data, cmd_count, stats):
         """Count per-engine ops and DMA bytes from flattened ring entries."""
-        OP_MMUL       = 0x00
-        OP_SFU        = 0x01
-        OP_SFU_SILU   = 0x06
-        OP_VECTOR_ADD = 0x0F
-        OP_VECTOR_MUL = 0x0E
-        OP_DMA_COPY   = 0x09
+        # Engine opcodes from gen/npu_abi.h / command_ir.h.
+        OP_MMUL          = 0x00
+        OP_SFU           = 0x01
+        OP_SFU_LAYERNORM = 0x02
+        OP_SFU_GELU      = 0x03
+        OP_SFU_RELU      = 0x04
+        OP_ROPE          = 0x05
+        OP_SFU_SILU      = 0x06
+        OP_PCIE_DMA      = 0x07
+        OP_DMA_COPY      = 0x09
+        OP_DMA_ST        = 0x0A
+        OP_VECTOR_ADD    = 0x0F
+        OP_VECTOR_MUL    = 0x10
+        OP_VRED_MAX      = 0x11
+        OP_VRED_SUM      = 0x12
+        OP_VCONV         = 0x13
+        OP_VRESID        = 0x14
+        OP_DMA_COPY_LDD  = 0x15
+        OP_DMA_COPY_STD  = 0x16
+        OP_SFU_RMSNORM   = 0x17
+        OP_BARRIER       = 0xFF
 
         for i in range(cmd_count):
             offset = i * RING_ENTRY_SIZE
@@ -843,32 +883,43 @@ class FmDeviceServer:
             d_off = i * 60
             desc = desc_data[d_off: d_off + 60] if d_off + 60 <= len(desc_data) else b""
 
+            # Descriptor layout matches compiler/lower.c and firmware npu_firmware.c.
             if opcode == OP_MMUL:
                 stats.mmulOps += 1
-                if len(desc) >= 24:
-                    inp = struct.unpack_from("<I", desc, 0)[0]
-                    wt  = struct.unpack_from("<I", desc, 4)[0]
-                    out = struct.unpack_from("<I", desc, 8)[0]
-                    sc  = struct.unpack_from("<I", desc, 20)[0]
+                if len(desc) >= 48:
+                    inp = struct.unpack_from("<I", desc, 32)[0]
+                    wt  = struct.unpack_from("<I", desc, 36)[0]
+                    out = struct.unpack_from("<I", desc, 40)[0]
+                    sc  = struct.unpack_from("<I", desc, 44)[0]
                     stats.dmaBytesRead += inp + wt + sc
                     stats.dmaBytesWritten += out
-            elif opcode in (OP_SFU, OP_SFU_SILU):
+            elif opcode in (
+                OP_SFU, OP_SFU_LAYERNORM, OP_SFU_GELU, OP_SFU_RELU,
+                OP_ROPE, OP_SFU_SILU, OP_SFU_RMSNORM,
+            ):
                 stats.sfuOps += 1
-                if len(desc) >= 12:
-                    sf_in = struct.unpack_from("<I", desc, 4)[0]
-                    sf_out = struct.unpack_from("<I", desc, 8)[0]
-                    stats.dmaBytesRead += sf_in
-                    stats.dmaBytesWritten += sf_out
-            elif opcode in (OP_VECTOR_ADD, OP_VECTOR_MUL):
+                if len(desc) >= 36:
+                    dim = struct.unpack_from("<I", desc, 32)[0]
+                    elements = dim & 0xFFFF
+                    stats.dmaBytesRead += elements * 2
+                    stats.dmaBytesWritten += elements * 2
+            elif opcode in (
+                OP_VECTOR_ADD, OP_VECTOR_MUL, OP_VRED_MAX, OP_VRED_SUM,
+                OP_VCONV, OP_VRESID,
+            ):
                 stats.vectorOps += 1
-                if len(desc) >= 16:
-                    va = struct.unpack_from("<I", desc, 4)[0]
-                    vb = struct.unpack_from("<I", desc, 8)[0]
-                    vo = struct.unpack_from("<I", desc, 12)[0]
-                    stats.dmaBytesRead += va + vb
-                    stats.dmaBytesWritten += vo
-            elif opcode == OP_DMA_COPY:
+                if len(desc) >= 36:
+                    elements = struct.unpack_from("<I", desc, 32)[0]
+                    stats.dmaBytesRead += elements * 4
+                    stats.dmaBytesWritten += elements * 4
+            elif opcode in (OP_DMA_COPY, OP_DMA_ST, OP_DMA_COPY_LDD, OP_DMA_COPY_STD):
                 stats.dmaOps += 1
+                if len(desc) >= 36:
+                    db = struct.unpack_from("<I", desc, 32)[0]
+                    stats.dmaBytesRead += db
+                    stats.dmaBytesWritten += db
+            elif opcode == OP_PCIE_DMA:
+                # PCIe DMA descriptor is 6 words; length at offset 12.
                 if len(desc) >= 16:
                     db = struct.unpack_from("<I", desc, 12)[0]
                     stats.dmaBytesRead += db
