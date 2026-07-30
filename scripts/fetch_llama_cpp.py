@@ -156,6 +156,9 @@ def integrate_backend(lock: Dict) -> bool:
     for src_file in GGML_NPU_SRC.iterdir():
         if src_file.name in ("README.md", "__pycache__"):
             continue
+        if src_file.name == "ggml-npu.cpp":
+            # Handled as a symlink below — the build always picks up the canonical source
+            continue
         if src_file.suffix == ".py" and src_file.name != "ggml-npu.cpp":
             # Keep only the backend source files; Python helpers stay in ggml-npu/
             continue
@@ -163,8 +166,19 @@ def integrate_backend(lock: Dict) -> bool:
         if src_file.is_file():
             shutil.copy2(str(src_file), str(dst))
 
-    # Also copy .cpp and .h explicitly
-    for name in ["ggml-npu.cpp", "ggml-npu.h"]:
+    # Create a symlink for ggml-npu.cpp so the build always uses the canonical source
+    # without requiring a manual copy after editing ggml-npu/ggml-npu.cpp.
+    src_cpp = GGML_NPU_SRC / "ggml-npu.cpp"
+    dst_cpp = target / "ggml-npu.cpp"
+    if src_cpp.exists():
+        if dst_cpp.exists() or dst_cpp.is_symlink():
+            dst_cpp.unlink()
+        rel_path = os.path.relpath(str(src_cpp), str(target))
+        dst_cpp.symlink_to(rel_path)
+        print(f"  symlink: {dst_cpp.relative_to(PROJECT_ROOT)} -> {rel_path}")
+
+    # Also copy .h explicitly (needed for include path resolution)
+    for name in ["ggml-npu.h"]:
         src = GGML_NPU_SRC / name
         dst = target / name
         if src.exists():
