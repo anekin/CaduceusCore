@@ -110,16 +110,27 @@ int cad_op_sfu(cad_command_blob_t *blob,
         return -1;
 
     cad_command_t cmd = {0};
-    static const uint32_t sfu_op_map[] = {
-        CAD_OP_SFU_SOFTMAX, CAD_OP_SFU_LAYERNORM, CAD_OP_SFU_GELU,
-        CAD_OP_SFU_RELU, CAD_OP_SFU_SILU, CAD_OP_ROPE, CAD_OP_SFU_RMSNORM,
+    /* Map opcode to the hardware SFU sub-op index written into
+     * descriptor d[10].  All SFU ops go through ring-entry opcode
+     * CAD_OP_SFU_SOFTMAX (0x01) except ROPE which uses CAD_OP_ROPE (0x05).
+     * The firmware dispatches on ring-entry opcode and reads the
+     * specific SFU function from the descriptor. */
+    static const int8_t opcode_to_hw_idx[256] = {
+        [CAD_OP_SFU_SOFTMAX]   = 0,
+        [CAD_OP_SFU_LAYERNORM] = 1,
+        [CAD_OP_SFU_GELU]      = 2,
+        [CAD_OP_SFU_RELU]      = 3,
+        [CAD_OP_SFU_SILU]      = 4,
+        [CAD_OP_ROPE]          = 5,
+        [CAD_OP_SFU_RMSNORM]   = 6,
     };
-    if (sfu_op >= (sizeof(sfu_op_map) / sizeof(sfu_op_map[0]))) return -1;
-    cmd.opcode = sfu_op_map[sfu_op];
+    int hw_idx = (sfu_op < 256) ? opcode_to_hw_idx[sfu_op] : -1;
+    if (hw_idx < 0) return -1;
+    cmd.opcode = (sfu_op == CAD_OP_ROPE) ? CAD_OP_ROPE : CAD_OP_SFU_SOFTMAX;
     cmd.kind = CAD_OPK_SFU;
     cmd.buffers[0] = input;
     cmd.buffers[1] = output;
-    cmd.u.sfu.sfu_op = sfu_op;
+    cmd.u.sfu.sfu_op = (uint32_t)hw_idx;
     cmd.u.sfu.elements = elements;
     cmd.u.sfu.head_dim = head_dim;
     cmd.u.sfu.pos = pos;

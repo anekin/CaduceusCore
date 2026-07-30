@@ -54,7 +54,7 @@ TEST_CASE("SFU descriptor carries dim, pos and sfu_op") {
     cad_command_blob_t *blob = cad_command_blob_create(CAD_CAP_SFU);
     cad_buffer_id_t in = cad_buffer_declare(blob, 5120, 64, 0x80000000);
     cad_buffer_id_t out = cad_buffer_declare(blob, 5120, 64, 0x80001000);
-    REQUIRE(cad_op_sfu(blob, 6, in, out, 2560, 0, 0, 0, nullptr) == 0);
+    REQUIRE(cad_op_sfu(blob, CAD_OP_SFU_RMSNORM, in, out, 2560, 0, 0, 0, nullptr) == 0);
 
     REQUIRE(cad_command_blob_lower(blob) == CAD_LOWER_OK);
 
@@ -134,7 +134,7 @@ TEST_CASE("Encoded blob round-trips through decoder") {
     cad_buffer_id_t out = cad_buffer_declare(blob, 10240, 64, 0x80020000);
     cad_buffer_id_t tmp = cad_buffer_declare(blob, 5120, 64, 0);
     REQUIRE(cad_op_mmul(blob, in, w, out, CAD_BUFFER_INVALID, 1, 2560, 2560, 0, nullptr) == 0);
-    REQUIRE(cad_op_sfu(blob, 6, out, tmp, 2560, 0, 0, 0, nullptr) == 0);
+    REQUIRE(cad_op_sfu(blob, CAD_OP_SFU_RMSNORM, out, tmp, 2560, 0, 0, 0, nullptr) == 0);
     REQUIRE(cad_op_barrier(blob) == 0);
 
     REQUIRE(cad_command_blob_lower(blob) == CAD_LOWER_OK);
