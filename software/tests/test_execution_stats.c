@@ -171,6 +171,7 @@ static void test_mmul_stats(cad_device_t dev) {
     TASSERT(stats.dma_bytes_read > 0, "dma_bytes_read > 0");
     TASSERT(stats.dma_bytes_written > 0, "dma_bytes_written > 0");
 
+    cadCommandListDestroy(cl);
     cadFenceDestroy(fence);
     cadQueueDestroy(queue);
     cadBufferFree(cmd_buf);
@@ -223,6 +224,7 @@ static void test_nop_zero_stats(cad_device_t dev) {
     TASSERT(s_err == CAD_ERROR_NOT_READY || stats.dma_bytes_read == 0, "nop dma_bytes_read == 0 or NOT_READY");
     TASSERT(s_err == CAD_ERROR_NOT_READY || stats.dma_bytes_written == 0, "nop dma_bytes_written == 0 or NOT_READY");
 
+    cadCommandListDestroy(cl);
     cadFenceDestroy(fence);
     cadQueueDestroy(queue);
 }

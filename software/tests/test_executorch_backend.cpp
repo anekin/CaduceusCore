@@ -89,6 +89,7 @@ TEST_CASE("Backend loads and executes a valid blob") {
     CHECK(st == CAD_ET_OK);
 
     /* Allocate and bind buffers */
+    cad_buffer_t buffers[4] = {NULL};
     for (uint32_t i = 1; i <= 4; i++) {
         cad_buffer_create_info_t binfo = {0};
         binfo.struct_size = CAD_BUFFER_CREATE_INFO_STRUCT_SIZE;
@@ -96,14 +97,17 @@ TEST_CASE("Backend loads and executes a valid blob") {
         cad_buffer_t buf = NULL;
         REQUIRE(cadBufferAllocate(device, &binfo, &buf) == CAD_SUCCESS);
         REQUIRE(cad_et_backend_bind_buffer(be, i, buf) == CAD_ET_OK);
+        buffers[i - 1] = buf;
     }
 
     /* Execute */
     st = cad_et_backend_execute(be);
     CHECK(st == CAD_ET_OK);
 
-    /* Cleanup (buffers freed by device close) */
     cad_et_backend_destroy(be);
+    for (int i = 0; i < 4; i++) {
+        if (buffers[i]) cadBufferFree(buffers[i]);
+    }
     cad_command_blob_encoded_free(blob_data);
     cadDeviceClose(device);
 }
@@ -256,6 +260,7 @@ TEST_CASE("Backend unbind buffer works") {
     CHECK(cad_et_backend_unbind_buffer(be, 0) == CAD_ET_BUFFER_ERROR);
 
     cad_et_backend_destroy(be);
+    cadBufferFree(buf);
     cad_command_blob_encoded_free(blob_data);
     cadDeviceClose(device);
 }
@@ -273,6 +278,7 @@ TEST_CASE("Backend execute propagates runtime submit error") {
     CHECK(cad_et_backend_load_blob(be, blob_data, blob_size) == CAD_ET_OK);
 
     /* Allocate and bind buffers */
+    cad_buffer_t buffers[4] = {NULL};
     for (uint32_t i = 1; i <= 4; i++) {
         cad_buffer_create_info_t binfo = {0};
         binfo.struct_size = CAD_BUFFER_CREATE_INFO_STRUCT_SIZE;
@@ -280,6 +286,7 @@ TEST_CASE("Backend execute propagates runtime submit error") {
         cad_buffer_t buf = NULL;
         REQUIRE(cadBufferAllocate(device, &binfo, &buf) == CAD_SUCCESS);
         REQUIRE(cad_et_backend_bind_buffer(be, i, buf) == CAD_ET_OK);
+        buffers[i - 1] = buf;
     }
 
     /* Inject a fault: next submit returns DEVICE_BUSY */
@@ -292,6 +299,9 @@ TEST_CASE("Backend execute propagates runtime submit error") {
     CHECK(err != NULL);
 
     cad_et_backend_destroy(be);
+    for (int i = 0; i < 4; i++) {
+        if (buffers[i]) cadBufferFree(buffers[i]);
+    }
     cad_command_blob_encoded_free(blob_data);
     cadDeviceClose(device);
 }
@@ -309,6 +319,7 @@ TEST_CASE("Backend re-uses shared Runtime — proved by mock op log") {
     REQUIRE(cad_et_backend_load_blob(be, blob_data, blob_size) == CAD_ET_OK);
 
     /* Bind buffers */
+    cad_buffer_t buffers[4] = {NULL};
     for (uint32_t i = 1; i <= 4; i++) {
         cad_buffer_create_info_t binfo = {0};
         binfo.struct_size = CAD_BUFFER_CREATE_INFO_STRUCT_SIZE;
@@ -316,6 +327,7 @@ TEST_CASE("Backend re-uses shared Runtime — proved by mock op log") {
         cad_buffer_t buf = NULL;
         REQUIRE(cadBufferAllocate(device, &binfo, &buf) == CAD_SUCCESS);
         REQUIRE(cad_et_backend_bind_buffer(be, i, buf) == CAD_ET_OK);
+        buffers[i - 1] = buf;
     }
 
     REQUIRE(cad_et_backend_execute(be) == CAD_ET_OK);
@@ -336,6 +348,9 @@ TEST_CASE("Backend re-uses shared Runtime — proved by mock op log") {
     CHECK(has_submit);
 
     cad_et_backend_destroy(be);
+    for (int i = 0; i < 4; i++) {
+        if (buffers[i]) cadBufferFree(buffers[i]);
+    }
     cad_command_blob_encoded_free(blob_data);
     cadDeviceClose(device);
 }

@@ -405,9 +405,11 @@ int main(int argc, char *argv[]) {
     if (err != CAD_SUCCESS) {
         fprintf(stderr, "FAIL: cadQueueSubmit -> %s\n",
                 cadErrorString(err));
+        cadCommandListDestroy(cl);
         cadFenceDestroy(fence);
         return 1;
     }
+    cadCommandListDestroy(cl);
 
     printf("  Waiting for fence...\n");
     err = cadFenceWait(fence, CAD_TIMEOUT_INFINITE);
@@ -605,8 +607,10 @@ static int test_corrupted_weight(cad_device_t dev) {
     err = cadQueueSubmit(queue, cl, fence);
     if (err != CAD_SUCCESS) {
         cadFenceDestroy(fence); cadQueueDestroy(queue);
+        cadCommandListDestroy(cl);
         goto cleanup1;
     }
+    cadCommandListDestroy(cl);
 
     err = cadFenceWait(fence, CAD_TIMEOUT_INFINITE);
     if (err != CAD_SUCCESS) {
@@ -824,6 +828,7 @@ static int test_reset_recovery(cad_device_t dev, const char *uri) {
         cadFenceCreate(dev, &fi, &fence);
 
         cadQueueSubmit(queue, cl, fence);
+        cadCommandListDestroy(cl);
         cadFenceWait(fence, CAD_TIMEOUT_INFINITE);
 
         float *output_f32 = (float *)calloc(MMUL_N, sizeof(float));
@@ -920,6 +925,7 @@ static int test_reset_recovery(cad_device_t dev, const char *uri) {
         cadFenceCreate(dev, &fi2, &f2);
 
         cadQueueSubmit(q2, cl2, f2);
+        cadCommandListDestroy(cl2);
         cadFenceWait(f2, CAD_TIMEOUT_INFINITE);
 
         float *output_f32 = (float *)calloc(MMUL_N, sizeof(float));

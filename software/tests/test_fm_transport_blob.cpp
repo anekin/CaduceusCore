@@ -101,9 +101,11 @@ int main() {
     err = cadQueueSubmit(queue, cl, fence);
     if (err != CAD_SUCCESS) {
         fprintf(stderr, "FAIL: cadQueueSubmit -> %s\n", cadErrorString(err));
-        cadFenceDestroy(fence); cadQueueDestroy(queue);
-        cadBufferFree(buf); cadDeviceClose(dev); return 1;
+        cadCommandListDestroy(cl); cadFenceDestroy(fence);
+        cadQueueDestroy(queue); cadBufferFree(buf); cadDeviceClose(dev); return 1;
     }
+
+    cadCommandListDestroy(cl);
 
     /* Verify captured payload */
     uint32_t size = 0;

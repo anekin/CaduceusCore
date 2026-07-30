@@ -258,8 +258,8 @@ NEG_TEST(submit_consumed_command_list) {
     /* Second submit with same (now submitted) command list: must fail */
     assert(cadQueueSubmit(queue, cl, nullptr) == CAD_ERROR_INVALID_HANDLE);
 
-    /* Can't destroy a submitted command list */
-    assert(cadCommandListDestroy(cl) == CAD_ERROR_INVALID_HANDLE);
+    /* After W3T9 lifecycle fix, destroying a submitted command list succeeds. */
+    assert(cadCommandListDestroy(cl) == CAD_SUCCESS);
 
     assert(cadFenceDestroy(fence) == CAD_SUCCESS);
     assert(cadQueueDestroy(queue) == CAD_SUCCESS);

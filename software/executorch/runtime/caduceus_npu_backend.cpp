@@ -308,12 +308,11 @@ cad_et_status_t cad_et_backend_execute(cad_et_backend_t backend) {
     err = cadQueueSubmit(be->queue, cmd_list, fence);
     if (err != CAD_SUCCESS) {
         cadFenceDestroy(fence);
-        /* On submit failure, caller retains ownership of cmd_list */
         cadCommandListDestroy(cmd_list);
         set_error(be, "cadQueueSubmit failed", err);
         return CAD_ET_EXECUTE_ERROR;
     }
-    /* After successful submit, ownership transferred — do not destroy cmd_list */
+    cadCommandListDestroy(cmd_list);
 
     err = cadFenceWait(fence, CAD_TIMEOUT_INFINITE);
     cad_fence_status_t fstatus;

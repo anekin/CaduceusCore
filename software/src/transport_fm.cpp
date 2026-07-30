@@ -235,7 +235,8 @@ static int fm_recv_message(int fd, cd::DeviceMessageT *msg) {
         if (computed != claimed) return CAD_TR_ERR_INVAL;
     }
 
-    auto unpacked = cd::GetDeviceMessage(wire.data())->UnPack();
+    std::unique_ptr<cd::DeviceMessageT> unpacked(
+        cd::GetDeviceMessage(wire.data())->UnPack());
     *msg = std::move(*unpacked);
     return CAD_TR_SUCCESS;
 }
@@ -300,7 +301,9 @@ static int fm_send_request(fm_transport_t *tr, cd::DeviceOpcode opcode,
     if (response->header->request_id() != rid) return CAD_TR_ERR_INVAL;
 
     if (response->header->status() != (uint32_t)cd::DeviceStatus_STATUS_OK) {
-        auto err_msg = flatbuffers::GetRoot<cd::ErrorResponse>(response->payload.data())->UnPack();
+        std::unique_ptr<cd::ErrorResponseT> err_msg(
+            flatbuffers::GetRoot<cd::ErrorResponse>(response->payload.data())->UnPack());
+        (void)err_msg;
         switch ((cd::DeviceStatus)response->header->status()) {
         case cd::DeviceStatus_STATUS_OUT_OF_MEMORY: return CAD_TR_ERR_NOMEM;
         case cd::DeviceStatus_STATUS_TIMEOUT: return CAD_TR_ERR_TIMEDOUT;
@@ -379,7 +382,8 @@ static int fm_buffer_alloc(void *tpriv, cad_transport_buffer_t **out,
     int err = fm_send_request(tr, cd::DeviceOpcode_OPCODE_BUFFER_ALLOC, inner_fbb, &resp);
     if (err != CAD_TR_SUCCESS) return err;
 
-    auto inner = flatbuffers::GetRoot<cd::BufferAllocResponse>(resp.payload.data())->UnPack();
+    std::unique_ptr<cd::BufferAllocResponseT> inner(
+        flatbuffers::GetRoot<cd::BufferAllocResponse>(resp.payload.data())->UnPack());
 
     uint64_t *handle = (uint64_t *)malloc(sizeof(uint64_t));
     if (!handle) return CAD_TR_ERR_NOMEM;
@@ -417,7 +421,8 @@ static int fm_buffer_read(void *tpriv, cad_transport_buffer_t *bf,
     int err = fm_send_request(tr, cd::DeviceOpcode_OPCODE_BUFFER_READ, inner_fbb, &resp);
     if (err != CAD_TR_SUCCESS) return err;
 
-    auto inner = flatbuffers::GetRoot<cd::BufferReadResponse>(resp.payload.data())->UnPack();
+    std::unique_ptr<cd::BufferReadResponseT> inner(
+        flatbuffers::GetRoot<cd::BufferReadResponse>(resp.payload.data())->UnPack());
     if (inner->data.size() != size) return CAD_TR_ERR_INVAL;
     memcpy(dst, inner->data.data(), size);
     return CAD_TR_SUCCESS;
@@ -453,7 +458,8 @@ static uint64_t fm_buffer_size(void *tpriv, cad_transport_buffer_t *bf) {
         != CAD_TR_SUCCESS) {
         return 0;
     }
-    auto inner = flatbuffers::GetRoot<cd::BufferSizeResponse>(resp.payload.data())->UnPack();
+    std::unique_ptr<cd::BufferSizeResponseT> inner(
+        flatbuffers::GetRoot<cd::BufferSizeResponse>(resp.payload.data())->UnPack());
     return inner->size;
 }
 
@@ -469,7 +475,8 @@ static int fm_fence_create(void *tpriv, cad_transport_fence_t **out) {
     int err = fm_send_request(tr, cd::DeviceOpcode_OPCODE_FENCE_CREATE, inner_fbb, &resp);
     if (err != CAD_TR_SUCCESS) return err;
 
-    auto inner = flatbuffers::GetRoot<cd::FenceCreateResponse>(resp.payload.data())->UnPack();
+    std::unique_ptr<cd::FenceCreateResponseT> inner(
+        flatbuffers::GetRoot<cd::FenceCreateResponse>(resp.payload.data())->UnPack());
 
     uint64_t *handle = (uint64_t *)malloc(sizeof(uint64_t));
     if (!handle) return CAD_TR_ERR_NOMEM;
@@ -507,7 +514,8 @@ static int fm_fence_wait(void *tpriv, cad_transport_fence_t *fence,
     if (err == CAD_TR_ERR_TIMEDOUT) return CAD_TR_ERR_TIMEDOUT;
     if (err != CAD_TR_SUCCESS) return err;
 
-    auto inner = flatbuffers::GetRoot<cd::FenceWaitResponse>(resp.payload.data())->UnPack();
+    std::unique_ptr<cd::FenceWaitResponseT> inner(
+        flatbuffers::GetRoot<cd::FenceWaitResponse>(resp.payload.data())->UnPack());
     return inner->signalled ? CAD_TR_SUCCESS : CAD_TR_ERR_NOTREADY;
 }
 
@@ -525,7 +533,8 @@ static int fm_fence_poll(void *tpriv, cad_transport_fence_t *fence) {
     if (err == CAD_TR_ERR_NOTREADY) return CAD_TR_ERR_NOTREADY;
     if (err != CAD_TR_SUCCESS) return err;
 
-    auto inner = flatbuffers::GetRoot<cd::FencePollResponse>(resp.payload.data())->UnPack();
+    std::unique_ptr<cd::FencePollResponseT> inner(
+        flatbuffers::GetRoot<cd::FencePollResponse>(resp.payload.data())->UnPack());
     return inner->signalled ? CAD_TR_SUCCESS : CAD_TR_ERR_NOTREADY;
 }
 
@@ -542,7 +551,8 @@ static int fm_fence_status(void *tpriv, cad_transport_fence_t *fence) {
     int err = fm_send_request(tr, cd::DeviceOpcode_OPCODE_FENCE_STATUS, inner_fbb, &resp);
     if (err != CAD_TR_SUCCESS) return 2; /* error */
 
-    auto inner = flatbuffers::GetRoot<cd::FenceStatusResponse>(resp.payload.data())->UnPack();
+    std::unique_ptr<cd::FenceStatusResponseT> inner(
+        flatbuffers::GetRoot<cd::FenceStatusResponse>(resp.payload.data())->UnPack());
     return (int)inner->status;
 }
 

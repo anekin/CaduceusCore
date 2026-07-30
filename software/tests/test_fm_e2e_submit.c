@@ -244,9 +244,11 @@ int main(int argc, char *argv[]) {
     if (err != CAD_SUCCESS) {
         fprintf(stderr, "FAIL: cadQueueSubmit -> %s\n",
                 fm_error_string(dev, err));
+        cadCommandListDestroy(cl);
         cadFenceDestroy(fence);
         return 1;
     }
+    cadCommandListDestroy(cl);
 
     printf("  Waiting for fence...\n");
     err = cadFenceWait(fence, CAD_TIMEOUT_INFINITE);

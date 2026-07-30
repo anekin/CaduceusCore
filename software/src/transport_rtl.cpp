@@ -296,7 +296,8 @@ static int rtl_recv_message(int fd, cd::DeviceMessageT *msg) {
         if (computed != fb_header->checksum()) return CAD_TR_ERR_INVAL;
     }
 
-    auto unpacked = cd::GetDeviceMessage(wire.data())->UnPack();
+    std::unique_ptr<cd::DeviceMessageT> unpacked(
+        cd::GetDeviceMessage(wire.data())->UnPack());
     *msg = std::move(*unpacked);
     return CAD_TR_SUCCESS;
 }
@@ -469,8 +470,8 @@ static int rtl_buffer_alloc(void *tpriv, cad_transport_buffer_t **out,
                                inner, &resp);
     if (err != CAD_TR_SUCCESS) return err;
 
-    auto result = flatbuffers::GetRoot<cd::BufferAllocResponse>(
-        resp.payload.data())->UnPack();
+    std::unique_ptr<cd::BufferAllocResponseT> result(
+        flatbuffers::GetRoot<cd::BufferAllocResponse>(resp.payload.data())->UnPack());
     uint64_t *handle = (uint64_t *)malloc(sizeof(uint64_t));
     if (!handle) return CAD_TR_ERR_NOMEM;
     *handle = result->handle;
@@ -509,8 +510,8 @@ static int rtl_buffer_read(void *tpriv, cad_transport_buffer_t *bf,
                                inner, &resp);
     if (err != CAD_TR_SUCCESS) return err;
 
-    auto result = flatbuffers::GetRoot<cd::BufferReadResponse>(
-        resp.payload.data())->UnPack();
+    std::unique_ptr<cd::BufferReadResponseT> result(
+        flatbuffers::GetRoot<cd::BufferReadResponse>(resp.payload.data())->UnPack());
     if (result->data.size() != size) return CAD_TR_ERR_INVAL;
     memcpy(dst, result->data.data(), size);
     return CAD_TR_SUCCESS;
@@ -546,8 +547,8 @@ static uint64_t rtl_buffer_size(void *tpriv, cad_transport_buffer_t *bf) {
     if (rtl_send_request(tr, cd::DeviceOpcode_OPCODE_BUFFER_SIZE,
                          inner, &resp) != CAD_TR_SUCCESS)
         return 0;
-    auto result = flatbuffers::GetRoot<cd::BufferSizeResponse>(
-        resp.payload.data())->UnPack();
+    std::unique_ptr<cd::BufferSizeResponseT> result(
+        flatbuffers::GetRoot<cd::BufferSizeResponse>(resp.payload.data())->UnPack());
     return result->size;
 }
 
@@ -564,8 +565,8 @@ static int rtl_fence_create(void *tpriv, cad_transport_fence_t **out) {
                                inner, &resp);
     if (err != CAD_TR_SUCCESS) return err;
 
-    auto result = flatbuffers::GetRoot<cd::FenceCreateResponse>(
-        resp.payload.data())->UnPack();
+    std::unique_ptr<cd::FenceCreateResponseT> result(
+        flatbuffers::GetRoot<cd::FenceCreateResponse>(resp.payload.data())->UnPack());
     uint64_t *handle = (uint64_t *)malloc(sizeof(uint64_t));
     if (!handle) return CAD_TR_ERR_NOMEM;
     *handle = result->handle;
@@ -604,8 +605,8 @@ static int rtl_fence_wait(void *tpriv, cad_transport_fence_t *fence,
     if (err == CAD_TR_ERR_TIMEDOUT) return CAD_TR_ERR_TIMEDOUT;
     if (err != CAD_TR_SUCCESS) return err;
 
-    auto result = flatbuffers::GetRoot<cd::FenceWaitResponse>(
-        resp.payload.data())->UnPack();
+    std::unique_ptr<cd::FenceWaitResponseT> result(
+        flatbuffers::GetRoot<cd::FenceWaitResponse>(resp.payload.data())->UnPack());
     return result->signalled ? CAD_TR_SUCCESS : CAD_TR_ERR_NOTREADY;
 }
 
@@ -624,8 +625,8 @@ static int rtl_fence_poll(void *tpriv, cad_transport_fence_t *fence) {
     if (err == CAD_TR_ERR_NOTREADY) return CAD_TR_ERR_NOTREADY;
     if (err != CAD_TR_SUCCESS) return err;
 
-    auto result = flatbuffers::GetRoot<cd::FencePollResponse>(
-        resp.payload.data())->UnPack();
+    std::unique_ptr<cd::FencePollResponseT> result(
+        flatbuffers::GetRoot<cd::FencePollResponse>(resp.payload.data())->UnPack());
     return result->signalled ? CAD_TR_SUCCESS : CAD_TR_ERR_NOTREADY;
 }
 
@@ -642,8 +643,8 @@ static int rtl_fence_status(void *tpriv, cad_transport_fence_t *fence) {
     int err = rtl_send_request(tr, cd::DeviceOpcode_OPCODE_FENCE_STATUS,
                                inner, &resp);
     if (err != CAD_TR_SUCCESS) return 2;
-    auto result = flatbuffers::GetRoot<cd::FenceStatusResponse>(
-        resp.payload.data())->UnPack();
+    std::unique_ptr<cd::FenceStatusResponseT> result(
+        flatbuffers::GetRoot<cd::FenceStatusResponse>(resp.payload.data())->UnPack());
     return (int)result->status;
 }
 
