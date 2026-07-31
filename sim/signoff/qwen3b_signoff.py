@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from signoff.device_server_fixture import managed_device_server
 from signoff.qwen3b_signoff_config import (
     BackendBundle,
     SignoffConfig,
@@ -29,7 +30,6 @@ from signoff.qwen3b_signoff_io import (
     _compare_hidden,
     _llama_env,
     _parse_generated_text,
-    managed_device_server,
 )
 
 __all__ = [

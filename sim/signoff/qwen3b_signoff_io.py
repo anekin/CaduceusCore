@@ -4,13 +4,11 @@
 from __future__ import annotations
 
 import contextlib
-import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 from typing import Iterator
 
@@ -182,41 +180,3 @@ def _run_llama_cli_decode(
     return _parse_generated_text(proc.stdout, prompt)
 
 
-@contextlib.contextmanager
-def managed_device_server(uri: str) -> Iterator[str]:
-    """Translate fm://spike to a unix socket and start the device server."""
-    if uri == "fm://spike":
-        sock = Path("/tmp/caduceus_fm_spike.sock")
-        sock.unlink(missing_ok=True)
-        server_cmd = [
-            sys.executable, "-m", "sim.device_server",
-            "--spike", "--sock", str(sock),
-        ]
-        env = os.environ.copy()
-        env["PYTHONPATH"] = "sim:gen"
-        proc = subprocess.Popen(
-            server_cmd,
-            cwd=str(REPO_ROOT),
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        try:
-            deadline = time.time() + 30.0
-            while time.time() < deadline and not sock.exists():
-                if proc.poll() is not None:
-                    raise SignoffError("device server exited before socket was ready")
-                time.sleep(0.1)
-            if not sock.exists():
-                raise SignoffError("timed out waiting for device server socket")
-            yield f"fm://unix?path={sock}"
-        finally:
-            proc.terminate()
-            try:
-                proc.wait(timeout=10.0)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-            sock.unlink(missing_ok=True)
-    else:
-        yield uri

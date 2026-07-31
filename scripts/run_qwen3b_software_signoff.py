@@ -18,6 +18,7 @@ from pathlib import Path
 _PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT / "sim"))
 
+from signoff.device_server_fixture import managed_device_server  # noqa: E402
 from signoff.qwen3b_signoff import (  # noqa: E402
     SignoffConfig,
     SignoffError,
@@ -84,10 +85,11 @@ def main(argv: list[str] | None = None) -> int:
     combined = _EVIDENCE_DIR / "task-17-qwen3b-software.json"
 
     if args.command == "positive":
-        payload = run_positive_signoff(
-            config, args.device, Path(args.evidence),
-            gate_filter=getattr(args, "gate_filter", None),
-        )
+        with managed_device_server(args.device) as resolved_uri:
+            payload = run_positive_signoff(
+                config, resolved_uri, Path(args.evidence),
+                gate_filter=getattr(args, "gate_filter", None),
+            )
         write_combined_evidence(combined)
         print(f"Positive signoff verdict: {payload['verdict']}")
         print(f"Evidence written to: {args.evidence}")

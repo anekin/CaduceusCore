@@ -8,6 +8,7 @@ import os
 import time
 from pathlib import Path
 
+from signoff.device_server_fixture import is_spike_device, managed_device_server
 from signoff.qwen3b_signoff_config import (
     NPU_BACKEND_NAME,
     SignoffConfig,
@@ -27,7 +28,6 @@ from signoff.qwen3b_signoff_io import (
     _backend_workdir,
     _llama_env,
     _run,
-    managed_device_server,
 )
 
 
@@ -47,7 +47,7 @@ def run_positive_signoff(
 
     use_spike_gate = (
         gate_filter == "single_decode_token"
-        or device_uri in ("fm://spike",)
+        or is_spike_device(device_uri)
     )
 
     with managed_device_server(device_uri) as resolved_uri:
