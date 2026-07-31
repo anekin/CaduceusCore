@@ -453,7 +453,7 @@ def generate_summary(iter_n: int, issues: List[str], sweep: Dict, e2e: Dict):
         f"> **M=1 decode is DRAM-bandwidth-bound**: {dram_demand:.1f}/{dram_available} GB/s ({bw_pct:.0f}%) — explains why all 5 array sizes produce nearly identical ~{sweep.get('baseline_tok_s', 0):.0f} tok/s.",
         f"> **M≥2 batch shifts bottleneck to compute**: tiling overhead amortized, throughput scales with M.",
         f"> **Batch decode (raw)**: {batch_min}-{batch_max} tok/s on {_H}×{_W}. With inter-op parallelism projected {interop_min}-{interop_max} tok/s.",
-        f"> **Per-tile DRAM is fine**: DMA ({int((_H*_W*4/8+_H*8/8)/43.52):.0f} cycles) ≪ per-tile compute — but M=1's aggregate BW demand dominates.",
+        f"> **Per-tile DRAM is fine**: DMA ({int((_H*_W*4/8+_H*8/8)/dram_available):.0f} cycles) ≪ per-tile compute — but M=1's aggregate BW demand dominates.",
     ]
     lines += [
         "",
