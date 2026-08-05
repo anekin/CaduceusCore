@@ -18,6 +18,10 @@ from pathlib import Path
 _PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT / "sim"))
 
+from signoff._ensure_pythonpath import ensure_repo_pythonpath  # noqa: E402
+
+ensure_repo_pythonpath(_PROJECT)
+
 from signoff.device_server_fixture import managed_device_server  # noqa: E402
 from signoff.qwen3b_signoff import (  # noqa: E402
     SignoffConfig,
@@ -49,6 +53,11 @@ def _positive_args(parser: argparse.ArgumentParser) -> None:
         "--gate", default=None, dest="gate_filter",
         help="Run only the named gate (e.g. single_decode_token, full_shape_blk0). "
              "When omitted, all enabled gates run.",
+    )
+    parser.add_argument(
+        "--n-predict", type=int, default=None, dest="n_predict_override",
+        help="Override n_predict for the multi_token_decode_with_kv gate "
+             "(default: config/qwen3b-signoff.json value, currently 128).",
     )
 
 
@@ -89,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
             payload = run_positive_signoff(
                 config, resolved_uri, Path(args.evidence),
                 gate_filter=getattr(args, "gate_filter", None),
+                n_predict_override=getattr(args, "n_predict_override", None),
             )
         write_combined_evidence(combined)
         print(f"Positive signoff verdict: {payload['verdict']}")

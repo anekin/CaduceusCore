@@ -93,8 +93,8 @@ class CommandBlob:
             2: abi.EngineOp.SFU_GELU,
             3: abi.EngineOp.SFU_RELU,
             4: abi.EngineOp.SFU_SILU,
-            5: abi.EngineOp.ROPE,
-            6: abi.EngineOp.SFU_RMSNORM,
+            5: abi.EngineOp.SFU_RELU,  # HardSwish (CV F32 path)
+            6: abi.EngineOp.SFU_RELU,  # HardSigmoid (CV F32 path)
         }
         self.commands.append(
             Command(

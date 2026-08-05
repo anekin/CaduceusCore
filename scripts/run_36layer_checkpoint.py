@@ -26,9 +26,9 @@ def get_git_commit() -> str:
         return "unknown"
 
 
-def verify_golden_files(layers: List[int]) -> bool:
+def verify_golden_files(layers: List[int], golden_dir: Path) -> bool:
     for l in layers:
-        p = GOLDEN_DIR / f"expected_l{l}.npz"
+        p = golden_dir / f"expected_l{l}.npz"
         if not p.exists():
             print(f"ERROR: missing golden file: {p}")
             return False
@@ -73,7 +73,7 @@ def run_ibex_smoke() -> Dict:
     return result
 
 
-def run_checkpoints(model_path: str, layers: List[int]) -> Dict:
+def run_checkpoints(model_path: str, layers: List[int], golden_dir: Path) -> Dict:
     print(f"Loading GGUF model: {model_path}")
     if not Path(model_path).exists():
         return {"error": f"model not found: {model_path}"}
@@ -91,7 +91,7 @@ def run_checkpoints(model_path: str, layers: List[int]) -> Dict:
     print("Checkpoint Validation: FM Re-run vs Golden")
     print(f"{'='*60}")
     for layer_idx in layers:
-        golden_path = GOLDEN_DIR / f"expected_l{layer_idx}.npz"
+        golden_path = golden_dir / f"expected_l{layer_idx}.npz"
         golden_data = np.load(golden_path, allow_pickle=True)
         golden_output = golden_data["output"].astype(np.float32)
         golden_data.close()
@@ -198,22 +198,26 @@ def main():
     parser.add_argument("--ibex-smoke", action="store_true", help="Run Ibex RTL FM-SOC-001 smoke test")
     parser.add_argument("--layers", type=int, nargs="+", default=DEFAULT_CHECKPOINTS)
     parser.add_argument("--model", type=str, default=DEFAULT_MODEL)
+    parser.add_argument("--checkpoint-dir", type=str, default=None,
+                        help="Directory containing expected_l{N}.npz golden files (default: %(default)s)")
     parser.add_argument("--no-amend", action="store_true", help="Skip learnings.md")
     args = parser.parse_args()
 
     model_path: str = args.model
     layers: List[int] = args.layers
+    golden_dir: Path = Path(args.checkpoint_dir) if args.checkpoint_dir else GOLDEN_DIR
     commit = get_git_commit()
     print(f"Commit: {commit}")
     print(f"Model:  {model_path}")
+    print(f"Golden dir: {golden_dir}")
 
-    if not verify_golden_files(layers):
+    if not verify_golden_files(layers, golden_dir):
         print("ERROR: missing golden files, aborting")
         sys.exit(1)
 
     print("\n--- Running Func Model forward pass ---")
     t0 = time.time()
-    checkpoint_results = run_checkpoints(model_path, layers)
+    checkpoint_results = run_checkpoints(model_path, layers, golden_dir)
     if "error" in checkpoint_results:
         print(f"ERROR: {checkpoint_results['error']}")
         sys.exit(1)

@@ -27,6 +27,9 @@ vc_hdrs.h
 # OMO build artifacts
 .omo/*.log
 .omo/simv_*
+# Generated evidence artifacts (large per-run JSON/NPZ files; keep source + final reports only)
+.omo/evidence/*.npz
+.omo/evidence/*.json
 
 # Generated firmware binaries
 firmware/build/*.bin

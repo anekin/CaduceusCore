@@ -89,6 +89,44 @@ def _parse_generated_text(stdout: str, prompt: str) -> str:
     return ""
 
 
+def _parse_generated_text_full(stdout: str, prompt: str) -> str:
+    """Extract the *full* generated region that follows the prompt echo.
+
+    Unlike :func:`_parse_generated_text` (first line only), this spans every
+    line between the prompt echo and the trailing ``[ Prompt: ... ]`` perf
+    summary, so multi-token decode comparisons cover the whole generated
+    sequence rather than just its first line.
+    """
+    clean = _strip_ansi(stdout)
+    marker = f"> {prompt}"
+    idx = clean.find(marker)
+    if idx < 0:
+        return ""
+    after = clean[idx + len(marker) :]
+    end = after.find("[ Prompt:")
+    if end >= 0:
+        after = after[:end]
+    parts = [line.strip() for line in after.splitlines() if line.strip()]
+    return " ".join(parts)
+
+
+def _count_generated_tokens(text: str, model_path: Path) -> int | None:
+    """Best-effort token count of *text* via the GGUF-backed Python tokenizer.
+
+    Returns None when the tokenizer cannot be loaded (missing ``tokenizers``
+    package or GGUF read failure) so callers can fall back to the requested
+    ``n_predict`` value without failing the gate.
+    """
+    if not text:
+        return 0
+    try:
+        from sim.tokenizer import tokenize
+
+        return len(tokenize(text, str(model_path)))
+    except Exception:
+        return None
+
+
 def _run_dump_hidden_states(
     config: SignoffConfig,
     workdir: Path,
@@ -155,11 +193,15 @@ def _run_llama_cli_decode(
     n_predict: int,
     timeout: float = 900.0,
     return_proc: bool = False,
+    ignore_eos: bool = False,
 ) -> str | subprocess.CompletedProcess[str]:
     """Run llama cli in single-turn mode and return the generated text.
 
     If *return_proc* is True, returns the completed process so callers can
-    inspect stderr (e.g. for per-fence execution stats).
+    inspect stderr (e.g. for per-fence execution stats).  When *ignore_eos*
+    is True the ``--ignore-eos`` flag is added so generation runs for the
+    full *n_predict* tokens (required to stress the KV cache at long
+    sequences instead of stopping at the first EOS).
     """
     cmd = [
         str(workdir / "llama"), "cli",
@@ -171,7 +213,14 @@ def _run_llama_cli_decode(
         "--top-k", str(config.top_k),
         "--top-p", str(config.top_p),
         "--single-turn",
+        # Basic console IO: llama-cli's advanced display suppresses stdout in
+        # limited-console environments (e.g. tmux), which would empty the
+        # captured output and break text comparison.  The gate always runs in
+        # a captured subprocess, so plain output is the correct mode.
+        "--simple-io",
     ]
+    if ignore_eos:
+        cmd.append("--ignore-eos")
     proc = _run(cmd, workdir, env, timeout=timeout)
     if proc.returncode != 0:
         raise SignoffError(f"llama cli failed: {proc.stderr[-1000:]}")

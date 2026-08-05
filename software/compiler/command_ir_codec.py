@@ -58,7 +58,7 @@ def encode_blob(blob: "CommandBlob") -> bytes:
 
     cmd_ring_off = off
     for i, cmd in enumerate(blob.commands):
-        entry_off = off + i * CAD_CMD_ENTRY_BYTES
+        entry_off = cmd_ring_off + i * CAD_CMD_ENTRY_BYTES
         buf[entry_off : entry_off + 4] = struct.pack("<I", cmd.opcode)
         buf[entry_off + 4 : entry_off + 8] = struct.pack("<I", cmd.desc_index * CAD_DESC_BYTES)
         dep_mask = 0
@@ -164,9 +164,15 @@ def _build_descriptor(blob: "CommandBlob", cmd: Command) -> bytes:
         sfu_op, elements, head_dim, pos = cmd.sfu  # type: ignore[misc]
         d[0] = bufs[0].phys_addr
         d[2] = bufs[1].phys_addr
-        d[8] = (head_dim << 16) | (elements & 0xFFFF)
-        d[9] = pos
-        d[10] = sfu_op
+        if blob.version_minor >= 1:
+            d[8] = elements
+            d[9] = head_dim
+            d[10] = pos
+            d[11] = sfu_op
+        else:
+            d[8] = (head_dim << 16) | (elements & 0xFFFF)
+            d[9] = pos
+            d[10] = sfu_op
     elif cmd.kind == "vector":
         bufs = [blob.buffers[b - 1] if b else None for b in cmd.buffers[:3]]
         _, elements = cmd.vector  # type: ignore[misc]
@@ -206,14 +212,21 @@ def _decode_descriptor(blob: "CommandBlob", opcode: int, desc: bytes) -> Command
         abi.EngineOp.ROPE,
         abi.EngineOp.SFU_RMSNORM,
     ):
-        elements = d[8] & 0xFFFF
-        head_dim = (d[8] >> 16) & 0xFFFF
-        sfu_op = d[10]
+        if blob.version_minor >= 1:
+            elements = d[8]
+            head_dim = d[9]
+            pos = d[10]
+            sfu_op = d[11]
+        else:
+            elements = d[8] & 0xFFFF
+            head_dim = (d[8] >> 16) & 0xFFFF
+            pos = d[9]
+            sfu_op = d[10]
         return Command(
             opcode=opcode,
             kind="sfu",
             buffers=[_find_buf(blob, d[0]), _find_buf(blob, d[2]), 0, 0],
-            sfu=(sfu_op, elements, head_dim, d[9]),
+            sfu=(sfu_op, elements, head_dim, pos),
         )
     elif opcode in (
         abi.EngineOp.VADD,

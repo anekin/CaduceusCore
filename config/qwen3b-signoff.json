@@ -97,7 +97,7 @@
     "multi_token_decode_with_kv": {
       "enabled": true,
       "prompt": "prefill",
-      "n_predict": 3,
+      "n_predict": 128,
       "expected_nodes": {
         "supported": 38,
         "fallback": 0

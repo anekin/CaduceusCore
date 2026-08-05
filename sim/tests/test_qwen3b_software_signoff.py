@@ -20,6 +20,14 @@ from signoff.qwen3b_signoff import (
     run_negative_signoff,
     verify_model_hash,
 )
+from signoff.qwen3b_signoff_gates import (
+    _FALLBACK_N_PREDICT,
+    _decode_failure_reason,
+)
+from signoff.qwen3b_signoff_io import (
+    _count_generated_tokens,
+    _parse_generated_text_full,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = REPO_ROOT / "config" / "qwen3b-signoff.json"
@@ -75,6 +83,57 @@ def test_parse_generated_text_missing_prompt() -> None:
     assert _parse_generated_text("no prompt here", "Hello") == ""
 
 
+def test_parse_generated_text_full_spans_all_lines() -> None:
+    raw = (
+        "\n> Hello\n"
+        "Hello! How can I assist\n"
+        "you today\n"
+        "[ Prompt: 25.4 t/s | Generation: 1.2 t/s ]\n"
+        "Exiting...\n"
+    )
+    assert _parse_generated_text_full(raw, "Hello") == "Hello! How can I assist you today"
+
+
+def test_parse_generated_text_full_strips_ansi() -> None:
+    raw = "\x1b[31m> Hello\nHello!\x1b[0m\n[ Prompt: 1 t/s ]\n"
+    assert _parse_generated_text_full(raw, "Hello") == "Hello!"
+
+
+def test_parse_generated_text_full_missing_prompt() -> None:
+    assert _parse_generated_text_full("no prompt here", "Hello") == ""
+
+
+def test_parse_generated_text_full_no_perf_line() -> None:
+    raw = "\n> Hello\nHello! How\n"
+    assert _parse_generated_text_full(raw, "Hello") == "Hello! How"
+
+
+def test_decode_failure_reason_oom() -> None:
+    reason = _decode_failure_reason(RuntimeError("std::bad_alloc"), 128)
+    assert reason.startswith("OOM at n_predict=128")
+
+
+def test_decode_failure_reason_timeout() -> None:
+    import subprocess
+
+    reason = _decode_failure_reason(subprocess.TimeoutExpired("cmd", 10.0), 128)
+    assert reason == "timeout at n_predict=128"
+
+
+def test_decode_failure_reason_generic() -> None:
+    reason = _decode_failure_reason(ValueError("boom"), 128)
+    assert reason.startswith("ValueError at n_predict=128")
+
+
+def test_fallback_n_predict_is_small() -> None:
+    assert _FALLBACK_N_PREDICT == 8
+    assert _FALLBACK_N_PREDICT < 128
+
+
+def test_count_generated_tokens_empty() -> None:
+    assert _count_generated_tokens("", _model_path()) == 0
+
+
 def test_compare_hidden_identical(tmp_path: Path) -> None:
     arr = np.random.RandomState(0).randn(2, 2048).astype(np.float32)
     cpu = tmp_path / "cpu.npz"
@@ -102,13 +161,15 @@ def test_compare_hidden_different(tmp_path: Path) -> None:
 def test_negative_signoff_detects_corruption(tmp_path: Path) -> None:
     cfg = load_config(DEFAULT_CONFIG)
     evidence = tmp_path / "negative.json"
-    payload = run_negative_signoff(cfg, evidence)
+    payload = run_negative_signoff(cfg, evidence, "mock://")
     assert payload["verdict"] == "pass"
     checks = {c["name"]: c for c in payload["checks"]}
     assert checks["model_hash_mismatch"]["detected"] is True
     assert evidence.is_file()
     loaded = json.loads(evidence.read_text())
     assert loaded["verdict"] == "pass"
+    assert "elapsed_sec" in loaded
+    assert loaded["elapsed_sec"] >= 0
 
 
 @pytest.mark.skipif(not _model_path().is_file(), reason="Qwen3B GGUF model not available")
@@ -117,7 +178,7 @@ def test_negative_signoff_detects_corruption(tmp_path: Path) -> None:
 def test_negative_signoff_detects_unsupported_device(tmp_path: Path) -> None:
     cfg = load_config(DEFAULT_CONFIG)
     evidence = tmp_path / "negative.json"
-    payload = run_negative_signoff(cfg, evidence)
+    payload = run_negative_signoff(cfg, evidence, "mock://")
     checks = {c["name"]: c for c in payload["checks"]}
     assert checks["unsupported_device_uri"]["detected"] is True
 

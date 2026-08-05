@@ -2,14 +2,15 @@
 
 ## Open
 
-- **NEG-01 (pre-existing): `run_negative_signoff` corrupted_weight_detection always fails.**
-  `sim/signoff/qwen3b_signoff_runner.py` (~line 168) references `REPO_ROOT` without importing it → `NameError`, swallowed by a bare `except` → `detected=False` → negative verdict always `fail`. Repro: `negative --device fm://python`. Fix: import `REPO_ROOT` from `qwen3b_signoff_config` (and narrow the bare except).
-- **NEG-02 (pre-existing): `test_negative_signoff_detects_*` tests call `run_negative_signoff(cfg, evidence)` with 2 args** but the signature requires `device_uri` → TypeError on HEAD (`sim/tests/test_qwen3b_software_signoff.py:105,120`).
-- **ENV-01 (pre-existing): `pytest-timeout` not installed** — `@pytest.mark.timeout` markers are no-ops (unknown-marker warnings).
+- (none)
 
 ## Resolved
 
 - **A5 (this task):** fm://python gates required a manually pre-started `python -m sim.device_server`. Now auto-managed by the `managed_device_server` fixture in `sim/signoff/device_server_fixture.py`.
+- **B1 (this task):** `software/compiler/command_ir_codec.py` had a bug where `encode_blob()` wrote multi-entry command rings at wrong offsets (used mutable `off` instead of stable `cmd_ring_off`). Fixed: `entry_off = cmd_ring_off + i * CAD_CMD_ENTRY_BYTES`. This made the production `CommandBlob.encode()`/`decode()` non-roundtrippable for any blob with >1 command entry. Now works correctly for MMUL+barrier, multi-MMUL, MMUL+SFU, and full MobileNetV3 graphs.
+- **NEG-01:** `sim/signoff/qwen3b_signoff_runner.py` now imports `REPO_ROOT` from `qwen3b_signoff_config`. The `corrupted_weight_detection` negative check is skipped for non-FM devices and narrowed to catch only `OSError` when the runtime library is missing.
+- **NEG-02:** `sim/tests/test_qwen3b_software_signoff.py` now passes `device_uri="mock://"` to both `run_negative_signoff` calls.
+- **ENV-01:** `pytest-timeout>=2.3.0` added to `requirements.txt`; install with `pip install -r requirements.txt` to make `@pytest.mark.timeout` functional.
 
 ## Notes
 

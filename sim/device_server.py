@@ -101,6 +101,15 @@ CAD_DESC_BYTES = CAD_DESC_WORDS * 4   # 60 bytes per descriptor
 CAD_CMD_ENTRY_BYTES = 32              # 8 × uint32 ring entry in blob
 DESC_ADDR_BASE = Addr.DRAM + 0x0300_0000  # above buffer window, avoids collision
 
+# CV blob execution uses a dedicated DRAM region above the host-allocator
+# window to avoid address collisions with firmware-path buffers.
+CV_BUF_BASE = Addr.DRAM + 0x0100_0000  # 16 MB offset → 0x81000000
+
+
+def _align(v: int, a: int = 64) -> int:
+    """Align *v* up to the next multiple of *a* (power-of-two)."""
+    return (v + a - 1) & ~(a - 1)
+
 
 def _payload_bytes(msg: DeviceMessageT) -> bytes:
     """Return the message payload as bytes."""
@@ -287,7 +296,7 @@ class FmDeviceServer:
         if self.use_spike:
             self._model = FuncModel(use_spike=True, sram_kb=4096)
         else:
-            self._model = FuncModel()
+            self._model = FuncModel(dram_mb=256)
         self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
         self._worker_thread.start()
 
@@ -328,11 +337,10 @@ class FmDeviceServer:
     def _execute_on_model(self, cmd_count: int, cmd_blob: bytes) -> None:
         """Write descriptors + ring entries and run the firmware loop.
 
-        Auto-detects between two formats:
-        1. W2-T7 headered format: {uint32 nop_count, uint32 blob_count,
-           uint32 total_cmd_count, raw blob bytes...} where each blob is
-           a cad_command_blob_t encoded binary.
-        2. Legacy flat format: ring_entries (24B each) || descriptors
+        Auto-detects between three formats:
+        1. W2-T7 CV blob: no DMA/copy opcodes → direct CV execution path.
+        2. W2-T7 Qwen blob: contains DMA/copy opcodes → firmware run_loop.
+        3. Legacy flat format: ring_entries (24B each) || descriptors
            (60B each).
         """
         if self._model is None:
@@ -343,6 +351,13 @@ class FmDeviceServer:
         if (len(cmd_blob) >= 16
                 and struct.unpack_from("<I", cmd_blob, 12)[0] == CAD_BLOB_MAGIC):
             ring_data, desc_data, actual_count = self._flatten_blobs(cmd_blob)
+            # Route CV blobs (no DMA/copy ops AND descriptor addresses
+            # are the B1 collision value 0x80000000) to direct golden
+            # execution.  Qwen/first-Conv blobs with unique addresses
+            # go through the firmware path.
+            if self._is_cv_blob(ring_data, desc_data, actual_count):
+                self._execute_cv_blob(cmd_blob)
+                return
             self._execute_flat(ring_data, desc_data, actual_count)
             return
 
@@ -356,6 +371,436 @@ class FmDeviceServer:
             cmd_blob[ring_bytes: ring_bytes + desc_bytes],
             cmd_count,
         )
+
+    # ── CV blob helpers ──────────────────────────────────────────────────
+
+    @staticmethod
+    def _is_cv_blob(ring_data: bytes, desc_data: bytes, cmd_count: int) -> bool:
+        """Return True if this blob is a CV blob (B1/B5 converter output).
+
+        Detection uses a single signal: no DMA/copy opcodes in the ring
+        entries.  Qwen blobs always have DMA_COPY, DMA_ST, or PCIE_DMA for
+        DRAM↔SRAM movement; CV blobs never have DMA ops because the golden
+        execution reads/writes DRAM directly.
+        """
+        _DMA_OPS = frozenset({0x07, 0x09, 0x0A, 0x15, 0x16})
+        for i in range(cmd_count):
+            offset = i * RING_ENTRY_SIZE
+            if offset + 4 > len(ring_data):
+                break
+            opcode = struct.unpack_from("<I", ring_data, offset)[0]
+            if opcode in _DMA_OPS:
+                return False
+
+        return True
+
+    def _execute_cv_blob(self, cmd_blob: bytes) -> None:
+        """Execute a CV command blob directly via golden modules.
+
+        Two execution modes are supported:
+
+        * **INT mode** (B1 blobs with collision ``host_addr=0x80000000``):
+          buffers are remapped to unique addresses starting at
+          ``CV_BUF_BASE`` and executed via INT8/INT4→INT32 golden modules
+          (original B4 behaviour).
+
+        * **F32 mode** (B5 blobs with unique sequential addresses from
+          ``0x80100000``): buffers keep their declared addresses and
+          execution uses pure float32 golden modules so output logits can
+          be compared against ONNX Runtime.
+        """
+        import numpy as np
+
+        from software.compiler.command_ir import CommandBlob  # noqa: F811
+
+        nop_count, blob_count, total_cmd_count = struct.unpack_from(
+            "<III", cmd_blob, 0
+        )
+        blob_offset = 12
+        next_addr = CV_BUF_BASE
+
+        for _blob_idx in range(blob_count):
+            if blob_offset + 64 > len(cmd_blob):
+                raise ValueError("truncated CV blob header")
+            blk = cmd_blob[blob_offset:]
+
+            magic = struct.unpack_from("<I", blk, 0)[0]
+            if magic != CAD_BLOB_MAGIC:
+                raise ValueError(f"bad CV blob magic: {magic:#x}")
+
+            bt_size = struct.unpack_from("<I", blk, 40)[0]
+            bt_off = struct.unpack_from("<I", blk, 44)[0]
+            cmd_size = struct.unpack_from("<I", blk, 32)[0]
+            cmd_off = struct.unpack_from("<I", blk, 36)[0]
+            desc_size = struct.unpack_from("<I", blk, 24)[0]
+            desc_off = struct.unpack_from("<I", blk, 28)[0]
+
+            blob_end = blob_offset + max(
+                64, bt_off + bt_size, cmd_off + cmd_size,
+                desc_off + desc_size,
+            )
+            if blob_end > len(cmd_blob):
+                raise ValueError("CV blob directory out of bounds")
+
+            blob = CommandBlob.decode(bytes(blk[:blob_end - blob_offset]))
+
+            use_f32 = (
+                len(blob.buffers) > 0
+                and blob.buffers[0].phys_addr != Addr.DRAM
+            )
+
+            if not use_f32:
+                for buf in blob.buffers:
+                    new_addr = _align(next_addr, buf.alignment)
+                    buf.phys_addr = new_addr
+                    next_addr = new_addr + _align(buf.size, buf.alignment)
+
+            self._exec_cv_commands(blob, use_f32=use_f32)
+
+            blob_offset = blob_end
+
+    def _exec_cv_commands(self, blob, use_f32: bool = False) -> None:
+        """Execute every non-barrier command in *blob* via golden modules."""
+        with self._model_lock:
+            model = self._model
+
+            for cmd in blob.commands:
+                if cmd.kind == "barrier":
+                    continue
+
+                if cmd.kind == "mmul":
+                    if use_f32:
+                        self._exec_cv_mmul_f32(model, blob, cmd)
+                    else:
+                        self._exec_cv_mmul(model, blob, cmd)
+                elif cmd.kind == "sfu":
+                    if use_f32:
+                        self._exec_cv_sfu_f32(model, blob, cmd)
+                    else:
+                        self._exec_cv_sfu(model, blob, cmd)
+                elif cmd.kind == "vector":
+                    if use_f32:
+                        self._exec_cv_vector_f32(model, blob, cmd)
+                    else:
+                        self._exec_cv_vector(model, blob, cmd)
+                elif cmd.kind == "dma_copy":
+                    pass
+                else:
+                    raise RuntimeError(
+                        f"unsupported CV opcode kind={cmd.kind} op={cmd.opcode:#x}"
+                    )
+
+    # ── Per-engine executors ────────────────────────────────────────────
+
+    def _exec_cv_mmul(self, model, blob, cmd) -> None:  # noqa: ANN001
+        """Execute a CV MMUL: read INT8 act + INT4 wt from DRAM, call
+        GoldenMXU.matmul_int32, write INT32 output to DRAM."""
+        import numpy as np
+
+        input_id, weight_id, output_id, scale_id = cmd.buffers
+        M, K, N = cmd.mmul  # type: ignore[misc]
+
+        input_buf = blob.buffers[input_id - 1]
+        weight_buf = blob.buffers[weight_id - 1]
+        output_buf = blob.buffers[output_id - 1]
+
+        act_bytes = model.pcie.tlp_read(input_buf.phys_addr, M * K)
+        act = np.frombuffer(act_bytes, dtype=np.int8).reshape(M, K)
+
+        wt_size = max((K * N) // 2, 1)
+        wt_bytes = model.pcie.tlp_read(weight_buf.phys_addr, wt_size)
+        wt = np.frombuffer(wt_bytes, dtype=np.uint8)
+
+        result = model.mxu.matmul_int32(act, wt, M, K, N)
+        model.pcie.tlp_write(output_buf.phys_addr, result.tobytes())
+
+    def _exec_cv_sfu(self, model, blob, cmd) -> None:  # noqa: ANN001
+        """Execute a CV SFU op: read FP16 from DRAM, call appropriate
+        GoldenSFU method, write FP16 output to DRAM."""
+        import numpy as np
+
+        sfu_op, elements, head_dim, pos = cmd.sfu  # type: ignore[misc]
+        input_id, output_id = cmd.buffers[:2]
+
+        input_buf = blob.buffers[input_id - 1]
+        output_buf = blob.buffers[output_id - 1]
+
+        fp_bytes = model.pcie.tlp_read(input_buf.phys_addr, elements * 2)
+        x = np.frombuffer(fp_bytes, dtype=np.float16).astype(np.float32)
+
+        result: np.ndarray
+        if sfu_op == 3:  # ReLU
+            result = model.sfu.relu_hw(x)
+        elif sfu_op == 2:  # GELU
+            result = model.sfu.gelu_hw(x)
+        elif sfu_op == 4:  # SiLU
+            result = model.sfu.silu_hw(x)
+        else:
+            raise RuntimeError(f"unsupported CV SFU op={sfu_op}")
+
+        model.pcie.tlp_write(
+            output_buf.phys_addr, result.astype(np.float16).tobytes()
+        )
+
+    def _exec_cv_vector(self, model, blob, cmd) -> None:  # noqa: ANN001
+        """Execute a CV Vector op: read INT32 from DRAM, call appropriate
+        GoldenVector method, write INT32 output to DRAM."""
+        import numpy as np
+
+        vec_op, elements = cmd.vector  # type: ignore[misc]
+        a_id, b_id, output_id = cmd.buffers[:3]
+
+        a_buf = blob.buffers[a_id - 1]
+        b_buf = blob.buffers[b_id - 1] if b_id else None
+        output_buf = blob.buffers[output_id - 1]
+
+        a_bytes = model.pcie.tlp_read(a_buf.phys_addr, elements * 4)
+        a = np.frombuffer(a_bytes, dtype=np.int32)
+
+        if b_buf:
+            b_bytes = model.pcie.tlp_read(b_buf.phys_addr, elements * 4)
+            b = np.frombuffer(b_bytes, dtype=np.int32)
+        else:
+            b = np.zeros(elements, dtype=np.int32)
+
+        result: np.ndarray
+        if vec_op == 0:  # VADD
+            result = model.vector.add(a, b)
+        elif vec_op == 1:  # VMUL
+            result = model.vector.mul(a, b)
+        elif vec_op == 2:  # VRED_MAX
+            val = model.vector.max_reduce(a)
+            result = np.array([int(val)], dtype=np.int32)
+        elif vec_op == 3:  # VRED_SUM
+            val = model.vector.sum_reduce(a)
+            result = np.array([int(val)], dtype=np.int32)
+        elif vec_op == 4:  # VCONV (INT32→FP16)
+            result_f16 = model.vector.conv_i32_to_f16(a)
+            result = result_f16.view(np.int16).astype(np.int32)
+        elif vec_op == 5:  # VRESID
+            result = model.vector.residual_add(a, b)
+        else:
+            raise RuntimeError(f"unsupported CV vector op={vec_op}")
+
+        out_bytes = np.asarray(result, dtype=np.int32).tobytes()
+        if len(out_bytes) < output_buf.size:
+            out_bytes = out_bytes.ljust(output_buf.size, b"\x00")
+        model.pcie.tlp_write(output_buf.phys_addr, out_bytes[:output_buf.size])
+
+    # ── Float32 CV executors ────────────────────────────────────────────
+
+    _CONV_META_MAGIC = 0xCADB0001
+    _CONV_META_SIZE = 20 * 4
+
+    @staticmethod
+    def _im2col_nchw(x, kh, kw, sh, sw, pt, pl, pb, pr, out_h, out_w):
+        """im2col for NCHW input, returning (N*out_h*out_w, C*kh*kw)."""
+        import numpy as np
+
+        N, C, H, W = x.shape
+        x_pad = np.pad(
+            x, ((0, 0), (0, 0), (pt, pb), (pl, pr)), mode="constant"
+        )
+        shape = (N, C, kh, kw, out_h, out_w)
+        strides = (
+            x_pad.strides[0],
+            x_pad.strides[1],
+            x_pad.strides[2],
+            x_pad.strides[3],
+            x_pad.strides[2] * sh,
+            x_pad.strides[3] * sw,
+        )
+        cols = np.lib.stride_tricks.as_strided(
+            x_pad, shape=shape, strides=strides
+        )
+        return cols.transpose(0, 4, 5, 1, 2, 3).reshape(
+            N * out_h * out_w, C * kh * kw
+        )
+
+    def _exec_cv_conv_f32(
+        self, model, input_buf, weight_buf, output_buf, wt_bytes, meta, M, K, N
+    ) -> None:
+        """Execute a standard or depthwise convolution from embedded metadata."""
+        import numpy as np
+
+        (
+            _magic, op_kind, kh, kw, sh, sw, pt, pl, pb, pr,
+            in_h, in_w, out_h, out_w, cin, cout, _groups, layout_code, _, _,
+        ) = meta
+
+        weight_data = np.frombuffer(wt_bytes[:-self._CONV_META_SIZE], dtype=np.float32)
+        wt_count = cout * (cin // max(_groups, 1)) * kh * kw
+        if weight_data.size < wt_count:
+            weight_data = np.pad(
+                weight_data, (0, wt_count - weight_data.size), constant_values=0.0
+            )
+        weight = weight_data[:wt_count].reshape(
+            cout, cin // max(_groups, 1), kh, kw
+        )
+
+        act_bytes = model.pcie.tlp_read(input_buf.phys_addr, input_buf.size)
+        act = np.frombuffer(act_bytes, dtype=np.float32)
+        in_elems = 1 * in_h * in_w * cin
+        if act.size < in_elems:
+            act = np.pad(act, (0, in_elems - act.size), constant_values=0.0)
+        act = act[:in_elems]
+        if layout_code == 1:
+            act = act.reshape(1, in_h, in_w, cin).transpose(0, 3, 1, 2)
+        else:
+            act = act.reshape(1, cin, in_h, in_w)
+
+        cols = self._im2col_nchw(
+            act, kh, kw, sh, sw, pt, pl, pb, pr, out_h, out_w
+        )
+
+        if op_kind == 2:  # depthwise
+            cols = cols.reshape(out_h * out_w, cin, kh * kw)
+            weight_2d = weight.reshape(cin, kh * kw)
+            out = np.einsum("ncp,cp->nc", cols, weight_2d)
+            out = out.reshape(1, out_h, out_w, cin)
+        else:  # standard conv
+            weight_2d = weight.reshape(cout, cin * kh * kw).T
+            out = cols @ weight_2d
+            out = out.reshape(1, out_h, out_w, cout)
+
+        model.pcie.tlp_write(
+            output_buf.phys_addr, out.astype(np.float32).tobytes()
+        )
+
+    def _exec_cv_mmul_f32(self, model, blob, cmd) -> None:
+        """Float32 MMUL: plain GEMM, or im2col convolution via embedded metadata."""
+        import numpy as np
+        import struct
+
+        input_id, weight_id, output_id, scale_id = cmd.buffers
+        M, K, N = cmd.mmul  # type: ignore[misc]
+
+        input_buf = blob.buffers[input_id - 1]
+        weight_buf = blob.buffers[weight_id - 1]
+        output_buf = blob.buffers[output_id - 1]
+
+        wt_bytes = model.pcie.tlp_read(weight_buf.phys_addr, weight_buf.size)
+
+        op_kind = 0
+        meta = None
+        if len(wt_bytes) >= K * N * 4 + self._CONV_META_SIZE:
+            meta_bytes = wt_bytes[-self._CONV_META_SIZE:]
+            vals = struct.unpack("<20I", meta_bytes)
+            if vals[0] == self._CONV_META_MAGIC:
+                op_kind = vals[1]
+                meta = vals
+
+        if op_kind in (1, 2):
+            self._exec_cv_conv_f32(
+                model, input_buf, weight_buf, output_buf, wt_bytes, meta, M, K, N
+            )
+            return
+
+        act_bytes = model.pcie.tlp_read(input_buf.phys_addr, input_buf.size)
+        act = np.frombuffer(act_bytes, dtype=np.float32)
+        if act.size < M * K:
+            act = np.pad(act, (0, M * K - act.size), constant_values=0.0)
+        act = act[:M * K].reshape(M, K)
+
+        wt = np.frombuffer(wt_bytes, dtype=np.float32)
+        if wt.size < K * N:
+            wt = np.pad(wt, (0, K * N - wt.size), constant_values=0.0)
+        wt = wt[:K * N].reshape(K, N)
+
+        result = np.matmul(act, wt).astype(np.float32)
+        model.pcie.tlp_write(output_buf.phys_addr, result.tobytes())
+
+    def _exec_cv_sfu_f32(self, model, blob, cmd) -> None:
+        """Float32 SFU: read float32 from DRAM, apply activation, write float32."""
+        import numpy as np
+
+        sfu_op, elements, head_dim, pos = cmd.sfu  # type: ignore[misc]
+        input_id, output_id = cmd.buffers[:2]
+
+        input_buf = blob.buffers[input_id - 1]
+        output_buf = blob.buffers[output_id - 1]
+
+        fp_bytes = model.pcie.tlp_read(input_buf.phys_addr, elements * 4)
+        x = np.frombuffer(fp_bytes, dtype=np.float32)
+
+        if sfu_op == 3:  # ReLU
+            result = np.maximum(x, 0.0)
+        elif sfu_op == 2:  # GELU
+            result = 0.5 * x * (1.0 + np.tanh(
+                np.sqrt(2.0 / np.pi) * (x + 0.044715 * x**3)))
+        elif sfu_op == 4:  # SiLU
+            result = x / (1.0 + np.exp(-x))
+        elif sfu_op == 5:  # HardSwish
+            result = x * np.clip(x + 3.0, 0.0, 6.0) / 6.0
+        elif sfu_op == 6:  # HardSigmoid
+            result = np.clip(x + 3.0, 0.0, 6.0) / 6.0
+        else:
+            raise RuntimeError(f"unsupported CV F32 SFU op={sfu_op}")
+
+        model.pcie.tlp_write(output_buf.phys_addr, result.astype(np.float32).tobytes())
+
+    def _exec_cv_vector_f32(self, model, blob, cmd) -> None:
+        """Float32 Vector: element-wise, reduction, with broadcast support."""
+        import numpy as np
+
+        vec_op, elements = cmd.vector  # type: ignore[misc]
+        a_id, b_id, output_id = cmd.buffers[:3]
+
+        a_buf = blob.buffers[a_id - 1]
+        b_buf = blob.buffers[b_id - 1] if b_id else None
+        output_buf = blob.buffers[output_id - 1]
+
+        a_bytes = model.pcie.tlp_read(a_buf.phys_addr, elements * 4)
+        a = np.frombuffer(a_bytes, dtype=np.float32)
+
+        if b_buf is not None:
+            b_bytes = model.pcie.tlp_read(
+                b_buf.phys_addr, min(b_buf.size, elements * 4)
+            )
+            b = np.frombuffer(b_bytes, dtype=np.float32)
+            if 0 < b.size < elements and elements % b.size == 0:
+                b = np.tile(b, elements // b.size)
+            elif b.size < elements:
+                b = np.pad(b, (0, elements - b.size), constant_values=0.0)
+        else:
+            b = np.zeros(elements, dtype=np.float32)
+
+        if vec_op == 0:  # VADD
+            result = a + b
+        elif vec_op == 1:  # VMUL
+            result = a * b
+        elif vec_op == 2:  # VRED_MAX
+            result = np.array([float(np.max(a[:elements]))], dtype=np.float32)
+        elif vec_op == 3:  # VRED_SUM
+            out_elems = output_buf.size // 4
+            if (
+                out_elems > 1
+                and out_elems <= elements
+                and elements % out_elems == 0
+            ):
+                segment = elements // out_elems
+                if b_id == 0:
+                    # CV F32 ReduceMean/GAP on NHWC data: each row of the
+                    # reshaped view is one spatial position (all channels), so
+                    # the mean over rows is the per-channel mean.
+                    result = (a[:elements].reshape(-1, out_elems).mean(
+                        axis=0
+                    )).astype(np.float32)
+                else:
+                    result = (a[:elements].reshape(out_elems, segment).sum(
+                        axis=1
+                    ) / segment).astype(np.float32)
+            else:
+                result = np.array(
+                    [float(np.sum(a[:elements]))], dtype=np.float32
+                )
+        else:
+            raise RuntimeError(f"unsupported CV F32 vector op={vec_op}")
+
+        out_bytes = result.astype(np.float32).tobytes()
+        if len(out_bytes) < output_buf.size:
+            out_bytes = out_bytes.ljust(output_buf.size, b"\x00")
+        model.pcie.tlp_write(output_buf.phys_addr, out_bytes[:output_buf.size])
 
     def _flatten_blobs(self, cmd_blob: bytes):
         """Parse W2-T7 serialized format and flatten to legacy layout.
