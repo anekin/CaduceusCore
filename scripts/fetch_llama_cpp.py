@@ -279,16 +279,18 @@ def build_backend(lock: Dict) -> bool:
         print(f"ERROR: cmake configure failed (returncode={result.returncode})")
         return False
 
-    print(f"Building target test-backend-ops ...")
-    result = subprocess.run(
-        ["cmake", "--build", str(BUILD_DIR), "--target", "test-backend-ops"],
-        capture_output=False, text=True,
-    )
-    if result.returncode != 0:
-        print(f"ERROR: build failed (returncode={result.returncode})")
-        return False
+    targets = ["test-backend-ops", "llama-app", "llama-cli"]
+    for target in targets:
+        print(f"Building target {target} ...")
+        result = subprocess.run(
+            ["cmake", "--build", str(BUILD_DIR), "--target", target],
+            capture_output=False, text=True,
+        )
+        if result.returncode != 0:
+            print(f"ERROR: build failed for target {target} (returncode={result.returncode})")
+            return False
 
-    print("OK: backend built successfully")
+    print("OK: backend and llama binaries built successfully")
     return True
 
 
