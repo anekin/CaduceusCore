@@ -63,3 +63,32 @@ sim/regression/*.json
 .omo/boulder.json
 .omo/run-continuation/
 opencode_wa/
+
+# Generated evidence directory (timestamps/per-run output; keep final reports in reports/)
+build/evidence/
+
+# Built software/runtime artifacts
+build/install/
+build/software/
+build/software-asan/
+build/p9_simv_soc_top
+build/run_*.sh
+
+# Python virtual environments used by helper scripts
+.venv_*
+
+# Fetched / built third-party artifacts
+third_party/
+build/llama/
+dtc_src
+
+# Transient OMO work artifacts
+.omo/drafts/
+.omo/notepads/fm-e2e-qwen-cv-software-stack/
+.omo/start-work/
+
+# Top-level build/copy artifact
+CaduceusCore/
+
+# Backup files
+*.bak.*
