@@ -40,27 +40,27 @@ class TestIsCVBlobDetection:
     _DESC_ABOVE_DRAM = struct.pack("<15I", 0x80100000, *([0] * 14))
 
     def test_mmul_only_is_cv(self) -> None:
-        from sim.device_server import FmDeviceServer, RING_ENTRY_SIZE
+        from device_server import FmDeviceServer, RING_ENTRY_SIZE
         ring = struct.pack("<III", 0x00, 0, 0) + b"\x00" * 12
         assert FmDeviceServer._is_cv_blob(ring, self._DESC_AT_DRAM, 1) is True
 
     def test_dma_copy_is_not_cv(self) -> None:
-        from sim.device_server import FmDeviceServer, RING_ENTRY_SIZE
+        from device_server import FmDeviceServer, RING_ENTRY_SIZE
         ring = struct.pack("<III", 0x09, 0, 0) + b"\x00" * 12
         assert FmDeviceServer._is_cv_blob(ring, self._DESC_AT_DRAM, 1) is False
 
     def test_pcie_dma_is_not_cv(self) -> None:
-        from sim.device_server import FmDeviceServer, RING_ENTRY_SIZE
+        from device_server import FmDeviceServer, RING_ENTRY_SIZE
         ring = struct.pack("<III", 0x07, 0, 0) + b"\x00" * 12
         assert FmDeviceServer._is_cv_blob(ring, self._DESC_AT_DRAM, 1) is False
 
     def test_dma_store_is_not_cv(self) -> None:
-        from sim.device_server import FmDeviceServer, RING_ENTRY_SIZE
+        from device_server import FmDeviceServer, RING_ENTRY_SIZE
         ring = struct.pack("<III", 0x0A, 0, 0) + b"\x00" * 12
         assert FmDeviceServer._is_cv_blob(ring, self._DESC_AT_DRAM, 1) is False
 
     def test_mixed_cv_ops_is_cv(self) -> None:
-        from sim.device_server import FmDeviceServer, RING_ENTRY_SIZE
+        from device_server import FmDeviceServer, RING_ENTRY_SIZE
         ring = bytearray()
         for op in (0x00, 0x04, 0x0F, 0x10, 0x12):
             ring.extend(struct.pack("<III", op, 0, 0) + b"\x00" * 12)
@@ -68,12 +68,12 @@ class TestIsCVBlobDetection:
 
     def test_unique_address_cv_blob_is_cv(self) -> None:
         """Blobs with only CV ops (no DMA) at unique addresses are still CV blobs."""
-        from sim.device_server import FmDeviceServer, RING_ENTRY_SIZE
+        from device_server import FmDeviceServer, RING_ENTRY_SIZE
         ring = struct.pack("<III", 0x00, 0, 0) + b"\x00" * 12
         assert FmDeviceServer._is_cv_blob(ring, self._DESC_ABOVE_DRAM, 1) is True
 
     def test_barrier_with_cv_ops_is_cv(self) -> None:
-        from sim.device_server import FmDeviceServer, RING_ENTRY_SIZE
+        from device_server import FmDeviceServer, RING_ENTRY_SIZE
         ring = struct.pack("<III", 0x00, 0, 0) + b"\x00" * 12
         ring += struct.pack("<III", 0xFF, 0, 0) + b"\x00" * 12
         assert FmDeviceServer._is_cv_blob(ring, self._DESC_AT_DRAM, 2) is True

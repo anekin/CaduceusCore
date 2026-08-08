@@ -13,10 +13,10 @@ from typing import Optional
 import numpy as np
 import pytest
 
-from sim.func_model import FuncModel
-from sim.golden_executor import GoldenMXU
-from sim.mmio_bridge import MMIOBridge
-from sim.regmap import Addr, DOORBELL, INTC
+from func_model import FuncModel
+from golden_executor import GoldenMXU
+from mmio_bridge import MMIOBridge
+from regmap import Addr, DOORBELL, INTC
 
 # ── Ring buffer constants (match firmware / device_server) ──────────────
 RING_BUF_ADDR = 0x8000_0000

@@ -31,7 +31,7 @@ _PACKAGE_ROOT = _SCRIPT_DIR.parent
 if str(_PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(_PACKAGE_ROOT))
 
-from sim.device_protocol import (
+from device_protocol import (
     MAGIC,
     PROTOCOL_VERSION,
     build_message,

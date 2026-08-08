@@ -8,9 +8,9 @@ import pytest
 
 import os
 
-from sim.func_model import FuncModel
-from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector
-from sim.regmap import Addr, MXU, SFU, VECTOR, DMA
+from func_model import FuncModel
+from golden_executor import GoldenMXU, GoldenSFU, GoldenVector
+from regmap import Addr, MXU, SFU, VECTOR, DMA
 from models.crossbar import CrossbarModel
 
 
@@ -115,8 +115,8 @@ def test_pcie_integration():
       3. Host reads result from DRAM via PCIe TLP (path 7: PCIE-TLP).
       4. Result compared against GoldenMXU.matmul_int4_per_block().
     """
-    from sim.regmap import MXU
-    from sim.golden_executor import GoldenMXU
+    from regmap import MXU
+    from golden_executor import GoldenMXU
 
     model = FuncModel()
 
@@ -594,7 +594,7 @@ def test_interrupt_delivery():
     """End-to-end interrupt delivery: MXU completes → IRQ fires →
     INTC.PENDING set → RISCVMini interrupt_pending → WFI wakes →
     trap handler dispatches → ACK clears pending."""
-    from sim.regmap import MXU, INTC
+    from regmap import MXU, INTC
 
     model = FuncModel()
     emu = model.riscv
@@ -692,8 +692,8 @@ def test_firmware_bootflow():
       3. IRQ completion: _irq_serviced set, INTC.PENDING cleared.
       4. Anti-vacuous: wrong opcode in doorbell returns error status.
     """
-    from sim.regmap import MXU, INTC, DOORBELL
-    from sim.golden_executor import GoldenMXU
+    from regmap import MXU, INTC, DOORBELL
+    from golden_executor import GoldenMXU
     from engine.isa import OpCode
 
     model = FuncModel()
@@ -1308,7 +1308,7 @@ def test_smoke_all():
     assert len(mxu_data) == 4
 
     # 5. Interrupt delivery: FuncModel smoke already exercises this
-    from sim.regmap import INTC
+    from regmap import INTC
     assert model.bridge.handle('read', INTC.BASE + INTC.PENDING, 0) is not None
 
     # 6. Original conv2d_smoke still passes
@@ -1343,7 +1343,7 @@ def _doorbell_setup_mmul(model: FuncModel, M: int, K: int, N: int,
                          scale_addr: int, desc_addr: int,
                          rng: np.random.RandomState = None):
     """Write deterministic MMUL input/weight/scale data to DRAM."""
-    from sim.golden_executor import GoldenMXU
+    from golden_executor import GoldenMXU
     if rng is None:
         rng = _RNG_DB
     act = rng.randint(-8, 8, size=M * K, dtype=np.int8)
@@ -1363,7 +1363,7 @@ def _doorbell_assert_mmul_result(model: FuncModel, act: np.ndarray,
                                  wgt_packed: np.ndarray, scales: np.ndarray,
                                  out_addr: int, M: int, K: int, N: int):
     """Compare firmware MMUL output in DRAM against GoldenMXU."""
-    from sim.golden_executor import GoldenMXU
+    from golden_executor import GoldenMXU
     out_off = out_addr - Addr.DRAM_BASE
     out_bytes = model.dram[out_off:out_off + M * N * 4]
     out_fw = np.frombuffer(out_bytes, dtype=np.float32).reshape(M, N)
@@ -1384,7 +1384,7 @@ def test_doorbell_single_mmul_interrupt():
       - Result matches GoldenMXU; INTC.PENDING cleared; doorbell heads updated.
     """
     from engine.isa import OpCode
-    from sim.regmap import INTC, DOORBELL
+    from regmap import INTC, DOORBELL
 
     model = FuncModel()
     assert model.firmware.ring_size == 16
@@ -1425,8 +1425,8 @@ def test_doorbell_three_command_queue():
     completion. Each command uses distinct SRAM/DRAM regions.
     """
     from engine.isa import OpCode
-    from sim.regmap import INTC, DOORBELL
-    from sim.golden_executor import GoldenSFU, GoldenVector
+    from regmap import INTC, DOORBELL
+    from golden_executor import GoldenSFU, GoldenVector
 
     model = FuncModel()
 
@@ -1505,7 +1505,7 @@ def test_doorbell_three_command_queue():
 def test_doorbell_ring_wrap_16():
     """Sequential 17 commands prove ring indices wrap modulo 16."""
     from engine.isa import OpCode
-    from sim.regmap import DOORBELL
+    from regmap import DOORBELL
 
     model = FuncModel()
     assert model.firmware.ring_size == 16

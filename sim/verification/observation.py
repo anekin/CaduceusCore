@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from sim.verification.tolerance import ToleranceConfig
+from verification.tolerance import ToleranceConfig
 
 
 class ObservationType(str, Enum):

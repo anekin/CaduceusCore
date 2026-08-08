@@ -40,11 +40,11 @@ try:
 except ImportError:
     COCOTB_AVAILABLE = False
 
-from sim.rtl_soc_runner import RTLSoCRunner, TestCaseConfig
-from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
+from rtl_soc_runner import RTLSoCRunner, TestCaseConfig
+from regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
 
 try:
-    from sim.cocotb_bridge import CocotbBridge
+    from cocotb_bridge import CocotbBridge
 except ImportError:
     CocotbBridge = None
 
@@ -138,8 +138,8 @@ if __name__ == "__main__":
     print(f"  FM-SOC-001 config: OK — {cfg.description}")
 
     # Validate RTLSoCRunner off-cocotb
-    from sim.rtl_soc_runner import RTLSoCRunner
-    from sim.cocotb_bridge import CocotbBridge
+    from rtl_soc_runner import RTLSoCRunner
+    from cocotb_bridge import CocotbBridge
     bridge = CocotbBridge()  # no DUT
     runner = RTLSoCRunner(bridge)
     runner.register_case(cfg)

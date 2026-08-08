@@ -10,8 +10,8 @@ Note: 1073766400 decimal = 0x40006000 = INTC.BASE + INTC.PENDING.
 """
 
 import pytest
-from sim.mmio_bridge import MMIOBridge
-from sim.regmap import INTC
+from mmio_bridge import MMIOBridge
+from regmap import INTC
 
 
 # ══════════════════════════════════════════════════════════════════════

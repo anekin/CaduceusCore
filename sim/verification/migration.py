@@ -12,10 +12,10 @@ verification framework.
 
 from typing import Optional
 
-from sim.verification.scenario import Scenario, Action, EvidenceRecord
-from sim.verification.observation import Observation, ObservationType
-from sim.verification.tolerance import ToleranceConfig, Provenance
-from sim.verification.operation_classifier import OperationClass
+from verification.scenario import Scenario, Action, EvidenceRecord
+from verification.observation import Observation, ObservationType
+from verification.tolerance import ToleranceConfig, Provenance
+from verification.operation_classifier import OperationClass
 
 
 def migrate_testcase_config(cfg, scenario_id: Optional[str] = None) -> Scenario:

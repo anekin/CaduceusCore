@@ -11,9 +11,9 @@ from typing import Any, Callable, Dict, Optional
 
 import numpy as np
 
-from sim.golden_executor import GoldenSFU, GoldenVector
+from golden_executor import GoldenSFU, GoldenVector
 from models.crossbar import CrossbarModel
-from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, PCIE_DMA, DOORBELL, INTC
+from regmap import Addr, MXU, SFU, VECTOR, DMA, PCIE_DMA, DOORBELL, INTC
 
 
 @dataclass

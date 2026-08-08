@@ -18,15 +18,15 @@ Workarounds and backdoors are tagged in-code with their classification:
 import logging
 from typing import Optional, Dict, Any, List
 
-from sim.verification.dut_adapter import (
+from verification.dut_adapter import (
     DUTAdapter,
     DUTError,
     DUTTimeoutError,
     DUTConnectionError,
 )
-from sim.verification.scenario import Action
-from sim.verification.observation import Observation, ObservationType
-from sim.verification.operation_classifier import OperationClass
+from verification.scenario import Action
+from verification.observation import Observation, ObservationType
+from verification.operation_classifier import OperationClass
 
 logger = logging.getLogger("rtl_adapter")
 

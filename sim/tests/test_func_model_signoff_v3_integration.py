@@ -23,9 +23,9 @@ import struct
 import numpy as np
 import pytest
 
-from sim.func_model import FuncModel, DualPathChecker
-from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector, GoldenDMA
-from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, INTC, DOORBELL
+from func_model import FuncModel, DualPathChecker
+from golden_executor import GoldenMXU, GoldenSFU, GoldenVector, GoldenDMA
+from regmap import Addr, MXU, SFU, VECTOR, DMA, INTC, DOORBELL
 from engine.isa import OpCode
 from models.crossbar import CrossbarModel
 

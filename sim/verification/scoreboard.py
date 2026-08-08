@@ -17,8 +17,8 @@ from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
 
-from sim.verification.observation import Observation, ObservationType
-from sim.verification.tolerance import ToleranceConfig
+from verification.observation import Observation, ObservationType
+from verification.tolerance import ToleranceConfig
 
 
 @dataclass

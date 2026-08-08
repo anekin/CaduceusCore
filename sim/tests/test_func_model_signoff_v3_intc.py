@@ -21,12 +21,12 @@ import struct
 import numpy as np
 import pytest
 
-from sim.func_model import FuncModel
-from sim.regmap import INTC, MXU, SFU, VECTOR, DMA, Addr
+from func_model import FuncModel
+from regmap import INTC, MXU, SFU, VECTOR, DMA, Addr
 
 # ── Re-export existing interrupt test from test_soc_fm.py ─────────────
 # pylint: disable=unused-import,wrong-import-position
-from sim.tests.test_soc_fm import test_interrupt_delivery  # noqa: F401
+from tests.test_soc_fm import test_interrupt_delivery  # noqa: F401
 
 
 # ── Helpers ────────────────────────────────────────────────────────────

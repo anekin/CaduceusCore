@@ -14,8 +14,8 @@ import os
 import numpy as np
 import pytest
 
-from sim.func_model import FuncModel, DualPathChecker
-from sim.tests.test_soc_fm import (
+from func_model import FuncModel, DualPathChecker
+from tests.test_soc_fm import (
     _blk0_read_hex,
     _blk0_run_mmul,
     _blk0_run_sfu,

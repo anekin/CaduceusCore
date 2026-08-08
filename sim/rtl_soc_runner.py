@@ -63,16 +63,16 @@ try:
 except ImportError:
     COCOTB_AVAILABLE = False
 
-from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
+from regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
 
 try:
-    from sim.spike_rtl_bridge import RTLMMIOBridge, SimpleAPBMaster, serve_rtl
+    from spike_rtl_bridge import RTLMMIOBridge, SimpleAPBMaster, serve_rtl
     SPIKE_RTL_BRIDGE_AVAILABLE = True
 except Exception:
     SPIKE_RTL_BRIDGE_AVAILABLE = False
 
 try:
-    from sim.spike_firmware import SpikeFirmware
+    from spike_firmware import SpikeFirmware
     SPIKE_FIRMWARE_AVAILABLE = True
 except Exception:
     SPIKE_FIRMWARE_AVAILABLE = False
@@ -84,8 +84,8 @@ except Exception:
     COCOTBEXT_AXI_AVAILABLE = False
 
 try:
-    from sim.func_model import FuncModel
-    from sim.spike_host import (
+    from func_model import FuncModel
+    from spike_host import (
         write_mmul_descriptor,
         write_sfu_descriptor,
         write_vector_descriptor,
@@ -98,7 +98,7 @@ try:
         SFU_OP_SOFTMAX,
         VEC_OP_ADD,
     )
-    from sim.cocotb_bridge import (
+    from cocotb_bridge import (
         pack_int8_activation_tile_major,
         pack_int4_tile_major,
     )
@@ -107,16 +107,16 @@ except Exception as exc:
     FUNC_MODEL_AVAILABLE = False
 
 try:
-    from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector
+    from golden_executor import GoldenMXU, GoldenSFU, GoldenVector
     GOLDEN_AVAILABLE = True
 except Exception:
     GOLDEN_AVAILABLE = False
 
 # ── Todo 10: delegate scenario-independent scoreboard to cocotb-free module
 try:
-    from sim.verification.scoreboard import Scoreboard, ScoreboardResult
-    from sim.verification.observation import Observation, ObservationType
-    from sim.verification.tolerance import ToleranceConfig
+    from verification.scoreboard import Scoreboard, ScoreboardResult
+    from verification.observation import Observation, ObservationType
+    from verification.tolerance import ToleranceConfig
     SCOREBOARD_AVAILABLE = True
 except Exception:
     SCOREBOARD_AVAILABLE = False
@@ -1050,7 +1050,7 @@ def load_golden_vectors(case_id: str, vectors_dir: str = None) -> Optional[TestC
 # ═══════════════════════════════════════════════════════════════════════════
 
 if COCOTB_AVAILABLE:
-    from sim.cocotb_bridge import CocotbBridge
+    from cocotb_bridge import CocotbBridge
 
     @cocotb.test()
     async def test_soc_rtl_runner_smoke(dut):
@@ -1456,7 +1456,7 @@ class P0SpikeRunner:
         rng = np.random.RandomState(42)
         act = rng.randint(-128, 127, size=M * K, dtype=np.int8).reshape(M, K)
         wgt_f32 = rng.randn(K, N).astype(np.float32)
-        from sim.quantize import quantize_int4_per_block
+        from quantize import quantize_int4_per_block
         wgt_packed, wgt_scales, _ = quantize_int4_per_block(wgt_f32, 128)
         golden = GoldenMXU().matmul_int32(act, wgt_packed, M, K, N)
         golden_bytes = golden.astype(np.int32).tobytes()
@@ -3432,7 +3432,7 @@ if COCOTB_AVAILABLE and FUNC_MODEL_AVAILABLE:
 if __name__ == "__main__":
     print("rtl_soc_runner.py — API validation (no cocotb)")
     # Validate API surface without cocotb
-    from sim.cocotb_bridge import CocotbBridge
+    from cocotb_bridge import CocotbBridge
     bridge = CocotbBridge()  # no DUT
     runner = RTLSoCRunner(bridge)
 

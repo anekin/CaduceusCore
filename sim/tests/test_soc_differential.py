@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 
 from gen.npu_abi import MXU
-from sim.verification import Action, FuncModelAdapter, Observation, Scenario
-from sim.verification.differential import (
+from verification import Action, FuncModelAdapter, Observation, Scenario
+from verification.differential import (
     DivergenceClass,
     GoldenExecutorOracle,
     MemoryGoldenOracle,
@@ -26,8 +26,8 @@ from sim.verification.differential import (
     run_differential_scenario,
     scenario_content_hash,
 )
-from sim.verification.observation import ObservationType
-from sim.verification.tolerance import ToleranceConfig
+from verification.observation import ObservationType
+from verification.tolerance import ToleranceConfig
 
 
 @pytest.fixture

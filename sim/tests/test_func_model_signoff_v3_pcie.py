@@ -19,7 +19,7 @@ from models.crossbar import CrossbarModel
 from models.pcie import DmaEngine
 
 # ── Re-export existing 8 DmaEngine unit tests ──────────────────────────
-from sim.tests.test_pcie_dma_fm import (  # noqa: F401, E402
+from tests.test_pcie_dma_fm import (  # noqa: F401, E402
     test_tc1_single_mwr_256,
     test_tc2_mrd_split_completion,
     test_tc3_unaligned_transfer,

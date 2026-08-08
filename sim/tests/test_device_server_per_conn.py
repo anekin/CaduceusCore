@@ -17,14 +17,14 @@ from caduceus_device_protocol.DeviceResetRequest import DeviceResetRequestT
 from caduceus_device_protocol.DeviceStatus import DeviceStatus
 from caduceus_device_protocol.MessageHeader import MessageHeaderT
 
-from sim.device_protocol import (
+from device_protocol import (
     build_message,
     pack_table,
     parse_message,
     recv_framed,
     send_framed,
 )
-from sim.device_server import FmDeviceServer, _ThreadedUnixFmServer
+from device_server import FmDeviceServer, _ThreadedUnixFmServer
 
 
 # ── Shared server fixture ─────────────────────────────────────────────────

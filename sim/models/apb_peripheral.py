@@ -207,7 +207,7 @@ def make_mxu_peripheral() -> APBPeripheral:
 
     Matches ``sim/regmap.py:MXU`` register offsets.
     """
-    from sim.regmap import Addr, MXU
+    from regmap import Addr, MXU
 
     return APBPeripheral(
         name="MXU",
@@ -233,7 +233,7 @@ def make_sfu_peripheral() -> APBPeripheral:
 
     Matches ``sim/regmap.py:SFU`` register offsets.
     """
-    from sim.regmap import Addr, SFU
+    from regmap import Addr, SFU
 
     return APBPeripheral(
         name="SFU",
@@ -256,7 +256,7 @@ def make_vector_peripheral() -> APBPeripheral:
 
     Matches ``sim/regmap.py:VECTOR`` register offsets.
     """
-    from sim.regmap import Addr, VECTOR
+    from regmap import Addr, VECTOR
 
     return APBPeripheral(
         name="VECTOR",
@@ -279,7 +279,7 @@ def make_dma_peripheral() -> APBPeripheral:
 
     Matches ``sim/regmap.py:DMA`` register offsets.
     """
-    from sim.regmap import Addr, DMA
+    from regmap import Addr, DMA
 
     return APBPeripheral(
         name="DMA",
@@ -311,7 +311,7 @@ def make_pcie_peripheral() -> APBPeripheral:
     class (only the base address); the register layout here mirrors the
     ``pcie_ep_wrapper`` APB register block.
     """
-    from sim.regmap import Addr
+    from regmap import Addr
 
     return APBPeripheral(
         name="PCIe",
@@ -336,7 +336,7 @@ def make_doorbell_peripheral() -> APBPeripheral:
 
     Matches ``sim/regmap.py:DOORBELL`` register offsets.
     """
-    from sim.regmap import Addr, DOORBELL
+    from regmap import Addr, DOORBELL
 
     return APBPeripheral(
         name="DOORBELL",
@@ -357,7 +357,7 @@ def make_intc_peripheral() -> APBPeripheral:
 
     Matches ``sim/regmap.py:INTC`` register offsets.
     """
-    from sim.regmap import Addr, INTC
+    from regmap import Addr, INTC
 
     return APBPeripheral(
         name="INTC",
@@ -376,7 +376,7 @@ def make_pcie_dma_peripheral() -> APBPeripheral:
 
     Matches ``sim/regmap.py:PCIE_DMA`` register offsets.
     """
-    from sim.regmap import Addr, PCIE_DMA
+    from regmap import Addr, PCIE_DMA
 
     return APBPeripheral(
         name="PCIE_DMA",

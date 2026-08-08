@@ -35,7 +35,7 @@ _PACKAGE_ROOT = _SCRIPT_DIR.parent
 if str(_PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(_PACKAGE_ROOT))
 
-from sim.regmap import Addr
+from regmap import Addr
 
 
 DEFAULT_SOCK_PATH = "/tmp/npu_mmio_rtl.sock"

@@ -22,10 +22,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from sim.verification.observation import Observation, ObservationType
-from sim.verification.scenario import Scenario
-from sim.verification.scoreboard import Scoreboard, ScoreboardResult
-from sim.verification.tolerance import ToleranceConfig
+from verification.observation import Observation, ObservationType
+from verification.scenario import Scenario
+from verification.scoreboard import Scoreboard, ScoreboardResult
+from verification.tolerance import ToleranceConfig
 
 
 class DivergenceClass(str, Enum):
@@ -180,7 +180,7 @@ class GoldenExecutorOracle(GoldenOracle):
         return "GoldenExecutorOracle"
 
     def _lazy_init(self):
-        from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector
+        from golden_executor import GoldenMXU, GoldenSFU, GoldenVector
         if self._mxu is None:
             self._mxu = GoldenMXU()
             self._sfu = GoldenSFU()
@@ -519,7 +519,7 @@ async def run_differential_scenario(
     detects/records any fault injection.
     """
 
-    from sim.verification.fault_injector import FaultClass
+    from verification.fault_injector import FaultClass
 
     scenario_id = scenario.scenario_id
     adapter_name = adapter.adapter_name

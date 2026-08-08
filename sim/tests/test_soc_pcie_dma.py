@@ -28,7 +28,7 @@ import logging
 import cocotb
 from cocotb.triggers import RisingEdge, ClockCycles
 
-from sim.cocotb_bridge import (
+from cocotb_bridge import (
     CocotbBridge,
     SRAM_BASE,
     DRAM_BASE,

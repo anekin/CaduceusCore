@@ -9,8 +9,8 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from sim.timing.metrics import MetricsCollector
-from sim.timing.types import RequestMetrics
+from timing.metrics import MetricsCollector
+from timing.types import RequestMetrics
 
 
 def _mesh_dims(ports: int) -> tuple[int, int]:

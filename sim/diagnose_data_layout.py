@@ -29,7 +29,7 @@ try:
 except ImportError:
     COCOTB_AVAILABLE = False
 
-from sim.cocotb_bridge import (
+from cocotb_bridge import (
     CocotbBridge,
     SRAM_BASE,
     pack_int8_activation_tile_major,

@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Tuple
 
 import pytest
 
-from sim.verification import (
+from verification import (
     Action,
     DUTAdapter,
     EvidenceRecord,

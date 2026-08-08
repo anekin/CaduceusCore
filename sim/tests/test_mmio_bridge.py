@@ -9,8 +9,8 @@ WILL FAIL until the handlers are fixed.
 
 import numpy as np
 
-from sim.mmio_bridge import MMIOBridge
-from sim.regmap import SFU, VECTOR
+from mmio_bridge import MMIOBridge
+from regmap import SFU, VECTOR
 
 
 def _write_reg(bridge, module, offset, value):

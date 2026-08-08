@@ -17,7 +17,7 @@ import asyncio
 import numpy as np
 import pytest
 
-from sim.verification import (
+from verification import (
     Action,
     FakeDUTAdapter,
     Observation,
@@ -26,12 +26,12 @@ from sim.verification import (
     Scoreboard,
     ToleranceConfig,
 )
-from sim.verification.dut_adapter import (
+from verification.dut_adapter import (
     DUTConnectionError,
     DUTTimeoutError,
 )
-from sim.verification.fm_adapter import FuncModelAdapter, ABI_VERSION
-from sim.verification.observation import ObservationType
+from verification.fm_adapter import FuncModelAdapter, ABI_VERSION
+from verification.observation import ObservationType
 
 
 def async_test(coro):
@@ -112,7 +112,7 @@ def test_mmio_frontdoor_write_and_readback():
     """MMIO write through bridge, read back the value."""
     async def _test():
         adapter = await _connect_adapter()
-        from sim.regmap import MXU
+        from regmap import MXU
 
         # Write to MXU CTRL register
         await adapter.execute_action(
@@ -136,7 +136,7 @@ def test_mmio_frontdoor_write_multiple_registers():
     """Multiple MMIO writes to different registers."""
     async def _test():
         adapter = await _connect_adapter()
-        from sim.regmap import MXU, SFU
+        from regmap import MXU, SFU
 
         await adapter.execute_action(
             Action.mmio_write(MXU.BASE + MXU.CTRL, 0x00000003)
@@ -201,7 +201,7 @@ def test_pcie_frontdoor_write_to_sram():
     """PCIe TLP write to SRAM, verify via backdoor readback."""
     async def _test():
         adapter = await _connect_adapter()
-        from sim.regmap import Addr
+        from regmap import Addr
         test_data = b"PCIe_SRAM_TEST" * 2
 
         await adapter.execute_action(
@@ -300,7 +300,7 @@ def test_doorbell_irq_dispatch():
     """Full doorbell dispatch: write data, host_write_command, IRQ, firmware dispatch."""
     async def _test():
         adapter = await _connect_adapter()
-        from sim.regmap import MXU, Addr
+        from regmap import MXU, Addr
 
         # Set up a simple MXU test via host_write_data + host_write_command
         M, K, N = 1, 8, 4
@@ -310,7 +310,7 @@ def test_doorbell_irq_dispatch():
             [0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 2, 3], [4, 5, 6, 7],
         ], dtype=np.int8)
 
-        from sim.golden_executor import GoldenMXU
+        from golden_executor import GoldenMXU
         wgt_packed = GoldenMXU.pack_int4(wgt_unpacked.flatten())
         scales = np.ones((1, N), dtype=np.float32)
 
@@ -438,8 +438,8 @@ def test_real_spike_missing_artifacts_fails():
     async def _test():
         # First, verify FuncModel with use_spike=True succeeds when
         # artifacts are present (the adapter path works).
-        from sim.func_model import FuncModel
-        from sim.spike_firmware import _is_spike_available
+        from func_model import FuncModel
+        from spike_firmware import _is_spike_available
 
         if _is_spike_available():
             # Artifacts present: verify FuncModel(use_spike=True) succeeds
@@ -547,7 +547,7 @@ def test_software_e2e_no_operation_performing_backdoors():
         adapter = await _connect_adapter()
 
         # Execute a frontdoor-only scenario: PCIe write + MMIO write + doorbell
-        from sim.regmap import MXU
+        from regmap import MXU
 
         test_data = b"SW_E2E_FRONTDOOR" + bytes(16)
 
@@ -591,13 +591,13 @@ def test_completion_status_observation():
     """Observe completion status through the adapter."""
     async def _test():
         adapter = await _connect_adapter()
-        from sim.regmap import MXU
+        from regmap import MXU
 
         # Set up and dispatch a quick MMUL to get DONE status
         M, K, N = 1, 8, 4
         act = np.ones((M, K), dtype=np.int8)
         wgt_unpacked = np.ones((K, N), dtype=np.int8)
-        from sim.golden_executor import GoldenMXU
+        from golden_executor import GoldenMXU
         wgt_packed = GoldenMXU.pack_int4(wgt_unpacked.flatten())
         scales = np.ones((1, N), dtype=np.float32)
 
