@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from sim.model_specs import all_aliases
-from sim.timing.benchmark import main
-from sim.timing.types import ModuleBreakdown, RequestMetrics, TokenTiming
+from model_specs import all_aliases
+from timing.benchmark import main
+from timing.types import ModuleBreakdown, RequestMetrics, TokenTiming
 
 CADUCEUSCORE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 

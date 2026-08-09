@@ -60,9 +60,9 @@ _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 sys.path.insert(0, str(_ROOT / "sim"))
 
-from sim.func_model import FuncModel
-from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector, GoldenDMA
-from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
+from func_model import FuncModel
+from golden_executor import GoldenMXU, GoldenSFU, GoldenVector, GoldenDMA
+from regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
 from models.crossbar import CrossbarModel
 from engine.isa import OpCode
 
@@ -1710,8 +1710,8 @@ def gen_fm_soc_021() -> VectorRecorder:
     rec = VectorRecorder(model, "FM-SOC-021", "P4")
 
     # Setup follows FuncModel.test_conv2d_smoke exactly
-    from sim.quantize import quantize_int4_per_block
-    from sim.tile_scheduler import TILE_WEIGHT_BYTES, TILE_SCALE_BYTES
+    from quantize import quantize_int4_per_block
+    from tile_scheduler import TILE_WEIGHT_BYTES, TILE_SCALE_BYTES
 
     M, K, N = 1, 256, 256
     rng = np.random.RandomState(42)

@@ -16,9 +16,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from sim.verification.scenario import Action
-from sim.verification.observation import Observation
-from sim.verification.operation_classifier import OperationClass
+from verification.scenario import Action
+from verification.observation import Observation
+from verification.operation_classifier import OperationClass
 
 
 class DUTError(Exception):

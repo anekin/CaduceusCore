@@ -13,7 +13,7 @@ Address routing (matches rtl/soc/axi_crossbar.v):
 import threading
 from typing import List, Optional, Tuple
 
-from sim.regmap import Addr
+from regmap import Addr
 
 
 class CrossbarModel:

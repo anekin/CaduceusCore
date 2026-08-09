@@ -20,7 +20,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from sim.func_model import FuncModel
+from func_model import FuncModel
 
 # ---------------------------------------------------------------------------
 # Paths

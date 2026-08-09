@@ -30,16 +30,16 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from sim.verification.dut_adapter import (
+from verification.dut_adapter import (
     DUTAdapter,
     DUTError,
     DUTTimeoutError,
     DUTConnectionError,
 )
-from sim.verification.scenario import Action
-from sim.verification.observation import Observation, ObservationType
-from sim.verification.operation_classifier import OperationClass
-from sim.verification.fault_injector import (
+from verification.scenario import Action
+from verification.observation import Observation, ObservationType
+from verification.operation_classifier import OperationClass
+from verification.fault_injector import (
     FaultClass,
     FaultInjector,
     FaultInjectionRecord,
@@ -136,7 +136,7 @@ class FuncModelAdapter(DUTAdapter):
 
         try:
             use_spike = (self._firmware_mode == "spike")
-            from sim.func_model import FuncModel
+            from func_model import FuncModel
             self._model = FuncModel(
                 dram_mb=self._dram_mb,
                 sram_kb=self._sram_kb,
@@ -176,7 +176,7 @@ class FuncModelAdapter(DUTAdapter):
         """
         self._check_connected()
         use_spike = (self._firmware_mode == "spike")
-        from sim.func_model import FuncModel
+        from func_model import FuncModel
         self._model = FuncModel(
             dram_mb=self._dram_mb,
             sram_kb=self._sram_kb,
@@ -367,7 +367,7 @@ class FuncModelAdapter(DUTAdapter):
             # Set host_tail directly (for scenarios that don't use
             # descriptors, e.g. simple backdoor doorbell)
             self._model.firmware.doorbell["host_tail"] = int(host_tail)
-            from sim.regmap import DOORBELL, INTC
+            from regmap import DOORBELL, INTC
             self._model.bridge.handle(
                 "write",
                 DOORBELL.BASE + DOORBELL.HOST_TAIL,
@@ -387,7 +387,7 @@ class FuncModelAdapter(DUTAdapter):
             - stalled_head: prevents head from advancing after dispatch
         """
         source = params["source"]
-        from sim.regmap import INTC
+        from regmap import INTC
 
         # Fault injection: dropped_interrupt
         if self._check_inject_fault(FaultClass.dropped_interrupt, "wait_irq"):
@@ -629,7 +629,7 @@ class FuncModelAdapter(DUTAdapter):
             )
 
         elif spec_type == ObservationType.completion_status:
-            from sim.regmap import MXU
+            from regmap import MXU
             status = self._model.bridge.handle(
                 "read", MXU.BASE + MXU.STATUS, 0
             )
@@ -652,7 +652,7 @@ class FuncModelAdapter(DUTAdapter):
             )
 
         elif spec_type == ObservationType.interrupt_status:
-            from sim.regmap import INTC
+            from regmap import INTC
             pending = self._model.bridge.handle(
                 "read", INTC.BASE + INTC.PENDING, 0
             )
@@ -717,7 +717,7 @@ class FuncModelAdapter(DUTAdapter):
         }
 
         if self._firmware_mode == "spike":
-            from sim.spike_firmware import _is_spike_available
+            from spike_firmware import _is_spike_available
             metadata["spike_available"] = _is_spike_available()
             if _is_spike_available():
                 import os as _os
@@ -751,10 +751,10 @@ class FuncModelAdapter(DUTAdapter):
 
     def _get_sram_offset(self, addr: int) -> int:
         """Translate address to SRAM byte offset."""
-        from sim.regmap import Addr
+        from regmap import Addr
         return int(addr) - Addr.SRAM_BASE
 
     def _get_dram_offset(self, addr: int) -> int:
         """Translate address to DRAM byte offset."""
-        from sim.regmap import Addr
+        from regmap import Addr
         return int(addr) - Addr.DRAM_BASE

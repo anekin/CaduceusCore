@@ -11,7 +11,7 @@ import warnings
 
 import pytest
 
-from sim.miniv import NPUFirmware
+from miniv import NPUFirmware
 
 
 def _make_minimal_modules() -> dict:
@@ -35,11 +35,11 @@ def test_import_and_construct_triggers_deprecation_warning():
 
     The warning is emitted from __init__, not at module level, so we must
     instantiate to see it. Mirrors the CLI check:
-        python3 -W default::DeprecationWarning -c "from sim.miniv import NPUFirmware; NPUFirmware({})"
+        python3 -W default::DeprecationWarning -c "from miniv import NPUFirmware; NPUFirmware({})"
     """
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        from sim.miniv import NPUFirmware as npf
+        from miniv import NPUFirmware as npf
 
         npf(sim_modules=_make_minimal_modules())
     deprecation_msgs = [
@@ -180,7 +180,7 @@ def test_dispatch_docstring_has_deprecated_marker():
 
 
 def test_cli_import_equivalent():
-    """Equivalent to: python3 -W default::DeprecationWarning -c "from sim.miniv import NPUFirmware"
+    """Equivalent to: python3 -W default::DeprecationWarning -c "from miniv import NPUFirmware"
 
     This test exists as a programmatic mirror of the manual QA step in the
     acceptance criteria. The warning fires on construction, not import.
@@ -190,7 +190,7 @@ def test_cli_import_equivalent():
     import sys
 
     code = (
-        "from sim.miniv import NPUFirmware; "
+        "from miniv import NPUFirmware; "
         "NPUFirmware({'dram': bytearray(1024), 'sram': bytearray(1024)}); "
         "print('OK')"
     )

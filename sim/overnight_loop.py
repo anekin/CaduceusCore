@@ -95,21 +95,22 @@ def check_model_consistency() -> List[str]:
     # Check for broken import paths (e.g., "from sim.models" which doesn't exist)
     # This catches incomplete migration where old project structure imports survive
     import subprocess as _subprocess
-    broken_import_patterns = [
-        (r"from sim\.models", "from models"),
-        (r"from sim\.engine", "from engine"),
-    ]
-    for pattern, fix in broken_import_patterns:
-        result = _subprocess.run(
-            ["grep", "-rn", pattern, "--include=*.py", str(SIM_DIR)],
-            capture_output=True, text=True
-        )
-        for line in result.stdout.strip().split("\n"):
-            if line and "__pycache__" not in line and "overnight_loop.py" not in line:
-                # exclude checker self-scanning
-                file_path = line.split(":")[0]
-                if "overnight_loop" not in file_path and "test_golden_deprecation" not in file_path:
-                    issues.append(f"broken import: {line.strip()} → should be {fix}")
+    # 2026-08-08: Broadened from sim.models/sim.engine to all from sim.* imports.
+    # Previously missed 294 instances of from sim.regmap, from sim.npu_sim, etc.
+    result = _subprocess.run(
+        ["grep", "-rn", r"from sim\.", "--include=*.py", str(SIM_DIR)],
+        capture_output=True, text=True
+    )
+    for line in result.stdout.strip().split("\n"):
+        if line and "__pycache__" not in line and "overnight_loop.py" not in line:
+            file_path = line.split(":")[0]
+            if "overnight_loop" not in file_path and "test_golden_deprecation" not in file_path:
+                # Extract module path for precise auto-fix
+                import_match = re.search(r'from (sim\.[\w.]+)\s+import', line)
+                if import_match:
+                    old_mod = import_match.group(1)
+                    new_mod = old_mod.replace("sim.", "", 1)
+                    issues.append(f"broken import: {line.strip()} → should be from {new_mod} import ...")
 
     # Check validate_e2e.py does not import deprecated models.golden
     e2e_path = SIM_DIR / "validate_e2e.py"
@@ -329,23 +330,30 @@ def fix_issues(issues: List[str]) -> int:
         elif "broken import" in issue:
             # Extract file path from issue and auto-fix
             import re as _re
-            m = _re.match(r"broken import: (.+?):(\d+):\s*from sim\.(\w+)\.(\w+) import", issue)
+            # Handle both: "from sim.module import" (two-level) and "from sim.pkg.module import" (three-level)
+            # Use search (not match) since line may contain leading code like "import x; from sim.y import z"
+            m = _re.search(r"from (sim\.[\w.]+)\s+import", issue)
             if m:
-                filepath = m.group(1)
-                old_import = f"from sim.{m.group(3)}.{m.group(4)} import"
-                new_import = f"from {m.group(3)}.{m.group(4)} import"
+                # Extract file path from issue prefix
+                fp_match = _re.match(r"broken import: (.+?):\d+:", issue)
+                filepath = fp_match.group(1) if fp_match else None
+                if not filepath:
+                    log(f"    Could not extract filepath from: {issue[:80]}")
+                    continue
+                old_prefix = f"from {m.group(1)} import"
+                new_prefix = f"from {m.group(1).replace('sim.', '', 1)} import"
                 with open(filepath) as f:
                     content = f.read()
-                if old_import in content:
-                    content = content.replace(old_import, new_import)
+                if old_prefix in content:
+                    content = content.replace(old_prefix, new_prefix)
                     with open(filepath, "w") as f:
                         f.write(content)
                     fixed += 1
-                    log(f"    Fixed broken import in {filepath}: {old_import} → {new_import}")
+                    log(f"    Fixed broken import in {filepath}: {old_prefix} → {new_prefix}")
                 else:
                     log(f"    Pattern not found in {filepath} (may already be fixed)")
             else:
-                log(f"    Auto-fix not available for broken import — requires manual review")
+                log(f"    Auto-fix regex didn't match: {issue[:120]}")
 
     return fixed
 

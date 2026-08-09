@@ -62,7 +62,7 @@ from caduceus_device_protocol.SubmitRequest import SubmitRequestT
 from caduceus_device_protocol.SubmitResponse import SubmitResponseT
 
 from gen.npu_abi import Addr, DOORBELL
-from sim.device_protocol import (
+from device_protocol import (
     MAGIC,
     PROTOCOL_VERSION,
     build_message,
@@ -74,7 +74,7 @@ from sim.device_protocol import (
     unpack_table,
     validate_header,
 )
-from sim.func_model import FuncModel
+from func_model import FuncModel
 
 
 LOGGER = logging.getLogger("caduceus.device")

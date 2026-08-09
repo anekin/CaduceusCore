@@ -37,7 +37,7 @@ from caduceus_device_protocol.FencePollRequest import FencePollRequestT
 from caduceus_device_protocol.FencePollResponse import FencePollResponseT
 from caduceus_device_protocol.MessageHeader import MessageHeaderT
 
-from sim.device_protocol import (
+from device_protocol import (
     MAGIC,
     PROTOCOL_VERSION,
     build_message,
@@ -46,7 +46,7 @@ from sim.device_protocol import (
     send_framed,
     validate_header,
 )
-from sim.rtl_protocol_endpoint import (
+from rtl_protocol_endpoint import (
     ThreadedRtlMockServer,
     RtlMockState,
     DEFAULT_SOCK_PATH,

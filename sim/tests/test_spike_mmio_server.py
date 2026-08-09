@@ -5,7 +5,7 @@ Covers: MMIO->bridge, SRAM/DRAM->crossbar, crossbar=None ERR."""
 from unittest.mock import MagicMock
 
 from models.crossbar import CrossbarModel
-from sim.spike_mmio_server import _handle_request
+from spike_mmio_server import _handle_request
 
 
 # ── Helpers ──────────────────────────────────────────────────────────

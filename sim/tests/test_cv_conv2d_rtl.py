@@ -1,7 +1,7 @@
 import os, sys, struct, time; from pathlib import Path; import numpy as np
 REPO = Path("/home/prj/zhengs/caduceuscore/CaduceusCore")
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "sim"))
-import cocotb; from sim.cocotb_bridge import CocotbBridge; from sim.regmap import Addr, DOORBELL
+import cocotb; from cocotb_bridge import CocotbBridge; from regmap import Addr, DOORBELL
 
 VD=REPO/"rtl/test_vectors/soc_e2e/cv_conv2d_rtl"; ED=REPO/"build/evidence"
 ACT_ADDR=0x80010000; WGT_ADDR=0x80063000; OUT_ADDR=0x80066000

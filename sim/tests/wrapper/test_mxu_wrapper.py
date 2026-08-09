@@ -31,7 +31,7 @@ from cocotb.triggers import ClockCycles, RisingEdge, Timer
 from cocotb.binary import BinaryValue
 
 try:
-    from sim.tests.wrapper.wrapper_common import (
+    from tests.wrapper.wrapper_common import (
         create_apb_master,
         create_axi_ram,
         write_reg,
@@ -49,7 +49,7 @@ except ImportError:
     )
 
 import numpy as np
-from sim.golden_executor import GoldenMXU
+from golden_executor import GoldenMXU
 
 # ══════════════════════════════════════════════════════════════════════
 # Constants

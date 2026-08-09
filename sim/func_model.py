@@ -12,11 +12,11 @@ from typing import Optional
 import numpy as np
 import struct
 
-from sim.regmap import Addr, print_map
-from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector, GoldenDMA
-from sim.mmio_bridge import MMIOBridge
-from sim.miniv import RISCVMini, NPUFirmware, BOOT_ROM_SIZE, BOOT_ROM_BASE
-from sim.axi_tracer import AXITracer
+from regmap import Addr, print_map
+from golden_executor import GoldenMXU, GoldenSFU, GoldenVector, GoldenDMA
+from mmio_bridge import MMIOBridge
+from miniv import RISCVMini, NPUFirmware, BOOT_ROM_SIZE, BOOT_ROM_BASE
+from axi_tracer import AXITracer
 from models.pcie import PCIeModel, DmaEngine
 from models.crossbar import CrossbarModel
 
@@ -88,7 +88,7 @@ class FuncModel:
             return NPUFirmware(sim_modules=sim_modules, bridge=bridge)
 
         # Lazy import breaks a circular dependency with sim.spike_mmio_server.
-        from sim.spike_firmware import SpikeFirmware, _spike_available
+        from spike_firmware import SpikeFirmware, _spike_available
 
         if _spike_available():
             return SpikeFirmware(sim_modules=sim_modules, bridge=bridge)
@@ -141,7 +141,7 @@ class FuncModel:
 
         # Mirror host_tail to doorbell MMIO and raise HOST doorbell interrupt.
         if self.bridge:
-            from sim.regmap import DOORBELL, INTC
+            from regmap import DOORBELL, INTC
             self.bridge.handle('write', DOORBELL.BASE + DOORBELL.HOST_TAIL, new_tail)
             self.bridge._set_irq(8)  # HOST doorbell interrupt source
 
@@ -194,8 +194,8 @@ class FuncModel:
 
     def test_conv2d_smoke(self):
         """End-to-end smoke test: Host → CMD → MXU (tile-level scheduling)."""
-        from sim.quantize import quantize_int4_per_block
-        from sim.tile_scheduler import TILE_H, TILE_W, TILE_WEIGHT_BYTES, TILE_SCALE_BYTES
+        from quantize import quantize_int4_per_block
+        from tile_scheduler import TILE_H, TILE_W, TILE_WEIGHT_BYTES, TILE_SCALE_BYTES
 
         print("=" * 60)
         print("Func Model — Tile-Level Per-Block INT4 Smoke Test")
@@ -273,8 +273,8 @@ if __name__ == "__main__":
     ok = model.test_conv2d_smoke()
 
     # Phase 3: AXI Tracer (tile-level)
-    from sim.quantize import quantize_int4_per_block
-    from sim.tile_scheduler import TILE_WEIGHT_BYTES, TILE_SCALE_BYTES
+    from quantize import quantize_int4_per_block
+    from tile_scheduler import TILE_WEIGHT_BYTES, TILE_SCALE_BYTES
 
     M, K, N = 1, 256, 256
     rng = np.random.RandomState(99)
@@ -364,7 +364,7 @@ class DualPathChecker:
     @staticmethod
     def _read_pcie(model: FuncModel, sram_offset: int, size: int) -> bytes:
         """PCIe TLP read through crossbar routing."""
-        from sim.regmap import Addr
+        from regmap import Addr
         phys_addr = Addr.SRAM_BASE + sram_offset
         return model.pcie.tlp_read(phys_addr, size)
 

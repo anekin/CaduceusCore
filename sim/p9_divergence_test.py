@@ -29,8 +29,8 @@ try:
 except ImportError:
     cocotb = None  # type: ignore
 
-from sim.cocotb_bridge import CocotbBridge, NPUInstruction
-from sim.cocotb_bridge import pack_int8_activation_tile_major, pack_int4_tile_major
+from cocotb_bridge import CocotbBridge, NPUInstruction
+from cocotb_bridge import pack_int8_activation_tile_major, pack_int4_tile_major
 
 # Lazy import perf_tests: it uses @cocotb.test() at module level and fails
 # to import in the offline --merge invocation where cocotb is not installed.
@@ -39,13 +39,13 @@ _PR = None
 def _get_perf_tests():
     global _PR
     if _PR is None:
-        from sim.perf_tests import PR, _gen, _pack_w, _make_scales
+        from perf_tests import PR, _gen, _pack_w, _make_scales
         _PR = (PR, _gen, _pack_w, _make_scales)
     return _PR
 
 
 import sim.diagnose_mmu_path as diag
-from sim.regmap import Addr
+from regmap import Addr
 
 try:
     logger = cocotb.logging.getLogger("p9_divergence_test")

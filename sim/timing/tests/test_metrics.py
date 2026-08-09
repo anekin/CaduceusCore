@@ -6,8 +6,8 @@ They will fail (RED) until MetricsCollector is implemented in Task 11.
 
 import pytest
 
-from sim.timing.metrics import MetricsCollector
-from sim.timing.types import RequestMetrics
+from timing.metrics import MetricsCollector
+from timing.types import RequestMetrics
 
 
 class TestComputeTTFT:

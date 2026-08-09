@@ -11,14 +11,14 @@ import struct
 import numpy as np
 import pytest
 
-from sim.func_model import FuncModel
-from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenVector
-from sim.regmap import Addr, DOORBELL, INTC
+from func_model import FuncModel
+from golden_executor import GoldenMXU, GoldenSFU, GoldenVector
+from regmap import Addr, DOORBELL, INTC
 from engine.isa import OpCode
 
 # ── Re-export existing doorbell tests from test_soc_fm.py ──────────────
 # pylint: disable=unused-import,wrong-import-position
-from sim.tests.test_soc_fm import (  # noqa: F401
+from tests.test_soc_fm import (  # noqa: F401
     test_doorbell_single_mmul_interrupt,
     test_doorbell_three_command_queue,
     test_doorbell_ring_wrap_16,
@@ -30,7 +30,7 @@ from sim.tests.test_soc_fm import (  # noqa: F401
 
 _RNG = np.random.RandomState(20260704)
 
-from sim.tests.test_soc_fm import (  # noqa: E402
+from tests.test_soc_fm import (  # noqa: E402
     _doorbell_setup_mmul,
     _doorbell_write_mmul_desc,
     _doorbell_assert_mmul_result,
@@ -112,7 +112,7 @@ def test_doorbell_concurrent_push_poll():
     Verifies that HOST_TAIL and NPU_HEAD indices are tracked correctly through
     interleaved push/poll cycles, including intermediate head-lag state.
     """
-    from sim.regmap import INTC
+    from regmap import INTC
 
     model = FuncModel()
     M, K, N = 1, 4, 2

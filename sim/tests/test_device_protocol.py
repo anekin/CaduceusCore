@@ -23,7 +23,7 @@ from caduceus_device_protocol.FenceWaitRequest import FenceWaitRequestT
 from caduceus_device_protocol.MessageHeader import MessageHeaderT
 from caduceus_device_protocol.DeviceMessage import DeviceMessage
 
-from sim.device_protocol import (
+from device_protocol import (
     MAGIC,
     PROTOCOL_VERSION,
     build_message,
@@ -34,7 +34,7 @@ from sim.device_protocol import (
     unpack_table,
     validate_header,
 )
-from sim.device_server import FmDeviceServer, _ThreadedUnixFmServer
+from device_server import FmDeviceServer, _ThreadedUnixFmServer
 
 
 # ── Codec tests ────────────────────────────────────────────────────────────

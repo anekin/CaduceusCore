@@ -26,7 +26,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO_ROOT))
 sys.path.insert(0, str(_REPO_ROOT / "sim"))
 
-from sim.regmap import Addr, DOORBELL, DMA
+from regmap import Addr, DOORBELL, DMA
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ class TestIncompatibleABI:
 
     def test_incompatible_abi_uses_spike(self, func_model_spike):
         """FuncModel(use_spike=True) must use SpikeFirmware, not NPUFirmware."""
-        from sim.spike_firmware import SpikeFirmware
+        from spike_firmware import SpikeFirmware
 
         fw = func_model_spike.firmware
         assert isinstance(fw, SpikeFirmware), (
@@ -165,14 +165,14 @@ class TestIncompatibleABI:
         """FuncModel(use_spike=True) without artifacts must raise RuntimeError."""
         import os
 
-        from sim.func_model import FuncModel
+        from func_model import FuncModel
 
         saved = os.environ.get("CADUCEUS_USE_SPIKE")
         os.environ["CADUCEUS_USE_SPIKE"] = "0"  # force NPUFirmware path
         try:
             # With env=0, use_spike=True should still attempt Spike
             # but with a fake path that doesn't exist, it should raise
-            from sim.spike_firmware import SpikeFirmware
+            from spike_firmware import SpikeFirmware
 
             # Direct test: SpikeFirmware without artifacts via patched paths
             import tempfile
@@ -180,11 +180,11 @@ class TestIncompatibleABI:
             with tempfile.NamedTemporaryFile(suffix=".nonexistent") as tf:
                 fake_path = Path(tf.name)
             # The file was deleted by NamedTemporaryFile, so it doesn't exist
-            from sim.mmio_bridge import MMIOBridge
+            from mmio_bridge import MMIOBridge
             from models.crossbar import CrossbarModel
 
             # Testing that _spike_available returns False when artifacts missing
-            from sim.spike_firmware import _is_spike_available
+            from spike_firmware import _is_spike_available
 
             # With the real paths, this is either True or False based on build state.
             # The important invariant is that when artifacts are missing,
@@ -232,7 +232,7 @@ class TestCorruptedDescriptor:
 
     def test_mmul_valid_returns_success(self, func_model_spike):
         """Sanity check: valid MMUL returns success status."""
-        from sim.quantize import quantize_int4_per_block
+        from quantize import quantize_int4_per_block
 
         M, K, N = 1, 128, 64
         rng = np.random.RandomState(42)
@@ -278,7 +278,7 @@ class TestEngineClasses:
 
     def test_mmul_completes(self, func_model_spike):
         """MMUL INT4 per-block matmul completes with correct status."""
-        from sim.quantize import quantize_int4_per_block
+        from quantize import quantize_int4_per_block
 
         M, K, N = 1, 128, 64
         rng = np.random.RandomState(42)
@@ -377,7 +377,7 @@ class TestChainedCommands:
 
     def test_chain_mmul_sfu_vector(self, func_model_spike):
         """Three chained commands complete in order."""
-        from sim.quantize import quantize_int4_per_block
+        from quantize import quantize_int4_per_block
 
         M, K, N = 1, 64, 32
         dim = N
@@ -447,7 +447,7 @@ class TestReset:
         _reset_doorbell(func_model_spike)
 
         # Now submit a valid command — should succeed
-        from sim.quantize import quantize_int4_per_block
+        from quantize import quantize_int4_per_block
 
         M, K, N = 1, 128, 64
         rng = np.random.RandomState(42)

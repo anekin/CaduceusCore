@@ -120,7 +120,7 @@ def _count_generated_tokens(text: str, model_path: Path) -> int | None:
     if not text:
         return 0
     try:
-        from sim.tokenizer import tokenize
+        from tokenizer import tokenize
 
         return len(tokenize(text, str(model_path)))
     except Exception:

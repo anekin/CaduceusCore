@@ -20,7 +20,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from sim.qwen_blk0_synthetic_vectors import (
+from qwen_blk0_synthetic_vectors import (
     get_dram_windows,
     assert_non_overlapping_windows,
     load_manifest,
@@ -30,16 +30,16 @@ from sim.qwen_blk0_synthetic_vectors import (
     PUBLIC_DIMS,
     VECTORS_DIR,
 )
-from sim.func_model import FuncModel
-from sim.tile_scheduler import (
+from func_model import FuncModel
+from tile_scheduler import (
     tile_mmul,
     TILE_H,
     TILE_W,
     TILE_WEIGHT_BYTES,
     TILE_SCALE_BYTES,
 )
-from sim.golden_executor import GoldenMXU
-from sim.regmap import Addr
+from golden_executor import GoldenMXU
+from regmap import Addr
 
 CASE_ID = "task-0b-qwen3b-synthetic-and-real-preflight"
 
@@ -515,7 +515,7 @@ def test_qwen_blk0_synthetic_direct_mmio_manifest_ops(capsys) -> None:
     """Synthetic direct-MMIO 17-op stress: load manifest, dispatch each op
     through FuncModel.bridge (MMIOBridge) at declared dimensions, compare
     against checked-in manifest golden."""
-    from sim.regmap import MXU, SFU, VECTOR
+    from regmap import MXU, SFU, VECTOR
 
     manifest = load_manifest()
     ops = manifest["ops"]
@@ -803,7 +803,7 @@ def test_qwen_blk0_synthetic_validation_rejects_corruption(capsys) -> None:
     dram = model.dram
     b = model.bridge
     MXU_BASE = 0x40000000
-    from sim.regmap import MXU
+    from regmap import MXU
 
     def _run_mxu_synth(inp, wgt):
         dram[_dram_off(IN_ADDR):_dram_off(IN_ADDR) + len(inp)] = inp
@@ -870,7 +870,7 @@ def test_qwen_blk0_synthetic_validation_rejects_invalid_descriptor(capsys) -> No
     WGT_ADDR = DRAM_BASE + 0x00100000
     OUT_ADDR = DRAM_BASE + 0x01000000
     MXU_BASE = 0x40000000
-    from sim.regmap import MXU
+    from regmap import MXU
 
     def _dram_off(a):
         return a - DRAM_BASE
@@ -932,10 +932,10 @@ def test_qwen_blk0_synthetic_tiled_boundary_coverage(capsys) -> None:
     Exercise first, middle, last, and remainder tile behaviour for both
     K-blocks and N-tiles. Verify output stitching via a NumPy reference matmul.
     """
-    from sim.tile_scheduler import (
+    from tile_scheduler import (
         tile_mmul, TILE_H, TILE_W, TILE_WEIGHT_BYTES, TILE_SCALE_BYTES,
     )
-    from sim.golden_executor import GoldenMXU
+    from golden_executor import GoldenMXU
 
     K, N, M = 129, 130, 1
     num_blocks = math.ceil(K / TILE_H)     # 2 (128 + 1)

@@ -75,6 +75,6 @@ def func_model_spike(spike_available, require_spike):
         else:
             pytest.skip("Spike firmware prerequisites not available")
 
-    from sim.func_model import FuncModel
+    from func_model import FuncModel
 
     return FuncModel(use_spike=True, sram_kb=4096)

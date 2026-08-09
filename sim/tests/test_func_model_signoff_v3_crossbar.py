@@ -23,14 +23,14 @@ import struct
 import numpy as np
 import pytest
 
-from sim.func_model import FuncModel
-from sim.golden_executor import GoldenMXU, GoldenSFU, GoldenDMA
-from sim.regmap import Addr
+from func_model import FuncModel
+from golden_executor import GoldenMXU, GoldenSFU, GoldenDMA
+from regmap import Addr
 from models.crossbar import CrossbarModel
 
 # ── Re-export existing crossbar tests ──────────────────────────────────
 # Import and alias so pytest discovers them when running *this* file.
-from sim.tests.test_soc_fm import (           # noqa: F401
+from tests.test_soc_fm import (           # noqa: F401
     test_crossbar_concurrent,
     test_crossbar_two_master_concurrent_read,
     test_crossbar_three_master_mixed,

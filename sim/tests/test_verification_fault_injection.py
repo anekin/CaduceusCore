@@ -19,7 +19,7 @@ import asyncio
 
 import pytest
 
-from sim.verification import (
+from verification import (
     Action,
     EvidenceRecord,
     Observation,
@@ -30,17 +30,17 @@ from sim.verification import (
     FaultInjector,
     FaultInjectionRecord,
 )
-from sim.verification.differential import (
+from verification.differential import (
     MemoryGoldenOracle,
     run_differential_scenario,
 )
-from sim.verification.dut_adapter import (
+from verification.dut_adapter import (
     DUTConnectionError,
     DUTTimeoutError,
 )
-from sim.verification.fm_adapter import FuncModelAdapter
-from sim.verification.observation import ObservationType
-from sim.verification.operation_classifier import OperationClass
+from verification.fm_adapter import FuncModelAdapter
+from verification.observation import ObservationType
+from verification.operation_classifier import OperationClass
 
 
 def async_test(coro):

@@ -23,7 +23,7 @@ from cocotb.triggers import ClockCycles, RisingEdge, Timer
 
 import numpy as np
 
-from sim.tests.wrapper.wrapper_common import (
+from tests.wrapper.wrapper_common import (
     check_no_x,
     create_apb_master,
     create_axi_ram,

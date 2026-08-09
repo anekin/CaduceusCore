@@ -586,3 +586,31 @@ PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q \
 - Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
 - Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
 - Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-07-31 16:53 36-layer RTL Checkpoint Forward Pass
+
+- Commit: 87fa843b43aa656a55e6ca881c019f13b4bdb918
+- Ibex RTL smoke (FM-SOC-001): NOT_RUN (0 cycles)
+- L0: cos_sim=1.000000 [PASS]
+- L10: cos_sim=1.000000 [PASS]
+- L20: cos_sim=1.000000 [PASS]
+- L35: cos_sim=1.000000 [PASS]
+- Evidence: `build/evidence/36layer-checkpoint.txt`
+- Verification: `grep -c 'cos_sim' build/evidence/36layer-checkpoint.txt` -> 6
+
+
+## 2026-07-31T10:00:55Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-07-31T11:22:03Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.

@@ -19,13 +19,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sim.verification.operation_classifier import (
+from verification.operation_classifier import (
     OperationClass,
     classify_action,
     validate_scenario_operations,
 )
-from sim.verification.observation import Observation, ObservationType
-from sim.verification.tolerance import ToleranceConfig, Provenance
+from verification.observation import Observation, ObservationType
+from verification.tolerance import ToleranceConfig, Provenance
 
 
 # ── Action ──────────────────────────────────────────────────────────────

@@ -28,7 +28,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
-from sim.tests.wrapper.wrapper_common import (
+from tests.wrapper.wrapper_common import (
     create_apb_master,
     create_axi_ram,
     write_reg,

@@ -30,14 +30,14 @@ _HERE = Path(__file__).resolve().parent
 _PROJECT = _HERE.parents[1]
 sys.path.insert(0, str(_PROJECT / "ggml-npu"))
 
-from sim.tile_scheduler import (
+from tile_scheduler import (
     tile_mmul,
     TILE_H,
     TILE_W,
     TILE_WEIGHT_BYTES,
     TILE_SCALE_BYTES,
 )
-from sim.golden_executor import GoldenMXU
+from golden_executor import GoldenMXU
 
 CASE_ID = "task-0b-qwen3b-synthetic-and-real-preflight"
 
@@ -308,8 +308,8 @@ def test_qwen25_3b_real_direct_projections(capsys) -> None:
     )
     from q4_dequant import load_selected_weights_from_gguf
     from qwen25_forward import Qwen25Layer
-    from sim.regmap import MXU
-    from sim.func_model import FuncModel
+    from regmap import MXU
+    from func_model import FuncModel
 
     gguf_path = _gguf_path()
     assert gguf_path.is_file(), f"GGUF not found: {gguf_path}"
@@ -854,7 +854,7 @@ def test_qwen25_3b_real_tiled_projections(capsys) -> None:
     )
     from q4_dequant import load_selected_weights_from_gguf, load_tensor_row_from_gguf
     from qwen25_forward import Qwen25Layer
-    from sim.func_model import FuncModel
+    from func_model import FuncModel
 
     gguf_path = _gguf_path()
     assert gguf_path.is_file(), f"GGUF not found: {gguf_path}"
@@ -1068,7 +1068,7 @@ def test_qwen25_3b_real_tiled_projections(capsys) -> None:
         direct_out = None
         try:
             # Re-run direct MMIO path (same as T4C2) for agreement
-            from sim.regmap import MXU as MXU_REG
+            from regmap import MXU as MXU_REG
             direct_model = FuncModel(dram_mb=256)
             d_dram = direct_model.dram
             _D_DIRECT_ACT = _T4C3_DRAM_BASE + 0x00000000
@@ -1326,9 +1326,9 @@ def test_qwen25_3b_real_connected_blk0(capsys) -> None:
     )
     from q4_dequant import load_selected_weights_from_gguf, load_tensor_row_from_gguf
     from qwen25_forward import Qwen25Layer
-    from sim.regmap import MXU, SFU, VECTOR
-    from sim.func_model import FuncModel
-    from sim.golden_executor import GoldenSFU, GoldenVector
+    from regmap import MXU, SFU, VECTOR
+    from func_model import FuncModel
+    from golden_executor import GoldenSFU, GoldenVector
 
     gguf_path = _gguf_path()
     assert gguf_path.is_file(), f"GGUF not found: {gguf_path}"
@@ -1949,9 +1949,9 @@ def test_qwen25_3b_real_blk0_rejects_corruption_and_shape_substitution(capsys) -
     )
     from q4_dequant import load_selected_weights_from_gguf, load_tensor_row_from_gguf
     from qwen25_forward import Qwen25Layer
-    from sim.regmap import MXU, SFU
-    from sim.func_model import FuncModel
-    from sim.golden_executor import GoldenSFU
+    from regmap import MXU, SFU
+    from func_model import FuncModel
+    from golden_executor import GoldenSFU
 
     gguf_path = _gguf_path()
     assert gguf_path.is_file(), f"GGUF not found: {gguf_path}"

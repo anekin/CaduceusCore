@@ -31,7 +31,7 @@ class TestFacadeConsistency:
 
     def test_addr_aliases_match_gen(self):
         """All Addr._BASE aliases match gen Addr values."""
-        from sim.regmap import Addr as FAddr
+        from regmap import Addr as FAddr
         import gen.npu_abi as gen
 
         checks = [
@@ -53,7 +53,7 @@ class TestFacadeConsistency:
 
     def test_new_style_aliases_match_gen(self):
         """New (non-_BASE) Addr names match gen."""
-        from sim.regmap import Addr as FAddr
+        from regmap import Addr as FAddr
         import gen.npu_abi as gen
 
         for attr in dir(gen.Addr):
@@ -98,8 +98,8 @@ class TestFacadeConsistency:
     def test_backward_compat_imports(self):
         """All old-style consumers import unchanged."""
         # Simulate all known import patterns
-        from sim.regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC, PCIE_DMA
-        from sim.regmap import EngineOp, OpCode, StatusCode, SFUOp, VectorOp, MXUDType
+        from regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC, PCIE_DMA
+        from regmap import EngineOp, OpCode, StatusCode, SFUOp, VectorOp, MXUDType
         # Check key attribute access
         assert Addr.MXU_BASE == 0x40000000
         assert Addr.DOORBELL == 0x40005000
@@ -121,7 +121,7 @@ class TestFacadeConsistency:
 
     def test_validate_no_conflicts(self):
         """Facade validate() reports no address conflicts."""
-        from sim.regmap import validate
+        from regmap import validate
         regions = validate()
         assert len(regions) >= 6  # at least MXU, SFU, VECTOR, DMA, DOORBELL, INTC
 

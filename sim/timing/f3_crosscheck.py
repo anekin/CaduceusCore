@@ -5,9 +5,9 @@ import json
 import sys
 from pathlib import Path
 
-from sim.model_specs import get_spec, llm_aliases
-from sim.npu_sim import NPUSimulator
-from sim.timing.timing_engine import _build_llm_trace  # reuse trace builder
+from model_specs import get_spec, llm_aliases
+from npu_sim import NPUSimulator
+from timing.timing_engine import _build_llm_trace  # reuse trace builder
 
 RESULTS_DIR = Path(__file__).resolve().parent.parent.parent / "results" / "timing"
 TOLERANCE = 15.0  # ±15%

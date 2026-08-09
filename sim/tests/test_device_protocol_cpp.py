@@ -11,7 +11,7 @@ import threading
 
 import pytest
 
-from sim.device_server import FmDeviceServer, _ThreadedUnixFmServer
+from device_server import FmDeviceServer, _ThreadedUnixFmServer
 
 
 # ── ctypes definitions ─────────────────────────────────────────────────────

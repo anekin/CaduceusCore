@@ -24,8 +24,8 @@ try:
 except ImportError:
     COCOTB_AVAILABLE = False
 
-from sim.cocotb_bridge import CocotbBridge, DRAM_BASE as DB, SRAM_BASE as SB
-from sim.cocotb_bridge import pack_int8_activation_tile_major, pack_int4_tile_major
+from cocotb_bridge import CocotbBridge, DRAM_BASE as DB, SRAM_BASE as SB
+from cocotb_bridge import pack_int8_activation_tile_major, pack_int4_tile_major
 
 logger = logging.getLogger("perf_tests_standalone_p11")
 

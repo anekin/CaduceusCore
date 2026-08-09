@@ -17,9 +17,9 @@ import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
-from sim.miniv import BOOT_ROM_BASE, BOOT_ROM_SIZE, DMEM_BASE, DMEM_SIZE
-from sim.regmap import Addr, DOORBELL
-from sim.spike_mmio_server import DEFAULT_SOCK_PATH, serve
+from miniv import BOOT_ROM_BASE, BOOT_ROM_SIZE, DMEM_BASE, DMEM_SIZE
+from regmap import Addr, DOORBELL
+from spike_mmio_server import DEFAULT_SOCK_PATH, serve
 
 
 _HERE = Path(__file__).parent
@@ -109,7 +109,7 @@ class SpikeFirmware:
         riscv.state.pc = 0x00000000
         riscv.state.write(2, DMEM_BASE + DMEM_SIZE)
         if boot_rom_path is not None and os.path.exists(boot_rom_path):
-            from sim.miniv import RISCVMini
+            from miniv import RISCVMini
 
             RISCVMini.load_hex(boot_rom_path, riscv._boot_rom, BOOT_ROM_BASE)
 

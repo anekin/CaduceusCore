@@ -293,7 +293,7 @@ class RISCVMini:
     def _handle_irq(self):
         """Trap handler: read INTC.PENDING via MMIO, find highest-priority
         source, dispatch to irq_handler, write ACK, clear flag if done."""
-        from sim.regmap import INTC
+        from regmap import INTC
         if not self.mmio_callback:
             self.interrupt_pending = False
             return
@@ -486,7 +486,7 @@ class NPUFirmware:
 
     def run_loop(self, max_commands: int = 10) -> List[dict]:
         """Main firmware loop: poll doorbell → dispatch → complete."""
-        from sim.regmap import DOORBELL
+        from regmap import DOORBELL
         results = []
         for _ in range(max_commands):
             # Service any pending doorbell HOST interrupt first.
@@ -522,7 +522,7 @@ class NPUFirmware:
         records IRQ service for _wait_done to continue.
         Supports all engine source bits: 0=MXU, 1=SFU, 2=VECTOR, 3=DMA.
         """
-        from sim.regmap import INTC, MXU, SFU, VECTOR, DMA
+        from regmap import INTC, MXU, SFU, VECTOR, DMA
         pending = self.irq_pending
         if self.bridge:
             pending = self.bridge.handle('read', INTC.BASE + INTC.PENDING, 0)
@@ -547,7 +547,7 @@ class NPUFirmware:
         xbar = self.mod.get('crossbar')
         if xbar is not None:
             return xbar.read(CrossbarModel.MASTER_IBEX, addr, size)
-        from sim.regmap import Addr
+        from regmap import Addr
         off = addr - Addr.DRAM_BASE
         dram = self.mod.get('dram', bytearray())
         return bytes(dram[off:off + size])
@@ -567,7 +567,7 @@ class NPUFirmware:
         available for fast smoke tests but is not guaranteed to match the real
         C firmware behaviour.
         """
-        from sim.regmap import MXU, SFU, VECTOR, DMA
+        from regmap import MXU, SFU, VECTOR, DMA
 
         desc = self._read_descriptor(cmd['desc_addr'])
         result = {'opcode': cmd['opcode'], 'status': 'unknown'}
@@ -575,8 +575,8 @@ class NPUFirmware:
 
         try:
             if op == OpCode.MMUL:  # MMUL — tile-level scheduling
-                from sim.tile_scheduler import tile_mmul
-                from sim.regmap import DMA, MXU
+                from tile_scheduler import tile_mmul
+                from regmap import DMA, MXU
 
                 def mwrite(base, off, val):
                     if self.riscv is not None and (val & 1):
