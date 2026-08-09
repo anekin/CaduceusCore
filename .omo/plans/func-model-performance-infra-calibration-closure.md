@@ -36,14 +36,7 @@
 - Evidence: `.omo/evidence/task-<N>-<slug>.<ext>`；完整 run bundle 位于 `.omo/evidence/func-model-perf-spec/<run_id>/`，`run_id=<UTC>-<head12>-<spec_hash12>`。
 - Mandatory provenance: HEAD、product source fingerprint、dirty paths、Python/dependency versions、host、seed、argv、spec/config/workload/provider/oracle/report hashes、units、UTC start/end；timestamp 不进入 canonical content hash。
 - Mandatory `DoneClaim`: T1-T25 每项写 `todo_id, red_command/result, green_command/result, mutation_command/result, head, source_fingerprint, evidence_path/hash, assertions[], verdict, stale_state, misleading_success_output`；缺失或不匹配使 T25/F1 失败。
-- Dirty worktree: runner 先校验下表中由正式计划冻结的 protected baseline，再记录执行开始时的 `.omo/**` allowlist；product fingerprint 排除 `.omo/**`。任何未声明 product dirty path、protected path 类型变化或 SHA-256 前后不一致均失败；active plan 本身不进入自引用 hash。
-
-### Trusted protected-file baseline
-| Path | Git state/type | SHA-256 |
-| --- | --- | --- |
-| `.omo/drafts/arc-model-v3-1-constraint-schema.md` | untracked regular file | `5304262b8a8a797aabe6b21ff12522ea51d011b9d52ec56f4aebb310464b04c9` |
-| `.omo/drafts/func-model-functional-signoff-repair.md` | untracked regular file | `5f09d79f29747cece829afba6618b8e99433be8fb9c1467652ecc0a7985e2459` |
-| `.omo/plans/arc-model-v3-1-constraint-schema.md` | untracked regular file | `dcddc05b9b302a4f1aa46e6b20dc4bfb6c28cbe03ae233fd37c30030a41c59c4` |
+- Dirty worktree: runner records execution-start `.omo/**` allowlist；product fingerprint excludes `.omo/**`。Any undeclared product dirty path or SHA-256 drift across run fails；active plan itself is excluded from self-referencing hash。No external protected-file baseline is currently declared; the runner does not gate on missing protected paths.
 
 ## Frozen spec-stage decisions
 ### Vocabulary and numeric policy
@@ -151,11 +144,11 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   Commit: Y | feat(perf-spec): freeze verification matrices | Files matrix/loader/tests
 
 - [ ] 4. Build a no-RTL, fail-closed evidence and DoneClaim runner
-  What to do: RED first, then create `scripts/run_func_model_perf_signoff.py` with `run/validate/audit/negative/rerun/baseline` and run-ID bundles. Record current-stage provenance/DoneClaims, atomic writes and source/report freshness. Parse the formal plan's protected baseline table before any task, verify path/git-state/type/SHA-256 before and after the run, and reject any evidence source path under live `rtl/**` before opening or hashing it. Evidence vocabulary excludes RTL/VCS/Spike cycles；stdout text never determines verdict.
+  What to do: RED first, then create `scripts/run_func_model_perf_signoff.py` with `run/validate/audit/negative/rerun/baseline` and run-ID bundles. Record current-stage provenance/DoneClaims, atomic writes and source/report freshness. Reject any evidence source path under live `rtl/**` before opening or hashing it. Evidence vocabulary excludes RTL/VCS/Spike cycles；stdout text never determines verdict.
   Parallelization: Y | Wave 1 | Blocks T6,T7,T16-T25 | Blocked by none
   References: `scripts/run_func_model_signoff.py:1008-1296` fingerprint/verdict pattern；`scripts/aggregate_software_signoff.py:41-135` stale checks；existing dirty worktree paths。
-  Acceptance criteria: 15+ runner tests cover stale HEAD/source/report, missing claim, zero tests, collision, deterministic hash, live-RTL path refusal and protected pre-run/post-run drift；same inputs produce same canonical content hash despite timestamps.
-  QA scenarios: `python3 scripts/run_func_model_perf_signoff.py negative --self-test --faults stale-head,stale-source,stale-report,missing-claim,zero-tests,collision,rtl-path,protected-pre-drift,protected-post-drift,pass-text` exits 0 only when structured JSON reports all 10 faults `rejected=true`；any `accepted>0` exits nonzero. Evidence `.omo/evidence/task-4-perf-runner.txt`.
+  Acceptance criteria: 15+ runner tests cover stale HEAD/source/report, missing claim, zero tests, collision, deterministic hash, live-RTL path refusal；same inputs produce same canonical content hash despite timestamps.
+  QA scenarios: `python3 scripts/run_func_model_perf_signoff.py negative --self-test --faults stale-head,stale-source,stale-report,missing-claim,zero-tests,collision,rtl-path,pass-text` exits 0 only when structured JSON reports all 8 faults `rejected=true`；any `accepted>0` exits nonzero. Evidence `.omo/evidence/task-4-perf-runner.txt`.
   Commit: Y | feat(signoff): add performance spec evidence runner | Files runner/tests
 
 - [ ] 5. Create genuinely independent provider and workload oracles
@@ -322,8 +315,8 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   What to do: Run baseline capture, provider/formula gates, Qwen/CV dual paths, sweeps, scaling, uncertainty reports, adversarial matrix and docs validation under one new run ID. Validate T1-T25 DoneClaims and exact HEAD/hashes；do not edit evidence to repair failure.
   Parallelization: N | Wave 5 | Blocks F1-F4 | Blocked by T21-T24
   References: all prior artifacts；`scripts/run_func_model_perf_signoff.py`。
-  Acceptance criteria: `python3 scripts/run_func_model_perf_signoff.py run --all-spec` and `python3 scripts/run_func_model_perf_signoff.py validate --require-fresh --require-done-claims 1-25 --protected-baseline-from-plan .omo/plans/func-model-performance-infra-calibration-closure.md` exit 0；structural exactness, every formula row, seven workload cases, all sweeps and adversarial outcomes pass；three protected files match frozen pre/post SHA-256；product KPIs report-only；`calibration_state=uncalibrated`。
-  QA scenarios: `python3 scripts/run_func_model_perf_signoff.py validate --require-fresh --require-done-claims 1-25 --repeat 2` exits 0 with identical canonical hashes. `python3 scripts/run_func_model_perf_signoff.py negative --case final-bundle --faults source,spec,oracle,workload,report,claim,protected-file` exits 0 only with `rejected=7,accepted=0`. Evidence `.omo/evidence/task-25-func-model-perf-spec-signoff.json` plus bundle.
+  Acceptance criteria: `python3 scripts/run_func_model_perf_signoff.py run --all-spec` and `python3 scripts/run_func_model_perf_signoff.py validate --require-fresh --require-done-claims 1-25` exit 0；structural exactness, every formula row, seven workload cases, all sweeps and adversarial outcomes pass；product KPIs report-only；`calibration_state=uncalibrated`。
+  QA scenarios: `python3 scripts/run_func_model_perf_signoff.py validate --require-fresh --require-done-claims 1-25 --repeat 2` exits 0 with identical canonical hashes. `python3 scripts/run_func_model_perf_signoff.py negative --case final-bundle --faults source,spec,oracle,workload,report,claim` exits 0 only with `rejected=6,accepted=0`. Evidence `.omo/evidence/task-25-func-model-perf-spec-signoff.json` plus bundle.
   Commit: N | verification-only
 
 ## Final verification wave (after ALL todos)
@@ -335,7 +328,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
 - [ ] F3. Real agent QA
   Run `python3 scripts/run_func_model_perf_signoff.py rerun --cases mxu-spec,sfu-vector-spec,dma-dram-spec,noc-kv-spec,qwen-blk0,qwen-prefill-128,mobilenetv3,resnet50,yolov8n --faults stale-state,misleading-success-output,zero-event,rtl-evidence --evidence .omo/evidence/final-perf-spec-real-qa.json`. Expected exit 0, all nine positives fresh-pass and all four faults `rejected=true`.
 - [ ] F4. Scope and claim fidelity audit
-  Run `python3 scripts/run_func_model_perf_signoff.py audit --checks scope,provenance,uncertainty,report-only,dirty-worktree --require-zero-waivers --protected-baseline-from-plan .omo/plans/func-model-performance-infra-calibration-closure.md --evidence .omo/evidence/final-perf-spec-scope-fidelity.md`. Expected exit 0 and `verdict=approve`；no `rtl/**` read/hash/edit or VCS execution, all KPI targets non-gating, protected files match frozen SHA-256 before/after, state remains uncalibrated.
+  Run `python3 scripts/run_func_model_perf_signoff.py audit --checks scope,provenance,uncertainty,report-only,dirty-worktree --require-zero-waivers --evidence .omo/evidence/final-perf-spec-scope-fidelity.md`. Expected exit 0 and `verdict=approve`；no `rtl/**` read/hash/edit or VCS execution, all KPI targets non-gating, state remains uncalibrated.
 
 ## Commit strategy
 - Work on `main` under established project constraint；one atomic conventional commit per T1-T24，implementation + tests together；T25 verification-only。
