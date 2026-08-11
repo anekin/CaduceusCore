@@ -1,4 +1,17 @@
 
+## T25 Issues (2026-08-11)
+
+### Open
+None.
+
+### Resolved / Design Notes
+1. **T24 DoneClaim missing from store** — T24 was verification-only and did not record a DoneClaim via the runner, causing `--require-done-claims 1-25` to fail. Re-ran the T24 green command through `run --cmd-argv ... --todo-id task-24` to register a valid claim.
+2. **`run --all-spec` evidence lacked source fingerprints and hashes** — The runner recorded empty `spec_sha256`/`workload_sha256`/`provider_sha256`/`oracle_sha256`/`report_sha256` and no `calibration_state`. Fixed by enriching the all-spec report with current file hashes and `calibration_state=uncalibrated` before writing the evidence bundle.
+3. **Canonical hash was not deterministic across repeat runs** — Elapsed-time fields nested inside `stages` and volatile top-level fields (`run_id`, `dirty_paths`, `peak_rss_*`) were included in the canonical hash. Fixed by recursively stripping excluded keys before hashing.
+4. **`validate --repeat` not implemented** — The parser had no `--repeat` argument and `cmd_validate` did not re-run fresh signoffs. Added `--repeat N` support that runs N fresh all-spec signoffs and asserts identical canonical hashes while still checking freshness, protected baseline, and DoneClaims.
+5. **`negative --case final-bundle` not implemented** — Added a final-bundle adversarial case with six fault injectors (source/spec/oracle/workload/report/claim) and a strict bundle validator; exits 0 only with `rejected=6,accepted=0`.
+
+
 ## T24 Issues (2026-08-11)
 
 ### Open

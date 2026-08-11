@@ -299,7 +299,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/run_func_model_perf_signoff.py baseline create --from-latest-fresh --output config/baselines/func_model_perf_spec_v1.json` GREEN exits 0. `python3 scripts/run_func_model_perf_signoff.py baseline validate --baseline config/baselines/func_model_perf_spec_v1.json --require-fresh` exits 0. `python3 scripts/run_func_model_perf_signoff.py negative --case baseline --faults accept-current,stale-spec,hidden-hard-gate` exits 0 only with `rejected=3,accepted=0`. Evidence `.omo/evidence/task-22-regression-baseline.json`.
   Commit: Y | test(perf-spec): add versioned performance baseline | Files baseline manifest/validator/tests
 
-- [ ] 23. Add portable CI and full signoff orchestration
+- [x] 23. Add portable CI and full signoff orchestration
   What to do: Add Python 3.10 CI job for all hard gates and no-RTL evidence validation. Implement `run --all-spec`, `validate --require-fresh`, `audit`, `rerun`; no EDA host labels/modules. Pin dependency install command and enforce full runtime/RSS limits.
   Parallelization: Y | Wave 5 | Blocks T25 | Blocked by T4,T16-T22
   References: `.github/workflows/caduceus-core-ci.yml:28-157` current jobs；`requirements.txt`；new runner。
@@ -315,7 +315,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/check_func_model_perf_docs.py --spec config/func_model_perf_spec_v1.json --bugs docs/bugs/bugs-soc-func-model.md` exits 0 with zero blocking open defects. `python3 scripts/check_func_model_perf_docs.py --negative-fixtures config/tests/docs_cycle_accurate.md,config/tests/docs_old_qwen.md,config/tests/docs_kpi_gate.md` exits 0 only with `rejected=3,accepted=0`. Evidence `.omo/evidence/task-24-doc-consistency.txt`.
   Commit: Y | docs(perf-spec): publish Func Model performance spec status | Files non-RTL docs/checkers/bug ledger
 
-- [ ] 25. Execute one clean, fresh performance-spec signoff
+- [x] 25. Execute one clean, fresh performance-spec signoff
   What to do: Run baseline capture, provider/formula gates, Qwen/CV dual paths, sweeps, scaling, uncertainty reports, adversarial matrix and docs validation under one new run ID. Validate T1-T25 DoneClaims and exact HEAD/hashes；do not edit evidence to repair failure.
   Parallelization: N | Wave 5 | Blocks F1-F4 | Blocked by T21-T24
   References: all prior artifacts；`scripts/run_func_model_perf_signoff.py`。
@@ -325,13 +325,13 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
 
 ## Final verification wave (after ALL todos)
 > Runs in parallel. ALL must exit 0 + `verdict=approve`. Human checkpoint: agent 执行 F1-F4 命令并 surface 结构化结果，但 `performance_spec_verified=true` 的阶段签收必须由用户人工确认后宣布。此 checkpoint 是 zero-intervention T1-T25 之后的显式 human gate，不否定 T1-T25 的 zero-intervention 策略。
-- [ ] F1. Plan compliance audit
+- [x] F1. Plan compliance audit
   Run `python3 scripts/run_func_model_perf_signoff.py audit --run-id-from .omo/evidence/task-25-func-model-perf-spec-signoff.json --plan .omo/plans/func-model-performance-infra-calibration-closure.md --require-done-claims 1-25 --recompute --evidence .omo/evidence/final-perf-spec-plan-compliance.md`. Expected exit 0, `verdict=approve`, 25 valid claims and independently recomputed gates.
-- [ ] F2. Architecture and code-quality audit
+- [x] F2. Architecture and code-quality audit
   Run `PYTHONPATH=sim python3 -m pytest sim/timing/tests sim/tests/test_mmio_perf_events.py -q`. Run `python3 scripts/run_func_model_perf_signoff.py audit --checks event-source,numerical-separation,oracle-independence,no-rtl,typed-errors --evidence .omo/evidence/final-perf-spec-architecture.md`. Expected both exit 0 and the audit records `verdict=approve`；one event source, no provider/oracle import leak, no live RTL read/hash/dependency or fake measured cycles.
-- [ ] F3. Real agent QA
+- [x] F3. Real agent QA
   Run `python3 scripts/run_func_model_perf_signoff.py rerun --cases mxu-spec,sfu-vector-spec,dma-dram-spec,noc-kv-spec,qwen-blk0,qwen-prefill-128,mobilenetv3,resnet50,yolov8n --faults stale-state,misleading-success-output,zero-event,rtl-evidence --evidence .omo/evidence/final-perf-spec-real-qa.json`. Expected exit 0, all nine positives fresh-pass and all four faults `rejected=true`.
-- [ ] F4. Scope and claim fidelity audit
+- [x] F4. Scope and claim fidelity audit
   Run `python3 scripts/run_func_model_perf_signoff.py audit --checks scope,provenance,uncertainty,report-only,dirty-worktree --require-zero-waivers --evidence .omo/evidence/final-perf-spec-scope-fidelity.md`. Expected exit 0 and `verdict=approve`；no `rtl/**` read/hash/edit or VCS execution, all KPI targets non-gating, state remains uncalibrated.
 
 ## Commit strategy
