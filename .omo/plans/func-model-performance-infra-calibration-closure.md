@@ -283,7 +283,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/run_func_model_perf_signoff.py run --reports uncertainty-kpis --cases qwen-prefill-2000,qwen-model-family,mobilenetv3,resnet50,yolov8n` exits 0 with all required low/base/high fields. `python3 scripts/run_func_model_perf_signoff.py negative --case uncertainty-kpis --faults timestamp-in-hash,direct-throughput-band,empty-report,kpi-gating` exits 0 only with `rejected=4,accepted=0`. Evidence `.omo/evidence/task-20-uncertainty-kpis.json`.
   Commit: Y | fix(timing): publish uncertainty-aware KPI reports | Files metrics/dashboard/summary/benchmark/tests/results
 
-- [ ] 21. Add adversarial and anti-vacuous performance-spec matrix
+- [x] 21. Add adversarial and anti-vacuous performance-spec matrix
   What to do: Add one negative per provider/workload plus stale source/report, duplicate/missing events, wrong units/hash/seed, zero activity, self-importing oracle, RTL-labeled evidence, profile-only overclaim and misleading PASS output.
   Parallelization: Y | Wave 5 | Blocks T23,T25 | Blocked by T2,T4,T6,T15-T20
   References: `sim/tests/test_soc_fm.py` functional negative patterns；runner and oracle contracts。

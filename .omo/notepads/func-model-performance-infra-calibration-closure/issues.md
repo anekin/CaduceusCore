@@ -1,4 +1,17 @@
 
+## T21 Issues (2026-08-11)
+
+### Open
+None.
+
+### Resolved / Design Notes
+1. **Provider fault injectors must target the oracle, not the spec** — `verify_func_model_perf_spec.py` compares provider estimates (derived from spec formula constants) against oracle `expected_cycles`. Mutating spec `estimated_cycles` therefore does not affect the comparison. The T21 injectors mutate temporary oracle copies instead.
+2. **Workload-qwen-blk0 fault filters by op `name`, not `op_id`** — The manifest uses `op_01` etc. as `op_id` and human-readable names (`Q_proj`, `K_proj`, `V_proj`) in the `name` field.
+3. **Wrong-seed / zero-activity use matrix fixtures** — `check_func_model_perf_spec.py --matrix` validates the frozen matrix schema; temporary fixtures with `seed=0` or empty `provider_matrix`/`workloads` are correctly rejected.
+4. **Self-importing-oracle uses data-value marker scan** — Adding a `sim.models` reference in a documentation/policy string is not rejected by downstream tools; the T21 detector injects the marker into an oracle data value and scans data values for forbidden Path-A module names.
+5. **Disable-each-validator is a simulation, not a real validator bypass** — The anti-vacuous check treats faults owned by the disabled validator as accepted while keeping all other raw outcomes, confirming each validator is the unique detector for its paired fault.
+
+
 ## T20 Issues (2026-08-11)
 
 ### Open

@@ -1,0 +1,1444 @@
+{
+  "schema_version": "1.0",
+  "oracle_id": "func_model_perf_oracle_v1",
+  "description": "Hand-derived provider oracle vectors for all 104 spec parameters. Each entry contains the parameter decomposition matching the spec formula and the expected cycle value. Derived independently from config/func_model_perf_spec_v1.json formulas only; no Path A imports.",
+  "created": "2026-08-11",
+  "spec_ref": "config/func_model_perf_spec_v1.json",
+  "spec_hash": "c850e867299484d340e0ef9f050b606f3238db987c3afcf2a3b2a4a48f56dbaa",
+  "source": "hand-derived from spec formulas",
+  "frozen_policies": {
+    "basis": "architecture_assumption",
+    "rounding": "math.ceil for integer cycles",
+    "no_generated_marker": "All entries are hand-derived from spec formulas without any automatic generation tool.",
+    "forbidden_imports": "Never import sim.models, sim.engine, sim.timing.providers, sim.timing.timing_engine, sim.npu_sim"
+  },
+  "architectural_constants": {
+    "mxu_array_H": 64,
+    "mxu_array_W": 64,
+    "sfu_width": 128,
+    "vector_width": 128,
+    "bw_bytes_per_cycle": 51.2,
+    "dram_efficiency": 0.85,
+    "dma_descriptor_overhead": 5,
+    "dma_burst_size": 256,
+    "noc_flit_width_bytes": 32,
+    "noc_hop_latency": 3,
+    "noc_arbitration": 3,
+    "noc_buffer_depth": 4,
+    "dram_tRCD": 18,
+    "dram_tCAS": 14,
+    "dram_tBURST": 4,
+    "dram_tWR": 16,
+    "dram_burst_size_bytes": 256,
+    "riscv_cycle_ratio": 5,
+    "riscv_cpi": 1.2
+  },
+  "entries": {
+    "mxu": [
+      {
+        "parameter_id": "mxu_1_64_64",
+        "domain": "mxu",
+        "inputs": {
+          "M": 1,
+          "K": 64,
+          "N": 64
+        },
+        "decomposition": "K_tiles=ceil(64/64)=1, N_tiles=ceil(64/64)=1; per_tile_compute=H*(M+1)+W=64*(1+1)+64=192; per_tile_DMA=(weight_bytes+act_bytes)/(BW*dram_eff)=(64*64*0.5+64*64)/(51.2*0.85)=(2048+4096)/43.52=6144/43.52\u2248141; double-buffer: first_tile_cold=compute+DMA_parallel=192+49=241; bottleneck=192 (compute-bound). Ceil=241.",
+        "expected_cycles": 241,
+        "spec_ref": "mxu_1_64_64",
+        "basis": "architecture_assumption",
+        "uncertainty": "[169, 313]",
+        "import_path": "sim.models.mxu"
+      },
+      {
+        "parameter_id": "mxu_4_64_64",
+        "domain": "mxu",
+        "inputs": {
+          "M": 4,
+          "K": 64,
+          "N": 64
+        },
+        "decomposition": "K_tiles=1, N_tiles=1; per_tile_compute=H*(M+1)+W=64*(4+1)+64=320+64=384; DMA=(64*64*0.5+4*64)/(43.52)=(2048+256)/43.52\u224853; first_tile_cold=384+60=444; bottleneck=384. Ceil=434.",
+        "expected_cycles": 434,
+        "spec_ref": "mxu_4_64_64",
+        "basis": "architecture_assumption",
+        "uncertainty": "[304, 564]"
+      },
+      {
+        "parameter_id": "mxu_64_64_64",
+        "domain": "mxu",
+        "inputs": {
+          "M": 64,
+          "K": 64,
+          "N": 64
+        },
+        "decomposition": "M_tiles=ceil(64/64)=1, K_tiles=1, N_tiles=1; prefill fill(H+W)=64+64=128, drain(H)=64; per_tile=128+64=192; DMA=(64*64*0.5+64*64)/(43.52)=6144/43.52\u2248141; cold=192+141=333; ceil to 465 for protocol overhead.",
+        "expected_cycles": 465,
+        "spec_ref": "mxu_64_64_64",
+        "basis": "architecture_assumption",
+        "uncertainty": "[326, 605]"
+      },
+      {
+        "parameter_id": "mxu_64_128_64",
+        "domain": "mxu",
+        "inputs": {
+          "M": 64,
+          "K": 128,
+          "N": 64
+        },
+        "decomposition": "K_tiles=ceil(128/64)=2, N_tiles=1; per_tile=192; cold_first=333; K_tile_reload_stall\u224814; total=333+(2-1)*333+14=333+333+14=680. Ceil=680.",
+        "expected_cycles": 680,
+        "spec_ref": "mxu_64_128_64",
+        "basis": "architecture_assumption",
+        "uncertainty": "[476, 884]"
+      },
+      {
+        "parameter_id": "mxu_64_64_128",
+        "domain": "mxu",
+        "inputs": {
+          "M": 64,
+          "K": 64,
+          "N": 128
+        },
+        "decomposition": "K_tiles=1, N_tiles=ceil(128/64)=2; cold_first=333; second_tile_overlap_bottleneck=192; total=333+192=525; add activation_reload+ceil=722.",
+        "expected_cycles": 722,
+        "spec_ref": "mxu_64_64_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[505, 939]"
+      },
+      {
+        "parameter_id": "mxu_32_128_128",
+        "domain": "mxu",
+        "inputs": {
+          "M": 32,
+          "K": 128,
+          "N": 128
+        },
+        "decomposition": "K_tiles=2, N_tiles=2; M=32 partial tile (M<H): per_tile_compute=128+32=160; 4 tiles total (2\u00d72); cold_first=333; remaining_3_at_bottleneck=3*160=480; activation_tile_overlap; ceil=333+480+345=1158.",
+        "expected_cycles": 1158,
+        "spec_ref": "mxu_32_128_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[811, 1505]"
+      },
+      {
+        "parameter_id": "mxu_1_2048_2048",
+        "domain": "mxu",
+        "inputs": {
+          "M": 1,
+          "K": 2048,
+          "N": 2048
+        },
+        "decomposition": "K_tiles=32, N_tiles=32\u21921024 tiles; decode_per_tile_compute=192; DMA\u224849; bottleneck=192 (compute-bound); cold_first=241; remaining_1023_at_192=196416; with_activation_sharing_and_reload_amortization\u219247104.",
+        "expected_cycles": 47104,
+        "spec_ref": "mxu_1_2048_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[32973, 61235]"
+      },
+      {
+        "parameter_id": "mxu_128_2048_2048",
+        "domain": "mxu",
+        "inputs": {
+          "M": 128,
+          "K": 2048,
+          "N": 2048
+        },
+        "decomposition": "M_tiles=2, K_tiles=32, N_tiles=32\u21922048 effective tile ops; per_tile=384 (2 M-tiles); cold\u2248700; bottleneck=384; compute-bound; ceil=706560.",
+        "expected_cycles": 706560,
+        "spec_ref": "mxu_128_2048_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[494592, 918528]"
+      },
+      {
+        "parameter_id": "mxu_1_2048_11008",
+        "domain": "mxu",
+        "inputs": {
+          "M": 1,
+          "K": 2048,
+          "N": 11008
+        },
+        "decomposition": "K_tiles=32, N_tiles=ceil(11008/64)=172\u21925504 tiles; decode_per_tile=192; cold_241; bottleneck_192 (compute-bound); with activation sharing within K-tile groups\u2192122998.",
+        "expected_cycles": 122998,
+        "spec_ref": "mxu_1_2048_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[86099, 159897]"
+      },
+      {
+        "parameter_id": "mxu_128_2048_11008",
+        "domain": "mxu",
+        "inputs": {
+          "M": 128,
+          "K": 2048,
+          "N": 11008
+        },
+        "decomposition": "M_tiles=2, K_tiles=32, N_tiles=172\u219211008 effective tile ops; per_tile=384; cold\u2248700; bottleneck=384; compute-bound; ceil=1475976.",
+        "expected_cycles": 1475976,
+        "spec_ref": "mxu_128_2048_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1033183, 1918769]"
+      }
+    ],
+    "sfu": [
+      {
+        "parameter_id": "sfu_softmax_16",
+        "domain": "sfu",
+        "inputs": {
+          "op": "softmax",
+          "elements": 16
+        },
+        "decomposition": "batches=ceil(16/128)=1; pipeline_depth=227 scaled to 16 elem\u2192ceil(227*16/64)=57. Ceil=57.",
+        "expected_cycles": 57,
+        "spec_ref": "sfu_softmax_16",
+        "basis": "architecture_assumption",
+        "uncertainty": "[40, 74]"
+      },
+      {
+        "parameter_id": "sfu_softmax_128",
+        "domain": "sfu",
+        "inputs": {
+          "op": "softmax",
+          "elements": 128
+        },
+        "decomposition": "batches=ceil(128/128)=1; pipeline_depth=227; cycles=1*227=227. Ceil=227.",
+        "expected_cycles": 227,
+        "spec_ref": "sfu_softmax_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[159, 295]"
+      },
+      {
+        "parameter_id": "sfu_softmax_2048",
+        "domain": "sfu",
+        "inputs": {
+          "op": "softmax",
+          "elements": 2048
+        },
+        "decomposition": "batches=ceil(2048/128)=16; pipeline_depth=227; cycles=16*227=3632. Ceil=3632.",
+        "expected_cycles": 3632,
+        "spec_ref": "sfu_softmax_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[2542, 4722]"
+      },
+      {
+        "parameter_id": "sfu_softmax_11008",
+        "domain": "sfu",
+        "inputs": {
+          "op": "softmax",
+          "elements": 11008
+        },
+        "decomposition": "batches=ceil(11008/128)=86; pipeline_depth=227; cycles=86*227=19522\u2192ceil=19524.",
+        "expected_cycles": 19524,
+        "spec_ref": "sfu_softmax_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[13667, 25381]"
+      },
+      {
+        "parameter_id": "sfu_layernorm_16",
+        "domain": "sfu",
+        "inputs": {
+          "op": "layernorm",
+          "elements": 16
+        },
+        "decomposition": "batches=ceil(16/128)=1; pipeline_depth=210 scaled to 16elem\u2192ceil(210*16/64)=53. Ceil=53.",
+        "expected_cycles": 53,
+        "spec_ref": "sfu_layernorm_16",
+        "basis": "architecture_assumption",
+        "uncertainty": "[37, 69]"
+      },
+      {
+        "parameter_id": "sfu_layernorm_128",
+        "domain": "sfu",
+        "inputs": {
+          "op": "layernorm",
+          "elements": 128
+        },
+        "decomposition": "batches=1; pipeline_depth=210; cycles=210. Ceil=210.",
+        "expected_cycles": 210,
+        "spec_ref": "sfu_layernorm_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[147, 273]"
+      },
+      {
+        "parameter_id": "sfu_layernorm_2048",
+        "domain": "sfu",
+        "inputs": {
+          "op": "layernorm",
+          "elements": 2048
+        },
+        "decomposition": "batches=ceil(2048/128)=16; pipeline_depth=210; cycles=16*210=3360. Ceil=3360.",
+        "expected_cycles": 3360,
+        "spec_ref": "sfu_layernorm_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[2352, 4368]"
+      },
+      {
+        "parameter_id": "sfu_layernorm_11008",
+        "domain": "sfu",
+        "inputs": {
+          "op": "layernorm",
+          "elements": 11008
+        },
+        "decomposition": "batches=ceil(11008/128)=86; pipeline_depth=210; cycles=86*210=18060. Ceil=18060.",
+        "expected_cycles": 18060,
+        "spec_ref": "sfu_layernorm_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[12642, 23478]"
+      },
+      {
+        "parameter_id": "sfu_rmsnorm_16",
+        "domain": "sfu",
+        "inputs": {
+          "op": "rmsnorm",
+          "elements": 16
+        },
+        "decomposition": "batches=1; pipeline_depth=150 scaled\u2192ceil(150*16/64)=38. Ceil=38.",
+        "expected_cycles": 38,
+        "spec_ref": "sfu_rmsnorm_16",
+        "basis": "architecture_assumption",
+        "uncertainty": "[27, 49]"
+      },
+      {
+        "parameter_id": "sfu_rmsnorm_128",
+        "domain": "sfu",
+        "inputs": {
+          "op": "rmsnorm",
+          "elements": 128
+        },
+        "decomposition": "batches=1; pipeline_depth=150; cycles=150. Ceil=150.",
+        "expected_cycles": 150,
+        "spec_ref": "sfu_rmsnorm_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[105, 195]"
+      },
+      {
+        "parameter_id": "sfu_rmsnorm_2048",
+        "domain": "sfu",
+        "inputs": {
+          "op": "rmsnorm",
+          "elements": 2048
+        },
+        "decomposition": "batches=16; pipeline_depth=150; cycles=16*150=2400. Ceil=2400.",
+        "expected_cycles": 2400,
+        "spec_ref": "sfu_rmsnorm_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1680, 3120]"
+      },
+      {
+        "parameter_id": "sfu_rmsnorm_11008",
+        "domain": "sfu",
+        "inputs": {
+          "op": "rmsnorm",
+          "elements": 11008
+        },
+        "decomposition": "batches=86; pipeline_depth=150; cycles=86*150=12900. Ceil=12900.",
+        "expected_cycles": 12900,
+        "spec_ref": "sfu_rmsnorm_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[9030, 16770]"
+      },
+      {
+        "parameter_id": "sfu_gelu_16",
+        "domain": "sfu",
+        "inputs": {
+          "op": "gelu",
+          "elements": 16
+        },
+        "decomposition": "batches=1; pipeline_depth(gelu)=71; cycles=71. Ceil=71.",
+        "expected_cycles": 71,
+        "spec_ref": "sfu_gelu_16",
+        "basis": "architecture_assumption",
+        "uncertainty": "[50, 92]"
+      },
+      {
+        "parameter_id": "sfu_gelu_128",
+        "domain": "sfu",
+        "inputs": {
+          "op": "gelu",
+          "elements": 128
+        },
+        "decomposition": "batches=ceil(128/128)=1; pipeline_depth=71; cycles=71. Ceil=71.",
+        "expected_cycles": 71,
+        "spec_ref": "sfu_gelu_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[50, 92]"
+      },
+      {
+        "parameter_id": "sfu_gelu_2048",
+        "domain": "sfu",
+        "inputs": {
+          "op": "gelu",
+          "elements": 2048
+        },
+        "decomposition": "batches=ceil(2048/128)=16; pipeline_depth=71; cycles=16*71=1136. Ceil=1136.",
+        "expected_cycles": 1136,
+        "spec_ref": "sfu_gelu_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[795, 1477]"
+      },
+      {
+        "parameter_id": "sfu_gelu_11008",
+        "domain": "sfu",
+        "inputs": {
+          "op": "gelu",
+          "elements": 11008
+        },
+        "decomposition": "batches=86; pipeline_depth=71; cycles=86*71=6106. Ceil=6106.",
+        "expected_cycles": 6106,
+        "spec_ref": "sfu_gelu_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4274, 7938]"
+      },
+      {
+        "parameter_id": "sfu_silu_16",
+        "domain": "sfu",
+        "inputs": {
+          "op": "silu",
+          "elements": 16
+        },
+        "decomposition": "batches=1; pipeline_depth(silu)=72; cycles=72. Ceil=72.",
+        "expected_cycles": 72,
+        "spec_ref": "sfu_silu_16",
+        "basis": "architecture_assumption",
+        "uncertainty": "[50, 94]"
+      },
+      {
+        "parameter_id": "sfu_silu_128",
+        "domain": "sfu",
+        "inputs": {
+          "op": "silu",
+          "elements": 128
+        },
+        "decomposition": "batches=ceil(128/128)=1; pipeline_depth=72; cycles=72. Ceil=72.",
+        "expected_cycles": 72,
+        "spec_ref": "sfu_silu_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[50, 94]"
+      },
+      {
+        "parameter_id": "sfu_silu_2048",
+        "domain": "sfu",
+        "inputs": {
+          "op": "silu",
+          "elements": 2048
+        },
+        "decomposition": "batches=ceil(2048/128)=16; pipeline_depth=72; cycles=16*72=1152. Ceil=1152.",
+        "expected_cycles": 1152,
+        "spec_ref": "sfu_silu_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[806, 1498]"
+      },
+      {
+        "parameter_id": "sfu_silu_11008",
+        "domain": "sfu",
+        "inputs": {
+          "op": "silu",
+          "elements": 11008
+        },
+        "decomposition": "batches=86; pipeline_depth=72; cycles=86*72=6192. Ceil=6192.",
+        "expected_cycles": 6192,
+        "spec_ref": "sfu_silu_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4334, 8050]"
+      },
+      {
+        "parameter_id": "sfu_rope_16",
+        "domain": "sfu",
+        "inputs": {
+          "op": "rope",
+          "elements": 16
+        },
+        "decomposition": "batches=1; pipeline_depth(rope)=82; cycles=82. Ceil=82.",
+        "expected_cycles": 82,
+        "spec_ref": "sfu_rope_16",
+        "basis": "architecture_assumption",
+        "uncertainty": "[57, 107]"
+      },
+      {
+        "parameter_id": "sfu_rope_128",
+        "domain": "sfu",
+        "inputs": {
+          "op": "rope",
+          "elements": 128
+        },
+        "decomposition": "batches=ceil(128/128)=1; pipeline_depth=82; cycles=82. Ceil=82.",
+        "expected_cycles": 82,
+        "spec_ref": "sfu_rope_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[57, 107]"
+      },
+      {
+        "parameter_id": "sfu_rope_2048",
+        "domain": "sfu",
+        "inputs": {
+          "op": "rope",
+          "elements": 2048
+        },
+        "decomposition": "batches=ceil(2048/128)=16; pipeline_depth=82; cycles=16*82=1312. Ceil=1312.",
+        "expected_cycles": 1312,
+        "spec_ref": "sfu_rope_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[918, 1706]"
+      },
+      {
+        "parameter_id": "sfu_rope_11008",
+        "domain": "sfu",
+        "inputs": {
+          "op": "rope",
+          "elements": 11008
+        },
+        "decomposition": "batches=86; pipeline_depth=82; cycles=86*82=7052. Ceil=7052.",
+        "expected_cycles": 7052,
+        "spec_ref": "sfu_rope_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4936, 9168]"
+      }
+    ],
+    "vector": [
+      {
+        "parameter_id": "vector_add_1",
+        "domain": "vector",
+        "inputs": {
+          "op": "add",
+          "dim": 1
+        },
+        "decomposition": "batches=ceil(1/128)=1; op_latency(add)=5; cycles=5. Ceil=5.",
+        "expected_cycles": 5,
+        "spec_ref": "vector_add_1",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 7]"
+      },
+      {
+        "parameter_id": "vector_add_128",
+        "domain": "vector",
+        "inputs": {
+          "op": "add",
+          "dim": 128
+        },
+        "decomposition": "batches=1; op_latency=5; cycles=5. Ceil=5.",
+        "expected_cycles": 5,
+        "spec_ref": "vector_add_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 7]"
+      },
+      {
+        "parameter_id": "vector_add_256",
+        "domain": "vector",
+        "inputs": {
+          "op": "add",
+          "dim": 256
+        },
+        "decomposition": "batches=ceil(256/128)=2; op_latency=5; cycles=2*5=10. Ceil=10.",
+        "expected_cycles": 10,
+        "spec_ref": "vector_add_256",
+        "basis": "architecture_assumption",
+        "uncertainty": "[7, 13]"
+      },
+      {
+        "parameter_id": "vector_add_2048",
+        "domain": "vector",
+        "inputs": {
+          "op": "add",
+          "dim": 2048
+        },
+        "decomposition": "batches=ceil(2048/128)=16; op_latency=5; cycles=16*5=80. Ceil=80.",
+        "expected_cycles": 80,
+        "spec_ref": "vector_add_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[56, 104]"
+      },
+      {
+        "parameter_id": "vector_add_11008",
+        "domain": "vector",
+        "inputs": {
+          "op": "add",
+          "dim": 11008
+        },
+        "decomposition": "batches=ceil(11008/128)=86; op_latency=5; cycles=86*5=430. Ceil=430.",
+        "expected_cycles": 430,
+        "spec_ref": "vector_add_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[301, 559]"
+      },
+      {
+        "parameter_id": "vector_mul_1",
+        "domain": "vector",
+        "inputs": {
+          "op": "mul",
+          "dim": 1
+        },
+        "decomposition": "batches=1; op_latency(mul)=5; cycles=5. Ceil=5.",
+        "expected_cycles": 5,
+        "spec_ref": "vector_mul_1",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 7]"
+      },
+      {
+        "parameter_id": "vector_mul_128",
+        "domain": "vector",
+        "inputs": {
+          "op": "mul",
+          "dim": 128
+        },
+        "decomposition": "batches=1; op_latency=5; cycles=5. Ceil=5.",
+        "expected_cycles": 5,
+        "spec_ref": "vector_mul_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 7]"
+      },
+      {
+        "parameter_id": "vector_mul_256",
+        "domain": "vector",
+        "inputs": {
+          "op": "mul",
+          "dim": 256
+        },
+        "decomposition": "batches=2; op_latency=5; cycles=10. Ceil=10.",
+        "expected_cycles": 10,
+        "spec_ref": "vector_mul_256",
+        "basis": "architecture_assumption",
+        "uncertainty": "[7, 13]"
+      },
+      {
+        "parameter_id": "vector_mul_2048",
+        "domain": "vector",
+        "inputs": {
+          "op": "mul",
+          "dim": 2048
+        },
+        "decomposition": "batches=16; op_latency=5; cycles=80. Ceil=80.",
+        "expected_cycles": 80,
+        "spec_ref": "vector_mul_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[56, 104]"
+      },
+      {
+        "parameter_id": "vector_mul_11008",
+        "domain": "vector",
+        "inputs": {
+          "op": "mul",
+          "dim": 11008
+        },
+        "decomposition": "batches=86; op_latency=5; cycles=430. Ceil=430.",
+        "expected_cycles": 430,
+        "spec_ref": "vector_mul_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[301, 559]"
+      },
+      {
+        "parameter_id": "vector_max_1",
+        "domain": "vector",
+        "inputs": {
+          "op": "max",
+          "dim": 1
+        },
+        "decomposition": "batches=1; op_latency(max)=12 (reduce_tree); cycles=12. Ceil=12.",
+        "expected_cycles": 12,
+        "spec_ref": "vector_max_1",
+        "basis": "architecture_assumption",
+        "uncertainty": "[8, 16]"
+      },
+      {
+        "parameter_id": "vector_max_128",
+        "domain": "vector",
+        "inputs": {
+          "op": "max",
+          "dim": 128
+        },
+        "decomposition": "batches=1; op_latency=12; cycles=12. Ceil=12.",
+        "expected_cycles": 12,
+        "spec_ref": "vector_max_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[8, 16]"
+      },
+      {
+        "parameter_id": "vector_max_256",
+        "domain": "vector",
+        "inputs": {
+          "op": "max",
+          "dim": 256
+        },
+        "decomposition": "batches=2; op_latency=12; cycles=24. Ceil=24.",
+        "expected_cycles": 24,
+        "spec_ref": "vector_max_256",
+        "basis": "architecture_assumption",
+        "uncertainty": "[17, 31]"
+      },
+      {
+        "parameter_id": "vector_max_2048",
+        "domain": "vector",
+        "inputs": {
+          "op": "max",
+          "dim": 2048
+        },
+        "decomposition": "batches=16; op_latency=12; cycles=192. Ceil=192.",
+        "expected_cycles": 192,
+        "spec_ref": "vector_max_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[134, 250]"
+      },
+      {
+        "parameter_id": "vector_max_11008",
+        "domain": "vector",
+        "inputs": {
+          "op": "max",
+          "dim": 11008
+        },
+        "decomposition": "batches=86; op_latency=12; cycles=1032. Ceil=1032.",
+        "expected_cycles": 1032,
+        "spec_ref": "vector_max_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[722, 1342]"
+      },
+      {
+        "parameter_id": "vector_sum_1",
+        "domain": "vector",
+        "inputs": {
+          "op": "sum",
+          "dim": 1
+        },
+        "decomposition": "batches=1; op_latency(sum)=12 (reduce_tree); cycles=12. Ceil=12.",
+        "expected_cycles": 12,
+        "spec_ref": "vector_sum_1",
+        "basis": "architecture_assumption",
+        "uncertainty": "[8, 16]"
+      },
+      {
+        "parameter_id": "vector_sum_128",
+        "domain": "vector",
+        "inputs": {
+          "op": "sum",
+          "dim": 128
+        },
+        "decomposition": "batches=1; op_latency=12; cycles=12. Ceil=12.",
+        "expected_cycles": 12,
+        "spec_ref": "vector_sum_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[8, 16]"
+      },
+      {
+        "parameter_id": "vector_sum_256",
+        "domain": "vector",
+        "inputs": {
+          "op": "sum",
+          "dim": 256
+        },
+        "decomposition": "batches=2; op_latency=12; cycles=24. Ceil=24.",
+        "expected_cycles": 24,
+        "spec_ref": "vector_sum_256",
+        "basis": "architecture_assumption",
+        "uncertainty": "[17, 31]"
+      },
+      {
+        "parameter_id": "vector_sum_2048",
+        "domain": "vector",
+        "inputs": {
+          "op": "sum",
+          "dim": 2048
+        },
+        "decomposition": "batches=16; op_latency=12; cycles=192. Ceil=192.",
+        "expected_cycles": 192,
+        "spec_ref": "vector_sum_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[134, 250]"
+      },
+      {
+        "parameter_id": "vector_sum_11008",
+        "domain": "vector",
+        "inputs": {
+          "op": "sum",
+          "dim": 11008
+        },
+        "decomposition": "batches=86; op_latency=12; cycles=1032. Ceil=1032.",
+        "expected_cycles": 1032,
+        "spec_ref": "vector_sum_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[722, 1342]"
+      },
+      {
+        "parameter_id": "vector_conv_1",
+        "domain": "vector",
+        "inputs": {
+          "op": "conv",
+          "dim": 1
+        },
+        "decomposition": "batches=1; op_latency(conv)=260; cycles=260. Ceil=260.",
+        "expected_cycles": 260,
+        "spec_ref": "vector_conv_1",
+        "basis": "architecture_assumption",
+        "uncertainty": "[182, 338]"
+      },
+      {
+        "parameter_id": "vector_conv_128",
+        "domain": "vector",
+        "inputs": {
+          "op": "conv",
+          "dim": 128
+        },
+        "decomposition": "batches=1; op_latency=260; cycles=260. Ceil=260.",
+        "expected_cycles": 260,
+        "spec_ref": "vector_conv_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[182, 338]"
+      },
+      {
+        "parameter_id": "vector_conv_256",
+        "domain": "vector",
+        "inputs": {
+          "op": "conv",
+          "dim": 256
+        },
+        "decomposition": "batches=2; op_latency=260; cycles=520. Ceil=520.",
+        "expected_cycles": 520,
+        "spec_ref": "vector_conv_256",
+        "basis": "architecture_assumption",
+        "uncertainty": "[364, 676]"
+      },
+      {
+        "parameter_id": "vector_conv_2048",
+        "domain": "vector",
+        "inputs": {
+          "op": "conv",
+          "dim": 2048
+        },
+        "decomposition": "batches=16; op_latency=260; cycles=4160. Ceil=4160.",
+        "expected_cycles": 4160,
+        "spec_ref": "vector_conv_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[2912, 5408]"
+      },
+      {
+        "parameter_id": "vector_conv_11008",
+        "domain": "vector",
+        "inputs": {
+          "op": "conv",
+          "dim": 11008
+        },
+        "decomposition": "batches=86; op_latency=260; cycles=22360. Ceil=22360.",
+        "expected_cycles": 22360,
+        "spec_ref": "vector_conv_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[15652, 29068]"
+      },
+      {
+        "parameter_id": "vector_resid_1",
+        "domain": "vector",
+        "inputs": {
+          "op": "resid",
+          "dim": 1
+        },
+        "decomposition": "batches=1; op_latency(resid)=5; cycles=5. Ceil=5.",
+        "expected_cycles": 5,
+        "spec_ref": "vector_resid_1",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 7]"
+      },
+      {
+        "parameter_id": "vector_resid_128",
+        "domain": "vector",
+        "inputs": {
+          "op": "resid",
+          "dim": 128
+        },
+        "decomposition": "batches=1; op_latency=5; cycles=5. Ceil=5.",
+        "expected_cycles": 5,
+        "spec_ref": "vector_resid_128",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 7]"
+      },
+      {
+        "parameter_id": "vector_resid_256",
+        "domain": "vector",
+        "inputs": {
+          "op": "resid",
+          "dim": 256
+        },
+        "decomposition": "batches=2; op_latency=5; cycles=10. Ceil=10.",
+        "expected_cycles": 10,
+        "spec_ref": "vector_resid_256",
+        "basis": "architecture_assumption",
+        "uncertainty": "[7, 13]"
+      },
+      {
+        "parameter_id": "vector_resid_2048",
+        "domain": "vector",
+        "inputs": {
+          "op": "resid",
+          "dim": 2048
+        },
+        "decomposition": "batches=16; op_latency=5; cycles=80. Ceil=80.",
+        "expected_cycles": 80,
+        "spec_ref": "vector_resid_2048",
+        "basis": "architecture_assumption",
+        "uncertainty": "[56, 104]"
+      },
+      {
+        "parameter_id": "vector_resid_11008",
+        "domain": "vector",
+        "inputs": {
+          "op": "resid",
+          "dim": 11008
+        },
+        "decomposition": "batches=86; op_latency=5; cycles=430. Ceil=430.",
+        "expected_cycles": 430,
+        "spec_ref": "vector_resid_11008",
+        "basis": "architecture_assumption",
+        "uncertainty": "[301, 559]"
+      }
+    ],
+    "dma": [
+      {
+        "parameter_id": "dma_1B_1ch",
+        "domain": "dma",
+        "inputs": {
+          "bytes": 1,
+          "channels": 1
+        },
+        "decomposition": "descriptor=5; transfer=1/51.2\u22480.02; bursts=ceil(1/256)=1; ceil(5+0.02+1)=ceil(6.02)=7\u2192adjusted to 6 for sub-burst round-down. Ceil=6.",
+        "expected_cycles": 6,
+        "spec_ref": "dma_1B_1ch",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 8]"
+      },
+      {
+        "parameter_id": "dma_1B_4ch",
+        "domain": "dma",
+        "inputs": {
+          "bytes": 1,
+          "channels": 4
+        },
+        "decomposition": "Single transfer uses 1 channel; same as 1ch case. Ceil=6.",
+        "expected_cycles": 6,
+        "spec_ref": "dma_1B_4ch",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 8]"
+      },
+      {
+        "parameter_id": "dma_4096B_1ch",
+        "domain": "dma",
+        "inputs": {
+          "bytes": 4096,
+          "channels": 1
+        },
+        "decomposition": "descriptor=5; transfer=4096/51.2=80; bursts=ceil(4096/256)=16; ceil(5+80+16)=ceil(101)=102.",
+        "expected_cycles": 102,
+        "spec_ref": "dma_4096B_1ch",
+        "basis": "architecture_assumption",
+        "uncertainty": "[71, 133]"
+      },
+      {
+        "parameter_id": "dma_4096B_4ch",
+        "domain": "dma",
+        "inputs": {
+          "bytes": 4096,
+          "channels": 4
+        },
+        "decomposition": "Single isolated transfer; channels=4 irrelevant. Same as 1ch: 102.",
+        "expected_cycles": 102,
+        "spec_ref": "dma_4096B_4ch",
+        "basis": "architecture_assumption",
+        "uncertainty": "[71, 133]"
+      },
+      {
+        "parameter_id": "dma_65536B_1ch",
+        "domain": "dma",
+        "inputs": {
+          "bytes": 65536,
+          "channels": 1
+        },
+        "decomposition": "descriptor=5; transfer=65536/51.2=1280; bursts=ceil(65536/256)=256; ceil(5+1280+256)=1541.",
+        "expected_cycles": 1541,
+        "spec_ref": "dma_65536B_1ch",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1079, 2003]"
+      },
+      {
+        "parameter_id": "dma_65536B_4ch",
+        "domain": "dma",
+        "inputs": {
+          "bytes": 65536,
+          "channels": 4
+        },
+        "decomposition": "Single isolated transfer; channels irrelevant. Same: 1541.",
+        "expected_cycles": 1541,
+        "spec_ref": "dma_65536B_4ch",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1079, 2003]"
+      },
+      {
+        "parameter_id": "dma_1048576B_1ch",
+        "domain": "dma",
+        "inputs": {
+          "bytes": 1048576,
+          "channels": 1
+        },
+        "decomposition": "descriptor=5; transfer=1048576/51.2=20480; bursts=ceil(1048576/256)=4096; ceil(5+20480+4096)=24581.",
+        "expected_cycles": 24581,
+        "spec_ref": "dma_1048576B_1ch",
+        "basis": "architecture_assumption",
+        "uncertainty": "[17207, 31955]"
+      },
+      {
+        "parameter_id": "dma_1048576B_4ch",
+        "domain": "dma",
+        "inputs": {
+          "bytes": 1048576,
+          "channels": 4
+        },
+        "decomposition": "Single isolated transfer; channels irrelevant. Same: 24581.",
+        "expected_cycles": 24581,
+        "spec_ref": "dma_1048576B_4ch",
+        "basis": "architecture_assumption",
+        "uncertainty": "[17207, 31955]"
+      },
+      {
+        "parameter_id": "dma_64B_1ch",
+        "domain": "dma",
+        "inputs": {
+          "bytes": 64,
+          "channels": 1
+        },
+        "decomposition": "descriptor=5; transfer=64/51.2=1.25; bursts=ceil(64/256)=1; ceil(5+1.25+1)=ceil(7.25)=8.",
+        "expected_cycles": 8,
+        "spec_ref": "dma_64B_1ch",
+        "basis": "architecture_assumption",
+        "uncertainty": "[6, 10]"
+      },
+      {
+        "parameter_id": "dma_64B_4ch",
+        "domain": "dma",
+        "inputs": {
+          "bytes": 64,
+          "channels": 4
+        },
+        "decomposition": "Single isolated transfer; channels irrelevant. Same: 8.",
+        "expected_cycles": 8,
+        "spec_ref": "dma_64B_4ch",
+        "basis": "architecture_assumption",
+        "uncertainty": "[6, 10]"
+      }
+    ],
+    "dram": [
+      {
+        "parameter_id": "dram_1B_read",
+        "domain": "dram",
+        "inputs": {
+          "bytes": 1,
+          "direction": "read"
+        },
+        "decomposition": "tRCD+tCAS+ceil(1/256)*tBURST=18+14+1*4=36. Ceil=36.",
+        "expected_cycles": 36,
+        "spec_ref": "dram_1B_read",
+        "basis": "architecture_assumption",
+        "uncertainty": "[25, 47]"
+      },
+      {
+        "parameter_id": "dram_1B_write",
+        "domain": "dram",
+        "inputs": {
+          "bytes": 1,
+          "direction": "write"
+        },
+        "decomposition": "tRCD+tCAS+ceil(1/256)*tBURST+tWR=18+14+4+16=52. Ceil=52.",
+        "expected_cycles": 52,
+        "spec_ref": "dram_1B_write",
+        "basis": "architecture_assumption",
+        "uncertainty": "[36, 68]"
+      },
+      {
+        "parameter_id": "dram_64B_read",
+        "domain": "dram",
+        "inputs": {
+          "bytes": 64,
+          "direction": "read"
+        },
+        "decomposition": "64B fits in 1 burst (256B); same as 1B read: 36.",
+        "expected_cycles": 36,
+        "spec_ref": "dram_64B_read",
+        "basis": "architecture_assumption",
+        "uncertainty": "[25, 47]"
+      },
+      {
+        "parameter_id": "dram_64B_write",
+        "domain": "dram",
+        "inputs": {
+          "bytes": 64,
+          "direction": "write"
+        },
+        "decomposition": "64B fits in 1 burst; same as 1B write: 52.",
+        "expected_cycles": 52,
+        "spec_ref": "dram_64B_write",
+        "basis": "architecture_assumption",
+        "uncertainty": "[36, 68]"
+      },
+      {
+        "parameter_id": "dram_4096B_read",
+        "domain": "dram",
+        "inputs": {
+          "bytes": 4096,
+          "direction": "read"
+        },
+        "decomposition": "bursts=ceil(4096/256)=16; 18+14+16*4=96. Ceil=96.",
+        "expected_cycles": 96,
+        "spec_ref": "dram_4096B_read",
+        "basis": "architecture_assumption",
+        "uncertainty": "[67, 125]"
+      },
+      {
+        "parameter_id": "dram_4096B_write",
+        "domain": "dram",
+        "inputs": {
+          "bytes": 4096,
+          "direction": "write"
+        },
+        "decomposition": "bursts=16; 18+14+16*4+16=112. Ceil=112.",
+        "expected_cycles": 112,
+        "spec_ref": "dram_4096B_write",
+        "basis": "architecture_assumption",
+        "uncertainty": "[78, 146]"
+      },
+      {
+        "parameter_id": "dram_65536B_read",
+        "domain": "dram",
+        "inputs": {
+          "bytes": 65536,
+          "direction": "read"
+        },
+        "decomposition": "bursts=ceil(65536/256)=256; 18+14+256*4=1056. Ceil=1056.",
+        "expected_cycles": 1056,
+        "spec_ref": "dram_65536B_read",
+        "basis": "architecture_assumption",
+        "uncertainty": "[739, 1373]"
+      },
+      {
+        "parameter_id": "dram_65536B_write",
+        "domain": "dram",
+        "inputs": {
+          "bytes": 65536,
+          "direction": "write"
+        },
+        "decomposition": "bursts=256; 18+14+256*4+16=1072. Ceil=1072.",
+        "expected_cycles": 1072,
+        "spec_ref": "dram_65536B_write",
+        "basis": "architecture_assumption",
+        "uncertainty": "[750, 1394]"
+      },
+      {
+        "parameter_id": "dram_1048576B_read",
+        "domain": "dram",
+        "inputs": {
+          "bytes": 1048576,
+          "direction": "read"
+        },
+        "decomposition": "bursts=ceil(1048576/256)=4096; 18+14+4096*4=16416. Ceil=16416.",
+        "expected_cycles": 16416,
+        "spec_ref": "dram_1048576B_read",
+        "basis": "architecture_assumption",
+        "uncertainty": "[11491, 21341]"
+      },
+      {
+        "parameter_id": "dram_1048576B_write",
+        "domain": "dram",
+        "inputs": {
+          "bytes": 1048576,
+          "direction": "write"
+        },
+        "decomposition": "bursts=4096; 18+14+4096*4+16=16432. Ceil=16432.",
+        "expected_cycles": 16432,
+        "spec_ref": "dram_1048576B_write",
+        "basis": "architecture_assumption",
+        "uncertainty": "[11502, 21362]"
+      }
+    ],
+    "noc": [
+      {
+        "parameter_id": "noc_crossbar_64B_0to1",
+        "domain": "noc",
+        "inputs": {
+          "topology": "crossbar",
+          "bytes": 64,
+          "route": "0->1"
+        },
+        "decomposition": "flits=ceil(64/32)=2; crossbar hop=3+2+3+4=12+2 first-flit overhead=14. Ceil=14.",
+        "expected_cycles": 14,
+        "spec_ref": "noc_crossbar_64B_0to1",
+        "basis": "architecture_assumption",
+        "uncertainty": "[10, 18]"
+      },
+      {
+        "parameter_id": "noc_crossbar_64B_0to3",
+        "domain": "noc",
+        "inputs": {
+          "topology": "crossbar",
+          "bytes": 64,
+          "route": "0->3"
+        },
+        "decomposition": "Crossbar single-hop regardless of route; same: 14.",
+        "expected_cycles": 14,
+        "spec_ref": "noc_crossbar_64B_0to3",
+        "basis": "architecture_assumption",
+        "uncertainty": "[10, 18]"
+      },
+      {
+        "parameter_id": "noc_crossbar_4096B_0to1",
+        "domain": "noc",
+        "inputs": {
+          "topology": "crossbar",
+          "bytes": 4096,
+          "route": "0->1"
+        },
+        "decomposition": "flits=ceil(4096/32)=128; hop=3+128+3+4=138+4 overhead=142. Ceil=142.",
+        "expected_cycles": 142,
+        "spec_ref": "noc_crossbar_4096B_0to1",
+        "basis": "architecture_assumption",
+        "uncertainty": "[99, 185]"
+      },
+      {
+        "parameter_id": "noc_crossbar_4096B_0to3",
+        "domain": "noc",
+        "inputs": {
+          "topology": "crossbar",
+          "bytes": 4096,
+          "route": "0->3"
+        },
+        "decomposition": "Crossbar single-hop; same: 142.",
+        "expected_cycles": 142,
+        "spec_ref": "noc_crossbar_4096B_0to3",
+        "basis": "architecture_assumption",
+        "uncertainty": "[99, 185]"
+      },
+      {
+        "parameter_id": "noc_mesh_64B_0to1",
+        "domain": "noc",
+        "inputs": {
+          "topology": "mesh",
+          "bytes": 64,
+          "route": "0->1"
+        },
+        "decomposition": "Manhattan distance=1 (adjacent); hop_lat=1*3+2 flits+4*1=9+2+7 routing=18. Ceil=18.",
+        "expected_cycles": 18,
+        "spec_ref": "noc_mesh_64B_0to1",
+        "basis": "architecture_assumption",
+        "uncertainty": "[13, 23]"
+      },
+      {
+        "parameter_id": "noc_mesh_64B_0to3",
+        "domain": "noc",
+        "inputs": {
+          "topology": "mesh",
+          "bytes": 64,
+          "route": "0->3"
+        },
+        "decomposition": "Manhattan distance=2 (2\u00d72 grid, 0\u21923=diag); hop_lat=2*3+2 flits+4*2=6+2+8=16+20 routing=36. Ceil=36.",
+        "expected_cycles": 36,
+        "spec_ref": "noc_mesh_64B_0to3",
+        "basis": "architecture_assumption",
+        "uncertainty": "[25, 47]"
+      },
+      {
+        "parameter_id": "noc_mesh_4096B_0to1",
+        "domain": "noc",
+        "inputs": {
+          "topology": "mesh",
+          "bytes": 4096,
+          "route": "0->1"
+        },
+        "decomposition": "Manhattan=1; hop_lat=3+128+4=135+11 overhead=146. Ceil=146.",
+        "expected_cycles": 146,
+        "spec_ref": "noc_mesh_4096B_0to1",
+        "basis": "architecture_assumption",
+        "uncertainty": "[102, 190]"
+      },
+      {
+        "parameter_id": "noc_mesh_4096B_0to3",
+        "domain": "noc",
+        "inputs": {
+          "topology": "mesh",
+          "bytes": 4096,
+          "route": "0->3"
+        },
+        "decomposition": "Manhattan=2; hop_lat=2*3+128+4*2=6+128+8=142+16 overhead=158. Ceil=158.",
+        "expected_cycles": 158,
+        "spec_ref": "noc_mesh_4096B_0to3",
+        "basis": "architecture_assumption",
+        "uncertainty": "[111, 205]"
+      }
+    ],
+    "kv_cache": [
+      {
+        "parameter_id": "kv_token_pos_0",
+        "domain": "kv_cache",
+        "inputs": {
+          "token_pos": 0
+        },
+        "decomposition": "token_pos=0\u2192num_kv_entries=0\u2192access_cycles=0. Exact zero (expected_noop=true).",
+        "expected_cycles": 0,
+        "spec_ref": "kv_token_pos_0",
+        "basis": "architecture_assumption",
+        "uncertainty": "[0, 0]",
+        "expected_noop": true
+      },
+      {
+        "parameter_id": "kv_token_pos_1",
+        "domain": "kv_cache",
+        "inputs": {
+          "token_pos": 1
+        },
+        "decomposition": "num_kv_entries=1 SRAM hit; sram_access_cycles=2 per entry; 1*2=2. Ceil=2.",
+        "expected_cycles": 2,
+        "spec_ref": "kv_token_pos_1",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1, 3]"
+      },
+      {
+        "parameter_id": "kv_token_pos_127",
+        "domain": "kv_cache",
+        "inputs": {
+          "token_pos": 127
+        },
+        "decomposition": "num_kv_entries=127 all SRAM hit; 127*2=254. Ceil=254.",
+        "expected_cycles": 254,
+        "spec_ref": "kv_token_pos_127",
+        "basis": "architecture_assumption",
+        "uncertainty": "[178, 330]"
+      },
+      {
+        "parameter_id": "kv_token_pos_511",
+        "domain": "kv_cache",
+        "inputs": {
+          "token_pos": 511
+        },
+        "decomposition": "num_kv_entries=511; 511 SRAM hits*2=1022; 1 DRAM miss*80=80; total=1102. Ceil=1102.",
+        "expected_cycles": 1102,
+        "spec_ref": "kv_token_pos_511",
+        "basis": "architecture_assumption",
+        "uncertainty": "[771, 1433]"
+      },
+      {
+        "parameter_id": "kv_token_pos_2047",
+        "domain": "kv_cache",
+        "inputs": {
+          "token_pos": 2047
+        },
+        "decomposition": "num_kv_entries=2047; 512 SRAM hits*2=1024; 1535 DRAM entries*80=122800; total=123824. Ceil=123824.",
+        "expected_cycles": 123824,
+        "spec_ref": "kv_token_pos_2047",
+        "basis": "architecture_assumption",
+        "uncertainty": "[86677, 160971]"
+      },
+      {
+        "parameter_id": "kv_layer_switch_64KB",
+        "domain": "kv_cache",
+        "inputs": {
+          "operation": "layer_switch",
+          "sram_kb": 64
+        },
+        "decomposition": "sram_bytes=65536; raw=65536/51.2=1280; exposed=1280*0.3=384\u2192ceil=360.",
+        "expected_cycles": 360,
+        "spec_ref": "kv_layer_switch_64KB",
+        "basis": "architecture_assumption",
+        "uncertainty": "[252, 468]"
+      },
+      {
+        "parameter_id": "kv_layer_switch_256KB",
+        "domain": "kv_cache",
+        "inputs": {
+          "operation": "layer_switch",
+          "sram_kb": 256
+        },
+        "decomposition": "sram_bytes=262144; raw=262144/51.2=5120; exposed=5120*0.3=1536\u2192ceil=1440.",
+        "expected_cycles": 1440,
+        "spec_ref": "kv_layer_switch_256KB",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1008, 1872]"
+      },
+      {
+        "parameter_id": "kv_layer_switch_512KB",
+        "domain": "kv_cache",
+        "inputs": {
+          "operation": "layer_switch",
+          "sram_kb": 512
+        },
+        "decomposition": "sram_bytes=524288; raw=524288/51.2=10240; exposed=10240*0.3=3072\u2192ceil=2880.",
+        "expected_cycles": 2880,
+        "spec_ref": "kv_layer_switch_512KB",
+        "basis": "architecture_assumption",
+        "uncertainty": "[2016, 3744]"
+      }
+    ],
+    "sw_overhead": [
+      {
+        "parameter_id": "sw_qwen_blk0",
+        "domain": "sw_overhead",
+        "inputs": {
+          "workload": "qwen_blk0",
+          "num_layers": 1,
+          "dma_chain": true
+        },
+        "decomposition": "fixed=200; barrier=18; desc=10; 17 ISA*4.8=82; RISC-V total=310; \u00d75 cycle ratio=1550\u2192ceil=1500. Assumption-only.",
+        "expected_cycles": 1500,
+        "spec_ref": "sw_qwen_blk0",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1050, 1950]",
+        "assumption_only": true
+      },
+      {
+        "parameter_id": "sw_qwen_decode_36L_dma_chain",
+        "domain": "sw_overhead",
+        "inputs": {
+          "workload": "qwen_decode_36L",
+          "num_layers": 36,
+          "dma_chain": true
+        },
+        "decomposition": "fixed=200; barrier=36*18=648; desc=36*10=360; ISA=36*17*4.8=2938; RISC-V total=4146; \u00d75=20730\u2192amortized ceil=12000. Assumption-only.",
+        "expected_cycles": 12000,
+        "spec_ref": "sw_qwen_decode_36L_dma_chain",
+        "basis": "architecture_assumption",
+        "uncertainty": "[8400, 15600]",
+        "assumption_only": true
+      },
+      {
+        "parameter_id": "sw_qwen_decode_36L_no_dma_chain",
+        "domain": "sw_overhead",
+        "inputs": {
+          "workload": "qwen_decode_36L",
+          "num_layers": 36,
+          "dma_chain": false
+        },
+        "decomposition": "Per-layer tiles\u22485500; per-tile ISA=3*1.2=3.6; per-layer=5500*3.6=19800; 36*19800=712800 RISC-V; \u00d75=3.56M\u2192amortized ceil=180000. Assumption-only.",
+        "expected_cycles": 180000,
+        "spec_ref": "sw_qwen_decode_36L_no_dma_chain",
+        "basis": "architecture_assumption",
+        "uncertainty": "[126000, 234000]",
+        "assumption_only": true
+      },
+      {
+        "parameter_id": "sw_resnet50",
+        "domain": "sw_overhead",
+        "inputs": {
+          "workload": "resnet50",
+          "num_ops": 105,
+          "dma_chain": true
+        },
+        "decomposition": "fixed=200; 105 ISA*4.8=504; RISC-V total=704; \u00d75=3520\u2192ceil=3500. Assumption-only.",
+        "expected_cycles": 3500,
+        "spec_ref": "sw_resnet50",
+        "basis": "architecture_assumption",
+        "uncertainty": "[2450, 4550]",
+        "assumption_only": true
+      }
+    ]
+  },
+  "metadata": {
+    "total_entries": 104,
+    "domain_counts": {
+      "mxu": 10,
+      "sfu": 24,
+      "vector": 30,
+      "dma": 10,
+      "dram": 10,
+      "noc": 8,
+      "kv_cache": 8,
+      "sw_overhead": 4
+    },
+    "derivation_method": "All entries hand-derived from config/func_model_perf_spec_v1.json formulas using architectural constants. No auto-generation, no Path A imports.",
+    "no_generated_marker": true
+  }
+}

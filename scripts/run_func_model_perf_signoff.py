@@ -56,6 +56,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_DIR = REPO_ROOT / ".omo" / "evidence"
 PLANS_DIR = REPO_ROOT / ".omo" / "plans"
 RTL_DIR = REPO_ROOT / "rtl"
+SPEC_PATH = REPO_ROOT / "config" / "func_model_perf_spec_v1.json"
+ORACLE_PATH = REPO_ROOT / "config" / "func_model_perf_oracle_v1.json"
+WORKLOAD_ORACLE_PATH = REPO_ROOT / "config" / "func_model_workload_oracle_v1.json"
+MATRIX_PATH = REPO_ROOT / "config" / "func_model_perf_matrix_v1.json"
 
 # Ensure sim/ is on sys.path
 SIM_DIR = REPO_ROOT / "sim"
@@ -1952,9 +1956,76 @@ def cmd_negative(args: argparse.Namespace) -> int:
     faults_str = getattr(args, "faults", "") or ""
     fault_list = [f.strip() for f in faults_str.split(",") if f.strip()]
 
-    if not fault_list and not getattr(args, "self_test", False):
+    matrix_mode = getattr(args, "matrix", "")
+
+    if not fault_list and not getattr(args, "self_test", False) and matrix_mode != "all":
         print("[negative] No faults specified. Use --self-test --faults <list>", file=sys.stderr)
         return 1
+
+    if matrix_mode == "all":
+        sys.path.insert(0, str(SIM_DIR))
+        try:
+            from timing.adversarial_matrix import run_adversarial_matrix
+            report = run_adversarial_matrix(
+                disable_each_validator=getattr(args, "self_test_disable_each_validator", False),
+            )
+        finally:
+            sys.path.remove(str(SIM_DIR))
+
+        print(json.dumps(report.to_dict(), indent=2))
+        all_ok = report.verdict == "pass"
+
+        evidence_path = getattr(args, "evidence_path", None)
+        if evidence_path:
+            if getattr(args, "todo_id", "unknown") == "unknown":
+                args.todo_id = "task-21-negative"
+            start_utc = datetime.now(timezone.utc)
+            neg_result = RunResult(
+                utc_start=start_utc.isoformat(),
+                utc_end=datetime.now(timezone.utc).isoformat(),
+                elapsed_s=0.0,
+                exit_code=0 if all_ok else 1,
+                stdout=json.dumps(report.to_dict(), indent=2),
+                verdict="pass" if all_ok else "fail",
+            )
+            provenance = record_provenance(
+                spec_paths=[str(SPEC_PATH.relative_to(REPO_ROOT))],
+                workload_paths=[str(WORKLOAD_ORACLE_PATH.relative_to(REPO_ROOT))],
+                oracle_paths=[str(ORACLE_PATH.relative_to(REPO_ROOT))],
+            )
+            claim = DoneClaim(
+                todo_id=args.todo_id,
+                head=provenance["head"],
+                source_fingerprint=provenance["spec_sha256"],
+                evidence_path=evidence_path,
+                provenance=provenance,
+                mutation_command={
+                    "argv": [
+                        sys.executable,
+                        str(REPO_ROOT / "scripts" / "run_func_model_perf_signoff.py"),
+                        "negative",
+                        "--matrix", "all",
+                        "--self-test-disable-each-validator",
+                        "--evidence-path", evidence_path,
+                    ],
+                },
+                mutation_result=report.to_dict(),
+                verdict=neg_result.verdict,
+                stale_state={
+                    "stale_head": False,
+                    "stale_source": report.stale_state.get("stale_source", False),
+                    "stale_report": report.stale_state.get("stale_report", False),
+                    "stale_evidence": False,
+                    "tested": report.stale_state.get("tested", False),
+                    "rejected": report.stale_state.get("rejected", False),
+                },
+                misleading_success_output=report.misleading_success_output.get("rejected", False),
+            )
+            neg_result.claim = claim
+            args.evidence_path = Path(evidence_path).name
+            _write_evidence(neg_result, args)
+
+        return 0 if all_ok else 1
 
     if getattr(args, "self_test", False):
         if not fault_list:
@@ -2421,6 +2492,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_neg.add_argument("--self-test", action="store_true", help="Run full self-test suite")
     p_neg.add_argument("--faults", help="Comma-separated fault names")
     p_neg.add_argument("--case", help="Single fault case to test")
+    p_neg.add_argument("--matrix", help="Adversarial matrix mode (e.g. 'all')")
+    p_neg.add_argument("--self-test-disable-each-validator", action="store_true",
+                       help="Run matrix once per validator with that validator disabled")
     p_neg.add_argument("--output", help="Output report path")
     p_neg.add_argument("--evidence-path", help="Evidence file path")
     p_neg.add_argument("--checks", help="Checks for negative test context")

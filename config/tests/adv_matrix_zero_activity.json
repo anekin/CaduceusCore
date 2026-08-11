@@ -1,0 +1,158 @@
+{
+  "schema_version": "1.0",
+  "matrix_id": "func_model_perf_matrix_v1",
+  "description": "Frozen Func Model performance matrix \u2014 provider row counts, hard workloads, sweep grids, runtime limits, and error policies. All decisions frozen from plan lines 48-73.",
+  "created": "2026-08-11",
+  "spec_ref": "config/func_model_perf_spec_v1.json",
+  "seed": 42,
+  "frozen_policies": {
+    "no_silent_skip": "Every case, row, workload, and sweep point MUST be executed. Skip flags, try/except swallowing, or empty-run deception are hard failures.",
+    "no_duplicate_ids": "All case_ids, workload_ids, and sweep_ids across the matrix must be unique.",
+    "seed_fixed": "Random seed=42 for all deterministic runs; no runtime seed injection.",
+    "error_policy": {
+      "provider_case_error": "abs(provider-oracle)/abs(oracle)*100; oracle>10 cycles \u2192 <=10%; 0<oracle<=10 \u2192 abs_err <=1 cycle",
+      "workload_path_error": "total and major(>=5% of total) \u2192 <=20% per case; minor \u2192 abs_err <=2 cycles",
+      "expected_noop": "Exact-zero oracle and provider for no-op cases; non-zero/NaN/Inf fails"
+    },
+    "runtime_limits": {
+      "provider_case_seconds": {
+        "max": 30,
+        "description": "Per-case absolute wall-clock ceiling"
+      },
+      "workload_seconds": {
+        "max": 120,
+        "description": "Per-workload absolute wall-clock ceiling"
+      },
+      "full_signoff_seconds": {
+        "max": 1800,
+        "description": "Total signoff suite wall-clock ceiling"
+      },
+      "peak_rss_mb": {
+        "max": 4096,
+        "description": "Peak resident set size ceiling"
+      }
+    },
+    "uncertainty": {
+      "latency_band": "low=0.7*base, high=1.3*base",
+      "throughput_band": "[base/1.3, base/0.7]"
+    },
+    "rounding": "math.ceil for integer cycles; no banker's rounding",
+    "basis": "architecture_assumption only; rtl_measurement rejected"
+  },
+  "provider_matrix": [],
+  "workloads": [],
+  "sweep_grids": {
+    "description": "Sweep grids frozen from plan line 72. Each grid has a unique sweep_id and explicit value set.",
+    "grids": [
+      {
+        "sweep_id": "bandwidth",
+        "dimension": "DRAM bandwidth (GB/s)",
+        "values": [
+          6.4,
+          12.8,
+          25.6,
+          51.2,
+          102.4
+        ],
+        "unit": "GB/s",
+        "resource_type": true,
+        "monotonicity_direction": "mono-decreasing"
+      },
+      {
+        "sweep_id": "array",
+        "dimension": "MXU array size (H or W)",
+        "values": [
+          32,
+          64,
+          128
+        ],
+        "unit": "dimensionless",
+        "resource_type": true,
+        "monotonicity_direction": "mono-decreasing"
+      },
+      {
+        "sweep_id": "dma_channels",
+        "dimension": "DMA channel count",
+        "values": [
+          1,
+          2,
+          4,
+          8
+        ],
+        "unit": "channels",
+        "resource_type": true,
+        "monotonicity_direction": "mono-decreasing"
+      },
+      {
+        "sweep_id": "prompt",
+        "dimension": "Prompt length (tokens)",
+        "values": [
+          16,
+          128,
+          512,
+          2000
+        ],
+        "unit": "tokens",
+        "resource_type": false,
+        "monotonicity_direction": "mono-increasing"
+      },
+      {
+        "sweep_id": "context",
+        "dimension": "Context length (tokens)",
+        "values": [
+          128,
+          512,
+          2048
+        ],
+        "unit": "tokens",
+        "resource_type": false,
+        "monotonicity_direction": "mono-increasing"
+      },
+      {
+        "sweep_id": "noc_hop",
+        "dimension": "NoC hop count",
+        "values": [
+          1,
+          2,
+          4
+        ],
+        "unit": "hops",
+        "resource_type": false,
+        "monotonicity_direction": "mono-increasing"
+      }
+    ],
+    "bottleneck_endpoints": [
+      {
+        "endpoint_id": "bottleneck_mem_bound",
+        "name": "Memory-bound endpoint",
+        "config": {
+          "bandwidth": 6.4,
+          "array": 128
+        },
+        "expected": "memory-bound \u2014 BW bottleneck share >=55%",
+        "description": "BW=6.4 GB/s with array=128; lowest bandwidth with largest array creates maximum memory bottleneck"
+      },
+      {
+        "endpoint_id": "bottleneck_compute_bound",
+        "name": "Compute-bound endpoint",
+        "config": {
+          "bandwidth": 102.4,
+          "array": 32
+        },
+        "expected": "compute-bound \u2014 compute bottleneck share >=55%",
+        "description": "BW=102.4 GB/s with array=32; highest bandwidth with smallest array creates maximum compute bottleneck"
+      }
+    ]
+  },
+  "dag_spec": {
+    "qwen_canonical_layer_dag": {
+      "semantic_ops": 17,
+      "breakdown": {
+        "mxu": 9,
+        "sfu": 5,
+        "vector": 3
+      },
+      "description": "Canonical Qwen layer DAG from docs/qwen25-3b-forward-spec.md. DMA/NoC/KV are expanded provider activities linked by parent operation ID."
+    }
+  }
+}

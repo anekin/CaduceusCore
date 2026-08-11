@@ -1,5 +1,26 @@
 
 
+## T21: Adversarial and Anti-Vacuous Performance-Spec Matrix (2026-08-11)
+
+### Design decisions
+- Added `sim/timing/adversarial_matrix.py` with a declarative fault-to-validator registry covering 26 adversarial faults:
+  - Per provider domain: mxu, sfu, vector, dma, dram, noc, kv_cache, sw_overhead.
+  - Per workload: qwen-blk0, qwen-decode-c128-g1, qwen-prefill-128, mobilenetv3, resnet50, yolov8n.
+  - Stale source/report, duplicate/missing events, wrong units/hash/seed, zero activity, self-importing oracle, RTL-labeled evidence, profile-only overclaim, misleading PASS output.
+- Provider faults mutate a temporary copy of `config/func_model_perf_oracle_v1.json` (scale one entry's expected_cycles or drop assumption flags) and invoke `scripts/verify_func_model_perf_spec.py` per domain.
+- Workload faults create temporary manifest/oracle mutations and assert structural invariant rejection locally.
+- Freshness, event-pair, contract, and evidence faults reuse existing `perf_contract.py`, `perf_session.py`, and runner helpers.
+- `--self-test-disable-each-validator` runs the matrix once per validator with that validator disabled; only the validator's paired fault flips to accepted, proving detection responsibility.
+- Structured bundle records `stale_state.tested=true,rejected=true` and `misleading_success_output.tested=true,rejected=true`.
+- No bad fixture creates a PASS index: every fault is rejected in the full-matrix run.
+
+### Verification results
+- GREEN: `python3 scripts/run_func_model_perf_signoff.py negative --matrix all --self-test-disable-each-validator` exits 0 with `declared_faults=26,detected_faults=26,accepted=0,rejected=26` and all 10 validators proven responsible.
+- Pytest: 10/10 tests pass in `test_perf_adversarial_matrix.py` (full matrix, disable-each-validator, individual injectors, CLI integration, DoneClaim evidence).
+- Full timing regression: 747/747 pass (737 existing + 10 new, no regressions).
+- Evidence recorded at `.omo/evidence/task-21-adversarial.json`.
+
+
 ## T20: Uncertainty-Aware Report-Only KPIs (2026-08-11)
 
 ### Design decisions
