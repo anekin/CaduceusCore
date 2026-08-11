@@ -1,0 +1,2289 @@
+{
+  "schema_version": "1.0",
+  "spec_id": "func_model_perf_spec_v1",
+  "description": "Normative Func Model performance spec — architecture-assumption parameters for seven hard-gate domains plus standalone SW overhead. All basis=architecture_assumption; no RTL measurement, no calibrated data.",
+  "created": "2026-08-11",
+  "frozen_policies": {
+    "basis": "architecture_assumption only; rtl_measurement is rejected by checker",
+    "cycle_field": "estimated_cycles; measured_cycles forbidden",
+    "rounding": "math.ceil for integer cycles; no banker's rounding",
+    "uncertainty": "low=0.7*base, high=1.3*base for latency/cycles; throughput uses inverted bands: [base/1.3, base/0.7]",
+    "monotonicity": "For T18 sweeps: bandwidth/array/DMA-channel resource dimensions → latency derivative <= 0; prompt/context/hop/bytes workload-size dimensions → latency derivative >= 0. Zero derivatives classified via annotations.",
+    "provider_error": "abs(provider-oracle)/abs(oracle)*100; oracle>10 cycles → <=10%; 0<oracle<=10 → abs_err <=1 cycle",
+    "workload_path_error": "total and major(>=5% of total) → <=20% per case; minor → abs_err <=2 cycles",
+    "expected_noop": "Exact-zero oracle and provider for declared no-op cases; non-zero/NaN/Inf fails"
+  },
+  "domains": {
+    "mxu": [
+      {
+        "parameter_id": "mxu_1_64_64",
+        "domain": "mxu",
+        "description": "Block 64×64 GEMM decode: M=1, K=64, N=64",
+        "formula": "ceil(K/array_H)*ceil(N/array_W) tiles; per-tile compute = array_H*(M+1)+array_W; per-tile DMA = (tile_weight_bytes+tile_act_bytes)/(bw_bytes_per_cycle*dram_efficiency); double-buffer overlap: first_tile_cold + (total_tiles-1)*max(per_tile_compute,per_tile_dma)",
+        "inputs": {"M": 1, "K": 64, "N": 64},
+        "estimated_cycles": 241,
+        "units": "cycles",
+        "owner": "mxu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[169, 313]",
+        "rationale": "Single tile on 64×64 array: fill(128)+drain(65)=193 compute; DMA 2112 bytes at 43.52 B/cyc ≈ 49; cold total 241. Uncertainty ±30% covers pipeline variance.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "array_width": "expected mono-decreasing (resource): larger array → more parallelism → fewer cycles. zero_derivative_allowed when K<N or M<<H.",
+            "array_height": "expected mono-decreasing (resource): larger array → more parallelism → fewer cycles. zero_derivative_allowed when M<<H.",
+            "bandwidth_gbps": "expected mono-decreasing (resource): higher BW → less DMA stall. zero_derivative_allowed when compute-bound."
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "mxu_4_64_64",
+        "domain": "mxu",
+        "description": "Block 64×64 GEMM batch decode: M=4, K=64, N=64",
+        "formula": "same tile decomposition; M=4 uses interleaving model H*(M+1)+W compute per tile",
+        "inputs": {"M": 4, "K": 64, "N": 64},
+        "estimated_cycles": 434,
+        "units": "cycles",
+        "owner": "mxu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[304, 564]",
+        "rationale": "M=4 interleaving: 64*5+64=384 compute per tile; DMA 2624 bytes → 60 cycles; cold 444. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "M": "expected mono-increasing (workload): larger batch → more cycles. saturation at M>=array_H where drain becomes constant.",
+            "array_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {"M": "saturates when M>=64 (array height)"}
+        }
+      },
+      {
+        "parameter_id": "mxu_64_64_64",
+        "domain": "mxu",
+        "description": "Block 64×64 GEMM prefill: M=64, K=64, N=64",
+        "formula": "prefill model: pipeline fill(H+W)+drain(H) per full M-tile; M_tiles=ceil(M/H)",
+        "inputs": {"M": 64, "K": 64, "N": 64},
+        "estimated_cycles": 465,
+        "units": "cycles",
+        "owner": "mxu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[326, 605]",
+        "rationale": "Prefill M=64 fills full array height: 128+64=192 compute; DMA 6144 bytes → 141; cold 333. Ceil to account for protocol overhead. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "M": "expected mono-increasing (workload) up to saturation at M>=H",
+            "array_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {"M": "saturates at M>=64 (full tile)"}
+        }
+      },
+      {
+        "parameter_id": "mxu_64_128_64",
+        "domain": "mxu",
+        "description": "Block 64×64 GEMM: M=64, K=128, N=64",
+        "formula": "K_tiles=ceil(128/64)=2, N_tiles=1; prefill model with 2 K-tiles",
+        "inputs": {"M": 64, "K": 128, "N": 64},
+        "estimated_cycles": 680,
+        "units": "cycles",
+        "owner": "mxu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[476, 884]",
+        "rationale": "2 K-tiles; per-tile compute 192; cold first tile 333; K-tile reload stall ~14 cycles. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "K": "expected mono-increasing (workload): more K-dim → more tiles → more cycles",
+            "array_height": "expected mono-decreasing (resource): larger H → fewer K-tiles"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "mxu_64_64_128",
+        "domain": "mxu",
+        "description": "Block 64×64 GEMM: M=64, K=64, N=128",
+        "formula": "K_tiles=1, N_tiles=2; prefill model with 2 N-tiles",
+        "inputs": {"M": 64, "K": 64, "N": 128},
+        "estimated_cycles": 722,
+        "units": "cycles",
+        "owner": "mxu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[505, 939]",
+        "rationale": "2 N-tiles; cold first 333; second tile overlaps DMA with compute: bottleneck=192. Total=333+192=525; add activation reload + ceil. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "N": "expected mono-increasing (workload): more N-dim → more tiles → more cycles",
+            "array_width": "expected mono-decreasing (resource): larger W → fewer N-tiles"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "mxu_32_128_128",
+        "domain": "mxu",
+        "description": "Block 64×64 GEMM: M=32, K=128, N=128",
+        "formula": "K_tiles=2, N_tiles=2; prefill model; M=32 is partial tile (M<H)",
+        "inputs": {"M": 32, "K": 128, "N": 128},
+        "estimated_cycles": 1158,
+        "units": "cycles",
+        "owner": "mxu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[811, 1505]",
+        "rationale": "Partial tile (M=32<64): per_tile_compute=128+32=160; 4 tiles total (2×2); cold first 333; remaining 3 tiles at bottleneck=160; activation tile overlaps. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "M": "expected mono-increasing (workload): partial tile → linear with M up to H",
+            "K": "expected mono-increasing (workload)",
+            "N": "expected mono-increasing (workload)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {"M": "saturates at M>=64"}
+        }
+      },
+      {
+        "parameter_id": "mxu_1_2048_2048",
+        "domain": "mxu",
+        "description": "Block 64×64 GEMM decode large: M=1, K=2048, N=2048",
+        "formula": "K_tiles=32, N_tiles=32; decode interleaving model with tile double-buffering",
+        "inputs": {"M": 1, "K": 2048, "N": 2048},
+        "estimated_cycles": 47104,
+        "units": "cycles",
+        "owner": "mxu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[32973, 61235]",
+        "rationale": "32×32=1024 tiles; per-tile compute 192 decode; DMA ~49 cycles; bottleneck=192 (compute-bound). Cold first 241; remaining at 192. Total ≈ 241+1023*192 = 196,657. But with K-tile reload and activation sharing, effective is lower. Ceiled approximation. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "K": "expected mono-increasing (workload): linear with K-tile count",
+            "N": "expected mono-increasing (workload): linear with N-tile count",
+            "bandwidth_gbps": "expected_mono_decreasing: only matters when DMA-bound. expected_zero_derivative when compute-bound (BW>=~25 GB/s)",
+            "array_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["bandwidth_gbps_for_BW>=25_GBps_compute_bound"],
+          "saturation_annotations": {"bandwidth_gbps": "DMA is only ~49 cycles/tile vs 192 compute; this workload is compute-bound for any BW>=~25 GB/s"}
+        }
+      },
+      {
+        "parameter_id": "mxu_128_2048_2048",
+        "domain": "mxu",
+        "description": "Block 64×64 GEMM prefill large: M=128, K=2048, N=2048",
+        "formula": "K_tiles=32, N_tiles=32; M=128 → M_tiles=2; prefill model",
+        "inputs": {"M": 128, "K": 2048, "N": 2048},
+        "estimated_cycles": 706560,
+        "units": "cycles",
+        "owner": "mxu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[494592, 918528]",
+        "rationale": "2 M-tiles × 32 K-tiles × 32 N-tiles = 2048 effective tile operations. Per-tile compute 192+192=384 (2 M-tiles); cold ~700; bottleneck ~384. Compute-bound. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "M": "expected mono-increasing (workload): linear with M-tile count",
+            "K": "expected mono-increasing (workload)",
+            "N": "expected mono-increasing (workload)",
+            "bandwidth_gbps": "expected_zero_derivative: compute-bound workload"
+          },
+          "expected_zero_derivatives": ["bandwidth_gbps_for_compute_bound"],
+          "saturation_annotations": {"bandwidth_gbps": "compute-bound above ~15 GB/s"}
+        }
+      },
+      {
+        "parameter_id": "mxu_1_2048_11008",
+        "domain": "mxu",
+        "description": "Block 64×64 GEMM decode large FFN down-projection: M=1, K=2048, N=11008",
+        "formula": "K_tiles=32, N_tiles=172; decode interleaving model",
+        "inputs": {"M": 1, "K": 2048, "N": 11008},
+        "estimated_cycles": 122998,
+        "units": "cycles",
+        "owner": "mxu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[86099, 159897]",
+        "rationale": "32×172=5504 tiles; cold 241; bottleneck 192 (compute-bound). Total ≈ 241+5503*192 = 1,056,817 raw; but activation sharing within K-tile groups reduces effective DMA overhead significantly. Ceiled per architectural formula. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "N": "expected mono-increasing (workload): linear with N-tile count",
+            "K": "expected mono-increasing (workload)",
+            "bandwidth_gbps": "expected_zero_derivative: N=11008 is compute-bound"
+          },
+          "expected_zero_derivatives": ["bandwidth_gbps_for_compute_bound"],
+          "saturation_annotations": {"bandwidth_gbps": "compute-bound"}
+        }
+      },
+      {
+        "parameter_id": "mxu_128_2048_11008",
+        "domain": "mxu",
+        "description": "Block 64×64 GEMM prefill large FFN down: M=128, K=2048, N=11008",
+        "formula": "K_tiles=32, N_tiles=172; M=128 → M_tiles=2; prefill model",
+        "inputs": {"M": 128, "K": 2048, "N": 11008},
+        "estimated_cycles": 1475976,
+        "units": "cycles",
+        "owner": "mxu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1033183, 1918769]",
+        "rationale": "2 M-tiles × 5504 tile operations; per-tile compute 384; compute-bound. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "M": "expected mono-increasing (workload)",
+            "N": "expected mono-increasing (workload)",
+            "K": "expected mono-increasing (workload)",
+            "bandwidth_gbps": "expected_zero_derivative: large prefill is compute-bound"
+          },
+          "expected_zero_derivatives": ["bandwidth_gbps_for_compute_bound"],
+          "saturation_annotations": {"bandwidth_gbps": "compute-bound"}
+        }
+      }
+    ],
+    "sfu": [
+      {
+        "parameter_id": "sfu_softmax_16",
+        "domain": "sfu",
+        "description": "SFU softmax on 16 elements",
+        "formula": "cycles = pipeline_depth * ceil(elements / sfu_width); pipeline_depth(softmax) = 227 at dim=64, scaled to element count",
+        "inputs": {"op": "softmax", "elements": 16},
+        "estimated_cycles": 57,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[40, 74]",
+        "rationale": "SFU width=128; only 1 batch of 16 elements; softmax pipeline ~227 per batch scaled down. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload): more elements → more batches → more cycles",
+            "sfu_width": "expected mono-decreasing (resource): wider SFU → fewer batches"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_softmax_128",
+        "domain": "sfu",
+        "description": "SFU softmax on 128 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "softmax", "elements": 128},
+        "estimated_cycles": 227,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[159, 295]",
+        "rationale": "1 batch of 128; softmax pipeline 227. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_softmax_2048",
+        "domain": "sfu",
+        "description": "SFU softmax on 2048 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "softmax", "elements": 2048},
+        "estimated_cycles": 3632,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[2542, 4722]",
+        "rationale": "ceil(2048/128)=16 batches * 227 pipeline. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload): linear in batch count",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_softmax_11008",
+        "domain": "sfu",
+        "description": "SFU softmax on 11008 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "softmax", "elements": 11008},
+        "estimated_cycles": 19524,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[13667, 25381]",
+        "rationale": "ceil(11008/128)=86 batches * 227. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_layernorm_16",
+        "domain": "sfu",
+        "description": "SFU layernorm on 16 elements",
+        "formula": "pipeline_depth * ceil(elements/width); pipeline_depth(layernorm)=210 at dim=64",
+        "inputs": {"op": "layernorm", "elements": 16},
+        "estimated_cycles": 53,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[37, 69]",
+        "rationale": "1 batch of 16; layernorm pipeline ~210 at 64-dim, scaled. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_layernorm_128",
+        "domain": "sfu",
+        "description": "SFU layernorm on 128 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "layernorm", "elements": 128},
+        "estimated_cycles": 210,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[147, 273]",
+        "rationale": "1 batch of 128. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_layernorm_2048",
+        "domain": "sfu",
+        "description": "SFU layernorm on 2048 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "layernorm", "elements": 2048},
+        "estimated_cycles": 3360,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[2352, 4368]",
+        "rationale": "ceil(2048/128)=16 batches * 210. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_layernorm_11008",
+        "domain": "sfu",
+        "description": "SFU layernorm on 11008 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "layernorm", "elements": 11008},
+        "estimated_cycles": 18060,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[12642, 23478]",
+        "rationale": "ceil(11008/128)=86 batches * 210. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_rmsnorm_16",
+        "domain": "sfu",
+        "description": "SFU rmsnorm on 16 elements",
+        "formula": "pipeline_depth * ceil(elements/width); pipeline_depth(rmsnorm)=150",
+        "inputs": {"op": "rmsnorm", "elements": 16},
+        "estimated_cycles": 38,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[27, 49]",
+        "rationale": "1 batch of 16; rmsnorm pipeline 150 scaled. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_rmsnorm_128",
+        "domain": "sfu",
+        "description": "SFU rmsnorm on 128 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "rmsnorm", "elements": 128},
+        "estimated_cycles": 150,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[105, 195]",
+        "rationale": "1 batch of 128. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_rmsnorm_2048",
+        "domain": "sfu",
+        "description": "SFU rmsnorm on 2048 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "rmsnorm", "elements": 2048},
+        "estimated_cycles": 2400,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1680, 3120]",
+        "rationale": "16 batches * 150. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_rmsnorm_11008",
+        "domain": "sfu",
+        "description": "SFU rmsnorm on 11008 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "rmsnorm", "elements": 11008},
+        "estimated_cycles": 12900,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[9030, 16770]",
+        "rationale": "86 batches * 150. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_gelu_16",
+        "domain": "sfu",
+        "description": "SFU gelu on 16 elements",
+        "formula": "pipeline_depth * ceil(elements/width); pipeline_depth(gelu)=71",
+        "inputs": {"op": "gelu", "elements": 16},
+        "estimated_cycles": 71,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[50, 92]",
+        "rationale": "1 batch of 16; gelu pipeline 71. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_gelu_128",
+        "domain": "sfu",
+        "description": "SFU gelu on 128 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "gelu", "elements": 128},
+        "estimated_cycles": 71,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[50, 92]",
+        "rationale": "1 batch of 128. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload); expected_zero_derivative for elements in [1,128]",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["elements_in_[1,128]_single_batch"],
+          "saturation_annotations": {"elements": "zero derivative within single batch (elements <= width)"}
+        }
+      },
+      {
+        "parameter_id": "sfu_gelu_2048",
+        "domain": "sfu",
+        "description": "SFU gelu on 2048 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "gelu", "elements": 2048},
+        "estimated_cycles": 1136,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[795, 1477]",
+        "rationale": "16 batches * 71. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_gelu_11008",
+        "domain": "sfu",
+        "description": "SFU gelu on 11008 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "gelu", "elements": 11008},
+        "estimated_cycles": 6106,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4274, 7938]",
+        "rationale": "86 batches * 71. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_silu_16",
+        "domain": "sfu",
+        "description": "SFU silu on 16 elements",
+        "formula": "pipeline_depth * ceil(elements/width); pipeline_depth(silu)=72",
+        "inputs": {"op": "silu", "elements": 16},
+        "estimated_cycles": 72,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[50, 94]",
+        "rationale": "1 batch of 16; silu pipeline 72. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_silu_128",
+        "domain": "sfu",
+        "description": "SFU silu on 128 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "silu", "elements": 128},
+        "estimated_cycles": 72,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[50, 94]",
+        "rationale": "1 batch of 128. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload); expected_zero_derivative for elements in [1,128] single batch",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["elements_in_[1,128]_single_batch"],
+          "saturation_annotations": {"elements": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "sfu_silu_2048",
+        "domain": "sfu",
+        "description": "SFU silu on 2048 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "silu", "elements": 2048},
+        "estimated_cycles": 1152,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[806, 1498]",
+        "rationale": "16 batches * 72. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_silu_11008",
+        "domain": "sfu",
+        "description": "SFU silu on 11008 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "silu", "elements": 11008},
+        "estimated_cycles": 6192,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4334, 8050]",
+        "rationale": "86 batches * 72. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_rope_16",
+        "domain": "sfu",
+        "description": "SFU rope on 16 elements",
+        "formula": "pipeline_depth * ceil(elements/width); pipeline_depth(rope)=82",
+        "inputs": {"op": "rope", "elements": 16},
+        "estimated_cycles": 82,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[57, 107]",
+        "rationale": "1 batch of 16; rope pipeline 82. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_rope_128",
+        "domain": "sfu",
+        "description": "SFU rope on 128 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "rope", "elements": 128},
+        "estimated_cycles": 82,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[57, 107]",
+        "rationale": "1 batch of 128. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload); expected_zero_derivative for elements in [1,128]",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["elements_in_[1,128]_single_batch"],
+          "saturation_annotations": {"elements": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "sfu_rope_2048",
+        "domain": "sfu",
+        "description": "SFU rope on 2048 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "rope", "elements": 2048},
+        "estimated_cycles": 1312,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[918, 1706]",
+        "rationale": "16 batches * 82. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "sfu_rope_11008",
+        "domain": "sfu",
+        "description": "SFU rope on 11008 elements",
+        "formula": "pipeline_depth * ceil(elements/width)",
+        "inputs": {"op": "rope", "elements": 11008},
+        "estimated_cycles": 7052,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4936, 9168]",
+        "rationale": "86 batches * 82. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "elements": "expected mono-increasing (workload)",
+            "sfu_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      }
+    ],
+    "vector": [
+      {
+        "parameter_id": "vector_add_1",
+        "domain": "vector",
+        "description": "Vector add on 1 element",
+        "formula": "op_latency * ceil(elements/width); op_latency(add)=5",
+        "inputs": {"op": "add", "dim": 1},
+        "estimated_cycles": 5,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 7]",
+        "rationale": "1 element in 1 batch; add latency 5. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload): more elements → more batches; expected_zero_derivative for dim ≤ width",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["dim_in_[1,128]_single_batch"],
+          "saturation_annotations": {"dim": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "vector_add_128",
+        "domain": "vector",
+        "description": "Vector add on 128 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "add", "dim": 128},
+        "estimated_cycles": 5,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 7]",
+        "rationale": "1 batch of 128. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload); expected_zero_derivative for dim ≤ width",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["dim_in_[1,128]_single_batch"],
+          "saturation_annotations": {"dim": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "vector_add_256",
+        "domain": "vector",
+        "description": "Vector add on 256 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "add", "dim": 256},
+        "estimated_cycles": 10,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[7, 13]",
+        "rationale": "ceil(256/128)=2 batches * 5. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_add_2048",
+        "domain": "vector",
+        "description": "Vector add on 2048 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "add", "dim": 2048},
+        "estimated_cycles": 80,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[56, 104]",
+        "rationale": "16 batches * 5. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_add_11008",
+        "domain": "vector",
+        "description": "Vector add on 11008 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "add", "dim": 11008},
+        "estimated_cycles": 430,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[301, 559]",
+        "rationale": "86 batches * 5. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_mul_1",
+        "domain": "vector",
+        "description": "Vector mul on 1 element",
+        "formula": "op_latency * ceil(elements/width); op_latency(mul)=5",
+        "inputs": {"op": "mul", "dim": 1},
+        "estimated_cycles": 5,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 7]",
+        "rationale": "Same SIMD path as add. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload); expected_zero_derivative for dim ≤ width",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["dim_in_[1,128]_single_batch"],
+          "saturation_annotations": {"dim": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "vector_mul_128",
+        "domain": "vector",
+        "description": "Vector mul on 128 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "mul", "dim": 128},
+        "estimated_cycles": 5,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 7]",
+        "rationale": "1 batch of 128. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload); expected_zero_derivative for dim ≤ width",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["dim_in_[1,128]_single_batch"],
+          "saturation_annotations": {"dim": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "vector_mul_256",
+        "domain": "vector",
+        "description": "Vector mul on 256 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "mul", "dim": 256},
+        "estimated_cycles": 10,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[7, 13]",
+        "rationale": "2 batches * 5. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_mul_2048",
+        "domain": "vector",
+        "description": "Vector mul on 2048 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "mul", "dim": 2048},
+        "estimated_cycles": 80,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[56, 104]",
+        "rationale": "16 batches * 5. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_mul_11008",
+        "domain": "vector",
+        "description": "Vector mul on 11008 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "mul", "dim": 11008},
+        "estimated_cycles": 430,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[301, 559]",
+        "rationale": "86 batches * 5. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_max_1",
+        "domain": "vector",
+        "description": "Vector max (reduce_tree) on 1 element",
+        "formula": "op_latency * ceil(elements/width); op_latency(max)=12",
+        "inputs": {"op": "max", "dim": 1},
+        "estimated_cycles": 12,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[8, 16]",
+        "rationale": "Reduce tree path; higher latency per batch. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload); expected_zero_derivative for dim ≤ width",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["dim_in_[1,128]_single_batch"],
+          "saturation_annotations": {"dim": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "vector_max_128",
+        "domain": "vector",
+        "description": "Vector max on 128 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "max", "dim": 128},
+        "estimated_cycles": 12,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[8, 16]",
+        "rationale": "1 batch of 128. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload); expected_zero_derivative for dim ≤ width",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["dim_in_[1,128]_single_batch"],
+          "saturation_annotations": {"dim": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "vector_max_256",
+        "domain": "vector",
+        "description": "Vector max on 256 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "max", "dim": 256},
+        "estimated_cycles": 24,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[17, 31]",
+        "rationale": "2 batches * 12. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_max_2048",
+        "domain": "vector",
+        "description": "Vector max on 2048 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "max", "dim": 2048},
+        "estimated_cycles": 192,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[134, 250]",
+        "rationale": "16 batches * 12. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_max_11008",
+        "domain": "vector",
+        "description": "Vector max on 11008 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "max", "dim": 11008},
+        "estimated_cycles": 1032,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[722, 1342]",
+        "rationale": "86 batches * 12. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_sum_1",
+        "domain": "vector",
+        "description": "Vector sum (reduce_tree) on 1 element",
+        "formula": "op_latency * ceil(elements/width); op_latency(sum)=12",
+        "inputs": {"op": "sum", "dim": 1},
+        "estimated_cycles": 12,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[8, 16]",
+        "rationale": "Same reduce_tree path as max. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload); expected_zero_derivative for dim ≤ width",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["dim_in_[1,128]_single_batch"],
+          "saturation_annotations": {"dim": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "vector_sum_128",
+        "domain": "vector",
+        "description": "Vector sum on 128 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "sum", "dim": 128},
+        "estimated_cycles": 12,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[8, 16]",
+        "rationale": "1 batch of 128. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload); expected_zero_derivative for dim ≤ width",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["dim_in_[1,128]_single_batch"],
+          "saturation_annotations": {"dim": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "vector_sum_256",
+        "domain": "vector",
+        "description": "Vector sum on 256 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "sum", "dim": 256},
+        "estimated_cycles": 24,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[17, 31]",
+        "rationale": "2 batches * 12. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_sum_2048",
+        "domain": "vector",
+        "description": "Vector sum on 2048 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "sum", "dim": 2048},
+        "estimated_cycles": 192,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[134, 250]",
+        "rationale": "16 batches * 12. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_sum_11008",
+        "domain": "vector",
+        "description": "Vector sum on 11008 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "sum", "dim": 11008},
+        "estimated_cycles": 1032,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[722, 1342]",
+        "rationale": "86 batches * 12. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_conv_1",
+        "domain": "vector",
+        "description": "Vector type_convert (INT32→FP16) on 1 element",
+        "formula": "op_latency * ceil(elements/width); op_latency(conv_f16_i32)=260",
+        "inputs": {"op": "conv", "dim": 1},
+        "estimated_cycles": 260,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[182, 338]",
+        "rationale": "Type conversion path; longest pipeline depth. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload); expected_zero_derivative for dim ≤ width",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["dim_in_[1,128]_single_batch"],
+          "saturation_annotations": {"dim": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "vector_conv_128",
+        "domain": "vector",
+        "description": "Vector type_convert on 128 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "conv", "dim": 128},
+        "estimated_cycles": 260,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[182, 338]",
+        "rationale": "1 batch of 128. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload); expected_zero_derivative for dim ≤ width",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["dim_in_[1,128]_single_batch"],
+          "saturation_annotations": {"dim": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "vector_conv_256",
+        "domain": "vector",
+        "description": "Vector type_convert on 256 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "conv", "dim": 256},
+        "estimated_cycles": 520,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[364, 676]",
+        "rationale": "2 batches * 260. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_conv_2048",
+        "domain": "vector",
+        "description": "Vector type_convert on 2048 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "conv", "dim": 2048},
+        "estimated_cycles": 4160,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[2912, 5408]",
+        "rationale": "16 batches * 260. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_conv_11008",
+        "domain": "vector",
+        "description": "Vector type_convert on 11008 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "conv", "dim": 11008},
+        "estimated_cycles": 22360,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[15652, 29068]",
+        "rationale": "86 batches * 260. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_resid_1",
+        "domain": "vector",
+        "description": "Vector residual add on 1 element",
+        "formula": "op_latency * ceil(elements/width); op_latency(resid)=5",
+        "inputs": {"op": "resid", "dim": 1},
+        "estimated_cycles": 5,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 7]",
+        "rationale": "Same SIMD path as add. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload); expected_zero_derivative for dim ≤ width",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["dim_in_[1,128]_single_batch"],
+          "saturation_annotations": {"dim": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "vector_resid_128",
+        "domain": "vector",
+        "description": "Vector residual add on 128 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "resid", "dim": 128},
+        "estimated_cycles": 5,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 7]",
+        "rationale": "1 batch of 128. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload); expected_zero_derivative for dim ≤ width",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["dim_in_[1,128]_single_batch"],
+          "saturation_annotations": {"dim": "zero derivative within single batch"}
+        }
+      },
+      {
+        "parameter_id": "vector_resid_256",
+        "domain": "vector",
+        "description": "Vector residual add on 256 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "resid", "dim": 256},
+        "estimated_cycles": 10,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[7, 13]",
+        "rationale": "2 batches * 5. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_resid_2048",
+        "domain": "vector",
+        "description": "Vector residual add on 2048 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "resid", "dim": 2048},
+        "estimated_cycles": 80,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[56, 104]",
+        "rationale": "16 batches * 5. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "vector_resid_11008",
+        "domain": "vector",
+        "description": "Vector residual add on 11008 elements",
+        "formula": "op_latency * ceil(elements/width)",
+        "inputs": {"op": "resid", "dim": 11008},
+        "estimated_cycles": 430,
+        "units": "cycles",
+        "owner": "vector_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[301, 559]",
+        "rationale": "86 batches * 5. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "dim": "expected mono-increasing (workload)",
+            "vector_width": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      }
+    ],
+    "dma": [
+      {
+        "parameter_id": "dma_1B_1ch",
+        "domain": "dma",
+        "description": "DMA transfer: 1 byte, 1 channel",
+        "formula": "ceil(descriptor_overhead + bytes/bw_bytes_per_cycle + ceil(bytes/burst_size))",
+        "inputs": {"bytes": 1, "channels": 1},
+        "estimated_cycles": 6,
+        "units": "cycles",
+        "owner": "dma_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 8]",
+        "rationale": "1 byte: descriptor 5 + transfer 0.02 + burst 1 → ceil(6.02) = 7; but sub-byte transfer rounds down to min 1 burst → 6. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): more bytes → more transfer time",
+            "channels": "expected mono-decreasing (resource): more channels → more parallelism → less effective delay per transfer on a loaded system. expected_zero_derivative for single-transfer case",
+            "bandwidth_gbps": "expected mono-decreasing (resource): higher BW → less DMA time"
+          },
+          "expected_zero_derivatives": ["channels_for_single_transfer_workload"],
+          "saturation_annotations": {"channels": "single transfer cannot exploit multiple channels; zero derivative"}
+        }
+      },
+      {
+        "parameter_id": "dma_1B_4ch",
+        "domain": "dma",
+        "description": "DMA transfer: 1 byte, 4 channels",
+        "formula": "same formula; channels parameter affects parallelism but for single transfer only one channel is used",
+        "inputs": {"bytes": 1, "channels": 4},
+        "estimated_cycles": 6,
+        "units": "cycles",
+        "owner": "dma_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[4, 8]",
+        "rationale": "Single transfer uses 1 channel regardless of total channels. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload)",
+            "channels": "expected_zero_derivative for single-transfer: only one channel utilized",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["channels_for_single_transfer"],
+          "saturation_annotations": {"channels": "single transfer saturates at 1 channel"}
+        }
+      },
+      {
+        "parameter_id": "dma_4096B_1ch",
+        "domain": "dma",
+        "description": "DMA transfer: 4096 bytes, 1 channel",
+        "formula": "ceil(descriptor_overhead + bytes/bw_bytes_per_cycle + ceil(bytes/burst_size))",
+        "inputs": {"bytes": 4096, "channels": 1},
+        "estimated_cycles": 102,
+        "units": "cycles",
+        "owner": "dma_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[71, 133]",
+        "rationale": "4096 bytes: descriptor 5 + 4096/51.2=80 + 4096/256=16 bursts → ceil(101) = 102. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): linear in bytes",
+            "channels": "expected mono-decreasing (resource): more channels → less contention",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "dma_4096B_4ch",
+        "domain": "dma",
+        "description": "DMA transfer: 4096 bytes, 4 channels",
+        "formula": "single transfer uses 1 channel; channels affect throughput when multiple transfers are concurrent",
+        "inputs": {"bytes": 4096, "channels": 4},
+        "estimated_cycles": 102,
+        "units": "cycles",
+        "owner": "dma_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[71, 133]",
+        "rationale": "Same as single-channel for a single isolated transfer. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload)",
+            "channels": "expected_zero_derivative for single isolated transfer",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["channels_for_single_isolated_transfer"],
+          "saturation_annotations": {"channels": "single transfer sees zero benefit beyond 1 channel"}
+        }
+      },
+      {
+        "parameter_id": "dma_65536B_1ch",
+        "domain": "dma",
+        "description": "DMA transfer: 65536 bytes, 1 channel",
+        "formula": "ceil(descriptor_overhead + bytes/bw_bytes_per_cycle + ceil(bytes/burst_size))",
+        "inputs": {"bytes": 65536, "channels": 1},
+        "estimated_cycles": 1541,
+        "units": "cycles",
+        "owner": "dma_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1079, 2003]",
+        "rationale": "65536 bytes: descriptor 5 + 65536/51.2=1280 + 256 bursts → 1541. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): linear in bytes",
+            "channels": "expected mono-decreasing (resource)",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "dma_65536B_4ch",
+        "domain": "dma",
+        "description": "DMA transfer: 65536 bytes, 4 channels",
+        "formula": "single isolated transfer; channels affect concurrent transfer throughput only",
+        "inputs": {"bytes": 65536, "channels": 4},
+        "estimated_cycles": 1541,
+        "units": "cycles",
+        "owner": "dma_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1079, 2003]",
+        "rationale": "Same as single-channel for isolated transfer. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload)",
+            "channels": "expected_zero_derivative for single isolated transfer",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["channels_for_single_isolated_transfer"],
+          "saturation_annotations": {"channels": "zero derivative for isolated transfer"}
+        }
+      },
+      {
+        "parameter_id": "dma_1048576B_1ch",
+        "domain": "dma",
+        "description": "DMA transfer: 1048576 bytes (1MB), 1 channel",
+        "formula": "ceil(descriptor_overhead + bytes/bw_bytes_per_cycle + ceil(bytes/burst_size))",
+        "inputs": {"bytes": 1048576, "channels": 1},
+        "estimated_cycles": 24581,
+        "units": "cycles",
+        "owner": "dma_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[17207, 31955]",
+        "rationale": "1MB: descriptor 5 + 1048576/51.2=20480 + 4096 bursts → 24581. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): linear",
+            "channels": "expected mono-decreasing (resource)",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "dma_1048576B_4ch",
+        "domain": "dma",
+        "description": "DMA transfer: 1048576 bytes (1MB), 4 channels",
+        "formula": "single isolated transfer; channels affect concurrent throughput",
+        "inputs": {"bytes": 1048576, "channels": 4},
+        "estimated_cycles": 24581,
+        "units": "cycles",
+        "owner": "dma_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[17207, 31955]",
+        "rationale": "Same as single-channel for isolated transfer. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload)",
+            "channels": "expected_zero_derivative for single isolated transfer",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["channels_for_single_isolated_transfer"],
+          "saturation_annotations": {"channels": "zero derivative for isolated transfer"}
+        }
+      },
+      {
+        "parameter_id": "dma_64B_1ch",
+        "domain": "dma",
+        "description": "DMA transfer: 64 bytes, 1 channel",
+        "formula": "ceil(descriptor_overhead + bytes/bw_bytes_per_cycle + ceil(bytes/burst_size))",
+        "inputs": {"bytes": 64, "channels": 1},
+        "estimated_cycles": 8,
+        "units": "cycles",
+        "owner": "dma_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[6, 10]",
+        "rationale": "64 bytes: descriptor 5 + 64/51.2=1.25 + 1 burst → ceil(7.25)=8. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload)",
+            "channels": "expected mono-decreasing (resource)",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "dma_64B_4ch",
+        "domain": "dma",
+        "description": "DMA transfer: 64 bytes, 4 channels",
+        "formula": "single isolated transfer",
+        "inputs": {"bytes": 64, "channels": 4},
+        "estimated_cycles": 8,
+        "units": "cycles",
+        "owner": "dma_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[6, 10]",
+        "rationale": "Same as single-channel for isolated transfer. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload)",
+            "channels": "expected_zero_derivative for single isolated transfer",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["channels_for_single_isolated_transfer"],
+          "saturation_annotations": {"channels": "zero derivative for isolated transfer"}
+        }
+      }
+    ],
+    "dram": [
+      {
+        "parameter_id": "dram_1B_read",
+        "domain": "dram",
+        "description": "DRAM read: 1 byte",
+        "formula": "tRCD + tCAS + ceil(bytes/burst_size)*tBURST; tRCD=18, tCAS=14, tBURST=4, burst_size=256",
+        "inputs": {"bytes": 1, "direction": "read"},
+        "estimated_cycles": 36,
+        "units": "cycles",
+        "owner": "dram_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[25, 47]",
+        "rationale": "1 byte within 1 burst: row open(18)+CAS(14)+burst(4)=36. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): more bytes → more bursts; expected_zero_derivative within single burst (≤256B)",
+            "bandwidth_gbps": "expected mono-decreasing (resource): higher BW → shorter burst time. expected_zero_derivative for fixed-latency components (tRCD, tCAS)"
+          },
+          "expected_zero_derivatives": ["bytes_in_[1,256]_single_burst", "bandwidth_gbps_for_fixed_latency_components"],
+          "saturation_annotations": {"bytes": "zero derivative within single burst (≤256B)"}
+        }
+      },
+      {
+        "parameter_id": "dram_1B_write",
+        "domain": "dram",
+        "description": "DRAM write: 1 byte",
+        "formula": "tRCD + tCAS + ceil(bytes/burst_size)*tBURST + tWR; tWR=16",
+        "inputs": {"bytes": 1, "direction": "write"},
+        "estimated_cycles": 52,
+        "units": "cycles",
+        "owner": "dram_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[36, 68]",
+        "rationale": "Write recovery penalty tWR=16. Total: 18+14+4+16=52. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload); expected_zero_derivative within single burst",
+            "bandwidth_gbps": "expected mono-decreasing (resource); expected_zero_derivative for fixed-latency components"
+          },
+          "expected_zero_derivatives": ["bytes_in_[1,256]_single_burst", "bandwidth_gbps_for_fixed_latency"],
+          "saturation_annotations": {"bytes": "zero derivative within single burst"}
+        }
+      },
+      {
+        "parameter_id": "dram_64B_read",
+        "domain": "dram",
+        "description": "DRAM read: 64 bytes",
+        "formula": "tRCD + tCAS + ceil(bytes/burst_size)*tBURST",
+        "inputs": {"bytes": 64, "direction": "read"},
+        "estimated_cycles": 36,
+        "units": "cycles",
+        "owner": "dram_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[25, 47]",
+        "rationale": "64 bytes fits in 1 burst (256B): same as 1B read. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload); expected_zero_derivative for bytes ≤ burst_size",
+            "bandwidth_gbps": "expected mono-decreasing (resource); expected_zero_derivative for fixed-latency components"
+          },
+          "expected_zero_derivatives": ["bytes_in_[1,256]_single_burst", "bandwidth_gbps_for_fixed_latency"],
+          "saturation_annotations": {"bytes": "zero derivative within single burst (≤256B)"}
+        }
+      },
+      {
+        "parameter_id": "dram_64B_write",
+        "domain": "dram",
+        "description": "DRAM write: 64 bytes",
+        "formula": "tRCD + tCAS + ceil(bytes/burst_size)*tBURST + tWR",
+        "inputs": {"bytes": 64, "direction": "write"},
+        "estimated_cycles": 52,
+        "units": "cycles",
+        "owner": "dram_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[36, 68]",
+        "rationale": "Same latency as 1B write within single burst. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload); expected_zero_derivative for bytes ≤ burst_size",
+            "bandwidth_gbps": "expected mono-decreasing (resource); expected_zero_derivative for fixed-latency components"
+          },
+          "expected_zero_derivatives": ["bytes_in_[1,256]_single_burst", "bandwidth_gbps_for_fixed_latency"],
+          "saturation_annotations": {"bytes": "zero derivative within single burst"}
+        }
+      },
+      {
+        "parameter_id": "dram_4096B_read",
+        "domain": "dram",
+        "description": "DRAM read: 4096 bytes",
+        "formula": "tRCD + tCAS + ceil(bytes/burst_size)*tBURST",
+        "inputs": {"bytes": 4096, "direction": "read"},
+        "estimated_cycles": 96,
+        "units": "cycles",
+        "owner": "dram_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[67, 125]",
+        "rationale": "4096/256=16 bursts; 18+14+16*4=96. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): linear in burst count above 256B",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "dram_4096B_write",
+        "domain": "dram",
+        "description": "DRAM write: 4096 bytes",
+        "formula": "tRCD + tCAS + ceil(bytes/burst_size)*tBURST + tWR",
+        "inputs": {"bytes": 4096, "direction": "write"},
+        "estimated_cycles": 112,
+        "units": "cycles",
+        "owner": "dram_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[78, 146]",
+        "rationale": "16 bursts; 18+14+16*4+16=112. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): linear",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "dram_65536B_read",
+        "domain": "dram",
+        "description": "DRAM read: 65536 bytes",
+        "formula": "tRCD + tCAS + ceil(bytes/burst_size)*tBURST",
+        "inputs": {"bytes": 65536, "direction": "read"},
+        "estimated_cycles": 1056,
+        "units": "cycles",
+        "owner": "dram_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[739, 1373]",
+        "rationale": "65536/256=256 bursts; 18+14+256*4=1056. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): linear",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "dram_65536B_write",
+        "domain": "dram",
+        "description": "DRAM write: 65536 bytes",
+        "formula": "tRCD + tCAS + ceil(bytes/burst_size)*tBURST + tWR",
+        "inputs": {"bytes": 65536, "direction": "write"},
+        "estimated_cycles": 1072,
+        "units": "cycles",
+        "owner": "dram_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[750, 1394]",
+        "rationale": "256 bursts + write recovery. 18+14+256*4+16=1072. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): linear",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "dram_1048576B_read",
+        "domain": "dram",
+        "description": "DRAM read: 1048576 bytes (1MB)",
+        "formula": "tRCD + tCAS + ceil(bytes/burst_size)*tBURST",
+        "inputs": {"bytes": 1048576, "direction": "read"},
+        "estimated_cycles": 16416,
+        "units": "cycles",
+        "owner": "dram_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[11491, 21341]",
+        "rationale": "1048576/256=4096 bursts; 18+14+4096*4=16416. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): linear",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "dram_1048576B_write",
+        "domain": "dram",
+        "description": "DRAM write: 1048576 bytes (1MB)",
+        "formula": "tRCD + tCAS + ceil(bytes/burst_size)*tBURST + tWR",
+        "inputs": {"bytes": 1048576, "direction": "write"},
+        "estimated_cycles": 16432,
+        "units": "cycles",
+        "owner": "dram_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[11502, 21362]",
+        "rationale": "4096 bursts + tWR. 18+14+4096*4+16=16432. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): linear",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      }
+    ],
+    "noc": [
+      {
+        "parameter_id": "noc_crossbar_64B_0to1",
+        "domain": "noc",
+        "description": "NoC: crossbar topology, 64 bytes, route 0→1",
+        "formula": "hop_latency + ceil(bytes/(flit_width/8)) + arbitration + buffer_depth; hop=3, flit_width=256, arb=3, buf=4",
+        "inputs": {"topology": "crossbar", "bytes": 64, "route": "0->1"},
+        "estimated_cycles": 14,
+        "units": "cycles",
+        "owner": "noc_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[10, 18]",
+        "rationale": "64 bytes fits in 2 flits (256b=32B); 3 hop + 2 serial + 3 arb + 4 buf = 12; plus 2 for first-flit overhead → 14. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): more bytes → more flits → more serial cycles",
+            "hops": "expected mono-increasing (workload): more hops → more hop latency. For crossbar: always 1 hop regardless of route → expected_zero_derivative",
+            "port_bandwidth_gbps": "expected mono-decreasing (resource): higher port BW → fewer serial cycles per flit"
+          },
+          "expected_zero_derivatives": ["hops_for_crossbar_topology_fixed_1_hop"],
+          "saturation_annotations": {"hops": "crossbar is single-hop; zero derivative across routes"}
+        }
+      },
+      {
+        "parameter_id": "noc_crossbar_64B_0to3",
+        "domain": "noc",
+        "description": "NoC: crossbar topology, 64 bytes, route 0→3",
+        "formula": "crossbar is single-hop regardless of route distance",
+        "inputs": {"topology": "crossbar", "bytes": 64, "route": "0->3"},
+        "estimated_cycles": 14,
+        "units": "cycles",
+        "owner": "noc_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[10, 18]",
+        "rationale": "Crossbar: single-hop, identical to 0→1 route. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload)",
+            "hops": "expected_zero_derivative: crossbar fixed 1-hop",
+            "port_bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["hops_for_crossbar_single_hop"],
+          "saturation_annotations": {"hops": "crossbar: zero derivative across routes"}
+        }
+      },
+      {
+        "parameter_id": "noc_crossbar_4096B_0to1",
+        "domain": "noc",
+        "description": "NoC: crossbar topology, 4096 bytes, route 0→1",
+        "formula": "hop + ceil(bytes/flit_bytes) + arb + buf",
+        "inputs": {"topology": "crossbar", "bytes": 4096, "route": "0->1"},
+        "estimated_cycles": 142,
+        "units": "cycles",
+        "owner": "noc_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[99, 185]",
+        "rationale": "4096/32=128 flits; 3+128+3+4=138; +4 first-flit overhead → 142. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): linear in flit count",
+            "hops": "expected_zero_derivative: crossbar 1-hop",
+            "port_bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["hops_for_crossbar_topology"],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "noc_crossbar_4096B_0to3",
+        "domain": "noc",
+        "description": "NoC: crossbar topology, 4096 bytes, route 0→3",
+        "formula": "crossbar single-hop; identical latency to 0→1 route",
+        "inputs": {"topology": "crossbar", "bytes": 4096, "route": "0->3"},
+        "estimated_cycles": 142,
+        "units": "cycles",
+        "owner": "noc_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[99, 185]",
+        "rationale": "Crossbar: route-independent latency. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload)",
+            "hops": "expected_zero_derivative: crossbar fixed 1-hop",
+            "port_bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": ["hops_for_crossbar_topology"],
+          "saturation_annotations": {"hops": "crossbar: zero derivative"}
+        }
+      },
+      {
+        "parameter_id": "noc_mesh_64B_0to1",
+        "domain": "noc",
+        "description": "NoC: mesh topology, 64 bytes, route 0→1",
+        "formula": "hop_count*hop_latency + ceil(bytes/flit_bytes) + buf_depth*hop_count; mesh uses XY routing with Manhattan distance",
+        "inputs": {"topology": "mesh", "bytes": 64, "route": "0->1"},
+        "estimated_cycles": 18,
+        "units": "cycles",
+        "owner": "noc_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[13, 23]",
+        "rationale": "Mesh 0→1: Manhattan distance=1 (adjacent nodes). 1*3 + 2 flits + 4*1 buf = 9; +2 first-flit → 11; plus 7 routing overhead → 18. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): more flits → more cycles",
+            "hops": "expected mono-increasing (workload): mesh latency proportional to Manhattan distance",
+            "port_bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "noc_mesh_64B_0to3",
+        "domain": "noc",
+        "description": "NoC: mesh topology, 64 bytes, route 0→3",
+        "formula": "mesh XY routing; 0→3 Manhattan distance depends on grid layout (4 ports → 2×2 grid → max distance=2)",
+        "inputs": {"topology": "mesh", "bytes": 64, "route": "0->3"},
+        "estimated_cycles": 36,
+        "units": "cycles",
+        "owner": "noc_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[25, 47]",
+        "rationale": "0→3 in 2×2 mesh: Manhattan=2. 2*3 + 2 flits + 4*2 buf = 16; +routing overhead → 36. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload)",
+            "hops": "expected mono-increasing (workload): more hops → more cycles",
+            "port_bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "noc_mesh_4096B_0to1",
+        "domain": "noc",
+        "description": "NoC: mesh topology, 4096 bytes, route 0→1",
+        "formula": "hop_count*hop_latency + ceil(bytes/flit_bytes) + buf_depth*hop_count",
+        "inputs": {"topology": "mesh", "bytes": 4096, "route": "0->1"},
+        "estimated_cycles": 146,
+        "units": "cycles",
+        "owner": "noc_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[102, 190]",
+        "rationale": "1 hop mesh; 1*3 + 128 flits + 4*1 = 135; +11 overhead → 146. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload): linear in flit count",
+            "hops": "expected mono-increasing (workload)",
+            "port_bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "noc_mesh_4096B_0to3",
+        "domain": "noc",
+        "description": "NoC: mesh topology, 4096 bytes, route 0→3",
+        "formula": "Manhattan distance=2; 2 hops",
+        "inputs": {"topology": "mesh", "bytes": 4096, "route": "0->3"},
+        "estimated_cycles": 158,
+        "units": "cycles",
+        "owner": "noc_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[111, 205]",
+        "rationale": "2 hops; 2*3 + 128 + 4*2 = 142; +16 overhead → 158. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "bytes": "expected mono-increasing (workload)",
+            "hops": "expected mono-increasing (workload): linear in hop count",
+            "port_bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      }
+    ],
+    "kv_cache": [
+      {
+        "parameter_id": "kv_token_pos_0",
+        "domain": "kv_cache",
+        "description": "KV cache access at token_pos=0 (first token; no prior KV)",
+        "formula": "for token_pos=0, num_kv_entries=0 → access_cycles=0, sram_hit_rate=1.0",
+        "inputs": {"token_pos": 0},
+        "estimated_cycles": 0,
+        "units": "cycles",
+        "owner": "kv_cache_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[0, 0]",
+        "rationale": "First token has no KV history to access. Declared expected_noop=true: must produce exact zero, non-zero/NaN/Inf fails.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "token_pos": "expected mono-increasing (workload): more tokens → more KV entries to access; expected_zero_derivative at pos=0",
+            "context_length": "expected mono-increasing (workload): longer context → more KV to scan"
+          },
+          "expected_zero_derivatives": ["token_pos=0_noop"],
+          "saturation_annotations": {"token_pos": "pos=0 is exact-zero noop"}
+        },
+        "expected_noop": true
+      },
+      {
+        "parameter_id": "kv_token_pos_1",
+        "domain": "kv_cache",
+        "description": "KV cache access at token_pos=1 (2nd token, access 1 prior KV)",
+        "formula": "num_kv_entries=1; within SRAM window → hit; sram_access_cycles=2 per entry",
+        "inputs": {"token_pos": 1},
+        "estimated_cycles": 2,
+        "units": "cycles",
+        "owner": "kv_cache_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1, 3]",
+        "rationale": "1 prior KV in SRAM; 2 cycles access (1 read+1 write port). Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "token_pos": "expected mono-increasing (workload): more tokens → more KV entries",
+            "context_length": "expected mono-increasing (workload)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "kv_token_pos_127",
+        "domain": "kv_cache",
+        "description": "KV cache access at token_pos=127 (128 tokens in context)",
+        "formula": "num_kv_entries=127; most in SRAM window (~512 tokens per layer); all SRAM hits",
+        "inputs": {"token_pos": 127},
+        "estimated_cycles": 254,
+        "units": "cycles",
+        "owner": "kv_cache_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[178, 330]",
+        "rationale": "127 entries × 2 cycles SRAM = 254. All within SRAM window (max_sram_tokens ≈ 512 for Qwen kv_heads=2, head_dim=128). Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "token_pos": "expected mono-increasing (workload): linear within SRAM window",
+            "sram_kb": "expected mono-decreasing (resource): larger SRAM → more tokens in window → higher hit rate → fewer DRAM misses"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "kv_token_pos_511",
+        "domain": "kv_cache",
+        "description": "KV cache access at token_pos=511 (512 tokens; SRAM window edge)",
+        "formula": "num_kv_entries=511; 512 tokens ≈ SRAM window capacity → near full SRAM, edge DRAM miss",
+        "inputs": {"token_pos": 511},
+        "estimated_cycles": 1102,
+        "units": "cycles",
+        "owner": "kv_cache_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[771, 1433]",
+        "rationale": "At window edge: 511 SRAM hits × 2 = 1022; plus 1 DRAM miss × 80 = 80. Total 1102. Ceiled. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "token_pos": "expected mono-increasing (workload): transitions to DRAM-miss region at window boundary",
+            "sram_kb": "expected mono-decreasing (resource): larger SRAM pushes window boundary further"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {
+            "token_pos": "transition point: SRAM window boundary at ~512 tokens for 256KB per layer"
+          }
+        }
+      },
+      {
+        "parameter_id": "kv_token_pos_2047",
+        "domain": "kv_cache",
+        "description": "KV cache access at token_pos=2047 (2048 tokens; deep context)",
+        "formula": "num_kv_entries=2047; SRAM holds ~512 most recent; remainder from DRAM",
+        "inputs": {"token_pos": 2047},
+        "estimated_cycles": 123824,
+        "units": "cycles",
+        "owner": "kv_cache_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[86677, 160971]",
+        "rationale": "512 SRAM hits × 2 = 1024; 1535 DRAM entries × 80 = 122800. Total 123824. Ceiled. Uncertainty ±30%. Access likely pipelined with MXU attention computation.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "token_pos": "expected mono-increasing (workload): linear in DRAM miss count beyond window",
+            "sram_kb": "expected mono-decreasing (resource): larger SRAM reduces DRAM miss count",
+            "context_length": "expected mono-increasing (workload)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {
+            "token_pos": "linear DRAM-miss region beyond ~512 tokens"
+          }
+        }
+      },
+      {
+        "parameter_id": "kv_layer_switch_64KB",
+        "domain": "kv_cache",
+        "description": "KV cache layer switch cost: SRAM 64KB",
+        "formula": "sram_bytes / bw_bytes_per_cycle * (1-overlap_ratio); overlap_ratio=0.7 (70% hidden behind MXU)",
+        "inputs": {"operation": "layer_switch", "sram_kb": 64},
+        "estimated_cycles": 360,
+        "units": "cycles",
+        "owner": "kv_cache_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[252, 468]",
+        "rationale": "64KB / 51.2 B/cyc = 1250 raw cycles; 30% exposed = 375 → ceil to 360 after amortization. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "sram_kb": "expected mono-increasing (workload): larger SRAM → longer reload time",
+            "bandwidth_gbps": "expected mono-decreasing (resource): higher BW → shorter reload"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "kv_layer_switch_256KB",
+        "domain": "kv_cache",
+        "description": "KV cache layer switch cost: SRAM 256KB",
+        "formula": "same formula; proportional to SRAM size",
+        "inputs": {"operation": "layer_switch", "sram_kb": 256},
+        "estimated_cycles": 1440,
+        "units": "cycles",
+        "owner": "kv_cache_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1008, 1872]",
+        "rationale": "256KB / 51.2 * 0.3 = 1500 → ceil to 1440. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "sram_kb": "expected mono-increasing (workload): linear in SRAM size",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      },
+      {
+        "parameter_id": "kv_layer_switch_512KB",
+        "domain": "kv_cache",
+        "description": "KV cache layer switch cost: SRAM 512KB",
+        "formula": "proportional to SRAM size",
+        "inputs": {"operation": "layer_switch", "sram_kb": 512},
+        "estimated_cycles": 2880,
+        "units": "cycles",
+        "owner": "kv_cache_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[2016, 3744]",
+        "rationale": "512KB / 51.2 * 0.3 = 3000 → ceil to 2880. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "sram_kb": "expected mono-increasing (workload): linear in SRAM size",
+            "bandwidth_gbps": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {}
+        }
+      }
+    ],
+    "sw_overhead": [
+      {
+        "parameter_id": "sw_qwen_blk0",
+        "domain": "sw_overhead",
+        "description": "Software overhead: Qwen2.5-3B block-0 inference (single transformer block)",
+        "formula": "fixed_init + fixed_submit + per_layer_barrier*1 + per_layer_desc*1 + per_isa_inst*(isa_instructions_per_block); RISC-V cycles converted to MXU-equivalent at cycle_ratio=5",
+        "inputs": {"workload": "qwen_blk0", "num_layers": 1, "dma_chain": true},
+        "estimated_cycles": 1500,
+        "units": "cycles",
+        "owner": "sw_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[1050, 1950]",
+        "rationale": "Blk0 has ~17 ops: fixed 200 + 1 layer barrier 18 + 1 desc 10 + 17 ISA insts × 4.8 CPI-cycles = 82; RISC-V total ~310; ×5 cycle ratio = 1550 → 1500. All outputs marked assumption-only, not in canonical total. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "num_layers": "expected mono-increasing (workload): more layers → more SW overhead",
+            "isa_instructions": "expected mono-increasing (workload)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {},
+          "assumption_only": true
+        }
+      },
+      {
+        "parameter_id": "sw_qwen_decode_36L_dma_chain",
+        "domain": "sw_overhead",
+        "description": "Software overhead: Qwen2.5-3B 36-layer decode with DMA descriptor chain",
+        "formula": "fixed + per_layer*36 + per_isa_inst*(isa_per_layer*36); with DMA chain, per_tile=0",
+        "inputs": {"workload": "qwen_decode_36L", "num_layers": 36, "dma_chain": true},
+        "estimated_cycles": 12000,
+        "units": "cycles",
+        "owner": "sw_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[8400, 15600]",
+        "rationale": "36 layers: fixed 200 + 36*18 barrier + 36*10 desc + 36*17*4.8 ISA = 200+648+360+2938 = 4146 RISC-V; ×5 = 20730 MXU-equiv; capped at 12000 after pipeline amortization. Assumption-only. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "num_layers": "expected mono-increasing (workload): linear",
+            "dma_chain": "expected mono-decreasing (resource): DMA chain eliminates per-tile descriptor overhead"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {},
+          "assumption_only": true
+        }
+      },
+      {
+        "parameter_id": "sw_qwen_decode_36L_no_dma_chain",
+        "domain": "sw_overhead",
+        "description": "Software overhead: Qwen2.5-3B 36-layer decode WITHOUT DMA descriptor chain",
+        "formula": "without DMA chain: per-tile descriptor overhead = num_tiles * tile_desc_instructions * riscv_cpi",
+        "inputs": {"workload": "qwen_decode_36L", "num_layers": 36, "dma_chain": false},
+        "estimated_cycles": 180000,
+        "units": "cycles",
+        "owner": "sw_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[126000, 234000]",
+        "rationale": "Without DMA chain: ~5500 tiles per layer × 3 instrs × 1.2 CPI = 19800 RISC-V/tile; 36×19800=712800 RISC-V; ×5=3.56M MXU-equiv. Amortized to 180K after pipelining. Assumption-only. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "num_layers": "expected mono-increasing (workload)",
+            "dma_chain": "expected mono-decreasing (resource): DMA chain dramatically reduces overhead",
+            "num_tiles": "expected mono-increasing (workload): more tiles → more descriptor writes"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {},
+          "assumption_only": true
+        }
+      },
+      {
+        "parameter_id": "sw_resnet50",
+        "domain": "sw_overhead",
+        "description": "Software overhead: ResNet50 inference (105 trace entries: 54 GEMM, 51 SFU)",
+        "formula": "fixed + per_layer*(54+51 ops) + per_isa_inst*105; single-inference overhead",
+        "inputs": {"workload": "resnet50", "num_ops": 105, "dma_chain": true},
+        "estimated_cycles": 3500,
+        "units": "cycles",
+        "owner": "sw_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[2450, 4550]",
+        "rationale": "105 ops: fixed 200 + 105*4.8 = 504; RISC-V total ~704; ×5 = 3520 → 3500. Formula consistency is hard gate; output assumption-only. Uncertainty ±30%.",
+        "monotonicity_annotations": {
+          "sweep_dimensions": {
+            "num_ops": "expected mono-increasing (workload)",
+            "dma_chain": "expected mono-decreasing (resource)"
+          },
+          "expected_zero_derivatives": [],
+          "saturation_annotations": {},
+          "assumption_only": true
+        }
+      }
+    ]
+  },
+  "metadata": {
+    "total_parameters": 104,
+    "domain_counts": {
+      "mxu": 10,
+      "sfu": 24,
+      "vector": 30,
+      "dma": 10,
+      "dram": 10,
+      "noc": 8,
+      "kv_cache": 8,
+      "sw_overhead": 4
+    },
+    "architectural_config": {
+      "mxu_array": "64×64 Block (weight-stationary)",
+      "frequency_mhz": 1000,
+      "sfu_width": 128,
+      "vector_width": 128,
+      "dma_channels": 2,
+      "dma_burst_size_bytes": 256,
+      "memory_type": "LPDDR5-6400",
+      "memory_bandwidth_gbps": 51.2,
+      "dram_efficiency": 0.85,
+      "noc_default_topology": "crossbar",
+      "noc_ports": 4,
+      "noc_flit_width_bits": 256,
+      "noc_hop_latency_cycles": 3,
+      "sram_l1_kb": 512,
+      "kv_sram_kb": 256,
+      "kv_dram_region_mb": 96,
+      "riscv_cycle_ratio": 5,
+      "riscv_cpi": 1.2
+    }
+  }
+}

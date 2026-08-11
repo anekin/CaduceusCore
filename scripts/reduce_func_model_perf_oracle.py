@@ -491,6 +491,25 @@ def _detect_path_a_reducer_mutation(oracle_path: str) -> Tuple[str, bool]:
     return "path-a-reducer check passed", True
 
 
+def _compute_sw_overhead_total(oracle_path: str) -> int:
+    """Sum estimated_cycles of sw_overhead operation entries across workloads.
+
+    An operation entry counts if its engine is "sw_overhead" or its op key/name
+    is "sw_overhead". A clean oracle has none, so the total must be 0.
+    """
+    with open(oracle_path, "r") as f:
+        oracle = json.load(f)
+    total = 0
+    for entry in oracle.get("workload_entries", {}).values():
+        per_op = entry.get("per_op_cycles", {})
+        for op_name, op_entry in per_op.items():
+            if not isinstance(op_entry, dict):
+                continue
+            if op_entry.get("engine") == "sw_overhead" or op_name == "sw_overhead":
+                total += int(op_entry.get("estimated_cycles", 0))
+    return total
+
+
 def _detect_path_b_decomposition_mutation(oracle_path: str, template_path: str) -> Tuple[str, bool]:
     """Verify the oracle has hand-derived Qwen decomposition entries using template ops."""
     with open(oracle_path, "r") as f:
@@ -938,6 +957,7 @@ def main() -> int:
     parser.add_argument("--variants", default="config/oracle/qwen25_3b_workload_variants_v1.json", help="Path to variants JSON")
     parser.add_argument("--manifest", default="config/workloads/qwen25_3b_perf_spec_v1.json", help="Path to canonical workload manifest")
     parser.add_argument("--self-check", action="store_true", help="Run self-check including AST import policy and subprocess isolation")
+    parser.add_argument("--no-path-a", action="store_true", help="Enforce no Path A dependency and report sw_overhead total")
     parser.add_argument("--mutations", default="", help="Comma-separated mutation checks to run")
     parser.add_argument("--workload-id", default="", help="Emit per-workload reduction for T16 (e.g. qwen25-3b-blk0-decode)")
     args = parser.parse_args()
@@ -950,7 +970,7 @@ def main() -> int:
     }
 
     # Step 1: AST import-policy self-check
-    if args.self_check:
+    if args.self_check or args.no_path_a:
         import_ok, import_violations = _check_self_imports()
         result["import_policy"] = {
             "verdict": "pass" if import_ok else "fail",
@@ -973,6 +993,18 @@ def main() -> int:
     else:
         result["import_policy"] = {"verdict": "skipped"}
         result["subprocess_isolation"] = {"verdict": "skipped"}
+
+    # Step 1b: Path A enforcement — reject structural Path A markers in the
+    # oracle and report the SW-overhead cycle total (0 for a clean oracle).
+    if args.no_path_a:
+        path_msg, path_ok = _detect_path_a_reducer_mutation(args.oracle)
+        result["path_a_reducer_check"] = {
+            "verdict": "pass" if path_ok else "fail",
+            "detail": path_msg,
+        }
+        result["reducer_sw_overhead_total"] = _compute_sw_overhead_total(args.oracle)
+        if not path_ok:
+            result["verdict"] = "fail"
 
     if args.workload_id:
         if args.workload_id in _CV_WORKLOAD_IDS:

@@ -1,5 +1,7 @@
 """Input-Stationary Engine — 第三经典数据流
 
+# Not covered by perf-spec v1; verify before switching architectural engine
+
 参考: SCALE-Sim 三种数据流对比 (arXiv 2410.22595)
 
 Input-stationary: 激活常驻 PE，权重流式穿过。

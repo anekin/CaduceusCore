@@ -1,0 +1,190 @@
+{
+  "schema_version": "1.0",
+  "template_id": "qwen25_3b_layer_template_v1",
+  "description": "Hand-derived 17-op canonical Qwen2.5-3B layer DAG template. Maps each semantic operator to its engine, shape decomposition formula, and dependency edges for critical-path reduction. Derived from docs/qwen25-3b-forward-spec.md. 9 MXU + 5 SFU + 3 Vector.",
+  "created": "2026-08-11",
+  "spec_ref": "config/func_model_perf_spec_v1.json",
+  "model_meta": {
+    "hidden": 2048,
+    "intermediate": 11008,
+    "heads": 16,
+    "kv_heads": 2,
+    "head_dim": 128
+  },
+  "architectural_constants": {
+    "mxu_array_H": 64,
+    "mxu_array_W": 64,
+    "sfu_width": 128,
+    "vector_width": 128,
+    "sfu_pipeline_depths": {
+      "softmax": 227,
+      "layernorm": 210,
+      "rmsnorm": 150,
+      "gelu": 71,
+      "silu": 72,
+      "rope": 82
+    },
+    "vector_op_latencies": {
+      "add": 5,
+      "mul": 5,
+      "max": 12,
+      "sum": 12,
+      "conv": 260,
+      "resid": 5
+    }
+  },
+  "ops": [
+    {
+      "op_id": "op_01",
+      "name": "Q_proj",
+      "engine": "mxu",
+      "semantic_role": "attention_query",
+      "shape_decomp": "M=batch_m, K=hidden, N=heads*head_dim; M_tiles=ceil(M/64), K_tiles=ceil(K/64), N_tiles=ceil(N/64); cycle_formula: M==1?decode_interleaving:prefill_model",
+      "dependency_edges": []
+    },
+    {
+      "op_id": "op_02",
+      "name": "K_proj",
+      "engine": "mxu",
+      "semantic_role": "attention_key",
+      "shape_decomp": "M=batch_m, K=hidden, N=kv_heads*head_dim; K_tiles=ceil(K/64), N_tiles=ceil(N/64); cycle_formula: M==1?decode_interleaving:prefill_model",
+      "dependency_edges": []
+    },
+    {
+      "op_id": "op_03",
+      "name": "V_proj",
+      "engine": "mxu",
+      "semantic_role": "attention_value",
+      "shape_decomp": "M=batch_m, K=hidden, N=kv_heads*head_dim; K_tiles=ceil(K/64), N_tiles=ceil(N/64); cycle_formula: M==1?decode_interleaving:prefill_model",
+      "dependency_edges": []
+    },
+    {
+      "op_id": "op_04",
+      "name": "RoPE",
+      "engine": "sfu",
+      "semantic_role": "positional_encoding",
+      "shape_decomp": "elements=heads*head_dim; batches=ceil(elements/sfu_width); cycles=pipeline_depth(rmsnorm)*batches for RoPE is rope: pipeline=82",
+      "dependency_edges": ["op_01", "op_02"]
+    },
+    {
+      "op_id": "op_05",
+      "name": "attention_QK",
+      "engine": "mxu",
+      "semantic_role": "attention_score_matmul",
+      "shape_decomp": "M=batch_m, K=head_dim, N=context_len; K_tiles=ceil(K/64), N_tiles=ceil(N/64); cycle_formula: M==1?decode_interleaving:prefill_model",
+      "dependency_edges": ["op_01", "op_02", "op_04"]
+    },
+    {
+      "op_id": "op_06",
+      "name": "softmax",
+      "engine": "sfu",
+      "semantic_role": "attention_score_normalization",
+      "shape_decomp": "elements=batch_m*heads*context_len; batches=ceil(elements/sfu_width); cycles=pipeline_depth(softmax=227)*batches",
+      "dependency_edges": ["op_05"]
+    },
+    {
+      "op_id": "op_07",
+      "name": "attention_PV",
+      "engine": "mxu",
+      "semantic_role": "attention_output_matmul",
+      "shape_decomp": "M=batch_m, K=context_len, N=head_dim*heads; K_tiles=ceil(K/64), N_tiles=ceil(N/64); cycle_formula: M==1?decode_interleaving:prefill_model",
+      "dependency_edges": ["op_06", "op_03"]
+    },
+    {
+      "op_id": "op_08",
+      "name": "O_proj",
+      "engine": "mxu",
+      "semantic_role": "attention_output_projection",
+      "shape_decomp": "M=batch_m, K=heads*head_dim, N=hidden; K_tiles=ceil(K/64), N_tiles=ceil(N/64); cycle_formula: M==1?decode_interleaving:prefill_model",
+      "dependency_edges": ["op_07"]
+    },
+    {
+      "op_id": "op_09",
+      "name": "residual_add_attn",
+      "engine": "vector",
+      "semantic_role": "skip_connection",
+      "shape_decomp": "dim=hidden; batches=ceil(hidden/vector_width); cycles=op_latency(resid=5)*batches",
+      "dependency_edges": ["op_08"]
+    },
+    {
+      "op_id": "op_10",
+      "name": "RMSNorm_pre_ffn",
+      "engine": "sfu",
+      "semantic_role": "pre_ffn_normalization",
+      "shape_decomp": "elements=hidden; batches=ceil(hidden/sfu_width); cycles=pipeline_depth(rmsnorm=150)*batches",
+      "dependency_edges": ["op_09"]
+    },
+    {
+      "op_id": "op_11",
+      "name": "FFN_gate",
+      "engine": "mxu",
+      "semantic_role": "ffn_gate_projection",
+      "shape_decomp": "M=batch_m, K=hidden, N=intermediate; K_tiles=ceil(K/64), N_tiles=ceil(N/64); cycle_formula: M==1?decode_interleaving:prefill_model",
+      "dependency_edges": ["op_10"]
+    },
+    {
+      "op_id": "op_12",
+      "name": "SiLU",
+      "engine": "sfu",
+      "semantic_role": "ffn_activation",
+      "shape_decomp": "elements=intermediate; batches=ceil(intermediate/sfu_width); cycles=pipeline_depth(silu=72)*batches",
+      "dependency_edges": ["op_11"]
+    },
+    {
+      "op_id": "op_13",
+      "name": "FFN_up",
+      "engine": "mxu",
+      "semantic_role": "ffn_up_projection",
+      "shape_decomp": "M=batch_m, K=hidden, N=intermediate; K_tiles=ceil(K/64), N_tiles=ceil(N/64); cycle_formula: M==1?decode_interleaving:prefill_model",
+      "dependency_edges": ["op_10"]
+    },
+    {
+      "op_id": "op_14",
+      "name": "gate_up_mul",
+      "engine": "vector",
+      "semantic_role": "elementwise_gate_multiply",
+      "shape_decomp": "dim=intermediate; batches=ceil(intermediate/vector_width); cycles=op_latency(mul=5)*batches",
+      "dependency_edges": ["op_12", "op_13"]
+    },
+    {
+      "op_id": "op_15",
+      "name": "FFN_down",
+      "engine": "mxu",
+      "semantic_role": "ffn_down_projection",
+      "shape_decomp": "M=batch_m, K=intermediate, N=hidden; K_tiles=ceil(K/64), N_tiles=ceil(N/64); cycle_formula: M==1?decode_interleaving:prefill_model",
+      "dependency_edges": ["op_14"]
+    },
+    {
+      "op_id": "op_16",
+      "name": "residual_add_ffn",
+      "engine": "vector",
+      "semantic_role": "skip_connection",
+      "shape_decomp": "dim=hidden; batches=ceil(hidden/vector_width); cycles=op_latency(resid=5)*batches",
+      "dependency_edges": ["op_15"]
+    },
+    {
+      "op_id": "op_17",
+      "name": "RMSNorm_final",
+      "engine": "sfu",
+      "semantic_role": "final_layer_norm",
+      "shape_decomp": "elements=hidden; batches=ceil(hidden/sfu_width); cycles=pipeline_depth(rmsnorm=150)*batches",
+      "dependency_edges": ["op_16"]
+    }
+  ],
+  "edge_summary": {
+    "parallel_chains": [
+      {"chain": "QKV_parallel", "ops": ["op_01", "op_02", "op_03"], "description": "Q/K/V projections are independent and can execute in parallel"},
+      {"chain": "FFN_gate_up_parallel", "ops": ["op_11", "op_13"], "description": "FFN gate and up projections are independent and can execute in parallel"}
+    ],
+    "serialized_bottlenecks": [
+      {"chain": "attention_serial", "ops": ["op_05", "op_06", "op_07"], "description": "Attention matmul chain: QK→softmax→PV, must be serialized due to data dependency"},
+      {"chain": "ffn_serial", "ops": ["op_11+op_12+op_13→op_14→op_15"], "description": "FFN: gate+up project→SiLU+mul→down project, parallel project branches must converge at op_14"}
+    ]
+  },
+  "metadata": {
+    "engine_counts": {"mxu": 9, "sfu": 5, "vector": 3},
+    "total_ops": 17,
+    "no_generated_marker": true,
+    "source": "hand-derived from docs/qwen25-3b-forward-spec.md + config/func_model_perf_spec_v1.json"
+  }
+}

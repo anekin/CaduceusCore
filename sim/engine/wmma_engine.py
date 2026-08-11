@@ -1,5 +1,7 @@
 """WMMA Engine — 16×16×16 Warp Matrix Multiply Accumulate
 
+# Not covered by perf-spec v1; verify before switching architectural engine
+
 参考: NVIDIA Volta/Ampere Tensor Core WMMA API
 
 每个 warp (32 threads) 协作算一个 16×16×16 块。

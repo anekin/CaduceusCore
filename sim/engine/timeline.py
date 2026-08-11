@@ -65,6 +65,8 @@ class SimulationReport:
     crossbar_wait: int = 0
     sram_stall: int = 0
     vcov_bubble: int = 0
+    # T15: canonical wall-clock critical path (max over topological paths)
+    wall_clock_critical_path: int = 0
 
     def to_text(self) -> str:
         lines = []

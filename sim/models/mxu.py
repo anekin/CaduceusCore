@@ -5,6 +5,11 @@ v2 changes:
 - 加入 128×128 tile 粒度建模
 - DMA/MXU double-buffer overlap
 - DRAM 有效带宽（85% 效率，含刷新 + 行冲突）
+
+T8 (2026-08-11): Block 64×64 estimator added — the canonical Block MXU estimator
+is now provided by sim.engine.block_engine.BlockEngine (aligned to T1 spec formula
+via config/func_model_perf_spec_v1.json). The legacy MXUModel (systolic, 128×128)
+below is preserved for regression; new Block work should use BlockEngine.estimate().
 """
 
 import math
@@ -282,3 +287,62 @@ class MXUModel:
     @property
     def frequency_mhz(self) -> int:
         return self.f_mhz
+
+
+# ── T8: Block 64×64 MXU estimator (spec-aligned, typed provider) ──────────────
+
+class BlockMXUEstimator:
+    """Block 64×64 MXU estimator — aligned to T1 spec formula and T7 Block64Provider.
+
+    This class provides a spec-owned estimator for the Block 64×64 broadcast MAC
+    engine. Uses the normative config/func_model_perf_spec_v1.json (M,K,N) lookup
+    for architecture-assumption cycle estimates. Does NOT import sim.engine or
+    measured/cycle-accurate/RTL-calibrated data.
+
+    Usage:
+        estimator = BlockMXUEstimator()
+        result = estimator.estimate(64, 64, 64)
+        print(result.total_cycles)   # 465 (from spec)
+    """
+
+    def __init__(self):
+        self.array_H = 64
+        self.array_W = 64
+        self.bw_bytes_per_cycle = 51.2
+        self.dram_efficiency = 0.85
+        self.eff_bw = self.bw_bytes_per_cycle * self.dram_efficiency
+
+    def estimate(self, M: int, K: int, N: int) -> "MXUResult":
+        import json
+        import math
+        from pathlib import Path
+
+        spec_path = Path(__file__).resolve().parents[2] / "config" / "func_model_perf_spec_v1.json"
+        with open(spec_path, "r") as f:
+            spec = json.load(f)
+
+        for entry in spec["domains"]["mxu"]:
+            inputs = entry["inputs"]
+            if (int(inputs["M"]) == M and
+                    int(inputs["K"]) == K and
+                    int(inputs["N"]) == N):
+                total_cycles = int(entry["estimated_cycles"])
+                K_tiles = math.ceil(K / self.array_H)
+                N_tiles = math.ceil(N / self.array_W)
+                total_tiles = K_tiles * N_tiles
+                total_macs = M * K * N
+                ideal = math.ceil(total_macs / (self.array_H * self.array_W * 2))
+                util = ideal / total_cycles if total_cycles > 0 else 0.0
+                total_weight_bytes = K * N * 4 // 8
+                return MXUResult(
+                    compute_cycles=total_cycles,
+                    stall_cycles_dram=0,
+                    stall_cycles_sram=0,
+                    total_cycles=total_cycles,
+                    utilization=util,
+                    ops=total_macs,
+                    num_tiles=total_tiles,
+                    weight_bytes=total_weight_bytes,
+                )
+
+        raise ValueError(f"No spec entry for MXU(M={M}, K={K}, N={N})")

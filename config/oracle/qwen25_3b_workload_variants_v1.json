@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "variants_id": "qwen25_3b_workload_variants_v1",
+  "description": "Per-workload shape variants for the 4 hard-gate Qwen2.5-3B workloads. These variants parameterize the 17-op layer template to produce per-op cycle estimates. Schema: workload_id, batch_m, prompt_len, context_len, layer_count, hidden, intermediate, kv_heads, head_dim.",
+  "created": "2026-08-11",
+  "template_ref": "config/oracle/qwen25_3b_layer_template_v1.json",
+  "frozen_policies": {
+    "no_auto_generation": "All variant values are hand-described, not generated from Path A models.",
+    "schema_locked": "Fields must include workload_id, batch_m, prompt_len, context_len, layer_count, hidden, intermediate, kv_heads, head_dim.",
+    "variant_set_hash_in_evidence": true
+  },
+  "variants": [
+    {
+      "workload_id": "qwen25-3b-blk0-decode",
+      "batch_m": 1,
+      "prompt_len": 1,
+      "context_len": 0,
+      "layer_count": 1,
+      "hidden": 2048,
+      "intermediate": 11008,
+      "heads": 16,
+      "kv_heads": 2,
+      "head_dim": 128,
+      "description": "Single block-0 decode: batch=1, no KV history (context=0). 1 layer only.",
+      "mxu_mode": "decode_interleaving",
+      "expected_noop_ops": ["kv_cache_token_pos_0"]
+    },
+    {
+      "workload_id": "qwen25-3b-decode-c128-g1",
+      "batch_m": 1,
+      "prompt_len": 1,
+      "context_len": 128,
+      "layer_count": 36,
+      "hidden": 2048,
+      "intermediate": 11008,
+      "heads": 16,
+      "kv_heads": 2,
+      "head_dim": 128,
+      "description": "36-layer decode with context=128, gen=1. All layers use decode interleaving mode.",
+      "mxu_mode": "decode_interleaving",
+      "expected_noop_ops": []
+    },
+    {
+      "workload_id": "qwen25-3b-prefill-16",
+      "batch_m": 16,
+      "prompt_len": 16,
+      "context_len": 0,
+      "layer_count": 36,
+      "hidden": 2048,
+      "intermediate": 11008,
+      "heads": 16,
+      "kv_heads": 2,
+      "head_dim": 128,
+      "description": "36-layer prefill with prompt=16 tokens. Uses prefill model (batch_m=16). context=0 means first layer has no KV history.",
+      "mxu_mode": "prefill",
+      "expected_noop_ops": ["kv_cache_first_layer"]
+    },
+    {
+      "workload_id": "qwen25-3b-prefill-128",
+      "batch_m": 128,
+      "prompt_len": 128,
+      "context_len": 0,
+      "layer_count": 36,
+      "hidden": 2048,
+      "intermediate": 11008,
+      "heads": 16,
+      "kv_heads": 2,
+      "head_dim": 128,
+      "description": "36-layer prefill with prompt=128 tokens. Uses prefill model (batch_m=128).",
+      "mxu_mode": "prefill",
+      "expected_noop_ops": ["kv_cache_first_layer"]
+    }
+  ],
+  "metadata": {
+    "variant_count": 4,
+    "variant_set_hash": "TBD — computed by reducer at runtime and included in evidence",
+    "no_generated_marker": true
+  }
+}

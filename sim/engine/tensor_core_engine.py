@@ -1,5 +1,7 @@
 """Tensor Core 风格引擎 — 64×16×16 子块碎片化模型
 
+# Not covered by perf-spec v1; verify before switching architectural engine
+
 参考: NVIDIA A100 Tensor Core
 
 NVIDIA 实际 Tensor Core 以 64×16×16 (K×M×N) 子块处理 GEMM：

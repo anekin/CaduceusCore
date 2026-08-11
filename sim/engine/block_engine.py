@@ -1,13 +1,17 @@
 """Block Engine — 全并行 MAC 阵列，纯空间映射
 
-与 systolic 的本质区别:
-  - 无 diagonal pipeline fill/drain: 数据广播到所有 MAC
-  - 但仍有广播同步 + 累加/归约开销，不是理想化的 1 cycle/tile
-  - 瓶颈: 通常是 DMA（加载权重+激活），但 compute 不再是零
-  - 代价: 全互连 crossbar 广播总线，面积 3-5× 同规模 systolic
+  Aligned to T1 perf spec (config/func_model_perf_spec_v1.json) and T7 Block64Provider.
+  Canonical Block 64×64 double-buffer tile decomposition: array_H=64, array_W=64.
+  This is the ONLY engine covered by perf-spec v1 for the MXU domain.
 
-参考: NVIDIA Tensor Core, Google TPUv4 的 vector-matrix unit
-"""
+  与 systolic 的本质区别:
+    - 无 diagonal pipeline fill/drain: 数据广播到所有 MAC
+    - 但仍有广播同步 + 累加/归约开销，不是理想化的 1 cycle/tile
+    - 瓶颈: 通常是 DMA（加载权重+激活），但 compute 不再是零
+    - 代价: 全互连 crossbar 广播总线，面积 3-5× 同规模 systolic
+
+  参考: NVIDIA Tensor Core, Google TPUv4 的 vector-matrix unit
+  """
 
 import math
 from typing import Any, Dict

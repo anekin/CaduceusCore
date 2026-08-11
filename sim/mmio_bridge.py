@@ -29,6 +29,7 @@ class MMIOBridge:
         self._trace: list = []
         self.tracer = None
         self._mxu_k_block = 0
+        self.perf_session: Optional[Any] = None  # PerformanceSession, set by FuncModel
 
     @property
     def _crossbar(self) -> Optional[CrossbarModel]:
@@ -150,10 +151,41 @@ class MMIOBridge:
                 raw_o = self._status.get(MXU.BASE + MXU.O_ADDR, 0)
                 raw_s = self._status.get(MXU.BASE + MXU.SCALE_ADDR, 0)
 
-                if M > 0 and K > 0 and N > 0:
+                # Perf event: MXU command accepted
+                mxu_seq_id: int = 0
+                if self.perf_session is not None:
+                    try:
+                        from timing.perf_contract import EngineType, OpType
+                        accepted = self.perf_session.emit_accepted(
+                            EngineType.MXU,
+                            OpType.MMUL,
+                            {"M": M, "K": K, "N": N},
+                        )
+                        mxu_seq_id = accepted.seq_id
+                    except Exception:
+                        pass
+
+                if self.perf_session is not None and self.perf_session.profile_only:
+                    # Profile-only: skip numerical kernel, still emit completion
+                    pass
+                elif M > 0 and K > 0 and N > 0:
                     self._run_mxu_compute(mxu, M, K, N, raw_i, raw_w, raw_o, raw_s, accumulate)
 
                 self._status[MXU.BASE + MXU.STATUS] = 2
+
+                # Perf event: MXU command completed
+                if self.perf_session is not None and mxu_seq_id > 0:
+                    try:
+                        from timing.perf_contract import EngineType, OpType
+                        self.perf_session.emit_completed(
+                            mxu_seq_id,
+                            EngineType.MXU,
+                            OpType.MMUL,
+                            {"M": M, "K": K, "N": N},
+                        )
+                    except Exception:
+                        pass
+
                 if self._status.get(MXU.BASE + MXU.IRQ_EN, 0) & 1:
                     self._set_irq(0)
 
@@ -302,10 +334,42 @@ class MMIOBridge:
                 pos = self._status.get(SFU.BASE + SFU.POS, 0)
                 op = self._status.get(SFU.BASE + SFU.CTRL, 0) & 0xF
 
-                if length > 0:
+                # Perf event: SFU command accepted
+                sfu_seq_id: int = 0
+                if self.perf_session is not None and length > 0:
+                    try:
+                        from timing.perf_contract import EngineType, OpType
+                        sfu_op = self.perf_session.sfu_op(op) or OpType.SOFTMAX
+                        accepted = self.perf_session.emit_accepted(
+                            EngineType.SFU,
+                            sfu_op,
+                            {"elements": length},
+                        )
+                        sfu_seq_id = accepted.seq_id
+                    except Exception:
+                        pass
+
+                if self.perf_session is not None and self.perf_session.profile_only:
+                    pass  # profile-only: skip numerical kernel
+                elif length > 0:
                     self._run_sfu_compute(sfu, raw_i, raw_o, length, head_dim, pos, op)
 
                 self._status[SFU.BASE + SFU.STATUS] = 2
+
+                # Perf event: SFU command completed
+                if self.perf_session is not None and sfu_seq_id > 0:
+                    try:
+                        from timing.perf_contract import EngineType, OpType
+                        sfu_op2 = self.perf_session.sfu_op(op) or OpType.SOFTMAX
+                        self.perf_session.emit_completed(
+                            sfu_seq_id,
+                            EngineType.SFU,
+                            sfu_op2,
+                            {"elements": length},
+                        )
+                    except Exception:
+                        pass
+
                 if self._status.get(SFU.BASE + SFU.IRQ_EN, 0) & 1:
                     self._set_irq(1)  # SFU IRQ
             else:
@@ -400,10 +464,42 @@ class MMIOBridge:
                 dim = self._status.get(VECTOR.BASE + VECTOR.DIM, 0) & 0xFFFF
                 op = self._status.get(VECTOR.BASE + VECTOR.CTRL, 0) & 0xF
 
-                if dim > 0:
+                # Perf event: Vector command accepted
+                vec_seq_id: int = 0
+                if self.perf_session is not None and dim > 0:
+                    try:
+                        from timing.perf_contract import EngineType, OpType
+                        vec_op = self.perf_session.vector_op(op) or OpType.ADD
+                        accepted = self.perf_session.emit_accepted(
+                            EngineType.VECTOR,
+                            vec_op,
+                            {"dim": dim},
+                        )
+                        vec_seq_id = accepted.seq_id
+                    except Exception:
+                        pass
+
+                if self.perf_session is not None and self.perf_session.profile_only:
+                    pass  # profile-only: skip numerical kernel
+                elif dim > 0:
                     self._run_vector_compute(vector, raw_a, raw_b, raw_o, dim, op)
 
                 self._status[VECTOR.BASE + VECTOR.STATUS] = 2
+
+                # Perf event: Vector command completed
+                if self.perf_session is not None and vec_seq_id > 0:
+                    try:
+                        from timing.perf_contract import EngineType, OpType
+                        vec_op2 = self.perf_session.vector_op(op) or OpType.ADD
+                        self.perf_session.emit_completed(
+                            vec_seq_id,
+                            EngineType.VECTOR,
+                            vec_op2,
+                            {"dim": dim},
+                        )
+                    except Exception:
+                        pass
+
                 if self._status.get(VECTOR.BASE + VECTOR.IRQ_EN, 0) & 1:
                     self._set_irq(2)
             else:
@@ -496,16 +592,52 @@ class MMIOBridge:
                 ch0_src = self._status.get(DMA.BASE + DMA.CH0_SRC, 0)
                 ch0_dst = self._status.get(DMA.BASE + DMA.CH0_DST, 0)
                 ch0_size = self._status.get(DMA.BASE + DMA.CH0_SIZE, 0)
-                if ch0_size > 0:
-                    self._run_dma_transfer(ch0_src, ch0_dst, ch0_size)
 
                 ch1_src = self._status.get(DMA.BASE + DMA.CH1_SRC, 0)
                 ch1_dst = self._status.get(DMA.BASE + DMA.CH1_DST, 0)
                 ch1_size = self._status.get(DMA.BASE + DMA.CH1_SIZE, 0)
-                if ch1_size > 0:
-                    self._run_dma_transfer(ch1_src, ch1_dst, ch1_size)
+
+                total_size = ch0_size + ch1_size
+
+                # Perf event: DMA command accepted
+                dma_seq_id: int = 0
+                if self.perf_session is not None and total_size > 0:
+                    try:
+                        from timing.perf_contract import EngineType, OpType
+                        accepted = self.perf_session.emit_accepted(
+                            EngineType.DMA,
+                            OpType.DMA_COPY,
+                            {"bytes": total_size},
+                        )
+                        dma_seq_id = accepted.seq_id
+                    except Exception:
+                        pass
+
+                batch_skip = (
+                    self.perf_session is not None
+                    and self.perf_session.batch_profile
+                )
+                if not batch_skip:
+                    if ch0_size > 0:
+                        self._run_dma_transfer(ch0_src, ch0_dst, ch0_size)
+                    if ch1_size > 0:
+                        self._run_dma_transfer(ch1_src, ch1_dst, ch1_size)
 
                 self._status[DMA.BASE + DMA.STATUS] = 2
+
+                # Perf event: DMA command completed
+                if self.perf_session is not None and dma_seq_id > 0:
+                    try:
+                        from timing.perf_contract import EngineType, OpType
+                        self.perf_session.emit_completed(
+                            dma_seq_id,
+                            EngineType.DMA,
+                            OpType.DMA_COPY,
+                            {"bytes": total_size},
+                        )
+                    except Exception:
+                        pass
+
                 self._status[DMA.BASE + DMA.CH0_SIZE] = 0
                 self._status[DMA.BASE + DMA.CH1_SIZE] = 0
                 if self._status.get(DMA.BASE + DMA.IRQ_EN, 0) & 1:

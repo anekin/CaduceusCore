@@ -7,7 +7,7 @@ Phase 2: Python 固件模拟器（riscv-gcc 就绪后切换 Spike + 真实 ELF�
 
 import hashlib
 import os
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import numpy as np
 import struct
@@ -20,11 +20,16 @@ from axi_tracer import AXITracer
 from models.pcie import PCIeModel, DmaEngine
 from models.crossbar import CrossbarModel
 
+if TYPE_CHECKING:
+    from timing.perf_session import PerformanceSession
+
 
 class FuncModel:
     """Top-level Func Model: DRAM + SRAM + MMIO Bridge + Modules + Firmware."""
 
-    def __init__(self, dram_mb: int = 64, sram_kb: int = 512, use_spike: Optional[bool] = None):
+    def __init__(self, dram_mb: int = 64, sram_kb: int = 512,
+                 use_spike: Optional[bool] = None,
+                 perf_session: Optional["PerformanceSession"] = None):
         # Memories
         self.dram = bytearray(dram_mb * 1024 * 1024)
         self.sram = bytearray(sram_kb * 1024)
@@ -47,6 +52,11 @@ class FuncModel:
             'crossbar': self.crossbar,
             'dram': self.dram, 'sram': self.sram,
         })
+
+        # Opt-in performance event emission (T6)
+        if perf_session is not None:
+            self.bridge.perf_session = perf_session
+        self.perf_session = perf_session
 
         sim_modules = {
             'mxu': self.mxu, 'sfu': self.sfu,

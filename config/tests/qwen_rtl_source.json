@@ -1,0 +1,32 @@
+{
+  "description": "Negative fixture: references RTL source path that must be rejected before file open",
+  "model_meta": {
+    "hidden": 2048,
+    "intermediate": 11008,
+    "layers": 36,
+    "heads": 16,
+    "kv_heads": 2,
+    "head_dim": 128
+  },
+  "source_path": "rtl/mxu/mxu_top.v",
+  "rtl_reference": "This fixture references an RTL source path which must be rejected before any file I/O",
+  "ops": [
+    {"op_id": "op_00", "name": "Q_proj", "engine": "mxu"},
+    {"op_id": "op_01", "name": "K_proj", "engine": "mxu"},
+    {"op_id": "op_02", "name": "V_proj", "engine": "mxu"},
+    {"op_id": "op_03", "name": "O_proj", "engine": "mxu"},
+    {"op_id": "op_04", "name": "FFN_gate", "engine": "mxu"},
+    {"op_id": "op_05", "name": "FFN_up", "engine": "mxu"},
+    {"op_id": "op_06", "name": "FFN_down", "engine": "mxu"},
+    {"op_id": "op_07", "name": "FFN_down2", "engine": "mxu"},
+    {"op_id": "op_08", "name": "FFN_extra", "engine": "mxu"},
+    {"op_id": "op_09", "name": "attn_score", "engine": "mxu"},
+    {"op_id": "op_10", "name": "attn_weight", "engine": "mxu"},
+    {"op_id": "op_11", "name": "SFU_softmax", "engine": "sfu"},
+    {"op_id": "op_12", "name": "SFU_rope", "engine": "sfu"},
+    {"op_id": "op_13", "name": "SFU_silu", "engine": "sfu"},
+    {"op_id": "op_14", "name": "SFU_rmsnorm", "engine": "sfu"},
+    {"op_id": "op_15", "name": "VEC_resid", "engine": "vector"},
+    {"op_id": "op_16", "name": "VEC_mul", "engine": "vector"}
+  ]
+}

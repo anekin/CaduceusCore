@@ -1,0 +1,21 @@
+{
+  "description": "Negative fixture: Qwen2.5-3B with only 7 GEMM ops (missing 2 MXU, 5 SFU, 3 Vector from the canonical 17-op DAG)",
+  "model_meta": {
+    "hidden": 2048,
+    "intermediate": 11008,
+    "layers": 36,
+    "heads": 16,
+    "kv_heads": 2,
+    "head_dim": 128
+  },
+  "ops": [
+    {"op_id": "op_00", "name": "Q_proj", "engine": "mxu"},
+    {"op_id": "op_01", "name": "K_proj", "engine": "mxu"},
+    {"op_id": "op_02", "name": "V_proj", "engine": "mxu"},
+    {"op_id": "op_03", "name": "O_proj", "engine": "mxu"},
+    {"op_id": "op_04", "name": "FFN_gate", "engine": "mxu"},
+    {"op_id": "op_05", "name": "FFN_up", "engine": "mxu"},
+    {"op_id": "op_06", "name": "FFN_down", "engine": "mxu"}
+  ],
+  "engine_summary": {"mxu": 7, "sfu": 0, "vector": 0, "total": 7}
+}

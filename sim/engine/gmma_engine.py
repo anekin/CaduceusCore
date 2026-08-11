@@ -1,5 +1,7 @@
 """GMMA Engine — Group Matrix Multiply Accumulate (Hopper H100 style)
 
+# Not covered by perf-spec v1; verify before switching architectural engine
+
 参考: NVIDIA Hopper H100 GMMA + TMA (Tensor Memory Accelerator)
 
 GMMA = Block Engine 的异步升级版:

@@ -61,6 +61,8 @@ class DRAMModel:
         """Estimate DRAM access latency for a given transfer size.
 
         Includes: row activation + CAS + data burst + precharge.
+        Row-conflict overhead is modeled separately via effective_bandwidth_bytes_per_cycle();
+        it is NOT included in per-access latency to avoid double-counting.
         """
         if size_bytes <= 0:
             return 0
@@ -82,10 +84,5 @@ class DRAMModel:
             latency += num_bursts * tBURST
         else:
             latency += num_bursts * tBURST + tWR
-
-        # Row conflict: if accessing different row, add precharge time
-        if self.row_conflict_prob > 0:
-            # tRP (precharge) ≈ 18ns → 18 cycles
-            latency += int(18 * self.row_conflict_prob)
 
         return int(latency)

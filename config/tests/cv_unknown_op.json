@@ -1,0 +1,1826 @@
+{
+  "workload_id": "yolov8n",
+  "schema_version": "1.0",
+  "created": "2026-08-11",
+  "model_meta": {
+    "family": "yolov8n",
+    "input_shape": [
+      1,
+      3,
+      640,
+      640
+    ],
+    "num_classes": 80
+  },
+  "trace_generator": {
+    "file": "sim/cv/traces/yolov8n_trace.py",
+    "sha256": "a934b2a8b7311bb6a8427766493748604cd6a394f7d2d1853564299cdac511bd",
+    "seed": 42,
+    "onnx_runtime_pinned": "onnxruntime>=1.23.0"
+  },
+  "invariants": {
+    "total_entries": 129,
+    "gemm_entries": 63,
+    "sfu_entries": 57,
+    "vector_entries": 0,
+    "host_only_entries": 9,
+    "gemm_plus_sfu_plus_vec_plus_host": 129
+  },
+  "entries": [
+    {
+      "seq": 0,
+      "name": "backbone.stem",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 102400,
+        "K": 27,
+        "N": 16
+      },
+      "depends_on": []
+    },
+    {
+      "seq": 1,
+      "name": "backbone.stem.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 1638400
+      },
+      "depends_on": [
+        0
+      ]
+    },
+    {
+      "seq": 2,
+      "name": "backbone.stage1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 25600,
+        "K": 144,
+        "N": 32
+      },
+      "depends_on": [
+        1
+      ]
+    },
+    {
+      "seq": 3,
+      "name": "backbone.stage1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 819200
+      },
+      "depends_on": [
+        2
+      ]
+    },
+    {
+      "seq": 4,
+      "name": "backbone.stage2.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 25600,
+        "K": 32,
+        "N": 32
+      },
+      "depends_on": [
+        3
+      ]
+    },
+    {
+      "seq": 5,
+      "name": "unknown_custom_op",
+      "engine": null,
+      "op": null,
+      "host_only": false,
+      "shape": {},
+      "depends_on": [
+        4
+      ]
+    },
+    {
+      "seq": 6,
+      "name": "backbone.stage2.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 819200
+      },
+      "depends_on": [
+        5
+      ]
+    },
+    {
+      "seq": 7,
+      "name": "backbone.stage2.m.0.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 25600,
+        "K": 144,
+        "N": 16
+      },
+      "depends_on": [
+        6
+      ]
+    },
+    {
+      "seq": 8,
+      "name": "backbone.stage2.m.0.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 409600
+      },
+      "depends_on": [
+        7
+      ]
+    },
+    {
+      "seq": 9,
+      "name": "backbone.stage2.m.0.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 25600,
+        "K": 144,
+        "N": 16
+      },
+      "depends_on": [
+        8
+      ]
+    },
+    {
+      "seq": 10,
+      "name": "backbone.stage2.m.0.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 409600
+      },
+      "depends_on": [
+        9
+      ]
+    },
+    {
+      "seq": 11,
+      "name": "backbone.stage2.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 25600,
+        "K": 48,
+        "N": 32
+      },
+      "depends_on": [
+        10
+      ]
+    },
+    {
+      "seq": 12,
+      "name": "backbone.stage2.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 819200
+      },
+      "depends_on": [
+        11
+      ]
+    },
+    {
+      "seq": 13,
+      "name": "backbone.stage3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 288,
+        "N": 64
+      },
+      "depends_on": [
+        12
+      ]
+    },
+    {
+      "seq": 14,
+      "name": "backbone.stage3.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 409600
+      },
+      "depends_on": [
+        13
+      ]
+    },
+    {
+      "seq": 15,
+      "name": "backbone.stage4.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 64,
+        "N": 64
+      },
+      "depends_on": [
+        14
+      ]
+    },
+    {
+      "seq": 16,
+      "name": "backbone.stage4.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 409600
+      },
+      "depends_on": [
+        15
+      ]
+    },
+    {
+      "seq": 17,
+      "name": "backbone.stage4.m.0.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 288,
+        "N": 32
+      },
+      "depends_on": [
+        16
+      ]
+    },
+    {
+      "seq": 18,
+      "name": "backbone.stage4.m.0.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 204800
+      },
+      "depends_on": [
+        17
+      ]
+    },
+    {
+      "seq": 19,
+      "name": "backbone.stage4.m.0.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 288,
+        "N": 32
+      },
+      "depends_on": [
+        18
+      ]
+    },
+    {
+      "seq": 20,
+      "name": "backbone.stage4.m.0.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 204800
+      },
+      "depends_on": [
+        19
+      ]
+    },
+    {
+      "seq": 21,
+      "name": "backbone.stage4.m.1.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 288,
+        "N": 32
+      },
+      "depends_on": [
+        20
+      ]
+    },
+    {
+      "seq": 22,
+      "name": "backbone.stage4.m.1.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 204800
+      },
+      "depends_on": [
+        21
+      ]
+    },
+    {
+      "seq": 23,
+      "name": "backbone.stage4.m.1.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 288,
+        "N": 32
+      },
+      "depends_on": [
+        22
+      ]
+    },
+    {
+      "seq": 24,
+      "name": "backbone.stage4.m.1.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 204800
+      },
+      "depends_on": [
+        23
+      ]
+    },
+    {
+      "seq": 25,
+      "name": "backbone.stage4.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 128,
+        "N": 64
+      },
+      "depends_on": [
+        24
+      ]
+    },
+    {
+      "seq": 26,
+      "name": "backbone.stage4.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 409600
+      },
+      "depends_on": [
+        25
+      ]
+    },
+    {
+      "seq": 27,
+      "name": "backbone.stage5",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 576,
+        "N": 128
+      },
+      "depends_on": [
+        26
+      ]
+    },
+    {
+      "seq": 28,
+      "name": "backbone.stage5.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 204800
+      },
+      "depends_on": [
+        27
+      ]
+    },
+    {
+      "seq": 29,
+      "name": "backbone.stage6.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 128,
+        "N": 128
+      },
+      "depends_on": [
+        28
+      ]
+    },
+    {
+      "seq": 30,
+      "name": "backbone.stage6.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 204800
+      },
+      "depends_on": [
+        29
+      ]
+    },
+    {
+      "seq": 31,
+      "name": "backbone.stage6.m.0.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        30
+      ]
+    },
+    {
+      "seq": 32,
+      "name": "backbone.stage6.m.0.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        31
+      ]
+    },
+    {
+      "seq": 33,
+      "name": "backbone.stage6.m.0.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        32
+      ]
+    },
+    {
+      "seq": 34,
+      "name": "backbone.stage6.m.0.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        33
+      ]
+    },
+    {
+      "seq": 35,
+      "name": "backbone.stage6.m.1.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        34
+      ]
+    },
+    {
+      "seq": 36,
+      "name": "backbone.stage6.m.1.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        35
+      ]
+    },
+    {
+      "seq": 37,
+      "name": "backbone.stage6.m.1.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        36
+      ]
+    },
+    {
+      "seq": 38,
+      "name": "backbone.stage6.m.1.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        37
+      ]
+    },
+    {
+      "seq": 39,
+      "name": "backbone.stage6.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 256,
+        "N": 128
+      },
+      "depends_on": [
+        38
+      ]
+    },
+    {
+      "seq": 40,
+      "name": "backbone.stage6.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 204800
+      },
+      "depends_on": [
+        39
+      ]
+    },
+    {
+      "seq": 41,
+      "name": "backbone.stage7",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 1152,
+        "N": 256
+      },
+      "depends_on": [
+        40
+      ]
+    },
+    {
+      "seq": 42,
+      "name": "backbone.stage7.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        41
+      ]
+    },
+    {
+      "seq": 43,
+      "name": "backbone.stage8.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 256,
+        "N": 256
+      },
+      "depends_on": [
+        42
+      ]
+    },
+    {
+      "seq": 44,
+      "name": "backbone.stage8.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        43
+      ]
+    },
+    {
+      "seq": 45,
+      "name": "backbone.stage8.m.0.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 1152,
+        "N": 128
+      },
+      "depends_on": [
+        44
+      ]
+    },
+    {
+      "seq": 46,
+      "name": "backbone.stage8.m.0.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 51200
+      },
+      "depends_on": [
+        45
+      ]
+    },
+    {
+      "seq": 47,
+      "name": "backbone.stage8.m.0.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 1152,
+        "N": 128
+      },
+      "depends_on": [
+        46
+      ]
+    },
+    {
+      "seq": 48,
+      "name": "backbone.stage8.m.0.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 51200
+      },
+      "depends_on": [
+        47
+      ]
+    },
+    {
+      "seq": 49,
+      "name": "backbone.stage8.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 384,
+        "N": 256
+      },
+      "depends_on": [
+        48
+      ]
+    },
+    {
+      "seq": 50,
+      "name": "backbone.stage8.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        49
+      ]
+    },
+    {
+      "seq": 51,
+      "name": "backbone.sppf.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 256,
+        "N": 128
+      },
+      "depends_on": [
+        50
+      ]
+    },
+    {
+      "seq": 52,
+      "name": "backbone.sppf.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 51200
+      },
+      "depends_on": [
+        51
+      ]
+    },
+    {
+      "seq": 53,
+      "name": "backbone.sppf.m.0",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        52
+      ]
+    },
+    {
+      "seq": 54,
+      "name": "backbone.sppf.m.1",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        53
+      ]
+    },
+    {
+      "seq": 55,
+      "name": "backbone.sppf.m.2",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        54
+      ]
+    },
+    {
+      "seq": 56,
+      "name": "backbone.sppf.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 512,
+        "N": 256
+      },
+      "depends_on": [
+        55
+      ]
+    },
+    {
+      "seq": 57,
+      "name": "backbone.sppf.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        56
+      ]
+    },
+    {
+      "seq": 58,
+      "name": "neck.upsample0",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        57
+      ]
+    },
+    {
+      "seq": 59,
+      "name": "neck.concat0",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        58
+      ]
+    },
+    {
+      "seq": 60,
+      "name": "neck.c2f_p4.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 384,
+        "N": 128
+      },
+      "depends_on": [
+        59
+      ]
+    },
+    {
+      "seq": 61,
+      "name": "neck.c2f_p4.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 204800
+      },
+      "depends_on": [
+        60
+      ]
+    },
+    {
+      "seq": 62,
+      "name": "neck.c2f_p4.m.0.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        61
+      ]
+    },
+    {
+      "seq": 63,
+      "name": "neck.c2f_p4.m.0.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        62
+      ]
+    },
+    {
+      "seq": 64,
+      "name": "neck.c2f_p4.m.0.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        63
+      ]
+    },
+    {
+      "seq": 65,
+      "name": "neck.c2f_p4.m.0.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        64
+      ]
+    },
+    {
+      "seq": 66,
+      "name": "neck.c2f_p4.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 192,
+        "N": 128
+      },
+      "depends_on": [
+        65
+      ]
+    },
+    {
+      "seq": 67,
+      "name": "neck.c2f_p4.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 204800
+      },
+      "depends_on": [
+        66
+      ]
+    },
+    {
+      "seq": 68,
+      "name": "neck.upsample1",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        67
+      ]
+    },
+    {
+      "seq": 69,
+      "name": "neck.concat1",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        68
+      ]
+    },
+    {
+      "seq": 70,
+      "name": "neck.c2f_p3.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 192,
+        "N": 64
+      },
+      "depends_on": [
+        69
+      ]
+    },
+    {
+      "seq": 71,
+      "name": "neck.c2f_p3.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 409600
+      },
+      "depends_on": [
+        70
+      ]
+    },
+    {
+      "seq": 72,
+      "name": "neck.c2f_p3.m.0.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 288,
+        "N": 32
+      },
+      "depends_on": [
+        71
+      ]
+    },
+    {
+      "seq": 73,
+      "name": "neck.c2f_p3.m.0.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 204800
+      },
+      "depends_on": [
+        72
+      ]
+    },
+    {
+      "seq": 74,
+      "name": "neck.c2f_p3.m.0.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 288,
+        "N": 32
+      },
+      "depends_on": [
+        73
+      ]
+    },
+    {
+      "seq": 75,
+      "name": "neck.c2f_p3.m.0.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 204800
+      },
+      "depends_on": [
+        74
+      ]
+    },
+    {
+      "seq": 76,
+      "name": "neck.c2f_p3.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 96,
+        "N": 64
+      },
+      "depends_on": [
+        75
+      ]
+    },
+    {
+      "seq": 77,
+      "name": "neck.c2f_p3.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 409600
+      },
+      "depends_on": [
+        76
+      ]
+    },
+    {
+      "seq": 78,
+      "name": "neck.conv_p4",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        77
+      ]
+    },
+    {
+      "seq": 79,
+      "name": "neck.conv_p4.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        78
+      ]
+    },
+    {
+      "seq": 80,
+      "name": "neck.concat2",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        79
+      ]
+    },
+    {
+      "seq": 81,
+      "name": "neck.c2f_p4_2.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 192,
+        "N": 128
+      },
+      "depends_on": [
+        80
+      ]
+    },
+    {
+      "seq": 82,
+      "name": "neck.c2f_p4_2.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 204800
+      },
+      "depends_on": [
+        81
+      ]
+    },
+    {
+      "seq": 83,
+      "name": "neck.c2f_p4_2.m.0.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        82
+      ]
+    },
+    {
+      "seq": 84,
+      "name": "neck.c2f_p4_2.m.0.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        83
+      ]
+    },
+    {
+      "seq": 85,
+      "name": "neck.c2f_p4_2.m.0.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        84
+      ]
+    },
+    {
+      "seq": 86,
+      "name": "neck.c2f_p4_2.m.0.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        85
+      ]
+    },
+    {
+      "seq": 87,
+      "name": "neck.c2f_p4_2.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 192,
+        "N": 128
+      },
+      "depends_on": [
+        86
+      ]
+    },
+    {
+      "seq": 88,
+      "name": "neck.c2f_p4_2.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 204800
+      },
+      "depends_on": [
+        87
+      ]
+    },
+    {
+      "seq": 89,
+      "name": "neck.conv_p5",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 1152,
+        "N": 128
+      },
+      "depends_on": [
+        88
+      ]
+    },
+    {
+      "seq": 90,
+      "name": "neck.conv_p5.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 51200
+      },
+      "depends_on": [
+        89
+      ]
+    },
+    {
+      "seq": 91,
+      "name": "neck.concat3",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        90
+      ]
+    },
+    {
+      "seq": 92,
+      "name": "neck.c2f_p5.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 384,
+        "N": 256
+      },
+      "depends_on": [
+        91
+      ]
+    },
+    {
+      "seq": 93,
+      "name": "neck.c2f_p5.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        92
+      ]
+    },
+    {
+      "seq": 94,
+      "name": "neck.c2f_p5.m.0.cv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 1152,
+        "N": 128
+      },
+      "depends_on": [
+        93
+      ]
+    },
+    {
+      "seq": 95,
+      "name": "neck.c2f_p5.m.0.cv1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 51200
+      },
+      "depends_on": [
+        94
+      ]
+    },
+    {
+      "seq": 96,
+      "name": "neck.c2f_p5.m.0.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 1152,
+        "N": 128
+      },
+      "depends_on": [
+        95
+      ]
+    },
+    {
+      "seq": 97,
+      "name": "neck.c2f_p5.m.0.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 51200
+      },
+      "depends_on": [
+        96
+      ]
+    },
+    {
+      "seq": 98,
+      "name": "neck.c2f_p5.cv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 384,
+        "N": 256
+      },
+      "depends_on": [
+        97
+      ]
+    },
+    {
+      "seq": 99,
+      "name": "neck.c2f_p5.cv2.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        98
+      ]
+    },
+    {
+      "seq": 100,
+      "name": "head.p3.box.0",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        99
+      ]
+    },
+    {
+      "seq": 101,
+      "name": "head.p3.box.0.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 409600
+      },
+      "depends_on": [
+        100
+      ]
+    },
+    {
+      "seq": 102,
+      "name": "head.p3.box.1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        101
+      ]
+    },
+    {
+      "seq": 103,
+      "name": "head.p3.box.1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 409600
+      },
+      "depends_on": [
+        102
+      ]
+    },
+    {
+      "seq": 104,
+      "name": "head.p3.box.2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 64,
+        "N": 64
+      },
+      "depends_on": [
+        103
+      ]
+    },
+    {
+      "seq": 105,
+      "name": "head.p3.cls.0",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 576,
+        "N": 80
+      },
+      "depends_on": [
+        104
+      ]
+    },
+    {
+      "seq": 106,
+      "name": "head.p3.cls.0.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 512000
+      },
+      "depends_on": [
+        105
+      ]
+    },
+    {
+      "seq": 107,
+      "name": "head.p3.cls.1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 720,
+        "N": 80
+      },
+      "depends_on": [
+        106
+      ]
+    },
+    {
+      "seq": 108,
+      "name": "head.p3.cls.1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 512000
+      },
+      "depends_on": [
+        107
+      ]
+    },
+    {
+      "seq": 109,
+      "name": "head.p3.cls.2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 6400,
+        "K": 80,
+        "N": 80
+      },
+      "depends_on": [
+        108
+      ]
+    },
+    {
+      "seq": 110,
+      "name": "head.p4.box.0",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 1152,
+        "N": 64
+      },
+      "depends_on": [
+        109
+      ]
+    },
+    {
+      "seq": 111,
+      "name": "head.p4.box.0.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        110
+      ]
+    },
+    {
+      "seq": 112,
+      "name": "head.p4.box.1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        111
+      ]
+    },
+    {
+      "seq": 113,
+      "name": "head.p4.box.1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 102400
+      },
+      "depends_on": [
+        112
+      ]
+    },
+    {
+      "seq": 114,
+      "name": "head.p4.box.2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 64,
+        "N": 64
+      },
+      "depends_on": [
+        113
+      ]
+    },
+    {
+      "seq": 115,
+      "name": "head.p4.cls.0",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 1152,
+        "N": 80
+      },
+      "depends_on": [
+        114
+      ]
+    },
+    {
+      "seq": 116,
+      "name": "head.p4.cls.0.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 128000
+      },
+      "depends_on": [
+        115
+      ]
+    },
+    {
+      "seq": 117,
+      "name": "head.p4.cls.1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 720,
+        "N": 80
+      },
+      "depends_on": [
+        116
+      ]
+    },
+    {
+      "seq": 118,
+      "name": "head.p4.cls.1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 128000
+      },
+      "depends_on": [
+        117
+      ]
+    },
+    {
+      "seq": 119,
+      "name": "head.p4.cls.2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1600,
+        "K": 80,
+        "N": 80
+      },
+      "depends_on": [
+        118
+      ]
+    },
+    {
+      "seq": 120,
+      "name": "head.p5.box.0",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 2304,
+        "N": 64
+      },
+      "depends_on": [
+        119
+      ]
+    },
+    {
+      "seq": 121,
+      "name": "head.p5.box.0.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 25600
+      },
+      "depends_on": [
+        120
+      ]
+    },
+    {
+      "seq": 122,
+      "name": "head.p5.box.1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        121
+      ]
+    },
+    {
+      "seq": 123,
+      "name": "head.p5.box.1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 25600
+      },
+      "depends_on": [
+        122
+      ]
+    },
+    {
+      "seq": 124,
+      "name": "head.p5.box.2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 64,
+        "N": 64
+      },
+      "depends_on": [
+        123
+      ]
+    },
+    {
+      "seq": 125,
+      "name": "head.p5.cls.0",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 2304,
+        "N": 80
+      },
+      "depends_on": [
+        124
+      ]
+    },
+    {
+      "seq": 126,
+      "name": "head.p5.cls.0.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 32000
+      },
+      "depends_on": [
+        125
+      ]
+    },
+    {
+      "seq": 127,
+      "name": "head.p5.cls.1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 720,
+        "N": 80
+      },
+      "depends_on": [
+        126
+      ]
+    },
+    {
+      "seq": 128,
+      "name": "head.p5.cls.1.act",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 32000
+      },
+      "depends_on": [
+        127
+      ]
+    },
+    {
+      "seq": 129,
+      "name": "head.p5.cls.2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 400,
+        "K": 80,
+        "N": 80
+      },
+      "depends_on": [
+        128
+      ]
+    }
+  ],
+  "content_hash": "aec40c8165a7b98ea699d2ef903892f788bfe80af8a4fa086f3c2989478f08d2"
+}

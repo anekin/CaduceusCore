@@ -1,5 +1,7 @@
 """FSA Engine — inline FlashAttention on systolic array.
 
+# Not covered by perf-spec v1; verify before switching architectural engine
+
 FSA (Fusing FlashAttention within a Single Systolic Array) executes
 complete FlashAttention — including softmax — within a single systolic
 array pass. No external SFU or Vector unit needed.

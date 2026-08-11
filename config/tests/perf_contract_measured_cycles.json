@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "provider_id": "spec-block64-v1",
+  "provider_version": "1.0.0",
+  "basis": "architectural_formula",
+  "calibration_state": "uncalibrated",
+  "domain": "mxu",
+  "boundary_id": "mxu-64x64x64",
+  "spec_hash": "abc123",
+  "estimated_cycles": 1000,
+  "measured_cycles": 999,
+  "units": "cycles",
+  "uncertainty_pct": 10.0
+}

@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0",
+  "spec_id": "test_rtl_basis",
+  "description": "Negative fixture: contains parameters with rtl_measurement basis (forbidden in v1)",
+  "frozen_policies": {
+    "basis": "architecture_assumption only; rtl_measurement rejected",
+    "cycle_field": "estimated_cycles",
+    "rounding": "math.ceil",
+    "uncertainty": "low=0.7*base, high=1.3*base"
+  },
+  "domains": {
+    "mxu": [
+      {
+        "parameter_id": "mxu_rtl_basis_1",
+        "domain": "mxu",
+        "description": "MXU param with rtl_measurement basis — should be rejected",
+        "formula": "ceil(K/64)*ceil(N/64) * pipeline_depth",
+        "inputs": {"M": 1, "K": 64, "N": 64},
+        "estimated_cycles": 241,
+        "units": "cycles",
+        "owner": "mxu_architect",
+        "basis": "rtl_measurement",
+        "uncertainty": "[169, 313]",
+        "rationale": "This parameter uses rtl_measurement basis which must be rejected by the checker. Only architecture_assumption is allowed in v1."
+      }
+    ],
+    "sfu": [
+      {
+        "parameter_id": "sfu_rtl_calibrated",
+        "domain": "sfu",
+        "description": "SFU param with basis=rtl_measurement (rejected)",
+        "formula": "pipeline * ceil(elements/128)",
+        "inputs": {"op": "softmax", "elements": 128},
+        "estimated_cycles": 227,
+        "units": "cycles",
+        "owner": "sfu_architect",
+        "basis": "rtl_measurement",
+        "uncertainty": "[159, 295]",
+        "rationale": "Must be rejected: rtl_measurement not allowed in v1."
+      }
+    ],
+    "dma": [
+      {
+        "parameter_id": "dma_rtl_measured",
+        "domain": "dma",
+        "description": "DMA param with rtl_measurement",
+        "formula": "ceil(descriptor + bytes/bw + ceil(bytes/burst))",
+        "inputs": {"bytes": 4096, "channels": 1},
+        "estimated_cycles": 102,
+        "units": "cycles",
+        "owner": "dma_architect",
+        "basis": "rtl_measurement",
+        "uncertainty": "[71, 133]",
+        "rationale": "Rejected: rtl_measurement basis forbidden."
+      }
+    ]
+  }
+}

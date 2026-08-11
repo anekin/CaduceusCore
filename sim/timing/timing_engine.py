@@ -68,11 +68,15 @@ def _aggregate_events(report: SimulationReport) -> ModuleBreakdown:
         elif ev.module == "kv":
             mb.cycles["kv_cache"] += cycles
         elif ev.module == "dma":
+            # dma_weight = hidden/overlapped (hidden behind compute)
+            # dma_effective = exposed/stall (visible stall beyond compute)
             if ev.overlapped:
-                mb.cycles["dma_effective"] += cycles
-            else:
                 mb.cycles["dma_weight"] += cycles
+            else:
+                mb.cycles["dma_effective"] += cycles
         elif ev.module == "noc":
+            # noc_latency = hidden/overlapped (hidden behind compute)
+            # noc_contention = exposed/stall (visible stall)
             if ev.overlapped:
                 mb.cycles["noc_latency"] += cycles
             else:
@@ -91,30 +95,32 @@ def _report_to_token_timing(
 ) -> TokenTiming:
     """Convert a SimulationReport into a TokenTiming.
 
-    Wall-clock total is computed from events that actually advance the timeline
-    (mxu + sfu + vector + kv).  DMA and NoC events are breakdown-only and are
-    explicitly excluded so that their cycle counts are not double-counted — the
-    MXU ``total_cycles`` already accounts for any DMA stall.
+    Wall-clock total is taken from the report's canonical critical path
+    (``wall_clock_critical_path``) when available.  When absent (legacy
+    reports) the wall-clock-advancing module sum is used as fallback.
+
+    DMA (effective/hidden) and NoC (latency/contention) are breakdown-only;
+    they overlap with compute and are excluded from the wall clock.
     """
     if report.layer_breakdowns:
         mb = _aggregate_layer_breakdowns(report)
     else:
         mb = _aggregate_events(report)
 
-    # Wall-clock advancing modules: MXU, SFU, Vector, KV Cache,
-    # crossbar_wait, sram_stall, vcov_bubble.
-    # DMA (effective/hidden) and NoC (latency/contention) are breakdown-only.
-    wall_keys = ("mxu", "sfu", "vector", "kv_cache",
-                 "crossbar_wait", "sram_stall", "vcov_bubble")
-    wall_cycles = sum(mb.cycles.get(k, 0) for k in wall_keys)
-
-    # kv_cache from layer_breakdowns excludes the global DRAM refresh event
-    # (layer=-1).  Add it back from the event list.
-    if report.layer_breakdowns:
-        for ev in report.events:
-            if ev.module == "kv" and "dram_refresh" in ev.op:
-                wall_cycles += ev.end_cycle - ev.start_cycle
-                break
+    # T15: canonical wall-clock critical path (max over topological paths).
+    # Falls back to wall-clock-advancing module sum for legacy reports.
+    wall_cycles = report.wall_clock_critical_path
+    if wall_cycles == 0:
+        wall_keys = ("mxu", "sfu", "vector", "kv_cache",
+                     "crossbar_wait", "sram_stall", "vcov_bubble")
+        wall_cycles = sum(mb.cycles.get(k, 0) for k in wall_keys)
+        # kv_cache from layer_breakdowns excludes the global DRAM refresh event
+        # (layer=-1).  Add it back from the event list.
+        if report.layer_breakdowns:
+            for ev in report.events:
+                if ev.module == "kv" and "dram_refresh" in ev.op:
+                    wall_cycles += ev.end_cycle - ev.start_cycle
+                    break
 
     return TokenTiming(
         token_idx=token_idx,
@@ -209,3 +215,51 @@ class TimingEngine:
         )
         metrics.module_breakdown = timing.module_breakdown.cycles
         return metrics
+
+
+def compute_critical_path_from_dag(
+    nodes: List[dict],
+    edges: List[Tuple[int, int]],
+) -> int:
+    """Compute the longest path (critical path) through a DAG of operations.
+
+    Each node is a dict with key ``cycles`` (int).  ``edges`` is a list of
+    ``(from_idx, to_idx)`` pairs representing directed dependencies.
+
+    Returns the maximum sum of cycles along any topological path.  For an
+    empty DAG returns 0; for a DAG with a single node returns that node's
+    cycles.
+
+    Raises ``ValueError`` if a cycle is detected (the input must be a DAG).
+    """
+    n = len(nodes)
+    if n == 0:
+        return 0
+
+    indeg = [0] * n
+    adj: List[List[int]] = [[] for _ in range(n)]
+    for u, v in edges:
+        if u < 0 or u >= n or v < 0 or v >= n:
+            raise ValueError(f"Edge ({u}, {v}) out of range (0..{n - 1})")
+        adj[u].append(v)
+        indeg[v] += 1
+
+    longest = [nodes[i].get("cycles", 0) for i in range(n)]
+
+    queue = [i for i in range(n) if indeg[i] == 0]
+    visited = 0
+    while queue:
+        u = queue.pop(0)
+        visited += 1
+        for v in adj[u]:
+            cand = longest[u] + nodes[v].get("cycles", 0)
+            if cand > longest[v]:
+                longest[v] = cand
+            indeg[v] -= 1
+            if indeg[v] == 0:
+                queue.append(v)
+
+    if visited != n:
+        raise ValueError("Cycle detected in DAG: cannot compute critical path")
+
+    return max(longest)

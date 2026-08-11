@@ -1,0 +1,1504 @@
+{
+  "workload_id": "resnet50",
+  "schema_version": "1.0",
+  "created": "2026-08-11",
+  "model_meta": {
+    "family": "resnet50",
+    "variant": "50",
+    "input_shape": [
+      1,
+      3,
+      224,
+      224
+    ],
+    "num_classes": 1000
+  },
+  "trace_generator": {
+    "file": "sim/cv/traces/resnet50_trace.py",
+    "sha256": "3e61025f99fa40a03f3cb1c8c4896d0d7533df19796b060931f12ddbc35107b8",
+    "seed": 42,
+    "onnx_runtime_pinned": "onnxruntime>=1.23.0"
+  },
+  "invariants": {
+    "total_entries": 105,
+    "gemm_entries": 54,
+    "sfu_entries": 51,
+    "vector_entries": 0,
+    "host_only_entries": 0,
+    "gemm_plus_sfu_plus_vec_plus_host": 105
+  },
+  "entries": [
+    {
+      "seq": 0,
+      "name": "conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 12544,
+        "K": 147,
+        "N": 64
+      },
+      "depends_on": []
+    },
+    {
+      "seq": 1,
+      "name": "relu",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 802816
+      },
+      "depends_on": [
+        0
+      ]
+    },
+    {
+      "seq": 2,
+      "name": "maxpool",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        1
+      ]
+    },
+    {
+      "seq": 3,
+      "name": "layer1.0.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 3136,
+        "K": 64,
+        "N": 64
+      },
+      "depends_on": [
+        2
+      ]
+    },
+    {
+      "seq": 4,
+      "name": "layer1.0.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        3
+      ]
+    },
+    {
+      "seq": 5,
+      "name": "layer1.0.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 3136,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        4
+      ]
+    },
+    {
+      "seq": 6,
+      "name": "layer1.0.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        5
+      ]
+    },
+    {
+      "seq": 7,
+      "name": "layer1.0.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 3136,
+        "K": 64,
+        "N": 256
+      },
+      "depends_on": [
+        6
+      ]
+    },
+    {
+      "seq": 8,
+      "name": "layer1.0.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 802816
+      },
+      "depends_on": [
+        7
+      ]
+    },
+    {
+      "seq": 9,
+      "name": "layer1.0.downsample.0",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 3136,
+        "K": 64,
+        "N": 256
+      },
+      "depends_on": [
+        8
+      ]
+    },
+    {
+      "seq": 10,
+      "name": "layer1.1.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 3136,
+        "K": 256,
+        "N": 64
+      },
+      "depends_on": [
+        9
+      ]
+    },
+    {
+      "seq": 11,
+      "name": "layer1.1.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        10
+      ]
+    },
+    {
+      "seq": 12,
+      "name": "layer1.1.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 3136,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        11
+      ]
+    },
+    {
+      "seq": 13,
+      "name": "layer1.1.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        12
+      ]
+    },
+    {
+      "seq": 14,
+      "name": "layer1.1.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 3136,
+        "K": 64,
+        "N": 256
+      },
+      "depends_on": [
+        13
+      ]
+    },
+    {
+      "seq": 15,
+      "name": "layer1.1.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 802816
+      },
+      "depends_on": [
+        14
+      ]
+    },
+    {
+      "seq": 16,
+      "name": "layer1.2.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 3136,
+        "K": 256,
+        "N": 64
+      },
+      "depends_on": [
+        15
+      ]
+    },
+    {
+      "seq": 17,
+      "name": "layer1.2.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        16
+      ]
+    },
+    {
+      "seq": 18,
+      "name": "layer1.2.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 3136,
+        "K": 576,
+        "N": 64
+      },
+      "depends_on": [
+        17
+      ]
+    },
+    {
+      "seq": 19,
+      "name": "layer1.2.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        18
+      ]
+    },
+    {
+      "seq": 20,
+      "name": "layer1.2.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 3136,
+        "K": 64,
+        "N": 256
+      },
+      "depends_on": [
+        19
+      ]
+    },
+    {
+      "seq": 21,
+      "name": "layer1.2.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 802816
+      },
+      "depends_on": [
+        20
+      ]
+    },
+    {
+      "seq": 22,
+      "name": "layer2.0.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 3136,
+        "K": 256,
+        "N": 128
+      },
+      "depends_on": [
+        21
+      ]
+    },
+    {
+      "seq": 23,
+      "name": "layer2.0.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 401408
+      },
+      "depends_on": [
+        22
+      ]
+    },
+    {
+      "seq": 24,
+      "name": "layer2.0.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 1152,
+        "N": 128
+      },
+      "depends_on": [
+        23
+      ]
+    },
+    {
+      "seq": 25,
+      "name": "layer2.0.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 100352
+      },
+      "depends_on": [
+        24
+      ]
+    },
+    {
+      "seq": 26,
+      "name": "layer2.0.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 128,
+        "N": 512
+      },
+      "depends_on": [
+        25
+      ]
+    },
+    {
+      "seq": 27,
+      "name": "layer2.0.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 401408
+      },
+      "depends_on": [
+        26
+      ]
+    },
+    {
+      "seq": 28,
+      "name": "layer2.0.downsample.0",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 256,
+        "N": 512
+      },
+      "depends_on": [
+        27
+      ]
+    },
+    {
+      "seq": 29,
+      "name": "layer2.1.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 512,
+        "N": 128
+      },
+      "depends_on": [
+        28
+      ]
+    },
+    {
+      "seq": 30,
+      "name": "layer2.1.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 100352
+      },
+      "depends_on": [
+        29
+      ]
+    },
+    {
+      "seq": 31,
+      "name": "layer2.1.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 1152,
+        "N": 128
+      },
+      "depends_on": [
+        30
+      ]
+    },
+    {
+      "seq": 32,
+      "name": "layer2.1.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 100352
+      },
+      "depends_on": [
+        31
+      ]
+    },
+    {
+      "seq": 33,
+      "name": "layer2.1.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 128,
+        "N": 512
+      },
+      "depends_on": [
+        32
+      ]
+    },
+    {
+      "seq": 34,
+      "name": "layer2.1.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 401408
+      },
+      "depends_on": [
+        33
+      ]
+    },
+    {
+      "seq": 35,
+      "name": "layer2.2.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 512,
+        "N": 128
+      },
+      "depends_on": [
+        34
+      ]
+    },
+    {
+      "seq": 36,
+      "name": "layer2.2.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 100352
+      },
+      "depends_on": [
+        35
+      ]
+    },
+    {
+      "seq": 37,
+      "name": "layer2.2.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 1152,
+        "N": 128
+      },
+      "depends_on": [
+        36
+      ]
+    },
+    {
+      "seq": 38,
+      "name": "layer2.2.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 100352
+      },
+      "depends_on": [
+        37
+      ]
+    },
+    {
+      "seq": 39,
+      "name": "layer2.2.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 128,
+        "N": 512
+      },
+      "depends_on": [
+        38
+      ]
+    },
+    {
+      "seq": 40,
+      "name": "layer2.2.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 401408
+      },
+      "depends_on": [
+        39
+      ]
+    },
+    {
+      "seq": 41,
+      "name": "layer2.3.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 512,
+        "N": 128
+      },
+      "depends_on": [
+        40
+      ]
+    },
+    {
+      "seq": 42,
+      "name": "layer2.3.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 100352
+      },
+      "depends_on": [
+        41
+      ]
+    },
+    {
+      "seq": 43,
+      "name": "layer2.3.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 1152,
+        "N": 128
+      },
+      "depends_on": [
+        42
+      ]
+    },
+    {
+      "seq": 44,
+      "name": "layer2.3.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 100352
+      },
+      "depends_on": [
+        43
+      ]
+    },
+    {
+      "seq": 45,
+      "name": "layer2.3.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 128,
+        "N": 512
+      },
+      "depends_on": [
+        44
+      ]
+    },
+    {
+      "seq": 46,
+      "name": "layer2.3.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 401408
+      },
+      "depends_on": [
+        45
+      ]
+    },
+    {
+      "seq": 47,
+      "name": "layer3.0.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 512,
+        "N": 256
+      },
+      "depends_on": [
+        46
+      ]
+    },
+    {
+      "seq": 48,
+      "name": "layer3.0.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        47
+      ]
+    },
+    {
+      "seq": 49,
+      "name": "layer3.0.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 2304,
+        "N": 256
+      },
+      "depends_on": [
+        48
+      ]
+    },
+    {
+      "seq": 50,
+      "name": "layer3.0.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 50176
+      },
+      "depends_on": [
+        49
+      ]
+    },
+    {
+      "seq": 51,
+      "name": "layer3.0.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 256,
+        "N": 1024
+      },
+      "depends_on": [
+        50
+      ]
+    },
+    {
+      "seq": 52,
+      "name": "layer3.0.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        51
+      ]
+    },
+    {
+      "seq": 53,
+      "name": "layer3.0.downsample.0",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 512,
+        "N": 1024
+      },
+      "depends_on": [
+        52
+      ]
+    },
+    {
+      "seq": 54,
+      "name": "layer3.1.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 1024,
+        "N": 256
+      },
+      "depends_on": [
+        53
+      ]
+    },
+    {
+      "seq": 55,
+      "name": "layer3.1.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 50176
+      },
+      "depends_on": [
+        54
+      ]
+    },
+    {
+      "seq": 56,
+      "name": "layer3.1.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 2304,
+        "N": 256
+      },
+      "depends_on": [
+        55
+      ]
+    },
+    {
+      "seq": 57,
+      "name": "layer3.1.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 50176
+      },
+      "depends_on": [
+        56
+      ]
+    },
+    {
+      "seq": 58,
+      "name": "layer3.1.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 256,
+        "N": 1024
+      },
+      "depends_on": [
+        57
+      ]
+    },
+    {
+      "seq": 59,
+      "name": "layer3.1.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        58
+      ]
+    },
+    {
+      "seq": 60,
+      "name": "layer3.2.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 1024,
+        "N": 256
+      },
+      "depends_on": [
+        59
+      ]
+    },
+    {
+      "seq": 61,
+      "name": "layer3.2.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 50176
+      },
+      "depends_on": [
+        60
+      ]
+    },
+    {
+      "seq": 62,
+      "name": "layer3.2.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 2304,
+        "N": 256
+      },
+      "depends_on": [
+        61
+      ]
+    },
+    {
+      "seq": 63,
+      "name": "layer3.2.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 50176
+      },
+      "depends_on": [
+        62
+      ]
+    },
+    {
+      "seq": 64,
+      "name": "layer3.2.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 256,
+        "N": 1024
+      },
+      "depends_on": [
+        63
+      ]
+    },
+    {
+      "seq": 65,
+      "name": "layer3.2.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        64
+      ]
+    },
+    {
+      "seq": 66,
+      "name": "layer3.3.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 1024,
+        "N": 256
+      },
+      "depends_on": [
+        65
+      ]
+    },
+    {
+      "seq": 67,
+      "name": "layer3.3.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 50176
+      },
+      "depends_on": [
+        66
+      ]
+    },
+    {
+      "seq": 68,
+      "name": "layer3.3.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 2304,
+        "N": 256
+      },
+      "depends_on": [
+        67
+      ]
+    },
+    {
+      "seq": 69,
+      "name": "layer3.3.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 50176
+      },
+      "depends_on": [
+        68
+      ]
+    },
+    {
+      "seq": 70,
+      "name": "layer3.3.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 256,
+        "N": 1024
+      },
+      "depends_on": [
+        69
+      ]
+    },
+    {
+      "seq": 71,
+      "name": "layer3.3.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        70
+      ]
+    },
+    {
+      "seq": 72,
+      "name": "layer3.4.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 1024,
+        "N": 256
+      },
+      "depends_on": [
+        71
+      ]
+    },
+    {
+      "seq": 73,
+      "name": "layer3.4.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 50176
+      },
+      "depends_on": [
+        72
+      ]
+    },
+    {
+      "seq": 74,
+      "name": "layer3.4.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 2304,
+        "N": 256
+      },
+      "depends_on": [
+        73
+      ]
+    },
+    {
+      "seq": 75,
+      "name": "layer3.4.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 50176
+      },
+      "depends_on": [
+        74
+      ]
+    },
+    {
+      "seq": 76,
+      "name": "layer3.4.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 256,
+        "N": 1024
+      },
+      "depends_on": [
+        75
+      ]
+    },
+    {
+      "seq": 77,
+      "name": "layer3.4.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        76
+      ]
+    },
+    {
+      "seq": 78,
+      "name": "layer3.5.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 1024,
+        "N": 256
+      },
+      "depends_on": [
+        77
+      ]
+    },
+    {
+      "seq": 79,
+      "name": "layer3.5.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 50176
+      },
+      "depends_on": [
+        78
+      ]
+    },
+    {
+      "seq": 80,
+      "name": "layer3.5.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 2304,
+        "N": 256
+      },
+      "depends_on": [
+        79
+      ]
+    },
+    {
+      "seq": 81,
+      "name": "layer3.5.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 50176
+      },
+      "depends_on": [
+        80
+      ]
+    },
+    {
+      "seq": 82,
+      "name": "layer3.5.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 256,
+        "N": 1024
+      },
+      "depends_on": [
+        81
+      ]
+    },
+    {
+      "seq": 83,
+      "name": "layer3.5.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        82
+      ]
+    },
+    {
+      "seq": 84,
+      "name": "layer4.0.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 1024,
+        "N": 512
+      },
+      "depends_on": [
+        83
+      ]
+    },
+    {
+      "seq": 85,
+      "name": "layer4.0.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 100352
+      },
+      "depends_on": [
+        84
+      ]
+    },
+    {
+      "seq": 86,
+      "name": "layer4.0.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 4608,
+        "N": 512
+      },
+      "depends_on": [
+        85
+      ]
+    },
+    {
+      "seq": 87,
+      "name": "layer4.0.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 25088
+      },
+      "depends_on": [
+        86
+      ]
+    },
+    {
+      "seq": 88,
+      "name": "layer4.0.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 512,
+        "N": 2048
+      },
+      "depends_on": [
+        87
+      ]
+    },
+    {
+      "seq": 89,
+      "name": "layer4.0.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 100352
+      },
+      "depends_on": [
+        88
+      ]
+    },
+    {
+      "seq": 90,
+      "name": "layer4.0.downsample.0",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 1024,
+        "N": 2048
+      },
+      "depends_on": [
+        89
+      ]
+    },
+    {
+      "seq": 91,
+      "name": "layer4.1.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 2048,
+        "N": 512
+      },
+      "depends_on": [
+        90
+      ]
+    },
+    {
+      "seq": 92,
+      "name": "layer4.1.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 25088
+      },
+      "depends_on": [
+        91
+      ]
+    },
+    {
+      "seq": 93,
+      "name": "layer4.1.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 4608,
+        "N": 512
+      },
+      "depends_on": [
+        92
+      ]
+    },
+    {
+      "seq": 94,
+      "name": "layer4.1.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 25088
+      },
+      "depends_on": [
+        93
+      ]
+    },
+    {
+      "seq": 95,
+      "name": "layer4.1.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 512,
+        "N": 2048
+      },
+      "depends_on": [
+        94
+      ]
+    },
+    {
+      "seq": 96,
+      "name": "layer4.1.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 100352
+      },
+      "depends_on": [
+        95
+      ]
+    },
+    {
+      "seq": 97,
+      "name": "layer4.2.conv1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 2048,
+        "N": 512
+      },
+      "depends_on": [
+        96
+      ]
+    },
+    {
+      "seq": 98,
+      "name": "layer4.2.relu1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 25088
+      },
+      "depends_on": [
+        97
+      ]
+    },
+    {
+      "seq": 99,
+      "name": "layer4.2.conv2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 4608,
+        "N": 512
+      },
+      "depends_on": [
+        98
+      ]
+    },
+    {
+      "seq": 100,
+      "name": "layer4.2.relu2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 25088
+      },
+      "depends_on": [
+        99
+      ]
+    },
+    {
+      "seq": 101,
+      "name": "layer4.2.conv3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 512,
+        "N": 2048
+      },
+      "depends_on": [
+        100
+      ]
+    },
+    {
+      "seq": 102,
+      "name": "layer4.2.relu3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 100352
+      },
+      "depends_on": [
+        101
+      ]
+    },
+    {
+      "seq": 103,
+      "name": "avgpool",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 100352
+      },
+      "depends_on": [
+        102
+      ]
+    },
+    {
+      "seq": 104,
+      "name": "fc",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 2048,
+        "N": 1000
+      },
+      "depends_on": [
+        103
+      ]
+    }
+  ],
+  "content_hash": "9467cdea905262a3dc2607b7e09e7b8a302ad91ee5d8189f27c47c5f9be43a9d"
+}

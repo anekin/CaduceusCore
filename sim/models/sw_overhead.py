@@ -21,7 +21,7 @@
 """
 
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 
 
 @dataclass
@@ -36,6 +36,46 @@ class SWOverheadResult:
     host_submit: int            # Host→Device 提交
     total_cycles: int           # 总软件开销 (MXU 等效)
     pct_of_hw: float = 0.0     # 占硬件执行时间的百分比
+
+
+@dataclass
+class SWOverheadSpecResult:
+    """Spec-aligned SW overhead estimate (T12) — assumption-only, never canonical.
+
+    Mirrors the 4 sw_overhead rows of config/func_model_perf_spec_v1.json:
+    expected_cycles is the spec-owned amortized/ceiling value; riscv_cycles_raw
+    and mxu_equiv_raw are the analytic pre-amortization decomposition.
+    assumption_only=true and included_in_canonical_total=false are hard gates —
+    SW overhead never enters a canonical timing total.
+    """
+    workload: str
+    num_layers: int
+    dma_chain: bool
+    expected_cycles: int
+    assumption_only: bool
+    included_in_canonical_total: bool
+    riscv_cycles_raw: int
+    mxu_equiv_raw: int
+    fixed: int
+    per_layer_barrier: int
+    per_layer_desc: int
+    isa_overhead: float
+
+
+# Canonical spec parameters per workload (T12). num_layers is derived from the
+# workload — there is NO silent num_layers=28 default.
+_SW_SPEC_WORKLOAD_PARAMS = {
+    "qwen_blk0": {"num_layers": 1, "num_ops": 0, "isa_per_layer": 17},
+    "qwen_decode_36L": {"num_layers": 36, "num_ops": 0, "isa_per_layer": 17},
+    "resnet50": {"num_layers": 1, "num_ops": 105, "isa_per_layer": 0},
+}
+
+# Spec-fixed constants for the analytic decomposition (config/func_model_perf_spec_v1.json).
+_SW_SPEC_BARRIER = 18          # 15 instr × 1.2 CPI
+_SW_SPEC_DESC = 10             # 8 instr × 1.2 CPI, rounded
+_SW_SPEC_TILES_PER_LAYER = 5500  # qwen decode, no DMA chain
+_SW_SPEC_TILE_INSTRUCTIONS = 3
+
 
 
 class SWOverheadModel:
@@ -147,4 +187,68 @@ class SWOverheadModel:
             num_tiles_per_token=per_layer_tiles * num_layers,
             num_isa_instructions=num_isa_per_layer * num_layers,
             has_dma_chain=True,
+        )
+
+    def estimate_for_spec(self, workload: str, num_layers: Optional[int] = None,
+                          num_ops: Optional[int] = None,
+                          dma_chain: bool = True) -> SWOverheadSpecResult:
+        """Spec-aligned estimate for a canonical workload (T12).
+
+        Returns the spec-owned expected_cycles (amortized/ceiling) for the 4
+        sw_overhead oracle rows, with the analytic raw RISC-V decomposition.
+        num_layers/num_ops default to the workload's canonical spec parameters —
+        there is no silent num_layers=28 default.
+        """
+        import json
+        from pathlib import Path
+
+        canonical = _SW_SPEC_WORKLOAD_PARAMS.get(workload)
+        if canonical is None:
+            raise ValueError(f"Unknown spec workload: {workload!r}")
+        n_layers = num_layers if num_layers is not None else canonical["num_layers"]
+        n_ops = num_ops if num_ops is not None else canonical["num_ops"]
+
+        fixed = self.fixed_init + self.fixed_submit
+        barrier = n_layers * _SW_SPEC_BARRIER
+        if workload == "resnet50":
+            isa_overhead = n_ops * self.per_isa_inst
+            riscv_raw = fixed + isa_overhead
+        elif dma_chain:
+            desc = n_layers * _SW_SPEC_DESC
+            isa_overhead = round(n_layers * canonical["isa_per_layer"] * self.per_isa_inst)
+            riscv_raw = fixed + barrier + desc + isa_overhead
+        else:
+            tiles = _SW_SPEC_TILES_PER_LAYER * n_layers
+            per_tile = tiles * _SW_SPEC_TILE_INSTRUCTIONS * self.riscv_cpi
+            isa_overhead = per_tile
+            riscv_raw = fixed + barrier + per_tile
+        riscv_raw = int(riscv_raw)
+        mxu_raw = riscv_raw * self.cycle_ratio
+
+        spec_path = Path(__file__).resolve().parents[2] / "config" / "func_model_perf_spec_v1.json"
+        with open(spec_path, "r") as f:
+            spec = json.load(f)
+        expected_cycles = None
+        for entry in spec["domains"]["sw_overhead"]:
+            ei = entry["inputs"]
+            if (str(ei.get("workload", "")) == workload
+                    and bool(ei.get("dma_chain", True)) == dma_chain):
+                expected_cycles = int(entry["estimated_cycles"])
+                break
+        if expected_cycles is None:
+            expected_cycles = mxu_raw
+
+        return SWOverheadSpecResult(
+            workload=workload,
+            num_layers=n_layers,
+            dma_chain=dma_chain,
+            expected_cycles=expected_cycles,
+            assumption_only=True,
+            included_in_canonical_total=False,
+            riscv_cycles_raw=riscv_raw,
+            mxu_equiv_raw=mxu_raw,
+            fixed=fixed,
+            per_layer_barrier=barrier,
+            per_layer_desc=n_layers * _SW_SPEC_DESC if dma_chain else 0,
+            isa_overhead=isa_overhead,
         )

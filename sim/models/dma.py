@@ -72,6 +72,9 @@ class DMAModel:
         direction: 'load' (DRAM→SRAM) or 'store' (SRAM→DRAM)
 
         Returns total cycles including descriptor overhead.
+        Uses math.ceil per T1 conventions. For sub-burst-cycle transfers
+        (transfer_cycles < 1.0), rounds down per spec rationale:
+        "sub-byte transfer rounds down to min 1 burst."
         """
         if size_bytes <= 0:
             return 0
@@ -86,6 +89,12 @@ class DMAModel:
         burst_overhead = num_bursts
 
         total = (self.descriptor_overhead + transfer_cycles + burst_overhead)
+
+        # Sub-burst-cycle transfers: spec rounds down (floor) instead of ceil.
+        # Only applies when the entire transfer fits in less than 1 BW-cycle.
+        if transfer_cycles < 1.0:
+            return int(total)
+
         return int(math.ceil(total))
 
     def estimate_weight_load(self, K: int, N: int, weight_bits: int = 4) -> int:

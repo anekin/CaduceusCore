@@ -1,4 +1,7 @@
-"""Systolic Engine — weight-stationary systolic array (现有 MXU v2 模型)"""
+"""Systolic Engine — weight-stationary systolic array (现有 MXU v2 模型)
+
+# Not covered by perf-spec v1; verify before switching architectural engine
+"""
 
 import math
 from typing import Any, Dict

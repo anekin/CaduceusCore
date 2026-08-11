@@ -1,0 +1,357 @@
+{
+  "schema_version": "1.0",
+  "matrix_id": "func_model_perf_matrix_v1",
+  "description": "Frozen Func Model performance matrix — provider row counts, hard workloads, sweep grids, runtime limits, and error policies. All decisions frozen from plan lines 48-73.",
+  "created": "2026-08-11",
+  "spec_ref": "config/func_model_perf_spec_v1.json",
+  "seed": 42,
+  "frozen_policies": {
+    "no_silent_skip": "Every case, row, workload, and sweep point MUST be executed. Skip flags, try/except swallowing, or empty-run deception are hard failures.",
+    "no_duplicate_ids": "All case_ids, workload_ids, and sweep_ids across the matrix must be unique.",
+    "seed_fixed": "Random seed=42 for all deterministic runs; no runtime seed injection.",
+    "error_policy": {
+      "provider_case_error": "abs(provider-oracle)/abs(oracle)*100; oracle>10 cycles → <=10%; 0<oracle<=10 → abs_err <=1 cycle",
+      "workload_path_error": "total and major(>=5% of total) → <=20% per case; minor → abs_err <=2 cycles",
+      "expected_noop": "Exact-zero oracle and provider for no-op cases; non-zero/NaN/Inf fails"
+    },
+    "runtime_limits": {
+      "provider_case_seconds": { "max": 30, "description": "Per-case absolute wall-clock ceiling" },
+      "workload_seconds": { "max": 120, "description": "Per-workload absolute wall-clock ceiling" },
+      "full_signoff_seconds": { "max": 1800, "description": "Total signoff suite wall-clock ceiling" },
+      "peak_rss_mb": { "max": 4096, "description": "Peak resident set size ceiling" }
+    },
+    "uncertainty": {
+      "latency_band": "low=0.7*base, high=1.3*base",
+      "throughput_band": "[base/1.3, base/0.7]"
+    },
+    "rounding": "math.ceil for integer cycles; no banker's rounding",
+    "basis": "architecture_assumption only; rtl_measurement rejected"
+  },
+  "provider_matrix": {
+    "description": "Provider row counts frozen from plan lines 48-55. Must match spec domain_counts exactly.",
+    "expected_domain_counts": {
+      "mxu": 10,
+      "sfu": 24,
+      "vector": 30,
+      "dma": 10,
+      "dram": 10,
+      "noc": 8,
+      "kv_cache": 8,
+      "sw_overhead": 4
+    },
+    "rows": {
+      "mxu": [
+        {"case_id": "mxu_001", "M": 1, "K": 64, "N": 64, "description": "Block 64x64 GEMM decode: M=1 units"},
+        {"case_id": "mxu_002", "M": 4, "K": 64, "N": 64, "description": "Block 64x64 GEMM batch decode: M=4"},
+        {"case_id": "mxu_003", "M": 64, "K": 64, "N": 64, "description": "Block 64x64 GEMM prefill: M=64"},
+        {"case_id": "mxu_004", "M": 64, "K": 128, "N": 64, "description": "Block 64x64 GEMM: M=64, K=128, N=64"},
+        {"case_id": "mxu_005", "M": 64, "K": 64, "N": 128, "description": "Block 64x64 GEMM: M=64, K=64, N=128"},
+        {"case_id": "mxu_006", "M": 32, "K": 128, "N": 128, "description": "Block 64x64 GEMM: M=32, K=128, N=128"},
+        {"case_id": "mxu_007", "M": 1, "K": 2048, "N": 2048, "description": "Block 64x64 GEMM decode large"},
+        {"case_id": "mxu_008", "M": 128, "K": 2048, "N": 2048, "description": "Block 64x64 GEMM prefill large"},
+        {"case_id": "mxu_009", "M": 1, "K": 2048, "N": 11008, "description": "Block 64x64 GEMM decode FFN down-projection"},
+        {"case_id": "mxu_010", "M": 128, "K": 2048, "N": 11008, "description": "Block 64x64 GEMM prefill FFN down-projection"}
+      ],
+      "sfu": [
+        {"case_id": "sfu_001", "op": "softmax", "elements": 16},
+        {"case_id": "sfu_002", "op": "softmax", "elements": 128},
+        {"case_id": "sfu_003", "op": "softmax", "elements": 2048},
+        {"case_id": "sfu_004", "op": "softmax", "elements": 11008},
+        {"case_id": "sfu_005", "op": "layernorm", "elements": 16},
+        {"case_id": "sfu_006", "op": "layernorm", "elements": 128},
+        {"case_id": "sfu_007", "op": "layernorm", "elements": 2048},
+        {"case_id": "sfu_008", "op": "layernorm", "elements": 11008},
+        {"case_id": "sfu_009", "op": "rmsnorm", "elements": 16},
+        {"case_id": "sfu_010", "op": "rmsnorm", "elements": 128},
+        {"case_id": "sfu_011", "op": "rmsnorm", "elements": 2048},
+        {"case_id": "sfu_012", "op": "rmsnorm", "elements": 11008},
+        {"case_id": "sfu_013", "op": "gelu", "elements": 16},
+        {"case_id": "sfu_014", "op": "gelu", "elements": 128},
+        {"case_id": "sfu_015", "op": "gelu", "elements": 2048},
+        {"case_id": "sfu_016", "op": "gelu", "elements": 11008},
+        {"case_id": "sfu_017", "op": "silu", "elements": 16},
+        {"case_id": "sfu_018", "op": "silu", "elements": 128},
+        {"case_id": "sfu_019", "op": "silu", "elements": 2048},
+        {"case_id": "sfu_020", "op": "silu", "elements": 11008},
+        {"case_id": "sfu_021", "op": "rope", "elements": 16},
+        {"case_id": "sfu_022", "op": "rope", "elements": 128},
+        {"case_id": "sfu_023", "op": "rope", "elements": 2048},
+        {"case_id": "sfu_024", "op": "rope", "elements": 11008}
+      ],
+      "vector": [
+        {"case_id": "vec_001", "op": "add", "dim": 1},
+        {"case_id": "vec_002", "op": "add", "dim": 128},
+        {"case_id": "vec_003", "op": "add", "dim": 256},
+        {"case_id": "vec_004", "op": "add", "dim": 2048},
+        {"case_id": "vec_005", "op": "add", "dim": 11008},
+        {"case_id": "vec_006", "op": "mul", "dim": 1},
+        {"case_id": "vec_007", "op": "mul", "dim": 128},
+        {"case_id": "vec_008", "op": "mul", "dim": 256},
+        {"case_id": "vec_009", "op": "mul", "dim": 2048},
+        {"case_id": "vec_010", "op": "mul", "dim": 11008},
+        {"case_id": "vec_011", "op": "max", "dim": 1},
+        {"case_id": "vec_012", "op": "max", "dim": 128},
+        {"case_id": "vec_013", "op": "max", "dim": 256},
+        {"case_id": "vec_014", "op": "max", "dim": 2048},
+        {"case_id": "vec_015", "op": "max", "dim": 11008},
+        {"case_id": "vec_016", "op": "sum", "dim": 1},
+        {"case_id": "vec_017", "op": "sum", "dim": 128},
+        {"case_id": "vec_018", "op": "sum", "dim": 256},
+        {"case_id": "vec_019", "op": "sum", "dim": 2048},
+        {"case_id": "vec_020", "op": "sum", "dim": 11008},
+        {"case_id": "vec_021", "op": "conv", "dim": 1},
+        {"case_id": "vec_022", "op": "conv", "dim": 128},
+        {"case_id": "vec_023", "op": "conv", "dim": 256},
+        {"case_id": "vec_024", "op": "conv", "dim": 2048},
+        {"case_id": "vec_025", "op": "conv", "dim": 11008},
+        {"case_id": "vec_026", "op": "resid", "dim": 1},
+        {"case_id": "vec_027", "op": "resid", "dim": 128},
+        {"case_id": "vec_028", "op": "resid", "dim": 256},
+        {"case_id": "vec_029", "op": "resid", "dim": 2048},
+        {"case_id": "vec_030", "op": "resid", "dim": 11008}
+      ],
+      "dma": [
+        {"case_id": "dma_001", "bytes": 1, "channels": 1},
+        {"case_id": "dma_002", "bytes": 64, "channels": 1},
+        {"case_id": "dma_003", "bytes": 4096, "channels": 1},
+        {"case_id": "dma_004", "bytes": 65536, "channels": 1},
+        {"case_id": "dma_005", "bytes": 1048576, "channels": 1},
+        {"case_id": "dma_006", "bytes": 1, "channels": 4},
+        {"case_id": "dma_007", "bytes": 64, "channels": 4},
+        {"case_id": "dma_008", "bytes": 4096, "channels": 4},
+        {"case_id": "dma_009", "bytes": 65536, "channels": 4},
+        {"case_id": "dma_010", "bytes": 1048576, "channels": 4}
+      ],
+      "dram": [
+        {"case_id": "dram_001", "bytes": 1, "rw": "read"},
+        {"case_id": "dram_002", "bytes": 64, "rw": "read"},
+        {"case_id": "dram_003", "bytes": 4096, "rw": "read"},
+        {"case_id": "dram_004", "bytes": 65536, "rw": "read"},
+        {"case_id": "dram_005", "bytes": 1048576, "rw": "read"},
+        {"case_id": "dram_006", "bytes": 1, "rw": "write"},
+        {"case_id": "dram_007", "bytes": 64, "rw": "write"},
+        {"case_id": "dram_008", "bytes": 4096, "rw": "write"},
+        {"case_id": "dram_009", "bytes": 65536, "rw": "write"},
+        {"case_id": "dram_010", "bytes": 1048576, "rw": "write"}
+      ],
+      "noc": [
+        {"case_id": "noc_001", "topology": "crossbar", "bytes": 64, "route": "0->1"},
+        {"case_id": "noc_002", "topology": "crossbar", "bytes": 64, "route": "0->3"},
+        {"case_id": "noc_003", "topology": "crossbar", "bytes": 4096, "route": "0->1"},
+        {"case_id": "noc_004", "topology": "crossbar", "bytes": 4096, "route": "0->3"},
+        {"case_id": "noc_005", "topology": "mesh", "bytes": 64, "route": "0->1"},
+        {"case_id": "noc_006", "topology": "mesh", "bytes": 64, "route": "0->3"},
+        {"case_id": "noc_007", "topology": "mesh", "bytes": 4096, "route": "0->1"},
+        {"case_id": "noc_008", "topology": "mesh", "bytes": 4096, "route": "0->3"}
+      ],
+      "kv_cache": [
+        {"case_id": "kv_001", "token_pos": 0, "description": "expected_noop=true, exact zero cycles"},
+        {"case_id": "kv_002", "token_pos": 1, "description": "Single token KV cache init"},
+        {"case_id": "kv_003", "token_pos": 127, "description": "Mid-length context"},
+        {"case_id": "kv_004", "token_pos": 511, "description": "Long context edge"},
+        {"case_id": "kv_005", "token_pos": 2047, "description": "Maximum context length"},
+        {"case_id": "kv_006", "sram_kb": 64, "description": "Layer-switch with minimal SRAM"},
+        {"case_id": "kv_007", "sram_kb": 256, "description": "Layer-switch with moderate SRAM"},
+        {"case_id": "kv_008", "sram_kb": 512, "description": "Layer-switch with full SRAM"}
+      ],
+      "sw_overhead": [
+        {"case_id": "sw_001", "workload": "qwen25-3b-blk0-decode", "description": "Qwen2.5-3B block-0 decode, DMA chain"},
+        {"case_id": "sw_002", "workload": "qwen25-3b-decode-c128-g1", "description": "Qwen2.5-3B 36-layer decode, DMA chain"},
+        {"case_id": "sw_003", "workload": "qwen25-3b-decode-c128-g1-no-dma", "description": "Qwen2.5-3B 36-layer decode, no DMA chain"},
+        {"case_id": "sw_004", "workload": "resnet50", "description": "ResNet50 CV overhead baseline"}
+      ]
+    }
+  },
+  "workloads": {
+    "description": "7 hard workloads frozen from plan lines 63-65. Each must complete within workload_seconds and produce valid output.",
+    "entries": [
+      {
+        "workload_id": "qwen25-3b-blk0-decode",
+        "type": "llm",
+        "model": "qwen2.5-3b",
+        "description": "Qwen2.5-3B block-0 decode — 17 semantic ops (9 MXU + 5 SFU + 3 Vector)",
+        "semantic_ops": 17,
+        "mxu_ops": 9,
+        "sfu_ops": 5,
+        "vector_ops": 3,
+        "seed": 42,
+        "qwen_meta": {
+          "hidden": 2048,
+          "intermediate": 11008,
+          "layers": 36,
+          "heads": 16,
+          "kv_heads": 2,
+          "head_dim": 128
+        }
+      },
+      {
+        "workload_id": "qwen25-3b-decode-c128-g1",
+        "type": "llm",
+        "model": "qwen2.5-3b",
+        "description": "Qwen2.5-3B 36-layer decode, context=128, gen=1 — 36×17=612 semantic ops",
+        "semantic_ops": 612,
+        "layers": 36,
+        "context": 128,
+        "gen_tokens": 1,
+        "seed": 42,
+        "qwen_meta": {
+          "hidden": 2048,
+          "intermediate": 11008,
+          "heads": 16,
+          "kv_heads": 2,
+          "head_dim": 128
+        }
+      },
+      {
+        "workload_id": "qwen-prefill-16",
+        "type": "llm",
+        "model": "qwen2.5-3b",
+        "description": "Qwen2.5-3B 36-layer prefill, prompt=16 — 36×17=612 semantic ops",
+        "semantic_ops": 612,
+        "layers": 36,
+        "prompt": 16,
+        "seed": 42,
+        "qwen_meta": {
+          "hidden": 2048,
+          "intermediate": 11008,
+          "heads": 16,
+          "kv_heads": 2,
+          "head_dim": 128
+        }
+      },
+      {
+        "workload_id": "qwen-prefill-128",
+        "type": "llm",
+        "model": "qwen2.5-3b",
+        "description": "Qwen2.5-3B 36-layer prefill, prompt=128 — 36×17=612 semantic ops",
+        "semantic_ops": 612,
+        "layers": 36,
+        "prompt": 128,
+        "seed": 42,
+        "qwen_meta": {
+          "hidden": 2048,
+          "intermediate": 11008,
+          "heads": 16,
+          "kv_heads": 2,
+          "head_dim": 128
+        }
+      },
+      {
+        "workload_id": "mobilenetv3",
+        "type": "cv",
+        "model": "mobilenetv3",
+        "description": "MobileNetV3-Small — 124 trace entries (54 GEMM, 42 SFU, 28 Vector)",
+        "trace_entries": 124,
+        "gemm_ops": 54,
+        "sfu_ops": 42,
+        "vector_ops": 28,
+        "input_shape": "1x3x224x224",
+        "seed": 42
+      },
+      {
+        "workload_id": "resnet50",
+        "type": "cv",
+        "model": "resnet50",
+        "description": "ResNet50 — 105 trace entries (54 GEMM, 51 SFU, 0 Vector)",
+        "trace_entries": 105,
+        "gemm_ops": 54,
+        "sfu_ops": 51,
+        "vector_ops": 0,
+        "input_shape": "1x3x224x224",
+        "seed": 42
+      },
+      {
+        "workload_id": "yolov8n",
+        "type": "cv",
+        "model": "yolov8n",
+        "description": "YOLOv8n — 129 trace entries (63 GEMM, 57 SFU, 9 Vector)",
+        "trace_entries": 129,
+        "gemm_ops": 63,
+        "sfu_ops": 57,
+        "vector_ops": 9,
+        "input_shape": "1x3x224x224",
+        "seed": 42
+      }
+    ]
+  },
+  "sweep_grids": {
+    "description": "Sweep grids frozen from plan line 72. Each grid has a unique sweep_id and explicit value set.",
+    "grids": [
+      {
+        "sweep_id": "bandwidth",
+        "dimension": "DRAM bandwidth (GB/s)",
+        "values": [6.4, 12.8, 25.6, 51.2, 102.4],
+        "unit": "GB/s",
+        "resource_type": true,
+        "monotonicity_direction": "mono-decreasing"
+      },
+      {
+        "sweep_id": "array",
+        "dimension": "MXU array size (H or W)",
+        "values": [32, 64, 128],
+        "unit": "dimensionless",
+        "resource_type": true,
+        "monotonicity_direction": "mono-decreasing"
+      },
+      {
+        "sweep_id": "dma_channels",
+        "dimension": "DMA channel count",
+        "values": [1, 2, 4, 8],
+        "unit": "channels",
+        "resource_type": true,
+        "monotonicity_direction": "mono-decreasing"
+      },
+      {
+        "sweep_id": "prompt",
+        "dimension": "Prompt length (tokens)",
+        "values": [16, 128, 512, 2000],
+        "unit": "tokens",
+        "resource_type": false,
+        "monotonicity_direction": "mono-increasing"
+      },
+      {
+        "sweep_id": "context",
+        "dimension": "Context length (tokens)",
+        "values": [128, 512, 2048],
+        "unit": "tokens",
+        "resource_type": false,
+        "monotonicity_direction": "mono-increasing"
+      },
+      {
+        "sweep_id": "noc_hop",
+        "dimension": "NoC hop count",
+        "values": [1, 2, 4],
+        "unit": "hops",
+        "resource_type": false,
+        "monotonicity_direction": "mono-increasing"
+      }
+    ],
+    "bottleneck_endpoints": [
+      {
+        "endpoint_id": "bottleneck_mem_bound",
+        "name": "Memory-bound endpoint",
+        "config": {"bandwidth": 6.4, "array": 128},
+        "expected": "memory-bound — BW bottleneck share >=55%",
+        "description": "BW=6.4 GB/s with array=128; lowest bandwidth with largest array creates maximum memory bottleneck"
+      },
+      {
+        "endpoint_id": "bottleneck_compute_bound",
+        "name": "Compute-bound endpoint",
+        "config": {"bandwidth": 102.4, "array": 32},
+        "expected": "compute-bound — compute bottleneck share >=55%",
+        "description": "BW=102.4 GB/s with array=32; highest bandwidth with smallest array creates maximum compute bottleneck"
+      }
+    ]
+  },
+  "dag_spec": {
+    "qwen_canonical_layer_dag": {
+      "semantic_ops": 17,
+      "breakdown": {
+        "mxu": 9,
+        "sfu": 5,
+        "vector": 3
+      },
+      "description": "Canonical Qwen layer DAG from docs/qwen25-3b-forward-spec.md. DMA/NoC/KV are expanded provider activities linked by parent operation ID."
+    }
+  }
+}

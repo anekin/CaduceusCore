@@ -1,5 +1,7 @@
 """Output-Stationary Engine — Gemmini 风格
 
+# Not covered by perf-spec v1; verify before switching architectural engine
+
 参考: Gemmini (UC Berkeley), "Architectural Insights: Comparing WS and OS" (IEEE 2024)
 
 Output-stationary: 每个 PE 持有一个输出元素，权重和激活流动后累加。

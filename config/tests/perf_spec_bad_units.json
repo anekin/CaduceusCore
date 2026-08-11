@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "spec_id": "test_bad_units",
+  "description": "Negative fixture: contains parameters with invalid units (furlongs, parsecs)",
+  "frozen_policies": {
+    "basis": "architecture_assumption only",
+    "cycle_field": "estimated_cycles",
+    "rounding": "math.ceil",
+    "uncertainty": "low=0.7*base, high=1.3*base"
+  },
+  "domains": {
+    "mxu": [
+      {
+        "parameter_id": "mxu_bad_units_furlongs",
+        "domain": "mxu",
+        "description": "This parameter has an invalid unit: furlongs",
+        "formula": "ceil(K/64)*ceil(N/64) * (64*(M+1)+64)",
+        "inputs": {"M": 1, "K": 64, "N": 64},
+        "estimated_cycles": 241,
+        "units": "furlongs",
+        "owner": "mxu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[169, 313]",
+        "rationale": "Invalid unit 'furlongs' should be rejected by the checker."
+      },
+      {
+        "parameter_id": "mxu_bad_units_parsecs",
+        "domain": "mxu",
+        "description": "This parameter has an invalid unit: parsecs",
+        "formula": "ceil(K/64)*ceil(N/64) * (64*(M+1)+64)",
+        "inputs": {"M": 4, "K": 64, "N": 64},
+        "estimated_cycles": 434,
+        "units": "parsecs",
+        "owner": "mxu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[304, 564]",
+        "rationale": "Invalid unit 'parsecs' should be rejected by the checker."
+      }
+    ],
+    "sfu": [
+      {
+        "parameter_id": "sfu_bad_unit_lightyears",
+        "domain": "sfu",
+        "description": "SFU param with invalid unit: lightyears",
+        "formula": "pipeline * ceil(elements/128)",
+        "inputs": {"op": "softmax", "elements": 16},
+        "estimated_cycles": 57,
+        "units": "lightyears",
+        "owner": "sfu_architect",
+        "basis": "architecture_assumption",
+        "uncertainty": "[40, 74]",
+        "rationale": "Invalid unit 'lightyears' must be rejected by checker."
+      }
+    ]
+  }
+}

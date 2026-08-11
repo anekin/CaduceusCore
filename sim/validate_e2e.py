@@ -45,13 +45,13 @@ def demo_end_to_end():
     print("\n[1] 模型规格 (Model Spec)")
     model_spec = {
         "name": "Qwen2.5-3B",
-        "hidden_size": 2560,
-        "intermediate_size": 9728,
-        "num_layers": 28,
-        "num_attention_heads": 32,
+        "hidden_size": 2048,
+        "intermediate_size": 11008,
+        "num_layers": 36,
+        "num_attention_heads": 16,
         "num_kv_heads": 2,
         "head_dim": 128,
-        "max_position_embeddings": 2048,
+        "max_position_embeddings": 32768,
     }
     for k, v in model_spec.items():
         print(f"    {k}: {v}")
@@ -134,8 +134,8 @@ def demo_end_to_end():
     mct = MultiCoreTimeline(num_cores=2, fifo=FIFOConfig(size_bytes=4096))
 
     layer_assignments = [list(range(0, 14)), list(range(14, 28))]
-    # Per-layer cost from actual sim (simplified: total/28)
-    per_layer_cost = report.decode_per_token_us / 28
+    # Per-layer cost from actual sim (simplified: total/36)
+    per_layer_cost = report.decode_per_token_us / 36
     per_layer = [per_layer_cost] * 28
     pipe_result = mct.simulate_pipeline(layer_assignments, per_layer, activation_size=2560)
 

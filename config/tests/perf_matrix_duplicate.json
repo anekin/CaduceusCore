@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "matrix_id": "perf_matrix_duplicate",
+  "description": "NEGATIVE FIXTURE: duplicate case_id across domains — must be rejected",
+  "seed": 42,
+  "frozen_policies": {
+    "no_silent_skip": "Every case, row, workload, and sweep point MUST be executed.",
+    "error_policy": {},
+    "runtime_limits": {
+      "provider_case_seconds": { "max": 30 },
+      "workload_seconds": { "max": 120 },
+      "full_signoff_seconds": { "max": 1800 },
+      "peak_rss_mb": { "max": 4096 }
+    }
+  },
+  "provider_matrix": {
+    "expected_domain_counts": {
+      "mxu": 10, "sfu": 24, "vector": 30, "dma": 10, "dram": 10, "noc": 8, "kv_cache": 8, "sw_overhead": 4
+    },
+    "rows": {
+      "mxu": [
+        {"case_id": "mxu_001", "M": 1, "K": 64, "N": 64},
+        {"case_id": "mxu_002", "M": 4, "K": 64, "N": 64},
+        {"case_id": "mxu_003", "M": 64, "K": 64, "N": 64},
+        {"case_id": "mxu_004", "M": 64, "K": 128, "N": 64},
+        {"case_id": "mxu_005", "M": 64, "K": 64, "N": 128},
+        {"case_id": "mxu_006", "M": 32, "K": 128, "N": 128},
+        {"case_id": "mxu_007", "M": 1, "K": 2048, "N": 2048},
+        {"case_id": "mxu_008", "M": 128, "K": 2048, "N": 2048},
+        {"case_id": "mxu_009", "M": 1, "K": 2048, "N": 11008},
+        {"case_id": "mxu_010", "M": 128, "K": 2048, "N": 11008}
+      ],
+      "sfu": [
+        {"case_id": "DUPLICATE_mxu_001", "op": "softmax", "elements": 16}
+      ],
+      "noc": [
+        {"case_id": "DUPLICATE_mxu_001", "topology": "crossbar", "bytes": 64, "route": "0->1"}
+      ]
+    }
+  },
+  "workloads": {
+    "entries": [{"workload_id": "qwen25-3b-blk0-decode", "seed": 42}]
+  },
+  "sweep_grids": {
+    "grids": [
+      {"sweep_id": "bandwidth", "values": [6.4, 12.8, 25.6, 51.2, 102.4]}
+    ],
+    "bottleneck_endpoints": [
+      {"endpoint_id": "bottleneck_mem_bound", "config": {"bandwidth": 6.4, "array": 128}},
+      {"endpoint_id": "bottleneck_compute_bound", "config": {"bandwidth": 102.4, "array": 32}}
+    ]
+  }
+}

@@ -1,0 +1,1695 @@
+{
+  "workload_id": "mobilenetv3",
+  "schema_version": "1.0",
+  "created": "2026-08-11",
+  "model_meta": {
+    "family": "mobilenetv3",
+    "variant": "small",
+    "input_shape": [
+      1,
+      3,
+      224,
+      224
+    ],
+    "num_classes": 1000
+  },
+  "trace_generator": {
+    "file": "sim/cv/cv_trace.py",
+    "sha256": "5ab8389f856ccc0c950d788594ebcc6f19ef2bc8c6c2cf08693b350d618b402b",
+    "seed": 42,
+    "onnx_runtime_pinned": "onnxruntime>=1.23.0"
+  },
+  "invariants": {
+    "total_entries": 124,
+    "gemm_entries": 54,
+    "sfu_entries": 42,
+    "vector_entries": 0,
+    "host_only_entries": 28,
+    "gemm_plus_sfu_plus_vec_plus_host": 124
+  },
+  "entries": [
+    {
+      "seq": 0,
+      "name": "node_Shape_0",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": []
+    },
+    {
+      "seq": 1,
+      "name": "node_Conv_506",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": -1,
+        "K": 27,
+        "N": 16
+      },
+      "depends_on": [
+        0
+      ]
+    },
+    {
+      "seq": 2,
+      "name": "n0",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 200704
+      },
+      "depends_on": [
+        1
+      ]
+    },
+    {
+      "seq": 3,
+      "name": "node_Conv_508",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 50176,
+        "K": 9,
+        "N": 1
+      },
+      "depends_on": [
+        2
+      ]
+    },
+    {
+      "seq": 4,
+      "name": "node_relu",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 50176
+      },
+      "depends_on": [
+        3
+      ]
+    },
+    {
+      "seq": 5,
+      "name": "node_mean",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        4
+      ]
+    },
+    {
+      "seq": 6,
+      "name": "node_conv2d_2",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 16,
+        "N": 8
+      },
+      "depends_on": [
+        5
+      ]
+    },
+    {
+      "seq": 7,
+      "name": "node_relu_1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 128
+      },
+      "depends_on": [
+        6
+      ]
+    },
+    {
+      "seq": 8,
+      "name": "node_conv2d_3",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 8,
+        "N": 16
+      },
+      "depends_on": [
+        7
+      ]
+    },
+    {
+      "seq": 9,
+      "name": "node_hardsigmoid",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 128
+      },
+      "depends_on": [
+        8
+      ]
+    },
+    {
+      "seq": 10,
+      "name": "node_mul_141",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        9
+      ]
+    },
+    {
+      "seq": 11,
+      "name": "node_Conv_510",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 3136,
+        "K": 16,
+        "N": 16
+      },
+      "depends_on": [
+        10
+      ]
+    },
+    {
+      "seq": 12,
+      "name": "node_Conv_512",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 3136,
+        "K": 16,
+        "N": 72
+      },
+      "depends_on": [
+        11
+      ]
+    },
+    {
+      "seq": 13,
+      "name": "node_relu_2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 225792
+      },
+      "depends_on": [
+        12
+      ]
+    },
+    {
+      "seq": 14,
+      "name": "node_Conv_514",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 56448,
+        "K": 9,
+        "N": 1
+      },
+      "depends_on": [
+        13
+      ]
+    },
+    {
+      "seq": 15,
+      "name": "node_relu_3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 56448
+      },
+      "depends_on": [
+        14
+      ]
+    },
+    {
+      "seq": 16,
+      "name": "node_Conv_516",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 72,
+        "N": 24
+      },
+      "depends_on": [
+        15
+      ]
+    },
+    {
+      "seq": 17,
+      "name": "node_Conv_518",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 24,
+        "N": 88
+      },
+      "depends_on": [
+        16
+      ]
+    },
+    {
+      "seq": 18,
+      "name": "node_relu_4",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 68992
+      },
+      "depends_on": [
+        17
+      ]
+    },
+    {
+      "seq": 19,
+      "name": "node_Conv_520",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 68992,
+        "K": 9,
+        "N": 1
+      },
+      "depends_on": [
+        18
+      ]
+    },
+    {
+      "seq": 20,
+      "name": "node_relu_5",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 68992
+      },
+      "depends_on": [
+        19
+      ]
+    },
+    {
+      "seq": 21,
+      "name": "node_Conv_522",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 88,
+        "N": 24
+      },
+      "depends_on": [
+        20
+      ]
+    },
+    {
+      "seq": 22,
+      "name": "node_add_201",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        21
+      ]
+    },
+    {
+      "seq": 23,
+      "name": "node_Conv_524",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 784,
+        "K": 24,
+        "N": 96
+      },
+      "depends_on": [
+        22
+      ]
+    },
+    {
+      "seq": 24,
+      "name": "n0_2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 75264
+      },
+      "depends_on": [
+        23
+      ]
+    },
+    {
+      "seq": 25,
+      "name": "node_Conv_526",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 18816,
+        "K": 25,
+        "N": 1
+      },
+      "depends_on": [
+        24
+      ]
+    },
+    {
+      "seq": 26,
+      "name": "n0_3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 18816
+      },
+      "depends_on": [
+        25
+      ]
+    },
+    {
+      "seq": 27,
+      "name": "node_mean_1",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        26
+      ]
+    },
+    {
+      "seq": 28,
+      "name": "node_conv2d_13",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 96,
+        "N": 24
+      },
+      "depends_on": [
+        27
+      ]
+    },
+    {
+      "seq": 29,
+      "name": "node_relu_6",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 128
+      },
+      "depends_on": [
+        28
+      ]
+    },
+    {
+      "seq": 30,
+      "name": "node_conv2d_14",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 24,
+        "N": 96
+      },
+      "depends_on": [
+        29
+      ]
+    },
+    {
+      "seq": 31,
+      "name": "node_hardsigmoid_1",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 128
+      },
+      "depends_on": [
+        30
+      ]
+    },
+    {
+      "seq": 32,
+      "name": "node_mul_465",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        31
+      ]
+    },
+    {
+      "seq": 33,
+      "name": "node_Conv_528",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 96,
+        "N": 40
+      },
+      "depends_on": [
+        32
+      ]
+    },
+    {
+      "seq": 34,
+      "name": "node_Conv_530",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 40,
+        "N": 240
+      },
+      "depends_on": [
+        33
+      ]
+    },
+    {
+      "seq": 35,
+      "name": "n0_4",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 47104
+      },
+      "depends_on": [
+        34
+      ]
+    },
+    {
+      "seq": 36,
+      "name": "node_Conv_532",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 47040,
+        "K": 25,
+        "N": 1
+      },
+      "depends_on": [
+        35
+      ]
+    },
+    {
+      "seq": 37,
+      "name": "n0_5",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 47104
+      },
+      "depends_on": [
+        36
+      ]
+    },
+    {
+      "seq": 38,
+      "name": "node_mean_2",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        37
+      ]
+    },
+    {
+      "seq": 39,
+      "name": "node_conv2d_18",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 240,
+        "N": 64
+      },
+      "depends_on": [
+        38
+      ]
+    },
+    {
+      "seq": 40,
+      "name": "node_relu_7",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 128
+      },
+      "depends_on": [
+        39
+      ]
+    },
+    {
+      "seq": 41,
+      "name": "node_conv2d_19",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 64,
+        "N": 240
+      },
+      "depends_on": [
+        40
+      ]
+    },
+    {
+      "seq": 42,
+      "name": "node_hardsigmoid_2",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 256
+      },
+      "depends_on": [
+        41
+      ]
+    },
+    {
+      "seq": 43,
+      "name": "node_mul_725",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        42
+      ]
+    },
+    {
+      "seq": 44,
+      "name": "node_Conv_534",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 240,
+        "N": 40
+      },
+      "depends_on": [
+        43
+      ]
+    },
+    {
+      "seq": 45,
+      "name": "node_add_421",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        44
+      ]
+    },
+    {
+      "seq": 46,
+      "name": "node_Conv_536",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 40,
+        "N": 240
+      },
+      "depends_on": [
+        45
+      ]
+    },
+    {
+      "seq": 47,
+      "name": "n0_6",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 47104
+      },
+      "depends_on": [
+        46
+      ]
+    },
+    {
+      "seq": 48,
+      "name": "node_Conv_538",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 47040,
+        "K": 25,
+        "N": 1
+      },
+      "depends_on": [
+        47
+      ]
+    },
+    {
+      "seq": 49,
+      "name": "n0_7",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 47104
+      },
+      "depends_on": [
+        48
+      ]
+    },
+    {
+      "seq": 50,
+      "name": "node_mean_3",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        49
+      ]
+    },
+    {
+      "seq": 51,
+      "name": "node_conv2d_23",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 240,
+        "N": 64
+      },
+      "depends_on": [
+        50
+      ]
+    },
+    {
+      "seq": 52,
+      "name": "node_relu_8",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 128
+      },
+      "depends_on": [
+        51
+      ]
+    },
+    {
+      "seq": 53,
+      "name": "node_conv2d_24",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 64,
+        "N": 240
+      },
+      "depends_on": [
+        52
+      ]
+    },
+    {
+      "seq": 54,
+      "name": "node_hardsigmoid_3",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 256
+      },
+      "depends_on": [
+        53
+      ]
+    },
+    {
+      "seq": 55,
+      "name": "node_mul_991",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        54
+      ]
+    },
+    {
+      "seq": 56,
+      "name": "node_Conv_540",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 240,
+        "N": 40
+      },
+      "depends_on": [
+        55
+      ]
+    },
+    {
+      "seq": 57,
+      "name": "node_add_539",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        56
+      ]
+    },
+    {
+      "seq": 58,
+      "name": "node_Conv_542",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 40,
+        "N": 120
+      },
+      "depends_on": [
+        57
+      ]
+    },
+    {
+      "seq": 59,
+      "name": "n0_8",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 23552
+      },
+      "depends_on": [
+        58
+      ]
+    },
+    {
+      "seq": 60,
+      "name": "node_Conv_544",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 23520,
+        "K": 25,
+        "N": 1
+      },
+      "depends_on": [
+        59
+      ]
+    },
+    {
+      "seq": 61,
+      "name": "n0_9",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 23552
+      },
+      "depends_on": [
+        60
+      ]
+    },
+    {
+      "seq": 62,
+      "name": "node_mean_4",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        61
+      ]
+    },
+    {
+      "seq": 63,
+      "name": "node_conv2d_28",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 120,
+        "N": 32
+      },
+      "depends_on": [
+        62
+      ]
+    },
+    {
+      "seq": 64,
+      "name": "node_relu_9",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 128
+      },
+      "depends_on": [
+        63
+      ]
+    },
+    {
+      "seq": 65,
+      "name": "node_conv2d_29",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 32,
+        "N": 120
+      },
+      "depends_on": [
+        64
+      ]
+    },
+    {
+      "seq": 66,
+      "name": "node_hardsigmoid_4",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 128
+      },
+      "depends_on": [
+        65
+      ]
+    },
+    {
+      "seq": 67,
+      "name": "node_mul_1257",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        66
+      ]
+    },
+    {
+      "seq": 68,
+      "name": "node_Conv_546",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 120,
+        "N": 48
+      },
+      "depends_on": [
+        67
+      ]
+    },
+    {
+      "seq": 69,
+      "name": "node_Conv_548",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 48,
+        "N": 144
+      },
+      "depends_on": [
+        68
+      ]
+    },
+    {
+      "seq": 70,
+      "name": "n0_10",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 28288
+      },
+      "depends_on": [
+        69
+      ]
+    },
+    {
+      "seq": 71,
+      "name": "node_Conv_550",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 28224,
+        "K": 25,
+        "N": 1
+      },
+      "depends_on": [
+        70
+      ]
+    },
+    {
+      "seq": 72,
+      "name": "n0_11",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 28288
+      },
+      "depends_on": [
+        71
+      ]
+    },
+    {
+      "seq": 73,
+      "name": "node_mean_5",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        72
+      ]
+    },
+    {
+      "seq": 74,
+      "name": "node_conv2d_33",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 144,
+        "N": 40
+      },
+      "depends_on": [
+        73
+      ]
+    },
+    {
+      "seq": 75,
+      "name": "node_relu_10",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 128
+      },
+      "depends_on": [
+        74
+      ]
+    },
+    {
+      "seq": 76,
+      "name": "node_conv2d_34",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 40,
+        "N": 144
+      },
+      "depends_on": [
+        75
+      ]
+    },
+    {
+      "seq": 77,
+      "name": "node_hardsigmoid_5",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 256
+      },
+      "depends_on": [
+        76
+      ]
+    },
+    {
+      "seq": 78,
+      "name": "node_mul_1517",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        77
+      ]
+    },
+    {
+      "seq": 79,
+      "name": "node_Conv_552",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 144,
+        "N": 48
+      },
+      "depends_on": [
+        78
+      ]
+    },
+    {
+      "seq": 80,
+      "name": "node_add_759",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        79
+      ]
+    },
+    {
+      "seq": 81,
+      "name": "node_Conv_554",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 196,
+        "K": 48,
+        "N": 288
+      },
+      "depends_on": [
+        80
+      ]
+    },
+    {
+      "seq": 82,
+      "name": "n0_12",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 56448
+      },
+      "depends_on": [
+        81
+      ]
+    },
+    {
+      "seq": 83,
+      "name": "node_Conv_556",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 14112,
+        "K": 25,
+        "N": 1
+      },
+      "depends_on": [
+        82
+      ]
+    },
+    {
+      "seq": 84,
+      "name": "n0_13",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 14208
+      },
+      "depends_on": [
+        83
+      ]
+    },
+    {
+      "seq": 85,
+      "name": "node_mean_6",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        84
+      ]
+    },
+    {
+      "seq": 86,
+      "name": "node_conv2d_38",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 288,
+        "N": 72
+      },
+      "depends_on": [
+        85
+      ]
+    },
+    {
+      "seq": 87,
+      "name": "node_relu_11",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 128
+      },
+      "depends_on": [
+        86
+      ]
+    },
+    {
+      "seq": 88,
+      "name": "node_conv2d_39",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 72,
+        "N": 288
+      },
+      "depends_on": [
+        87
+      ]
+    },
+    {
+      "seq": 89,
+      "name": "node_hardsigmoid_6",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 384
+      },
+      "depends_on": [
+        88
+      ]
+    },
+    {
+      "seq": 90,
+      "name": "node_mul_1783",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        89
+      ]
+    },
+    {
+      "seq": 91,
+      "name": "node_Conv_558",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 288,
+        "N": 96
+      },
+      "depends_on": [
+        90
+      ]
+    },
+    {
+      "seq": 92,
+      "name": "node_Conv_560",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 96,
+        "N": 576
+      },
+      "depends_on": [
+        91
+      ]
+    },
+    {
+      "seq": 93,
+      "name": "n0_14",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 28288
+      },
+      "depends_on": [
+        92
+      ]
+    },
+    {
+      "seq": 94,
+      "name": "node_Conv_562",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 28224,
+        "K": 25,
+        "N": 1
+      },
+      "depends_on": [
+        93
+      ]
+    },
+    {
+      "seq": 95,
+      "name": "n0_15",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 28288
+      },
+      "depends_on": [
+        94
+      ]
+    },
+    {
+      "seq": 96,
+      "name": "node_mean_7",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        95
+      ]
+    },
+    {
+      "seq": 97,
+      "name": "node_conv2d_43",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 576,
+        "N": 144
+      },
+      "depends_on": [
+        96
+      ]
+    },
+    {
+      "seq": 98,
+      "name": "node_relu_12",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 256
+      },
+      "depends_on": [
+        97
+      ]
+    },
+    {
+      "seq": 99,
+      "name": "node_conv2d_44",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 144,
+        "N": 576
+      },
+      "depends_on": [
+        98
+      ]
+    },
+    {
+      "seq": 100,
+      "name": "node_hardsigmoid_7",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 640
+      },
+      "depends_on": [
+        99
+      ]
+    },
+    {
+      "seq": 101,
+      "name": "node_mul_2043",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        100
+      ]
+    },
+    {
+      "seq": 102,
+      "name": "node_Conv_564",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 576,
+        "N": 96
+      },
+      "depends_on": [
+        101
+      ]
+    },
+    {
+      "seq": 103,
+      "name": "node_add_979",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        102
+      ]
+    },
+    {
+      "seq": 104,
+      "name": "node_Conv_566",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 96,
+        "N": 576
+      },
+      "depends_on": [
+        103
+      ]
+    },
+    {
+      "seq": 105,
+      "name": "n0_16",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 28288
+      },
+      "depends_on": [
+        104
+      ]
+    },
+    {
+      "seq": 106,
+      "name": "node_Conv_568",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 28224,
+        "K": 25,
+        "N": 1
+      },
+      "depends_on": [
+        105
+      ]
+    },
+    {
+      "seq": 107,
+      "name": "n0_17",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 28288
+      },
+      "depends_on": [
+        106
+      ]
+    },
+    {
+      "seq": 108,
+      "name": "node_mean_8",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        107
+      ]
+    },
+    {
+      "seq": 109,
+      "name": "node_conv2d_48",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 576,
+        "N": 144
+      },
+      "depends_on": [
+        108
+      ]
+    },
+    {
+      "seq": 110,
+      "name": "node_relu_13",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 256
+      },
+      "depends_on": [
+        109
+      ]
+    },
+    {
+      "seq": 111,
+      "name": "node_conv2d_49",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 144,
+        "N": 576
+      },
+      "depends_on": [
+        110
+      ]
+    },
+    {
+      "seq": 112,
+      "name": "node_hardsigmoid_8",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 640
+      },
+      "depends_on": [
+        111
+      ]
+    },
+    {
+      "seq": 113,
+      "name": "node_mul_2309",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        112
+      ]
+    },
+    {
+      "seq": 114,
+      "name": "node_Conv_570",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 576,
+        "N": 96
+      },
+      "depends_on": [
+        113
+      ]
+    },
+    {
+      "seq": 115,
+      "name": "node_add_1097",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        114
+      ]
+    },
+    {
+      "seq": 116,
+      "name": "node_Conv_572",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 49,
+        "K": 96,
+        "N": 576
+      },
+      "depends_on": [
+        115
+      ]
+    },
+    {
+      "seq": 117,
+      "name": "n0_18",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 28288
+      },
+      "depends_on": [
+        116
+      ]
+    },
+    {
+      "seq": 118,
+      "name": "node_mean_9",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        117
+      ]
+    },
+    {
+      "seq": 119,
+      "name": "node_Concat_402",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        118
+      ]
+    },
+    {
+      "seq": 120,
+      "name": "node_view",
+      "engine": null,
+      "op": null,
+      "host_only": true,
+      "shape": {},
+      "depends_on": [
+        119
+      ]
+    },
+    {
+      "seq": 121,
+      "name": "node_linear",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 576,
+        "N": 1024
+      },
+      "depends_on": [
+        120
+      ]
+    },
+    {
+      "seq": 122,
+      "name": "n0_19",
+      "engine": "sfu",
+      "op": "silu",
+      "host_only": false,
+      "shape": {
+        "elements": 1024
+      },
+      "depends_on": [
+        121
+      ]
+    },
+    {
+      "seq": 123,
+      "name": "node_linear_1",
+      "engine": "mxu",
+      "op": "mmul",
+      "host_only": false,
+      "shape": {
+        "M": 1,
+        "K": 1024,
+        "N": 1000
+      },
+      "depends_on": [
+        122
+      ]
+    }
+  ],
+  "content_hash": "9091ae2a86bbd5b9d1c3c3566cf98e1c82ef61e47ebd7c35b055c17d02afd4f7"
+}
