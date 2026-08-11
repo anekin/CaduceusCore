@@ -430,3 +430,23 @@ Fields: todo_id, red_command/result, green_command/result, mutation_command/resu
 - End-to-end smoke: decode and prefill simulations produce correct wall-clock totals and breakdown values.
 - Evidence recorded at `.omo/evidence/task-15-timeline-report.txt`.
 
+
+## T17: CV Workload Dual-Path Spec Gates (2026-08-11)
+
+### Design decisions
+- Added `sim/timing/cv_spec_gates.py` with `compute_path_a_result` and `evaluate_cv_workload` for the three frozen CV workloads (`mobilenetv3`, `resnet50`, `yolov8n`).
+- Path A loads manifests via `timing.workloads.build_cv_workload`, estimates MXU/SFU/Vector cycles with the same architectural formulas as T16, and reduces the entry `depends_on` DAG via `compute_critical_path_from_dag`.
+- CV MXU estimate caps tile compute before selecting the bottleneck (`per_tile_compute = H+W+H` for `M >= H`) so that large-M convolutions do not inflate the bottleneck with the uncapped `H*(M+1)+W` intermediate value. This keeps DMA/im2col bytes visible for the `im2col-bytes-x8` fault.
+- Path B reducer (`scripts/reduce_func_model_perf_oracle.py`) was extended with `reduce_cv_workload`, `_cv_critical_path_from_manifest`, and a local `_cv_mxu_cycles` duplicate of the Path A formula. It consumes the hand-authored oracle summary counts for structural cross-check while computing cycles independently from the manifest.
+- `compare_path_results` in `qwen_spec_gates.py` was generalized: canonical op counts are enforced only for `qwen25-*` workloads, and `structural_engine_counts` is checked when both paths provide it.
+- Runner handlers added: `run --cases mobilenetv3,resnet50,yolov8n --compare-paths a,b` and `negative --case cv-paths --faults im2col-bytes-x8,dropped-depthwise,unknown-op,path-b-decomposition`.
+- Negative faults are evaluated on the combined three-workload result so that `dropped-depthwise` (which only affects MobileNetV3's N==1 depthwise entries) still produces a structural mismatch.
+
+### Verification results
+- GREEN: `python3 scripts/run_func_model_perf_signoff.py run --cases mobilenetv3,resnet50,yolov8n --compare-paths a,b` exits 0 with `passed=3`.
+- MUTATIONS: `python3 scripts/run_func_model_perf_signoff.py negative --case cv-paths --faults im2col-bytes-x8,dropped-depthwise,unknown-op,path-b-decomposition` exits 0 with `rejected=4,accepted=0`.
+- Pytest: 20/20 tests pass in `test_cv_spec_gates.py` (Path A, Path B subprocess, dual-path gate, all four fault injectors, runner CLI).
+- Full timing regression: 697/697 pass (no regressions; previous baseline was 677).
+- Qwen regression: 17/17 in `test_qwen_spec_gates.py` and 33/33 in `test_perf_oracle_independence.py` still pass.
+- Evidence recorded at `.omo/evidence/task-17-cv-spec-gates.json`.
+

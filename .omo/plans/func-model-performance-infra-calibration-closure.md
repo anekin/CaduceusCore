@@ -119,7 +119,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
 ## Todos
 > Implementation + Test = ONE todo. Never separate.
 
-- [ ] 1. Establish the normative Func Model performance spec
+- [x] 1. Establish the normative Func Model performance spec
   What to do: RED first, then create `docs/func-model-performance-spec.md` and `config/func_model_perf_spec_v1.json`. Own every parameter/formula ID/unit/assumption/uncertainty for seven hard-gate domains and standalone SW overhead. Reclassify historical RTL-derived comments as legacy/untrusted; do not copy measured numbers as oracle facts. Spec 中必须包含 monotonicity annotation schema（供 T18 消费）：每个 sweep 维度声明 `expected_zero_derivatives` 列表（例如 `decode_fixed_context: prompt_length_non_monotonic=true`）和 `saturation_annotations`（例如 `saturated_bandwidth: array_saturation=true`），T18 runner cross-check computed 零斜率与这些 annotations 以判定 expected_zero vs actual_zero。
   Parallelization: Y | Wave 1 | Blocks T3,T5,T7-T12,T20 | Blocked by none
   References: `sim/config/npu_config.yaml:30-61` mixed ownership；`sim/models/dram.py:7-49` architecture assumptions；`sim/models/sw_overhead.py:1-70` assumption-heavy constants；`spec/soc_golden_contract.md` current performance exclusion。
@@ -127,7 +127,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/check_func_model_perf_spec.py --spec config/func_model_perf_spec_v1.json` GREEN exits 0. `python3 scripts/check_func_model_perf_spec.py --negative-fixtures config/tests/perf_spec_bad_units.json,config/tests/perf_spec_rtl_basis.json` exits 0 only with `rejected=2,accepted=0`. Evidence `.omo/evidence/task-1-perf-spec.txt`.
   Commit: Y | feat(perf-spec): define architecture-owned performance spec | Files normative docs/config, checker, tests
 
-- [ ] 2. Define typed event, provider, report and future-calibration contracts
+- [x] 2. Define typed event, provider, report and future-calibration contracts
   What to do: RED first, then add `sim/timing/perf_contract.py` with strict event IDs, semantic start/complete, typed units/errors, estimated result/report schemas and calibration-ready artifact fields. Unknown versions/ops/shapes/units, nonpositive values, NaN/Inf, duplicates and missing pairs fail closed.
   Parallelization: Y | Wave 1 | Blocks T6,T7,T13-T15,T21 | Blocked by none
   References: `sim/engine/timeline.py:7-68` underspecified events；`sim/timing/types.py:7-48` current reports；`sim/axi_tracer.py:13-51` host-time tracer unsuitable for cycles。
@@ -135,7 +135,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 -m sim.timing.perf_contract --self-check` GREEN exits 0. `python3 -m sim.timing.perf_contract --negative-fixtures config/tests/perf_contract_measured_cycles.json,config/tests/perf_contract_bad_unit.json,config/tests/perf_contract_nan.json` exits 0 only with `rejected=3,accepted=0`. Evidence `.omo/evidence/task-2-perf-contract.txt`.
   Commit: Y | feat(timing): add performance spec contracts | Files contract/tests
 
-- [ ] 3. Freeze provider, workload, sweep and runtime matrices
+- [x] 3. Freeze provider, workload, sweep and runtime matrices
   What to do: RED first, then create `config/func_model_perf_matrix_v1.json` and loader. Encode every frozen row/count/seed/error policy/sweep/runtime limit from this plan. Provider case <=30s, workload <=120s, full signoff <=1800s, peak RSS <=4GB; no case may silently skip.
   Parallelization: Y | Wave 1 | Blocks T8-T14,T16-T20 | Blocked by T1
   References: this plan's frozen matrices；`sim/model_specs.py:26-42` model registry；CV trace generators；`sim/timing/benchmark.py:40-92` current dynamic dispatch。
@@ -143,7 +143,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/check_func_model_perf_spec.py --matrix config/func_model_perf_matrix_v1.json` GREEN exits 0. `python3 scripts/check_func_model_perf_spec.py --negative-fixtures config/tests/perf_matrix_duplicate.json,config/tests/perf_matrix_missing.json,config/tests/perf_matrix_skip.json,config/tests/perf_matrix_missing_6p4_endpoint.json` exits 0 only with `rejected=4,accepted=0`. Evidence `.omo/evidence/task-3-perf-matrix.txt`.
   Commit: Y | feat(perf-spec): freeze verification matrices | Files matrix/loader/tests
 
-- [ ] 4. Build a no-RTL, fail-closed evidence and DoneClaim runner
+- [x] 4. Build a no-RTL, fail-closed evidence and DoneClaim runner
   What to do: RED first, then create `scripts/run_func_model_perf_signoff.py` with `run/validate/audit/negative/rerun/baseline` and run-ID bundles. Record current-stage provenance/DoneClaims, atomic writes and source/report freshness. Reject any evidence source path under live `rtl/**` before opening or hashing it. Evidence vocabulary excludes RTL/VCS/Spike cycles；stdout text never determines verdict. 实现 `--protected-baseline-from-plan <plan.md>` 子命令：解析计划 Must-NOT-Have 中的 protected-file 条目，对每个条目 (a) 文件不存在 → 记录 `path_missing=true, verdict=vacuously_passed` 继续，(b) 文件存在且 SHA-256 匹配冻结哈希 → `verdict=passed`，(c) 文件存在但 SHA-256 不匹配 → fail。为 `validate --require-fresh` 实现可执行 predicate：evidence timestamp >= run start AND >= max(spec_mtime, workload_mtime, provider_mtime, oracle_mtime)；不满足时 fail 并报 `stale_evidence`。DoneClaim 必须有 JSON schema（字段见 Verification strategy line 38）和 `--validate-claims` lint 命令。
   Parallelization: Y | Wave 1 | Blocks T6,T7,T16-T25 | Blocked by none
   References: `scripts/run_func_model_signoff.py:1008-1296` fingerprint/verdict pattern；`scripts/aggregate_software_signoff.py:41-135` stale checks；existing dirty worktree paths；this plan's Must-NOT-Have keep-alive protected-file entries。后续 todo 引用的所有 runner CLI 选项必须在 T4 实现并 tested：T21 `--matrix all --self-test-disable-each-validator`、T22 `baseline create|validate --from-latest-fresh --require-fresh`、T23 `run --all-spec --ci-mode / validate --require-fresh --require-done-claims 1-22`、T25 `validate --require-fresh --require-done-claims 1-25 --repeat 2 / run --all-spec`、F1 `audit --run-id-from --plan --require-done-claims --recompute`、F2 `audit --checks event-source,numerical-separation,oracle-independence,no-rtl,typed-errors`、F3 `rerun --cases ... --faults ...`、F4 `audit --checks scope,provenance,uncertainty,report-only,dirty-worktree --require-zero-waivers`。T4 acceptance 必须含一个 "interface smoke" 测试：用 fixture 调用上述每个选项（含 F2/F4 的 `--checks` 组合），验证精确的 exit 0 + 结构化输出，未支持任一则 T4 fail。
@@ -151,7 +151,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/run_func_model_perf_signoff.py negative --self-test --faults stale-head,stale-source,stale-report,missing-claim,zero-tests,collision,rtl-path,pass-text,stale-evidence,protected-mismatch` exits 0 only when structured JSON reports all 10 faults `rejected=true`；any `accepted>0` exits nonzero. `python3 scripts/run_func_model_perf_signoff.py validate --protected-baseline-from-plan .omo/plans/func-model-performance-infra-calibration-closure.md --phantom-only` exits 0 with `path_missing=true, verdict=vacuously_passed`。Evidence `.omo/evidence/task-4-perf-runner.txt`.
   Commit: Y | feat(signoff): add performance spec evidence runner | Files runner/tests
 
-- [ ] 5. Create genuinely independent provider and workload oracles
+- [x] 5. Create genuinely independent provider and workload oracles
   What to do: RED first, then create `config/func_model_perf_oracle_v1.json`, `config/func_model_workload_oracle_v1.json`, `scripts/verify_func_model_perf_spec.py` and `scripts/reduce_func_model_perf_oracle.py`. Fill every provider row with manual decomposition/spec references；define Path B schema/reducer using **17-op layer template plus per-workload shape variants**（template 含 17 个 op 的 hand-derived cycle decomposition + dependency edges；shape variant 文件位于 `config/oracle/qwen25_3b_workload_variants_v1.json`，按 4 个 hard-gate workload（blk0-decode/decode-c128-g1/prefill-16/prefill-128）给出 batch/prompt/context 等 per-workload 维度参数，reducer 读取 variant 后代入 template 计算每层 critical path）——禁止逐条手工 author 612 条。Provider verifier consumes provider CLI JSON only；workload reducer never imports or calls Path A。禁止 Path B 通过 `subprocess/sys.modules/importlib` 调用 Path A，AST 静态检查之外补 runtime subprocess 隔离测试。Add formula/ceiling/unit/constant + **spec-interpretation mutation**（改一个 spec 参数后两条独立路径应各自 fail）, Path A reducer and Path B decomposition + Path B template mutations. variant 文件 schema 必须在 T5 evidence 中定稿：字段 `{workload_id, batch_m, prompt_len, context_len, layer_count, hidden, intermediate, kv_heads, head_dim}`，reducer 应用后的 variant 集合 hash 必须出现在 evidence 中以防止 A/B 路径 variant diverge。
   Parallelization: N | Wave 1 | Blocks T8-T14,T16,T17 | Blocked by T1,T3
   Readiness gate: 启动前先验证 T1.spec 和 T3.matrix 通过 schema-compatibility check；若 T1/T3 在本 todo 期间变更则 T5 必须 re-run。
@@ -160,7 +160,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/verify_func_model_perf_spec.py --oracle config/func_model_perf_oracle_v1.json --self-check --mutations ceiling,constant,units,noop-nonzero,spec-interpretation` exits 0 only when every mutation is rejected. `python3 scripts/reduce_func_model_perf_oracle.py --oracle config/func_model_workload_oracle_v1.json --self-check --mutations path-a-reducer,path-b-decomposition,dependency-edge,template-mutation` exits 0 only with `verdict=pass,rejected_mutations=4`. `python3 scripts/run_func_model_perf_signoff.py negative --case oracle-isolation --faults dynamic-import,subprocess-patha,shared-helper,template-import-patha` exits 0 only with `rejected=4,accepted=0`. Evidence `.omo/evidence/task-5-independent-oracle.txt`.
   Commit: Y | test(perf-spec): add independent formula oracles | Files oracle/verifier/import-policy tests
 
-- [ ] 6. Emit semantic performance events from FuncModel/MMIOBridge
+- [x] 6. Emit semantic performance events from FuncModel/MMIOBridge
   What to do: RED first, then add opt-in `PerformanceSession` at MMIO command acceptance/completion seams. Events carry semantic sequence, programmed shape and parent workload IDs; provider timeline is separate. Functional mode executes kernels；profile-only drives the same register/START path but skips numerical kernels and is never functional evidence.
   Parallelization: Y | Wave 2 | Blocks T15-T17,T21 | Blocked by T2-T4
   References: `sim/func_model.py:24-75` wiring；`sim/mmio_bridge.py:118-165,286-315,382-413,489-517` synchronous command paths；`scripts/compare_firmware_equivalence.py:125-165` observer seam。
@@ -168,7 +168,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `PYTHONPATH=sim python3 -m pytest sim/tests/test_mmio_perf_events.py -q` exits 0. `python3 scripts/run_func_model_perf_signoff.py negative --case mmio-events --faults duplicate-start,missing-completion,wrong-shape` exits 0 only with structured `rejected=3,accepted=0`. Evidence `.omo/evidence/task-6-mmio-events.json`.
   Commit: Y | feat(func-model): emit semantic performance events | Files FuncModel/bridge/session/tests
 
-- [ ] 7. Implement architectural provider registry and calibration-ready artifacts
+- [x] 7. Implement architectural provider registry and calibration-ready artifacts
   What to do: RED first, then add `sim/timing/providers.py` and `config/perf_providers/spec-block64-v1.json`. Providers read normative spec, return typed estimates/errors and declare domain/boundary/uncertainty. Current artifact remains uncalibrated；future RTL fields are schema-only synthetic fixtures.
   Parallelization: Y | Wave 2 | Blocks T8-T12,T15,T20 | Blocked by T1,T2,T4
   References: `sim/models/*` current estimators；`sim/golden_executor.py` legacy counters that must remain non-authoritative；`scripts/extract_func_model_cycles.py` legacy bypass。
@@ -176,7 +176,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `PYTHONPATH=sim python3 -m pytest sim/timing/tests/test_perf_providers.py -q` exits 0. `python3 scripts/run_func_model_perf_signoff.py negative --case provider-registry --faults unknown-op,out-of-domain,rtl-labeled-artifact` exits 0 only with `rejected=3,accepted=0`. Evidence `.omo/evidence/task-7-provider-registry.txt`.
   Commit: Y | feat(timing): add architectural provider registry | Files provider registry/artifact/tests
 
-- [ ] 8. Verify MXU architectural estimates against the independent oracle
+- [x] 8. Verify MXU architectural estimates against the independent oracle
   What to do: RED provider mutations, then adapt Block/MXU estimator to normative spec and typed provider. Run all 10 rows, emit tile/state decomposition and assumptions. Do not import `analyze_perf.py` or historical RTL tables as oracle. 当前验证范围限定为 Block engine（当前 RTL Phase 1 + bootstrap 链路使用 64×64 Broadcast MAC，array_size 每个 row 在 T3 matrix 中钉死）；FSA/GMMA/TensorCore/WMMA/OS-Systolic 等 Arc Model v2+ 候选 engine 的 spec-owned 公式验证延后至将来更换 architectural engine 时进行。**Existing non-Block engines (`sim/engine/systolic_engine.py`, `os_systolic_engine.py`, `fsa_engine.py`, `gmma_engine.py`, `tensor_core_engine.py`, `wmma_engine.py`, `is_systolic_engine.py`) 保持 in place 但 `performance_spec_verified` 不覆盖它们——加 deprecation warning 注释（`# Not covered by perf-spec v1; verify before switching architectural engine`）并在 T24 bug ledger 中记录 deferred-scope 条目，禁止删除或 refactor。**
   Parallelization: Y | Wave 2 | Blocks T15,T16,T18 | Blocked by T3,T5,T7
   References: `sim/engine/block_engine.py` and `sim/models/mxu.py` estimators；`docs/mxu-perf-calibration.md` historical evidence explicitly non-oracle。
@@ -184,7 +184,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/verify_func_model_perf_spec.py --domain mxu` GREEN exits 0 with `rows=10,failed=0`. `python3 scripts/verify_func_model_perf_spec.py --domain mxu --mutations mkn-swap,tile-base,axis-order` exits 0 only with `rejected_mutations=3`. Evidence `.omo/evidence/task-8-mxu-spec.json`.
   Commit: Y | test(perf-spec): verify MXU estimates | Files MXU provider/models/tests
 
-- [ ] 9. Verify SFU and Vector architectural estimates
+- [x] 9. Verify SFU and Vector architectural estimates
   What to do: RED mutations, then align all six SFU and six Vector ops to spec-owned parameters. Remove unknown-op defaults and ambiguous element/block counts. Run 24+30 oracle rows.
   Parallelization: Y | Wave 2 | Blocks T15-T18 | Blocked by T3,T5,T7
   References: `sim/models/sfu.py:1-80` current defaults；`sim/models/vector.py` block formulas；`sim/config/npu_config.yaml:30-61` historical labels to reclassify。
@@ -192,7 +192,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/verify_func_model_perf_spec.py --domain sfu,vector` GREEN exits 0 with `rows=54,failed=0`. `python3 scripts/verify_func_model_perf_spec.py --domain sfu,vector --mutations unknown-default,off-by-one,wrong-block-size` exits 0 only with `rejected_mutations=3`. Evidence `.omo/evidence/task-9-sfu-vector-spec.json`.
   Commit: Y | test(perf-spec): verify SFU and Vector estimates | Files models/providers/tests
 
-- [ ] 10. Verify DMA and DRAM architectural estimates
+- [x] 10. Verify DMA and DRAM architectural estimates
   What to do: RED mutations, then align bandwidth, burst, setup, refresh, row-conflict and read/write units to normative spec. Run both 10-row matrices; zero/negative transfer remains safe library behavior only, never signoff-valid.
   Parallelization: Y | Wave 2 | Blocks T15-T18 | Blocked by T3,T5,T7
   References: `sim/models/dma.py:1-125` DMA formulas；`sim/models/dram.py:7-91` DRAM assumptions；`sim/timing/tests/test_metrics.py` zero-safe behavior。
@@ -200,7 +200,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/verify_func_model_perf_spec.py --domain dma,dram` GREEN exits 0 with `rows=20,failed=0`. `python3 scripts/verify_func_model_perf_spec.py --domain dma,dram --mutations gbps-unit,floor-rounding,zero-size` exits 0 only with `rejected_mutations=3`. Evidence `.omo/evidence/task-10-memory-spec.json`.
   Commit: Y | test(perf-spec): verify DMA and DRAM estimates | Files memory models/providers/tests
 
-- [ ] 11. Verify NoC and KV Cache architectural estimates
+- [x] 11. Verify NoC and KV Cache architectural estimates
   What to do: RED mutations, then align topology/hop/serialization/contention and KV capacity/hit/miss/layer-switch assumptions to spec. Run 8+8 oracle rows using kv_heads=2.
   Parallelization: Y | Wave 3 | Blocks T15,T16,T18 | Blocked by T3,T5,T7
   References: `sim/models/noc.py:1-178` NoC；`sim/models/kv_cache.py:14-144` KV assumptions；Qwen pinned metadata。
@@ -208,7 +208,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/verify_func_model_perf_spec.py --domain noc,kv --mutations route,hit-rate,kv-heads,noop-nonzero` exits 0 only with all 16 rows valid and `rejected_mutations=4`；any accepted mutation exits nonzero. Evidence `.omo/evidence/task-11-noc-kv-spec.json`.
   Commit: Y | test(perf-spec): verify NoC and KV estimates | Files models/providers/tests
 
-- [ ] 12. Verify standalone SW overhead assumptions without integrating them
+- [x] 12. Verify standalone SW overhead assumptions without integrating them
   What to do: RED mutations, then validate four hand-decomposed SW rows. Label results `assumption_only=true, included_in_canonical_total=false, uncertainty_pct>=30`. Correct stale default layer/model assumptions but do not add SW cycles to main totals. 显式声明 `sim/models/sw_overhead.py:44-49` 中的 `cycle_ratio=5`（RISC-V @200MHz vs MXU @1GHz）和 `riscv_cpi=1.2` 是 assumption-only constant，不进入 sweep sensitivity matrix（T18 的 bandwidth/array/dma-channels/prompt/context/noc-hop sweep 不含 RISC-V 频率维度），将在未来 RTL 校准时验证 Ibex RV32IMC 实际频率比。
   Parallelization: Y | Wave 3 | Blocks T20 | Blocked by T1,T3,T5,T7
   References: `sim/models/sw_overhead.py:1-150` standalone model；old plan SW integration deferral。
@@ -216,7 +216,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/verify_func_model_perf_spec.py --domain sw_overhead` GREEN exits 0 with `rows=4,failed=0`. `python3 scripts/verify_func_model_perf_spec.py --domain sw_overhead --mutations include-in-total,stale-28-layers` exits 0 only with `rejected_mutations=2`. Evidence `.omo/evidence/task-12-sw-overhead-spec.json`.
   Commit: Y | test(perf-spec): verify standalone software overhead | Files SW model/provider/tests
 
-- [ ] 13. Canonicalize Qwen2.5-3B workload and remove duplicate builders
+- [x] 13. Canonicalize Qwen2.5-3B workload and remove duplicate builders
   What to do: RED stale-metadata tests, then create `sim/timing/workloads.py` and `config/workloads/qwen25_3b_perf_spec_v1.json`. Correct `model_specs.py`/`npu_sim.py` kv_heads and dimensions；update non-RTL timing consumers/docs；hand-author the four Qwen Path B entries in `config/func_model_workload_oracle_v1.json`. The checker rejects any declared source path under `rtl/**` before file access and never reads/hashes live RTL artifacts.
   Parallelization: Y | Wave 3 | Blocks T15,T16,T19,T20 | Blocked by T2,T3,T5
   References: pinned `sim/signoff/test_qwen25_3b_real_blk0.py:44-52`；grep patterns `kv_heads=16|NUM_KV_HEADS=16|kv_dim=2048` 跨 `sim/**`；`sim/model_specs.py` conflict；`sim/npu_sim.py` duplicate；`sim/timing/timing_engine.py` duplicate；`scripts/extract_func_model_cycles.py` non-authoritative direct-model bypass。**禁止使用易漂移的精确行号；改用 grep 模式作为 stale-reference 扫描的机械基础。**
@@ -224,7 +224,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/check_perf_workloads.py --workload qwen25-3b --oracle config/func_model_workload_oracle_v1.json` exits 0 with four exact workloads. `python3 scripts/check_perf_workloads.py --negative-fixtures config/tests/qwen_old_dims.json,config/tests/qwen_7gemm.json,config/tests/qwen_rtl_source.json` exits 0 only with `rejected=3,rtl_files_opened=0`. Evidence `.omo/evidence/task-13-qwen-workload.txt`.
   Commit: Y | fix(workload): canonicalize Qwen performance workload | Files non-RTL workload/model/timing/scripts/docs/tests
 
-- [ ] 14. Freeze canonical CV workloads
+- [x] 14. Freeze canonical CV workloads
   What to do: RED count/schema mutations, then normalize MobileNetV3, ResNet50 and YOLOv8n traces into the shared workload contract with fixed input/seed/hashes. Unknown/misc ops must map explicitly or fail, never default silently.
   Parallelization: Y | Wave 3 | Blocks T15,T17,T20 | Blocked by T2,T3,T5
   References: `sim/cv/cv_trace.py:175-270` MobileNet；`sim/cv/traces/resnet50_trace.py:134-212`；`sim/cv/traces/yolov8n_trace.py:195-303`。
@@ -232,7 +232,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/check_perf_workloads.py --workload mobilenetv3,resnet50,yolov8n --oracle config/func_model_workload_oracle_v1.json` exits 0 with exact counts/hashes. `python3 scripts/check_perf_workloads.py --negative-fixtures config/tests/cv_dropped_layer.json,config/tests/cv_unknown_op.json,config/tests/cv_bad_shape.json` exits 0 only with `rejected=3,accepted=0`. Evidence `.omo/evidence/task-14-cv-workloads.txt`.
   Commit: Y | feat(workload): freeze representative CV traces | Files CV adapters/manifests/tests
 
-- [ ] 15. Converge timeline, overlap and report semantics (分阶段提交：15a → 15b → 15c)
+- [x] 15. Converge timeline, overlap and report semantics (分阶段提交：15a → 15b → 15c)
   What to do: RED hand-DAG cases, then make TimingEngine/NPUSimulator consume shared events/providers/workloads。分子阶段提交确保原子性：
     - 15a (Provider/Event 接入): TimingEngine 消费 T6 events 和 T7 providers 通过 T2 contract；通过 T6/T7 签的共享 event-schema fixture 作为端到端 smoke test，禁止破坏上游 todo 的独立 GREEN 测试。
     - 15b (Critical path / overlap / contention 语义): 定义 canonical `total_cycles = max over topological paths of (sum estimated_cycles on that path)`——显式公式，不是 sum-of-breakdowns，不是 sum 减去 dma overlap；测试 DAG 必须含 sum-of-breakdowns 和 critical-path 明显分歧的 fixture（如 pure-parallel DMA + 长 SFU 链）并要求 15b 采用后者。Hidden/exposed DMA/NoC 字段定义：`dma_weight=hidden/overlapped, dma_effective=exposed/stall`——必须与 `npu_sim.py:210-213` 的语义一致，`timing_engine.py:70-79` events fallback 的 dma_effective/dma_weight 反转 bug 必须修。
@@ -243,7 +243,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `PYTHONPATH=sim python3 -m pytest sim/timing/tests/test_perf_timeline.py -q` exits 0 with exact serialized/overlap/contention assertions + sum-vs-critical-path RED case. `python3 scripts/run_func_model_perf_signoff.py negative --case path-a-timeline --faults duplicate-dma,removed-dependency,empty-events,sum-of-breakdowns,dma-effective-inverted` exits 0 only with `rejected=5,accepted=0`. Evidence `.omo/evidence/task-15-timeline-report.txt`.
   Commit: Y | refactor(timing): converge event timeline and reports (15a/15b/15c 可分三个 atomic commit) | Files timing stack/tests
 
-- [ ] 16. Close Qwen workload structural and dual-path spec gates
+- [x] 16. Close Qwen workload structural and dual-path spec gates
   What to do: Run four hard Qwen cases through Path A and Path B. Block-0 may run functional mode；36-layer cases use profile-only. Compare total/major breakdown under <=20% rule after exact structural/DAG checks.
   Parallelization: Y | Wave 4 | Blocks T19-T25 | Blocked by T4-T6,T8-T11,T13,T15
   References: T13 workload；T15 reducers；`docs/qwen25-3b-forward-spec.md` op-order source after correction。
@@ -251,7 +251,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/run_func_model_perf_signoff.py run --cases qwen-blk0,qwen-decode-c128-g1,qwen-prefill-16,qwen-prefill-128 --compare-paths a,b` exits 0 with `passed=4`. `python3 scripts/run_func_model_perf_signoff.py negative --case qwen-paths --faults missing-attention,path-a-double-count,path-b-decomposition` exits 0 only with `rejected=3,accepted=0`. Evidence `.omo/evidence/task-16-qwen-spec-gates.json`.
   Commit: Y | test(perf-spec): close Qwen workload gates | Files integration tests/minimal fixes
 
-- [ ] 17. Close representative CV dual-path spec gates
+- [x] 17. Close representative CV dual-path spec gates
   What to do: Run three CV workloads through both independent paths and compare total/major breakdown. Validate im2col/DMA/MXU/SFU mapping and host-only exclusions explicitly.
   Parallelization: Y | Wave 4 | Blocks T20-T25 | Blocked by T4,T5,T6,T8-T11,T14,T15
   References: T14 manifests；`sim/cv/conv_mapper.py` mapping；timing benchmark CV path。
