@@ -160,6 +160,7 @@ def _benchmark_alias(
         is_cv=is_cv,
         engine_config=engine.config,
         weight_streaming_overlap_ratio=ws_overlap,
+        uncertainty=args.uncertainty,
     )
     if not is_cv:
         _print_calibration_report(module_breakdown, alias)
@@ -249,6 +250,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Comma-separated port counts to sweep (e.g., 2,4,8). "
              "Overrides interconnect.ports in config for each value. "
              "Default: 4 when not specified.",
+    )
+    parser.add_argument(
+        "--uncertainty",
+        action="store_true",
+        help="Emit low/base/high uncertainty bands for latency/throughput KPIs.",
     )
     return parser
 

@@ -1,4 +1,15 @@
 
+## T20 Issues (2026-08-11)
+
+### Open
+None.
+
+### Resolved / Design Notes
+1. **Temporary prefill-2000 variant** — The canonical workload manifest only defines four hard-gate variants. T20 creates the `qwen25-3b-prefill-2000` variant programmatically in `sim/timing/uncertainty_kpis.py` by loading the manifest and overriding `batch_m=prompt_len=2000`, so `config/workloads/qwen25_3b_perf_spec_v1.json` remains unchanged.
+2. **Qwen-model-family aggregate canonical hash** — The aggregate scaling report carries a top-level `canonical_hash` in addition to per-model hashes, satisfying the byte-stable nonzero requirement for the combined report.
+3. **No `sw_overhead` in canonical totals** — Uncertainty reports do not include a `canonical_total` field; all canonical content is hashed via `canonical_hash` and no `sw_overhead` sub-item is introduced.
+
+
 ## T19 Issues (2026-08-11)
 
 ### Open

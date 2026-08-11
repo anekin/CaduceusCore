@@ -198,3 +198,74 @@ class MetricsCollector:
         )
 
         return asdict(filled)
+
+
+# ---------------------------------------------------------------------------
+# Canonical uncertainty bands (frozen formulas)
+# ---------------------------------------------------------------------------
+
+def apply_cycle_band(base: float) -> dict[str, float]:
+    """Return frozen cycle/latency band: low=0.7*base, high=1.3*base.
+
+    Args:
+        base: Base cycle or latency value.
+
+    Returns:
+        Dict with ``low``, ``base``, ``high`` keys.
+    """
+    return {"low": round(0.7 * base, 6), "base": round(base, 6), "high": round(1.3 * base, 6)}
+
+
+def apply_throughput_band(base: float) -> dict[str, float]:
+    """Return frozen throughput band: inverse [base/1.3, base, base/0.7].
+
+    Args:
+        base: Base throughput value (TPS or FPS).
+
+    Returns:
+        Dict with ``low``, ``base``, ``high`` keys.
+    """
+    return {
+        "low": round(base / 1.3, 6),
+        "base": round(base, 6),
+        "high": round(base / 0.7, 6),
+    }
+
+
+def apply_sum_of_stages_band(
+    stage_bases: list[float],
+    correlation: str = "independent",
+) -> dict[str, float]:
+    """Return uncertainty band for a sum-of-stages metric.
+
+    For ``correlation="independent"`` the high deviation is the root-sum-square
+    of per-stage high deviations (symmetric bands assumed).  For
+    ``correlation="correlated"`` the band is linear (sum of low/high).
+
+    Args:
+        stage_bases: Base values for each stage.
+        correlation: ``"independent"`` (RSS) or ``"correlated"`` (linear).
+
+    Returns:
+        Dict with ``low``, ``base``, ``high`` keys.
+
+    Raises:
+        ValueError: If ``correlation`` is not one of the supported modes.
+    """
+    if correlation not in ("independent", "correlated"):
+        raise ValueError(f"Unsupported correlation mode: {correlation}")
+
+    base = sum(stage_bases)
+    if correlation == "correlated":
+        low = sum(0.7 * s for s in stage_bases)
+        high = sum(1.3 * s for s in stage_bases)
+        return {"low": round(low, 6), "base": round(base, 6), "high": round(high, 6)}
+
+    # Independent: RSS of per-stage deviations (symmetric 0.7/1.3 band).
+    deviations = [(1.3 - 1.0) * s for s in stage_bases]
+    rss_dev = sum(d * d for d in deviations) ** 0.5
+    return {
+        "low": round(base - rss_dev, 6),
+        "base": round(base, 6),
+        "high": round(base + rss_dev, 6),
+    }

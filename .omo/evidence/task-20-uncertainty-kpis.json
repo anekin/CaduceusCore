@@ -1,0 +1,517 @@
+{
+  "case_id": "unknown",
+  "dirty_paths": [
+    ".omo/evidence/task-0-signoff-v3-runner.txt",
+    ".omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md",
+    ".omo/notepads/func-model-performance-infra-calibration-closure/issues.md",
+    ".omo/notepads/func-model-performance-infra-calibration-closure/learnings.md",
+    ".omo/notepads/phase6-rtl-verification/learnings.md",
+    ".omo/plans/func-model-performance-infra-calibration-closure.md",
+    "build/evidence/fm-cv-chain.txt",
+    "build/evidence/w3-4-mobilenetv3-fm.txt",
+    "requirements.txt",
+    "scripts/run_func_model_perf_signoff.py",
+    "sim/engine/block_engine.py",
+    "sim/engine/fsa_engine.py",
+    "sim/engine/gmma_engine.py",
+    "sim/engine/is_systolic_engine.py",
+    "sim/engine/os_systolic_engine.py",
+    "sim/engine/systolic_engine.py",
+    "sim/engine/tensor_core_engine.py",
+    "sim/engine/timeline.py",
+    "sim/engine/wmma_engine.py",
+    "sim/func_model.py",
+    "sim/mmio_bridge.py",
+    "sim/model_specs.py",
+    "sim/models/dma.py",
+    "sim/models/dram.py",
+    "sim/models/kv_cache.py",
+    "sim/models/mxu.py",
+    "sim/models/noc.py",
+    "sim/models/sfu.py",
+    "sim/models/sw_overhead.py",
+    "sim/models/vector.py",
+    "sim/timing/benchmark.py",
+    "sim/timing/dashboard.py",
+    "sim/timing/generate_summary.py",
+    "sim/timing/metrics.py",
+    "sim/timing/timing_engine.py",
+    "sim/validate_e2e.py",
+    ".omo/evidence/task-1-perf-spec.txt",
+    ".omo/evidence/task-13-qwen-workload.txt",
+    ".omo/evidence/task-14-cv-workloads.txt",
+    ".omo/evidence/task-15-timeline-report.txt",
+    ".omo/evidence/task-2-perf-contract.txt",
+    ".omo/evidence/task-3-perf-matrix.txt",
+    ".omo/evidence/task-5-independent-oracle.txt",
+    ".omo/evidence/task-7-provider-registry.txt",
+    ".omo/notepads/func-model-performance-infra-calibration-closure/decisions.md",
+    ".omo/notepads/func-model-performance-infra-calibration-closure/problems.md",
+    "config/func_model_perf_matrix_v1.json",
+    "config/func_model_perf_oracle_v1.json",
+    "config/func_model_perf_spec_v1.json",
+    "config/func_model_workload_oracle_v1.json",
+    "config/oracle/qwen25_3b_layer_template_v1.json",
+    "config/oracle/qwen25_3b_workload_variants_v1.json",
+    "config/perf_providers/spec-block64-v1.json",
+    "config/tests/cv_bad_shape.json",
+    "config/tests/cv_dropped_layer.json",
+    "config/tests/cv_unknown_op.json",
+    "config/tests/perf_contract_bad_unit.json",
+    "config/tests/perf_contract_measured_cycles.json",
+    "config/tests/perf_contract_nan.json",
+    "config/tests/perf_matrix_duplicate.json",
+    "config/tests/perf_matrix_missing.json",
+    "config/tests/perf_matrix_missing_6p4_endpoint.json",
+    "config/tests/perf_matrix_skip.json",
+    "config/tests/perf_spec_bad_units.json",
+    "config/tests/perf_spec_rtl_basis.json",
+    "config/tests/qwen_7gemm.json",
+    "config/tests/qwen_old_dims.json",
+    "config/tests/qwen_rtl_source.json",
+    "config/workloads/mobilenetv3_perf_spec_v1.json",
+    "config/workloads/resnet50_perf_spec_v1.json",
+    "config/workloads/yolov8n_perf_spec_v1.json",
+    "docs/func-model-performance-spec.md",
+    "scripts/check_func_model_perf_spec.py",
+    "scripts/check_perf_workloads.py",
+    "scripts/verify_func_model_perf_spec.py",
+    "sim/tests/test_mmio_perf_events.py",
+    "sim/timing/perf_contract.py",
+    "sim/timing/perf_session.py",
+    "sim/timing/providers.py",
+    "sim/timing/tests/test_perf_contract.py",
+    "sim/timing/tests/test_perf_memory_spec.py",
+    "sim/timing/tests/test_perf_mxu_spec.py",
+    "sim/timing/tests/test_perf_noc_kv_spec.py",
+    "sim/timing/tests/test_perf_providers.py",
+    "sim/timing/tests/test_perf_sfu_vector_spec.py",
+    "sim/timing/tests/test_perf_signoff_runner.py",
+    "sim/timing/tests/test_perf_spec_config.py",
+    "sim/timing/tests/test_perf_sw_overhead_spec.py",
+    "sim/timing/tests/test_perf_timeline.py",
+    "sim/timing/tests/test_perf_workloads.py",
+    "sim/timing/tests/test_uncertainty_kpis.py",
+    "sim/timing/uncertainty_kpis.py",
+    "sim/timing/workloads.py"
+  ],
+  "doneclaim": {
+    "assertions": [],
+    "evidence_path": ".omo/evidence/task-20-uncertainty-kpis.json",
+    "evidence_sha256": "94466bfc87d5fa1a0c22b01130571716cc3b74105c245860770b610199e2d5aa",
+    "green_command": {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_perf_signoff.py",
+        "run",
+        "--reports",
+        "uncertainty-kpis",
+        "--cases",
+        "qwen-prefill-2000,qwen-model-family,mobilenetv3,resnet50,yolov8n",
+        "--evidence-path",
+        ".omo/evidence/task-20-uncertainty-kpis.json",
+        "--todo-id",
+        "unknown"
+      ]
+    },
+    "green_result": {
+      "assertions": [
+        {
+          "detail": "unknown_cases=[]",
+          "id": "all_cases_known",
+          "result": "pass"
+        },
+        {
+          "detail": "every report must be report_only=true",
+          "id": "all_reports_report_only",
+          "result": "pass"
+        },
+        {
+          "detail": "missing low/base/high bands",
+          "id": "all_kpis_have_low_base_high",
+          "result": "pass"
+        },
+        {
+          "detail": "missing canonical_hash",
+          "id": "all_reports_have_canonical_hash",
+          "result": "pass"
+        }
+      ],
+      "cases": [
+        "qwen-prefill-2000",
+        "qwen-model-family",
+        "mobilenetv3",
+        "resnet50",
+        "yolov8n"
+      ],
+      "command": "run",
+      "errors": [],
+      "passed": true,
+      "report_only": true,
+      "reports": "uncertainty-kpis",
+      "reports_data": {
+        "mobilenetv3": {
+          "assumptions": {
+            "path": "T17 CV dual-path gate",
+            "uncertainty": "cycles 0.7/1.3, throughput inverse"
+          },
+          "canonical_hash": "2324681c8a1ba879084460760b14261042a208fd51d5d69f2c6ba7dc15a8de06",
+          "case": "mobilenetv3",
+          "fps": {
+            "base": 550.728724,
+            "high": 786.75532,
+            "low": 423.63748
+          },
+          "inference_latency_us": {
+            "base": 1815.776,
+            "high": 2360.5088,
+            "low": 1271.0432
+          },
+          "model": "mobilenetv3",
+          "path_a_total": 1815776,
+          "path_b_total": 1815776,
+          "report_only": true,
+          "total_cycles": 1815776,
+          "total_error_pct": 0.0,
+          "workload_hash": "9091ae2a86bbd5b9d1c3c3566cf98e1c82ef61e47ebd7c35b055c17d02afd4f7"
+        },
+        "qwen-model-family": {
+          "canonical_hash": "300763150cc6ee971e5452640ebafb070b36da04da4ef2c65928ad9f439fc6b4",
+          "case": "qwen-model-family",
+          "models": [
+            {
+              "assumptions": {
+                "batch_m": 1,
+                "context_len": 1,
+                "cycle_model": "T16 qwen_spec_gates decode formula",
+                "effective_dram_bw_bytes_per_cycle": 43.52,
+                "mxu_array": "64x64",
+                "param_formula": "layers * (2*hidden*head_dim*(num_heads+kv_heads) + 3*hidden*intermediate)",
+                "weight_bytes_per_param": 0.5,
+                "weight_precision": "INT4"
+              },
+              "canonical_hash": "82882076ad128935c7af5efccd1dad0514d68da3ed305fbb65c927637793d62e",
+              "hidden": 1536,
+              "layers": 28,
+              "model": "qwen2.5-1.5b",
+              "report_only": true,
+              "total_decode_cycles": 42751716,
+              "tps": {
+                "base": 23.390874,
+                "high": 33.415534,
+                "low": 17.99298
+              },
+              "weight_bytes": 655097856
+            },
+            {
+              "assumptions": {
+                "batch_m": 1,
+                "context_len": 1,
+                "cycle_model": "T16 qwen_spec_gates decode formula",
+                "effective_dram_bw_bytes_per_cycle": 43.52,
+                "mxu_array": "64x64",
+                "param_formula": "layers * (2*hidden*head_dim*(num_heads+kv_heads) + 3*hidden*intermediate)",
+                "weight_bytes_per_param": 0.5,
+                "weight_precision": "INT4"
+              },
+              "canonical_hash": "b8fb405a0e54dd8b1d4f7a11abcf080c04e83bbbf53e6a028139034b73f84f2a",
+              "hidden": 2048,
+              "layers": 36,
+              "model": "qwen2.5-3b",
+              "report_only": true,
+              "total_decode_cycles": 90954900,
+              "tps": {
+                "base": 10.99446,
+                "high": 15.706371,
+                "low": 8.457277
+              },
+              "weight_bytes": 1387266048
+            },
+            {
+              "assumptions": {
+                "batch_m": 1,
+                "context_len": 1,
+                "cycle_model": "T16 qwen_spec_gates decode formula",
+                "effective_dram_bw_bytes_per_cycle": 43.52,
+                "mxu_array": "64x64",
+                "param_formula": "layers * (2*hidden*head_dim*(num_heads+kv_heads) + 3*hidden*intermediate)",
+                "weight_bytes_per_param": 0.5,
+                "weight_precision": "INT4"
+              },
+              "canonical_hash": "ebc151e616a120d6159a4ba348f7c6aa0a047d591429332bce5c9023d088335c",
+              "hidden": 3584,
+              "layers": 28,
+              "model": "qwen2.5-7b",
+              "report_only": true,
+              "total_decode_cycles": 212892680,
+              "tps": {
+                "base": 4.697202,
+                "high": 6.710289,
+                "low": 3.613233
+              },
+              "weight_bytes": 3262644224
+            }
+          ],
+          "passed": true,
+          "report_only": true,
+          "scaling_assertions": [
+            {
+              "detail": "weight_bytes=[655097856, 1387266048, 3262644224]",
+              "id": "weight_bytes_monotonic",
+              "result": "pass"
+            },
+            {
+              "detail": "total_decode_cycles=[42751716, 90954900, 212892680]",
+              "id": "total_decode_cycles_monotonic",
+              "result": "pass"
+            },
+            {
+              "detail": "ratios=[0.023750027354691877, 0.023738912984627446, 0.02372020811546506], deltas(%)=[0.046797293739682305, 0.07879412664976879]",
+              "id": "memory_bound_per_weight_byte_delta_within_20pct",
+              "result": "pass"
+            },
+            {
+              "detail": "all scaling reports must carry report_only=true",
+              "id": "all_reports_report_only",
+              "result": "pass"
+            }
+          ],
+          "verdict": "pass"
+        },
+        "qwen-prefill-2000": {
+          "assumptions": {
+            "mxu_formula": "T16 decode/prefill cycle estimate",
+            "uncertainty": "cycles 0.7/1.3, throughput inverse, TTFT RSS independent"
+          },
+          "canonical_hash": "3d842d0a495caac964d60372146b5aa1235c745d21d814b701e3b8467482135f",
+          "case": "qwen-prefill-2000",
+          "decode_per_token_us": {
+            "base": 2526.695,
+            "high": 3284.7035,
+            "low": 1768.6865
+          },
+          "first_decode_cycles": 2526695,
+          "freq_mhz": 1000,
+          "layers": 36,
+          "model": "qwen2.5-3b",
+          "prefill_cycles": 60223319856,
+          "prefill_ms": {
+            "base": 60223.319856,
+            "high": 78290.315813,
+            "low": 42156.323899
+          },
+          "prompt_len": 2000,
+          "report_only": true,
+          "tpot_us": {
+            "base": 2526.695,
+            "high": 3284.7035,
+            "low": 1768.6865
+          },
+          "tps": {
+            "base": 395.773926,
+            "high": 565.391323,
+            "low": 304.441482
+          },
+          "ttft_ms": {
+            "base": 60225.846551,
+            "high": 78292.842524,
+            "low": 42158.850578
+          },
+          "workload_hash": "2e6f0828e00bd2219cabf2f47e92cecc4351aed44d6f921d1a962d213086f0a8"
+        },
+        "resnet50": {
+          "assumptions": {
+            "path": "T17 CV dual-path gate",
+            "uncertainty": "cycles 0.7/1.3, throughput inverse"
+          },
+          "canonical_hash": "09f3fe1cb3f5bf1545df22e9118e811b128de013634199506d507b70c0cbbd2c",
+          "case": "resnet50",
+          "fps": {
+            "base": 54.048202,
+            "high": 77.211717,
+            "low": 41.57554
+          },
+          "inference_latency_us": {
+            "base": 18502.003,
+            "high": 24052.6039,
+            "low": 12951.4021
+          },
+          "model": "resnet50",
+          "path_a_total": 18502003,
+          "path_b_total": 18502003,
+          "report_only": true,
+          "total_cycles": 18502003,
+          "total_error_pct": 0.0,
+          "workload_hash": "9467cdea905262a3dc2607b7e09e7b8a302ad91ee5d8189f27c47c5f9be43a9d"
+        },
+        "yolov8n": {
+          "assumptions": {
+            "path": "T17 CV dual-path gate",
+            "uncertainty": "cycles 0.7/1.3, throughput inverse"
+          },
+          "canonical_hash": "caed8da686914640140fc12b380e5004a6b63ea4d03ed8dbf90c414198622f09",
+          "case": "yolov8n",
+          "fps": {
+            "base": 97.04677,
+            "high": 138.638242,
+            "low": 74.651361
+          },
+          "inference_latency_us": {
+            "base": 10304.31,
+            "high": 13395.603,
+            "low": 7213.017
+          },
+          "model": "yolov8n",
+          "path_a_total": 10304310,
+          "path_b_total": 10304310,
+          "report_only": true,
+          "total_cycles": 10304310,
+          "total_error_pct": 0.0,
+          "workload_hash": "aec40c8165a7b98ea699d2ef903892f788bfe80af8a4fa086f3c2989478f08d2"
+        }
+      },
+      "verdict": "pass"
+    },
+    "head": "a6284576c6ca13cd11c32da9f10cc1744cf00106",
+    "misleading_success_output": false,
+    "provenance": {
+      "argv": [
+        "/home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_perf_signoff.py",
+        "run",
+        "--reports",
+        "uncertainty-kpis",
+        "--cases",
+        "qwen-prefill-2000,qwen-model-family,mobilenetv3,resnet50,yolov8n"
+      ],
+      "dirty_paths": [
+        ".omo/evidence/task-0-signoff-v3-runner.txt",
+        ".omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md",
+        ".omo/notepads/func-model-performance-infra-calibration-closure/issues.md",
+        ".omo/notepads/func-model-performance-infra-calibration-closure/learnings.md",
+        ".omo/notepads/phase6-rtl-verification/learnings.md",
+        ".omo/plans/func-model-performance-infra-calibration-closure.md",
+        "build/evidence/fm-cv-chain.txt",
+        "build/evidence/w3-4-mobilenetv3-fm.txt",
+        "requirements.txt",
+        "scripts/run_func_model_perf_signoff.py",
+        "sim/engine/block_engine.py",
+        "sim/engine/fsa_engine.py",
+        "sim/engine/gmma_engine.py",
+        "sim/engine/is_systolic_engine.py",
+        "sim/engine/os_systolic_engine.py",
+        "sim/engine/systolic_engine.py",
+        "sim/engine/tensor_core_engine.py",
+        "sim/engine/timeline.py",
+        "sim/engine/wmma_engine.py",
+        "sim/func_model.py",
+        "sim/mmio_bridge.py",
+        "sim/model_specs.py",
+        "sim/models/dma.py",
+        "sim/models/dram.py",
+        "sim/models/kv_cache.py",
+        "sim/models/mxu.py",
+        "sim/models/noc.py",
+        "sim/models/sfu.py",
+        "sim/models/sw_overhead.py",
+        "sim/models/vector.py",
+        "sim/timing/benchmark.py",
+        "sim/timing/dashboard.py",
+        "sim/timing/generate_summary.py",
+        "sim/timing/metrics.py",
+        "sim/timing/timing_engine.py",
+        "sim/validate_e2e.py",
+        ".omo/evidence/task-1-perf-spec.txt",
+        ".omo/evidence/task-13-qwen-workload.txt",
+        ".omo/evidence/task-14-cv-workloads.txt",
+        ".omo/evidence/task-15-timeline-report.txt",
+        ".omo/evidence/task-2-perf-contract.txt",
+        ".omo/evidence/task-3-perf-matrix.txt",
+        ".omo/evidence/task-5-independent-oracle.txt",
+        ".omo/evidence/task-7-provider-registry.txt",
+        ".omo/notepads/func-model-performance-infra-calibration-closure/decisions.md",
+        ".omo/notepads/func-model-performance-infra-calibration-closure/problems.md",
+        "config/func_model_perf_matrix_v1.json",
+        "config/func_model_perf_oracle_v1.json",
+        "config/func_model_perf_spec_v1.json",
+        "config/func_model_workload_oracle_v1.json",
+        "config/oracle/qwen25_3b_layer_template_v1.json",
+        "config/oracle/qwen25_3b_workload_variants_v1.json",
+        "config/perf_providers/spec-block64-v1.json",
+        "config/tests/cv_bad_shape.json",
+        "config/tests/cv_dropped_layer.json",
+        "config/tests/cv_unknown_op.json",
+        "config/tests/perf_contract_bad_unit.json",
+        "config/tests/perf_contract_measured_cycles.json",
+        "config/tests/perf_contract_nan.json",
+        "config/tests/perf_matrix_duplicate.json",
+        "config/tests/perf_matrix_missing.json",
+        "config/tests/perf_matrix_missing_6p4_endpoint.json",
+        "config/tests/perf_matrix_skip.json",
+        "config/tests/perf_spec_bad_units.json",
+        "config/tests/perf_spec_rtl_basis.json",
+        "config/tests/qwen_7gemm.json",
+        "config/tests/qwen_old_dims.json",
+        "config/tests/qwen_rtl_source.json",
+        "config/workloads/mobilenetv3_perf_spec_v1.json",
+        "config/workloads/resnet50_perf_spec_v1.json",
+        "config/workloads/yolov8n_perf_spec_v1.json",
+        "docs/func-model-performance-spec.md",
+        "scripts/check_func_model_perf_spec.py",
+        "scripts/check_perf_workloads.py",
+        "scripts/verify_func_model_perf_spec.py",
+        "sim/tests/test_mmio_perf_events.py",
+        "sim/timing/perf_contract.py",
+        "sim/timing/perf_session.py",
+        "sim/timing/providers.py",
+        "sim/timing/tests/test_perf_contract.py",
+        "sim/timing/tests/test_perf_memory_spec.py",
+        "sim/timing/tests/test_perf_mxu_spec.py",
+        "sim/timing/tests/test_perf_noc_kv_spec.py",
+        "sim/timing/tests/test_perf_providers.py",
+        "sim/timing/tests/test_perf_sfu_vector_spec.py",
+        "sim/timing/tests/test_perf_signoff_runner.py",
+        "sim/timing/tests/test_perf_spec_config.py",
+        "sim/timing/tests/test_perf_sw_overhead_spec.py",
+        "sim/timing/tests/test_perf_timeline.py",
+        "sim/timing/tests/test_perf_workloads.py",
+        "sim/timing/tests/test_uncertainty_kpis.py",
+        "sim/timing/uncertainty_kpis.py",
+        "sim/timing/workloads.py"
+      ],
+      "head": "a6284576c6ca13cd11c32da9f10cc1744cf00106",
+      "head_short": "a6284576c6ca",
+      "host": "sz0002",
+      "oracle_sha256": "",
+      "provider_sha256": "",
+      "python_version": "3.10.12",
+      "report_sha256": "",
+      "seed": 42,
+      "spec_sha256": "",
+      "units": {
+        "bandwidth": "GB/s",
+        "cycles": "estimated_cycles",
+        "time": "ns"
+      },
+      "utc_end": "2026-08-11T07:46:34.213926+00:00",
+      "utc_start": "2026-08-11T07:46:34.003104+00:00",
+      "workload_sha256": ""
+    },
+    "source_fingerprint": "",
+    "stale_state": {
+      "stale_evidence": false,
+      "stale_head": false,
+      "stale_report": false,
+      "stale_source": false
+    },
+    "todo_id": "unknown",
+    "verdict": "pass"
+  },
+  "elapsed_s": 0.29,
+  "evidence_sha256": "94466bfc87d5fa1a0c22b01130571716cc3b74105c245860770b610199e2d5aa",
+  "exit_code": 0,
+  "head": "a6284576c6ca13cd11c32da9f10cc1744cf00106",
+  "stdout_preview": "{\n  \"command\": \"run\",\n  \"reports\": \"uncertainty-kpis\",\n  \"cases\": [\n    \"qwen-prefill-2000\",\n    \"qwen-model-family\",\n    \"mobilenetv3\",\n    \"resnet50\",\n    \"yolov8n\"\n  ],\n  \"reports_data\": {\n    \"qwen-prefill-2000\": {\n      \"case\": \"qwen-prefill-2000\",\n      \"model\": \"qwen2.5-3b\",\n      \"report_only\": true,\n      \"prompt_len\": 2000,\n      \"layers\": 36,\n      \"freq_mhz\": 1000,\n      \"prefill_cycles\": 60223319856,\n      \"first_decode_cycles\": 2526695,\n      \"ttft_ms\": {\n        \"low\": 42158.850578,\n        \"base\": 60225.846551,\n        \"high\": 78292.842524\n      },\n      \"tps\": {\n        \"low\": 304.441482,\n        \"base\": 395.773926,\n        \"high\": 565.391323\n      },\n      \"tpot_us\": {\n        \"low\": 1768.6865,\n        \"base\": 2526.695,\n        \"high\": 3284.7035\n      },\n      \"prefill_ms\": {\n        \"low\": 42156.323899,\n        \"base\": 60223.319856,\n        \"high\": 78290.315813\n      },\n      \"decode_per_token_us\": {\n        \"low\": 1768.6865,\n        \"base\": 2526.695,\n        \"high\": 3284.7035\n      },\n      \"workload_hash\": \"2e6f0828e00bd2219cabf2f47e92cecc4351aed44d6f921d1a962d213086f0a8\",\n      \"assumptions\": {\n        \"mxu_formula\": \"T16 decode/prefill cycle estimate\",\n        \"uncertainty\": \"cycles 0.7/1.3, throughput inverse, TTFT RSS independent\"\n      },\n      \"canonical_hash\": \"3d842d0a495caac964d60372146b5aa1235c745d21d814b701e3b8467482135f\"\n    },\n    \"qwen-model-family\": {\n      \"case\": \"qwen-model-family\",\n      \"report_only\": true,\n      \"models\": [\n        {\n          \"model\": \"qwen2.5-1.5b\",\n          \"hidden\": 1536,\n          \"layers\": 28,\n          \"weight_bytes\": 655097856,\n          \"total_decode_cycles\": 42751716,\n          \"tps\": {\n            \"low\": 17.99298,\n            \"base\": 23.390874,\n            \"high\": 33.415534\n          },\n          \"report_only\": true,\n          \"assumptions\": {\n            \"weight_precision\": \"INT4\",\n            \"weight_bytes_per_param\": 0.5,\n            \"context_len\": 1,\n            \"batch_m\": 1,\n            \"mxu",
+  "utc_end": "2026-08-11T07:46:34.213926+00:00",
+  "utc_start": "2026-08-11T07:46:33.923781+00:00",
+  "verdict": "pass"
+}

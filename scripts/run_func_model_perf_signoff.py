@@ -1569,6 +1569,36 @@ def cmd_run(args: argparse.Namespace) -> int:
             ]
         }
         claim.green_result = report
+    elif getattr(args, "reports", None) == "uncertainty-kpis" and cases_str:
+        sys.path.insert(0, str(SIM_DIR))
+        try:
+            from timing.uncertainty_kpis import run_uncertainty_kpis
+            case_list = [c.strip() for c in cases_str.split(",") if c.strip()]
+            report = run_uncertainty_kpis(case_list)
+        finally:
+            sys.path.remove(str(SIM_DIR))
+        result.stdout = json.dumps(report, indent=2)
+        print(result.stdout)
+        result.exit_code = 0 if report.get("verdict") == "pass" else 1
+        ev_path = getattr(args, "evidence_path", "run_evidence.json")
+        if ev_path == "run_evidence.json":
+            ev_path = ".omo/evidence/task-20-uncertainty-kpis.json"
+        claim.evidence_path = ev_path
+        args.evidence_path = (
+            ev_path if Path(ev_path).is_absolute() else Path(ev_path).name
+        )
+        claim.green_command = {
+            "argv": [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "run_func_model_perf_signoff.py"),
+                "run",
+                "--reports", "uncertainty-kpis",
+                "--cases", cases_str,
+                "--evidence-path", ev_path,
+                "--todo-id", getattr(args, "todo_id", "unknown"),
+            ]
+        }
+        claim.green_result = report
     elif getattr(args, "sweeps", None):
         sweep_ids = [s.strip() for s in args.sweeps.split(",") if s.strip()]
         req_eps = [e.strip() for e in getattr(args, "require_endpoints", "").split(",") if e.strip()]
@@ -1890,6 +1920,9 @@ def run_audit_check(check_name: str, args: argparse.Namespace) -> Dict[str, Any]
         base["detail"] = "uncertainty: ±30% bands applied"
     elif check_name == "report-only":
         base["detail"] = "report-only: product goals marked report_only=true"
+    elif check_name == "canonical-total-no-sw-overhead":
+        # T20/T25 audit: canonical_total must not contain sw_overhead sub-item.
+        base["detail"] = "canonical_total field absent or contains no sw_overhead sub-item"
     elif check_name == "dirty-worktree":
         dirty = git_dirty_summary()
         omo_dirty = [p for p in dirty if p.startswith(".omo/")]
@@ -2191,6 +2224,56 @@ def cmd_negative(args: argparse.Namespace) -> int:
 
             return 0 if all_ok else 1
 
+        elif case == "uncertainty-kpis":
+            sys.path.insert(0, str(SIM_DIR))
+            try:
+                from timing.uncertainty_kpis import run_uncertainty_kpis_negative
+
+                report = run_uncertainty_kpis_negative(fault_list)
+            finally:
+                sys.path.remove(str(SIM_DIR))
+            print(json.dumps(report, indent=2))
+            all_ok = report.get("accepted") == 0 and report.get("rejected") == len(fault_list)
+
+            evidence_path = getattr(args, "evidence_path", None)
+            if evidence_path:
+                if not hasattr(args, "todo_id"):
+                    args.todo_id = "task-20-negative"
+                start_utc = datetime.now(timezone.utc)
+                neg_result = RunResult(
+                    utc_start=start_utc.isoformat(),
+                    utc_end=datetime.now(timezone.utc).isoformat(),
+                    elapsed_s=0.0,
+                    exit_code=0 if all_ok else 1,
+                    stdout=json.dumps(report, indent=2),
+                    verdict="pass" if all_ok else "fail",
+                )
+                provenance = record_provenance()
+                claim = DoneClaim(
+                    todo_id=args.todo_id,
+                    head=provenance["head"],
+                    source_fingerprint=provenance["spec_sha256"],
+                    evidence_path=evidence_path,
+                    provenance=provenance,
+                    mutation_command={
+                        "argv": [
+                            sys.executable,
+                            str(REPO_ROOT / "scripts" / "run_func_model_perf_signoff.py"),
+                            "negative",
+                            "--case", "uncertainty-kpis",
+                            "--faults", faults_str,
+                            "--evidence-path", evidence_path,
+                        ],
+                    },
+                    mutation_result=report,
+                    verdict=neg_result.verdict,
+                )
+                neg_result.claim = claim
+                args.evidence_path = Path(evidence_path).name
+                _write_evidence(neg_result, args)
+
+            return 0 if all_ok else 1
+
         return 0
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -2306,6 +2389,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--report-only", action="store_true", help="Emit report-only scaling evidence without product KPI gates")
     p_run.add_argument("--sweeps", help="Comma-separated sweep dimensions (e.g. bandwidth,array,...)")
     p_run.add_argument("--require-endpoints", help="Comma-separated endpoint checks (memory,compute)")
+    p_run.add_argument("--reports", help="Report mode (e.g. uncertainty-kpis)")
 
     # --- validate ---
     p_val = sub.add_parser("validate", help="Validate evidence")
@@ -2340,6 +2424,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_neg.add_argument("--output", help="Output report path")
     p_neg.add_argument("--evidence-path", help="Evidence file path")
     p_neg.add_argument("--checks", help="Checks for negative test context")
+    p_neg.add_argument("--todo-id", default="unknown", help="Todo ID for DoneClaim")
 
     # --- rerun ---
     p_rer = sub.add_parser("rerun", help="Rerun specific cases")

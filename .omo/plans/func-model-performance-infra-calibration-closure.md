@@ -275,7 +275,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/run_func_model_perf_signoff.py run --cases qwen-scaling-1p5b-3b-7b --report-only` exits 0 with ordered weights/cycles and normalized delta <=20%. `python3 scripts/run_func_model_perf_signoff.py negative --case model-scaling --faults swapped-model-params,kpi-target-gate` exits 0 only with `rejected=2,accepted=0`. Evidence `.omo/evidence/task-19-model-scaling.json`.
   Commit: Y | test(perf-spec): verify cross-model scaling | Files workload/report tests
 
-- [ ] 20. Produce uncertainty-aware report-only KPIs
+- [x] 20. Produce uncertainty-aware report-only KPIs
   What to do: Update metrics/dashboard/summary/benchmark for canonical total and frozen uncertainty transforms. Generate Qwen prefill-2000, model family and registered CV KPI reports. Separate volatile run metadata from canonical content；remove constant-prefill/stale notes.
   Parallelization: Y | Wave 4 | Blocks T22-T25 | Blocked by T1,T4,T7,T12,T16-T19
   References: `sim/timing/metrics.py:10-200` metrics；`sim/timing/dashboard.py:120-232` zero/timestamp behavior；`sim/timing/generate_summary.py:109-112` false constant note；product target docs。

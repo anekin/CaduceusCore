@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 import json
 import math
 from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from timing.metrics import MetricsCollector
+from timing.metrics import (
+    MetricsCollector,
+    apply_cycle_band,
+    apply_sum_of_stages_band,
+    apply_throughput_band,
+)
 from timing.types import RequestMetrics
 
 
@@ -56,6 +62,17 @@ def _round_dict_values(d: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+_VOLATILE_KEYS = {"timestamp", "utc", "utc_start", "utc_end", "run_id", "date",
+                  "canonical_hash", "evidence_sha256"}
+
+
+def _canonical_hash(data: dict[str, Any]) -> str:
+    """Compute a deterministic SHA-256 hash excluding volatile metadata."""
+    filtered = {k: v for k, v in data.items() if k not in _VOLATILE_KEYS}
+    canonical = json.dumps(filtered, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def _itl_histogram_ascii(itl_list: list[float], bins: int = 10) -> str:
     """Build an ASCII histogram string for ITL values."""
     if not itl_list:
@@ -100,6 +117,8 @@ class Dashboard:
         is_cv: bool = False,
         engine_config: dict[str, Any] | None = None,
         weight_streaming_overlap_ratio: float | None = None,
+        wall_clock_critical_path: int = 0,
+        uncertainty: bool = False,
     ) -> dict[str, Any]:
         """Generate a complete JSON metrics dict.
 
@@ -112,12 +131,22 @@ class Dashboard:
             engine_config: Optional engine metadata dict.
             weight_streaming_overlap_ratio: Pre-computed tile-level double-buffering
                 overlap ratio, or None to derive from module_breakdown (fallback).
+            wall_clock_critical_path: T15 canonical critical-path cycles.
+                When > 0, used for total_cycles and all percentage normalizations.
+                When 0, falls back to sum(module_breakdown.values()) (legacy).
+            uncertainty: If True, emit low/base/high bands for latency/throughput
+                KPIs instead of scalar base values.
 
         Returns:
             Deterministically ordered dict with all required keys and 2-dp float
-            precision.
+            precision.  A ``canonical_hash`` field is added that excludes volatile
+            metadata such as ``timestamp``.
         """
-        total_cycles = sum(module_breakdown.values()) if module_breakdown else 0
+        total_cycles = (
+            wall_clock_critical_path
+            if wall_clock_critical_path > 0
+            else (sum(module_breakdown.values()) if module_breakdown else 0)
+        )
         dma_weight = module_breakdown.get("dma_weight", 0) if module_breakdown else 0
         dma_effective = module_breakdown.get("dma_effective", 0) if module_breakdown else 0
 
@@ -210,26 +239,44 @@ class Dashboard:
         }
 
         if is_cv:
-            output["fps"] = round(
-                freq_mhz * 1e6 / total_cycles if total_cycles else 0.0, 2
-            )
-            output["inference_latency_us"] = round(
-                total_cycles / freq_mhz if freq_mhz else 0.0, 2
-            )
+            fps_base = freq_mhz * 1e6 / total_cycles if total_cycles else 0.0
+            latency_base = total_cycles / freq_mhz if freq_mhz else 0.0
+            if uncertainty:
+                output["fps"] = _round_dict_values(apply_throughput_band(fps_base))
+                output["inference_latency_us"] = _round_dict_values(apply_cycle_band(latency_base))
+            else:
+                output["fps"] = round(fps_base, 2)
+                output["inference_latency_us"] = round(latency_base, 2)
         else:
-            decode_per_token_us = round(
+            decode_per_token_us_base = (
                 mean(request_metrics.decode_cycles_per_token) / freq_mhz
-                if request_metrics.decode_cycles_per_token and freq_mhz else 0.0, 2
+                if request_metrics.decode_cycles_per_token and freq_mhz else 0.0
             )
-            output["tps"] = round(request_metrics.tps, 2)
-            output["ttft_ms"] = round(request_metrics.ttft_us / 1000.0, 2)
-            output["tpot_us"] = round(
-                request_metrics.tpot_us if request_metrics.tpot_us is not None else 0.0, 2
+            tps_base = request_metrics.tps
+            ttft_ms_base = request_metrics.ttft_us / 1000.0
+            tpot_us_base = request_metrics.tpot_us if request_metrics.tpot_us is not None else 0.0
+            prefill_ms_base = (
+                request_metrics.prefill_cycles / (freq_mhz * 1e3) if freq_mhz else 0.0
             )
-            output["prefill_ms"] = round(
-                request_metrics.prefill_cycles / (freq_mhz * 1e3) if freq_mhz else 0.0, 2
-            )
-            output["decode_per_token_us"] = decode_per_token_us
+            if uncertainty:
+                output["tps"] = _round_dict_values(apply_throughput_band(tps_base))
+                output["ttft_ms"] = _round_dict_values(
+                    apply_sum_of_stages_band(
+                        [prefill_ms_base, decode_per_token_us_base / 1000.0],
+                        correlation="independent",
+                    )
+                )
+                output["tpot_us"] = _round_dict_values(apply_cycle_band(tpot_us_base))
+                output["prefill_ms"] = _round_dict_values(apply_cycle_band(prefill_ms_base))
+                output["decode_per_token_us"] = _round_dict_values(apply_cycle_band(decode_per_token_us_base))
+            else:
+                output["tps"] = round(tps_base, 2)
+                output["ttft_ms"] = round(ttft_ms_base, 2)
+                output["tpot_us"] = round(tpot_us_base, 2)
+                output["prefill_ms"] = round(prefill_ms_base, 2)
+                output["decode_per_token_us"] = round(decode_per_token_us_base, 2)
+
+        output["canonical_hash"] = _canonical_hash(output)
 
         # --- Deterministic sorting ---
         return dict(sorted(output.items()))
@@ -270,7 +317,11 @@ class Dashboard:
             if key in json_data:
                 val = json_data[key]
                 label = key.replace("_", " ").title()
-                lines.append(f"| {label} | {val} |")
+                if isinstance(val, dict) and {"low", "base", "high"} <= set(val.keys()):
+                    cell = f"{val['low']:.2f} / {val['base']:.2f} / {val['high']:.2f}"
+                else:
+                    cell = str(val)
+                lines.append(f"| {label} | {cell} |")
 
         lines.append("")
 
@@ -355,6 +406,8 @@ class Dashboard:
         is_cv: bool = False,
         engine_config: dict[str, Any] | None = None,
         weight_streaming_overlap_ratio: float | None = None,
+        wall_clock_critical_path: int = 0,
+        uncertainty: bool = False,
     ) -> tuple[str, str]:
         """Save JSON and Markdown reports under *output_dir*.
 
@@ -372,6 +425,8 @@ class Dashboard:
             is_cv=is_cv,
             engine_config=engine_config,
             weight_streaming_overlap_ratio=weight_streaming_overlap_ratio,
+            wall_clock_critical_path=wall_clock_critical_path,
+            uncertainty=uncertainty,
         )
         md_text = self.generate_markdown(json_data)
 

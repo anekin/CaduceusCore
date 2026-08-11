@@ -1,5 +1,25 @@
 
 
+## T20: Uncertainty-Aware Report-Only KPIs (2026-08-11)
+
+### Design decisions
+- Added frozen uncertainty helpers in `sim/timing/metrics.py`: `apply_cycle_band` (0.7/1.3), `apply_throughput_band` (inverse), and `apply_sum_of_stages_band` (RSS independent / linear correlated).
+- `sim/timing/dashboard.py` emits low/base/high bands for LLM KPIs (`ttft_ms`, `tps`, `tpot_us`, `prefill_ms`, `decode_per_token_us`) and CV KPIs (`fps`, `inference_latency_us`) when `uncertainty=True`; scalar output remains the default for backward compatibility.
+- Added `canonical_hash` to dashboard JSON and uncertainty reports, computed from content excluding volatile metadata (`timestamp`, `utc`, `run_id`, etc.).
+- `sim/timing/generate_summary.py` preserves low/base/high bands in summary tables and removes stale constant-prefill notes.
+- `sim/timing/benchmark.py` gained `--uncertainty` flag to write banded reports.
+- New `sim/timing/uncertainty_kpis.py` builds report-only KPI reports for `qwen-prefill-2000`, `qwen-model-family`, and the three frozen CV workloads without modifying T1-T19 canonical manifests.
+- Runner handlers added: `run --reports uncertainty-kpis --cases ...` and `negative --case uncertainty-kpis --faults timestamp-in-hash,direct-throughput-band,empty-report,kpi-gating`.
+- TTFT uses RSS independent propagation across prefill + first-decode stages; throughput uses inverse bands.
+
+### Verification results
+- GREEN: `python3 scripts/run_func_model_perf_signoff.py run --reports uncertainty-kpis --cases qwen-prefill-2000,qwen-model-family,mobilenetv3,resnet50,yolov8n` exits 0 with `verdict=pass`, `report_only=true`, and all required low/base/high fields.
+- MUTATIONS: `python3 scripts/run_func_model_perf_signoff.py negative --case uncertainty-kpis --faults timestamp-in-hash,direct-throughput-band,empty-report,kpi-gating` exits 0 with `rejected=4,accepted=0`.
+- Pytest: 18/18 tests pass in `test_uncertainty_kpis.py` (band formulas, RSS vs linear 3-stage, dashboard uncertainty, report builders, negative faults, CLI GREEN/RED, evidence JSON).
+- Full timing regression: 737/737 pass (no regressions).
+- Evidence recorded at `.omo/evidence/task-20-uncertainty-kpis.json` (green) and `.omo/evidence/task-20-uncertainty-kpis-negative.json` (negative).
+
+
 ## T19: Cross-Model Scaling Without Product Signoff (2026-08-11)
 
 ### Design decisions
