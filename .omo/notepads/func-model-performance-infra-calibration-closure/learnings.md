@@ -533,3 +533,26 @@ Fields: todo_id, red_command/result, green_command/result, mutation_command/resu
 - Qwen regression: 17/17 in `test_qwen_spec_gates.py` and 33/33 in `test_perf_oracle_independence.py` still pass.
 - Evidence recorded at `.omo/evidence/task-17-cv-spec-gates.json`.
 
+
+## T22: Versioned Performance-Spec Regression Baseline and Change Policy (2026-08-11)
+
+### Design decisions
+- Added `sim/timing/perf_baseline.py` to compute content hashes over canonical inputs (`func_model_perf_spec_v1.json`, `func_model_perf_matrix_v1.json`, `func_model_perf_oracle_v1.json`, `func_model_workload_oracle_v1.json`, `spec-block64-v1.json`, and the four workload manifests) and capture a canonical result set.
+- Canonical results include: all-domain provider-vs-oracle formula gates, Qwen/CV dual-path totals, sweep monotonicity and endpoint checks, cross-model scaling report, and uncertainty-aware KPI reports.
+- Baseline JSON carries `baseline_id`, `created`, `spec_hash`, `matrix_hash`, `oracle_hash`, `workload_oracle_hash`, `provider_config_hash`, `workload_manifest_hashes`, `canonical_results`, `canonical_content_hash`, and an explicit `policy` documenting the change rules.
+- `validate_baseline` recomputes input hashes and canonical results; structural/formula/workload/invariant mismatches are hard failures, while KPI-only deltas are collected as `report_diffs` and do not fail validation.
+- `--require-fresh` reuses the T4 freshness predicate: baseline mtime must be >= max(spec, matrix, oracle, workload oracle, provider config, workload manifest mtimes).
+- Validate mode is read-only; the baseline file is never written.
+- `scripts/run_func_model_perf_signoff.py` baseline subcommand supports `create --from-latest-fresh --output <path>` and `validate --baseline <path> --require-fresh`; legacy protected-baseline mode remains available when `--from-plan` is supplied.
+
+### Verification results
+- GREEN: `python3 scripts/run_func_model_perf_signoff.py baseline create --from-latest-fresh --output config/baselines/func_model_perf_spec_v1.json` exits 0.
+- GREEN: `python3 scripts/run_func_model_perf_signoff.py baseline validate --baseline config/baselines/func_model_perf_spec_v1.json --require-fresh` exits 0 with `input_hash_match=true`, `canonical_content_hash_match=true`, no hard failures, and freshness OK.
+- MUTATIONS: `python3 scripts/run_func_model_perf_signoff.py negative --case baseline --faults accept-current,stale-spec,hidden-hard-gate` exits 0 with `rejected=3,accepted=0`.
+  - `accept-current`: validate mode leaves baseline file unchanged.
+  - `stale-spec`: mutated spec triggers `spec_hash_mismatch`.
+  - `hidden-hard-gate`: mutated provider oracle fails provider formula gates while uncertainty KPIs remain stable.
+- Pytest: 7/7 tests pass in `sim/timing/tests/test_perf_baseline.py`.
+- Full timing regression: 754/754 pass (no regressions).
+- Evidence recorded at `.omo/evidence/task-22-regression-baseline.json` and `.omo/evidence/task-22-regression-baseline-negative.json`.
+

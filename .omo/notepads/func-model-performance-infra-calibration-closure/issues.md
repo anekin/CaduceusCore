@@ -1,4 +1,16 @@
 
+## T22 Issues (2026-08-11)
+
+### Open
+None.
+
+### Resolved / Design Notes
+1. **Provider formula gates require `--domain` flag** — The verifier's `--self-check` mode validates oracle structure and import policy but does not compare provider estimates to oracle entries. Baseline capture therefore invokes `--domain mxu,sfu,vector,dma,dram,noc,kv,sw_overhead --self-check` so all 104 rows are exercised.
+2. **Baseline validate must be read-only** — `validate_baseline` loads the baseline and computes current hashes/results in memory; it never opens the file for writing. The `accept-current` negative fault verifies mtime/size/hash unchanged before and after validation.
+3. **Evidence file merging for create + validate** — Running `baseline validate` after `baseline create` with the same `--evidence-path` merges the existing `green_command`/`green_result` into the DoneClaim so a single evidence file records both the create and validate steps.
+4. **Hidden-hard-gate must mutate data values, not metadata** — Mutating a provider oracle `expected_cycles` data value triggers provider gate failure while uncertainty KPIs (computed from workload cycles, not the oracle) remain stable. Mutating only metadata fields (e.g., description) would not reproduce the required hard gate regression.
+
+
 ## T21 Issues (2026-08-11)
 
 ### Open

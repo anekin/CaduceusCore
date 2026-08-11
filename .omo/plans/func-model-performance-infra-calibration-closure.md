@@ -291,7 +291,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/run_func_model_perf_signoff.py negative --matrix all --self-test-disable-each-validator` GREEN exits 0 only with `declared_faults=detected_faults,accepted=0` and every disabled validator causing its paired test to fail. Evidence `.omo/evidence/task-21-adversarial.json`.
   Commit: Y | test(signoff): add performance spec adversarial matrix | Files fixtures/tests/minimal validators
 
-- [ ] 22. Establish performance-spec regression baseline and change policy
+- [x] 22. Establish performance-spec regression baseline and change policy
   What to do: Create versioned canonical baseline from fresh current results, keyed by spec/workload/provider hashes. Structural/formula/workload/invariant gates are absolute；KPI drift only raises report diff. Baseline updates require changed spec version/rationale, never “accept current output.”
   Parallelization: Y | Wave 5 | Blocks T23-T25 | Blocked by T4,T16-T20
   References: `results/timing/*` stale current outputs；existing stale-fingerprint runner patterns。

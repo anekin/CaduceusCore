@@ -1,0 +1,2809 @@
+{
+  "baseline_id": "func_model_perf_spec_v1",
+  "canonical_content_hash": "f6c77525f08be41c8abd8dfe43ac0012e9284fc8b087ef72cfc6f97e472a6ce7",
+  "canonical_results": {
+    "cv_paths": {
+      "failed": 0,
+      "passed": 3,
+      "verdict": "pass",
+      "workloads": {
+        "mobilenetv3": {
+          "passed": true,
+          "path_a_total": 1815776,
+          "path_b_total": 1815776,
+          "total_error_pct": 0.0,
+          "workload_hash": "9091ae2a86bbd5b9d1c3c3566cf98e1c82ef61e47ebd7c35b055c17d02afd4f7"
+        },
+        "resnet50": {
+          "passed": true,
+          "path_a_total": 18502003,
+          "path_b_total": 18502003,
+          "total_error_pct": 0.0,
+          "workload_hash": "9467cdea905262a3dc2607b7e09e7b8a302ad91ee5d8189f27c47c5f9be43a9d"
+        },
+        "yolov8n": {
+          "passed": true,
+          "path_a_total": 10304310,
+          "path_b_total": 10304310,
+          "total_error_pct": 0.0,
+          "workload_hash": "aec40c8165a7b98ea699d2ef903892f788bfe80af8a4fa086f3c2989478f08d2"
+        }
+      }
+    },
+    "provider_gates": {
+      "_exit_code": 0,
+      "domain_validation": {
+        "domains": {
+          "dma": {
+            "failed": 0,
+            "passed": 10,
+            "results": [
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 1,
+                  "bw_bytes_per_cycle": 51.2,
+                  "bytes": 1,
+                  "channels": 1,
+                  "descriptor_overhead": 5,
+                  "estimated_cycles": 6,
+                  "sub_burst_floor": true,
+                  "transfer_cycles": 0.02
+                },
+                "error": 0,
+                "inputs": {
+                  "bytes": 1,
+                  "channels": 1
+                },
+                "oracle_cycles": 6,
+                "parameter_id": "dma_1B_1ch",
+                "provider_cycles": 6,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 1,
+                  "bw_bytes_per_cycle": 51.2,
+                  "bytes": 1,
+                  "channels": 4,
+                  "descriptor_overhead": 5,
+                  "estimated_cycles": 6,
+                  "sub_burst_floor": true,
+                  "transfer_cycles": 0.02
+                },
+                "error": 0,
+                "inputs": {
+                  "bytes": 1,
+                  "channels": 4
+                },
+                "oracle_cycles": 6,
+                "parameter_id": "dma_1B_4ch",
+                "provider_cycles": 6,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 16,
+                  "bw_bytes_per_cycle": 51.2,
+                  "bytes": 4096,
+                  "channels": 1,
+                  "descriptor_overhead": 5,
+                  "estimated_cycles": 101,
+                  "sub_burst_floor": false,
+                  "transfer_cycles": 80.0
+                },
+                "error": 1.0,
+                "inputs": {
+                  "bytes": 4096,
+                  "channels": 1
+                },
+                "oracle_cycles": 102,
+                "parameter_id": "dma_4096B_1ch",
+                "provider_cycles": 101,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 16,
+                  "bw_bytes_per_cycle": 51.2,
+                  "bytes": 4096,
+                  "channels": 4,
+                  "descriptor_overhead": 5,
+                  "estimated_cycles": 101,
+                  "sub_burst_floor": false,
+                  "transfer_cycles": 80.0
+                },
+                "error": 1.0,
+                "inputs": {
+                  "bytes": 4096,
+                  "channels": 4
+                },
+                "oracle_cycles": 102,
+                "parameter_id": "dma_4096B_4ch",
+                "provider_cycles": 101,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 256,
+                  "bw_bytes_per_cycle": 51.2,
+                  "bytes": 65536,
+                  "channels": 1,
+                  "descriptor_overhead": 5,
+                  "estimated_cycles": 1541,
+                  "sub_burst_floor": false,
+                  "transfer_cycles": 1280.0
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 65536,
+                  "channels": 1
+                },
+                "oracle_cycles": 1541,
+                "parameter_id": "dma_65536B_1ch",
+                "provider_cycles": 1541,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 256,
+                  "bw_bytes_per_cycle": 51.2,
+                  "bytes": 65536,
+                  "channels": 4,
+                  "descriptor_overhead": 5,
+                  "estimated_cycles": 1541,
+                  "sub_burst_floor": false,
+                  "transfer_cycles": 1280.0
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 65536,
+                  "channels": 4
+                },
+                "oracle_cycles": 1541,
+                "parameter_id": "dma_65536B_4ch",
+                "provider_cycles": 1541,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 4096,
+                  "bw_bytes_per_cycle": 51.2,
+                  "bytes": 1048576,
+                  "channels": 1,
+                  "descriptor_overhead": 5,
+                  "estimated_cycles": 24581,
+                  "sub_burst_floor": false,
+                  "transfer_cycles": 20480.0
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 1048576,
+                  "channels": 1
+                },
+                "oracle_cycles": 24581,
+                "parameter_id": "dma_1048576B_1ch",
+                "provider_cycles": 24581,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 4096,
+                  "bw_bytes_per_cycle": 51.2,
+                  "bytes": 1048576,
+                  "channels": 4,
+                  "descriptor_overhead": 5,
+                  "estimated_cycles": 24581,
+                  "sub_burst_floor": false,
+                  "transfer_cycles": 20480.0
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 1048576,
+                  "channels": 4
+                },
+                "oracle_cycles": 24581,
+                "parameter_id": "dma_1048576B_4ch",
+                "provider_cycles": 24581,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 1,
+                  "bw_bytes_per_cycle": 51.2,
+                  "bytes": 64,
+                  "channels": 1,
+                  "descriptor_overhead": 5,
+                  "estimated_cycles": 8,
+                  "sub_burst_floor": false,
+                  "transfer_cycles": 1.25
+                },
+                "error": 0,
+                "inputs": {
+                  "bytes": 64,
+                  "channels": 1
+                },
+                "oracle_cycles": 8,
+                "parameter_id": "dma_64B_1ch",
+                "provider_cycles": 8,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 1,
+                  "bw_bytes_per_cycle": 51.2,
+                  "bytes": 64,
+                  "channels": 4,
+                  "descriptor_overhead": 5,
+                  "estimated_cycles": 8,
+                  "sub_burst_floor": false,
+                  "transfer_cycles": 1.25
+                },
+                "error": 0,
+                "inputs": {
+                  "bytes": 64,
+                  "channels": 4
+                },
+                "oracle_cycles": 8,
+                "parameter_id": "dma_64B_4ch",
+                "provider_cycles": 8,
+                "verdict": "pass"
+              }
+            ],
+            "rows": 10,
+            "verdict": "pass"
+          },
+          "dram": {
+            "failed": 0,
+            "passed": 10,
+            "results": [
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 1,
+                  "bytes": 1,
+                  "direction": "read",
+                  "estimated_cycles": 36,
+                  "is_write": false,
+                  "tBURST": 4,
+                  "tCAS": 14,
+                  "tRCD": 18,
+                  "tWR": 16
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 1,
+                  "direction": "read"
+                },
+                "oracle_cycles": 36,
+                "parameter_id": "dram_1B_read",
+                "provider_cycles": 36,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 1,
+                  "bytes": 1,
+                  "direction": "write",
+                  "estimated_cycles": 52,
+                  "is_write": true,
+                  "tBURST": 4,
+                  "tCAS": 14,
+                  "tRCD": 18,
+                  "tWR": 16
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 1,
+                  "direction": "write"
+                },
+                "oracle_cycles": 52,
+                "parameter_id": "dram_1B_write",
+                "provider_cycles": 52,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 1,
+                  "bytes": 64,
+                  "direction": "read",
+                  "estimated_cycles": 36,
+                  "is_write": false,
+                  "tBURST": 4,
+                  "tCAS": 14,
+                  "tRCD": 18,
+                  "tWR": 16
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 64,
+                  "direction": "read"
+                },
+                "oracle_cycles": 36,
+                "parameter_id": "dram_64B_read",
+                "provider_cycles": 36,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 1,
+                  "bytes": 64,
+                  "direction": "write",
+                  "estimated_cycles": 52,
+                  "is_write": true,
+                  "tBURST": 4,
+                  "tCAS": 14,
+                  "tRCD": 18,
+                  "tWR": 16
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 64,
+                  "direction": "write"
+                },
+                "oracle_cycles": 52,
+                "parameter_id": "dram_64B_write",
+                "provider_cycles": 52,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 16,
+                  "bytes": 4096,
+                  "direction": "read",
+                  "estimated_cycles": 96,
+                  "is_write": false,
+                  "tBURST": 4,
+                  "tCAS": 14,
+                  "tRCD": 18,
+                  "tWR": 16
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 4096,
+                  "direction": "read"
+                },
+                "oracle_cycles": 96,
+                "parameter_id": "dram_4096B_read",
+                "provider_cycles": 96,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 16,
+                  "bytes": 4096,
+                  "direction": "write",
+                  "estimated_cycles": 112,
+                  "is_write": true,
+                  "tBURST": 4,
+                  "tCAS": 14,
+                  "tRCD": 18,
+                  "tWR": 16
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 4096,
+                  "direction": "write"
+                },
+                "oracle_cycles": 112,
+                "parameter_id": "dram_4096B_write",
+                "provider_cycles": 112,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 256,
+                  "bytes": 65536,
+                  "direction": "read",
+                  "estimated_cycles": 1056,
+                  "is_write": false,
+                  "tBURST": 4,
+                  "tCAS": 14,
+                  "tRCD": 18,
+                  "tWR": 16
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 65536,
+                  "direction": "read"
+                },
+                "oracle_cycles": 1056,
+                "parameter_id": "dram_65536B_read",
+                "provider_cycles": 1056,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 256,
+                  "bytes": 65536,
+                  "direction": "write",
+                  "estimated_cycles": 1072,
+                  "is_write": true,
+                  "tBURST": 4,
+                  "tCAS": 14,
+                  "tRCD": 18,
+                  "tWR": 16
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 65536,
+                  "direction": "write"
+                },
+                "oracle_cycles": 1072,
+                "parameter_id": "dram_65536B_write",
+                "provider_cycles": 1072,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 4096,
+                  "bytes": 1048576,
+                  "direction": "read",
+                  "estimated_cycles": 16416,
+                  "is_write": false,
+                  "tBURST": 4,
+                  "tCAS": 14,
+                  "tRCD": 18,
+                  "tWR": 16
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 1048576,
+                  "direction": "read"
+                },
+                "oracle_cycles": 16416,
+                "parameter_id": "dram_1048576B_read",
+                "provider_cycles": 16416,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "burst_size": 256,
+                  "bursts": 4096,
+                  "bytes": 1048576,
+                  "direction": "write",
+                  "estimated_cycles": 16432,
+                  "is_write": true,
+                  "tBURST": 4,
+                  "tCAS": 14,
+                  "tRCD": 18,
+                  "tWR": 16
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 1048576,
+                  "direction": "write"
+                },
+                "oracle_cycles": 16432,
+                "parameter_id": "dram_1048576B_write",
+                "provider_cycles": 16432,
+                "verdict": "pass"
+              }
+            ],
+            "rows": 10,
+            "verdict": "pass"
+          },
+          "kv": {
+            "failed": 0,
+            "passed": 8,
+            "results": [
+              {
+                "decomposition": {
+                  "dram_misses": 0,
+                  "estimated_cycles": 0,
+                  "expected_noop": true,
+                  "num_kv_entries": 0,
+                  "sram_hits": 0,
+                  "token_pos": 0
+                },
+                "error": 0,
+                "inputs": {
+                  "token_pos": 0
+                },
+                "oracle_cycles": 0,
+                "parameter_id": "kv_token_pos_0",
+                "provider_cycles": 0,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "dram_access_cycles": 80,
+                  "dram_misses": 0,
+                  "estimated_cycles": 2,
+                  "num_kv_entries": 1,
+                  "sram_access_cycles": 2,
+                  "sram_hits": 1,
+                  "sram_window": 512,
+                  "token_pos": 1
+                },
+                "error": 0,
+                "inputs": {
+                  "token_pos": 1
+                },
+                "oracle_cycles": 2,
+                "parameter_id": "kv_token_pos_1",
+                "provider_cycles": 2,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "dram_access_cycles": 80,
+                  "dram_misses": 0,
+                  "estimated_cycles": 254,
+                  "num_kv_entries": 127,
+                  "sram_access_cycles": 2,
+                  "sram_hits": 127,
+                  "sram_window": 512,
+                  "token_pos": 127
+                },
+                "error": 0.0,
+                "inputs": {
+                  "token_pos": 127
+                },
+                "oracle_cycles": 254,
+                "parameter_id": "kv_token_pos_127",
+                "provider_cycles": 254,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "dram_access_cycles": 80,
+                  "dram_misses": 0,
+                  "estimated_cycles": 1022,
+                  "num_kv_entries": 511,
+                  "sram_access_cycles": 2,
+                  "sram_hits": 511,
+                  "sram_window": 512,
+                  "token_pos": 511
+                },
+                "error": 7.3,
+                "inputs": {
+                  "token_pos": 511
+                },
+                "oracle_cycles": 1102,
+                "parameter_id": "kv_token_pos_511",
+                "provider_cycles": 1022,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "dram_access_cycles": 80,
+                  "dram_misses": 1535,
+                  "estimated_cycles": 123824,
+                  "num_kv_entries": 2047,
+                  "sram_access_cycles": 2,
+                  "sram_hits": 512,
+                  "sram_window": 512,
+                  "token_pos": 2047
+                },
+                "error": 0.0,
+                "inputs": {
+                  "token_pos": 2047
+                },
+                "oracle_cycles": 123824,
+                "parameter_id": "kv_token_pos_2047",
+                "provider_cycles": 123824,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "bw_bytes_per_cycle": 51.2,
+                  "estimated_cycles": 384,
+                  "exposed_ratio": 0.3,
+                  "operation": "layer_switch",
+                  "raw_cycles": 1280.0,
+                  "sram_bytes": 65536,
+                  "sram_kb": 64
+                },
+                "error": 6.7,
+                "inputs": {
+                  "operation": "layer_switch",
+                  "sram_kb": 64
+                },
+                "oracle_cycles": 360,
+                "parameter_id": "kv_layer_switch_64KB",
+                "provider_cycles": 384,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "bw_bytes_per_cycle": 51.2,
+                  "estimated_cycles": 1536,
+                  "exposed_ratio": 0.3,
+                  "operation": "layer_switch",
+                  "raw_cycles": 5120.0,
+                  "sram_bytes": 262144,
+                  "sram_kb": 256
+                },
+                "error": 6.7,
+                "inputs": {
+                  "operation": "layer_switch",
+                  "sram_kb": 256
+                },
+                "oracle_cycles": 1440,
+                "parameter_id": "kv_layer_switch_256KB",
+                "provider_cycles": 1536,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "bw_bytes_per_cycle": 51.2,
+                  "estimated_cycles": 3072,
+                  "exposed_ratio": 0.3,
+                  "operation": "layer_switch",
+                  "raw_cycles": 10240.0,
+                  "sram_bytes": 524288,
+                  "sram_kb": 512
+                },
+                "error": 6.7,
+                "inputs": {
+                  "operation": "layer_switch",
+                  "sram_kb": 512
+                },
+                "oracle_cycles": 2880,
+                "parameter_id": "kv_layer_switch_512KB",
+                "provider_cycles": 3072,
+                "verdict": "pass"
+              }
+            ],
+            "rows": 8,
+            "verdict": "pass"
+          },
+          "mxu": {
+            "domain": "mxu",
+            "failed": 0,
+            "passed": 10,
+            "results": [
+              {
+                "decomposition": {
+                  "K_tiles": 1,
+                  "M_tiles": 1,
+                  "N_tiles": 1,
+                  "array_H": 64,
+                  "array_W": 64,
+                  "decode_mode": true,
+                  "eff_bw": 43.52,
+                  "estimated_cycles": 241,
+                  "per_tile_compute": 192,
+                  "per_tile_dma": 48.5,
+                  "tile_act_bytes": 64,
+                  "tile_weight_bytes": 2048,
+                  "total_tiles": 1
+                },
+                "error": 0.0,
+                "inputs": {
+                  "K": 64,
+                  "M": 1,
+                  "N": 64
+                },
+                "oracle_cycles": 241,
+                "parameter_id": "mxu_1_64_64",
+                "provider_cycles": 241,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "K_tiles": 1,
+                  "M_tiles": 1,
+                  "N_tiles": 1,
+                  "array_H": 64,
+                  "array_W": 64,
+                  "decode_mode": true,
+                  "eff_bw": 43.52,
+                  "estimated_cycles": 434,
+                  "per_tile_compute": 384,
+                  "per_tile_dma": 52.9,
+                  "tile_act_bytes": 256,
+                  "tile_weight_bytes": 2048,
+                  "total_tiles": 1
+                },
+                "error": 0.0,
+                "inputs": {
+                  "K": 64,
+                  "M": 4,
+                  "N": 64
+                },
+                "oracle_cycles": 434,
+                "parameter_id": "mxu_4_64_64",
+                "provider_cycles": 434,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "K_tiles": 1,
+                  "M_tiles": 1,
+                  "N_tiles": 1,
+                  "array_H": 64,
+                  "array_W": 64,
+                  "decode_mode": false,
+                  "eff_bw": 43.52,
+                  "estimated_cycles": 465,
+                  "per_tile_compute": 192,
+                  "per_tile_dma": 141.2,
+                  "tile_act_bytes": 4096,
+                  "tile_weight_bytes": 2048,
+                  "total_tiles": 1
+                },
+                "error": 0.0,
+                "inputs": {
+                  "K": 64,
+                  "M": 64,
+                  "N": 64
+                },
+                "oracle_cycles": 465,
+                "parameter_id": "mxu_64_64_64",
+                "provider_cycles": 465,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "K_tiles": 2,
+                  "M_tiles": 1,
+                  "N_tiles": 1,
+                  "array_H": 64,
+                  "array_W": 64,
+                  "decode_mode": false,
+                  "eff_bw": 43.52,
+                  "estimated_cycles": 680,
+                  "per_tile_compute": 192,
+                  "per_tile_dma": 141.2,
+                  "tile_act_bytes": 4096,
+                  "tile_weight_bytes": 2048,
+                  "total_tiles": 2
+                },
+                "error": 0.0,
+                "inputs": {
+                  "K": 128,
+                  "M": 64,
+                  "N": 64
+                },
+                "oracle_cycles": 680,
+                "parameter_id": "mxu_64_128_64",
+                "provider_cycles": 680,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "K_tiles": 1,
+                  "M_tiles": 1,
+                  "N_tiles": 2,
+                  "array_H": 64,
+                  "array_W": 64,
+                  "decode_mode": false,
+                  "eff_bw": 43.52,
+                  "estimated_cycles": 722,
+                  "per_tile_compute": 192,
+                  "per_tile_dma": 141.2,
+                  "tile_act_bytes": 4096,
+                  "tile_weight_bytes": 2048,
+                  "total_tiles": 2
+                },
+                "error": 0.0,
+                "inputs": {
+                  "K": 64,
+                  "M": 64,
+                  "N": 128
+                },
+                "oracle_cycles": 722,
+                "parameter_id": "mxu_64_64_128",
+                "provider_cycles": 722,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "K_tiles": 2,
+                  "M_tiles": 1,
+                  "N_tiles": 2,
+                  "array_H": 64,
+                  "array_W": 64,
+                  "decode_mode": false,
+                  "eff_bw": 43.52,
+                  "estimated_cycles": 1158,
+                  "per_tile_compute": 160,
+                  "per_tile_dma": 94.1,
+                  "tile_act_bytes": 2048,
+                  "tile_weight_bytes": 2048,
+                  "total_tiles": 4
+                },
+                "error": 0.0,
+                "inputs": {
+                  "K": 128,
+                  "M": 32,
+                  "N": 128
+                },
+                "oracle_cycles": 1158,
+                "parameter_id": "mxu_32_128_128",
+                "provider_cycles": 1158,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "K_tiles": 32,
+                  "M_tiles": 1,
+                  "N_tiles": 32,
+                  "array_H": 64,
+                  "array_W": 64,
+                  "decode_mode": true,
+                  "eff_bw": 43.52,
+                  "estimated_cycles": 47104,
+                  "per_tile_compute": 192,
+                  "per_tile_dma": 48.5,
+                  "tile_act_bytes": 64,
+                  "tile_weight_bytes": 2048,
+                  "total_tiles": 1024
+                },
+                "error": 0.0,
+                "inputs": {
+                  "K": 2048,
+                  "M": 1,
+                  "N": 2048
+                },
+                "oracle_cycles": 47104,
+                "parameter_id": "mxu_1_2048_2048",
+                "provider_cycles": 47104,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "K_tiles": 32,
+                  "M_tiles": 2,
+                  "N_tiles": 32,
+                  "array_H": 64,
+                  "array_W": 64,
+                  "decode_mode": false,
+                  "eff_bw": 43.52,
+                  "estimated_cycles": 706560,
+                  "per_tile_compute": 384,
+                  "per_tile_dma": 235.3,
+                  "tile_act_bytes": 8192,
+                  "tile_weight_bytes": 2048,
+                  "total_tiles": 1024
+                },
+                "error": 0.0,
+                "inputs": {
+                  "K": 2048,
+                  "M": 128,
+                  "N": 2048
+                },
+                "oracle_cycles": 706560,
+                "parameter_id": "mxu_128_2048_2048",
+                "provider_cycles": 706560,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "K_tiles": 32,
+                  "M_tiles": 1,
+                  "N_tiles": 172,
+                  "array_H": 64,
+                  "array_W": 64,
+                  "decode_mode": true,
+                  "eff_bw": 43.52,
+                  "estimated_cycles": 122998,
+                  "per_tile_compute": 192,
+                  "per_tile_dma": 48.5,
+                  "tile_act_bytes": 64,
+                  "tile_weight_bytes": 2048,
+                  "total_tiles": 5504
+                },
+                "error": 0.0,
+                "inputs": {
+                  "K": 2048,
+                  "M": 1,
+                  "N": 11008
+                },
+                "oracle_cycles": 122998,
+                "parameter_id": "mxu_1_2048_11008",
+                "provider_cycles": 122998,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "K_tiles": 32,
+                  "M_tiles": 2,
+                  "N_tiles": 172,
+                  "array_H": 64,
+                  "array_W": 64,
+                  "decode_mode": false,
+                  "eff_bw": 43.52,
+                  "estimated_cycles": 1475976,
+                  "per_tile_compute": 384,
+                  "per_tile_dma": 235.3,
+                  "tile_act_bytes": 8192,
+                  "tile_weight_bytes": 2048,
+                  "total_tiles": 5504
+                },
+                "error": 0.0,
+                "inputs": {
+                  "K": 2048,
+                  "M": 128,
+                  "N": 11008
+                },
+                "oracle_cycles": 1475976,
+                "parameter_id": "mxu_128_2048_11008",
+                "provider_cycles": 1475976,
+                "verdict": "pass"
+              }
+            ],
+            "rows": 10,
+            "verdict": "pass"
+          },
+          "noc": {
+            "failed": 0,
+            "passed": 8,
+            "results": [
+              {
+                "decomposition": {
+                  "arbitration": 3,
+                  "buffer_depth": 4,
+                  "bytes": 64,
+                  "estimated_cycles": 14,
+                  "flits": 2,
+                  "hop_count": 1,
+                  "overhead": 2,
+                  "route": "0->1",
+                  "topology": "crossbar"
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 64,
+                  "route": "0->1",
+                  "topology": "crossbar"
+                },
+                "oracle_cycles": 14,
+                "parameter_id": "noc_crossbar_64B_0to1",
+                "provider_cycles": 14,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "arbitration": 3,
+                  "buffer_depth": 4,
+                  "bytes": 64,
+                  "estimated_cycles": 14,
+                  "flits": 2,
+                  "hop_count": 1,
+                  "overhead": 2,
+                  "route": "0->3",
+                  "topology": "crossbar"
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 64,
+                  "route": "0->3",
+                  "topology": "crossbar"
+                },
+                "oracle_cycles": 14,
+                "parameter_id": "noc_crossbar_64B_0to3",
+                "provider_cycles": 14,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "arbitration": 3,
+                  "buffer_depth": 4,
+                  "bytes": 4096,
+                  "estimated_cycles": 142,
+                  "flits": 128,
+                  "hop_count": 1,
+                  "overhead": 4,
+                  "route": "0->1",
+                  "topology": "crossbar"
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 4096,
+                  "route": "0->1",
+                  "topology": "crossbar"
+                },
+                "oracle_cycles": 142,
+                "parameter_id": "noc_crossbar_4096B_0to1",
+                "provider_cycles": 142,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "arbitration": 3,
+                  "buffer_depth": 4,
+                  "bytes": 4096,
+                  "estimated_cycles": 142,
+                  "flits": 128,
+                  "hop_count": 1,
+                  "overhead": 4,
+                  "route": "0->3",
+                  "topology": "crossbar"
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 4096,
+                  "route": "0->3",
+                  "topology": "crossbar"
+                },
+                "oracle_cycles": 142,
+                "parameter_id": "noc_crossbar_4096B_0to3",
+                "provider_cycles": 142,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "arbitration": 3,
+                  "buffer_depth": 4,
+                  "bytes": 64,
+                  "estimated_cycles": 18,
+                  "flits": 2,
+                  "hop_count": 1,
+                  "overhead": 6,
+                  "route": "0->1",
+                  "topology": "mesh"
+                },
+                "error": 0.0,
+                "inputs": {
+                  "bytes": 64,
+                  "route": "0->1",
+                  "topology": "mesh"
+                },
+                "oracle_cycles": 18,
+                "parameter_id": "noc_mesh_64B_0to1",
+                "provider_cycles": 18,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "arbitration": 6,
+                  "buffer_depth": 8,
+                  "bytes": 64,
+                  "estimated_cycles": 33,
+                  "flits": 2,
+                  "hop_count": 2,
+                  "overhead": 11,
+                  "route": "0->3",
+                  "topology": "mesh"
+                },
+                "error": 8.3,
+                "inputs": {
+                  "bytes": 64,
+                  "route": "0->3",
+                  "topology": "mesh"
+                },
+                "oracle_cycles": 36,
+                "parameter_id": "noc_mesh_64B_0to3",
+                "provider_cycles": 33,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "arbitration": 3,
+                  "buffer_depth": 4,
+                  "bytes": 4096,
+                  "estimated_cycles": 156,
+                  "flits": 128,
+                  "hop_count": 1,
+                  "overhead": 18,
+                  "route": "0->1",
+                  "topology": "mesh"
+                },
+                "error": 6.8,
+                "inputs": {
+                  "bytes": 4096,
+                  "route": "0->1",
+                  "topology": "mesh"
+                },
+                "oracle_cycles": 146,
+                "parameter_id": "noc_mesh_4096B_0to1",
+                "provider_cycles": 156,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "arbitration": 6,
+                  "buffer_depth": 8,
+                  "bytes": 4096,
+                  "estimated_cycles": 171,
+                  "flits": 128,
+                  "hop_count": 2,
+                  "overhead": 23,
+                  "route": "0->3",
+                  "topology": "mesh"
+                },
+                "error": 8.2,
+                "inputs": {
+                  "bytes": 4096,
+                  "route": "0->3",
+                  "topology": "mesh"
+                },
+                "oracle_cycles": 158,
+                "parameter_id": "noc_mesh_4096B_0to3",
+                "provider_cycles": 171,
+                "verdict": "pass"
+              }
+            ],
+            "rows": 8,
+            "verdict": "pass"
+          },
+          "sfu": {
+            "failed": 0,
+            "passed": 24,
+            "results": [
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "effective_depth": 57,
+                  "elements": 16,
+                  "estimated_cycles": 57,
+                  "op": "softmax",
+                  "pipeline_depth": 227,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 16,
+                  "op": "softmax"
+                },
+                "oracle_cycles": 57,
+                "parameter_id": "sfu_softmax_16",
+                "provider_cycles": 57,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "effective_depth": 227,
+                  "elements": 128,
+                  "estimated_cycles": 227,
+                  "op": "softmax",
+                  "pipeline_depth": 227,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 128,
+                  "op": "softmax"
+                },
+                "oracle_cycles": 227,
+                "parameter_id": "sfu_softmax_128",
+                "provider_cycles": 227,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 16,
+                  "effective_depth": 227,
+                  "elements": 2048,
+                  "estimated_cycles": 3632,
+                  "op": "softmax",
+                  "pipeline_depth": 227,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 2048,
+                  "op": "softmax"
+                },
+                "oracle_cycles": 3632,
+                "parameter_id": "sfu_softmax_2048",
+                "provider_cycles": 3632,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 86,
+                  "effective_depth": 227,
+                  "elements": 11008,
+                  "estimated_cycles": 19522,
+                  "op": "softmax",
+                  "pipeline_depth": 227,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 11008,
+                  "op": "softmax"
+                },
+                "oracle_cycles": 19524,
+                "parameter_id": "sfu_softmax_11008",
+                "provider_cycles": 19522,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "effective_depth": 53,
+                  "elements": 16,
+                  "estimated_cycles": 53,
+                  "op": "layernorm",
+                  "pipeline_depth": 210,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 16,
+                  "op": "layernorm"
+                },
+                "oracle_cycles": 53,
+                "parameter_id": "sfu_layernorm_16",
+                "provider_cycles": 53,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "effective_depth": 210,
+                  "elements": 128,
+                  "estimated_cycles": 210,
+                  "op": "layernorm",
+                  "pipeline_depth": 210,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 128,
+                  "op": "layernorm"
+                },
+                "oracle_cycles": 210,
+                "parameter_id": "sfu_layernorm_128",
+                "provider_cycles": 210,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 16,
+                  "effective_depth": 210,
+                  "elements": 2048,
+                  "estimated_cycles": 3360,
+                  "op": "layernorm",
+                  "pipeline_depth": 210,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 2048,
+                  "op": "layernorm"
+                },
+                "oracle_cycles": 3360,
+                "parameter_id": "sfu_layernorm_2048",
+                "provider_cycles": 3360,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 86,
+                  "effective_depth": 210,
+                  "elements": 11008,
+                  "estimated_cycles": 18060,
+                  "op": "layernorm",
+                  "pipeline_depth": 210,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 11008,
+                  "op": "layernorm"
+                },
+                "oracle_cycles": 18060,
+                "parameter_id": "sfu_layernorm_11008",
+                "provider_cycles": 18060,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "effective_depth": 38,
+                  "elements": 16,
+                  "estimated_cycles": 38,
+                  "op": "rmsnorm",
+                  "pipeline_depth": 150,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 16,
+                  "op": "rmsnorm"
+                },
+                "oracle_cycles": 38,
+                "parameter_id": "sfu_rmsnorm_16",
+                "provider_cycles": 38,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "effective_depth": 150,
+                  "elements": 128,
+                  "estimated_cycles": 150,
+                  "op": "rmsnorm",
+                  "pipeline_depth": 150,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 128,
+                  "op": "rmsnorm"
+                },
+                "oracle_cycles": 150,
+                "parameter_id": "sfu_rmsnorm_128",
+                "provider_cycles": 150,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 16,
+                  "effective_depth": 150,
+                  "elements": 2048,
+                  "estimated_cycles": 2400,
+                  "op": "rmsnorm",
+                  "pipeline_depth": 150,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 2048,
+                  "op": "rmsnorm"
+                },
+                "oracle_cycles": 2400,
+                "parameter_id": "sfu_rmsnorm_2048",
+                "provider_cycles": 2400,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 86,
+                  "effective_depth": 150,
+                  "elements": 11008,
+                  "estimated_cycles": 12900,
+                  "op": "rmsnorm",
+                  "pipeline_depth": 150,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 11008,
+                  "op": "rmsnorm"
+                },
+                "oracle_cycles": 12900,
+                "parameter_id": "sfu_rmsnorm_11008",
+                "provider_cycles": 12900,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "effective_depth": 71,
+                  "elements": 16,
+                  "estimated_cycles": 71,
+                  "op": "gelu",
+                  "pipeline_depth": 71,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 16,
+                  "op": "gelu"
+                },
+                "oracle_cycles": 71,
+                "parameter_id": "sfu_gelu_16",
+                "provider_cycles": 71,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "effective_depth": 71,
+                  "elements": 128,
+                  "estimated_cycles": 71,
+                  "op": "gelu",
+                  "pipeline_depth": 71,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 128,
+                  "op": "gelu"
+                },
+                "oracle_cycles": 71,
+                "parameter_id": "sfu_gelu_128",
+                "provider_cycles": 71,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 16,
+                  "effective_depth": 71,
+                  "elements": 2048,
+                  "estimated_cycles": 1136,
+                  "op": "gelu",
+                  "pipeline_depth": 71,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 2048,
+                  "op": "gelu"
+                },
+                "oracle_cycles": 1136,
+                "parameter_id": "sfu_gelu_2048",
+                "provider_cycles": 1136,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 86,
+                  "effective_depth": 71,
+                  "elements": 11008,
+                  "estimated_cycles": 6106,
+                  "op": "gelu",
+                  "pipeline_depth": 71,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 11008,
+                  "op": "gelu"
+                },
+                "oracle_cycles": 6106,
+                "parameter_id": "sfu_gelu_11008",
+                "provider_cycles": 6106,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "effective_depth": 72,
+                  "elements": 16,
+                  "estimated_cycles": 72,
+                  "op": "silu",
+                  "pipeline_depth": 72,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 16,
+                  "op": "silu"
+                },
+                "oracle_cycles": 72,
+                "parameter_id": "sfu_silu_16",
+                "provider_cycles": 72,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "effective_depth": 72,
+                  "elements": 128,
+                  "estimated_cycles": 72,
+                  "op": "silu",
+                  "pipeline_depth": 72,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 128,
+                  "op": "silu"
+                },
+                "oracle_cycles": 72,
+                "parameter_id": "sfu_silu_128",
+                "provider_cycles": 72,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 16,
+                  "effective_depth": 72,
+                  "elements": 2048,
+                  "estimated_cycles": 1152,
+                  "op": "silu",
+                  "pipeline_depth": 72,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 2048,
+                  "op": "silu"
+                },
+                "oracle_cycles": 1152,
+                "parameter_id": "sfu_silu_2048",
+                "provider_cycles": 1152,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 86,
+                  "effective_depth": 72,
+                  "elements": 11008,
+                  "estimated_cycles": 6192,
+                  "op": "silu",
+                  "pipeline_depth": 72,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 11008,
+                  "op": "silu"
+                },
+                "oracle_cycles": 6192,
+                "parameter_id": "sfu_silu_11008",
+                "provider_cycles": 6192,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "effective_depth": 82,
+                  "elements": 16,
+                  "estimated_cycles": 82,
+                  "op": "rope",
+                  "pipeline_depth": 82,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 16,
+                  "op": "rope"
+                },
+                "oracle_cycles": 82,
+                "parameter_id": "sfu_rope_16",
+                "provider_cycles": 82,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "effective_depth": 82,
+                  "elements": 128,
+                  "estimated_cycles": 82,
+                  "op": "rope",
+                  "pipeline_depth": 82,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 128,
+                  "op": "rope"
+                },
+                "oracle_cycles": 82,
+                "parameter_id": "sfu_rope_128",
+                "provider_cycles": 82,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 16,
+                  "effective_depth": 82,
+                  "elements": 2048,
+                  "estimated_cycles": 1312,
+                  "op": "rope",
+                  "pipeline_depth": 82,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 2048,
+                  "op": "rope"
+                },
+                "oracle_cycles": 1312,
+                "parameter_id": "sfu_rope_2048",
+                "provider_cycles": 1312,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 86,
+                  "effective_depth": 82,
+                  "elements": 11008,
+                  "estimated_cycles": 7052,
+                  "op": "rope",
+                  "pipeline_depth": 82,
+                  "sfu_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "elements": 11008,
+                  "op": "rope"
+                },
+                "oracle_cycles": 7052,
+                "parameter_id": "sfu_rope_11008",
+                "provider_cycles": 7052,
+                "verdict": "pass"
+              }
+            ],
+            "rows": 24,
+            "verdict": "pass"
+          },
+          "sw_overhead": {
+            "domain": "sw_overhead",
+            "failed": 0,
+            "passed": 4,
+            "results": [
+              {
+                "decomposition": {
+                  "assumption_only": true,
+                  "cycle_ratio": 5,
+                  "dma_chain": true,
+                  "estimated_cycles": 1500,
+                  "fixed_riscv": 200,
+                  "included_in_canonical_total": false,
+                  "mxu_equiv_raw": 1550,
+                  "num_layers": 1,
+                  "per_isa_inst_riscv": 4.8,
+                  "per_layer_barrier_riscv": 18,
+                  "per_layer_desc_riscv": 10,
+                  "riscv_raw": 310,
+                  "workload": "qwen_blk0"
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dma_chain": true,
+                  "num_layers": 1,
+                  "workload": "qwen_blk0"
+                },
+                "oracle_cycles": 1500,
+                "parameter_id": "sw_qwen_blk0",
+                "provider_cycles": 1500,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "assumption_only": true,
+                  "cycle_ratio": 5,
+                  "dma_chain": true,
+                  "estimated_cycles": 12000,
+                  "fixed_riscv": 200,
+                  "included_in_canonical_total": false,
+                  "mxu_equiv_raw": 20730,
+                  "num_layers": 36,
+                  "per_isa_inst_riscv": 4.8,
+                  "per_layer_barrier_riscv": 18,
+                  "per_layer_desc_riscv": 10,
+                  "riscv_raw": 4146,
+                  "workload": "qwen_decode_36L"
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dma_chain": true,
+                  "num_layers": 36,
+                  "workload": "qwen_decode_36L"
+                },
+                "oracle_cycles": 12000,
+                "parameter_id": "sw_qwen_decode_36L_dma_chain",
+                "provider_cycles": 12000,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "assumption_only": true,
+                  "cycle_ratio": 5,
+                  "dma_chain": false,
+                  "estimated_cycles": 180000,
+                  "fixed_riscv": 200,
+                  "included_in_canonical_total": false,
+                  "mxu_equiv_raw": 3568240,
+                  "num_layers": 36,
+                  "per_isa_inst_riscv": 4.8,
+                  "per_layer_barrier_riscv": 18,
+                  "per_layer_desc_riscv": 10,
+                  "riscv_raw": 713648,
+                  "workload": "qwen_decode_36L"
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dma_chain": false,
+                  "num_layers": 36,
+                  "workload": "qwen_decode_36L"
+                },
+                "oracle_cycles": 180000,
+                "parameter_id": "sw_qwen_decode_36L_no_dma_chain",
+                "provider_cycles": 180000,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "assumption_only": true,
+                  "cycle_ratio": 5,
+                  "dma_chain": true,
+                  "estimated_cycles": 3500,
+                  "fixed_riscv": 200,
+                  "included_in_canonical_total": false,
+                  "mxu_equiv_raw": 3520,
+                  "num_layers": 1,
+                  "per_isa_inst_riscv": 4.8,
+                  "per_layer_barrier_riscv": 18,
+                  "per_layer_desc_riscv": 10,
+                  "riscv_raw": 704,
+                  "workload": "resnet50"
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dma_chain": true,
+                  "num_ops": 105,
+                  "workload": "resnet50"
+                },
+                "oracle_cycles": 3500,
+                "parameter_id": "sw_resnet50",
+                "provider_cycles": 3500,
+                "verdict": "pass"
+              }
+            ],
+            "rows": 4,
+            "verdict": "pass"
+          },
+          "vector": {
+            "failed": 0,
+            "passed": 30,
+            "results": [
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "dim": 1,
+                  "estimated_cycles": 5,
+                  "op": "add",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0,
+                "inputs": {
+                  "dim": 1,
+                  "op": "add"
+                },
+                "oracle_cycles": 5,
+                "parameter_id": "vector_add_1",
+                "provider_cycles": 5,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "dim": 128,
+                  "estimated_cycles": 5,
+                  "op": "add",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0,
+                "inputs": {
+                  "dim": 128,
+                  "op": "add"
+                },
+                "oracle_cycles": 5,
+                "parameter_id": "vector_add_128",
+                "provider_cycles": 5,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 2,
+                  "dim": 256,
+                  "estimated_cycles": 10,
+                  "op": "add",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0,
+                "inputs": {
+                  "dim": 256,
+                  "op": "add"
+                },
+                "oracle_cycles": 10,
+                "parameter_id": "vector_add_256",
+                "provider_cycles": 10,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 16,
+                  "dim": 2048,
+                  "estimated_cycles": 80,
+                  "op": "add",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 2048,
+                  "op": "add"
+                },
+                "oracle_cycles": 80,
+                "parameter_id": "vector_add_2048",
+                "provider_cycles": 80,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 86,
+                  "dim": 11008,
+                  "estimated_cycles": 430,
+                  "op": "add",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 11008,
+                  "op": "add"
+                },
+                "oracle_cycles": 430,
+                "parameter_id": "vector_add_11008",
+                "provider_cycles": 430,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "dim": 1,
+                  "estimated_cycles": 5,
+                  "op": "mul",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0,
+                "inputs": {
+                  "dim": 1,
+                  "op": "mul"
+                },
+                "oracle_cycles": 5,
+                "parameter_id": "vector_mul_1",
+                "provider_cycles": 5,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "dim": 128,
+                  "estimated_cycles": 5,
+                  "op": "mul",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0,
+                "inputs": {
+                  "dim": 128,
+                  "op": "mul"
+                },
+                "oracle_cycles": 5,
+                "parameter_id": "vector_mul_128",
+                "provider_cycles": 5,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 2,
+                  "dim": 256,
+                  "estimated_cycles": 10,
+                  "op": "mul",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0,
+                "inputs": {
+                  "dim": 256,
+                  "op": "mul"
+                },
+                "oracle_cycles": 10,
+                "parameter_id": "vector_mul_256",
+                "provider_cycles": 10,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 16,
+                  "dim": 2048,
+                  "estimated_cycles": 80,
+                  "op": "mul",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 2048,
+                  "op": "mul"
+                },
+                "oracle_cycles": 80,
+                "parameter_id": "vector_mul_2048",
+                "provider_cycles": 80,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 86,
+                  "dim": 11008,
+                  "estimated_cycles": 430,
+                  "op": "mul",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 11008,
+                  "op": "mul"
+                },
+                "oracle_cycles": 430,
+                "parameter_id": "vector_mul_11008",
+                "provider_cycles": 430,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "dim": 1,
+                  "estimated_cycles": 12,
+                  "op": "max",
+                  "op_latency": 12,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 1,
+                  "op": "max"
+                },
+                "oracle_cycles": 12,
+                "parameter_id": "vector_max_1",
+                "provider_cycles": 12,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "dim": 128,
+                  "estimated_cycles": 12,
+                  "op": "max",
+                  "op_latency": 12,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 128,
+                  "op": "max"
+                },
+                "oracle_cycles": 12,
+                "parameter_id": "vector_max_128",
+                "provider_cycles": 12,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 2,
+                  "dim": 256,
+                  "estimated_cycles": 24,
+                  "op": "max",
+                  "op_latency": 12,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 256,
+                  "op": "max"
+                },
+                "oracle_cycles": 24,
+                "parameter_id": "vector_max_256",
+                "provider_cycles": 24,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 16,
+                  "dim": 2048,
+                  "estimated_cycles": 192,
+                  "op": "max",
+                  "op_latency": 12,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 2048,
+                  "op": "max"
+                },
+                "oracle_cycles": 192,
+                "parameter_id": "vector_max_2048",
+                "provider_cycles": 192,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 86,
+                  "dim": 11008,
+                  "estimated_cycles": 1032,
+                  "op": "max",
+                  "op_latency": 12,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 11008,
+                  "op": "max"
+                },
+                "oracle_cycles": 1032,
+                "parameter_id": "vector_max_11008",
+                "provider_cycles": 1032,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "dim": 1,
+                  "estimated_cycles": 12,
+                  "op": "sum",
+                  "op_latency": 12,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 1,
+                  "op": "sum"
+                },
+                "oracle_cycles": 12,
+                "parameter_id": "vector_sum_1",
+                "provider_cycles": 12,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "dim": 128,
+                  "estimated_cycles": 12,
+                  "op": "sum",
+                  "op_latency": 12,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 128,
+                  "op": "sum"
+                },
+                "oracle_cycles": 12,
+                "parameter_id": "vector_sum_128",
+                "provider_cycles": 12,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 2,
+                  "dim": 256,
+                  "estimated_cycles": 24,
+                  "op": "sum",
+                  "op_latency": 12,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 256,
+                  "op": "sum"
+                },
+                "oracle_cycles": 24,
+                "parameter_id": "vector_sum_256",
+                "provider_cycles": 24,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 16,
+                  "dim": 2048,
+                  "estimated_cycles": 192,
+                  "op": "sum",
+                  "op_latency": 12,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 2048,
+                  "op": "sum"
+                },
+                "oracle_cycles": 192,
+                "parameter_id": "vector_sum_2048",
+                "provider_cycles": 192,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 86,
+                  "dim": 11008,
+                  "estimated_cycles": 1032,
+                  "op": "sum",
+                  "op_latency": 12,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 11008,
+                  "op": "sum"
+                },
+                "oracle_cycles": 1032,
+                "parameter_id": "vector_sum_11008",
+                "provider_cycles": 1032,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "dim": 1,
+                  "estimated_cycles": 260,
+                  "op": "conv",
+                  "op_latency": 260,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 1,
+                  "op": "conv"
+                },
+                "oracle_cycles": 260,
+                "parameter_id": "vector_conv_1",
+                "provider_cycles": 260,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "dim": 128,
+                  "estimated_cycles": 260,
+                  "op": "conv",
+                  "op_latency": 260,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 128,
+                  "op": "conv"
+                },
+                "oracle_cycles": 260,
+                "parameter_id": "vector_conv_128",
+                "provider_cycles": 260,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 2,
+                  "dim": 256,
+                  "estimated_cycles": 520,
+                  "op": "conv",
+                  "op_latency": 260,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 256,
+                  "op": "conv"
+                },
+                "oracle_cycles": 520,
+                "parameter_id": "vector_conv_256",
+                "provider_cycles": 520,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 16,
+                  "dim": 2048,
+                  "estimated_cycles": 4160,
+                  "op": "conv",
+                  "op_latency": 260,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 2048,
+                  "op": "conv"
+                },
+                "oracle_cycles": 4160,
+                "parameter_id": "vector_conv_2048",
+                "provider_cycles": 4160,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 86,
+                  "dim": 11008,
+                  "estimated_cycles": 22360,
+                  "op": "conv",
+                  "op_latency": 260,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 11008,
+                  "op": "conv"
+                },
+                "oracle_cycles": 22360,
+                "parameter_id": "vector_conv_11008",
+                "provider_cycles": 22360,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "dim": 1,
+                  "estimated_cycles": 5,
+                  "op": "resid",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0,
+                "inputs": {
+                  "dim": 1,
+                  "op": "resid"
+                },
+                "oracle_cycles": 5,
+                "parameter_id": "vector_resid_1",
+                "provider_cycles": 5,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 1,
+                  "dim": 128,
+                  "estimated_cycles": 5,
+                  "op": "resid",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0,
+                "inputs": {
+                  "dim": 128,
+                  "op": "resid"
+                },
+                "oracle_cycles": 5,
+                "parameter_id": "vector_resid_128",
+                "provider_cycles": 5,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 2,
+                  "dim": 256,
+                  "estimated_cycles": 10,
+                  "op": "resid",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0,
+                "inputs": {
+                  "dim": 256,
+                  "op": "resid"
+                },
+                "oracle_cycles": 10,
+                "parameter_id": "vector_resid_256",
+                "provider_cycles": 10,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 16,
+                  "dim": 2048,
+                  "estimated_cycles": 80,
+                  "op": "resid",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 2048,
+                  "op": "resid"
+                },
+                "oracle_cycles": 80,
+                "parameter_id": "vector_resid_2048",
+                "provider_cycles": 80,
+                "verdict": "pass"
+              },
+              {
+                "decomposition": {
+                  "batches": 86,
+                  "dim": 11008,
+                  "estimated_cycles": 430,
+                  "op": "resid",
+                  "op_latency": 5,
+                  "vector_width": 128
+                },
+                "error": 0.0,
+                "inputs": {
+                  "dim": 11008,
+                  "op": "resid"
+                },
+                "oracle_cycles": 430,
+                "parameter_id": "vector_resid_11008",
+                "provider_cycles": 430,
+                "verdict": "pass"
+              }
+            ],
+            "rows": 30,
+            "verdict": "pass"
+          }
+        },
+        "failed": 0,
+        "rows": 104,
+        "verdict": "pass"
+      },
+      "failed": 0,
+      "import_policy": {},
+      "rows": 104,
+      "verdict": "pass"
+    },
+    "qwen_paths": {
+      "failed": 0,
+      "passed": 4,
+      "verdict": "pass",
+      "workloads": {
+        "qwen25-3b-blk0-decode": {
+          "passed": true,
+          "path_a_total": 2519940,
+          "path_b_total": 2519842,
+          "total_error_pct": 0.0,
+          "workload_hash": "c8bf9f21cfdc90990b3d35fafa2c2867ca635a66a566b925634b081156d36568"
+        },
+        "qwen25-3b-decode-c128-g1": {
+          "passed": true,
+          "path_a_total": 2536628,
+          "path_b_total": 2536628,
+          "total_error_pct": 0.0,
+          "workload_hash": "20eede2b42a5b3a567cec0d74fa7f87278e4eb4ec1de75db2e069280e425bb33"
+        },
+        "qwen25-3b-prefill-128": {
+          "passed": true,
+          "path_a_total": 108640230,
+          "path_b_total": 108639758,
+          "total_error_pct": 0.0,
+          "workload_hash": "c19fce9aa54578e9a3a1444e0a7a9474da6df366764442753159875028b22eb5"
+        },
+        "qwen25-3b-prefill-16": {
+          "passed": true,
+          "path_a_total": 15053832,
+          "path_b_total": 15053690,
+          "total_error_pct": 0.0,
+          "workload_hash": "4a7750d8b5ad6bd2fabb7893d5fea50f4e92477e337d4c9dd947e1961d1ce838"
+        }
+      }
+    },
+    "scaling_report": {
+      "assertions": [
+        {
+          "detail": "weight_bytes=[655097856, 1387266048, 3262644224]",
+          "id": "weight_bytes_monotonic",
+          "result": "pass"
+        },
+        {
+          "detail": "total_decode_cycles=[42751716, 90954900, 212892680]",
+          "id": "total_decode_cycles_monotonic",
+          "result": "pass"
+        },
+        {
+          "detail": "ratios=[0.023750027354691877, 0.023738912984627446, 0.02372020811546506], deltas(%)=[0.046797293739682305, 0.07879412664976879]",
+          "id": "memory_bound_per_weight_byte_delta_within_20pct",
+          "result": "pass"
+        },
+        {
+          "detail": "all scaling reports must carry report_only=true",
+          "id": "all_reports_report_only",
+          "result": "pass"
+        }
+      ],
+      "models": [
+        {
+          "hidden": 1536,
+          "layers": 28,
+          "memory_bound_per_weight_byte": 0.023750027354691877,
+          "model": "qwen2.5-1.5b",
+          "report_only": true,
+          "total_decode_cycles": 42751716,
+          "weight_bytes": 655097856
+        },
+        {
+          "hidden": 2048,
+          "layers": 36,
+          "memory_bound_per_weight_byte": 0.023738912984627446,
+          "model": "qwen2.5-3b",
+          "report_only": true,
+          "total_decode_cycles": 90954900,
+          "weight_bytes": 1387266048
+        },
+        {
+          "hidden": 3584,
+          "layers": 28,
+          "memory_bound_per_weight_byte": 0.02372020811546506,
+          "model": "qwen2.5-7b",
+          "report_only": true,
+          "total_decode_cycles": 212892680,
+          "weight_bytes": 3262644224
+        }
+      ],
+      "passed": true,
+      "report_only": true,
+      "verdict": "pass"
+    },
+    "sweep_checks": {
+      "endpoint_failures": [],
+      "endpoints": [
+        {
+          "check": "dram_bw_share_pct",
+          "endpoint": "memory",
+          "passed": true,
+          "threshold": 55.0,
+          "value": 86.95
+        },
+        {
+          "check": "mxu_utilization_pct",
+          "endpoint": "compute",
+          "passed": true,
+          "threshold": 55.0,
+          "value": 93.51
+        }
+      ],
+      "monotonicity_failures": [],
+      "sweeps": {
+        "array": {
+          "direction": "mono-decreasing",
+          "failures": [],
+          "rows": [
+            {
+              "array": 32,
+              "dram_bw_share_pct": 45.72,
+              "mxu_utilization_pct": 93.68,
+              "total_cycles": 63734377
+            },
+            {
+              "array": 64,
+              "dram_bw_share_pct": 45.53,
+              "mxu_utilization_pct": 93.04,
+              "total_cycles": 41648881
+            },
+            {
+              "array": 128,
+              "dram_bw_share_pct": 45.43,
+              "mxu_utilization_pct": 92.98,
+              "total_cycles": 40353016
+            }
+          ],
+          "unit": "dimensionless"
+        },
+        "bandwidth": {
+          "direction": "mono-decreasing",
+          "failures": [],
+          "rows": [
+            {
+              "bandwidth": 6.4,
+              "dram_bw_share_pct": 86.99,
+              "mxu_utilization_pct": 94.53,
+              "total_cycles": 316879937
+            },
+            {
+              "bandwidth": 12.8,
+              "dram_bw_share_pct": 76.97,
+              "mxu_utilization_pct": 94.3,
+              "total_cycles": 159146496
+            },
+            {
+              "bandwidth": 25.6,
+              "dram_bw_share_pct": 62.57,
+              "mxu_utilization_pct": 93.86,
+              "total_cycles": 80279833
+            },
+            {
+              "bandwidth": 51.2,
+              "dram_bw_share_pct": 45.53,
+              "mxu_utilization_pct": 93.04,
+              "total_cycles": 41648881
+            },
+            {
+              "bandwidth": 102.4,
+              "dram_bw_share_pct": 29.47,
+              "mxu_utilization_pct": 92.49,
+              "total_cycles": 30905126
+            }
+          ],
+          "unit": "GB/s"
+        },
+        "context": {
+          "direction": "mono-increasing",
+          "failures": [],
+          "rows": [
+            {
+              "context": 128,
+              "decode_cycles": 41648881,
+              "dram_bw_share_pct": 45.53,
+              "mxu_utilization_pct": 93.04
+            },
+            {
+              "context": 512,
+              "decode_cycles": 41648881,
+              "dram_bw_share_pct": 45.53,
+              "mxu_utilization_pct": 93.04
+            },
+            {
+              "context": 2048,
+              "decode_cycles": 43759473,
+              "dram_bw_share_pct": 45.53,
+              "mxu_utilization_pct": 88.56
+            }
+          ],
+          "unit": "tokens"
+        },
+        "dma-channels": {
+          "direction": "mono-decreasing",
+          "failures": [],
+          "rows": [
+            {
+              "dma-channels": 1,
+              "dram_bw_share_pct": 45.53,
+              "mxu_utilization_pct": 93.04,
+              "total_cycles": 41648881
+            },
+            {
+              "dma-channels": 2,
+              "dram_bw_share_pct": 45.53,
+              "mxu_utilization_pct": 93.04,
+              "total_cycles": 41648881
+            },
+            {
+              "dma-channels": 4,
+              "dram_bw_share_pct": 45.53,
+              "mxu_utilization_pct": 93.04,
+              "total_cycles": 41648881
+            },
+            {
+              "dma-channels": 8,
+              "dram_bw_share_pct": 45.53,
+              "mxu_utilization_pct": 93.04,
+              "total_cycles": 41648881
+            }
+          ],
+          "unit": "channels"
+        },
+        "noc-hop": {
+          "direction": "mono-increasing",
+          "failures": [],
+          "rows": [
+            {
+              "dram_bw_share_pct": 45.53,
+              "mxu_utilization_pct": 93.04,
+              "noc-hop": 1,
+              "total_cycles": 41648881
+            },
+            {
+              "dram_bw_share_pct": 45.53,
+              "mxu_utilization_pct": 93.04,
+              "noc-hop": 2,
+              "total_cycles": 41648881
+            },
+            {
+              "dram_bw_share_pct": 45.53,
+              "mxu_utilization_pct": 93.04,
+              "noc-hop": 4,
+              "total_cycles": 41648881
+            }
+          ],
+          "unit": "hops"
+        },
+        "prompt": {
+          "direction": "mono-increasing",
+          "failures": [],
+          "rows": [
+            {
+              "decode_cycles": 41648881,
+              "dram_bw_share_pct": 51.27,
+              "mxu_utilization_pct": 93.5,
+              "prefill_cycles": 788257582,
+              "prompt": 16
+            },
+            {
+              "decode_cycles": 41648881,
+              "dram_bw_share_pct": 68.21,
+              "mxu_utilization_pct": 93.5,
+              "prefill_cycles": 6306021358,
+              "prompt": 128
+            },
+            {
+              "decode_cycles": 41648881,
+              "dram_bw_share_pct": 89.56,
+              "mxu_utilization_pct": 93.5,
+              "prefill_cycles": 25224068590,
+              "prompt": 512
+            },
+            {
+              "decode_cycles": 41648881,
+              "dram_bw_share_pct": 97.17,
+              "mxu_utilization_pct": 93.49,
+              "prefill_cycles": 98533868367,
+              "prompt": 2000
+            }
+          ],
+          "unit": "tokens"
+        }
+      },
+      "verdict": "pass"
+    },
+    "uncertainty_kpis": {
+      "assertions": [
+        {
+          "detail": "unknown_cases=[]",
+          "id": "all_cases_known",
+          "result": "pass"
+        },
+        {
+          "detail": "every report must be report_only=true",
+          "id": "all_reports_report_only",
+          "result": "pass"
+        },
+        {
+          "detail": "missing low/base/high bands",
+          "id": "all_kpis_have_low_base_high",
+          "result": "pass"
+        },
+        {
+          "detail": "missing canonical_hash",
+          "id": "all_reports_have_canonical_hash",
+          "result": "pass"
+        }
+      ],
+      "passed": true,
+      "report_only": true,
+      "reports_data": {
+        "mobilenetv3": {
+          "canonical_hash": "2324681c8a1ba879084460760b14261042a208fd51d5d69f2c6ba7dc15a8de06",
+          "case": "mobilenetv3",
+          "fps": {
+            "base": 550.728724,
+            "high": 786.75532,
+            "low": 423.63748
+          },
+          "inference_latency_us": {
+            "base": 1815.776,
+            "high": 2360.5088,
+            "low": 1271.0432
+          },
+          "path_a_total": 1815776,
+          "path_b_total": 1815776,
+          "report_only": true,
+          "total_cycles": 1815776,
+          "total_error_pct": 0.0
+        },
+        "qwen-model-family": {
+          "canonical_hash": "300763150cc6ee971e5452640ebafb070b36da04da4ef2c65928ad9f439fc6b4",
+          "case": "qwen-model-family",
+          "models": [
+            {
+              "canonical_hash": "82882076ad128935c7af5efccd1dad0514d68da3ed305fbb65c927637793d62e",
+              "model": "qwen2.5-1.5b",
+              "total_decode_cycles": 42751716,
+              "tps": {
+                "base": 23.390874,
+                "high": 33.415534,
+                "low": 17.99298
+              },
+              "weight_bytes": 655097856
+            },
+            {
+              "canonical_hash": "b8fb405a0e54dd8b1d4f7a11abcf080c04e83bbbf53e6a028139034b73f84f2a",
+              "model": "qwen2.5-3b",
+              "total_decode_cycles": 90954900,
+              "tps": {
+                "base": 10.99446,
+                "high": 15.706371,
+                "low": 8.457277
+              },
+              "weight_bytes": 1387266048
+            },
+            {
+              "canonical_hash": "ebc151e616a120d6159a4ba348f7c6aa0a047d591429332bce5c9023d088335c",
+              "model": "qwen2.5-7b",
+              "total_decode_cycles": 212892680,
+              "tps": {
+                "base": 4.697202,
+                "high": 6.710289,
+                "low": 3.613233
+              },
+              "weight_bytes": 3262644224
+            }
+          ],
+          "passed": true,
+          "report_only": true,
+          "verdict": "pass"
+        },
+        "qwen-prefill-2000": {
+          "canonical_hash": "3d842d0a495caac964d60372146b5aa1235c745d21d814b701e3b8467482135f",
+          "case": "qwen-prefill-2000",
+          "decode_per_token_us": {
+            "base": 2526.695,
+            "high": 3284.7035,
+            "low": 1768.6865
+          },
+          "path_a_total": null,
+          "path_b_total": null,
+          "prefill_ms": {
+            "base": 60223.319856,
+            "high": 78290.315813,
+            "low": 42156.323899
+          },
+          "report_only": true,
+          "total_cycles": null,
+          "total_error_pct": null,
+          "tpot_us": {
+            "base": 2526.695,
+            "high": 3284.7035,
+            "low": 1768.6865
+          },
+          "tps": {
+            "base": 395.773926,
+            "high": 565.391323,
+            "low": 304.441482
+          },
+          "ttft_ms": {
+            "base": 60225.846551,
+            "high": 78292.842524,
+            "low": 42158.850578
+          }
+        },
+        "resnet50": {
+          "canonical_hash": "09f3fe1cb3f5bf1545df22e9118e811b128de013634199506d507b70c0cbbd2c",
+          "case": "resnet50",
+          "fps": {
+            "base": 54.048202,
+            "high": 77.211717,
+            "low": 41.57554
+          },
+          "inference_latency_us": {
+            "base": 18502.003,
+            "high": 24052.6039,
+            "low": 12951.4021
+          },
+          "path_a_total": 18502003,
+          "path_b_total": 18502003,
+          "report_only": true,
+          "total_cycles": 18502003,
+          "total_error_pct": 0.0
+        },
+        "yolov8n": {
+          "canonical_hash": "caed8da686914640140fc12b380e5004a6b63ea4d03ed8dbf90c414198622f09",
+          "case": "yolov8n",
+          "fps": {
+            "base": 97.04677,
+            "high": 138.638242,
+            "low": 74.651361
+          },
+          "inference_latency_us": {
+            "base": 10304.31,
+            "high": 13395.603,
+            "low": 7213.017
+          },
+          "path_a_total": 10304310,
+          "path_b_total": 10304310,
+          "report_only": true,
+          "total_cycles": 10304310,
+          "total_error_pct": 0.0
+        }
+      },
+      "verdict": "pass"
+    }
+  },
+  "created": "2026-08-11T08:56:32.523858+00:00",
+  "matrix_hash": "21772e181a9d34b3af962f22c301746fec506ef343e97099b08bf324ff2037c8",
+  "oracle_hash": "645e8aae29b17138312815a98431a3b7a63ec6bef24ccd45fd9ea18313da678b",
+  "policy": {
+    "rules": [
+      "Validate mode is read-only and never mutates the baseline file.",
+      "Structural/formula/workload/invariant gate regressions are hard failures.",
+      "KPI drift produces a report diff but does not fail validation.",
+      "Baseline must be recreated only when spec/matrix/oracle/manifest/provider config changes."
+    ],
+    "summary": "Baseline updates require a changed spec version/rationale; never 'accept current output'."
+  },
+  "provider_config_hash": "82c30fefd6ec9cb5c8699139febfd1f047459a5444c9ff5d0d69ca0c1ca79f81",
+  "spec_hash": "807b235f1446b92521203b275dd977ad0100a45ca07fc91fa453803d30a60930",
+  "workload_manifest_hashes": {
+    "mobilenetv3": "1a7584ca936654a4d8df205a9098bdd7c6612294ad37081eea9845d4d1da57ce",
+    "qwen25_3b": "67dbc9cefc45553c22c7e86ea4329316963132ade4ad22fa13c92c0ff958b0a1",
+    "resnet50": "ef0a0835c45567a8785064126a9583686f5d9a8db6b3fa748e0997b0840b36ca",
+    "yolov8n": "7e04e0b17b5e3005936707a5d280308240c7c5df5344b266cf0cfe3c410a01a1"
+  },
+  "workload_oracle_hash": "a507484e79259d202f22835d63d9e7572672a2d5a516a2ed3738fe0baf8ffa28"
+}

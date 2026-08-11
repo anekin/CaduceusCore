@@ -2345,6 +2345,54 @@ def cmd_negative(args: argparse.Namespace) -> int:
 
             return 0 if all_ok else 1
 
+        elif case == "baseline":
+            from timing.perf_baseline import run_baseline_negative
+
+            baseline_path = Path(args.baseline or "config/baselines/func_model_perf_spec_v1.json")
+            report = run_baseline_negative(fault_list, baseline_path)
+            print(json.dumps(report, indent=2))
+            all_ok = report.get("accepted") == 0 and report.get("rejected") == len(fault_list)
+
+            evidence_path = getattr(args, "evidence_path", None)
+            if evidence_path:
+                if not hasattr(args, "todo_id"):
+                    args.todo_id = "task-22-negative"
+                start_utc = datetime.now(timezone.utc)
+                neg_result = RunResult(
+                    utc_start=start_utc.isoformat(),
+                    utc_end=datetime.now(timezone.utc).isoformat(),
+                    elapsed_s=0.0,
+                    exit_code=0 if all_ok else 1,
+                    stdout=json.dumps(report, indent=2),
+                    verdict="pass" if all_ok else "fail",
+                )
+                provenance = record_provenance()
+                claim = DoneClaim(
+                    todo_id=args.todo_id,
+                    head=provenance["head"],
+                    source_fingerprint=provenance["spec_sha256"],
+                    evidence_path=evidence_path,
+                    provenance=provenance,
+                    mutation_command={
+                        "argv": [
+                            sys.executable,
+                            str(REPO_ROOT / "scripts" / "run_func_model_perf_signoff.py"),
+                            "negative",
+                            "--case", "baseline",
+                            "--faults", faults_str,
+                            "--baseline", str(baseline_path),
+                            "--evidence-path", evidence_path,
+                        ],
+                    },
+                    mutation_result=report,
+                    verdict=neg_result.verdict,
+                )
+                neg_result.claim = claim
+                args.evidence_path = Path(evidence_path).name
+                _write_evidence(neg_result, args)
+
+            return 0 if all_ok else 1
+
         return 0
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -2384,51 +2432,139 @@ def cmd_rerun(args: argparse.Namespace) -> int:
 # Subcommand: baseline
 # ---------------------------------------------------------------------------
 def cmd_baseline(args: argparse.Namespace) -> int:
-    """Create or validate protected baseline snapshots."""
+    """Create or validate versioned performance-spec regression baselines."""
+    from timing.perf_baseline import create_baseline, validate_baseline
+
     action = getattr(args, "baseline_action", "validate")
+    plan_path = getattr(args, "from_plan", None)
+
+    if plan_path:
+        if action == "create":
+            entries = parse_protected_baseline(plan_path)
+            baseline: Dict[str, Any] = {
+                "created": datetime.now(timezone.utc).isoformat(),
+                "head": git_head(),
+                "entries": {},
+            }
+            for entry in entries:
+                current = entry.compute_current_sha256() if entry.exists else None
+                baseline["entries"][entry.path] = {
+                    "exists": entry.exists,
+                    "sha256": current,
+                    "path_missing": not entry.exists,
+                }
+            output = getattr(args, "output", None) or ".omo/evidence/protected-baseline.json"
+            _atomic_write(Path(output), json.dumps(baseline, indent=2) + "\n")
+            print(f"[baseline] Created protected baseline with {len(entries)} entries -> {output}")
+            return 0
+
+        if action == "validate":
+            entries = parse_protected_baseline(plan_path)
+            results, all_ok = check_protected_baseline(entries)
+            for r in results:
+                status = "PASS" if r["verdict"] == "passed" else r["verdict"].upper()
+                print(f"[baseline] {status}: {r['path']} -> {r.get('reason', '')}")
+            return 0 if all_ok else 1
+
+    start_utc = datetime.now(timezone.utc)
+    result = RunResult(utc_start=start_utc.isoformat())
+
+    ev_path = getattr(args, "evidence_path", "baseline_evidence.json")
+    claim = DoneClaim(
+        todo_id=getattr(args, "todo_id", "unknown"),
+        head=git_head(),
+        source_fingerprint="",
+        evidence_path=ev_path,
+    )
 
     if action == "create":
-        plan_path = getattr(args, "from_plan", None)
-        if not plan_path:
-            print("[baseline] --from-plan required for create", file=sys.stderr)
+        output = getattr(args, "output", None)
+        if not output:
+            print("[baseline create] --output required", file=sys.stderr)
             return 1
-        entries = parse_protected_baseline(plan_path)
-        baseline: Dict[str, Any] = {
-            "created": datetime.now(timezone.utc).isoformat(),
-            "head": git_head(),
-            "entries": {},
+        output_path = Path(output)
+        baseline = create_baseline(output_path)
+        report = {
+            "command": "baseline create",
+            "baseline_path": str(output_path),
+            "baseline_id": baseline["baseline_id"],
+            "canonical_content_hash": baseline["canonical_content_hash"],
+            "spec_hash": baseline["spec_hash"],
+            "verdict": "pass",
         }
-        for entry in entries:
-            current = entry.compute_current_sha256() if entry.exists else None
-            baseline["entries"][entry.path] = {
-                "exists": entry.exists,
-                "sha256": current,
-                "path_missing": not entry.exists,
-            }
-        output = getattr(args, "output", None) or ".omo/evidence/protected-baseline.json"
-        _atomic_write(Path(output), json.dumps(baseline, indent=2) + "\n")
-        print(f"[baseline] Created baseline with {len(entries)} entries -> {output}")
-        return 0
+        result.stdout = json.dumps(report, indent=2)
+        result.exit_code = 0
+        result.verdict = "pass"
+        claim.green_command = {
+            "argv": [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "run_func_model_perf_signoff.py"),
+                "baseline", "create",
+                "--from-latest-fresh",
+                "--output", output,
+                "--evidence-path", ev_path,
+                "--todo-id", getattr(args, "todo_id", "unknown"),
+            ]
+        }
+        claim.green_result = report
+        claim.source_fingerprint = baseline["spec_hash"]
 
     elif action == "validate":
-        baseline_path = getattr(args, "from_latest_fresh", None)
+        baseline_path = getattr(args, "baseline", None)
         if not baseline_path:
-            baseline_path = ".omo/evidence/protected-baseline.json"
-        plan_path = getattr(args, "from_plan", None)
-        if not plan_path:
-            print("[baseline] --from-plan required for validate", file=sys.stderr)
+            print("[baseline validate] --baseline required", file=sys.stderr)
             return 1
+        require_fresh = getattr(args, "require_fresh", False)
+        baseline_path_obj = Path(baseline_path)
+        report = validate_baseline(baseline_path_obj, require_fresh=require_fresh)
+        result.stdout = json.dumps(report, indent=2)
+        result.exit_code = 0 if report.get("verdict") == "pass" else 1
+        result.verdict = report.get("verdict", "fail")
 
-        entries = parse_protected_baseline(plan_path)
-        results, all_ok = check_protected_baseline(entries)
-        for r in results:
-            status = "PASS" if r["verdict"] == "passed" else r["verdict"].upper()
-            print(f"[baseline] {status}: {r['path']} -> {r.get('reason', '')}")
-        return 0 if all_ok else 1
+        baseline_doc: Dict[str, Any] = {}
+        if baseline_path_obj.is_file():
+            try:
+                baseline_doc = json.loads(baseline_path_obj.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        evidence_file = EVIDENCE_DIR / Path(ev_path).name
+        if evidence_file.is_file():
+            try:
+                existing = json.loads(evidence_file.read_text(encoding="utf-8"))
+                existing_claim = existing.get("doneclaim", {})
+                claim.green_command = existing_claim.get("green_command")
+                claim.green_result = existing_claim.get("green_result")
+            except Exception:
+                pass
+
+        mutation_argv = [
+            sys.executable,
+            str(REPO_ROOT / "scripts" / "run_func_model_perf_signoff.py"),
+            "baseline", "validate",
+            "--baseline", baseline_path,
+            "--evidence-path", ev_path,
+            "--todo-id", getattr(args, "todo_id", "unknown"),
+        ]
+        if require_fresh:
+            mutation_argv.insert(6, "--require-fresh")
+        claim.mutation_command = {"argv": mutation_argv}
+        claim.mutation_result = report
+        claim.source_fingerprint = baseline_doc.get("spec_hash", "")
 
     else:
         print(f"[baseline] Unknown action: {action}", file=sys.stderr)
         return 1
+
+    print(result.stdout)
+    end_utc = datetime.now(timezone.utc)
+    result.utc_end = end_utc.isoformat()
+    result.elapsed_s = (end_utc - start_utc).total_seconds()
+    claim.verdict = result.verdict
+    result.claim = claim
+    args.evidence_path = Path(ev_path).name
+    _write_evidence(result, args)
+    return result.exit_code
 
 
 # ---------------------------------------------------------------------------
@@ -2498,6 +2634,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_neg.add_argument("--output", help="Output report path")
     p_neg.add_argument("--evidence-path", help="Evidence file path")
     p_neg.add_argument("--checks", help="Checks for negative test context")
+    p_neg.add_argument("--baseline", help="Baseline path for baseline negative case")
     p_neg.add_argument("--todo-id", default="unknown", help="Todo ID for DoneClaim")
 
     # --- rerun ---
@@ -2507,13 +2644,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_rer.add_argument("--checks", help="Checks for rerun context")
 
     # --- baseline ---
-    p_bl = sub.add_parser("baseline", help="Create or validate baselines")
+    p_bl = sub.add_parser("baseline", help="Create or validate performance-spec regression baselines")
     p_bl.add_argument("action", nargs="?", choices=["create", "validate"], default="validate",
                       help="Baseline action (create or validate)")
-    p_bl.add_argument("--from-plan", help="Plan.md path for entries")
-    p_bl.add_argument("--from-latest-fresh", help="Use latest fresh baseline")
+    p_bl.add_argument("--from-plan", help="Plan.md path for protected-baseline entries (legacy)")
+    p_bl.add_argument("--from-latest-fresh", action="store_true",
+                      help="Create from fresh current results")
+    p_bl.add_argument("--baseline", help="Baseline path for validate")
     p_bl.add_argument("--require-fresh", action="store_true", help="Require freshness")
-    p_bl.add_argument("--output", help="Output path for baseline")
+    p_bl.add_argument("--output", help="Output path for create")
+    p_bl.add_argument("--evidence-path", default="baseline_evidence.json", help="Evidence file path")
+    p_bl.add_argument("--todo-id", default="unknown", help="Todo ID for DoneClaim")
 
     return parser
 
