@@ -64,6 +64,8 @@ kv_cache:
   sram_kb: 256
   dram_region_mb: 96
   precision_bits: 8
+  max_context: 2048
+  total_tokens: 128
 
 dma:
   channels: 2

@@ -59,10 +59,10 @@ def generate_qwen3b_trace(prompt_len: int = 128) -> List[Tuple[int, int, int, in
     INTERMEDIATE = 11008
     NUM_LAYERS = 36
     NUM_HEADS = 16
-    NUM_KV_HEADS = 16
+    NUM_KV_HEADS = 2
     HEAD_DIM = 128
     QKV_DIM = NUM_HEADS * HEAD_DIM   # 16 * 128 = 2048
-    KV_DIM = NUM_KV_HEADS * HEAD_DIM # 16 * 128 = 2048
+    KV_DIM = NUM_KV_HEADS * HEAD_DIM # 2 * 128 = 256
 
     trace = []
     for layer in range(NUM_LAYERS):
@@ -96,9 +96,12 @@ class NPUSimulator:
         self.dram = DRAMModel(self.config)
         self.noc = NoCModel(self.config)
 
-        # Configure KV cache for Qwen2.5-3B
+        kv_cfg = self.config.get("kv_cache", {})
         self.kv.configure_for_model(
-            num_kv_heads=16, head_dim=128, num_layers=36, max_context=2048
+            num_kv_heads=2,
+            head_dim=128,
+            num_layers=36,
+            max_context=int(kv_cfg.get("max_context", 2048)),
         )
 
     def simulate_decode(self, trace: List[Tuple[int, int, int, int, str]]) -> SimulationReport:
@@ -112,7 +115,7 @@ class NPUSimulator:
         """
         timeline = CoreTimeline(core_id=0)
         layer_data: Dict[int, LayerBreakdown] = {}
-        total_tokens = 128  # KV cache tracked context depth (baseline for Qwen2.5-3B)
+        total_tokens = int(self.config.get("kv_cache", {}).get("total_tokens", 128))
         total_weight_bytes = 0
 
         # Check optimizations
@@ -322,6 +325,7 @@ class NPUSimulator:
             crossbar_wait=timeline.total_crossbar_wait,
             sram_stall=timeline.total_sram_stall,
             vcov_bubble=timeline.total_vcov_bubble,
+            wall_clock_critical_path=total_cycles,
         )
         return report
 
@@ -406,6 +410,7 @@ class NPUSimulator:
             crossbar_wait=timeline.total_crossbar_wait,
             sram_stall=timeline.total_sram_stall,
             vcov_bubble=timeline.total_vcov_bubble,
+            wall_clock_critical_path=total_cycles,
         )
 
     def simulate_prefill(self, prompt_len: int = 128) -> SimulationReport:
@@ -498,6 +503,7 @@ class NPUSimulator:
             crossbar_wait=timeline.total_crossbar_wait,
             sram_stall=timeline.total_sram_stall,
             vcov_bubble=timeline.total_vcov_bubble,
+            wall_clock_critical_path=total_cycles,
         )
         return report
 
