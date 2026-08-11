@@ -118,17 +118,99 @@ Func Model default parameter (`entries=256`) was copied from the RTL ROM size wi
 
 ---
 
+### 2026-08-11 [Info] Deferred Scope: Non-Block Engine Performance Formulas (BUG-SOC-FM-009)
+
+**Case**: T24 — Func Model performance spec reconciliation
+**Status**: Deferred (zero waivers; no blocking open defect)
+**Severity**: info
+**Owner**: perf_spec_architect
+
+#### Description
+
+Perf-spec v1 hard gate only covers the **Block 64×64** engine. The other seven engines in the design space — **FSA / Systolic / OS-Systolic / TensorCore / WMMA / GMMA / Input-Stationary** — have engine files under `sim/engine/` but their performance formulas have **not** been validated against the normative spec oracle and are not included in `config/func_model_perf_spec_v1.json`.
+
+| Engine | File | Deferred Reason |
+|--------|------|-----------------|
+| FSA | `sim/engine/fsa_engine.py` | Selected by Arc Model DSE for S1 cost-optimized scenario, but no Architecture Contract → Func Model v2 exists yet. |
+| Systolic | `sim/engine/systolic_engine.py` | Legacy 128×128 bootstrap engine; superseded by Block for perf-spec v1. |
+| OS-Systolic | `sim/engine/os_systolic_engine.py` | Output-stationary variant deferred pending engine decision. |
+| TensorCore | `sim/engine/tensor_core_engine.py` | NVIDIA-style tensor-core model; not selected for any current scenario. |
+| WMMA | `sim/engine/wmma_engine.py` | Wave MMA model; not selected for any current scenario. |
+| GMMA | `sim/engine/gmma_engine.py` | Hopper-style group MMA; experimental, contains dead constant `GMMA_PIPELINE_SCALE=0.05` (see BUG-SOC-FM-010). |
+| Input-Stationary | `sim/engine/is_systolic_engine.py` | Input-stationary variant deferred pending engine decision. |
+
+#### Evidence
+
+- T8 explicitly deferred non-Block engine formula verification: "Block 64×64 is the ONLY engine covered by perf-spec v1; all other 7 engines carry deprecation comments."
+- Each non-Block engine file contains the deprecation comment: `# Not covered by perf-spec v1; verify before switching architectural engine`.
+- `scripts/verify_func_model_perf_spec.py --domain mxu` validates only Block 64×64 rows; no provider-vs-oracle comparison exists for other engines.
+
+#### Signoff Impact
+
+- This deferred-scope entry is **informational only**; it is not a signoff relaxation and does not block signoff.
+- Any future architectural engine switch must: (1) produce an updated Architecture Contract, (2) implement the engine in Func Model, (3) add normative spec rows, (4) regenerate golden reference, and (5) re-run T1-T25 style signoff before RTL implementation.
+
+---
+
+### 2026-08-11 [Info] GMMA Engine Dead Constant `GMMA_PIPELINE_SCALE=0.05` (BUG-SOC-FM-010)
+
+**Case**: T24 — performance-model bug governance
+**Status**: Deferred modeling bug (zero waivers; no blocking open defect)
+**Severity**: info
+**Owner**: perf_spec_architect
+
+#### Description
+
+`sim/engine/gmma_engine.py` defines a class constant `GMMA_PIPELINE_SCALE = 0.05` at line 52, intended to scale the effective pipeline depth of a group-MMA unit. However, the method `_per_tile_compute()` at lines 61–63 does not reference this constant:
+
+```python
+GMMA_PIPELINE_SCALE = 0.05  # line 52
+
+def _per_tile_compute(self, M: int) -> int:  # lines 61–63
+    """Systolic pipeline depth per K-tile: H (weight load) + M (act stream) + W (drain)."""
+    return self.H + M + self.W
+```
+
+The constant is therefore **dead code**. Removing it produces no behavioral change, but leaving it creates a misleading signal that the pipeline depth is scaled when it is not.
+
+#### Root Cause
+
+During initial GMMA engine prototyping, the pipeline scale factor was introduced to reflect the shorter effective pipeline of a group-MMA unit relative to a pure weight-stationary systolic array. The refactor of `_per_tile_compute()` to a simple `H + M + W` form dropped the scale application but the constant declaration was not removed.
+
+#### Fix Plan
+
+Deferred because:
+1. GMMA is not the selected engine for any current scenario (S1/S2/S3 all use FSA or Block).
+2. The dead constant does not affect Block-engine hard gates or any current signoff.
+3. When GMMA is selected for a future scenario, the formula must be rewritten from scratch against the updated Architecture Contract; at that point the dead constant will be removed or correctly incorporated.
+
+#### Evidence
+
+- Static search: `grep -n "GMMA_PIPELINE_SCALE" sim/engine/gmma_engine.py` returns only the definition at line 52; no reads in `_per_tile_compute` or `estimate()`.
+- Removing `GMMA_PIPELINE_SCALE` and running the existing timing regression does not change Block-engine results (GMMA is not exercised by default).
+
+#### Signoff Impact
+
+- This is a **deferred modeling bug**, not a signoff relaxation.
+- It does not block T24 signoff because GMMA is out-of-scope for perf-spec v1.
+- Future GMMA adoption must resolve this as part of the engine-specific formula gate.
+
+---
+
 ## Stats (SoC Func Model)
 
 | Metric | Value |
 |--------|:-----:|
-| Total bugs | 8 |
+| Total bugs | 10 |
 | Open | 0 |
 | Fixed | 8 |
+| Deferred (info, non-blocking) | 2 |
 | Critical | 0 |
 | Major | 6 |
 | Minor | 2 |
+| Info | 2 |
 | Has fix plan / implemented | 0/0 |
+| Signoff relaxations | 0 |
 
 ---
 

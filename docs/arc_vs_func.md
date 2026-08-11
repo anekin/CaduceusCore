@@ -9,8 +9,8 @@
 | | Arc Model | Func Model |
 |------|------|------|
 | **回答的问题** | 哪种架构好？ | 选定的架构到底多快？输出对不对？ |
-| **速度** | 秒级（解析公式） | 分钟级（逐 cycle 模拟） |
-| **精度** | 近似（忽略固件/DMA 调度等） | 精确（包含所有硬件因素） |
+| **速度** | 秒级（解析公式） | 分钟级（逐 estimated_cycle 模拟） |
+| **精度** | 近似（忽略固件/DMA 调度等） | architecture-assumption estimates（未经 RTL 校准） |
 
 ---
 
@@ -72,9 +72,9 @@ Host 读到完成信号
 - 输出 `$readmemh` 格式的 hex 文件供 RTL 仿真验证
 - 验证流程：`golden_executor.py` → `$readmemh` → `compare_rtl.py`
 
-### 角色 2：性能模型（cycle-accurate）
+### 角色 2：性能模型（estimated_cycles，uncalibrated）
 
-给每个模块加 cycle 计数：
+给每个模块加 `estimated_cycles` 计数；所有数值基于 `architecture_assumption`，默认 uncertainty band 为 0.7×–1.3×，未来需经 `future RTL calibration` 更新 `calibration_state`：
 
 | 模块 | Cycle 模型 |
 |------|------|
@@ -135,14 +135,14 @@ Arc Model                         Func Model
 
 以 Qwen2.5-3B 为例：
 
-| 指标 | Arc Model（公式） | Func Model（模拟） | 差异来源 |
+| 指标 | Arc Model（公式） | Func Model（estimated，uncalibrated） | 差异来源 |
 |------|:---:|:---:|------|
-| decode tok/s | 35.1 | ~28-30 | 固件开销 + DMA 调度 + MMIO |
-| prefill latency | ❌ 未实现 | ~300ms | Arc 不做 prefill |
-| TTFT | ❌ 未实现 | ~320ms | 含固件启动 + 第一个 token |
-| MXU util | 0.26% | ~22%(prefill)/~0.2%(decode) | Arc 只算 decode M=1 |
+| decode tok/s | 35.1 | ~21-30 (estimated) | 固件开销 + DMA 调度 + MMIO；未 RTL 校准 |
+| prefill latency | ❌ 未实现 | ~150-300ms (estimated) | Arc 不做 prefill |
+| TTFT | ❌ 未实现 | ~200-320ms (estimated) | 含固件启动 + 第一个 token |
+| MXU util | 0.26% | ~22%(prefill)/~0.2%(decode) (estimated) | Arc 只算 decode M=1 |
 
-**结论**：Arc Model 的快是以忽略实现细节为代价的。Func Model 的性能数据才是给客户看的真实数字。
+**结论**：Arc Model 的快是以忽略实现细节为代价的。Func Model 的性能数据是 architecture-assumption estimates，未来需经 RTL 校准才能作为产品 signoff 依据。
 
 ---
 

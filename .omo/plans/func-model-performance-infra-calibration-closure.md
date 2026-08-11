@@ -307,7 +307,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/run_func_model_perf_signoff.py run --all-spec --ci-mode` exits 0 within frozen limits. `python3 scripts/run_func_model_perf_signoff.py validate --require-fresh --require-done-claims 1-22` exits 0. `python3 scripts/run_func_model_perf_signoff.py negative --case ci --faults vcs-command,rtl-path,previous-head,timeout,rss-limit` exits 0 only with `rejected=5,accepted=0`. Evidence `.omo/evidence/task-23-perf-spec-ci.txt`.
   Commit: Y | ci(perf-spec): add portable performance spec gates | Files workflow/runner/tests
 
-- [ ] 24. Reconcile documentation and performance-model bug governance
+- [x] 24. Reconcile documentation and performance-model bug governance
   What to do: Update performance docs/checklists to say spec-stage/uncalibrated/estimated, correct Qwen parameters and generated results, document assumptions/uncertainty/future RTL calibration phase. Record every current hard-gate defect in `docs/bugs/bugs-soc-func-model.md` with severity/owner/evidence；zero waivers. 记录非 Block engine（FSA/GMMA/TensorCore/WMMA/OS-Systolic）的 spec-owned 公式验证延后至将来更换 architectural engine 时进行；记录 `sim/engine/gmma_engine.py` 中 `GMMA_PIPELINE_SCALE=0.05` 是 dead constant（定义于 line 50 但 `_per_tile_compute` line 59-61 未引用），标注为 deferred modeling bug。
   Parallelization: Y | Wave 5 | Blocks T25 | Blocked by T16-T22
   References: `docs/arc_vs_func.md` cycle-accurate overclaim；`docs/func_model_performance_analysis.md` stale dimensions；`docs/func-model-e2e-performance-analysis.md` corrected history；signoff checklist/bug ledger；`sim/engine/gmma_engine.py:50,59-61` dead constant。

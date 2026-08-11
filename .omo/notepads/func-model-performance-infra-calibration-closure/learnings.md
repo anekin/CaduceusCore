@@ -1,5 +1,22 @@
 
 
+## T24: Reconcile Documentation and Performance-Model Bug Governance (2026-08-11)
+
+### Design decisions
+- Updated four performance-related docs (`docs/arc_vs_func.md`, `docs/func_model_architecture.md`, `docs/func-model-e2e-performance-analysis.md`, `docs/func_model_performance_analysis.md`) to remove cycle-accurate/RTL-calibrated/measured-cycles overclaim language and replace with `estimated_cycles`, `architecture_assumption`, `uncalibrated`, uncertainty bands, and future RTL calibration phase.
+- Corrected Qwen2.5-3B parameters across docs to T13 canonical values: hidden=2048, intermediate=11008, layers=36, heads=16, kv_heads=2, head_dim=128, kv_dim=256.
+- Added `GMMA_PIPELINE_SCALE=0.05` dead constant and non-Block engine deferred-scope entries to `docs/bugs/bugs-soc-func-model.md` as informational deferred bugs with zero waivers and zero blocking open defects.
+- Implemented `scripts/check_func_model_perf_docs.py` with doc semantic scanning (forbidden phrases, stale Qwen dims, KPI-as-gate, required markers) and bug-ledger validation (required deferred entries, zero waivers, zero blocking open defects).
+- Added `<!-- doc-check: ignore -->` annotation so historical bug-fix narratives can mention old wrong parameters without triggering false positives.
+- Added negative fixtures `config/tests/docs_cycle_accurate.md`, `config/tests/docs_old_qwen.md`, `config/tests/docs_kpi_gate.md` and pytest coverage in `sim/timing/tests/test_perf_docs.py`.
+
+### Verification results
+- GREEN: `python3 scripts/check_func_model_perf_docs.py --spec config/func_model_perf_spec_v1.json --bugs docs/bugs/bugs-soc-func-model.md` exits 0 with docs_valid=true, bugs_valid=true, blocking_open_defects=0, waivers=0, deferred_entries=[BUG-SOC-FM-009, BUG-SOC-FM-010].
+- MUTATIONS: `python3 scripts/check_func_model_perf_docs.py --negative-fixtures config/tests/docs_cycle_accurate.md,config/tests/docs_old_qwen.md,config/tests/docs_kpi_gate.md` exits 0 with rejected=3, accepted=0.
+- Pytest: 13/13 tests pass in `test_perf_docs.py`.
+- Evidence recorded at `.omo/evidence/task-24-doc-consistency.txt`.
+
+
 ## T21: Adversarial and Anti-Vacuous Performance-Spec Matrix (2026-08-11)
 
 ### Design decisions

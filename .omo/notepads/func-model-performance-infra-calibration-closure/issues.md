@@ -1,4 +1,19 @@
 
+## T24 Issues (2026-08-11)
+
+### Open
+None.
+
+### Resolved / Design Notes
+1. **Historical bug-fix narratives contain stale Qwen values** — `docs/func-model-e2e-performance-analysis.md` legitimately describes old wrong parameters when explaining Bug 5. Added `<!-- doc-check: ignore -->` annotation and updated `_line_has_ignore_annotation()` so the checker skips those lines.
+2. **"kv_dim=2048" collides with "qkv_dim=2048"** — The stale-value regex matched the substring inside `qkv_dim`. Fixed by adding a word boundary / separator prefix to the stale pattern.
+3. **Bug ledger uses "waiver" in deferred-entry rationale** — The zero-waiver lint flagged the word "waiver" even when stating "not a waiver". Rephrased to "not a signoff relaxation" to keep the ledger readable while satisfying the lint.
+4. **Negative fixture summary counts** — Initial summary summed per-fixture finding counts; requirement is fixture-level `rejected=N,accepted=0`. Updated summary to count fixtures, not findings.
+
+### Known limitation
+- The doc checker only scans the four required performance docs plus any `--extra-docs`. Other docs (e.g., `docs/func-model-performance-spec.md`) are not in the default required set; they can be added via `--extra-docs` if needed for future signoff waves.
+
+
 ## T22 Issues (2026-08-11)
 
 ### Open

@@ -1,17 +1,18 @@
 # CaduceusCore Func Model E2E Performance Analysis
 
 **Hardware Target**: Block 64x64 MAC Array, 1 core, INT4, 1 GHz, LPDDR5-6400 (51.2 GB/s)
-**Model**: Qwen2.5-3B (36 layers, hidden=2048, intermediate=11008, GQA=16)
+**Model**: Qwen2.5-3B (36 layers, hidden=2048, intermediate=11008, GQA=2)
 **Mode**: Decode (M=1 per GEMM)
 **Date**: 2026-07-09
+**Status**: spec-stage / uncalibrated / estimated — 本文所有 cycle/KPI 均为 `estimated_cycles`（`basis=architecture_assumption`），未经 RTL 实测校准，未来需进入 RTL calibration phase。
 
 ---
 
 ## 1. Executive Summary
 
-### Current TPS: 21.59
+### Current Estimated TPS: 21.59
 
-The Block 64x64 MAC array achieves **21.59 tokens/second** on Qwen2.5-3B decode with LPDDR5-6400. This is the result of three bug fixes, one optimization, and corrected model parameters that more than doubled throughput from the original baseline.
+The Block 64x64 MAC array is estimated to achieve **21.59 tokens/second** on Qwen2.5-3B decode with LPDDR5-6400. This is the result of three bug fixes, one optimization, and corrected model parameters that more than doubled throughput from the original baseline. All numbers remain architecture-assumption estimates until RTL calibration.
 
 **TPS Evolution: 8.41 to 21.59**
 
@@ -44,7 +45,7 @@ Wall clock per token: 46.33 ms (= 1/21.59 s)
 
 ### Corrected Model Parameters (Bug 5 Fix)
 
-The original analysis used 7B-like parameters (hidden=2560, intermediate=9728, layers=28) instead of the true Qwen2.5-3B values. The corrected parameters are:
+The original analysis used 7B-like parameters (hidden=2560, intermediate=9728, layers=28) instead of the true Qwen2.5-3B values. <!-- doc-check: ignore --> The corrected parameters are:
 
 | Parameter | Old (wrong) | Corrected |
 |-----------|:---------:|:---------:|
@@ -52,8 +53,9 @@ The original analysis used 7B-like parameters (hidden=2560, intermediate=9728, l
 | intermediate | 9728 | **11008** |
 | layers | 28 | **36** |
 | num_heads | 32 | **16** |
-| kv_heads | 2 | **16** |
+| kv_heads | 16 | **2** |
 | head_dim | 128 | 128 (unchanged) |
+| kv_dim | 2048 | **256** |
 | Model size (INT4) | ~1.36 GB | **1.53 GB** |
 
 The correction reduced TPS from 23.95 (wrong params + all fixes) to 14.81 (corrected params + bugs 3+4). After fixing bugs 3 and 4, TPS reached **21.59**.
@@ -61,6 +63,8 @@ The correction reduced TPS from 23.95 (wrong params + all fixes) to 14.81 (corre
 ---
 
 ## 2. Performance Evaluation Methodology
+
+> Scope and calibration state: this report covers Func Model **estimated_cycles** only. All cycle counts are architecture assumptions (`basis=architecture_assumption`, `calibration_state=uncalibrated`) with a default uncertainty band of 0.7×–1.3×. Future RTL calibration 会将这些估算值与实际测量得到的 cycle 数据进行对比，并据此更新 spec 与 uncertainty。
 
 ### Timing Pipeline Architecture
 
@@ -119,7 +123,7 @@ results/timing/qwen2.5-3b.{json,md}
 
 ### Model Parameter Correction
 
-On 2026-07-09, model_specs.py was corrected from 7B-like parameters (hidden=2560, intermediate=9728, layers=28) to the true Qwen2.5-3B parameters (hidden=2048, intermediate=11008, layers=36). This was Bug 5. All timing data in this report uses the corrected parameters unless explicitly noted. The npu_sim.py `generate_qwen3b_trace()` was also updated to use the correct dimensions.
+On 2026-07-09, model_specs.py was corrected from 7B-like parameters (hidden=2560, intermediate=9728, layers=28) to the true Qwen2.5-3B parameters (hidden=2048, intermediate=11008, layers=36). <!-- doc-check: ignore --> This was Bug 5. All timing data in this report uses the corrected parameters unless explicitly noted. The npu_sim.py `generate_qwen3b_trace()` was also updated to use the correct dimensions.
 
 ### Wall Clock vs Breakdown-Only Distinction
 
@@ -476,7 +480,7 @@ During this performance analysis, five issues were discovered and fixed.
 | 2 | DMA model assumes one big burst (no ping-pong) | `block_engine.py:127` | 18.04 to 23.95 (+33%) | `BlockEngine.estimate()` computed `total_cycles = max(compute, dma)`, which assumes DMA and compute are fully serializable (worst-case). In reality, DMA loads the next tile while the MXU processes the current tile via SRAM ping-pong double buffering. The `estimate_weight_cache_pair()` had the correct ping-pong model, but standard `estimate()` did not. | Changed to ping-pong model: `total = first_cold_tile + (N-1) * max(per_tile_compute, per_tile_dma)`. This properly accounts for the overlap of all but the first tile. |
 | 3 | Variable swap in npu_sim.py (effective/hidden reversed) | `npu_sim.py:159` | inflated dma_effective | `self.dma.estimate_effective()` returns `(effective, hidden)`. The variable assignment `effective, hidden = self.dma.estimate_effective(...)` was correct, but `dma_effective` accumulated the wrong component due to a naming confusion in earlier refactoring. The result was that what should have been `dma_weight` (hidden cycles) was assigned to `dma_effective` (exposed cycles), inflating the exposed DMA stall figure. | Corrected the assignment so that `dma_effective` tracks the first return value (non-overlapped cycles) and `dma_weight` tracks the second (hidden cycles). After the fix, `dma_effective` dropped from 23.6M to 16.5M, and `dma_weight` rose from 16.5M to 23.6M. |
 | 4 | dma_effective double-counted in wall clock | `timing_engine.py:102` | 14.81 to 21.59 (+45.8%) | When bug 3 was present, `dma_effective` was artificially inflated. But even with correct values, `dma_effective` was included in `wall_keys`, causing it to contribute to the wall clock total. DMA-effective cycles represent the portion of DMA that is NOT hidden behind compute. However, the Timeline already accounts for DMA stall through the BlockEngine's `total_cycles` (which uses max(compute, dma) or the ping-pong model). Adding `dma_effective` on top double-counts the stall. | Removed `dma_effective` from `wall_keys`. Wall clock modules are now `("mxu", "sfu", "vector", "kv_cache")` only. |
-| 5 | Wrong Qwen2.5-3B model parameters in model_specs.py | `model_specs.py:28` | 23.95 to 14.81 (-38.2%) | `model_specs.py` had `qwen2.5-3b` configured with hidden=2560, intermediate=9728, layers=28 -- parameters resembling a 7B model rather than the true 3B. The correct Qwen2.5-3B parameters are hidden=2048, intermediate=11008, layers=36, heads=16, kv_heads=16. The 7B-like parameters had larger K dimensions (2560 vs 2048) and N dimensions (9728 vs 11008) per GEMM, creating more tiles and more DMA work. Counterintuitively, the larger model also had fewer layers (28 vs 36). | Updated to correct values. The smaller per-GEMM dimensions (2048, 11008 vs 2560, 9728) reduced tile counts but increased layer count (28 to 36). |
+| 5 | Wrong Qwen2.5-3B model parameters in model_specs.py | `model_specs.py:28` | 23.95 to 14.81 (-38.2%) | `model_specs.py` had `qwen2.5-3b` configured with hidden=2560, intermediate=9728, layers=28 -- parameters resembling a 7B model rather than the true 3B. The correct Qwen2.5-3B parameters are hidden=2048, intermediate=11008, layers=36, heads=16, kv_heads=2. The 7B-like parameters had larger K dimensions (2560 vs 2048) and N dimensions (9728 vs 11008) per GEMM, creating more tiles and more DMA work. Counterintuitively, the larger model also had fewer layers (28 vs 36). <!-- doc-check: ignore --> | Updated to correct values. The smaller per-GEMM dimensions (2048, 11008 vs 2560, 9728) reduced tile counts but increased layer count (28 to 36). |
 
 ### Bug #1 Deep Dive: The Double-Counting Bug
 
@@ -503,7 +507,7 @@ Together they added ~23.6M cycles (instead of the correct ~16.5M hidden cycles) 
 
 ### Bug #5 Deep Dive: Wrong Model Parameters
 
-The `model_specs.py` entry for `qwen2.5-3b` had been copied from the `qwen2.5-7b` template during initial development and never corrected. The wrong parameters (hidden=2560, intermediate=9728, layers=28) created a GEMM trace that was structurally different from the real model:
+The `model_specs.py` entry for `qwen2.5-3b` had been copied from the `qwen2.5-7b` template during initial development and never corrected. The wrong parameters (hidden=2560, intermediate=9728, layers=28) created a GEMM trace that was structurally different from the real model: <!-- doc-check: ignore -->
 
 **Old (wrong) tile calculations:**
 - Q_proj: K_tiles=ceil(2560/64)=40, N_tiles=ceil(4096/64)=64, total=2,560
@@ -634,9 +638,9 @@ These dashboard metrics measure **DMA cycle ratio**, not **DDR bandwidth utiliza
 
 ---
 
-## 10. Recommendations
+## 10. Recommendations and Future RTL Calibration
 
-### 10.1 Block 64x64 Ceiling: ~22 TPS
+### 10.1 Block 64x64 Ceiling: ~22 TPS (estimated, uncalibrated)
 
 The current configuration is near its practical limit. With the Block 64x64 engine at 1 GHz and LPDDR5-6400, the maximum achievable decode TPS for Qwen2.5-3B is approximately **22 TPS**. This is because:
 
@@ -659,7 +663,7 @@ The current TTFT (from benchmark) = 196.09 ms for 128-token prompt, with prefill
 
 ### 10.3 Arc DSE Recommended Configurations
 
-The Arc Model DSE identified three target configurations. The Block 64x64 evaluated here is the bootstrap configuration. Recommended next targets:
+The Arc Model DSE identified three target configurations. The Block 64x64 evaluated here is the bootstrap configuration. Non-Block engine formulas (FSA/GMMA/TensorCore/WMMA/OS-Systolic) are currently deferred-scope; switching to any of them requires an updated Architecture Contract and a new perf-spec revision before signoff. Recommended next targets:
 
 | Config | Engine | Array | TPS (est.) | Notes |
 |--------|--------|:----:|:----------:|-------|
@@ -713,7 +717,7 @@ sim/engine/timeline.py  (engine-agnostic event scheduler)
 Per-op executor (pluggable)
   |  Current: BlockEngine.estimate() and model estimate() calls
   |  RTL: VCS simulation cycle counts (from AXI trace or RTL cycle counter)
-  |  Cocotb: Python-controlled RTL with cycle-accurate measurement
+  |  Cocotb: Python-controlled RTL with 精确 cycle 测量
   v
 sim/timing/metrics.py  (engine-agnostic)
   |  MetricsCollector derives TPS, TTFT, TPOT from cycle counts
@@ -732,7 +736,7 @@ To swap the executor from `BlockEngine.estimate()` to VCS/Cocotb cycle logs:
 
 2. **Timeline unchanged**: The CoreTimeline, wall-clock filter, breakdown-only markers, and TPS derivation all work identically with any cycle source.
 
-3. **Cross-validation**: Plot Func Model estimated cycles vs RTL measured cycles per GEMM. Any significant deviation indicates either a Func Model modeling error or an RTL implementation issue.
+3. **Cross-validation**: Plot Func Model estimated cycles vs RTL 实测 cycle 数据 per GEMM. Any significant deviation indicates either a Func Model modeling error or an RTL implementation issue.
 
 4. **Dashboard reuse**: The same Dashboard JSON output validates both Func Model estimates and RTL measurements. A single `diff` between the two JSON files flags discrepancies.
 
@@ -740,9 +744,9 @@ To swap the executor from `BlockEngine.estimate()` to VCS/Cocotb cycle logs:
 
 | Protocol | Data Source | Cycle Source |
 |----------|-----------|-------------|
-| Func Model estimate | BlockEngine / SFUModel / VectorModel | `estimate()` return value |
-| VCS cycle log | AXI4 trace dump | `$time` at start/end of operation |
-| Cocotb cycle log | Python-controlled RTL | `RisingEdge(clk)` counter |
+| Func Model estimate | BlockEngine / SFUModel / VectorModel | `estimate()` return value (architecture assumption, uncalibrated) |
+| VCS cycle log | AXI4 trace dump | `$time` at start/end of operation (future RTL calibration) |
+| Cocotb cycle log | Python-controlled RTL | `RisingEdge(clk)` counter (future RTL calibration) |
 | Spike/ISS trace | RISC-V firmware execution | Instruction count * CPI |
 
 The key invariant: **the timeline never changes**. Only the `mxu_cycles` parameter to `add_mxu()` changes. This allows side-by-side comparison of Func Model estimate vs RTL reality using identical TPS and breakdown metrics.

@@ -2,7 +2,7 @@
 
 ## 1. 架构总览
 
-CaduceusCore 的 Func Model 是一个 **cycle-level NPU 性能模拟器**。它不对 RTL 进行仿真，而是通过分析模型计算 NPU 硬件各模块在一次推理 request 中需要的时钟周期数，进而推导出 **tok/s、TTFT、TPOT、ITL** 等端到端性能指标。
+CaduceusCore 的 Func Model 是一个 **spec-stage NPU 性能模拟器**。它不对 RTL 进行门级 cycle 精确仿真，而是基于 architecture assumptions 估算 NPU 硬件各模块在一次推理 request 中需要的时钟周期数，进而推导出 **tok/s、TTFT、TPOT、ITL** 等端到端性能指标。所有结果均为 `estimated_cycles`/`uncalibrated`，未来需经 RTL 实测校准。
 
 整个流水线分为四层：
 
@@ -17,34 +17,36 @@ CaduceusCore 的 Func Model 是一个 **cycle-level NPU 性能模拟器**。它�
 
 ## 2. Qwen2.5-3B 模型维度
 
-从 `sim/model_specs.py` 中的模型注册表获取：
+从 `sim/model_specs.py` 中的模型注册表获取（经 T13 校正）：
 
 | 参数 | 值 | 含义 |
 |------|-----|------|
-| `hidden` | 2560 | 隐藏层维度 |
-| `intermediate` | 9728 | FFN 中间层维度 |
-| `qkv_dim` | 4096 (32 heads × 128) | Q 投影输出维度 |
+| `hidden` | **2048** | 隐藏层维度 |
+| `intermediate` | **11008** | FFN 中间层维度 |
+| `qkv_dim` | 2048 (16 heads × 128) | Q 投影输出维度 |
 | `kv_dim` | 256 (2 KV heads × 128) | K/V 投影输出维度 (GQA=2) |
-| `layers` | 28 | Transformer 层数 |
-| `num_heads` | 32 | 注意力头数 |
-| `kv_heads` | 2 | KV 头数 (Grouped-Query Attention) |
+| `layers` | **36** | Transformer 层数 |
+| `num_heads` | **16** | 注意力头数 |
+| `kv_heads` | **2** | KV 头数 (Grouped-Query Attention) |
 | `head_dim` | 128 | 每个头的维度 |
 
 **每层 7 个矩阵乘法：**
 
 | 序号 | 运算 | 维度 (M,K,N) | 说明 |
 |------|------|-------------|------|
-| 1 | Q_proj | (M, 2560, 4096) | Query 投影 |
-| 2 | K_proj | (M, 2560, 256) | Key 投影 |
-| 3 | V_proj | (M, 2560, 256) | Value 投影 |
-| 4 | O_proj | (M, 4096, 2560) | Output 投影 |
-| 5 | FFN_gate | (M, 2560, 9728) | SiLU 门控 |
-| 6 | FFN_up | (M, 2560, 9728) | 上投影 |
-| 7 | FFN_down | (M, 9728, 2560) | 下投影 |
+| 1 | Q_proj | (M, 2048, 2048) | Query 投影 |
+| 2 | K_proj | (M, 2048, 256) | Key 投影 |
+| 3 | V_proj | (M, 2048, 256) | Value 投影 |
+| 4 | O_proj | (M, 2048, 2048) | Output 投影 |
+| 5 | FFN_gate | (M, 2048, 11008) | SiLU 门控 |
+| 6 | FFN_up | (M, 2048, 11008) | 上投影 |
+| 7 | FFN_down | (M, 11008, 2048) | 下投影 |
 
 > **Decode** 时 M=1（逐 token 生成）；**Prefill** 时 M=128（并行处理 prompt）。
 
-28 层 × 7 个 GEMM = **196 个矩阵乘法**构成一次 decode；prefill 同理。
+36 层 × 7 个 GEMM = **252 个矩阵乘法**构成一次 decode；prefill 同理。
+
+> 本节模型维度与 `config/func_model_perf_spec_v1.json` 的 T1 normative spec 一致，performance 数字为 architecture-assumption estimates，未经 RTL 校准（`calibration_state=uncalibrated`）。
 
 ---
 
@@ -251,10 +253,12 @@ PYTHONPATH=.:sim python -m sim.timing.benchmark --all
 
 ## 8. Qwen2.5-3B 在当前配置下的性能结果
 
+> 本节所有数值为 **estimated_cycles** 推导的 architecture-assumption 结果（`basis=architecture_assumption`，`calibration_state=uncalibrated`），尚未经过 RTL 实测校准，存在 ±30% 不确定性带。Future RTL calibration phase 会替换为实测 cycle 数据。
+
 ```
 ┌──────────────────────────────────────────────────┐
 │  NPU System Simulation Report                    │
-│  Model: Qwen2.5-3B | Layers: 28                  │
+│  Model: Qwen2.5-3B | Layers: 36                  │
 │  NPU: 1 core, block, 64×64, INT4, 1000MHz        │
 ├──────────────────────────────────────────────────┤
 │                                                  │
@@ -292,13 +296,13 @@ PYTHONPATH=.:sim python -m sim.timing.benchmark --all
 
 ```
                          ┌──────────────┐
-   ModelSpec             │ qwen2.5-3b   │  hidden=2560, intermediate=9728,
-   (模型维度)             │ 28 layers    │  qkv_dim=4096, kv_heads=2
+   ModelSpec             │ qwen2.5-3b   │  hidden=2048, intermediate=11008,
+   (模型维度)             │ 36 layers    │  qkv_dim=2048, kv_dim=256, kv_heads=2
                          └──────┬───────┘
                                 │ _build_llm_trace()
                                 ▼
                          ┌──────────────┐
-   GEMM Trace             │ 196 tuples   │  (M, K, N, layer, op_name)
+   GEMM Trace             │ 252 tuples   │  (M, K, N, layer, op_name)
    (计算图)               └──────┬───────┘
                                 │ NPUSimulator.simulate_decode()
                                 ▼
@@ -349,7 +353,7 @@ PYTHONPATH=.:sim python -m sim.timing.benchmark --all
 
 ---
 
-## 10. 关键设计决策
+## 10. 关键设计决策与不确定性
 
 | 决策 | 原因 |
 |------|------|
@@ -359,15 +363,21 @@ PYTHONPATH=.:sim python -m sim.timing.benchmark --all
 | Weight Cache 合并 Gate+Up | PE 双 weight 寄存器允许两个共享 (M,K) 的 GEMM 共享一次 pipeline fill |
 | NoC self-transfer (src=0,dst=0) | 单核场景下模拟 DRAM→SRAM 穿越跨总线 (crossbar) 的延迟，`noc_contention`=0 表示无竞争 |
 | `ModuleBreakdown` 显式字段 | 替代动态 monkey-patching，确保类型安全（`RequestMetrics.module_breakdown: Dict[str,int]`） |
+| Block 64×64 是当前 perf-spec v1 唯一覆盖引擎 | 其他引擎（FSA/Systolic/GMMA/TensorCore/WMMA/OS-Systolic/Input-Stationary）公式验证延后至未来 architectural engine 切换时 |
+
+### 不确定性说明
+- 所有 cycle 估值基于 architectural assumptions，未经 RTL 实测，默认不确定性带为 0.7×–1.3×（详见 `config/func_model_perf_spec_v1.json` 的 `frozen_policies.uncertainty`）。
+- 当前配置（Block 64×64 + LPDDR5-6400）的 TPS 估算应理解为 "estimated_cycles → tok/s" 的 report-only 指标，不作为产品 KPI gate。
+- 非 Block 引擎的公式尚未纳入 perf-spec v1 hard gate；切换引擎前必须先完成 Architecture Contract 更新并重新生成 golden reference。
 
 ---
 
-## 11. 扩展能力
+## 11. 扩展能力（spec-stage 范围说明）
 
-1. **切换引擎**：`--engine systolic|block|tensor_core|wmma|gmma|input_stationary` 一键切换 7 种 MAC 引擎
+1. **切换引擎**：CLI 支持 `--engine systolic|block|tensor_core|wmma|gmma|input_stationary` 切换 7 种 MAC 引擎，但 perf-spec v1 hard gate 仅覆盖 **Block 64×64**；其他引擎为 experimental/deferred-scope，未纳入当前 signoff。
 2. **切换 DRAM**：`--dram 25|50|100|200|460|819` 从 LPDDR5-32b 到 HBM3
 3. **调整阵列**：`--array 128x256` 改变 MAC 阵列尺寸
 4. **精度扫描**：`--precision 2|4|8`
 5. **DMA 扫描**：`--sweep-dma-channels 1,2,4,8` 输出 CSV
 6. **NoC 扫描**：`--sweep-noc-topology crossbar,mesh --sweep-noc-ports 2,4,8`
-7. **模型注册**：向 `MODELS` dict 添加新 `ModelSpec` 即可支持任意 Transformer 模型
+7. **模型注册**：向 `MODELS` dict 添加新 `ModelSpec` 即可支持任意 Transformer 模型；新模型必须先用 `golden_executor.py` 验证精度，再进入时序评估。

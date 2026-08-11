@@ -1,6 +1,8 @@
 # NPU Func Model 架构文档
 
-> 版本: v1.0 | 日期: 2026-06-20 | 状态: 全线贯通 (Spike + Python)
+> 版本: v1.0 | 日期: 2026-06-20 | 状态: 全线贯通 (Spike + Python) | 性能阶段: spec-stage / uncalibrated / estimated
+>
+> 本文档描述 Func Model 的功能架构与接口；所有性能数字均为 `estimated_cycles`（`basis=architecture_assumption`，`calibration_state=uncalibrated`），存在默认不确定性带 0.7×–1.3×，未来需经 `future RTL calibration` 更新 `calibration_state` 与 uncertainty。当前 perf-spec v1 hard gate 仅覆盖 Block 64×64 引擎；FSA/GMMA/TensorCore/WMMA/OS-Systolic/Input-Stationary 公式验证为 deferred-scope。
 
 ---
 
@@ -553,5 +555,6 @@ npu/
 | Python bit-exact | `FuncModel.run()` + 输出 hash 对比 | ✅ |
 | Spike 裸跑固件 | `spike firmware.elf` → Doorbell 读写 | ✅ |
 | Spike 命令消费 | 完整 MMUL 流程: DMA→MXU→Completion | ✅ |
-| RTL 对比 (计划) | axi_tracer JSON → RTL testbench | ⏳ |
-| 真实硅前验证 (计划) | FPGA 原型 | ⏳ |
+| 性能 spec 合规 | `scripts/check_func_model_perf_docs.py` + `scripts/verify_func_model_perf_spec.py` | ✅ (spec-stage) |
+| RTL 实测校准 (未来) | axi_tracer JSON → RTL testbench → 更新 `calibration_state` | ⏳ |
+| 真实硅前验证 (未来) | FPGA 原型 | ⏳ |
