@@ -1,0 +1,566 @@
+{
+  "case_id": "task-16",
+  "dirty_paths": [
+    ".omo/evidence/task-0-signoff-v3-runner.txt",
+    ".omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md",
+    ".omo/notepads/phase6-rtl-verification/learnings.md",
+    ".omo/plans/func-model-performance-infra-calibration-closure.md",
+    "build/evidence/fm-cv-chain.txt",
+    "build/evidence/w3-4-mobilenetv3-fm.txt",
+    "requirements.txt",
+    "sim/engine/block_engine.py",
+    "sim/engine/fsa_engine.py",
+    "sim/engine/gmma_engine.py",
+    "sim/engine/is_systolic_engine.py",
+    "sim/engine/os_systolic_engine.py",
+    "sim/engine/systolic_engine.py",
+    "sim/engine/tensor_core_engine.py",
+    "sim/engine/timeline.py",
+    "sim/engine/wmma_engine.py",
+    "sim/func_model.py",
+    "sim/mmio_bridge.py",
+    "sim/model_specs.py",
+    "sim/models/dma.py",
+    "sim/models/dram.py",
+    "sim/models/kv_cache.py",
+    "sim/models/mxu.py",
+    "sim/models/noc.py",
+    "sim/models/sfu.py",
+    "sim/models/sw_overhead.py",
+    "sim/models/vector.py",
+    "sim/npu_sim.py",
+    "sim/timing/dashboard.py",
+    "sim/timing/generate_summary.py",
+    "sim/timing/timing_engine.py",
+    "sim/validate_e2e.py",
+    ".omo/evidence/task-1-perf-spec.txt",
+    ".omo/evidence/task-13-qwen-workload.txt",
+    ".omo/evidence/task-14-cv-workloads.txt",
+    ".omo/evidence/task-15-timeline-report.txt",
+    ".omo/evidence/task-2-perf-contract.txt",
+    ".omo/evidence/task-3-perf-matrix.txt",
+    ".omo/evidence/task-5-independent-oracle.txt",
+    ".omo/evidence/task-7-provider-registry.txt",
+    ".omo/notepads/func-model-performance-infra-calibration-closure/decisions.md",
+    ".omo/notepads/func-model-performance-infra-calibration-closure/issues.md",
+    ".omo/notepads/func-model-performance-infra-calibration-closure/learnings.md",
+    ".omo/notepads/func-model-performance-infra-calibration-closure/problems.md",
+    "config/func_model_perf_matrix_v1.json",
+    "config/func_model_perf_oracle_v1.json",
+    "config/func_model_perf_spec_v1.json",
+    "config/func_model_workload_oracle_v1.json",
+    "config/oracle/qwen25_3b_layer_template_v1.json",
+    "config/oracle/qwen25_3b_workload_variants_v1.json",
+    "config/perf_providers/spec-block64-v1.json",
+    "config/tests/cv_bad_shape.json",
+    "config/tests/cv_dropped_layer.json",
+    "config/tests/cv_unknown_op.json",
+    "config/tests/perf_contract_bad_unit.json",
+    "config/tests/perf_contract_measured_cycles.json",
+    "config/tests/perf_contract_nan.json",
+    "config/tests/perf_matrix_duplicate.json",
+    "config/tests/perf_matrix_missing.json",
+    "config/tests/perf_matrix_missing_6p4_endpoint.json",
+    "config/tests/perf_matrix_skip.json",
+    "config/tests/perf_spec_bad_units.json",
+    "config/tests/perf_spec_rtl_basis.json",
+    "config/tests/qwen_7gemm.json",
+    "config/tests/qwen_old_dims.json",
+    "config/tests/qwen_rtl_source.json",
+    "config/workloads/mobilenetv3_perf_spec_v1.json",
+    "config/workloads/qwen25_3b_perf_spec_v1.json",
+    "config/workloads/resnet50_perf_spec_v1.json",
+    "config/workloads/yolov8n_perf_spec_v1.json",
+    "docs/func-model-performance-spec.md",
+    "scripts/check_func_model_perf_spec.py",
+    "scripts/check_perf_workloads.py",
+    "scripts/reduce_func_model_perf_oracle.py",
+    "scripts/run_func_model_perf_signoff.py",
+    "scripts/verify_func_model_perf_spec.py",
+    "sim/tests/test_mmio_perf_events.py",
+    "sim/timing/perf_contract.py",
+    "sim/timing/perf_session.py",
+    "sim/timing/providers.py",
+    "sim/timing/qwen_spec_gates.py",
+    "sim/timing/tests/test_perf_contract.py",
+    "sim/timing/tests/test_perf_memory_spec.py",
+    "sim/timing/tests/test_perf_mxu_spec.py",
+    "sim/timing/tests/test_perf_noc_kv_spec.py",
+    "sim/timing/tests/test_perf_oracle_independence.py",
+    "sim/timing/tests/test_perf_providers.py",
+    "sim/timing/tests/test_perf_sfu_vector_spec.py",
+    "sim/timing/tests/test_perf_signoff_runner.py",
+    "sim/timing/tests/test_perf_spec_config.py",
+    "sim/timing/tests/test_perf_sw_overhead_spec.py",
+    "sim/timing/tests/test_perf_timeline.py",
+    "sim/timing/tests/test_perf_workloads.py",
+    "sim/timing/tests/test_qwen_spec_gates.py",
+    "sim/timing/workloads.py"
+  ],
+  "doneclaim": {
+    "assertions": [
+      {
+        "detail": "run --compare-paths a,b passed=4",
+        "id": "green_run_passed",
+        "result": "pass"
+      },
+      {
+        "detail": "negative --case qwen-paths rejected=3 accepted=0",
+        "id": "negative_qwen_paths_rejected_all",
+        "result": "pass"
+      }
+    ],
+    "evidence_path": ".omo/evidence/task-16-qwen-spec-gates.json",
+    "evidence_sha256": "1cb5e13335469702a75418dbf9435d157087a54c75a29fdd48ea8e5f45dcb382",
+    "green_command": {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_perf_signoff.py",
+        "run",
+        "--cases",
+        "qwen-blk0,qwen-decode-c128-g1,qwen-prefill-16,qwen-prefill-128",
+        "--compare-paths",
+        "a,b",
+        "--evidence-path",
+        "task-16-qwen-spec-gates.json",
+        "--todo-id",
+        "task-16"
+      ]
+    },
+    "green_result": {
+      "cases": [
+        "qwen-blk0",
+        "qwen-decode-c128-g1",
+        "qwen-prefill-16",
+        "qwen-prefill-128"
+      ],
+      "command": "run",
+      "compare_paths": "a,b",
+      "errors": [],
+      "failed": 0,
+      "passed": 4,
+      "results": {
+        "qwen-blk0": {
+          "assertions": [
+            {
+              "detail": "qwen25-3b-blk0-decode: Path A op_count=17, Path B op_count=17",
+              "id": "structural_op_count",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-blk0-decode: expected 17 ops, got 17",
+              "id": "canonical_op_count",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-blk0-decode: workload hash mismatch",
+              "id": "structural_workload_hash",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-blk0-decode: units mismatch",
+              "id": "matching_units",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-blk0-decode: non-positive total cycles",
+              "id": "positive_activity",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-blk0-decode: total error 0.00% (A=2519940, B=2519842)",
+              "id": "total_cycles_within_20pct",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-blk0-decode: mxu error 0.00% (A=3613113, B=3613113)",
+              "id": "major_breakdown_mxu_within_20pct",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-blk0-decode: vector abs error 0 (A=590, B=590)",
+              "id": "minor_breakdown_vector_within_2",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-blk0-decode: sfu abs error 0 (A=12304, B=12304)",
+              "id": "minor_breakdown_sfu_within_2",
+              "result": "pass"
+            }
+          ],
+          "passed": true,
+          "path_a_total": 2519940,
+          "path_b_total": 2519842,
+          "total_error_pct": 0.0,
+          "workload_id": "qwen25-3b-blk0-decode"
+        },
+        "qwen-decode-c128-g1": {
+          "assertions": [
+            {
+              "detail": "qwen25-3b-decode-c128-g1: Path A op_count=612, Path B op_count=612",
+              "id": "structural_op_count",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-decode-c128-g1: expected 612 ops, got 612",
+              "id": "canonical_op_count",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-decode-c128-g1: workload hash mismatch",
+              "id": "structural_workload_hash",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-decode-c128-g1: units mismatch",
+              "id": "matching_units",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-decode-c128-g1: non-positive total cycles",
+              "id": "positive_activity",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-decode-c128-g1: total error 0.00% (A=2536628, B=2536628)",
+              "id": "total_cycles_within_20pct",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-decode-c128-g1: mxu error 0.00% (A=3626169, B=3626169)",
+              "id": "major_breakdown_mxu_within_20pct",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-decode-c128-g1: vector abs error 0 (A=590, B=590)",
+              "id": "minor_breakdown_vector_within_2",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-decode-c128-g1: sfu abs error 0 (A=15936, B=15936)",
+              "id": "minor_breakdown_sfu_within_2",
+              "result": "pass"
+            }
+          ],
+          "passed": true,
+          "path_a_total": 2536628,
+          "path_b_total": 2536628,
+          "total_error_pct": 0.0,
+          "workload_id": "qwen25-3b-decode-c128-g1"
+        },
+        "qwen-prefill-128": {
+          "assertions": [
+            {
+              "detail": "qwen25-3b-prefill-128: Path A op_count=612, Path B op_count=612",
+              "id": "structural_op_count",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-128: expected 612 ops, got 612",
+              "id": "canonical_op_count",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-128: workload hash mismatch",
+              "id": "structural_workload_hash",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-128: units mismatch",
+              "id": "matching_units",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-128: non-positive total cycles",
+              "id": "positive_activity",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-128: total error 0.00% (A=108640230, B=108639758)",
+              "id": "total_cycles_within_20pct",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-128: mxu error 0.00% (A=156551244, B=156551244)",
+              "id": "major_breakdown_mxu_within_20pct",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-128: vector abs error 0 (A=590, B=590)",
+              "id": "minor_breakdown_vector_within_2",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-128: sfu abs error 0 (A=12304, B=12304)",
+              "id": "minor_breakdown_sfu_within_2",
+              "result": "pass"
+            }
+          ],
+          "passed": true,
+          "path_a_total": 108640230,
+          "path_b_total": 108639758,
+          "total_error_pct": 0.0,
+          "workload_id": "qwen25-3b-prefill-128"
+        },
+        "qwen-prefill-16": {
+          "assertions": [
+            {
+              "detail": "qwen25-3b-prefill-16: Path A op_count=612, Path B op_count=612",
+              "id": "structural_op_count",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-16: expected 612 ops, got 612",
+              "id": "canonical_op_count",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-16: workload hash mismatch",
+              "id": "structural_workload_hash",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-16: units mismatch",
+              "id": "matching_units",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-16: non-positive total cycles",
+              "id": "positive_activity",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-16: total error 0.00% (A=15053832, B=15053690)",
+              "id": "total_cycles_within_20pct",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-16: mxu error 0.00% (A=21676671, B=21676671)",
+              "id": "major_breakdown_mxu_within_20pct",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-16: vector abs error 0 (A=590, B=590)",
+              "id": "minor_breakdown_vector_within_2",
+              "result": "pass"
+            },
+            {
+              "detail": "qwen25-3b-prefill-16: sfu abs error 0 (A=12304, B=12304)",
+              "id": "minor_breakdown_sfu_within_2",
+              "result": "pass"
+            }
+          ],
+          "passed": true,
+          "path_a_total": 15053832,
+          "path_b_total": 15053690,
+          "total_error_pct": 0.0,
+          "workload_id": "qwen25-3b-prefill-16"
+        }
+      },
+      "total": 4,
+      "verdict": "pass"
+    },
+    "head": "ac3a2fb25cf8c40537f1891e497def00980447ed",
+    "misleading_success_output": false,
+    "mutation_command": {
+      "argv": [
+        "python3",
+        "scripts/run_func_model_perf_signoff.py",
+        "negative",
+        "--case",
+        "qwen-paths",
+        "--faults",
+        "missing-attention,path-a-double-count,path-b-decomposition"
+      ]
+    },
+    "mutation_result": {
+      "accepted": 0,
+      "all_passed": true,
+      "rejected": 3,
+      "requested_faults": [
+        "missing-attention",
+        "path-a-double-count",
+        "path-b-decomposition"
+      ],
+      "results": {
+        "missing-attention": {
+          "accepted": false,
+          "detail": "Path A missing attention ops must fail structural op_count",
+          "fault": "missing-attention",
+          "path_a_op_count": 14,
+          "path_a_total": 2319473,
+          "path_b_op_count": 17,
+          "path_b_total": 2519842,
+          "rejected": true
+        },
+        "path-a-double-count": {
+          "accepted": false,
+          "detail": "Path A sum-of-breakdowns must exceed 20% gate",
+          "fault": "path-a-double-count",
+          "path_a_total": 3626007,
+          "path_b_total": 2519842,
+          "rejected": true,
+          "total_error_pct": 43.9
+        },
+        "path-b-decomposition": {
+          "accepted": false,
+          "detail": "Mutated Path B decomposition must exceed 20% gate",
+          "fault": "path-b-decomposition",
+          "mutated_oracle": "/tmp/perf_signoff_negative__c7lxpmj/mutated_workload_oracle.json",
+          "mutated_path_b_total": 911680,
+          "path_a_total": 2519940,
+          "reducer_total_cycles": 2519842,
+          "rejected": true,
+          "total_error_pct": 176.41
+        }
+      },
+      "test": "negative-qwen-paths",
+      "utc": "2026-08-11T05:52:38.111103+00:00"
+    },
+    "provenance": {
+      "argv": [
+        "scripts/run_func_model_perf_signoff.py",
+        "run",
+        "--cases",
+        "qwen-blk0,qwen-decode-c128-g1,qwen-prefill-16,qwen-prefill-128",
+        "--compare-paths",
+        "a,b",
+        "--evidence-path",
+        "task-16-qwen-spec-gates.json",
+        "--todo-id",
+        "task-16"
+      ],
+      "dirty_paths": [
+        ".omo/evidence/task-0-signoff-v3-runner.txt",
+        ".omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md",
+        ".omo/notepads/phase6-rtl-verification/learnings.md",
+        ".omo/plans/func-model-performance-infra-calibration-closure.md",
+        "build/evidence/fm-cv-chain.txt",
+        "build/evidence/w3-4-mobilenetv3-fm.txt",
+        "requirements.txt",
+        "sim/engine/block_engine.py",
+        "sim/engine/fsa_engine.py",
+        "sim/engine/gmma_engine.py",
+        "sim/engine/is_systolic_engine.py",
+        "sim/engine/os_systolic_engine.py",
+        "sim/engine/systolic_engine.py",
+        "sim/engine/tensor_core_engine.py",
+        "sim/engine/timeline.py",
+        "sim/engine/wmma_engine.py",
+        "sim/func_model.py",
+        "sim/mmio_bridge.py",
+        "sim/model_specs.py",
+        "sim/models/dma.py",
+        "sim/models/dram.py",
+        "sim/models/kv_cache.py",
+        "sim/models/mxu.py",
+        "sim/models/noc.py",
+        "sim/models/sfu.py",
+        "sim/models/sw_overhead.py",
+        "sim/models/vector.py",
+        "sim/npu_sim.py",
+        "sim/timing/dashboard.py",
+        "sim/timing/generate_summary.py",
+        "sim/timing/timing_engine.py",
+        "sim/validate_e2e.py",
+        ".omo/evidence/task-1-perf-spec.txt",
+        ".omo/evidence/task-13-qwen-workload.txt",
+        ".omo/evidence/task-14-cv-workloads.txt",
+        ".omo/evidence/task-15-timeline-report.txt",
+        ".omo/evidence/task-2-perf-contract.txt",
+        ".omo/evidence/task-3-perf-matrix.txt",
+        ".omo/evidence/task-5-independent-oracle.txt",
+        ".omo/evidence/task-7-provider-registry.txt",
+        ".omo/notepads/func-model-performance-infra-calibration-closure/decisions.md",
+        ".omo/notepads/func-model-performance-infra-calibration-closure/issues.md",
+        ".omo/notepads/func-model-performance-infra-calibration-closure/learnings.md",
+        ".omo/notepads/func-model-performance-infra-calibration-closure/problems.md",
+        "config/func_model_perf_matrix_v1.json",
+        "config/func_model_perf_oracle_v1.json",
+        "config/func_model_perf_spec_v1.json",
+        "config/func_model_workload_oracle_v1.json",
+        "config/oracle/qwen25_3b_layer_template_v1.json",
+        "config/oracle/qwen25_3b_workload_variants_v1.json",
+        "config/perf_providers/spec-block64-v1.json",
+        "config/tests/cv_bad_shape.json",
+        "config/tests/cv_dropped_layer.json",
+        "config/tests/cv_unknown_op.json",
+        "config/tests/perf_contract_bad_unit.json",
+        "config/tests/perf_contract_measured_cycles.json",
+        "config/tests/perf_contract_nan.json",
+        "config/tests/perf_matrix_duplicate.json",
+        "config/tests/perf_matrix_missing.json",
+        "config/tests/perf_matrix_missing_6p4_endpoint.json",
+        "config/tests/perf_matrix_skip.json",
+        "config/tests/perf_spec_bad_units.json",
+        "config/tests/perf_spec_rtl_basis.json",
+        "config/tests/qwen_7gemm.json",
+        "config/tests/qwen_old_dims.json",
+        "config/tests/qwen_rtl_source.json",
+        "config/workloads/mobilenetv3_perf_spec_v1.json",
+        "config/workloads/qwen25_3b_perf_spec_v1.json",
+        "config/workloads/resnet50_perf_spec_v1.json",
+        "config/workloads/yolov8n_perf_spec_v1.json",
+        "docs/func-model-performance-spec.md",
+        "scripts/check_func_model_perf_spec.py",
+        "scripts/check_perf_workloads.py",
+        "scripts/reduce_func_model_perf_oracle.py",
+        "scripts/run_func_model_perf_signoff.py",
+        "scripts/verify_func_model_perf_spec.py",
+        "sim/tests/test_mmio_perf_events.py",
+        "sim/timing/perf_contract.py",
+        "sim/timing/perf_session.py",
+        "sim/timing/providers.py",
+        "sim/timing/qwen_spec_gates.py",
+        "sim/timing/tests/test_perf_contract.py",
+        "sim/timing/tests/test_perf_memory_spec.py",
+        "sim/timing/tests/test_perf_mxu_spec.py",
+        "sim/timing/tests/test_perf_noc_kv_spec.py",
+        "sim/timing/tests/test_perf_oracle_independence.py",
+        "sim/timing/tests/test_perf_providers.py",
+        "sim/timing/tests/test_perf_sfu_vector_spec.py",
+        "sim/timing/tests/test_perf_signoff_runner.py",
+        "sim/timing/tests/test_perf_spec_config.py",
+        "sim/timing/tests/test_perf_sw_overhead_spec.py",
+        "sim/timing/tests/test_perf_timeline.py",
+        "sim/timing/tests/test_perf_workloads.py",
+        "sim/timing/tests/test_qwen_spec_gates.py",
+        "sim/timing/workloads.py"
+      ],
+      "head": "ac3a2fb25cf8c40537f1891e497def00980447ed",
+      "head_short": "ac3a2fb25cf8",
+      "host": "sz0002",
+      "oracle_sha256": "",
+      "provider_sha256": "",
+      "python_version": "3.10.12",
+      "report_sha256": "",
+      "seed": 42,
+      "spec_sha256": "",
+      "units": {
+        "bandwidth": "GB/s",
+        "cycles": "estimated_cycles",
+        "time": "ns"
+      },
+      "utc_end": "2026-08-11T05:52:37.899174+00:00",
+      "utc_start": "2026-08-11T05:52:37.554781+00:00",
+      "workload_sha256": ""
+    },
+    "source_fingerprint": "",
+    "stale_state": {
+      "stale_evidence": false,
+      "stale_head": false,
+      "stale_report": false,
+      "stale_source": false
+    },
+    "todo_id": "task-16",
+    "verdict": "pass"
+  },
+  "elapsed_s": 0.405,
+  "evidence_sha256": "1cb5e13335469702a75418dbf9435d157087a54c75a29fdd48ea8e5f45dcb382",
+  "exit_code": 0,
+  "head": "ac3a2fb25cf8c40537f1891e497def00980447ed",
+  "stdout_preview": "{\n  \"command\": \"run\",\n  \"compare_paths\": \"a,b\",\n  \"cases\": [\n    \"qwen-blk0\",\n    \"qwen-decode-c128-g1\",\n    \"qwen-prefill-16\",\n    \"qwen-prefill-128\"\n  ],\n  \"total\": 4,\n  \"passed\": 4,\n  \"failed\": 0,\n  \"errors\": [],\n  \"results\": {\n    \"qwen-blk0\": {\n      \"workload_id\": \"qwen25-3b-blk0-decode\",\n      \"passed\": true,\n      \"path_a_total\": 2519940,\n      \"path_b_total\": 2519842,\n      \"total_error_pct\": 0.0,\n      \"assertions\": [\n        {\n          \"id\": \"structural_op_count\",\n          \"result\": \"pass\",\n          \"detail\": \"qwen25-3b-blk0-decode: Path A op_count=17, Path B op_count=17\"\n        },\n        {\n          \"id\": \"canonical_op_count\",\n          \"result\": \"pass\",\n          \"detail\": \"qwen25-3b-blk0-decode: expected 17 ops, got 17\"\n        },\n        {\n          \"id\": \"structural_workload_hash\",\n          \"result\": \"pass\",\n          \"detail\": \"qwen25-3b-blk0-decode: workload hash mismatch\"\n        },\n        {\n          \"id\": \"matching_units\",\n          \"result\": \"pass\",\n          \"detail\": \"qwen25-3b-blk0-decode: units mismatch\"\n        },\n        {\n          \"id\": \"positive_activity\",\n          \"result\": \"pass\",\n          \"detail\": \"qwen25-3b-blk0-decode: non-positive total cycles\"\n        },\n        {\n          \"id\": \"total_cycles_within_20pct\",\n          \"result\": \"pass\",\n          \"detail\": \"qwen25-3b-blk0-decode: total error 0.00% (A=2519940, B=2519842)\"\n        },\n        {\n          \"id\": \"major_breakdown_mxu_within_20pct\",\n          \"result\": \"pass\",\n          \"detail\": \"qwen25-3b-blk0-decode: mxu error 0.00% (A=3613113, B=3613113)\"\n        },\n        {\n          \"id\": \"minor_breakdown_vector_within_2\",\n          \"result\": \"pass\",\n          \"detail\": \"qwen25-3b-blk0-decode: vector abs error 0 (A=590, B=590)\"\n        },\n        {\n          \"id\": \"minor_breakdown_sfu_within_2\",\n          \"result\": \"pass\",\n          \"detail\": \"qwen25-3b-blk0-decode: sfu abs error 0 (A=12304, B=12304)\"\n        }\n      ]\n    },\n    \"qwen-decode-c128-g1\": {\n      \"workload",
+  "utc_end": "2026-08-11T05:52:37.899174+00:00",
+  "utc_start": "2026-08-11T05:52:37.494672+00:00",
+  "verdict": "pass"
+}
