@@ -325,6 +325,8 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
 
 ## Final verification wave (after ALL todos)
 > Runs in parallel. ALL must exit 0 + `verdict=approve`. Human checkpoint: agent 执行 F1-F4 命令并 surface 结构化结果，但 `performance_spec_verified=true` 的阶段签收必须由用户人工确认后宣布。此 checkpoint 是 zero-intervention T1-T25 之后的显式 human gate，不否定 T1-T25 的 zero-intervention 策略。
+> 
+> ✅ **2026-08-11 人工确认**：F1-F4 全部通过，证据 bundle 完整，`performance_spec_verified=true` 已声明。Func Model 性能签收阶段正式关闭。
 - [x] F1. Plan compliance audit
   Run `python3 scripts/run_func_model_perf_signoff.py audit --run-id-from .omo/evidence/task-25-func-model-perf-spec-signoff.json --plan .omo/plans/func-model-performance-infra-calibration-closure.md --require-done-claims 1-25 --recompute --evidence .omo/evidence/final-perf-spec-plan-compliance.md`. Expected exit 0, `verdict=approve`, 25 valid claims and independently recomputed gates.
 - [x] F2. Architecture and code-quality audit

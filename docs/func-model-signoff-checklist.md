@@ -1,8 +1,8 @@
-# Func Model Signoff Checklist — v3 (with Bug Fix + Bridge-Accum Fix + INTC Fix)
+# Func Model Signoff Checklist — v3 + Performance Closure ✅
 
-> **Date**: 2026-07-27
+> **Date**: 2026-08-11 (last updated)
 > **Scope**: v2 op-level + v3 SoC integration + bug-fix cycle (FM-004/005/006/007) + bridge accumulation fix (FM-005 sub-issue) + INTC KeyError fix (FM-008). RTL-golden-readiness for full SoC RTL is deferred.
-> **Performance signoff**: FAIL/PARTIAL — tracked separately. Do NOT claim performance pass.
+> **Performance signoff**: ✅ PASS — func-model-performance-infra-calibration-closure completed 2026-08-11, T1-T25 + F1-F4 all passed, performance_spec_verified=true.
 
 This document reconciles all signoff evidence gathered across tasks T0B–T5 and codifies
 the evidence chain, provenance rules, and classification boundaries that the semantic
@@ -390,3 +390,42 @@ bash scripts/ci_bootstrap_firmware.sh 2>&1 | tee .omo/evidence/task-w1t5-firmwar
 
 The software baseline must pass.  The firmware script may skip — that is
 expected and not an error.
+
+---
+
+## Performance Signoff Status — func-model-performance-infra-calibration-closure ✅
+
+Completed 2026-08-11. All T1-T25 implementation tasks + Final Wave F1-F4 passed.
+
+| Signoff ID | Description | Status |
+|---|---|---|
+| PERF-FM-01 | Provider formula gates (MXU/SFU/Vector/DMA/DRAM/NoC/KV/SW, 104 rows) | ✅ PASS |
+| PERF-FM-02 | Independent provider + workload oracles (Path B, zero Path A imports) | ✅ PASS |
+| PERF-FM-03 | Semantic MMIO performance events + contract validation | ✅ PASS |
+| PERF-FM-04 | MXU architectural estimates vs independent oracle | ✅ PASS |
+| PERF-FM-05 | SFU + Vector spec gates (54 rows, 6 ops each) | ✅ PASS |
+| PERF-FM-06 | DMA + DRAM spec gates (28 rows total) | ✅ PASS |
+| PERF-FM-07 | NoC + KV Cache spec gates | ✅ PASS |
+| PERF-FM-08 | SW Overhead assumptions (4 workloads, assumption_only=true) | ✅ PASS |
+| PERF-FM-09 | Qwen2.5-3B workload canonicalization (2048/11008/36/16/2) | ✅ PASS |
+| PERF-FM-10 | CV workloads (MobileNetV3/ResNet50/YOLOv8n) | ✅ PASS |
+| PERF-FM-11 | Timeline convergence + overlap semantics | ✅ PASS |
+| PERF-FM-12 | Qwen dual-path spec gates (4 workloads, Path A vs B ≤20%) | ✅ PASS |
+| PERF-FM-13 | CV dual-path spec gates (3 workloads, Path A vs B ≤20%) | ✅ PASS |
+| PERF-FM-14 | Sensitivity sweeps (6 dims, monotonicity + endpoints) | ✅ PASS |
+| PERF-FM-15 | Cross-model scaling (1.5B/3B/7B, monotonic + weight_byte delta <20%) | ✅ PASS |
+| PERF-FM-16 | Uncertainty-aware report-only KPIs (low/base/high bands) | ✅ PASS |
+| PERF-FM-17 | Adversarial matrix (26 faults, disable-each-validator) | ✅ PASS |
+| PERF-FM-18 | Performance regression baseline (spec hash frozen + change policy) | ✅ PASS |
+| PERF-FM-19 | Portable CI + full signoff orchestration (--all-spec, no VCS/network) | ✅ PASS |
+| PERF-FM-20 | Documentation + bug ledger consistency audit | ✅ PASS |
+| PERF-FM-21 | Clean performance-spec signoff (T25, calibration_state=uncalibrated) | ✅ PASS |
+| PERF-FM-22 | Plan compliance audit (F1, 25 DoneClaims + canonical hash recompute) | ✅ PASS |
+| PERF-FM-23 | Architecture + code-quality audit (F2, 802/802 pytest + 5 checks) | ✅ PASS |
+| PERF-FM-24 | Real agent QA (F3, 9 cases + 4 faults) | ✅ PASS |
+| PERF-FM-25 | Scope + claim fidelity audit (F4, zero waivers, non-omo dirty=0) | ✅ PASS |
+
+**Evidence**: `.omo/evidence/task-25-func-model-perf-spec-signoff.json` + bundle under `.omo/evidence/func-model-perf-spec/`
+**Report**: `reports/func-model-perf-verification-report.md`
+**Plan**: `.omo/plans/func-model-performance-infra-calibration-closure.md`
+**State**: `performance_spec_verified=true, calibration_state=uncalibrated`
