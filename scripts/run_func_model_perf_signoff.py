@@ -1196,6 +1196,12 @@ _QWEN_WORKLOAD_ALIASES = {
     "qwen-prefill-128": "qwen25-3b-prefill-128",
 }
 
+_CV_WORKLOAD_ALIASES = {
+    "mobilenetv3": "mobilenetv3",
+    "resnet50": "resnet50",
+    "yolov8n": "yolov8n",
+}
+
 
 def _run_qwen_path_comparison(case_list: List[str]) -> Dict[str, Any]:
     """Run a list of Qwen workload aliases through Path A/B comparison."""
@@ -1214,6 +1220,49 @@ def _run_qwen_path_comparison(case_list: List[str]) -> Dict[str, Any]:
             failed += 1
             continue
         comparison = evaluate_qwen_workload(workload_id)
+        results[alias] = {
+            "workload_id": workload_id,
+            "passed": comparison.get("passed", False),
+            "path_a_total": comparison.get("path_a_total"),
+            "path_b_total": comparison.get("path_b_total"),
+            "total_error_pct": comparison.get("total_error_pct"),
+            "assertions": comparison.get("assertions", []),
+        }
+        if comparison.get("passed"):
+            passed += 1
+        else:
+            failed += 1
+
+    return {
+        "command": "run",
+        "compare_paths": "a,b",
+        "cases": case_list,
+        "total": len(case_list),
+        "passed": passed,
+        "failed": failed,
+        "errors": errors,
+        "results": results,
+        "verdict": "pass" if failed == 0 and not errors else "fail",
+    }
+
+
+def _run_cv_path_comparison(case_list: List[str]) -> Dict[str, Any]:
+    """Run a list of CV workload aliases through Path A/B comparison."""
+    from timing.cv_spec_gates import evaluate_cv_workload
+
+    results: Dict[str, Any] = {}
+    passed = 0
+    failed = 0
+    errors: List[str] = []
+
+    for alias in case_list:
+        workload_id = _CV_WORKLOAD_ALIASES.get(alias)
+        if workload_id is None:
+            results[alias] = {"verdict": "fail", "error": f"Unknown case alias: {alias}"}
+            errors.append(f"Unknown alias: {alias}")
+            failed += 1
+            continue
+        comparison = evaluate_cv_workload(workload_id)
         results[alias] = {
             "workload_id": workload_id,
             "passed": comparison.get("passed", False),
@@ -1461,7 +1510,18 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     if compare_paths and cases_str:
         case_list = [c.strip() for c in cases_str.split(",") if c.strip()]
-        report = _run_qwen_path_comparison(case_list)
+        cv_aliases = set(_CV_WORKLOAD_ALIASES.keys())
+        qwen_aliases = set(_QWEN_WORKLOAD_ALIASES.keys())
+        if cv_aliases.issuperset(case_list):
+            report = _run_cv_path_comparison(case_list)
+        elif qwen_aliases.issuperset(case_list):
+            report = _run_qwen_path_comparison(case_list)
+        else:
+            report = {
+                "verdict": "fail",
+                "error": "case list mixes CV and Qwen aliases or contains unknown aliases",
+                "cases": case_list,
+            }
         result.stdout = json.dumps(report, indent=2)
         print(result.stdout)
         result.exit_code = 0 if report.get("verdict") == "pass" else 1
@@ -1921,6 +1981,53 @@ def cmd_negative(args: argparse.Namespace) -> int:
                             str(REPO_ROOT / "scripts" / "run_func_model_perf_signoff.py"),
                             "negative",
                             "--case", "qwen-paths",
+                            "--faults", faults_str,
+                            "--evidence-path", evidence_path,
+                        ],
+                    },
+                    mutation_result=report,
+                    verdict=neg_result.verdict,
+                )
+                neg_result.claim = claim
+                _write_evidence(neg_result, args)
+
+            return 0 if all_ok else 1
+
+        elif case == "cv-paths":
+            sys.path.insert(0, str(SIM_DIR))
+            from timing.cv_spec_gates import run_cv_paths_negative
+
+            report = run_cv_paths_negative(fault_list)
+            sys.path.remove(str(SIM_DIR))
+            print(json.dumps(report, indent=2))
+            all_ok = report.get("accepted") == 0 and report.get("rejected") == len(fault_list)
+
+            evidence_path = getattr(args, "evidence_path", None)
+            if evidence_path:
+                if not hasattr(args, "todo_id"):
+                    args.todo_id = "task-17-negative"
+                start_utc = datetime.now(timezone.utc)
+                neg_result = RunResult(
+                    utc_start=start_utc.isoformat(),
+                    utc_end=datetime.now(timezone.utc).isoformat(),
+                    elapsed_s=0.0,
+                    exit_code=0 if all_ok else 1,
+                    stdout=json.dumps(report, indent=2),
+                    verdict="pass" if all_ok else "fail",
+                )
+                provenance = record_provenance()
+                claim = DoneClaim(
+                    todo_id=args.todo_id,
+                    head=provenance["head"],
+                    source_fingerprint=provenance["spec_sha256"],
+                    evidence_path=evidence_path,
+                    provenance=provenance,
+                    mutation_command={
+                        "argv": [
+                            sys.executable,
+                            str(REPO_ROOT / "scripts" / "run_func_model_perf_signoff.py"),
+                            "negative",
+                            "--case", "cv-paths",
                             "--faults", faults_str,
                             "--evidence-path", evidence_path,
                         ],

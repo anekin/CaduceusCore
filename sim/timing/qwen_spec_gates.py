@@ -223,12 +223,20 @@ def compare_path_results(
         path_a["op_count"] == path_b["op_count"],
         f"{workload_id}: Path A op_count={path_a['op_count']}, Path B op_count={path_b['op_count']}",
     )
-    expected_ops = 17 if path_a["layer_count"] == 1 else 612
-    _assert(
-        "canonical_op_count",
-        path_a["op_count"] == expected_ops,
-        f"{workload_id}: expected {expected_ops} ops, got {path_a['op_count']}",
-    )
+    # Canonical op counts are frozen only for the Qwen2.5-3B workloads.
+    if workload_id.startswith("qwen25-"):
+        expected_ops = 17 if path_a["layer_count"] == 1 else 612
+        _assert(
+            "canonical_op_count",
+            path_a["op_count"] == expected_ops,
+            f"{workload_id}: expected {expected_ops} ops, got {path_a['op_count']}",
+        )
+    if "engine_counts" in path_a and "engine_counts" in path_b:
+        _assert(
+            "structural_engine_counts",
+            path_a["engine_counts"] == path_b["engine_counts"],
+            f"{workload_id}: engine_counts mismatch A={path_a['engine_counts']} B={path_b['engine_counts']}",
+        )
     _assert(
         "structural_workload_hash",
         path_a["workload_hash"] == path_b["workload_hash"],

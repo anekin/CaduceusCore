@@ -41,6 +41,13 @@ _FORBIDDEN_MODULES = frozenset({
 
 _FORBIDDEN_PREFIXES = tuple(sorted(_FORBIDDEN_MODULES))
 
+# CV workload IDs supported for independent Path B reduction.
+_CV_WORKLOAD_IDS = {"mobilenetv3", "resnet50", "yolov8n"}
+_CV_MANIFEST_PATHS = {
+    wid: f"config/workloads/{wid}_perf_spec_v1.json"
+    for wid in _CV_WORKLOAD_IDS
+}
+
 
 def _check_import_policy(filepath: str) -> Tuple[bool, List[str]]:
     """Scan a Python file for forbidden imports and return (pass, violations)."""
@@ -619,9 +626,167 @@ except Exception as e:
         return False, f"Subprocess isolation check error: {e}"
 
 
-# ── Per-workload output (T16) ────────────────────────────────────────────
+# ── Per-workload output (T16/T17) ─────────────────────────────────────────
 
 _MXU_SHAPE_FIELDS = ("M", "K", "N")
+
+
+def _cv_mxu_cycles(
+    M: int,
+    K: int,
+    N: int,
+    array_H: int = 64,
+    array_W: int = 64,
+    bw_bpc: float = 43.52,
+    weight_bytes_per_elem: float = 0.5,
+) -> int:
+    """CV-specific MXU estimate: tile compute is capped before bottleneck selection."""
+    K_tiles = _ceil_div(K, array_H)
+    N_tiles = _ceil_div(N, array_W)
+    total_tiles = K_tiles * N_tiles
+    if M >= array_H:
+        per_tile_compute = array_H + array_W + array_H
+    else:
+        per_tile_compute = array_H * (M + 1) + array_W
+    weight_bytes = array_H * array_W * weight_bytes_per_elem
+    act_bytes = M * array_H
+    per_tile_dma = (weight_bytes + act_bytes) / bw_bpc if bw_bpc > 0 else float("inf")
+    first_tile_cold = per_tile_compute + per_tile_dma
+    bottleneck = max(per_tile_compute, per_tile_dma)
+    raw = first_tile_cold + (total_tiles - 1) * bottleneck
+    return math.ceil(raw)
+
+
+def _cv_critical_path_from_manifest(manifest: Dict[str, Any]) -> Tuple[int, Dict[str, int], Dict[str, int]]:
+    """Compute critical path, breakdown and engine counts from a CV manifest.
+
+    Uses the same architectural formulas as Path A but only standard-library
+    and local functions so Path B remains independent.
+    """
+    entries = manifest.get("entries", [])
+    nodes: List[Dict[str, Any]] = []
+    breakdown: Dict[str, int] = {"mxu": 0, "sfu": 0, "vector": 0, "host_only": 0}
+    engine_counts: Dict[str, int] = {"mxu": 0, "sfu": 0, "vector": 0, "host_only": 0}
+
+    for entry in entries:
+        engine = entry.get("engine")
+        host_only = entry.get("host_only", False) or engine is None
+        shape = entry.get("shape", {})
+
+        if host_only:
+            cycles = 0
+            engine_counts["host_only"] += 1
+        elif engine == "mxu":
+            cycles = _cv_mxu_cycles(
+                shape.get("M", 0), shape.get("K", 0), shape.get("N", 0)
+            )
+            breakdown["mxu"] += cycles
+            engine_counts["mxu"] += 1
+        elif engine == "sfu":
+            cycles = _sfu_cycles("silu", shape.get("elements", 0))
+            breakdown["sfu"] += cycles
+            engine_counts["sfu"] += 1
+        elif engine == "vector":
+            cycles = _vector_cycles("mul", shape.get("dim", 0))
+            breakdown["vector"] += cycles
+            engine_counts["vector"] += 1
+        else:
+            cycles = 0
+            engine_counts.setdefault(str(engine), 0)
+            engine_counts[str(engine)] += 1
+
+        nodes.append({"cycles": cycles})
+
+    seq_to_idx = {entry["seq"]: i for i, entry in enumerate(entries)}
+    edges: List[Tuple[int, int]] = []
+    for dst_idx, entry in enumerate(entries):
+        for dep_seq in entry.get("depends_on", []):
+            src_idx = seq_to_idx.get(dep_seq)
+            if src_idx is not None:
+                edges.append((src_idx, dst_idx))
+
+    cpath = _reduce_critical_path_local(nodes, edges)
+    return cpath, breakdown, engine_counts
+
+
+def _reduce_critical_path_local(
+    nodes: List[Dict[str, Any]], edges: List[Tuple[int, int]]
+) -> int:
+    """Local copy of compute_critical_path_from_dag to avoid importing Path A."""
+    n = len(nodes)
+    if n == 0:
+        return 0
+    indeg = [0] * n
+    adj: List[List[int]] = [[] for _ in range(n)]
+    for u, v in edges:
+        adj[u].append(v)
+        indeg[v] += 1
+    longest = [nodes[i].get("cycles", 0) for i in range(n)]
+    queue = [i for i in range(n) if indeg[i] == 0]
+    visited = 0
+    while queue:
+        u = queue.pop(0)
+        visited += 1
+        for v in adj[u]:
+            cand = longest[u] + nodes[v].get("cycles", 0)
+            if cand > longest[v]:
+                longest[v] = cand
+            indeg[v] -= 1
+            if indeg[v] == 0:
+                queue.append(v)
+    if visited != n:
+        raise ValueError("Cycle detected in CV DAG")
+    return max(longest)
+
+
+def reduce_cv_workload(
+    workload_id: str,
+    oracle_path: str,
+) -> Dict[str, Any]:
+    """Reduce a single CV workload through Path B and return structured result."""
+    manifest_path = _CV_MANIFEST_PATHS.get(workload_id)
+    if manifest_path is None:
+        return {
+            "workload_id": workload_id,
+            "verdict": "fail",
+            "error": f"Unknown CV workload '{workload_id}'",
+        }
+
+    with open(manifest_path, "r") as f:
+        manifest = json.load(f)
+
+    # Consume the hand-authored oracle entry for structural validation.
+    with open(oracle_path, "r") as f:
+        oracle = json.load(f)
+    oracle_entry = oracle.get("workload_entries", {}).get(workload_id, {})
+    oracle_summary = oracle_entry.get("per_op_cycles", {}).get("summary", {})
+
+    cpath, breakdown, engine_counts = _cv_critical_path_from_manifest(manifest)
+    inv = manifest.get("invariants", {})
+    total_entries = inv.get("total_entries", len(manifest.get("entries", [])))
+
+    # Structural cross-check against the hand-authored oracle summary.
+    structural_ok = (
+        engine_counts.get("mxu", 0) == oracle_summary.get("gemm_entries", inv.get("gemm_entries", 0))
+        and engine_counts.get("sfu", 0) == oracle_summary.get("sfu_entries", inv.get("sfu_entries", 0))
+        and engine_counts.get("host_only", 0) == oracle_summary.get("host_only_entries", inv.get("host_only_entries", 0))
+        and total_entries == engine_counts.get("mxu", 0) + engine_counts.get("sfu", 0)
+        + engine_counts.get("vector", 0) + engine_counts.get("host_only", 0)
+    )
+
+    return {
+        "tool": "reduce_func_model_perf_oracle",
+        "path": "Path B (independent)",
+        "workload_id": workload_id,
+        "total_cycles": cpath,
+        "breakdown": breakdown,
+        "op_count": total_entries,
+        "engine_counts": engine_counts,
+        "units": "cycles",
+        "workload_hash": manifest.get("content_hash", ""),
+        "manifest_ref": manifest_path,
+        "verdict": "pass" if cpath > 0 and structural_ok else "fail",
+    }
 
 
 def _canonical_workload_hash(manifest: Dict[str, Any], variant: Dict[str, Any]) -> str:
@@ -738,10 +903,12 @@ def reduce_workload(
         op_cycles[op_id] = cyc
 
     breakdown: Dict[str, int] = {"mxu": 0, "sfu": 0, "vector": 0}
+    engine_counts: Dict[str, int] = {"mxu": 0, "sfu": 0, "vector": 0}
     for op in ops:
         eng = op["engine"]
         if eng in breakdown:
             breakdown[eng] += op_cycles.get(op["op_id"], 0)
+            engine_counts[eng] += 1
 
     total_ops = len(ops) * variant.get("layer_count", 1)
 
@@ -754,6 +921,7 @@ def reduce_workload(
         "breakdown": breakdown,
         "op_count": total_ops,
         "layer_count": variant.get("layer_count", 1),
+        "engine_counts": engine_counts,
         "units": "cycles",
         "workload_hash": _canonical_workload_hash(manifest, variant),
         "manifest_ref": manifest_path,
@@ -807,9 +975,12 @@ def main() -> int:
         result["subprocess_isolation"] = {"verdict": "skipped"}
 
     if args.workload_id:
-        workload_result = reduce_workload(
-            args.workload_id, args.oracle, args.template, args.variants, args.manifest
-        )
+        if args.workload_id in _CV_WORKLOAD_IDS:
+            workload_result = reduce_cv_workload(args.workload_id, args.oracle)
+        else:
+            workload_result = reduce_workload(
+                args.workload_id, args.oracle, args.template, args.variants, args.manifest
+            )
         print(json.dumps(workload_result, indent=2))
         return 0 if workload_result.get("verdict") == "pass" else 1
 
