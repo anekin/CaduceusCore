@@ -62,6 +62,7 @@ SIM_DIR = REPO_ROOT / "sim"
 if str(SIM_DIR) not in sys.path:
     sys.path.insert(0, str(SIM_DIR))
 
+from timing.model_scaling import build_scaling_report
 from timing.sweeps import run_negative_sweeps, run_sweeps
 
 # ---------------------------------------------------------------------------
@@ -1539,6 +1540,35 @@ def cmd_run(args: argparse.Namespace) -> int:
             ]
         }
         claim.green_result = report
+    elif cases_str == "qwen-scaling-1p5b-3b-7b" and getattr(args, "report_only", False):
+        sys.path.insert(0, str(SIM_DIR))
+        try:
+            report = build_scaling_report()
+        finally:
+            sys.path.remove(str(SIM_DIR))
+        result.stdout = json.dumps(report, indent=2)
+        print(result.stdout)
+        result.exit_code = 0 if report.get("verdict") == "pass" else 1
+        ev_path = getattr(args, "evidence_path", "run_evidence.json")
+        if ev_path == "run_evidence.json":
+            ev_path = ".omo/evidence/task-19-model-scaling.json"
+        claim.evidence_path = ev_path
+        # _write_evidence prepends EVIDENCE_DIR to relative paths.
+        args.evidence_path = (
+            ev_path if Path(ev_path).is_absolute() else Path(ev_path).name
+        )
+        claim.green_command = {
+            "argv": [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "run_func_model_perf_signoff.py"),
+                "run",
+                "--cases", cases_str,
+                "--report-only",
+                "--evidence-path", ev_path,
+                "--todo-id", getattr(args, "todo_id", "unknown"),
+            ]
+        }
+        claim.green_result = report
     elif getattr(args, "sweeps", None):
         sweep_ids = [s.strip() for s in args.sweeps.split(",") if s.strip()]
         req_eps = [e.strip() for e in getattr(args, "require_endpoints", "").split(",") if e.strip()]
@@ -2113,6 +2143,54 @@ def cmd_negative(args: argparse.Namespace) -> int:
 
             return 0 if all_ok else 1
 
+        elif case == "model-scaling":
+            sys.path.insert(0, str(SIM_DIR))
+            from timing.model_scaling import run_model_scaling_negative
+
+            report = run_model_scaling_negative(fault_list)
+            sys.path.remove(str(SIM_DIR))
+            print(json.dumps(report, indent=2))
+            all_ok = report.get("accepted") == 0 and report.get("rejected") == len(fault_list)
+
+            evidence_path = getattr(args, "evidence_path", None)
+            if evidence_path:
+                if not hasattr(args, "todo_id"):
+                    args.todo_id = "task-19-negative"
+                start_utc = datetime.now(timezone.utc)
+                neg_result = RunResult(
+                    utc_start=start_utc.isoformat(),
+                    utc_end=datetime.now(timezone.utc).isoformat(),
+                    elapsed_s=0.0,
+                    exit_code=0 if all_ok else 1,
+                    stdout=json.dumps(report, indent=2),
+                    verdict="pass" if all_ok else "fail",
+                )
+                provenance = record_provenance()
+                claim = DoneClaim(
+                    todo_id=args.todo_id,
+                    head=provenance["head"],
+                    source_fingerprint=provenance["spec_sha256"],
+                    evidence_path=evidence_path,
+                    provenance=provenance,
+                    mutation_command={
+                        "argv": [
+                            sys.executable,
+                            str(REPO_ROOT / "scripts" / "run_func_model_perf_signoff.py"),
+                            "negative",
+                            "--case", "model-scaling",
+                            "--faults", faults_str,
+                            "--evidence-path", evidence_path,
+                        ],
+                    },
+                    mutation_result=report,
+                    verdict=neg_result.verdict,
+                )
+                neg_result.claim = claim
+                args.evidence_path = Path(evidence_path).name
+                _write_evidence(neg_result, args)
+
+            return 0 if all_ok else 1
+
         return 0
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -2225,6 +2303,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--evidence-sources", nargs="*", help="Evidence source paths to check")
     p_run.add_argument("--checks", help="Audit checks (event-source,numerical-separation,...)")
     p_run.add_argument("--compare-paths", help="Compare independent paths (e.g. a,b)")
+    p_run.add_argument("--report-only", action="store_true", help="Emit report-only scaling evidence without product KPI gates")
     p_run.add_argument("--sweeps", help="Comma-separated sweep dimensions (e.g. bandwidth,array,...)")
     p_run.add_argument("--require-endpoints", help="Comma-separated endpoint checks (memory,compute)")
 

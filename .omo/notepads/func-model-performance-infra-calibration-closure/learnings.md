@@ -1,5 +1,23 @@
 
 
+## T19: Cross-Model Scaling Without Product Signoff (2026-08-11)
+
+### Design decisions
+- Added `sim/timing/model_scaling.py` with a single builder path that loads the canonical 17-op Qwen layer template from `config/workloads/qwen25_3b_perf_spec_v1.json` and resolves shapes per model using `sim.model_specs` dimensions.
+- Frozen INT4 weight-byte estimate from spec: `weight_bytes = 0.5 * layers * (2*hidden*head_dim*(num_heads+kv_heads) + 3*hidden*intermediate)`.
+- Decode-1 workload uses `batch_m=1, context_len=1` so all attention ops are active; total decode cycles = single-layer critical path * layers, using the same architectural formulas as T16 (`_mxu_decode_cycles`, `_sfu_cycles`, `_vector_cycles`, `compute_critical_path_from_dag`).
+- Memory-bound component = sum of per-MXU-op DMA transfer cycles (weight + activation bytes / effective BW) across one layer * layers; normalized per weight byte shows adjacent deltas <0.1% (well within the 20% gate).
+- Runner `run --cases qwen-scaling-1p5b-3b-7b --report-only` emits structured JSON with `verdict=pass` and `report_only=true`; no product KPI gate is applied in the GREEN path.
+- Runner `negative --case model-scaling --faults swapped-model-params,kpi-target-gate` rejects both: swapping 1.5B/7B hidden/layers breaks monotonic ordering, and injecting a fake `decode_tps >= 100` hard gate is rejected because T19 outputs must be report-only.
+
+### Verification results
+- GREEN: `python3 scripts/run_func_model_perf_signoff.py run --cases qwen-scaling-1p5b-3b-7b --report-only` exits 0 with strictly increasing weight_bytes and total_decode_cycles, normalized memory-bound ratio delta <=20%, and all reports `report_only=true`.
+- MUTATIONS: `python3 scripts/run_func_model_perf_signoff.py negative --case model-scaling --faults swapped-model-params,kpi-target-gate` exits 0 with `rejected=2,accepted=0`.
+- Pytest: 12/12 tests pass in `test_model_scaling.py` (GREEN monotonicity, report_only, assumptions; RED swapped-params, KPI gate, negative runner; CLI GREEN/RED; JSON evidence).
+- Full timing regression: 719/719 pass (707 existing + 12 new, no regressions).
+- Evidence recorded at `.omo/evidence/task-19-model-scaling.json` (green) and `.omo/evidence/task-19-model-scaling-negative.json` (negative).
+
+
 ## T18: Monotonicity and Bottleneck-Transition Sweeps (2026-08-11)
 
 ### Design decisions

@@ -1,4 +1,16 @@
 
+## T19 Issues (2026-08-11)
+
+### Open
+None.
+
+### Resolved / Design Notes
+1. **Evidence path handling for absolute vs relative paths** — `_write_evidence` prepends `EVIDENCE_DIR` to relative `args.evidence_path`. The model-scaling handler preserves absolute user-supplied evidence paths and reduces the default `.omo/evidence/task-19-model-scaling.json` to its basename so the file lands in `.omo/evidence/` without nesting.
+
+### Known limitation
+- Weight-byte estimate excludes the embedding table because `sim.model_specs.py` does not expose `vocab_size`. The estimate is an architectural param-count approximation and is used only for relative scaling validation (1.5B<3B<7B); no claim is made that it matches the published model-card parameter count exactly.
+
+
 ## T18 Issues (2026-08-11)
 
 ### Open

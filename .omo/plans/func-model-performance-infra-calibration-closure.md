@@ -267,7 +267,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/run_func_model_perf_signoff.py run --sweeps bandwidth,array,dma-channels,prompt,context,noc-hop --require-endpoints memory,compute` exits 0 with all grids present. `python3 scripts/run_func_model_perf_signoff.py negative --case sweeps --faults resource-positive-slope,workload-negative-slope,nan-slope,missing-6p4-endpoint,unreachable-transition` exits 0 only with `rejected=5,accepted=0`. Evidence `.omo/evidence/task-18-sensitivity.json`.
   Commit: Y | test(perf-spec): verify scaling and bottleneck transitions | Files sweep runner/tests
 
-- [ ] 19. Verify cross-model scaling without product signoff
+- [x] 19. Verify cross-model scaling without product signoff
   What to do: Generate Qwen1.5B/3B/7B decode report-only workloads from one builder. Assert weight bytes and total decode estimates increase with model size and memory-bound cycles/weight-byte normalize within 20%；do not gate absolute TPS targets.
   Parallelization: Y | Wave 4 | Blocks T20,T22-T25 | Blocked by T3,T13,T16
   References: `sim/model_specs.py:26-30` model specs；existing benchmark family reports。
