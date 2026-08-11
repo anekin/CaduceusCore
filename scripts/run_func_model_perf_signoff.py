@@ -2896,24 +2896,40 @@ def run_audit_check(check_name: str, args: argparse.Namespace) -> Dict[str, Any]
     base: Dict[str, Any] = {"check": check_name, "status": "ok", "verdict": "pass"}
 
     if check_name == "event-source":
-        rtl_refs = []
+        # Plan-relevant evidence only: func-model-perf-spec run bundles plus
+        # task evidence named `task-<digits>-<keyword-slug>` (keywords as the
+        # first slug component). Excludes unrelated other-plan evidence such
+        # as task-4c2-qwen25-3b-* real-blk0 RTL runs.
         relevant_keywords = (
             "perf", "qwen", "cv", "provider", "oracle",
             "timeline", "contract", "matrix", "workload", "independent",
         )
+        plan_evidence_re = re.compile(
+            r"^task-\d+-(?:perf|qwen|cv|provider|oracle|timeline|contract|"
+            r"matrix|workload|independent)[-_]"
+        )
         spec_evidence_dir = EVIDENCE_DIR / "func-model-perf-spec"
+        # Fail only on live-RTL source references: `rtl/` dir paths (same
+        # semantic as is_rtl_path) or rtl-named source files (*_rtl*.py/.v/.sv).
+        # Benign mentions (rtl rejection counters, negative-fixture config
+        # names, rtl_calibrated schema reason, no-rtl check name) do not
+        # indicate live-RTL dependency and must not fail.
+        rtl_dir_ref = re.compile(r"(?:^|[^a-z0-9_])rtl[/\\]")
+        rtl_source_ref = re.compile(r"rtl[a-z0-9_]*\.(?:py|v|sv|svh)\b")
+        rtl_refs = []
         for ev in EVIDENCE_DIR.rglob("*"):
             if not ev.is_file():
                 continue
             under_spec_dir = spec_evidence_dir in ev.parents
             name = ev.name.lower()
-            if not under_spec_dir and not any(kw in name for kw in relevant_keywords):
+            if not under_spec_dir and not plan_evidence_re.match(name):
                 continue
             try:
-                if "rtl" in ev.read_text().lower():
-                    rtl_refs.append(str(ev.relative_to(REPO_ROOT)))
+                txt = ev.read_text().lower()
             except Exception:
-                pass
+                continue
+            if rtl_dir_ref.search(txt) or rtl_source_ref.search(txt):
+                rtl_refs.append(str(ev.relative_to(REPO_ROOT)))
         base["detail"] = {"rtl_refs_found": len(rtl_refs), "files": rtl_refs[:10]}
         if rtl_refs:
             base["status"] = "fail"
