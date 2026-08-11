@@ -1,0 +1,67 @@
+{
+  "test": "negative-final-bundle",
+  "utc": "2026-08-11T10:28:07.921307+00:00",
+  "requested_faults": [
+    "source",
+    "spec",
+    "oracle",
+    "workload",
+    "report",
+    "claim"
+  ],
+  "results": {
+    "source": {
+      "fault": "source",
+      "rejected": true,
+      "failures": [
+        "source_fingerprint_mismatch",
+        "report_sha256_mismatch"
+      ]
+    },
+    "spec": {
+      "fault": "spec",
+      "rejected": true,
+      "failures": [
+        "spec_sha256_mismatch",
+        "report_sha256_mismatch"
+      ]
+    },
+    "oracle": {
+      "fault": "oracle",
+      "rejected": true,
+      "failures": [
+        "oracle_sha256_mismatch",
+        "report_sha256_mismatch"
+      ]
+    },
+    "workload": {
+      "fault": "workload",
+      "rejected": true,
+      "failures": [
+        "workload_sha256_mismatch",
+        "report_sha256_mismatch"
+      ]
+    },
+    "report": {
+      "fault": "report",
+      "rejected": true,
+      "failures": [
+        "canonical_hash_mismatch",
+        "report_sha256_mismatch"
+      ]
+    },
+    "claim": {
+      "fault": "claim",
+      "rejected": true,
+      "failures": [
+        "missing_field:evidence_sha256",
+        "claim_verdict_not_pass",
+        "report_sha256_mismatch"
+      ]
+    }
+  },
+  "accepted": 0,
+  "rejected": 6,
+  "all_passed": true,
+  "verdict": "pass"
+}

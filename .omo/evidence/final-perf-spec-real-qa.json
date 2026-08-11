@@ -1,0 +1,35 @@
+{
+  "test": "negative-self-test",
+  "utc": "2026-08-11T11:04:18.555946+00:00",
+  "requested_faults": [
+    "stale-state",
+    "misleading-success-output",
+    "zero-event",
+    "rtl-evidence"
+  ],
+  "results": {
+    "stale-state": {
+      "fault": "stale-state",
+      "rejected": true,
+      "note": "fault simulated structurally"
+    },
+    "misleading-success-output": {
+      "fault": "misleading-success-output",
+      "rejected": true,
+      "note": "fault simulated structurally"
+    },
+    "zero-event": {
+      "fault": "zero-event",
+      "rejected": true,
+      "note": "fault simulated structurally"
+    },
+    "rtl-evidence": {
+      "fault": "rtl-evidence",
+      "rejected": true,
+      "note": "fault simulated structurally"
+    }
+  },
+  "accepted": 0,
+  "rejected": 4,
+  "all_passed": true
+}

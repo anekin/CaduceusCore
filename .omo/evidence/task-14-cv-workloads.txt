@@ -1,0 +1,154 @@
+T14: Freeze Canonical CV Workloads (2026-08-11)
+================================================
+
+## Manifests Created
+- config/workloads/mobilenetv3_perf_spec_v1.json
+- config/workloads/resnet50_perf_spec_v1.json
+- config/workloads/yolov8n_perf_spec_v1.json
+
+## Exact Entry Counts
+
+| Workload | Total | GEMM (mxu/mmul) | SFU (sfu/silu) | Host-Only |
+|----------|-------|-----------------|----------------|-----------|
+| MobileNetV3-Small | 124 | 54 | 42 | 28 |
+| ResNet50 | 105 | 54 | 51 | 0 |
+| YOLOv8n | 129 | 63 | 57 | 9 |
+
+## Frozen Content Hashes (SHA-256 of entries, sorted JSON)
+
+| Workload | Content Hash |
+|----------|-------------|
+| mobilenetv3 | 9091ae2a86bbd5b9d1c3c3566cf98e1c82ef61e47ebd7c35b055c17d02afd4f7 |
+| resnet50 | 9467cdea905262a3dc2607b7e09e7b8a302ad91ee5d8189f27c47c5f9be43a9d |
+| yolov8n | aec40c8165a7b98ea699d2ef903892f788bfe80af8a4fa086f3c2989478f08d2 |
+
+## Trace Generator SHA-256
+
+| File | SHA-256 |
+|------|---------|
+| sim/cv/cv_trace.py | 5ab8389f856ccc0c950d788594ebcc6f19ef2bc8c6c2cf08693b350d618b402b |
+| sim/cv/traces/resnet50_trace.py | 3e61025f99fa40a03f3cb1c8c4896d0d7533df19796b060931f12ddbc35107b8 |
+| sim/cv/traces/yolov8n_trace.py | a934b2a8b7311bb6a8427766493748604cd6a394f7d2d1853564299cdac511bd |
+
+## Host-Only Rubric (Frozen)
+
+host_only = op that does not emit an MMIO command for MXU/SFU/Vector/DMA/NoC/KV.
+
+Host-only ops in CV manifests:
+- MobileNetV3-Small: shape, global_avg_pool (10), mul (9), add (6), concat, reshape = 28 entries
+- ResNet50: none (all 105 entries have engine classification; max_pool and avg_pool emit SFU cycles)
+- YOLOv8n: max_pool (3, SPPF), upsample (2), concat (4) = 9 entries
+
+All host-only entries have:
+  engine: null
+  op: null
+  host_only: true
+  shape: {}
+
+All non-host entries have:
+  engine: "mxu" or "sfu"
+  op: "mmul" (for mxu) or "silu" (for sfu)
+  shape: {M, K, N} for mxu, {elements} for sfu
+
+## CV Entry Classification (per trace type → engine/op)
+
+| Trace Type | Engine | Op | Notes |
+|------------|--------|----|-------|
+| pointwise_conv | mxu | mmul | 1x1 conv mapped to GEMM |
+| depthwise_conv | mxu | mmul | Depthwise conv mapped to GEMM |
+| gemm | mxu | mmul | Fully-connected layer |
+| hard_swish | sfu | silu | Element-wise activation, SFU pipeline |
+| hard_sigmoid | sfu | silu | Element-wise activation, SFU pipeline |
+| relu | sfu | silu | Element-wise activation, SFU pipeline |
+| max_pool | sfu | silu | Pool op with sfu_cycles > 0 |
+| avg_pool | sfu | silu | Pool op with sfu_cycles > 0 |
+| global_avg_pool | — | — | host-only (sfu_cycles=0) |
+| add | — | — | host-only (sfu_cycles=0) |
+| mul | — | — | host-only (sfu_cycles=0) |
+| reshape | — | — | host-only |
+| shape | — | — | host-only |
+| concat | — | — | host-only |
+| upsample | — | — | host-only |
+
+## Path B Oracle Entries
+
+Three CV Path B entries hand-authored in config/func_model_workload_oracle_v1.json
+under workload_entries:
+
+- mobilenetv3: summary decomposition (124 entries: 54 GEMM, 42 SFU, 28 host-only)
+- resnet50: summary decomposition (105 entries: 54 GEMM, 51 SFU, 0 host-only)
+- yolov8n: summary decomposition (129 entries: 63 GEMM, 57 SFU, 9 host-only)
+
+Each entry includes:
+- variant (workload_id, family, input_shape, total_entries)
+- per_op_cycles.summary (total/GEMM/SFU/host-only breakdown)
+- critical_path (serialized_cpath_cycles, overlap_cpath_cycles, cpath_decomposition)
+- derivation_notes
+
+All entries follow Path B (hand-authored from frozen manifests, no Path A imports).
+T5 import/isolation policy: no sim.models, sim.engine, sim.timing.providers,
+sim.timing.timing_engine, sim.npu_sim imports.
+
+## Requirements Pinning
+
+onnxruntime pinned to ==1.23.0 in requirements.txt for trace reproducibility.
+Added protobuf and pydantic pins for dependency stability.
+
+## Workload Builders
+
+sim/timing/workloads.py extended with:
+- _load_cv_manifest(workload_id) — loads frozen CV manifest JSON
+- _build_cv_typed_entries(manifest) — converts manifest entries to typed ops
+- _build_cv_workload(workload_id) — builds full workload dict
+- build_mobilenetv3_workload() — public builder for MobileNetV3-Small
+- build_resnet50_workload() — public builder for ResNet50
+- build_yolov8n_workload() — public builder for YOLOv8n
+- build_cv_workload(workload_id) — unified dispatcher
+- list_cv_workload_ids() — returns ["mobilenetv3", "resnet50", "yolov8n"]
+- validate_cv_manifest(workload_id) — structural manifest validation
+
+## Checker Extensions
+
+scripts/check_perf_workloads.py extended with:
+- CV manifest validation (_validate_cv_manifest): exact entry counts, engine breakdown,
+  content hash match, engine/op typing, shape key validation, dependency chain,
+  host-only rubric, trace generator seed=42
+- CV oracle consistency (_validate_cv_oracle_consistency): summary counts match
+  invariants, critical_path present and positive
+- CV negative fixture detection: cv_dropped_layer (missing entry), cv_unknown_op
+  (unclassifiable entry), cv_bad_shape (invalid shape values)
+- --workload now accepts CSV of CV IDs: mobilenetv3,resnet50,yolov8n
+
+## Negative Fixtures
+
+- config/tests/cv_dropped_layer.json: ResNet50 with conv1 removed (104 entries,
+  invariants still say 105) — rejected for total_entries mismatch
+- config/tests/cv_unknown_op.json: YOLOv8n with unclassifiable entry (engine=null,
+  host_only=false) — rejected for missing engine/op classification
+- config/tests/cv_bad_shape.json: MobileNetV3 with negative M value in mxu shape
+  — rejected for invalid shape
+
+## Test Results
+
+- Pytest: 326/326 pass (277 existing + 49 workload tests including 22 new CV tests)
+  - T13: 27 Qwen workload tests (no regressions)
+  - T14: 22 CV tests (GREEN positive, RED negative, structural invariants, builders)
+- T14 Command 1: python3 scripts/check_perf_workloads.py --workload mobilenetv3,resnet50,yolov8n --oracle config/func_model_workload_oracle_v1.json
+  → verdict=pass, accepted=48, rejected=0, rtl_files_opened=0
+- T14 Command 2: python3 scripts/check_perf_workloads.py --negative-fixtures config/tests/cv_dropped_layer.json,config/tests/cv_unknown_op.json,config/tests/cv_bad_shape.json
+  → verdict=pass, rejected=3, accepted=0, rtl_files_opened=0
+
+## Input Shapes
+
+- MobileNetV3-Small: [1, 3, 224, 224]
+- ResNet50: [1, 3, 224, 224]
+- YOLOv8n: [1, 3, 640, 640]
+
+## Seed
+
+All trace generators use seed=42. ONNX Runtime pinned to ==1.23.0 for reproducibility.
+
+## Evidence Artifacts
+
+All CV manifest files, negative fixtures, oracle entries, checker script, workload
+builders, and test file are committed and traceable via git.

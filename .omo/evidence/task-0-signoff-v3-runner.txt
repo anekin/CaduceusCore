@@ -1,17 +1,17 @@
 case_id: task-0-v3-signoff-runner
-utc_start: 2026-07-28T03:39:16.904701+00:00
-utc_end: 2026-07-28T03:39:23.736412+00:00
-elapsed_s: 6.832
+utc_start: 2026-08-11T04:35:01.027981+00:00
+utc_end: 2026-08-11T04:35:04.105881+00:00
+elapsed_s: 3.078
 branch: main
-head: 1412bbec3176ed514acf3b6784c1bd07bb904e24
-dirty_worktree: dirty:.omo/evidence/e2e-task-14-e2e.txt                  |   58 +-
- .omo/evidence/e2e-task-14-npz-compare.txt          |   27 +
- .omo/evidence/task-0-signoff-v3-runner.txt         |   18 +-
- .omo/notepads/f
+head: ac3a2fb25cf8c40537f1891e497def00980447ed
+dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |  20 +--
+ .../fm-e2e-qwen-cv-software-stack/learnings.md     |  68 +++++++++
+ .omo/notepads/phase6-rtl-verification/learnings.md |  16 +++
+ ...-mode
 argv: ["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_v3.py", "-q"]
 command_hash: 3c192012365a11c9
 exit_code: 0
-source_fingerprint: e788642c7d50f7fc52ea0302abbbd9278cc3a71213c890e572ef07607f472a3a
+source_fingerprint: 38937eb6557c9251885c461492b4cb225daa7702a928e7a435045a80564e1234
 source_files (3):
   - /home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_signoff.py
   - /home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/conftest.py
@@ -31,6 +31,6 @@ SIGNOFF_METRIC {"case": "task-0-v3-signoff-runner", "key": "evidence.verdict", "
 
 --- STDOUT (first 8000 chars) ---
 .......................                                                  [100%]
-23 passed in 3.69s
+23 passed in 1.41s
 
 --- END ---

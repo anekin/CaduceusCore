@@ -1,0 +1,37 @@
+........................................................................ [ 80%]
+..................                                                       [100%]
+90 passed in 0.36s
+---NEGATIVE_RUNNER_OUTPUT---
+{
+  "test": "provider-registry",
+  "utc": "2026-08-11T03:51:07.567767+00:00",
+  "requested_faults": [
+    "unknown-op",
+    "out-of-domain",
+    "rtl-labeled-artifact"
+  ],
+  "results": {
+    "unknown-op": {
+      "fault": "unknown-op",
+      "rejected": true,
+      "error_type": "UnsupportedOpError",
+      "message": "Op 'unknown_op' is not supported for domain 'mxu' by provider 'spec-block64-v1'. Supported ops: ['mmul']"
+    },
+    "out-of-domain": {
+      "fault": "out-of-domain",
+      "rejected": true,
+      "error_type": "OutOfDomainError",
+      "message": "Domain 'gpu' is not supported by provider 'spec-block64-v1'. Supported domains: ['dma', 'dram', 'kv_cache', 'mxu', 'noc', 'sfu', 'sw_overhead', 'vector']"
+    },
+    "rtl-labeled-artifact": {
+      "fault": "rtl-labeled-artifact",
+      "rejected": true,
+      "error_type": "RTLCalibratedArtifactError",
+      "message": "Provider 'spec-block64-v1' rejects RTL-calibrated artifacts. Only basis=architectural_formula + calibration_state=uncalibrated is verdict-eligible."
+    }
+  },
+  "accepted": 0,
+  "rejected": 3,
+  "all_passed": true,
+  "verdict": "pass"
+}

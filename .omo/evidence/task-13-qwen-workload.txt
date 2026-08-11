@@ -1,0 +1,112 @@
+T13: Qwen2.5-3B Performance Workload Canonicalization — Evidence
+====================================================================
+Date: 2026-08-11
+Status: COMPLETE
+
+## T13 QA Commands
+
+### Command 1: Workload Manifest + Oracle Validation
+$ python3 scripts/check_perf_workloads.py --workload qwen25-3b --oracle config/func_model_workload_oracle_v1.json
+→ exit 0
+→ verdict: pass, accepted: 22, rejected: 0, rtl_files_opened: 0
+
+### Command 2: Negative Fixture Rejection
+$ python3 scripts/check_perf_workloads.py --negative-fixtures config/tests/qwen_old_dims.json,config/tests/qwen_7gemm.json,config/tests/qwen_rtl_source.json
+→ exit 0
+→ rejected=3, accepted=0, rtl_files_opened=0
+
+### Pytest Regression
+$ PYTHONPATH=sim python3 -m pytest sim/timing/tests/test_perf_workloads.py -q
+→ 27 passed
+
+### Downstream Re-validation
+$ PYTHONPATH=sim python3 -m pytest sim/timing/tests/test_perf_{mxu,sfu_vector,memory,noc_kv,sw_overhead}_spec.py sim/timing/tests/test_perf_contract.py sim/tests/test_mmio_perf_events.py -q
+→ 277 passed, 0 failed
+
+## Files Changed
+
+### Bug Fixes (kv_heads=16 → kv_heads=2)
+1. sim/model_specs.py: kv_heads=16 → kv_heads=2 for qwen2.5-3b
+2. sim/npu_sim.py:
+   - NUM_KV_HEADS=16 → 2
+   - KV_DIM=2048 → 256
+   - configure_for_model(num_kv_heads=16) → num_kv_heads=2
+3. sim/validate_e2e.py: Phantom config (hidden_size=2560, layers=28, num_heads=32)
+   replaced with correct Qwen2.5-3B values (hidden=2048, intermediate=11008, layers=36, heads=16, kv_heads=2)
+
+### Variant ID Canonicalization
+4. config/oracle/qwen25_3b_workload_variants_v1.json:
+   - qwen-prefill-16 → qwen25-3b-prefill-16
+   - qwen-prefill-128 → qwen25-3b-prefill-128
+5. scripts/reduce_func_model_perf_oracle.py:
+   - Updated expected_ids in _check_variants() and _check_workload_entries()
+6. config/func_model_workload_oracle_v1.json:
+   - Updated variant IDs in workload entry keys and nested variant.workload_id values
+
+## Files Created
+
+7. config/workloads/qwen25_3b_perf_spec_v1.json
+   - Frozen 17-op DAG manifest
+   - 9 MXU + 5 SFU + 3 Vector ops
+   - 4 hard-gate variants: blk0-decode, decode-c128-g1, prefill-16, prefill-128
+   - Model pins: hidden=2048, intermediate=11008, layers=36, heads=16, kv_heads=2, head_dim=128, kv_dim=256
+   - Dependency edges and parallel chains declared
+   - spec_line_ref annotated per op (lines 66-82 of docs/qwen25-3b-forward-spec.md)
+
+8. sim/timing/workloads.py
+   - build_qwen25_3b_workload(workload_id) → typed workload dict
+   - validate_manifest() → structural validation
+   - list_workload_ids() → sorted valid IDs
+   - Shape formula resolver with sorted token replacement (longest first to avoid substring collisions)
+
+9. scripts/check_perf_workloads.py
+   - --workload mode: validates manifest + oracle consistency
+   - --negative-fixtures mode: rejects fixtures with structured JSON verdict
+   - RTL path rejection before file access (rtl_files_opened=0)
+   - 17-op layer count, 9/5/3 engine breakdown, 612-op for 36-layer cases
+
+10. config/tests/qwen_old_dims.json (negative fixture)
+11. config/tests/qwen_7gemm.json (negative fixture)
+12. config/tests/qwen_rtl_source.json (negative fixture)
+
+13. sim/timing/tests/test_perf_workloads.py
+    - GREEN: CLI --workload exits 0, manifest structure, oracle consistency
+    - RED: negative fixtures rejected=3, rtl_files_opened=0
+    - Structural: 17 ops, 4 variants, 612 ops for 36L, model pins, DAG edges
+    - Workload builder: 4 workloads, invalid raises, blk0=17 ops, 36L=612, content hash
+    - Manifest: op seq monotonic, spec_line_refs, parallel chains
+    - Stale-reference: no kv_heads=16 in sim/ (annotation-gated), no phantom config
+    - Downstream smoke: model_specs kv_heads=2, timing_engine trace kv_dim=256
+
+## Stale-Reference Grep Report
+
+=== COMPREHENSIVE GREP: kv_heads=16 / kv_dim=2048 ===
+sim/timing/tests/test_perf_noc_kv_spec.py:303:  [MUTATION DOC] kv-heads mutation: kv_heads=16
+sim/timing/tests/test_perf_noc_kv_spec.py:315:  [MUTATION DOC] kv_heads=16 matches oracle
+sim/timing/tests/test_perf_workloads.py:7:     [OUR TEST] Stale-reference grep definition
+sim/timing/tests/test_perf_workloads.py:282:   [OUR TEST] Stale-reference test docstring
+sim/timing/tests/test_perf_workloads.py:300:   [OUR TEST] Stale-reference error message
+sim/timing/tests/test_perf_workloads.py:341:   [OUR TEST] qkv_dim = 2048 comment (correct, QKV dim is 16*128=2048, not KV dim)
+
+All remaining matches are annotated:
+- test_perf_noc_kv_spec.py: deliberate mutation detection (kv_heads=16 is the WRONG pin being tested)
+- test_perf_workloads.py: test code that detects stale references
+- Line 341: correctly refers to qkv_dim=2048 (Q heads * head_dim), NOT kv_dim
+
+=== COMPREHENSIVE GREP: phantom config in validate_e2e.py ===
+(no matches)
+
+## Downstream Smoke Test
+- model_specs.get_spec("qwen2.5-3b").kv_heads == 2 ✓
+- model_specs.get_spec("qwen2.5-3b").kv_heads * head_dim == 256 ✓
+- timing_engine._build_llm_trace uses kv_dim=256 for K/V projections ✓
+- npu_sim.py generate_qwen3b_trace uses KV_DIM=256 ✓
+- npu_sim.py configure_for_model uses num_kv_heads=2 ✓
+
+## Verification Summary
+- T13 Command 1: PASS (22 accepted, 0 rejected)
+- T13 Command 2: PASS (rejected=3, rtl_files_opened=0)
+- Pytest new tests: 27/27 PASS
+- Downstream regression: 277/277 PASS
+- Stale-reference grep: CLEAN (all matches annotated)
+- Phantom config: CLEAN (no matches)

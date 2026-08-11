@@ -1,0 +1,97 @@
+{
+  "command": "validate",
+  "utc": "2026-08-11T10:27:59.480548+00:00",
+  "checks": [],
+  "protected_baseline": {
+    "plan": ".omo/plans/func-model-performance-infra-calibration-closure.md",
+    "entries_checked": 3,
+    "results": [
+      {
+        "path": ".omo/drafts/arc-model-v3-1-constraint-schema.md",
+        "path_missing": true,
+        "verdict": "vacuously_passed",
+        "reason": "file does not exist in worktree or git history"
+      },
+      {
+        "path": ".omo/drafts/func-model-functional-signoff-repair.md",
+        "path_missing": true,
+        "verdict": "vacuously_passed",
+        "reason": "file does not exist in worktree or git history"
+      },
+      {
+        "path": ".omo/plans/arc-model-v3-1-constraint-schema.md",
+        "path_missing": true,
+        "verdict": "vacuously_passed",
+        "reason": "file does not exist in worktree or git history"
+      }
+    ],
+    "all_passed": true
+  },
+  "freshness": {
+    "ok": true,
+    "details": {
+      "evidence_mtime": 1786443596.7436128,
+      "data_mtimes": {},
+      "max_data_mtime": 0
+    }
+  },
+  "required_claims": {
+    "required": [
+      "task-1",
+      "task-10",
+      "task-11",
+      "task-12",
+      "task-13",
+      "task-14",
+      "task-15",
+      "task-16",
+      "task-17",
+      "task-18",
+      "task-19",
+      "task-2",
+      "task-20",
+      "task-21",
+      "task-22",
+      "task-23",
+      "task-24",
+      "task-25",
+      "task-3",
+      "task-4",
+      "task-5",
+      "task-6",
+      "task-7",
+      "task-8",
+      "task-9"
+    ],
+    "present": [
+      "task-1",
+      "task-10",
+      "task-11",
+      "task-12",
+      "task-13",
+      "task-14",
+      "task-15",
+      "task-16",
+      "task-17",
+      "task-18",
+      "task-19",
+      "task-2",
+      "task-20",
+      "task-21",
+      "task-22",
+      "task-23",
+      "task-24",
+      "task-25",
+      "task-3",
+      "task-4",
+      "task-5",
+      "task-6",
+      "task-7",
+      "task-8",
+      "task-9"
+    ],
+    "missing": [],
+    "claim_errors": [],
+    "stale_claims": []
+  }
+}

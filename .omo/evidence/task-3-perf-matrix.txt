@@ -1,0 +1,32 @@
+=== TASK 3: Perf Matrix RED/GREEN/Mutation Evidence ===
+Timestamp: 2026-08-11
+
+--- GREEN: Matrix validation ---
+
+Matrix: func_model_perf_matrix_v1 v1.0 — PASS
+  Errors: 0
+  Seed check: OK
+  Domain counts: {"mxu": 10, "sfu": 24, "vector": 30, "dma": 10, "dram": 10, "noc": 8, "kv_cache": 8, "sw_overhead": 4}
+---
+GREEN exit: 0
+
+--- RED: Negative fixtures ---
+
+Negative fixtures: 4 total, 4 correctly rejected, 0 incorrectly accepted
+  [OK] config/tests/perf_matrix_duplicate.json: 
+  [OK] config/tests/perf_matrix_missing.json: 
+  [OK] config/tests/perf_matrix_skip.json: 
+  [OK] config/tests/perf_matrix_missing_6p4_endpoint.json: 
+RED exit: 0
+
+--- MUTATION: Pytest ---
+........................................................................ [ 94%]
+....                                                                     [100%]
+76 passed in 3.61s
+Pytest exit: 0
+
+--- VERIFICATION SUMMARY ---
+1. matrix GREEN: validates with 0 errors, 104 provider rows, seed=42 OK
+2. negative fixtures RED: 4/4 correctly rejected, 0 incorrectly accepted
+3. mutation pytest: 76/76 passed (40 spec + 36 matrix)
+4. LSP diagnostics: checked on all changed files

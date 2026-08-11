@@ -1,0 +1,11 @@
+Spec: func_model_perf_spec_v1 v1.0 — PASS
+  Parameters: 104 total, 104 accepted, 0 rejected
+  Errors: 0, Warnings: 0
+  Content hash: c850e867299484d3...
+  Domain counts: {"mxu": 10, "sfu": 24, "vector": 30, "dma": 10, "dram": 10, "noc": 8, "kv_cache": 8, "sw_overhead": 4}
+
+=== Negative Fixtures ===
+
+Negative fixtures: 2 total, 2 correctly rejected, 0 incorrectly accepted
+  [OK] config/tests/perf_spec_bad_units.json: 
+  [OK] config/tests/perf_spec_rtl_basis.json: 

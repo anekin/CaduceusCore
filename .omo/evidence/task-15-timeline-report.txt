@@ -1,0 +1,39 @@
+# T15 Evidence: Timeline Critical-Path, Overlap, and Report De-duplication
+# Generated: 2026-08-11
+
+## T15a — Provider/Event Integration
+- TimingEngine consumes PerfEvent from PerformanceSession and PerfEstimate from Block64Provider via T2 contracts
+- compute_critical_path_from_dag(): topological sort + DP longest-path through DAG of operations
+- wall_clock_critical_path field added to SimulationReport (appears in all 3 report-construction sites in npu_sim.py)
+- _report_to_token_timing uses report.wall_clock_critical_path when available; falls back to wall-clock-advancing module sum for legacy reports
+
+## T15b — Critical Path / Overlap / Contention
+- Canonical formula: total_cycles = max over topological paths of (sum estimated_cycles on that path)
+- RED case verified: hand DAG with sum-of-breakdowns=100 and critical-path=70 — old sum logic fails, new critical-path logic passes
+- dma_effective/dma_weight semantics fixed (was inverted):
+  - dma_weight = hidden/overlapped (ev.overlapped=True → dma_weight)
+  - dma_effective = exposed/stall (ev.overlapped=False → dma_effective)
+- Test DAGs cover: serialized chain, parallel DMA + long SFU chain (overlap), contention, disconnected components
+- Cycle detection raises ValueError; out-of-range edges raise ValueError
+
+## T15c — Report / Dashboard De-duplication
+- dashboard.py: total_cycles now uses wall_clock_critical_path when provided (>0); falls back to sum(module_breakdown) for legacy
+- module_utilization_pct, bandwidth_utilization_pct, noc_contention_pct normalized to wall_clock_critical_path
+- generate_summary.py: stale "103.23ms constant-prefill" note removed; replaced with dynamic derivation note
+- wall_clock_critical_path parameter threaded through generate_json() and save()
+
+## Negative Runner
+- path-a-timeline case added to scripts/run_func_model_perf_signoff.py
+- 5 fault injectors: duplicate-dma, removed-dependency, empty-events, sum-of-breakdowns, dma-effective-inverted
+- All 5 faults correctly detected: rejected=5, accepted=0
+
+## Test Results
+- test_perf_timeline.py: 29/29 passed (13 critical-path DAG, 6 dma semantics, 7 dashboard normalization, 3 zero-event)
+- Full timing suite (timing/tests/): 655/660 passed — 5 pre-existing T14 oracle expansion failures in test_perf_oracle_independence.py
+- Scope-relevant: 575/575 clean (all T6/T7/T8-T14 tests unaffected)
+- mmio events: 29/29 passed
+- T13 consumer smoke: kv_heads=2, kv_dim=256 active after TimingEngine integration
+
+## Commands
+- GREEN: PYTHONPATH=sim python3 -m pytest sim/timing/tests/test_perf_timeline.py -q → 29 passed
+- GREEN: python3 scripts/run_func_model_perf_signoff.py negative --case path-a-timeline --faults duplicate-dma,removed-dependency,empty-events,sum-of-breakdowns,dma-effective-inverted → rejected=5,accepted=0,verdict=pass

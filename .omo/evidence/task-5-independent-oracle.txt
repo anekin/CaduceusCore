@@ -1,0 +1,82 @@
+# Task 5 — Independent Oracle Evidence
+# Created: 2026-08-11
+# Aggregate Verdict: PASS
+
+## Verifier Self-Check
+```
+python3 scripts/verify_func_model_perf_spec.py --oracle config/func_model_perf_oracle_v1.json --self-check
+Exit: 0 | Verdict: pass | Accepted: 116 | Rejected: 0
+Import policy: pass (0 violations)
+Spec hash match: true (c850e867...)
+```
+
+## Verifier Mutation Detection
+```
+python3 scripts/verify_func_model_perf_spec.py --oracle config/func_model_perf_oracle_v1.json --self-check --mutations ceiling,constant,units,noop-nonzero,spec-interpretation
+Exit: 0 | Verdict: pass
+Mutations checked: 5/5 passed
+- ceiling: pass (no float values)
+- constant: pass (all architectural constants match)
+- units: pass (no bad values)
+- noop-nonzero: pass (kv_token_pos_0 is exact zero)
+- spec-interpretation: pass (oracle spec_hash matches actual spec)
+```
+
+## Reducer Self-Check
+```
+python3 scripts/reduce_func_model_perf_oracle.py --oracle config/func_model_workload_oracle_v1.json --self-check
+Exit: 0 | Verdict: pass | Accepted: 22 | Rejected: 0
+Import policy: pass (0 violations)
+Subprocess isolation: pass (66 modules loaded, no Path A modules)
+```
+
+## Reducer Mutation Detection
+```
+python3 scripts/reduce_func_model_perf_oracle.py --oracle config/func_model_workload_oracle_v1.json --self-check --mutations path-a-reducer,path-b-decomposition,dependency-edge,template-mutation
+Exit: 0 | Verdict: pass
+Mutations checked: 4/4 passed
+- path-a-reducer: pass (no Path A structural patterns in oracle data)
+- path-b-decomposition: pass (blk0 has 17 per-op entries)
+- dependency-edge: pass (all required edges present)
+- template-mutation: pass (17 ops, 9/5/3 engine breakdown)
+```
+
+## Pytest Regression
+```
+PYTHONPATH=sim python3 -m pytest sim/timing/tests/test_perf_oracle_independence.py -q
+Exit: 0 | 33 passed
+```
+
+## Spec-Interpretation Mutation (cross-path)
+Mutating mxu_1_64_64's estimated_cycles from 241 to 999 in spec:
+- Verifier spec-interpretation mutation: correctly detected hash mismatch → fail
+- This proves the two paths fail independently on spec mutation.
+
+## Content Hashes (stable)
+- provider_oracle: 645e8aae29b17138312815a98431a3b7a63ec6bef24ccd45fd9ea18313da678b
+- workload_oracle: 57a441784e816ec74d62de16e4a0e6a433411b10e41f46e8547f9911cd10c4be
+- layer_template: a81118e4a89e063727b6faa64b1d48585c775d125e041f84126471bf71211938
+- workload_variants: 0650bc7df237b6f89b8acf7b69dabb80fe9b23d14c6e390886ef2ba3170ac4c6
+- verifier_script: 50c3fda2e18b4752ff274ca34a331dd283eb7894fd2a1d6a5ca01138136d02eb
+- reducer_script: 471f8c9888421b5532c130ccc2af72aabe10a7b2a8786ed6e7a9e5e548ee8667
+
+## Variant Set Hash
+Variant set (4 workload IDs): 0718d6c33671030bac058390fa858a596991942469a8d87ef2e404f449c721d1
+Prevents A/B path variant divergence.
+
+## File Inventory
+Created:
+- config/func_model_perf_oracle_v1.json — 104 provider oracle rows (hand-derived from spec formulas)
+- config/oracle/qwen25_3b_layer_template_v1.json — 17-op Qwen2.5-3B layer DAG template (9 MXU, 5 SFU, 3 Vector)
+- config/oracle/qwen25_3b_workload_variants_v1.json — 4 workload shape variants (blk0-decode, decode-c128-g1, prefill-16, prefill-128)
+- config/func_model_workload_oracle_v1.json — Path B workload oracle with hand-derived critical paths
+- scripts/verify_func_model_perf_spec.py — Provider verifier (AST import policy, 5 mutation checks)
+- scripts/reduce_func_model_perf_oracle.py — Path B reducer (template + variant expansion, subprocess isolation)
+- sim/timing/tests/test_perf_oracle_independence.py — 33 isolation tests
+
+## Isolation Enforcement
+- AST import-policy: both scripts scanned for sim.models, sim.engine, sim.timing.providers, sim.timing.timing_engine, sim.npu_sim → 0 violations
+- Runtime subprocess isolation: reducer tested with restricted PYTHONPATH excluding Path A directories → sys.modules clean
+- Path B never calls Path A via subprocess, sys.modules, importlib, or shared helper files
+- No auto-generated markers in any oracle/Template/variant file
+- Spec-interpretation mutation detected independently by both paths

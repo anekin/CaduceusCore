@@ -1,0 +1,63 @@
+{
+  "test": "perf_contract.self_check",
+  "passed": 33,
+  "total": 33,
+  "verdict": "pass",
+  "details": [
+    "PASS: PerfEvent valid construction",
+    "PASS: PerfEvent: unknown engine rejected",
+    "PASS: PerfEvent: unknown op rejected",
+    "PASS: PerfEvent: negative shape value rejected",
+    "PASS: PerfEvent: zero shape value accepted (KV token_pos=0)",
+    "PASS: PerfEvent: seq_id=0 rejected",
+    "PASS: EventPairValidator: first add clean",
+    "PASS: EventPairValidator: duplicate event_id caught",
+    "PASS: EventPairValidator: missing completion caught",
+    "PASS: EventPairValidator: completion w/o acceptance caught",
+    "PASS: PerfEstimate valid construction",
+    "PASS: PerfEstimate: content hash stable",
+    "PASS: PerfEstimate: round-trip successful",
+    "PASS: PerfEstimate: zero cycles rejected",
+    "PASS: PerfEstimate: NaN uncertainty rejected",
+    "PASS: PerfEstimate: Inf uncertainty rejected",
+    "PASS: PerfEstimate: unknown unit rejected",
+    "PASS: PerfEstimate: measured_cycles rejected by extra=forbid",
+    "PASS: PerfEstimate: architectural+uncalibrated IS verdict eligible",
+    "PASS: PerfEstimate: rtl_calibrated correctly NOT verdict eligible",
+    "PASS: PerfBand: monotonic OK",
+    "PASS: PerfBand: non-monotonic rejected",
+    "PASS: PerfBand: NaN rejected",
+    "PASS: PerfReport: sw_overhead_included=True rejected",
+    "PASS: PerfArtifact: valid + verdict eligible",
+    "PASS: PerfArtifact: round-trip hash stable",
+    "PASS: PerfArtifact: content hash excludes RTL fields",
+    "PASS: PerfArtifact: rtl_calibrated NOT verdict eligible",
+    "PASS: negotiate_version: 1.0.0 accepted",
+    "PASS: negotiate_version: 9.9.9 rejected",
+    "PASS: PerfEvent: wrong shape keys rejected",
+    "PASS: PerfReport: non-monotonic band rejected",
+    "PASS: PerfEstimate: wrong shape keys for SFU rejected"
+  ]
+}
+{
+  "test": "perf_contract.negative_fixtures",
+  "rejected": 3,
+  "accepted": 0,
+  "verdict": "pass",
+  "details": [
+    {
+      "path": "config/tests/perf_contract_measured_cycles.json",
+      "accepted": false
+    },
+    {
+      "path": "config/tests/perf_contract_bad_unit.json",
+      "accepted": false
+    },
+    {
+      "path": "config/tests/perf_contract_nan.json",
+      "accepted": false
+    }
+  ]
+}
+..........................................................               [100%]
+58 passed in 0.18s
