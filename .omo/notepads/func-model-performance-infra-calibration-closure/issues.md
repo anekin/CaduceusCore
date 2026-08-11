@@ -1,4 +1,18 @@
 
+## T18 Issues (2026-08-11)
+
+### Open
+None.
+
+### Resolved / Design Notes
+1. **Sweeping context requires a KV-cache knob** — `NPUSimulator` hard-coded `max_context=2048` and `total_tokens=128`. Added `kv_cache.max_context` and `kv_cache.total_tokens` to `sim/config/npu_config.yaml` with the old defaults, then had `NPUSimulator` read them from config. This keeps all existing behavior unchanged while letting the T18 context sweep override `total_tokens`.
+
+2. **`dram_bw_share_pct` has no direct module bucket** — `module_breakdown` does not contain a `dram` key; DRAM activity is represented by `dma_weight` (hidden transfers) and `dma_effective` (exposed stalls). The sweep runner therefore defines `dram_effective_cycles = dma_weight + dma_effective` and computes share relative to `(dma_weight + dma_effective + noc_latency)`.
+
+### Known limitation
+- `dma-channels` and `noc-hop` grids produce zero deltas for the Qwen2.5-3B decode workload because the current model treats DMA as fully overlapped and NoC hop latency is small relative to the compute-bound path. These zero slopes are reported but not treated as failures because other grids (bandwidth, array, prompt, context) show clear monotonic transitions. Future model refinements may expose channel/hop sensitivity for larger traces.
+
+
 ## T17 Issues (2026-08-11)
 
 ### Open

@@ -1,5 +1,29 @@
 
 
+## T18: Monotonicity and Bottleneck-Transition Sweeps (2026-08-11)
+
+### Design decisions
+- Added `sim/timing/sweeps.py` with a config-clone helper (`_clone_config_engine`) that writes mutated YAML to a temp file and builds a `TimingEngine`, matching the pattern used by `sim/timing/benchmark.py`.
+- Mapped the six frozen sweep dimensions from `config/func_model_perf_matrix_v1.json`:
+  - Resource dimensions (`bandwidth`, `array`, `dma-channels`, `noc-hop`) are varied via config overrides and measured on `simulate_decode`.
+  - Workload dimensions (`prompt`, `context`) are varied via `simulate_request(..., prompt_len=v)` and `kv_cache.total_tokens=v` respectively.
+- Added `kv_cache.max_context` and `kv_cache.total_tokens` keys to `sim/config/npu_config.yaml` (defaults preserve previous hard-coded values) and wired them into `NPUSimulator` so the context sweep can be driven from config without source edits.
+- Monotonicity check supports signed finite-difference assertions: resource dimensions must be non-increasing, workload dimensions non-increasing; NaN/Inf and wrong-direction deltas fail. Individual zero deltas are reported but allowed; strict mode detects all-zero grids for negative testing.
+- Bottleneck-share metrics:
+  - `mxu_utilization_pct` = `module_utilization_pct["mxu"]` from `MetricsCollector`.
+  - `dram_bw_share_pct` = `(dma_weight + dma_effective) / (dma_weight + dma_effective + noc_latency) * 100`, treating total DMA cycles as DRAM transfer activity.
+- Endpoint checks assert `dram_bw_share_pct >= 55` for the memory-bound endpoint (`BW=6.4 GB/s, array=128`) and `mxu_utilization_pct >= 55` for the compute-bound endpoint (`BW=102.4 GB/s, array=32`).
+- Wired `--sweeps` and `--require-endpoints` into `scripts/run_func_model_perf_signoff.py run`, defaulting evidence to `.omo/evidence/task-18-sensitivity.json`.
+- Added `negative --case sweeps` with five fault injectors: `resource-positive-slope`, `workload-negative-slope`, `nan-slope`, `missing-6p4-endpoint`, `unreachable-transition`.
+
+### Verification results
+- GREEN: `run --sweeps bandwidth,array,dma-channels,prompt,context,noc-hop --require-endpoints memory,compute` exits 0 with all grids present and endpoint checks passed.
+- MUTATIONS: `negative --case sweeps --faults resource-positive-slope,workload-negative-slope,nan-slope,missing-6p4-endpoint,unreachable-transition` exits 0 with `rejected=5,accepted=0`.
+- Pytest: 10/10 tests pass in `test_perf_sweeps.py` (monotonicity unit checks, green sweep, endpoint transition, negative faults, CLI negative).
+- Full timing regression: 707/707 pass (no regressions).
+- Evidence recorded at `.omo/evidence/task-18-sensitivity.json` (green) and `.omo/evidence/task-18-sensitivity-negative.json` (negative).
+
+
 ## T16: Qwen Workload Dual-Path Spec Gates (2026-08-11)
 
 ### Design decisions

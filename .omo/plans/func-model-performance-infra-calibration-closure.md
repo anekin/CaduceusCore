@@ -259,7 +259,7 @@ Critical path: T1-T5 -> T6/T7 -> T8-T15 -> T16-T20 -> T21-T25 -> F1-F4。
   QA scenarios: `python3 scripts/run_func_model_perf_signoff.py run --cases mobilenetv3,resnet50,yolov8n --compare-paths a,b` exits 0 with `passed=3`. `python3 scripts/run_func_model_perf_signoff.py negative --case cv-paths --faults im2col-bytes-x8,dropped-depthwise,unknown-op,path-b-decomposition` exits 0 only with `rejected=4,accepted=0`. Evidence `.omo/evidence/task-17-cv-spec-gates.json`.
   Commit: Y | test(perf-spec): close CV workload gates | Files CV integration tests/minimal fixes
 
-- [ ] 18. Close monotonicity and bottleneck-transition sweeps
+- [x] 18. Close monotonicity and bottleneck-transition sweeps
   What to do: Execute every frozen resource/workload sweep with deterministic config clones. Assert monotonic relationships, diminishing-return sanity and the two required memory/compute bottleneck endpoints；emit sensitivity derivatives.
   Parallelization: Y | Wave 4 | Blocks T20-T25 | Blocked by T3,T4,T8-T11,T15
   References: `sim/timing/benchmark.py` sweep paths；`sim/timing/tests/test_tile_double_buffer.py` existing trends；normative spec bottleneck definitions。
