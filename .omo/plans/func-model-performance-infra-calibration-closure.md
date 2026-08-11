@@ -42,7 +42,7 @@
 ### Vocabulary and numeric policy
 - 所有周期字段命名 `estimated_cycles`；`measured_cycles` 只允许未来 `calibration_state=rtl_calibrated` artifact 使用，当前 validator 遇到该字段即拒绝纳入 verdict。
 - Provider error 使用未舍入值：`abs(provider-oracle)/abs(oracle)*100`。普通 case 在 `oracle>10 cycles` 时每 case `<=10%`，`0<oracle<=10` 时 absolute error `<=1 cycle`；任一普通 case 非正/NaN/Inf 值失败。唯一例外是 matrix 显式声明 `expected_noop=true` 的 case：oracle 与 provider 必须都为 exact integer zero，仍参与 structural coverage，但不进入相对误差、正周期或 workload activity gate；任何非零、NaN/Inf 或未声明 no-op 的 zero 都失败。
-- Workload path error 使用未舍入值；total 和每个占 total `>=5%` 的 major breakdown 每 case `<=20%`；小 breakdown 使用 absolute error `<=2 cycles`。Major breakdown 类别冻结清单：`{mxu, sfu, vector, dma, dma_effective, dma_weight, noc_latency, noc_contention, kv_cache, crossbar_wait, sram_stall, vcov_bubble, host_only}`；gate 判定使用 Path A 和 Path B 中呈现的类别并集——若类别在 A 中为 4.9%、在 B 中为 6%，则按并集判定为 major（>=5%），避免因为单边阈值翻转 gate 应用。
+- Workload path error 使用未舍入值；total 和每个占 total `>=5%` 的 major breakdown 每 case `<=20%`；小 breakdown 使用 absolute error `<=2 cycles`。Major breakdown 类别冻结清单：`{mxu, sfu, vector, dram, dma, dma_effective, dma_weight, noc_latency, noc_contention, kv_cache, crossbar_wait, sram_stall, vcov_bubble, host_only}`；gate 判定使用 Path A 和 Path B 中呈现的类别并集——若类别在 A 中为 4.9%、在 B 中为 6%，则按并集判定为 major（>=5%），避免因为单边阈值翻转 gate 应用。
 - Integer cycle 使用 ceiling，不允许 banker's rounding；bytes/bits、Hz/MHz/GHz、cycle/ns 转换集中在 typed unit helpers 并检测 overflow。
 
 ### Provider hard-gate matrix
