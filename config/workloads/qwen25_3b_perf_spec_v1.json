@@ -1,0 +1,275 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "qwen25_3b_perf_spec_v1",
+  "description": "Frozen Qwen2.5-3B performance workload manifest: 17-op layer DAG with 4 hard-gate workload variants. Derived from docs/qwen25-3b-forward-spec.md §2.1 (lines 58-91).",
+  "created": "2026-08-11",
+  "spec_ref": "config/func_model_perf_spec_v1.json",
+  "model_meta": {
+    "hidden": 2048,
+    "intermediate": 11008,
+    "layers": 36,
+    "heads": 16,
+    "kv_heads": 2,
+    "head_dim": 128,
+    "kv_dim": 256
+  },
+  "architectural_constants": {
+    "mxu_array_H": 64,
+    "mxu_array_W": 64,
+    "sfu_width": 128,
+    "vector_width": 128,
+    "sfu_pipeline_depths": {
+      "softmax": 227,
+      "layernorm": 210,
+      "rmsnorm": 150,
+      "gelu": 71,
+      "silu": 72,
+      "rope": 82
+    },
+    "vector_op_latencies": {
+      "add": 5,
+      "mul": 5,
+      "max": 12,
+      "sum": 12,
+      "conv": 260,
+      "resid": 5
+    }
+  },
+  "ops": [
+    {
+      "seq": 0,
+      "op_id": "op_00",
+      "name": "RMSNorm_pre_attn",
+      "engine": "sfu",
+      "shape_formula": "elements=hidden",
+      "spec_line_ref": "66"
+    },
+    {
+      "seq": 1,
+      "op_id": "op_01",
+      "name": "Q_proj",
+      "engine": "mxu",
+      "shape_formula": "M=batch_m, K=hidden, N=heads*head_dim",
+      "spec_line_ref": "67"
+    },
+    {
+      "seq": 2,
+      "op_id": "op_02",
+      "name": "K_proj",
+      "engine": "mxu",
+      "shape_formula": "M=batch_m, K=hidden, N=kv_heads*head_dim",
+      "spec_line_ref": "68"
+    },
+    {
+      "seq": 3,
+      "op_id": "op_03",
+      "name": "V_proj",
+      "engine": "mxu",
+      "shape_formula": "M=batch_m, K=hidden, N=kv_heads*head_dim",
+      "spec_line_ref": "69"
+    },
+    {
+      "seq": 4,
+      "op_id": "op_04",
+      "name": "RoPE",
+      "engine": "sfu",
+      "shape_formula": "elements=heads*head_dim",
+      "spec_line_ref": "70"
+    },
+    {
+      "seq": 5,
+      "op_id": "op_05",
+      "name": "attn_score",
+      "engine": "mxu",
+      "shape_formula": "M=batch_m, K=head_dim, N=context_len",
+      "spec_line_ref": "71"
+    },
+    {
+      "seq": 6,
+      "op_id": "op_06",
+      "name": "softmax",
+      "engine": "sfu",
+      "shape_formula": "elements=batch_m*heads*context_len",
+      "spec_line_ref": "72"
+    },
+    {
+      "seq": 7,
+      "op_id": "op_07",
+      "name": "attn_weight",
+      "engine": "mxu",
+      "shape_formula": "M=batch_m, K=context_len, N=head_dim*heads",
+      "spec_line_ref": "73"
+    },
+    {
+      "seq": 8,
+      "op_id": "op_08",
+      "name": "O_proj",
+      "engine": "mxu",
+      "shape_formula": "M=batch_m, K=heads*head_dim, N=hidden",
+      "spec_line_ref": "74"
+    },
+    {
+      "seq": 9,
+      "op_id": "op_09",
+      "name": "VRESID_pre_attn",
+      "engine": "vector",
+      "shape_formula": "dim=hidden",
+      "spec_line_ref": "75"
+    },
+    {
+      "seq": 10,
+      "op_id": "op_10",
+      "name": "RMSNorm_post_attn",
+      "engine": "sfu",
+      "shape_formula": "elements=hidden",
+      "spec_line_ref": "76"
+    },
+    {
+      "seq": 11,
+      "op_id": "op_11",
+      "name": "FFN_gate",
+      "engine": "mxu",
+      "shape_formula": "M=batch_m, K=hidden, N=intermediate",
+      "spec_line_ref": "77"
+    },
+    {
+      "seq": 12,
+      "op_id": "op_12",
+      "name": "FFN_up",
+      "engine": "mxu",
+      "shape_formula": "M=batch_m, K=hidden, N=intermediate",
+      "spec_line_ref": "78"
+    },
+    {
+      "seq": 13,
+      "op_id": "op_13",
+      "name": "SiLU",
+      "engine": "sfu",
+      "shape_formula": "elements=intermediate",
+      "spec_line_ref": "79"
+    },
+    {
+      "seq": 14,
+      "op_id": "op_14",
+      "name": "gate_up_mul",
+      "engine": "vector",
+      "shape_formula": "dim=intermediate",
+      "spec_line_ref": "80"
+    },
+    {
+      "seq": 15,
+      "op_id": "op_15",
+      "name": "FFN_down",
+      "engine": "mxu",
+      "shape_formula": "M=batch_m, K=intermediate, N=hidden",
+      "spec_line_ref": "81"
+    },
+    {
+      "seq": 16,
+      "op_id": "op_16",
+      "name": "VRESID_post_ffn",
+      "engine": "vector",
+      "shape_formula": "dim=hidden",
+      "spec_line_ref": "82"
+    }
+  ],
+  "engine_summary": {
+    "mxu": 9,
+    "sfu": 5,
+    "vector": 3,
+    "total": 17,
+    "spec_line_ref": "86-91"
+  },
+  "workload_variants": [
+    {
+      "workload_id": "qwen25-3b-blk0-decode",
+      "batch_m": 1,
+      "prompt_len": 1,
+      "context_len": 0,
+      "layer_count": 1,
+      "hidden": 2048,
+      "intermediate": 11008,
+      "heads": 16,
+      "kv_heads": 2,
+      "head_dim": 128,
+      "mxu_mode": "decode_interleaving",
+      "description": "Single block-0 decode: batch=1, no KV history (context=0). 1 layer. 17 ops total.",
+      "expected_noop_ops": ["attn_score", "softmax", "attn_weight"]
+    },
+    {
+      "workload_id": "qwen25-3b-decode-c128-g1",
+      "batch_m": 1,
+      "prompt_len": 1,
+      "context_len": 128,
+      "layer_count": 36,
+      "hidden": 2048,
+      "intermediate": 11008,
+      "heads": 16,
+      "kv_heads": 2,
+      "head_dim": 128,
+      "mxu_mode": "decode_interleaving",
+      "description": "36-layer decode with context=128, gen=1. 612 ops total (36 * 17). All MXU decode interleaving.",
+      "expected_noop_ops": []
+    },
+    {
+      "workload_id": "qwen25-3b-prefill-16",
+      "batch_m": 16,
+      "prompt_len": 16,
+      "context_len": 0,
+      "layer_count": 36,
+      "hidden": 2048,
+      "intermediate": 11008,
+      "heads": 16,
+      "kv_heads": 2,
+      "head_dim": 128,
+      "mxu_mode": "prefill",
+      "description": "36-layer prefill with prompt=16 tokens. 612 ops total. Uses prefill model (batch_m=16).",
+      "expected_noop_ops": ["attn_score", "softmax", "attn_weight"]
+    },
+    {
+      "workload_id": "qwen25-3b-prefill-128",
+      "batch_m": 128,
+      "prompt_len": 128,
+      "context_len": 0,
+      "layer_count": 36,
+      "hidden": 2048,
+      "intermediate": 11008,
+      "heads": 16,
+      "kv_heads": 2,
+      "head_dim": 128,
+      "mxu_mode": "prefill",
+      "description": "36-layer prefill with prompt=128 tokens. 612 ops total. Highest per-layer cost.",
+      "expected_noop_ops": ["attn_score", "softmax", "attn_weight"]
+    }
+  ],
+  "dependency_edges": {
+    "op_00": [],
+    "op_01": ["op_00"],
+    "op_02": ["op_00"],
+    "op_03": ["op_00"],
+    "op_04": ["op_01", "op_02"],
+    "op_05": ["op_01", "op_02", "op_04"],
+    "op_06": ["op_05"],
+    "op_07": ["op_06", "op_03"],
+    "op_08": ["op_07"],
+    "op_09": ["op_08"],
+    "op_10": ["op_09"],
+    "op_11": ["op_10"],
+    "op_12": ["op_10"],
+    "op_13": ["op_11"],
+    "op_14": ["op_13", "op_12"],
+    "op_15": ["op_14"],
+    "op_16": ["op_15"]
+  },
+  "parallel_chains": [
+    {"chain": "QKV_parallel", "ops": ["op_01", "op_02", "op_03"]},
+    {"chain": "FFN_gate_up_parallel", "ops": ["op_11", "op_12"]}
+  ],
+  "metadata": {
+    "engine_counts": {"mxu": 9, "sfu": 5, "vector": 3},
+    "total_ops": 17,
+    "variant_count": 4,
+    "no_generated_marker": true,
+    "source": "hand-derived from docs/qwen25-3b-forward-spec.md"
+  }
+}
