@@ -96,10 +96,39 @@ SF-02 test PASS. Golden test suite 477/477 PASS (no regression).
 
 ---
 
+### 2026-08-12 [Medium] `_mxu_decode_cycles()` Undercounts Per-Tile Compute for M ≥ H (BUG-PERF-MXU-001)
+
+**Case**: Func Model prefill bottleneck analysis (`_mxu_decode_cycles`)
+**Status**: Fixed
+
+#### Description
+
+`sim/timing/qwen_spec_gates.py` and `sim/timing/model_scaling.py` both contain a dead override in `_mxu_decode_cycles()` that sets `per_tile_compute = array_H + array_W + array_H` (192 cycles) for any `M >= array_H`. Because `first_tile_cold` and `bottleneck` are computed before the override, total cycle counts were unaffected, but any per-tile bottleneck analysis incorrectly classified prefill as DMA-bound.
+
+For Qwen2.5-3B prefill-2000, the report falsely claimed prefill was "DMA-bound (15.6×)" because `per_tile_compute` was reported as 192 cycles while `per_tile_dma` was 2,988 cycles. The correct `per_tile_compute` from the original formula is 128,128 cycles, making prefill compute-bound by 42.9×.
+
+#### Root Cause
+
+Lines 50-51 in `qwen_spec_gates.py` (and lines 125-126 in `model_scaling.py`) override `per_tile_compute` after it has already been used to derive `first_tile_cold` and `bottleneck`. The override is therefore dead code for total-cycle estimation, but the mutated `per_tile_compute` value was referenced by downstream bottleneck analysis/reporting.
+
+#### Fix Commit
+
+Removed the two-line override in both files. The original formula `per_tile_compute = array_H * (M + 1) + array_W` correctly scales with M.
+
+#### Evidence
+
+- `per_tile_compute` for M=1: 192 cycles (unchanged)
+- `per_tile_compute` for M=128: 8,320 cycles (was incorrectly 192)
+- `per_tile_compute` for M=2000: 128,128 cycles (was incorrectly 192)
+- Total prefill cycles remain 60,223,319,856 (bottleneck used the pre-override value)
+- Performance report updated to classify prefill as compute-bound
+
+---
+
 ## Stats (Module-Level)
 
 | Metric | Value |
 |--------|:-----:|
-| Total bugs | 2 |
+| Total bugs | 3 |
 | Open | 1 (BUG-MXU-WDT-001) |
-| Fixed | 1 |
+| Fixed | 2 |

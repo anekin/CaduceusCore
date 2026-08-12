@@ -47,8 +47,6 @@ def _mxu_decode_cycles(
     per_tile_dma = (weight_bytes + act_bytes) / bw_bpc if bw_bpc > 0 else float("inf")
     first_tile_cold = per_tile_compute + per_tile_dma
     bottleneck = max(per_tile_compute, per_tile_dma)
-    if M >= array_H:
-        per_tile_compute = array_H + array_W + array_H
     raw = first_tile_cold + (total_tiles - 1) * bottleneck
     return math.ceil(raw)
 
