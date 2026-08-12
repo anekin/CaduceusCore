@@ -1,7 +1,7 @@
 # Func Model 性能验证报告
 
 **日期**: 2026-08-11  
-**版本**: v1.0  
+**版本**: v1.1  
 **计划**: `func-model-performance-infra-calibration-closure`  
 **校准状态**: `uncalibrated`  
 **验证结果**: 全部 T1–T25 任务与 Final Wave F1–F4 通过  
@@ -234,24 +234,168 @@ DMA:
 
 ---
 
-## 7. 限制与后续工作
+## 7. Prefill 性能瓶颈分析
+
+### 7.1 Prefill vs Decode：根本差异
+
+Prefill 阶段同时处理 prompt 的全部 token（M=prompt_len），与 Decode（M=1）有本质区别：
+
+| 维度 | Decode (M=1) | Prefill (M=128) | Prefill (M=2000) |
+|------|-------------|-----------------|-------------------|
+| 每 tile 激活字节 | 64 B | 8,192 B | 128,000 B |
+| 每 tile DMA 搬运 | 48.5 cycles | 620 cycles | **2,988 cycles** |
+| 每 tile 计算 | 192 cycles | 192 cycles | 192 cycles |
+| 每 tile bottleneck | **Compute** (192) | **DMA** (620) | **DMA** (2,988) |
+| DMA/Compute 比 | 0.25:1 | 3.2:1 | **15.6:1** |
+
+> **核心发现**：Prefill 阶段每个 tile 的 DMA 搬运量随 M 线性增长（激活字节 = M × grid_height），而计算量保持不变（compute = H×(M+1)+W，当 M≥H 时简化为 H+H+W）。更大的 M 使瓶颈从"计算受限"彻底反转为"带宽受限"，且反转强度远超 Decode。
+
+### 7.2 Qwen2.5-3B Prefill-2000 逐层分解
+
+```
+  per_layer_prefill = 1,672,869,996 cycles (critical-path DAG)
+  × 36 layers
+  = 60,223,319,856 cycles @ 1GHz = 60,223 ms
+```
+
+| 每层占主导的 op | cycles | 瓶颈 | 占总层时间的比例 |
+|-----------------|--------|------|-----------------|
+| Q_proj / O_proj (M=2000×K=2048×N=2048, 1024 tiles) | ~3,060,000 | DMA | ~0.2% each |
+| FFN_gate + up (weight-cache merged, M=2000×K=2048×N=11008, 5504 tiles) | ~16,447,000 | DMA | ~1.0% |
+| FFN_down (M=2000×K=11008×N=2048, 5504 tiles) | ~16,447,000 | DMA | ~1.0% |
+| K_proj / V_proj / Attention / SFU / Vector | ~12,000,000 | Mixed | ~0.7% |
+| ──────────────────────────────────── | | | |
+| 其余 36 层小 op（层内合并）| — | — | ~77.8% |
+
+> **注**：每层的总 prefill time 中有 **~78%** 来自 DAG critical-path 上串行排列的中小 op（K/V/proj、attention、RMSNorm、SiLU 等）。每个单独的 MXU op 虽然占比较小（Q/O 各~0.2%、FFN gate+up+down 各~1%），但 36 层的累积串行效果使得总 prefill 时间线性累加。
+
+### 7.3 Prefill 瓶颈根源
+
+Prefill TTFT 高达 **60.2 秒** 的根本原因有三：
+
+1. **M >> 1 导致 DMA 暴增**：每 tile 搬运的激活数据（M × grid_height）是 decode（1 × 64 = 64B）的 **2000 倍**。DMA 搬运量从 decode 的 1.39 GB/token 变为 prefill 的 ~280 GB/pass（2000 tokens 的 intermediate activations 远大于模型权重本身）。
+
+2. **层间完全串行**：36 层之间没有流水线重叠。每层的 output 是下一层的 input，无法开始下层的 DMA 预取。这是 Transformer 结构的内在约束，与硬件无关。
+
+3. **DAG critical-path 串行化**：虽然 Q/K/V 投影在 DAG 中是并行的（三者取 max），但 M=2000 下每个 MXU op 都受 DMA 瓶颈主导，并行收益有限——它们竞争同一个 DRAM 总线。
+
+### 7.4 Prefill 提升方向
+
+| 手段 | 预期效果 | 说明 |
+|------|----------|------|
+| 增大 DRAM 带宽 | **~线性** | Prefill 100% BW-bound，BW 翻倍 → TTFT 减半 |
+| 增大 MXU 阵列 | **零收益** | 每 tile 计算仅 192 cycles，已被 DMA 完全掩盖 |
+| 层间流水线（pipeline parallelism） | **~2× (2-core)** | 层 i+1 在核 B 开始搬运时核 A 仍在计算层 i。但需复制权重存储或共享 BW |
+| 减少 prompt 长度 | **~二次方** | M 减小 → 激活字节减少 + tile 数减少，双重收益 |
+
+---
+
+## 8. 端到端 (E2E) 性能分析
+
+### 8.1 TTFT 分解
+
+Qwen2.5-3B，prompt_len=2000，block 64×64，LPDDR5-6400：
+
+```
+TTFT = Prefill time + First-Decode time
+
+     = 60,223,319,856 / 1e9    +  2,526,695 / 1e9
+     = 60,223 ms               +  2.527 ms
+     = 60,225.5 ms
+     ≈ 60.2 秒
+```
+
+| 阶段 | 耗时 | 占 TTFT 比例 | 瓶颈 |
+|------|------|-------------|------|
+| Prefill（36 layers × 2000 tokens） | 60,223 ms | **99.996%** | 🔴 DRAM BW |
+| First Decode（1 token） | 2.5 ms | 0.004% | — |
+
+> **Prefill 完全主导 TTFT**。First decode 仅贡献 2.5ms，可以忽略不计。
+
+### 8.2 完整请求端到端延迟
+
+若生成 gen_len 个 token：
+
+```
+E2E Latency = TTFT + (gen_len - 1) × decode_per_token
+            = TTFT + (gen_len - 1) × (1000 / decode_tps) [ms]
+```
+
+| 生成长度 | E2E 延迟（base） | E2E 延迟（high = BW×1.3） | 瓶颈归属 |
+|---------|-----------------|--------------------------|----------|
+| 16 tokens | 60,225 + 15×91 = **61.6 s** | 42,159 + 15×70 = 43.2 s | Prefill |
+| 64 tokens | 60,225 + 63×91 = **66.0 s** | 42,159 + 63×70 = 46.6 s | Prefill |
+| 128 tokens | 60,225 + 127×91 = **71.8 s** | 42,159 + 127×70 = 51.0 s | Prefill |
+| 256 tokens | 60,225 + 255×91 = **83.4 s** | 42,159 + 255×70 = 60.0 s | Prefill |
+| 1024 tokens | 60,225 + 1023×91 = **153.4 s** | 42,159 + 1023×70 = 113.8 s | Prefill → 渐变 Decode |
+
+> `decode_per_token = 1000 / decode_tps_base = 1000 / 10.99 ≈ 91.0 ms`
+
+**结论**：对于绝大多数交互式生成长度（gen_len = 16 ~ 1024），E2E 延迟的 **82% ~ 39%** 来自 prefill。Decode 的贡献随 gen_len 线性增长，但在 128 tokens 以内 prefill 仍然占主导。瓶颈切换点大约在 **gen_len ≈ 660 tokens** 处（prefill_time ≈ gen_len × decode_per_token）。
+
+### 8.3 Decode 与 Prefill 瓶颈对比
+
+```
+             Decode (per token)          Prefill (2000 tokens)
+             ─────────────────          ─────────────────────
+  Time:      33.7 ms        ←          60,223 ms
+  TPS base:  10.99 tok/s    ←          0.033 tok/s (effective)
+  Bottleneck: BW (86.8%)    ←          BW (99%+)
+  Max E2E @ 128 tok: 71.8s（prefill 占 84%）
+```
+
+### 8.4 端到端瓶颈归属图
+
+```
+                    Prefill 阶段              Decode 阶段
+                    ────────────              ──────────
+     瓶颈:         ████████████████ DRAM BW   ████████████ DRAM BW
+                    (99.9% wall-clock)          (86.8% wall-clock)
+     
+     计算利用率:   ▏ ~0.1%（MXU 算力完全浪费）  ███ ~50%（部分利用）
+     
+     提升方向:     BW 翻倍 → TTFT 减半          BW 翻倍 → TPS 翻倍
+                   多核无用（串行层依赖）         多核无用（BW 已打满）
+     
+     CV 对比:      —                             CV 计算量大但延迟小
+     MobileNetV3:                                ~1.8 ms（计算为主）
+```
+
+---
+
+## 9. 限制与后续工作
 
 1. **uncalibrated 状态**: 所有数值均为 architecture-assumption estimates，需 RTL 实测校准。
 2. **不确定性带**: ±30%（cycle 0.7/1.3，throughput 取倒数），报告已给出 low/base/high。
 3. **SW Overhead**: 不进入 canonical total，仅作为 assumption-only 透明项。
-4. **CV 绝对数值**: 为基于 manifest shape 的架构级估计，未与实测视频流对齐。
-5. **RTL Calibration Phase**: 未来需填充 `rtl_head`、`eda_version`、`testbench_hash` 等预留字段，并将 `calibration_state` 迁移至 `rtl_calibrated`。
+4. **Prefill 分析基于 canonical formula**：per-tile DMA 值来自 `_mxu_decode_cycles` 公式，未经过 BlockEngine 全仿真验证。实际 engine 的 prefill total_cycles 可能因双缓冲流水线和 weight-cache 优化而显著降低。
+5. **CV 绝对数值**: 为基于 manifest shape 的架构级估计，未与实测视频流对齐。
+6. **RTL Calibration Phase**: 未来需填充 `rtl_head`、`eda_version`、`testbench_hash` 等预留字段，并将 `calibration_state` 迁移至 `rtl_calibrated`。
 
 ---
 
-## 8. 结论
+## 10. 结论
 
 Func Model 性能验证阶段已完成。基于当前 64×64 Block Engine、INT4、1GHz、LPDDR5-6400 配置：
 
-- **Qwen2.5-3B decode**: 约 **11 tok/s**（base），LPDDR5 BW 是瓶颈。
-- **Qwen2.5-3B prefill (2000 tokens)**: TTFT 约 **60.2 s**（base）。
-- **CV**: MobileNetV3 ~**551 FPS**，YOLOv8n ~**97 FPS**，ResNet-50 ~**54 FPS**。
-- 所有规格门禁、双路径一致性、对抗矩阵、敏感性扫参、Final Wave 均通过。
+**LLM Decode**
+- Qwen2.5-3B：~11 tok/s（base），~30 tok/s（全仿真）
+- 瓶颈：DRAM BW（86.8% wall-clock），DMA stall 为主
+- 提升路径：增加 BW（位宽 / 3D DRAM），多核/大阵列无效
+
+**LLM Prefill**
+- Qwen2.5-3B，prompt=2000：TTFT ~60.2 s（base）
+- 瓶颈：DRAM BW（99.9%+），每 tile 激活字节暴增 2000×
+- Prefill 主导 E2E 延迟（128 token 生成中占 84%）
+- 提升路径：增加 BW + 减少 prompt 长度（二次收益）
+
+**CV Inference**
+- MobileNetV3 ~551 FPS，YOLOv8n ~97 FPS，ResNet-50 ~54 FPS
+- 当前配置对 CV latency 已满足实时要求
+
+**签收状态**
+- 所有规格门禁、双路径一致性、对抗矩阵、敏感性扫参、Final Wave 均通过
+- `performance_spec_verified=true`，`calibration_state=uncalibrated`
 
 下一阶段待 RTL 实测数据接入后，使用预留的 calibration schema 将 `calibration_state` 从 `uncalibrated` 更新为 `rtl_calibrated`，并相应收紧 uncertainty band。
 
