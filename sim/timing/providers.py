@@ -8,7 +8,7 @@ No numerical kernel imports (sim.models, sim.engine) — this module is
 pure architectural dispatch.
 
 Usage:
-    from sim.timing.providers import ProviderRegistry
+    from timing.providers import ProviderRegistry
     reg = ProviderRegistry("config/func_model_perf_spec_v1.json")
     reg.activate("spec-block64-v1")
     est = reg.estimate("mxu", "mmul", {"M": 64, "K": 64, "N": 64})

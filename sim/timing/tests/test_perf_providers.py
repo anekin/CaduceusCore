@@ -461,7 +461,7 @@ class TestEstimateContentHash:
         r1 = block64_provider.estimate("mxu", "mmul", {"M": 64, "K": 64, "N": 64})
         r2 = block64_provider.estimate("mxu", "mmul", {"M": 64, "K": 64, "N": 64})
 
-        from sim.timing.perf_contract import PerfEstimate  # noqa: E402
+        from timing.perf_contract import PerfEstimate  # noqa: E402
         e1 = PerfEstimate(**r1)
         e2 = PerfEstimate(**r2)
         assert e1.content_hash() == e2.content_hash()
@@ -470,20 +470,20 @@ class TestEstimateContentHash:
         r1 = block64_provider.estimate("mxu", "mmul", {"M": 64, "K": 64, "N": 64})
         r2 = block64_provider.estimate("mxu", "mmul", {"M": 1, "K": 64, "N": 64})
 
-        from sim.timing.perf_contract import PerfEstimate  # noqa: E402
+        from timing.perf_contract import PerfEstimate  # noqa: E402
         e1 = PerfEstimate(**r1)
         e2 = PerfEstimate(**r2)
         assert e1.content_hash() != e2.content_hash()
 
     def test_estimate_is_verdict_eligible(self, block64_provider):
         r = block64_provider.estimate("mxu", "mmul", {"M": 64, "K": 64, "N": 64})
-        from sim.timing.perf_contract import PerfEstimate  # noqa: E402
+        from timing.perf_contract import PerfEstimate  # noqa: E402
         e = PerfEstimate(**r)
         assert e.is_verdict_eligible() is True
 
     def test_round_trip_stable(self, block64_provider):
         r = block64_provider.estimate("mxu", "mmul", {"M": 64, "K": 64, "N": 64})
-        from sim.timing.perf_contract import PerfEstimate  # noqa: E402
+        from timing.perf_contract import PerfEstimate  # noqa: E402
         e = PerfEstimate(**r)
         rt = e.round_trip()
         assert rt.estimated_cycles == e.estimated_cycles
@@ -498,7 +498,7 @@ class TestMutationDetection:
 
     def test_mutated_cycle_value_detected(self, block64_provider):
         r = block64_provider.estimate("mxu", "mmul", {"M": 64, "K": 64, "N": 64})
-        from sim.timing.perf_contract import PerfEstimate  # noqa: E402
+        from timing.perf_contract import PerfEstimate  # noqa: E402
         e_orig = PerfEstimate(**r)
         # Create mutated copy
         mutated = dict(r)
@@ -508,7 +508,7 @@ class TestMutationDetection:
 
     def test_mutated_provider_id_detected(self, block64_provider):
         r = block64_provider.estimate("mxu", "mmul", {"M": 64, "K": 64, "N": 64})
-        from sim.timing.perf_contract import PerfEstimate  # noqa: E402
+        from timing.perf_contract import PerfEstimate  # noqa: E402
         e_orig = PerfEstimate(**r)
         mutated = dict(r)
         mutated["provider_id"] = "evil-provider"
@@ -518,7 +518,7 @@ class TestMutationDetection:
     def test_rtl_fields_excluded_from_hash(self, block64_provider):
         """RTL fields should be excluded from content hash computation."""
         r = block64_provider.estimate("mxu", "mmul", {"M": 64, "K": 64, "N": 64})
-        from sim.timing.perf_contract import PerfEstimate  # noqa: E402
+        from timing.perf_contract import PerfEstimate  # noqa: E402
         e_no_rtl = PerfEstimate(**r)
 
         r_with_rtl = dict(r)
@@ -638,7 +638,7 @@ class TestFutureRTLArtifact:
 
     def test_rtl_calibrated_provider_rejects_verdict(self, block64_provider):
         """Any estimate with rtl_calibrated state should be rejected."""
-        from sim.timing.perf_contract import PerfEstimate  # noqa: E402
+        from timing.perf_contract import PerfEstimate  # noqa: E402
         # Create an estimate with rtl_calibrated through the provider
         with pytest.raises(RTLCalibratedArtifactError):
             block64_provider.estimate("mxu", "mmul", {"M": 64, "K": 64, "N": 64},

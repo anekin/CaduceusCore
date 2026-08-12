@@ -345,11 +345,12 @@ def fix_issues(issues: List[str]) -> int:
                 with open(filepath) as f:
                     content = f.read()
                 if old_prefix in content:
+                    num_replaced = content.count(old_prefix)
                     content = content.replace(old_prefix, new_prefix)
                     with open(filepath, "w") as f:
                         f.write(content)
-                    fixed += 1
-                    log(f"    Fixed broken import in {filepath}: {old_prefix} → {new_prefix}")
+                    fixed += num_replaced
+                    log(f"    Fixed {num_replaced} broken import(s) in {filepath}: {old_prefix} → {new_prefix}")
                 else:
                     log(f"    Pattern not found in {filepath} (may already be fixed)")
             else:
