@@ -38,10 +38,16 @@ def _mxu_decode_cycles(
     array_H: int = 64, array_W: int = 64,
     bw_bpc: float = 43.52, weight_bytes_per_elem: float = 0.5,
 ) -> int:
+    # BlockEngine broadcast model (aligned with sim.engine.block_engine.BlockEngine.estimate()):
+    # no systolic pipeline fill/drain; each token in a tile costs H broadcast-MAC cycles
+    # plus broadcast-sync + accumulate/reduction overhead.  For INT4 weights / INT8
+    # activations this is H + BROADCAST_SYNC_CYCLES(2) + _accumulate_cycles(4,8)(2).
     K_tiles = _ceil_div(K, array_H)
     N_tiles = _ceil_div(N, array_W)
     total_tiles = K_tiles * N_tiles
-    per_tile_compute = array_H * (M + 1) + array_W
+    sync_cycles = 2
+    acc_cycles = max(1, min(3, (4 + 8) // 8 + 1))  # = 2 for INT4 x INT8
+    per_tile_compute = M * (array_H + sync_cycles + acc_cycles)
     weight_bytes = array_H * array_W * weight_bytes_per_elem
     act_bytes = M * array_H
     per_tile_dma = (weight_bytes + act_bytes) / bw_bpc if bw_bpc > 0 else float("inf")

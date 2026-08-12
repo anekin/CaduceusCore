@@ -48,15 +48,13 @@ def _provider_estimate(M: int, K: int, N: int) -> Tuple[int, Dict]:
     tile_weight_bytes = math.ceil(array_H * array_W * _MXU_W_BITS / 8)
     tile_act_bytes = math.ceil(M * array_H * _MXU_A_BITS / 8)
 
-    if M <= 8:
-        per_tile_compute = array_H * (M + 1) + array_W
-        M_tiles = 1
-    else:
-        M_tiles = math.ceil(M / array_H)
-        if M_tiles == 1 and M < array_H:
-            per_tile_compute = array_H + array_W + M
-        else:
-            per_tile_compute = M_tiles * (array_H + array_W + array_H)
+    # BlockEngine broadcast model (aligned with BlockEngine.estimate):
+    # per-token-per-tile compute = H + BROADCAST_SYNC_CYCLES + _accumulate_cycles.
+    # For INT4/INT8 this is H + 2 + 2 = H + 4 = 68.
+    sync_cycles = 2
+    acc_cycles = max(1, min(3, (_MXU_W_BITS + _MXU_A_BITS) // 8 + 1))
+    per_tile_compute = M * (array_H + sync_cycles + acc_cycles)
+    M_tiles = math.ceil(M / array_H) if M > array_H else 1
 
     per_tile_dma = (tile_weight_bytes + tile_act_bytes) / eff_bw
 
@@ -79,7 +77,7 @@ def _provider_estimate(M: int, K: int, N: int) -> Tuple[int, Dict]:
 
     return estimated_cycles, {
         "K_tiles": K_tiles, "N_tiles": N_tiles,
-        "M_tiles": M_tiles if M > 8 else 1,
+        "M_tiles": M_tiles,
         "total_tiles": total_tiles,
         "per_tile_compute": per_tile_compute,
         "per_tile_dma": round(per_tile_dma, 1),
@@ -104,14 +102,9 @@ def _formula_cycles(M: int, K: int, N: int, array_H: int, array_W: int) -> int:
     total_tiles = K_tiles * N_tiles
     tile_weight_bytes = math.ceil(array_H * array_W * w_bits / 8)
     tile_act_bytes = math.ceil(M * array_H * a_bits / 8)
-    if M <= 8:
-        per_tile_compute = array_H * (M + 1) + array_W
-    else:
-        M_tiles = math.ceil(M / array_H)
-        if M_tiles == 1 and M < array_H:
-            per_tile_compute = array_H + array_W + M
-        else:
-            per_tile_compute = M_tiles * (array_H + array_W + array_H)
+    sync_cycles = 2
+    acc_cycles = max(1, min(3, (w_bits + a_bits) // 8 + 1))
+    per_tile_compute = M * (array_H + sync_cycles + acc_cycles)
     per_tile_dma = (tile_weight_bytes + tile_act_bytes) / eff_bw
     first_cold = per_tile_dma + per_tile_compute
     if total_tiles > 1:
@@ -153,43 +146,43 @@ def oracle_entries(oracle) -> list:
 class TestMXUGreenPath:
     def test_mxu_1_64_64(self):
         cyc, _ = _provider_estimate(1, 64, 64)
-        assert cyc == 241
+        assert cyc == 117
 
     def test_mxu_4_64_64(self):
         cyc, _ = _provider_estimate(4, 64, 64)
-        assert cyc == 434
+        assert cyc == 325
 
     def test_mxu_64_64_64(self):
         cyc, _ = _provider_estimate(64, 64, 64)
-        assert cyc == 465
+        assert cyc == 4494
 
     def test_mxu_64_128_64(self):
         cyc, _ = _provider_estimate(64, 128, 64)
-        assert cyc == 680
+        assert cyc == 8846
 
     def test_mxu_64_64_128(self):
         cyc, _ = _provider_estimate(64, 64, 128)
-        assert cyc == 722
+        assert cyc == 8846
 
     def test_mxu_32_128_128(self):
         cyc, _ = _provider_estimate(32, 128, 128)
-        assert cyc == 1158
+        assert cyc == 8799
 
     def test_mxu_1_2048_2048(self):
         cyc, _ = _provider_estimate(1, 2048, 2048)
-        assert cyc == 47104
+        assert cyc == 69681
 
     def test_mxu_128_2048_2048(self):
         cyc, _ = _provider_estimate(128, 2048, 2048)
-        assert cyc == 706560
+        assert cyc == 8913132
 
     def test_mxu_1_2048_11008(self):
         cyc, _ = _provider_estimate(1, 2048, 11008)
-        assert cyc == 122998
+        assert cyc == 374321
 
     def test_mxu_128_2048_11008(self):
         cyc, _ = _provider_estimate(128, 2048, 11008)
-        assert cyc == 1475976
+        assert cyc == 47907052
 
     def test_all_10_rows(self, spec_entries, oracle_entries):
         failed = 0
@@ -225,7 +218,9 @@ class TestMXUGreenPath:
         for entry in spec_entries:
             M, K, N = int(entry["inputs"]["M"]), int(entry["inputs"]["K"]), int(entry["inputs"]["N"])
             cyc, _ = _provider_estimate(M, K, N)
-            assert cyc <= 2_000_000, f"{entry['parameter_id']}: cycles={cyc} unreasonably large"
+            # Prefill M=128 large GEMMs exceed the old decode-only threshold;
+            # the BlockEngine broadcast model scales linearly with M tokens.
+            assert cyc <= 100_000_000, f"{entry['parameter_id']}: cycles={cyc} unreasonably large"
 
     def test_decode_prefill_partition(self, spec_entries):
         decode_entries = [e for e in spec_entries if int(e["inputs"]["M"]) <= 8]

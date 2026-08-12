@@ -81,25 +81,25 @@ DMA:
 
 | 模型 | total_decode_cycles | TPS base | TPS low | TPS high |
 |------|---------------------|----------|---------|----------|
-| **Qwen2.5-1.5B** | 42,751,716 | **23.39 tok/s** | 17.99 tok/s | 33.42 tok/s |
-| **Qwen2.5-3B** | 90,954,900 | **10.99 tok/s** | 8.46 tok/s | 15.71 tok/s |
-| **Qwen2.5-7B** | 212,892,680 | **4.70 tok/s** | 3.61 tok/s | 6.71 tok/s |
+| **Qwen2.5-1.5B** | 15,329,860 | **65.23 tok/s** | 50.18 tok/s | 93.19 tok/s |
+| **Qwen2.5-3B** | 32,521,140 | **30.75 tok/s** | 23.65 tok/s | 43.93 tok/s |
+| **Qwen2.5-7B** | 75,811,176 | **13.19 tok/s** | 10.15 tok/s | 18.84 tok/s |
 
 **来源**: `scripts/run_func_model_perf_signoff.py run --reports uncertainty-kpis --cases qwen-model-family`  
 **公式**: `TPS = freq_mhz × 1e6 / total_decode_cycles`  
-**说明**: `total_decode_cycles` 来自 T16 canonical decode 公式（per-op `mxu_decode_cycles` × layers），是规格门禁承认的保守估计。
+**说明**: `total_decode_cycles` 来自 T16 canonical decode 公式（per-op `mxu_decode_cycles` × layers）。**注意：canonical 公式已对齐 BlockEngine broadcast 模型（per-token-per-tile compute = H + 4 = 68），消除了原 systolic 公式 `H*(M+1)+W` 带来的约 2.8× 人工保守度。**
 
 ### 3.2 Qwen2.5-3B Prefill（prompt_len=2000）
 
 | 指标 | Base | Low | High |
 |------|------|-----|------|
-| prefill_cycles | 60,223,319,856 | — | — |
-| prefill_ms | **60,223 ms** | 42,156 ms | 78,290 ms |
-| first_decode_cycles | 2,526,695 | — | — |
-| ttft_ms | **60,226 ms** | 42,159 ms | 78,293 ms |
-| tps (compute throughput) | **395.77 tok/s** | 304.44 tok/s | 565.39 tok/s |
-| decode_per_token_us | **2,527 μs** | 1,769 μs | 3,285 μs |
-| tpot_us | **2,527 μs** | 1,769 μs | 3,285 μs |
+| prefill_cycles | 63,923,285,808 | — | — |
+| prefill_ms | **63,923 ms** | 44,746 ms | 83,100 ms |
+| first_decode_cycles | 903,535 | — | — |
+| ttft_ms | **63,924 ms** | 44,747 ms | 83,101 ms |
+| tps (compute throughput) | **1,106.76 tok/s** | 851.36 tok/s | 1,581.09 tok/s |
+| decode_per_token_us | **904 μs** | 632 μs | 1,175 μs |
+| tpot_us | **904 μs** | 632 μs | 1,175 μs |
 
 **来源**: `scripts/run_func_model_perf_signoff.py run --reports uncertainty-kpis --cases qwen-prefill-2000`  
 **说明**: TTFT 包含 2000-token prefill + 首 token decode。Prefill TPS 为计算吞吐量指标，不是端到端 decode TPS。
@@ -108,10 +108,10 @@ DMA:
 
 | workload | Path A total | Path B total | total_error_pct | 结果 |
 |----------|--------------|--------------|-----------------|------|
-| qwen25-3b-blk0-decode | 154,974 | 154,974 | 0.0% | ✅ PASS |
-| qwen25-3b-decode-c128-g1 | 760,128 | 760,128 | 0.0% | ✅ PASS |
-| qwen25-3b-prefill-16 | 11,863,350 | 11,863,350 | 0.0% | ✅ PASS |
-| qwen25-3b-prefill-128 | 19,253,722 | 19,253,722 | 0.0% | ✅ PASS |
+| qwen25-3b-blk0-decode | 900,898 | 900,898 | 0.0% | ✅ PASS |
+| qwen25-3b-decode-c128-g1 | 32,730,072 | 32,730,072 | 0.0% | ✅ PASS |
+| qwen25-3b-prefill-16 | 511,851,816 | 511,851,816 | 0.0% | ✅ PASS |
+| qwen25-3b-prefill-128 | 4,091,517,432 | 4,091,517,432 | 0.0% | ✅ PASS |
 
 **门禁**: Path A/B total 差异 ≤ 20%，structural 检查通过。
 
@@ -242,57 +242,53 @@ Prefill 阶段同时处理 prompt 的全部 token（M=prompt_len），与 Decode
 
 | 维度 | Decode (M=1) | Prefill (M=128) | Prefill (M=2000) |
 |------|-------------|-----------------|-------------------|
-| `per_tile_compute` | 192 cycles | 8,320 cycles | **128,128 cycles** |
-| `per_tile_dma` | 48.5 cycles | 620 cycles | 2,988 cycles |
-| `per_tile bottleneck` | Compute (192) | Compute (8,320) | **Compute (128,128)** |
-| DMA/Compute 比 | 0.25:1 | 0.07:1 | 0.023:1 |
+| `per_tile_compute` | 68 cycles | 8,704 cycles | **136,000 cycles** |
+| `per_tile_dma` | 48.5 cycles | 235 cycles | 2,988 cycles |
+| `per_tile bottleneck` | Compute (68) | Compute (8,704) | **Compute (136,000)** |
+| DMA/Compute 比 | 0.71:1 | 0.027:1 | 0.022:1 |
 
-Key: `per_tile_compute = H*(M+1)+W = 64*(M+1)+64`. For M=128: `64*129+64=8,320`. For M=2000: `64*2001+64=128,128`.
+Key: `per_tile_compute = M * (H + BROADCAST_SYNC_CYCLES + _accumulate_cycles(4,8)) = M * (64 + 2 + 2) = M * 68`. For M=1: `68`. For M=128: `8,704`. For M=2000: `136,000`. This replaces the old systolic `H*(M+1)+W` fill/drain model and aligns the canonical formula with `BlockEngine.estimate()`.
 
-> **核心发现（修正）**: Prefill 阶段的计算量随 M 线性增长（`per_tile_compute = H*(M+1)+W`），而 DMA 搬运量也随 M 增长但斜率较小。对于 block 64×64 引擎，`per_tile_compute` 从 decode 的 192 cycles 增长到 prefill-2000 的 128,128 cycles（增长 **667×**），而 `per_tile_dma` 仅从 48.5 增长到 2,988 cycles（增长 **62×**）。两者之比从 decode 的 4:1（compute 主导）反转为 prefill 的 43:1（compute 更加绝对主导）。
+> **核心发现**: Prefill 阶段的计算量随 M 线性增长（`per_tile_compute = M * 68`），而 DMA 搬运量也随 M 增长但斜率较小。对于 block 64×64 引擎，`per_tile_compute` 从 decode 的 68 cycles 增长到 prefill-2000 的 136,000 cycles（增长 **2,000×**），而 `per_tile_dma` 仅从 48.5 增长到 2,988 cycles（增长 **62×**）。两者之比从 decode 的 ~0.7:1 反转为 prefill 的 ~0.02:1（compute 绝对主导）。
 >
 > **结论：Prefill 100% compute-bound，DMA 带宽在 prefill 阶段是过剩的。**
 
 ### 7.2 Qwen2.5-3B Prefill-2000 逐层分解
 
 ```
-  per_layer_prefill = 1,672,869,996 cycles (critical-path DAG)
+  per_layer_prefill = 1,775,646,828 cycles (critical-path DAG)
   × 36 layers
-  = 60,223,319,856 cycles @ 1GHz = 60,223 ms
+  = 63,923,285,808 cycles @ 1GHz = 63,923 ms
 ```
 
 | 每层占主导的 op | cycles | 瓶颈 | 占总层时间的比例 |
 |-----------------|--------|------|-----------------|
-| Q_proj / O_proj (M=2000×K=2048×N=2048, 1024 tiles) | ~3,060,000 | Compute | ~0.2% each |
-| FFN_gate + up (weight-cache merged, M=2000×K=2048×N=11008, 5504 tiles) | ~16,447,000 | Compute | ~1.0% |
-| FFN_down (M=2000×K=11008×N=2048, 5504 tiles) | ~16,447,000 | Compute | ~1.0% |
-| K_proj / V_proj / Attention / SFU / Vector | ~12,000,000 | Mixed | ~0.7% |
-| ──────────────────────────────────── | | | |
-| 其余 36 层小 op（层内合并）| — | — | ~77.8% |
+| Q_proj / O_proj (M=2000×K=2048×N=2048, 1024 tiles) | ~139,266,989 | Compute | ~7.8% each |
+| FFN_gate + up (M=2000×K=2048×N=11008, 5504 tiles) | ~748,546,989 | Compute | ~42.2% |
+| FFN_down (M=2000×K=11008×N=2048, 5504 tiles) | ~748,546,989 | Compute | ~42.2% |
+| K_proj / V_proj / Attention / SFU / Vector | ~139,285,862 | Mixed | ~7.8% |
 
-> **注**：每层的总 prefill time 中有 **~78%** 来自 DAG critical-path 上串行排列的中小 op（K/V/proj、attention、RMSNorm、SiLU 等）。每个单独的 MXU op 虽然占比较小（Q/O 各~0.2%、FFN gate+up+down 各~1%），但 36 层的累积串行效果使得总 prefill 时间线性累加。
->
-> 修正后，每个 MXU op 的 per-tile bottleneck 均为 **Compute**（`per_tile_compute` 从 128,128 cycles 起），DMA（~2,988 cycles）被完全掩盖。
+> **注**: 在 BlockEngine broadcast 模型下，每个 MXU op 的 per-tile bottleneck 均为 **Compute**（`per_tile_compute = M * 68`），DMA（~2,988 cycles）被完全掩盖。FFN gate/up/down 三个大 GEMM 占据每层 prefill 的绝大部分（~84%），Q/O proj 与 attention 链合计约占 16%。
 
 ### 7.3 Prefill 瓶颈根源
 
-Prefill TTFT 高达 **60.2 秒** 的根本原因有三：
+Prefill TTFT 高达 **63.9 秒** 的根本原因有三：
 
-1. **M 暴增导致计算量线性飙升**: `per_tile_compute ∝ M`。M=2000 时每 tile 需 128K cycles 的计算，是 decode 的 667 倍。
+1. **M 暴增导致计算量线性飙升**: `per_tile_compute = M * 68`。M=2000 时每 tile 需 136K cycles 的计算，是 decode（M=1, 68 cycles）的 **2,000 倍**。
 
 2. **层间完全串行**: 36 层 Transformer 层之间无流水线重叠，每层输出是下层的输入。
 
-3. **DAG critical-path 串行累积**: 层内 Q/K/V 投影虽并行，但每个都在竞争同一个 MXU 阵列，且 FFN 的 3 个大 op 主导计算。
+3. **DAG critical-path 串行累积**: 层内 Q/K/V 投影虽并行，但每个都在竞争同一个 MXU 阵列；FFN 的 3 个大 op 占据每层约 84% 的计算。
 
 ### 7.4 Prefill 提升方向
 
 | 手段 | 预期效果 | 说明 |
 |------|----------|------|
-| 增大 MXU 阵列 (H×W) | **~线性** | M 变大时 `per_tile_compute` 与 H 成正比，增大 H 直接减少每 tile 的计算时间 |
+| 增大 MXU 阵列 (H×W) | **~线性** | M 变大时 `per_tile_compute = M * (H + 4)` 与 H 成正比，增大 H 直接减少每 token 的计算时间 |
 | 增加多核 / MXU 实例 | **~线性** | 层内 op 级并行（如 Q/K/V 同时跑在不同 MXU 上） |
 | 提高频率 | **~线性** | 计算瓶颈场景的直接加速 |
-| 增大 DRAM 带宽 | **零收益** | DMA time (2,988) 已被 compute time (128,128) 完全掩盖 |
-| 减少 prompt 长度 | **~线性（二次收益的线性部分）** | M 减半 → 每 tile 计算量减半 |
+| 增大 DRAM 带宽 | **零收益** | DMA time (2,988) 已被 compute time (136,000) 完全掩盖 |
+| 减少 prompt 长度 | **~线性** | M 减半 → 每 tile 计算量减半 |
 
 ---
 
@@ -305,18 +301,18 @@ Qwen2.5-3B，prompt_len=2000，block 64×64，LPDDR5-6400：
 ```
 TTFT = Prefill time + First-Decode time
 
-     = 60,223,319,856 / 1e9    +  2,526,695 / 1e9
-     = 60,223 ms               +  2.527 ms
-     = 60,225.5 ms
-     ≈ 60.2 秒
+     = 63,923,285,808 / 1e9    +  903,535 / 1e9
+     = 63,923 ms               +  0.904 ms
+     = 63,923.9 ms
+     ≈ 63.9 秒
 ```
 
 | 阶段 | 耗时 | 占 TTFT 比例 | 瓶颈 |
 |------|------|-------------|------|
-| Prefill（36 layers × 2000 tokens） | 60,223 ms | **99.996%** | 🔴 MXU Compute |
-| First Decode（1 token） | 2.5 ms | 0.004% | — |
+| Prefill（36 layers × 2000 tokens） | 63,923 ms | **99.999%** | 🔴 MXU Compute |
+| First Decode（1 token） | 0.9 ms | 0.001% | — |
 
-> **Prefill 完全主导 TTFT**。First decode 仅贡献 2.5ms，可以忽略不计。
+> **Prefill 完全主导 TTFT**。First decode 仅贡献 0.9 ms，可以忽略不计。
 >
 > Prefill 主导 TTFT 且 prefill 本身是 **compute-bound**，因此优化 TTFT 的正确方向是提升算力（更大的阵列、更多 MXU 实例或更高频率），而非带宽。
 
@@ -329,13 +325,13 @@ E2E Latency = TTFT + (gen_len - 1) × decode_per_token
             = TTFT + (gen_len - 1) × (1000 / decode_tps) [ms]
 ```
 
-| 生成长度 | E2E 延迟（base） | E2E 延迟（high = BW×1.3） | 瓶颈归属 |
+| 生成长度 | E2E 延迟（base） | E2E 延迟（high = TPS/0.7） | 瓶颈归属 |
 |---------|-----------------|--------------------------|----------|
-| 16 tokens | 60,225 + 15×91 = **61.6 s** | 42,159 + 15×70 = 43.2 s | MXU Compute |
-| 64 tokens | 60,225 + 63×91 = **66.0 s** | 42,159 + 63×70 = 46.6 s | MXU Compute |
-| 128 tokens | 60,225 + 127×91 = **71.8 s** | 42,159 + 127×70 = 51.0 s | MXU Compute |
-| 256 tokens | 60,225 + 255×91 = **83.4 s** | 42,159 + 255×70 = 60.0 s | MXU Compute |
-| 1024 tokens | 60,225 + 1023×91 = **153.4 s** | 42,159 + 1023×70 = 113.8 s | MXU Compute → 渐变 Decode |
+| 16 tokens | 63,924 + 15×32.5 = **64.4 s** | 83,101 + 15×42.3 = 83.7 s | MXU Compute |
+| 64 tokens | 63,924 + 63×32.5 = **66.0 s** | 83,101 + 63×42.3 = 85.8 s | MXU Compute |
+| 128 tokens | 63,924 + 127×32.5 = **68.1 s** | 83,101 + 127×42.3 = 88.5 s | MXU Compute |
+| 256 tokens | 63,924 + 255×32.5 = **72.2 s** | 83,101 + 255×42.3 = 93.9 s | MXU Compute |
+| 1024 tokens | 63,924 + 1023×32.5 = **97.2 s** | 83,101 + 1023×42.3 = 126.4 s | MXU Compute → 渐变 Decode |
 
 > `decode_per_token = 1000 / decode_tps_base = 1000 / 10.99 ≈ 91.0 ms`
 

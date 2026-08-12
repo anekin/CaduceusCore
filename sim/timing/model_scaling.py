@@ -112,11 +112,19 @@ def _mxu_decode_cycles(
     array_H: int = _ARRAY_H, array_W: int = _ARRAY_W,
     bw_bpc: float = _BW_BPC,
 ) -> int:
-    """T16 MXU decode cycle estimate for one MXU op."""
+    """T16 MXU decode cycle estimate for one MXU op.
+
+    Aligned with sim.engine.block_engine.BlockEngine.estimate(): broadcast MAC
+    array with no systolic fill/drain.  Per-token per-tile compute is
+    H + BROADCAST_SYNC_CYCLES + _accumulate_cycles(w_bits, a_bits); for a tile
+    processing M tokens this becomes M * (H + 4) under INT4/INT8.
+    """
     K_tiles = _ceil_div(K, array_H)
     N_tiles = _ceil_div(N, array_W)
     total_tiles = K_tiles * N_tiles
-    per_tile_compute = array_H * (M + 1) + array_W
+    sync_cycles = 2
+    acc_cycles = max(1, min(3, (4 + 8) // 8 + 1))  # = 2 for INT4 x INT8
+    per_tile_compute = M * (array_H + sync_cycles + acc_cycles)
     tile_weight_bytes = array_H * array_W * _WEIGHT_BYTES_PER_ELEM
     tile_act_bytes = M * array_H
     per_tile_dma = (tile_weight_bytes + tile_act_bytes) / bw_bpc if bw_bpc > 0 else float("inf")

@@ -87,22 +87,27 @@ def _mxu_decode_cycles(M: int, K: int, N: int,
                        bw_bpc: float = 43.52, weight_bytes_per_elem: float = 0.5) -> int:
     """Compute MXU decode interleaving cycle estimate from hand-derived formula.
 
+    Aligned with BlockEngine.estimate() (sim.engine.block_engine): broadcast MAC
+    array with no systolic fill/drain.  Per-token per-tile compute is
+    H + BROADCAST_SYNC_CYCLES + _accumulate_cycles(w_bits, a_bits); for a tile
+    processing M tokens this becomes M * (H + 4) under INT4/INT8.
+
     Formula: K_tiles=ceil(K/H), N_tiles=ceil(N/W);
-    per_tile_compute = H*(M+1)+W;
+    per_tile_compute = M * (H + BROADCAST_SYNC_CYCLES + _accumulate_cycles(4,8));
     per_tile_DMA = (weight_bytes + act_bytes) / (bw_bpc);
     double-buffer: first_tile_cold + (total_tiles-1)*max(per_tile_compute, per_tile_dma)
     """
     K_tiles = _ceil_div(K, array_H)
     N_tiles = _ceil_div(N, array_W)
     total_tiles = K_tiles * N_tiles
-    per_tile_compute = array_H * (M + 1) + array_W
+    sync_cycles = 2
+    acc_cycles = max(1, min(3, (4 + 8) // 8 + 1))  # = 2 for INT4 x INT8
+    per_tile_compute = M * (array_H + sync_cycles + acc_cycles)
     weight_bytes = array_H * array_W * weight_bytes_per_elem
     act_bytes = M * array_H
     per_tile_dma = (weight_bytes + act_bytes) / bw_bpc if bw_bpc > 0 else float("inf")
     first_tile_cold = per_tile_compute + per_tile_dma
     bottleneck = max(per_tile_compute, per_tile_dma)
-    if M >= array_H:
-        per_tile_compute = array_H + array_W + array_H
     raw = first_tile_cold + (total_tiles - 1) * bottleneck
     return math.ceil(raw)
 

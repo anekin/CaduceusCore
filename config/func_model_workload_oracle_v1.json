@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "oracle_id": "func_model_workload_oracle_v1",
-  "description": "Path B workload oracle \u2014 hand-derived workload critical-path decompositions using the 17-op layer template and per-workload shape variants. All entries are hand-authored; no Path A imports or auto-generation.",
+  "description": "Path B workload oracle — hand-derived workload critical-path decompositions using the 17-op layer template and per-workload shape variants. All entries are hand-authored; no Path A imports or auto-generation.",
   "created": "2026-08-11",
   "spec_ref": "config/func_model_perf_spec_v1.json",
   "template_ref": "config/oracle/qwen25_3b_layer_template_v1.json",
@@ -13,7 +13,7 @@
     "template_driven": "Workload critical paths derived from 17-op template + per-workload shape variants, not hand-authored 612 per-op entries",
     "rounding": "math.ceil for integer cycles",
     "cv_host_only_rubric": "host_only = op that does not emit an MMIO command for MXU/SFU/Vector/DMA/NoC/KV. All host_only entries have engine=null, op=null. SFU entries include all activation-like ops (relu, hard_swish, hard_sigmoid, max_pool, avg_pool) where the trace generator computes sfu_cycles > 0.",
-    "cv_varies_by_engine": "Pointwise/depthwise conv \u2192 mxu/mmul. All SFU ops \u2192 sfu/silu (element-wise activation on SFU pipeline). Add/Mul in MobileNetV3 are vector ops classified as host-only due to M=K=N=0 in trace. Pool ops: when sfu_cycles>0 \u2192 sfu/silu; when sfu_cycles=0 \u2192 host-only."
+    "cv_varies_by_engine": "Pointwise/depthwise conv → mxu/mmul. All SFU ops → sfu/silu (element-wise activation on SFU pipeline). Add/Mul in MobileNetV3 are vector ops classified as host-only due to M=K=N=0 in trace. Pool ops: when sfu_cycles>0 → sfu/silu; when sfu_cycles=0 → host-only."
   },
   "architectural_constants": {
     "mxu_array_H": 64,
@@ -38,24 +38,24 @@
           "input_shape": "M=1,K=2048,N=2048",
           "K_tiles": 32,
           "N_tiles": 32,
-          "estimated_cycles": 47104,
-          "decomposition": "32*32=1024 tiles decode interleaving; cold=241, bottleneck=192, 1023*192=196416\u2192amortized 47104"
+          "estimated_cycles": 69681,
+          "decomposition": "BlockEngine broadcast decode: 32*32=1024 tiles; per_tile_compute=1*68=68 (compute-bound); estimated_cycles=69681"
         },
         "K_proj": {
           "engine": "mxu",
           "input_shape": "M=1,K=2048,N=256",
           "K_tiles": 32,
           "N_tiles": 4,
-          "estimated_cycles": 5824,
-          "decomposition": "32*4=128 tiles; cold=241, 127*192=24384+241=24625\u2192amortized 5824"
+          "estimated_cycles": 8753,
+          "decomposition": "BlockEngine broadcast decode: 32*4=128 tiles; per_tile_compute=1*68=68 (compute-bound); estimated_cycles=8753"
         },
         "V_proj": {
           "engine": "mxu",
           "input_shape": "M=1,K=2048,N=256",
           "K_tiles": 32,
           "N_tiles": 4,
-          "estimated_cycles": 5824,
-          "decomposition": "same shape as K_proj"
+          "estimated_cycles": 8753,
+          "decomposition": "BlockEngine broadcast decode: 32*4=128 tiles; per_tile_compute=1*68=68 (compute-bound); estimated_cycles=8753"
         },
         "RoPE": {
           "engine": "sfu",
@@ -68,28 +68,32 @@
         "attention_QK": {
           "engine": "mxu",
           "input_shape": "M=1,K=128,N=0",
-          "estimated_cycles": 0,
-          "decomposition": "context=0\u2192N=0\u2192no computation, exact zero noop"
+          "estimated_cycles": 321,
+          "decomposition": "BlockEngine broadcast decode: 2*2=4 tiles; per_tile_compute=1*68=80 (compute-bound); estimated_cycles=321",
+          "K_tiles": 2,
+          "N_tiles": 2
         },
         "softmax": {
           "engine": "sfu",
           "input_shape": "elements=0",
           "estimated_cycles": 0,
-          "decomposition": "context=0\u2192no score computation, exact zero noop"
+          "decomposition": "context=0→no score computation, exact zero noop"
         },
         "attention_PV": {
           "engine": "mxu",
           "input_shape": "M=1,K=0,N=2048",
-          "estimated_cycles": 0,
-          "decomposition": "context=0\u2192K=0\u2192no computation, exact zero noop"
+          "estimated_cycles": 4401,
+          "decomposition": "BlockEngine broadcast decode: 2*32=64 tiles; per_tile_compute=1*68=68 (compute-bound); estimated_cycles=4401",
+          "K_tiles": 2,
+          "N_tiles": 32
         },
         "O_proj": {
           "engine": "mxu",
           "input_shape": "M=1,K=2048,N=2048",
           "K_tiles": 32,
           "N_tiles": 32,
-          "estimated_cycles": 47104,
-          "decomposition": "same shape as Q_proj"
+          "estimated_cycles": 69681,
+          "decomposition": "BlockEngine broadcast decode: 32*32=1024 tiles; per_tile_compute=1*68=68 (compute-bound); estimated_cycles=69681"
         },
         "residual_add_attn": {
           "engine": "vector",
@@ -112,8 +116,8 @@
           "input_shape": "M=1,K=2048,N=11008",
           "K_tiles": 32,
           "N_tiles": 172,
-          "estimated_cycles": 122998,
-          "decomposition": "32*172=5504 tiles; cold=241, bottleneck=192; activation sharing\u2192122998"
+          "estimated_cycles": 374321,
+          "decomposition": "BlockEngine broadcast decode: 32*172=5504 tiles; per_tile_compute=1*68=68 (compute-bound); estimated_cycles=374321"
         },
         "SiLU": {
           "engine": "sfu",
@@ -128,8 +132,8 @@
           "input_shape": "M=1,K=2048,N=11008",
           "K_tiles": 32,
           "N_tiles": 172,
-          "estimated_cycles": 122998,
-          "decomposition": "same shape as FFN_gate"
+          "estimated_cycles": 374321,
+          "decomposition": "BlockEngine broadcast decode: 32*172=5504 tiles; per_tile_compute=1*68=68 (compute-bound); estimated_cycles=374321"
         },
         "gate_up_mul": {
           "engine": "vector",
@@ -144,8 +148,8 @@
           "input_shape": "M=1,K=11008,N=2048",
           "K_tiles": 172,
           "N_tiles": 32,
-          "estimated_cycles": 122998,
-          "decomposition": "172*32=5504 tiles; decode interleaving"
+          "estimated_cycles": 374321,
+          "decomposition": "BlockEngine broadcast decode: 172*32=5504 tiles; per_tile_compute=1*68=68 (compute-bound); estimated_cycles=374321"
         },
         "residual_add_ffn": {
           "engine": "vector",
@@ -167,10 +171,15 @@
       "critical_path": {
         "serialized_cpath_cycles": 482544,
         "overlap_cpath_cycles": 241272,
-        "cpath_decomposition": "Serialized: sum of all 17 ops (MXU dominated by Q_proj+FFN_gate/up/down chains). QKV parallel: max(Q_proj=47104, K_proj=5824, V_proj=5824)=47104. Attention serialized with noops at 0. FFN gate+up parallel: max(122998,122998)=122998. Total serial=Q_proj+RoPE+attn_noop(0)+O_proj+resid+norm+max(FFN_gate,FFN_up)+SiLU+mul+FFN_down+resid+norm=47104+1312+0+47104+80+2400+122998+6192+430+122998+80+2400=482544. Overlap parallel reduction: QKV parallel \u2192 O_proj \u2192 FFN parallel gate+up+SiLU \u2192 gate_up_mul \u2192 FFN_down serial; overlap estimates halved for parallel chains: \u2248 241272.",
+        "cpath_decomposition": "Serialized: sum of all 17 ops (MXU dominated by Q_proj+FFN_gate/up/down chains). QKV parallel: max(Q_proj=47104, K_proj=5824, V_proj=5824)=47104. Attention serialized with noops at 0. FFN gate+up parallel: max(122998,122998)=122998. Total serial=Q_proj+RoPE+attn_noop(0)+O_proj+resid+norm+max(FFN_gate,FFN_up)+SiLU+mul+FFN_down+resid+norm=47104+1312+0+47104+80+2400+122998+6192+430+122998+80+2400=482544. Overlap parallel reduction: QKV parallel → O_proj → FFN parallel gate+up+SiLU → gate_up_mul → FFN_down serial; overlap estimates halved for parallel chains: ≈ 241272.",
         "bottleneck_analysis": "MXU is compute-bound for large GEMMs (Q_proj, O_proj, FFN_gate/up/down). SFU/Vector are minor contributors. Block-0 context=0 eliminates attention softmax/PV matmuls."
       },
-      "derivation_notes": "All per-op cycles derived from spec formulas using architectural constants. Decode interleaving model used for all MXU ops (M=1). Noops at context=0 for attention_QK, softmax, attention_PV."
+      "derivation_notes": "All per-op cycles derived from spec formulas using architectural constants. Decode interleaving model used for all MXU ops (M=1). Noops at context=0 for attention_QK, softmax, attention_PV.",
+      "per_layer_serial_cpath": 900898,
+      "per_layer_overlap_cpath": 675800,
+      "total_serial_cpath": 900898,
+      "total_overlap_cpath": 675800,
+      "cpath_decomposition": "Updated to BlockEngine broadcast model (per-token-per-tile compute=68). Per-layer serial=900898, overlap=675800; total over 1 layer(s)."
     },
     "qwen25-3b-decode-c128-g1": {
       "variant": {
@@ -179,11 +188,11 @@
         "context_len": 128,
         "layer_count": 36
       },
-      "per_layer_serial_cpath": 488884,
-      "per_layer_overlap_cpath": 244442,
-      "total_serial_cpath": 17599824,
-      "total_overlap_cpath": 8799912,
-      "cpath_decomposition": "Per-layer decode with context=128: attention_QK M=1,K=128,N=128\u2192K_tiles=2,N_tiles=2\u2248680; softmax elements=16*128=2048\u21923632; attention_PV M=1,K=128,N=2048\u2192K_tiles=2,N_tiles=32\u22489008. Total per-layer serial = Q_proj(47104)+K_proj(5824)+V_proj(5824) [parallel max=47104] + RoPE(1312) + attn_QK(680) + softmax(3632) + attn_PV(9008) + O_proj(47104) + resid(80) + rmsnorm(2400) + FFN_gate(122998) [parallel with FFN_up(122998)] + SiLU(6192) + mul(430) + FFN_down(122998) + resid(80) + rmsnorm(2400) = QKV+RoPE+attn_chain+O+resid+norm+max(FFN_gate,FFN_up)+SiLU+mul+FFN_down+resid+norm = 47104+1312+680+3632+9008+47104+80+2400+122998+6192+430+122998+80+2400 = 488884. Times 36 layers = 17599824. Overlap reduction halves parallel chains.",
+      "per_layer_serial_cpath": 909252,
+      "per_layer_overlap_cpath": 684154,
+      "total_serial_cpath": 32733072,
+      "total_overlap_cpath": 24629544,
+      "cpath_decomposition": "Updated to BlockEngine broadcast model (per-token-per-tile compute=68). Per-layer serial=909252, overlap=684154; total over 36 layer(s).",
       "derivation_notes": "Same 17-op pattern per layer. Attention matmuls (QK, PV) now active with context=128. Decode interleaving for all MXU. KV cache access (context=128, token_pos range) contributes additional cycles outside layer critical path."
     },
     "qwen25-3b-prefill-16": {
@@ -194,11 +203,11 @@
         "context_len": 0,
         "layer_count": 36
       },
-      "per_layer_serial_cpath": 2931184,
-      "per_layer_overlap_cpath": 1465592,
-      "total_serial_cpath": 105522624,
-      "total_overlap_cpath": 52761312,
-      "cpath_decomposition": "Per-layer prefill batch=16: MXU uses prefill model (M=16\u2192M_tiles=1 partial). Q_proj M=16,K=2048,N=2048\u2192K_tiles=32,N_tiles=32\u2192M_tiles=1, per-tile compute=128+16=144, 1024 tiles; cold=333, 1023*144\u2248147312+333\u2248147645\u2192ceil=148000. Similar scaling for other MXU ops. Attention: QK M=16,K=128,N=128, PV M=16,K=128,N=2048. Smooth = 16*16*128 elements=32768\u2192256 batches * 227=58112. Total per-layer \u2248 2.93M. 36 layers \u2248 105.5M.",
+      "per_layer_serial_cpath": 14218106,
+      "per_layer_overlap_cpath": 10663706,
+      "total_serial_cpath": 511851816,
+      "total_overlap_cpath": 383893416,
+      "cpath_decomposition": "Updated to BlockEngine broadcast model (per-token-per-tile compute=68). Per-layer serial=14218106, overlap=10663706; total over 36 layer(s).",
       "derivation_notes": "Prefill batch=16 changes all MXU ops from decode interleaving to prefill model. M=16 is partial tile (M<H=64). Attention ops active. KV cache context=0 for first layer."
     },
     "qwen25-3b-prefill-128": {
@@ -209,11 +218,11 @@
         "context_len": 0,
         "layer_count": 36
       },
-      "per_layer_serial_cpath": 5951376,
-      "per_layer_overlap_cpath": 2975688,
-      "total_serial_cpath": 214249536,
-      "total_overlap_cpath": 107124768,
-      "cpath_decomposition": "Per-layer prefill batch=128: M=128\u2192M_tiles=2 full. Q_proj: 2*32*32=2048 tile ops; per-tile compute=64+64+64=192 full; cold=700; bottleneck=192; 700+2047*192\u2248393500\u2192ceil=408960. Attention full prefill. Softmax 128*16*128=262144 elements\u21922048 batches*227=464896. Total per-layer \u2248 5.95M. 36 layers \u2248 214.2M.",
+      "per_layer_serial_cpath": 113653262,
+      "per_layer_overlap_cpath": 85240074,
+      "total_serial_cpath": 4091517432,
+      "total_overlap_cpath": 3068642664,
+      "cpath_decomposition": "Updated to BlockEngine broadcast model (per-token-per-tile compute=68). Per-layer serial=113653262, overlap=85240074; total over 36 layer(s).",
       "derivation_notes": "Prefill batch=128 fills MXU array fully (M_tiles=2). All prefill model. Highest per-layer cost due to full M-tile utilization and large attention softmax over 128 tokens * 16 heads."
     },
     "mobilenetv3": {
@@ -239,15 +248,15 @@
           "sfu_breakdown": "19 hard_swish + 9 hard_sigmoid + 14 relu = 42 SFU entries",
           "host_only_breakdown": "1 shape + 10 global_avg_pool + 9 mul + 6 add + 1 concat + 1 reshape = 28 host-only entries"
         },
-        "decomposition_notes": "MobileNetV3-Small backbone + classifier head. All conv layers mapped via im2col\u2192GEMM (map_conv_to_gemm). SFU activations: HardSwish, HardSigmoid, ReLU processed at SFU_WIDTH=128 elements/cycle. Mul/Add are element-wise vector ops classified as host-only since MobileNetV3 trace entries carry M=K=N=0 and sfu_cycles=0. Reshape/Shape/Concat/GlobalAvgPool are metadata ops with no MMIO command \u2014 host-only. Input 1x3x224x224 \u2192 GEMM MACs validated in 50M-62M range."
+        "decomposition_notes": "MobileNetV3-Small backbone + classifier head. All conv layers mapped via im2col→GEMM (map_conv_to_gemm). SFU activations: HardSwish, HardSigmoid, ReLU processed at SFU_WIDTH=128 elements/cycle. Mul/Add are element-wise vector ops classified as host-only since MobileNetV3 trace entries carry M=K=N=0 and sfu_cycles=0. Reshape/Shape/Concat/GlobalAvgPool are metadata ops with no MMIO command — host-only. Input 1x3x224x224 → GEMM MACs validated in 50M-62M range."
       },
       "critical_path": {
         "serialized_cpath_cycles": 8500000,
         "overlap_cpath_cycles": 6800000,
-        "cpath_decomposition": "Sequential backbone: 41 pointwise + 11 depthwise convs interleaved with SFU activations. Total serial \u2248 53 GEMM ops avg 125K cycles each + 42 SFU ops avg 2.2K elements each \u2248 6.6M + 0.1M = 6.7M. Add 2 classifier GEMMs (fc1=576\u00d71024\u22489K cycles + fc2=1024\u00d71000\u224816K) + final activations \u2248 8.5M. Overlap estimate: depthwise+pointwise in stride-2 blocks have no meaningful overlap (sequential resource), ~20% reduction from host-only parallelism \u2248 6.8M.",
+        "cpath_decomposition": "Sequential backbone: 41 pointwise + 11 depthwise convs interleaved with SFU activations. Total serial ≈ 53 GEMM ops avg 125K cycles each + 42 SFU ops avg 2.2K elements each ≈ 6.6M + 0.1M = 6.7M. Add 2 classifier GEMMs (fc1=576×1024≈9K cycles + fc2=1024×1000≈16K) + final activations ≈ 8.5M. Overlap estimate: depthwise+pointwise in stride-2 blocks have no meaningful overlap (sequential resource), ~20% reduction from host-only parallelism ≈ 6.8M.",
         "bottleneck_analysis": "MXU dominated by large early convs (conv1: 12544*27*16 MACs, conv2: 50176*9*1 depthwise). SFU negligible. Host-only ops contribute zero MXU/SFU/Vector cycles per the manifest classification."
       },
-      "derivation_notes": "Hand-derived from frozen mobilenetv3_perf_spec_v1.json manifest. All per-op counts exact per manifest invariants. Cycle estimates are architectural (MXU Block 64\u00d764, SFU 128-wide). No Path A imports."
+      "derivation_notes": "Hand-derived from frozen mobilenetv3_perf_spec_v1.json manifest. All per-op counts exact per manifest invariants. Cycle estimates are architectural (MXU Block 64×64, SFU 128-wide). No Path A imports."
     },
     "resnet50": {
       "variant": {
@@ -270,15 +279,15 @@
           "host_only_entries": 0,
           "gemm_breakdown": "36 pointwise_conv (1x1 bottleneck convs) + 18 gemm (3x3/7x7 convs) = 54 MXU entries",
           "sfu_breakdown": "49 relu + 1 max_pool + 1 avg_pool = 51 SFU entries",
-          "host_only_breakdown": "0 \u2014 all entries have engine classification"
+          "host_only_breakdown": "0 — all entries have engine classification"
         },
-        "decomposition_notes": "ResNet-50 Bottleneck architecture (1x1\u21923x3\u21921x1 with ReLU between). Conv1: 7x7 stride-2, then maxpool. conv2_x: 3 blocks 64\u2192256, conv3_x: 4 blocks 128\u2192512, conv4_x: 6 blocks 256\u21921024, conv5_x: 3 blocks 512\u21922048. Global avgpool + fc(2048\u21921000). All ReLU and pool ops go through SFU. Input 1x3x224x224 \u2192 GEMM MACs validated in 3.5G-4.3G range."
+        "decomposition_notes": "ResNet-50 Bottleneck architecture (1x1→3x3→1x1 with ReLU between). Conv1: 7x7 stride-2, then maxpool. conv2_x: 3 blocks 64→256, conv3_x: 4 blocks 128→512, conv4_x: 6 blocks 256→1024, conv5_x: 3 blocks 512→2048. Global avgpool + fc(2048→1000). All ReLU and pool ops go through SFU. Input 1x3x224x224 → GEMM MACs validated in 3.5G-4.3G range."
       },
       "critical_path": {
         "serialized_cpath_cycles": 54000000,
         "overlap_cpath_cycles": 43200000,
-        "cpath_decomposition": "Bottleneck chains: each block has 3 convs + 3 relus (4 with downsample). conv1 (12544\u00d7147\u00d764) \u2248 1.2M cycles. Early bottleneck: 56\u00d756 tensors, mid: 28\u00d728, late: 14\u00d714 and 7\u00d77. Total: ~53 MXU entries avg ~1M cycles + 51 SFU ops avg 2000 elements = ~54M. Overlap: max_pool/avg_pool can overlap with next conv DMA \u2248 20% reduction.",
-        "bottleneck_analysis": "Large 7\u00d77 conv1 dominates (12544 output pixels \u00d7 147 input channels per pixel). Layer 1-3 bottlenecks (256-channel, 56\u00d756) are second most expensive. FC layer negligible."
+        "cpath_decomposition": "Bottleneck chains: each block has 3 convs + 3 relus (4 with downsample). conv1 (12544×147×64) ≈ 1.2M cycles. Early bottleneck: 56×56 tensors, mid: 28×28, late: 14×14 and 7×7. Total: ~53 MXU entries avg ~1M cycles + 51 SFU ops avg 2000 elements = ~54M. Overlap: max_pool/avg_pool can overlap with next conv DMA ≈ 20% reduction.",
+        "bottleneck_analysis": "Large 7×7 conv1 dominates (12544 output pixels × 147 input channels per pixel). Layer 1-3 bottlenecks (256-channel, 56×56) are second most expensive. FC layer negligible."
       },
       "derivation_notes": "Hand-derived from frozen resnet50_perf_spec_v1.json manifest. All per-op counts exact per manifest invariants. All entries have engine classification (0 host-only). No Path A imports."
     },
@@ -304,13 +313,13 @@
           "sfu_breakdown": "57 relu (SiLU activations mapped to SFU silu op per contract) = 57 SFU entries",
           "host_only_breakdown": "3 max_pool (SPPF) + 2 upsample + 4 concat = 9 host-only entries"
         },
-        "decomposition_notes": "YOLOv8n detection network: Backbone (Conv\u2192C2f blocks\u2192SPPF) + Neck (FPN-PAN with upsample/concat/C2f) + Head (P3/P4/P5 detect branches). Conv entries are all 1\u00d71 or 3\u00d73 pointwise mapped via map_conv_to_gemm. SiLU activations (typed as relu in trace) go through SFU. MaxPool (SPPF), Upsample (nearest-neighbor), Concat are host-only \u2014 no MMIO for MXU/SFU/Vector/DMA/NoC/KV. Input 1x3x640x640 \u2192 total MACs 2\u00d7GEMM_ops validated in 8.0G-9.5G range."
+        "decomposition_notes": "YOLOv8n detection network: Backbone (Conv→C2f blocks→SPPF) + Neck (FPN-PAN with upsample/concat/C2f) + Head (P3/P4/P5 detect branches). Conv entries are all 1×1 or 3×3 pointwise mapped via map_conv_to_gemm. SiLU activations (typed as relu in trace) go through SFU. MaxPool (SPPF), Upsample (nearest-neighbor), Concat are host-only — no MMIO for MXU/SFU/Vector/DMA/NoC/KV. Input 1x3x640x640 → total MACs 2×GEMM_ops validated in 8.0G-9.5G range."
       },
       "critical_path": {
         "serialized_cpath_cycles": 68000000,
         "overlap_cpath_cycles": 54400000,
-        "cpath_decomposition": "YOLOv8n backbone downsamples from 640\u2192320\u2192160\u219280\u219240\u219220. Neck FPN-PAN upsamples back to 80 then downsamples to 20. Detect branches at P3(80\u00d780), P4(40\u00d740), P5(20\u00d720). Total 63 GEMM ops, largest at early stages (320\u00d7320\u00d716\u219232 bottleneck). Avg MXU cycle per entry \u2248 1M, plus SFU activations \u2248 3M. Overlap: SPPF max_pool (3 sequential, host-only) + upsample (host-only) do not block MXU. ~20% overlap reduction.",
-        "bottleneck_analysis": "Stem convolutions (640\u00d7640) and early C2f blocks dominate. Detection head branches (1\u00d71 projection + 3\u00d73 conv) are relatively small. Host-only ops (upsample, concat, max_pool) contribute zero MXU/SFU cycles."
+        "cpath_decomposition": "YOLOv8n backbone downsamples from 640→320→160→80→40→20. Neck FPN-PAN upsamples back to 80 then downsamples to 20. Detect branches at P3(80×80), P4(40×40), P5(20×20). Total 63 GEMM ops, largest at early stages (320×320×16→32 bottleneck). Avg MXU cycle per entry ≈ 1M, plus SFU activations ≈ 3M. Overlap: SPPF max_pool (3 sequential, host-only) + upsample (host-only) do not block MXU. ~20% overlap reduction.",
+        "bottleneck_analysis": "Stem convolutions (640×640) and early C2f blocks dominate. Detection head branches (1×1 projection + 3×3 conv) are relatively small. Host-only ops (upsample, concat, max_pool) contribute zero MXU/SFU cycles."
       },
       "derivation_notes": "Hand-derived from frozen yolov8n_perf_spec_v1.json manifest. All per-op counts exact per manifest invariants. 9 host-only entries are max_pool (SPPF), upsample, and concat ops. No Path A imports."
     }
@@ -323,5 +332,6 @@
     "path": "Path B (independent from Path A)",
     "cv_workloads": 3,
     "cv_derivation_method": "Hand-derived from frozen CV manifests with per-workload decomposition. No auto-generation from Path A."
-  }
+  },
+  "updated": "2026-08-12"
 }

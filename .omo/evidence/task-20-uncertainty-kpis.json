@@ -1,51 +1,37 @@
 {
   "case_id": "unknown",
   "dirty_paths": [
-    ".omo/evidence/task-0-signoff-v3-runner.txt",
     ".omo/evidence/task-20-uncertainty-kpis.json",
-    ".omo/evidence/task-24-doc-consistency.txt",
-    ".omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md",
-    ".omo/notepads/func-model-performance-infra-calibration-closure/issues.md",
-    ".omo/notepads/func-model-performance-infra-calibration-closure/learnings.md",
-    ".omo/notepads/phase6-rtl-verification/learnings.md",
-    ".omo/plans/func-model-performance-infra-calibration-closure.md",
-    ".omo/evidence/final-perf-spec-architecture.md",
-    ".omo/evidence/final-perf-spec-plan-compliance.md",
-    ".omo/evidence/final-perf-spec-scope-fidelity.md",
-    ".omo/evidence/func-model-perf-spec/.tmp-validate-repeat-0.json",
-    ".omo/evidence/func-model-perf-spec/.tmp-validate-repeat-1.json",
-    ".omo/evidence/func-model-perf-spec/20260811T101956-0f0b338bcd9a-b34fa4412270/negative-final-bundle.json",
-    ".omo/evidence/func-model-perf-spec/20260811T101956-0f0b338bcd9a-b34fa4412270/run-stderr.txt",
-    ".omo/evidence/func-model-perf-spec/20260811T101956-0f0b338bcd9a-b34fa4412270/run-stdout.json",
-    ".omo/evidence/func-model-perf-spec/20260811T101956-0f0b338bcd9a-b34fa4412270/task-25-func-model-perf-spec-signoff.json",
-    ".omo/evidence/func-model-perf-spec/20260811T101956-0f0b338bcd9a-b34fa4412270/validate-protected.json",
-    ".omo/evidence/func-model-perf-spec/20260811T101956-0f0b338bcd9a-b34fa4412270/validate-repeat.json",
-    ".omo/evidence/func-model-perf-spec/task-24-run-stderr.txt",
-    ".omo/evidence/func-model-perf-spec/task-24-run-stdout.txt",
-    ".omo/evidence/func-model-perf-spec/task-25-negative-final-bundle.json",
-    ".omo/evidence/func-model-perf-spec/task-25-run-stderr.txt",
-    ".omo/evidence/func-model-perf-spec/task-25-run-stdout.json",
-    ".omo/evidence/func-model-perf-spec/task-25-validate-protected.json",
-    ".omo/evidence/func-model-perf-spec/task-25-validate-repeat.json",
-    ".omo/evidence/task-1-perf-spec.txt",
-    ".omo/evidence/task-13-qwen-workload.txt",
-    ".omo/evidence/task-14-cv-workloads.txt",
-    ".omo/evidence/task-15-timeline-report.txt",
-    ".omo/evidence/task-2-perf-contract.txt",
     ".omo/evidence/task-23-perf-spec-ci.txt",
-    ".omo/evidence/task-3-perf-matrix.txt",
-    ".omo/evidence/task-5-independent-oracle.txt",
-    ".omo/evidence/task-7-provider-registry.txt",
-    ".omo/notepads/func-model-performance-infra-calibration-closure/decisions.md",
-    ".omo/notepads/func-model-performance-infra-calibration-closure/problems.md"
+    "config/baselines/func_model_perf_spec_v1.json",
+    "config/func_model_perf_oracle_v1.json",
+    "config/func_model_perf_spec_v1.json",
+    "config/func_model_workload_oracle_v1.json",
+    "reports/func-model-perf-verification-report.md",
+    "scripts/reduce_func_model_perf_oracle.py",
+    "scripts/verify_func_model_perf_spec.py",
+    "sim/timing/model_scaling.py",
+    "sim/timing/qwen_spec_gates.py",
+    "sim/timing/tests/test_perf_mxu_spec.py",
+    "sim/timing/tests/test_perf_providers.py",
+    ".omo/notes/bootstrap-performance-targets.md",
+    ".omo/notes/bug-perf-mxu-001-retrospective.md",
+    ".omo/notes/edge-ttft-vs-input-length.md",
+    ".omo/notes/func-model-perf-verification-spec.md",
+    ".omo/notes/performance-requirements-baseline.md",
+    ".omo/notes/theoretical-roofline-analysis.md",
+    ".omo/ulw-research/20260812-154136/expansion-log.md",
+    ".omo/ulw-research/20260812-154136/wave-1-intel-meteor-lake.md",
+    ".omo/ulw-research/20260812-154136/wave-1-other-edge-npus.md",
+    ".omo/ulw-research/20260812-154136/wave-1-qualcomm.md"
   ],
   "doneclaim": {
     "assertions": [],
     "evidence_path": ".omo/evidence/task-20-uncertainty-kpis.json",
-    "evidence_sha256": "060c09f228679ece7e67310b34f7373e1832274ca5e937ea32c100e2ebd983d4",
+    "evidence_sha256": "1e657eac38d5982b91bfe59aa1fe2449ba26f94c8712dc289554368873a57bbc",
     "green_command": {
       "argv": [
-        "/usr/bin/python3",
+        "/usr/bin/python",
         "/home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_perf_signoff.py",
         "run",
         "--reports",
@@ -120,7 +106,7 @@
           "workload_hash": "9091ae2a86bbd5b9d1c3c3566cf98e1c82ef61e47ebd7c35b055c17d02afd4f7"
         },
         "qwen-model-family": {
-          "canonical_hash": "300763150cc6ee971e5452640ebafb070b36da04da4ef2c65928ad9f439fc6b4",
+          "canonical_hash": "684506f70861fb689c574e0d5487e651cbae0fcb2a90fff050e24ecb9188eb84",
           "case": "qwen-model-family",
           "models": [
             {
@@ -134,16 +120,16 @@
                 "weight_bytes_per_param": 0.5,
                 "weight_precision": "INT4"
               },
-              "canonical_hash": "82882076ad128935c7af5efccd1dad0514d68da3ed305fbb65c927637793d62e",
+              "canonical_hash": "87f7735aadd061bbd254745b36cbe4aa6488caa9894d60b29f74c7cec7923e5c",
               "hidden": 1536,
               "layers": 28,
               "model": "qwen2.5-1.5b",
               "report_only": true,
-              "total_decode_cycles": 42751716,
+              "total_decode_cycles": 15329860,
               "tps": {
-                "base": 23.390874,
-                "high": 33.415534,
-                "low": 17.99298
+                "base": 65.232168,
+                "high": 93.188811,
+                "low": 50.178591
               },
               "weight_bytes": 655097856
             },
@@ -158,16 +144,16 @@
                 "weight_bytes_per_param": 0.5,
                 "weight_precision": "INT4"
               },
-              "canonical_hash": "b8fb405a0e54dd8b1d4f7a11abcf080c04e83bbbf53e6a028139034b73f84f2a",
+              "canonical_hash": "4dbe40498bf80d41e3fdffb9cfc59c49f0bcb5f3da9e5b1ac81d19321e1bd5fd",
               "hidden": 2048,
               "layers": 36,
               "model": "qwen2.5-3b",
               "report_only": true,
-              "total_decode_cycles": 90954900,
+              "total_decode_cycles": 32521140,
               "tps": {
-                "base": 10.99446,
-                "high": 15.706371,
-                "low": 8.457277
+                "base": 30.74923,
+                "high": 43.927471,
+                "low": 23.653254
               },
               "weight_bytes": 1387266048
             },
@@ -182,16 +168,16 @@
                 "weight_bytes_per_param": 0.5,
                 "weight_precision": "INT4"
               },
-              "canonical_hash": "ebc151e616a120d6159a4ba348f7c6aa0a047d591429332bce5c9023d088335c",
+              "canonical_hash": "81a102d283191a5c07467d42b20818986a3e8aad8b0b75f9553b4821247b3b92",
               "hidden": 3584,
               "layers": 28,
               "model": "qwen2.5-7b",
               "report_only": true,
-              "total_decode_cycles": 212892680,
+              "total_decode_cycles": 75811176,
               "tps": {
-                "base": 4.697202,
-                "high": 6.710289,
-                "low": 3.613233
+                "base": 13.190667,
+                "high": 18.84381,
+                "low": 10.146667
               },
               "weight_bytes": 3262644224
             }
@@ -205,7 +191,7 @@
               "result": "pass"
             },
             {
-              "detail": "total_decode_cycles=[42751716, 90954900, 212892680]",
+              "detail": "total_decode_cycles=[15329860, 32521140, 75811176]",
               "id": "total_decode_cycles_monotonic",
               "result": "pass"
             },
@@ -227,39 +213,39 @@
             "mxu_formula": "T16 decode/prefill cycle estimate",
             "uncertainty": "cycles 0.7/1.3, throughput inverse, TTFT RSS independent"
           },
-          "canonical_hash": "3d842d0a495caac964d60372146b5aa1235c745d21d814b701e3b8467482135f",
+          "canonical_hash": "e1afc17481b2b96debcbadd3d77a6b55da285b8cb877eaa17eaff025224bff0e",
           "case": "qwen-prefill-2000",
           "decode_per_token_us": {
-            "base": 2526.695,
-            "high": 3284.7035,
-            "low": 1768.6865
+            "base": 903.535,
+            "high": 1174.5955,
+            "low": 632.4745
           },
-          "first_decode_cycles": 2526695,
+          "first_decode_cycles": 903535,
           "freq_mhz": 1000,
           "layers": 36,
           "model": "qwen2.5-3b",
-          "prefill_cycles": 60223319856,
+          "prefill_cycles": 63923285808,
           "prefill_ms": {
-            "base": 60223.319856,
-            "high": 78290.315813,
-            "low": 42156.323899
+            "base": 63923.285808,
+            "high": 83100.27155,
+            "low": 44746.300066
           },
           "prompt_len": 2000,
           "report_only": true,
           "tpot_us": {
-            "base": 2526.695,
-            "high": 3284.7035,
-            "low": 1768.6865
+            "base": 903.535,
+            "high": 1174.5955,
+            "low": 632.4745
           },
           "tps": {
-            "base": 395.773926,
-            "high": 565.391323,
-            "low": 304.441482
+            "base": 1106.763988,
+            "high": 1581.091412,
+            "low": 851.356914
           },
           "ttft_ms": {
-            "base": 60225.846551,
-            "high": 78292.842524,
-            "low": 42158.850578
+            "base": 63924.189343,
+            "high": 83101.175087,
+            "low": 44747.203599
           },
           "workload_hash": "2e6f0828e00bd2219cabf2f47e92cecc4351aed44d6f921d1a962d213086f0a8"
         },
@@ -316,7 +302,7 @@
       },
       "verdict": "pass"
     },
-    "head": "180c2b945536b1181f8189e80448d934ab9d7ef1",
+    "head": "513fba6b7a1319542276e6cd2fedaac959c4aa8a",
     "misleading_success_output": false,
     "provenance": {
       "argv": [
@@ -328,46 +314,32 @@
         "qwen-prefill-2000,qwen-model-family,mobilenetv3,resnet50,yolov8n"
       ],
       "dirty_paths": [
-        ".omo/evidence/task-0-signoff-v3-runner.txt",
         ".omo/evidence/task-20-uncertainty-kpis.json",
-        ".omo/evidence/task-24-doc-consistency.txt",
-        ".omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md",
-        ".omo/notepads/func-model-performance-infra-calibration-closure/issues.md",
-        ".omo/notepads/func-model-performance-infra-calibration-closure/learnings.md",
-        ".omo/notepads/phase6-rtl-verification/learnings.md",
-        ".omo/plans/func-model-performance-infra-calibration-closure.md",
-        ".omo/evidence/final-perf-spec-architecture.md",
-        ".omo/evidence/final-perf-spec-plan-compliance.md",
-        ".omo/evidence/final-perf-spec-scope-fidelity.md",
-        ".omo/evidence/func-model-perf-spec/.tmp-validate-repeat-0.json",
-        ".omo/evidence/func-model-perf-spec/.tmp-validate-repeat-1.json",
-        ".omo/evidence/func-model-perf-spec/20260811T101956-0f0b338bcd9a-b34fa4412270/negative-final-bundle.json",
-        ".omo/evidence/func-model-perf-spec/20260811T101956-0f0b338bcd9a-b34fa4412270/run-stderr.txt",
-        ".omo/evidence/func-model-perf-spec/20260811T101956-0f0b338bcd9a-b34fa4412270/run-stdout.json",
-        ".omo/evidence/func-model-perf-spec/20260811T101956-0f0b338bcd9a-b34fa4412270/task-25-func-model-perf-spec-signoff.json",
-        ".omo/evidence/func-model-perf-spec/20260811T101956-0f0b338bcd9a-b34fa4412270/validate-protected.json",
-        ".omo/evidence/func-model-perf-spec/20260811T101956-0f0b338bcd9a-b34fa4412270/validate-repeat.json",
-        ".omo/evidence/func-model-perf-spec/task-24-run-stderr.txt",
-        ".omo/evidence/func-model-perf-spec/task-24-run-stdout.txt",
-        ".omo/evidence/func-model-perf-spec/task-25-negative-final-bundle.json",
-        ".omo/evidence/func-model-perf-spec/task-25-run-stderr.txt",
-        ".omo/evidence/func-model-perf-spec/task-25-run-stdout.json",
-        ".omo/evidence/func-model-perf-spec/task-25-validate-protected.json",
-        ".omo/evidence/func-model-perf-spec/task-25-validate-repeat.json",
-        ".omo/evidence/task-1-perf-spec.txt",
-        ".omo/evidence/task-13-qwen-workload.txt",
-        ".omo/evidence/task-14-cv-workloads.txt",
-        ".omo/evidence/task-15-timeline-report.txt",
-        ".omo/evidence/task-2-perf-contract.txt",
         ".omo/evidence/task-23-perf-spec-ci.txt",
-        ".omo/evidence/task-3-perf-matrix.txt",
-        ".omo/evidence/task-5-independent-oracle.txt",
-        ".omo/evidence/task-7-provider-registry.txt",
-        ".omo/notepads/func-model-performance-infra-calibration-closure/decisions.md",
-        ".omo/notepads/func-model-performance-infra-calibration-closure/problems.md"
+        "config/baselines/func_model_perf_spec_v1.json",
+        "config/func_model_perf_oracle_v1.json",
+        "config/func_model_perf_spec_v1.json",
+        "config/func_model_workload_oracle_v1.json",
+        "reports/func-model-perf-verification-report.md",
+        "scripts/reduce_func_model_perf_oracle.py",
+        "scripts/verify_func_model_perf_spec.py",
+        "sim/timing/model_scaling.py",
+        "sim/timing/qwen_spec_gates.py",
+        "sim/timing/tests/test_perf_mxu_spec.py",
+        "sim/timing/tests/test_perf_providers.py",
+        ".omo/notes/bootstrap-performance-targets.md",
+        ".omo/notes/bug-perf-mxu-001-retrospective.md",
+        ".omo/notes/edge-ttft-vs-input-length.md",
+        ".omo/notes/func-model-perf-verification-spec.md",
+        ".omo/notes/performance-requirements-baseline.md",
+        ".omo/notes/theoretical-roofline-analysis.md",
+        ".omo/ulw-research/20260812-154136/expansion-log.md",
+        ".omo/ulw-research/20260812-154136/wave-1-intel-meteor-lake.md",
+        ".omo/ulw-research/20260812-154136/wave-1-other-edge-npus.md",
+        ".omo/ulw-research/20260812-154136/wave-1-qualcomm.md"
       ],
-      "head": "180c2b945536b1181f8189e80448d934ab9d7ef1",
-      "head_short": "180c2b945536",
+      "head": "513fba6b7a1319542276e6cd2fedaac959c4aa8a",
+      "head_short": "513fba6b7a13",
       "host": "sz0002",
       "oracle_sha256": "",
       "provider_sha256": "",
@@ -380,8 +352,8 @@
         "cycles": "estimated_cycles",
         "time": "ns"
       },
-      "utc_end": "2026-08-11T11:05:54.531990+00:00",
-      "utc_start": "2026-08-11T11:05:54.344798+00:00",
+      "utc_end": "2026-08-12T10:27:32.866478+00:00",
+      "utc_start": "2026-08-12T10:27:32.654437+00:00",
       "workload_sha256": ""
     },
     "source_fingerprint": "",
@@ -394,12 +366,12 @@
     "todo_id": "unknown",
     "verdict": "pass"
   },
-  "elapsed_s": 0.27,
-  "evidence_sha256": "060c09f228679ece7e67310b34f7373e1832274ca5e937ea32c100e2ebd983d4",
+  "elapsed_s": 0.312,
+  "evidence_sha256": "1e657eac38d5982b91bfe59aa1fe2449ba26f94c8712dc289554368873a57bbc",
   "exit_code": 0,
-  "head": "180c2b945536b1181f8189e80448d934ab9d7ef1",
-  "stdout_preview": "{\n  \"command\": \"run\",\n  \"reports\": \"uncertainty-kpis\",\n  \"cases\": [\n    \"qwen-prefill-2000\",\n    \"qwen-model-family\",\n    \"mobilenetv3\",\n    \"resnet50\",\n    \"yolov8n\"\n  ],\n  \"reports_data\": {\n    \"qwen-prefill-2000\": {\n      \"case\": \"qwen-prefill-2000\",\n      \"model\": \"qwen2.5-3b\",\n      \"report_only\": true,\n      \"prompt_len\": 2000,\n      \"layers\": 36,\n      \"freq_mhz\": 1000,\n      \"prefill_cycles\": 60223319856,\n      \"first_decode_cycles\": 2526695,\n      \"ttft_ms\": {\n        \"low\": 42158.850578,\n        \"base\": 60225.846551,\n        \"high\": 78292.842524\n      },\n      \"tps\": {\n        \"low\": 304.441482,\n        \"base\": 395.773926,\n        \"high\": 565.391323\n      },\n      \"tpot_us\": {\n        \"low\": 1768.6865,\n        \"base\": 2526.695,\n        \"high\": 3284.7035\n      },\n      \"prefill_ms\": {\n        \"low\": 42156.323899,\n        \"base\": 60223.319856,\n        \"high\": 78290.315813\n      },\n      \"decode_per_token_us\": {\n        \"low\": 1768.6865,\n        \"base\": 2526.695,\n        \"high\": 3284.7035\n      },\n      \"workload_hash\": \"2e6f0828e00bd2219cabf2f47e92cecc4351aed44d6f921d1a962d213086f0a8\",\n      \"assumptions\": {\n        \"mxu_formula\": \"T16 decode/prefill cycle estimate\",\n        \"uncertainty\": \"cycles 0.7/1.3, throughput inverse, TTFT RSS independent\"\n      },\n      \"canonical_hash\": \"3d842d0a495caac964d60372146b5aa1235c745d21d814b701e3b8467482135f\"\n    },\n    \"qwen-model-family\": {\n      \"case\": \"qwen-model-family\",\n      \"report_only\": true,\n      \"models\": [\n        {\n          \"model\": \"qwen2.5-1.5b\",\n          \"hidden\": 1536,\n          \"layers\": 28,\n          \"weight_bytes\": 655097856,\n          \"total_decode_cycles\": 42751716,\n          \"tps\": {\n            \"low\": 17.99298,\n            \"base\": 23.390874,\n            \"high\": 33.415534\n          },\n          \"report_only\": true,\n          \"assumptions\": {\n            \"weight_precision\": \"INT4\",\n            \"weight_bytes_per_param\": 0.5,\n            \"context_len\": 1,\n            \"batch_m\": 1,\n            \"mxu",
-  "utc_end": "2026-08-11T11:05:54.531990+00:00",
-  "utc_start": "2026-08-11T11:05:54.261997+00:00",
+  "head": "513fba6b7a1319542276e6cd2fedaac959c4aa8a",
+  "stdout_preview": "{\n  \"command\": \"run\",\n  \"reports\": \"uncertainty-kpis\",\n  \"cases\": [\n    \"qwen-prefill-2000\",\n    \"qwen-model-family\",\n    \"mobilenetv3\",\n    \"resnet50\",\n    \"yolov8n\"\n  ],\n  \"reports_data\": {\n    \"qwen-prefill-2000\": {\n      \"case\": \"qwen-prefill-2000\",\n      \"model\": \"qwen2.5-3b\",\n      \"report_only\": true,\n      \"prompt_len\": 2000,\n      \"layers\": 36,\n      \"freq_mhz\": 1000,\n      \"prefill_cycles\": 63923285808,\n      \"first_decode_cycles\": 903535,\n      \"ttft_ms\": {\n        \"low\": 44747.203599,\n        \"base\": 63924.189343,\n        \"high\": 83101.175087\n      },\n      \"tps\": {\n        \"low\": 851.356914,\n        \"base\": 1106.763988,\n        \"high\": 1581.091412\n      },\n      \"tpot_us\": {\n        \"low\": 632.4745,\n        \"base\": 903.535,\n        \"high\": 1174.5955\n      },\n      \"prefill_ms\": {\n        \"low\": 44746.300066,\n        \"base\": 63923.285808,\n        \"high\": 83100.27155\n      },\n      \"decode_per_token_us\": {\n        \"low\": 632.4745,\n        \"base\": 903.535,\n        \"high\": 1174.5955\n      },\n      \"workload_hash\": \"2e6f0828e00bd2219cabf2f47e92cecc4351aed44d6f921d1a962d213086f0a8\",\n      \"assumptions\": {\n        \"mxu_formula\": \"T16 decode/prefill cycle estimate\",\n        \"uncertainty\": \"cycles 0.7/1.3, throughput inverse, TTFT RSS independent\"\n      },\n      \"canonical_hash\": \"e1afc17481b2b96debcbadd3d77a6b55da285b8cb877eaa17eaff025224bff0e\"\n    },\n    \"qwen-model-family\": {\n      \"case\": \"qwen-model-family\",\n      \"report_only\": true,\n      \"models\": [\n        {\n          \"model\": \"qwen2.5-1.5b\",\n          \"hidden\": 1536,\n          \"layers\": 28,\n          \"weight_bytes\": 655097856,\n          \"total_decode_cycles\": 15329860,\n          \"tps\": {\n            \"low\": 50.178591,\n            \"base\": 65.232168,\n            \"high\": 93.188811\n          },\n          \"report_only\": true,\n          \"assumptions\": {\n            \"weight_precision\": \"INT4\",\n            \"weight_bytes_per_param\": 0.5,\n            \"context_len\": 1,\n            \"batch_m\": 1,\n            \"mxu_ar",
+  "utc_end": "2026-08-12T10:27:32.866478+00:00",
+  "utc_start": "2026-08-12T10:27:32.554416+00:00",
   "verdict": "pass"
 }

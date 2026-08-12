@@ -1,6 +1,6 @@
 {
   "baseline_id": "func_model_perf_spec_v1",
-  "canonical_content_hash": "f6c77525f08be41c8abd8dfe43ac0012e9284fc8b087ef72cfc6f97e472a6ce7",
+  "canonical_content_hash": "62e1788bfebc3996dd999b83010da8c9f3e3f5237f8a571a92c16fd6ba5aa767",
   "canonical_results": {
     "cv_paths": {
       "failed": 0,
@@ -680,9 +680,10 @@
                   "array_W": 64,
                   "decode_mode": true,
                   "eff_bw": 43.52,
-                  "estimated_cycles": 241,
-                  "per_tile_compute": 192,
+                  "estimated_cycles": 117,
+                  "per_tile_compute": 68,
                   "per_tile_dma": 48.5,
+                  "per_token_compute": 68,
                   "tile_act_bytes": 64,
                   "tile_weight_bytes": 2048,
                   "total_tiles": 1
@@ -693,9 +694,9 @@
                   "M": 1,
                   "N": 64
                 },
-                "oracle_cycles": 241,
+                "oracle_cycles": 117,
                 "parameter_id": "mxu_1_64_64",
-                "provider_cycles": 241,
+                "provider_cycles": 117,
                 "verdict": "pass"
               },
               {
@@ -707,9 +708,10 @@
                   "array_W": 64,
                   "decode_mode": true,
                   "eff_bw": 43.52,
-                  "estimated_cycles": 434,
-                  "per_tile_compute": 384,
+                  "estimated_cycles": 325,
+                  "per_tile_compute": 272,
                   "per_tile_dma": 52.9,
+                  "per_token_compute": 68,
                   "tile_act_bytes": 256,
                   "tile_weight_bytes": 2048,
                   "total_tiles": 1
@@ -720,9 +722,9 @@
                   "M": 4,
                   "N": 64
                 },
-                "oracle_cycles": 434,
+                "oracle_cycles": 325,
                 "parameter_id": "mxu_4_64_64",
-                "provider_cycles": 434,
+                "provider_cycles": 325,
                 "verdict": "pass"
               },
               {
@@ -734,9 +736,10 @@
                   "array_W": 64,
                   "decode_mode": false,
                   "eff_bw": 43.52,
-                  "estimated_cycles": 465,
-                  "per_tile_compute": 192,
+                  "estimated_cycles": 4494,
+                  "per_tile_compute": 4352,
                   "per_tile_dma": 141.2,
+                  "per_token_compute": 68,
                   "tile_act_bytes": 4096,
                   "tile_weight_bytes": 2048,
                   "total_tiles": 1
@@ -747,9 +750,9 @@
                   "M": 64,
                   "N": 64
                 },
-                "oracle_cycles": 465,
+                "oracle_cycles": 4494,
                 "parameter_id": "mxu_64_64_64",
-                "provider_cycles": 465,
+                "provider_cycles": 4494,
                 "verdict": "pass"
               },
               {
@@ -761,9 +764,10 @@
                   "array_W": 64,
                   "decode_mode": false,
                   "eff_bw": 43.52,
-                  "estimated_cycles": 680,
-                  "per_tile_compute": 192,
+                  "estimated_cycles": 8846,
+                  "per_tile_compute": 4352,
                   "per_tile_dma": 141.2,
+                  "per_token_compute": 68,
                   "tile_act_bytes": 4096,
                   "tile_weight_bytes": 2048,
                   "total_tiles": 2
@@ -774,9 +778,9 @@
                   "M": 64,
                   "N": 64
                 },
-                "oracle_cycles": 680,
+                "oracle_cycles": 8846,
                 "parameter_id": "mxu_64_128_64",
-                "provider_cycles": 680,
+                "provider_cycles": 8846,
                 "verdict": "pass"
               },
               {
@@ -788,9 +792,10 @@
                   "array_W": 64,
                   "decode_mode": false,
                   "eff_bw": 43.52,
-                  "estimated_cycles": 722,
-                  "per_tile_compute": 192,
+                  "estimated_cycles": 8846,
+                  "per_tile_compute": 4352,
                   "per_tile_dma": 141.2,
+                  "per_token_compute": 68,
                   "tile_act_bytes": 4096,
                   "tile_weight_bytes": 2048,
                   "total_tiles": 2
@@ -801,9 +806,9 @@
                   "M": 64,
                   "N": 128
                 },
-                "oracle_cycles": 722,
+                "oracle_cycles": 8846,
                 "parameter_id": "mxu_64_64_128",
-                "provider_cycles": 722,
+                "provider_cycles": 8846,
                 "verdict": "pass"
               },
               {
@@ -815,9 +820,10 @@
                   "array_W": 64,
                   "decode_mode": false,
                   "eff_bw": 43.52,
-                  "estimated_cycles": 1158,
-                  "per_tile_compute": 160,
+                  "estimated_cycles": 8799,
+                  "per_tile_compute": 2176,
                   "per_tile_dma": 94.1,
+                  "per_token_compute": 68,
                   "tile_act_bytes": 2048,
                   "tile_weight_bytes": 2048,
                   "total_tiles": 4
@@ -828,9 +834,9 @@
                   "M": 32,
                   "N": 128
                 },
-                "oracle_cycles": 1158,
+                "oracle_cycles": 8799,
                 "parameter_id": "mxu_32_128_128",
-                "provider_cycles": 1158,
+                "provider_cycles": 8799,
                 "verdict": "pass"
               },
               {
@@ -842,9 +848,10 @@
                   "array_W": 64,
                   "decode_mode": true,
                   "eff_bw": 43.52,
-                  "estimated_cycles": 47104,
-                  "per_tile_compute": 192,
+                  "estimated_cycles": 69681,
+                  "per_tile_compute": 68,
                   "per_tile_dma": 48.5,
+                  "per_token_compute": 68,
                   "tile_act_bytes": 64,
                   "tile_weight_bytes": 2048,
                   "total_tiles": 1024
@@ -855,9 +862,9 @@
                   "M": 1,
                   "N": 2048
                 },
-                "oracle_cycles": 47104,
+                "oracle_cycles": 69681,
                 "parameter_id": "mxu_1_2048_2048",
-                "provider_cycles": 47104,
+                "provider_cycles": 69681,
                 "verdict": "pass"
               },
               {
@@ -869,9 +876,10 @@
                   "array_W": 64,
                   "decode_mode": false,
                   "eff_bw": 43.52,
-                  "estimated_cycles": 706560,
-                  "per_tile_compute": 384,
+                  "estimated_cycles": 8913132,
+                  "per_tile_compute": 8704,
                   "per_tile_dma": 235.3,
+                  "per_token_compute": 68,
                   "tile_act_bytes": 8192,
                   "tile_weight_bytes": 2048,
                   "total_tiles": 1024
@@ -882,9 +890,9 @@
                   "M": 128,
                   "N": 2048
                 },
-                "oracle_cycles": 706560,
+                "oracle_cycles": 8913132,
                 "parameter_id": "mxu_128_2048_2048",
-                "provider_cycles": 706560,
+                "provider_cycles": 8913132,
                 "verdict": "pass"
               },
               {
@@ -896,9 +904,10 @@
                   "array_W": 64,
                   "decode_mode": true,
                   "eff_bw": 43.52,
-                  "estimated_cycles": 122998,
-                  "per_tile_compute": 192,
+                  "estimated_cycles": 374321,
+                  "per_tile_compute": 68,
                   "per_tile_dma": 48.5,
+                  "per_token_compute": 68,
                   "tile_act_bytes": 64,
                   "tile_weight_bytes": 2048,
                   "total_tiles": 5504
@@ -909,9 +918,9 @@
                   "M": 1,
                   "N": 11008
                 },
-                "oracle_cycles": 122998,
+                "oracle_cycles": 374321,
                 "parameter_id": "mxu_1_2048_11008",
-                "provider_cycles": 122998,
+                "provider_cycles": 374321,
                 "verdict": "pass"
               },
               {
@@ -923,9 +932,10 @@
                   "array_W": 64,
                   "decode_mode": false,
                   "eff_bw": 43.52,
-                  "estimated_cycles": 1475976,
-                  "per_tile_compute": 384,
+                  "estimated_cycles": 47907052,
+                  "per_tile_compute": 8704,
                   "per_tile_dma": 235.3,
+                  "per_token_compute": 68,
                   "tile_act_bytes": 8192,
                   "tile_weight_bytes": 2048,
                   "total_tiles": 5504
@@ -936,9 +946,9 @@
                   "M": 128,
                   "N": 11008
                 },
-                "oracle_cycles": 1475976,
+                "oracle_cycles": 47907052,
                 "parameter_id": "mxu_128_2048_11008",
-                "provider_cycles": 1475976,
+                "provider_cycles": 47907052,
                 "verdict": "pass"
               }
             ],
@@ -2337,29 +2347,29 @@
       "workloads": {
         "qwen25-3b-blk0-decode": {
           "passed": true,
-          "path_a_total": 2519940,
-          "path_b_total": 2519842,
-          "total_error_pct": 0.0,
+          "path_a_total": 900996,
+          "path_b_total": 900898,
+          "total_error_pct": 0.01,
           "workload_hash": "c8bf9f21cfdc90990b3d35fafa2c2867ca635a66a566b925634b081156d36568"
         },
         "qwen25-3b-decode-c128-g1": {
           "passed": true,
-          "path_a_total": 2536628,
-          "path_b_total": 2536628,
+          "path_a_total": 909252,
+          "path_b_total": 909252,
           "total_error_pct": 0.0,
           "workload_hash": "20eede2b42a5b3a567cec0d74fa7f87278e4eb4ec1de75db2e069280e425bb33"
         },
         "qwen25-3b-prefill-128": {
           "passed": true,
-          "path_a_total": 108640230,
-          "path_b_total": 108639758,
+          "path_a_total": 113653734,
+          "path_b_total": 113653262,
           "total_error_pct": 0.0,
           "workload_hash": "c19fce9aa54578e9a3a1444e0a7a9474da6df366764442753159875028b22eb5"
         },
         "qwen25-3b-prefill-16": {
           "passed": true,
-          "path_a_total": 15053832,
-          "path_b_total": 15053690,
+          "path_a_total": 14218248,
+          "path_b_total": 14218106,
           "total_error_pct": 0.0,
           "workload_hash": "4a7750d8b5ad6bd2fabb7893d5fea50f4e92477e337d4c9dd947e1961d1ce838"
         }
@@ -2373,7 +2383,7 @@
           "result": "pass"
         },
         {
-          "detail": "total_decode_cycles=[42751716, 90954900, 212892680]",
+          "detail": "total_decode_cycles=[15329860, 32521140, 75811176]",
           "id": "total_decode_cycles_monotonic",
           "result": "pass"
         },
@@ -2395,7 +2405,7 @@
           "memory_bound_per_weight_byte": 0.023750027354691877,
           "model": "qwen2.5-1.5b",
           "report_only": true,
-          "total_decode_cycles": 42751716,
+          "total_decode_cycles": 15329860,
           "weight_bytes": 655097856
         },
         {
@@ -2404,7 +2414,7 @@
           "memory_bound_per_weight_byte": 0.023738912984627446,
           "model": "qwen2.5-3b",
           "report_only": true,
-          "total_decode_cycles": 90954900,
+          "total_decode_cycles": 32521140,
           "weight_bytes": 1387266048
         },
         {
@@ -2413,7 +2423,7 @@
           "memory_bound_per_weight_byte": 0.02372020811546506,
           "model": "qwen2.5-7b",
           "report_only": true,
-          "total_decode_cycles": 212892680,
+          "total_decode_cycles": 75811176,
           "weight_bytes": 3262644224
         }
       ],
@@ -2668,39 +2678,39 @@
           "total_error_pct": 0.0
         },
         "qwen-model-family": {
-          "canonical_hash": "300763150cc6ee971e5452640ebafb070b36da04da4ef2c65928ad9f439fc6b4",
+          "canonical_hash": "684506f70861fb689c574e0d5487e651cbae0fcb2a90fff050e24ecb9188eb84",
           "case": "qwen-model-family",
           "models": [
             {
-              "canonical_hash": "82882076ad128935c7af5efccd1dad0514d68da3ed305fbb65c927637793d62e",
+              "canonical_hash": "87f7735aadd061bbd254745b36cbe4aa6488caa9894d60b29f74c7cec7923e5c",
               "model": "qwen2.5-1.5b",
-              "total_decode_cycles": 42751716,
+              "total_decode_cycles": 15329860,
               "tps": {
-                "base": 23.390874,
-                "high": 33.415534,
-                "low": 17.99298
+                "base": 65.232168,
+                "high": 93.188811,
+                "low": 50.178591
               },
               "weight_bytes": 655097856
             },
             {
-              "canonical_hash": "b8fb405a0e54dd8b1d4f7a11abcf080c04e83bbbf53e6a028139034b73f84f2a",
+              "canonical_hash": "4dbe40498bf80d41e3fdffb9cfc59c49f0bcb5f3da9e5b1ac81d19321e1bd5fd",
               "model": "qwen2.5-3b",
-              "total_decode_cycles": 90954900,
+              "total_decode_cycles": 32521140,
               "tps": {
-                "base": 10.99446,
-                "high": 15.706371,
-                "low": 8.457277
+                "base": 30.74923,
+                "high": 43.927471,
+                "low": 23.653254
               },
               "weight_bytes": 1387266048
             },
             {
-              "canonical_hash": "ebc151e616a120d6159a4ba348f7c6aa0a047d591429332bce5c9023d088335c",
+              "canonical_hash": "81a102d283191a5c07467d42b20818986a3e8aad8b0b75f9553b4821247b3b92",
               "model": "qwen2.5-7b",
-              "total_decode_cycles": 212892680,
+              "total_decode_cycles": 75811176,
               "tps": {
-                "base": 4.697202,
-                "high": 6.710289,
-                "low": 3.613233
+                "base": 13.190667,
+                "high": 18.84381,
+                "low": 10.146667
               },
               "weight_bytes": 3262644224
             }
@@ -2710,37 +2720,37 @@
           "verdict": "pass"
         },
         "qwen-prefill-2000": {
-          "canonical_hash": "3d842d0a495caac964d60372146b5aa1235c745d21d814b701e3b8467482135f",
+          "canonical_hash": "e1afc17481b2b96debcbadd3d77a6b55da285b8cb877eaa17eaff025224bff0e",
           "case": "qwen-prefill-2000",
           "decode_per_token_us": {
-            "base": 2526.695,
-            "high": 3284.7035,
-            "low": 1768.6865
+            "base": 903.535,
+            "high": 1174.5955,
+            "low": 632.4745
           },
           "path_a_total": null,
           "path_b_total": null,
           "prefill_ms": {
-            "base": 60223.319856,
-            "high": 78290.315813,
-            "low": 42156.323899
+            "base": 63923.285808,
+            "high": 83100.27155,
+            "low": 44746.300066
           },
           "report_only": true,
           "total_cycles": null,
           "total_error_pct": null,
           "tpot_us": {
-            "base": 2526.695,
-            "high": 3284.7035,
-            "low": 1768.6865
+            "base": 903.535,
+            "high": 1174.5955,
+            "low": 632.4745
           },
           "tps": {
-            "base": 395.773926,
-            "high": 565.391323,
-            "low": 304.441482
+            "base": 1106.763988,
+            "high": 1581.091412,
+            "low": 851.356914
           },
           "ttft_ms": {
-            "base": 60225.846551,
-            "high": 78292.842524,
-            "low": 42158.850578
+            "base": 63924.189343,
+            "high": 83101.175087,
+            "low": 44747.203599
           }
         },
         "resnet50": {
@@ -2785,9 +2795,9 @@
       "verdict": "pass"
     }
   },
-  "created": "2026-08-11T09:06:24.194773+00:00",
+  "created": "2026-08-12T10:24:42.282435+00:00",
   "matrix_hash": "21772e181a9d34b3af962f22c301746fec506ef343e97099b08bf324ff2037c8",
-  "oracle_hash": "645e8aae29b17138312815a98431a3b7a63ec6bef24ccd45fd9ea18313da678b",
+  "oracle_hash": "031b42d46f45b03552f26b7443f403fd00e0d166977b2230396933c81eea8ad8",
   "policy": {
     "rules": [
       "Validate mode is read-only and never mutates the baseline file.",
@@ -2798,12 +2808,12 @@
     "summary": "Baseline updates require a changed spec version/rationale; never 'accept current output'."
   },
   "provider_config_hash": "82c30fefd6ec9cb5c8699139febfd1f047459a5444c9ff5d0d69ca0c1ca79f81",
-  "spec_hash": "807b235f1446b92521203b275dd977ad0100a45ca07fc91fa453803d30a60930",
+  "spec_hash": "1cee62bc2857f3ad05c7b52bd145271cc7e6cf1131d2d23dab7770fde2004c39",
   "workload_manifest_hashes": {
     "mobilenetv3": "1a7584ca936654a4d8df205a9098bdd7c6612294ad37081eea9845d4d1da57ce",
     "qwen25_3b": "67dbc9cefc45553c22c7e86ea4329316963132ade4ad22fa13c92c0ff958b0a1",
     "resnet50": "ef0a0835c45567a8785064126a9583686f5d9a8db6b3fa748e0997b0840b36ca",
     "yolov8n": "7e04e0b17b5e3005936707a5d280308240c7c5df5344b266cf0cfe3c410a01a1"
   },
-  "workload_oracle_hash": "a507484e79259d202f22835d63d9e7572672a2d5a516a2ed3738fe0baf8ffa28"
+  "workload_oracle_hash": "ee9699646d4f2db31406f52bf995299a41415b90edbbba4cec2711b7816009d7"
 }

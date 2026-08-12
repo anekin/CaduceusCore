@@ -396,15 +396,15 @@ def _mxu_provider_estimate(M: int, K: int, N: int,
     tile_weight_bytes = math.ceil(array_H * array_W * _MXU_W_BITS / 8)
     tile_act_bytes = math.ceil(M * array_H * _MXU_A_BITS / 8)
 
-    if M <= 8:
-        per_tile_compute = array_H * (M + 1) + array_W
-        M_tiles = 1
-    else:
-        M_tiles = math.ceil(M / array_H)
-        if M_tiles == 1 and M < array_H:
-            per_tile_compute = array_H + array_W + M
-        else:
-            per_tile_compute = M_tiles * (array_H + array_W + array_H)
+    # BlockEngine broadcast model (aligned with BlockEngine.estimate and the
+    # canonical _mxu_decode_cycles formula): no systolic fill/drain.
+    # Per-token-per-tile compute = H + BROADCAST_SYNC_CYCLES + _accumulate_cycles.
+    # For INT4 weights / INT8 activations this is H + 2 + 2 = H + 4 = 68.
+    sync_cycles = 2
+    acc_cycles = max(1, min(3, (_MXU_W_BITS + _MXU_A_BITS) // 8 + 1))  # = 2
+    per_token_compute = array_H + sync_cycles + acc_cycles
+    per_tile_compute = M * per_token_compute
+    M_tiles = math.ceil(M / array_H) if M > array_H else 1
 
     per_tile_dma = (tile_weight_bytes + tile_act_bytes) / eff_bw
 
@@ -426,8 +426,9 @@ def _mxu_provider_estimate(M: int, K: int, N: int,
     decomposition = {
         "K_tiles": K_tiles,
         "N_tiles": N_tiles,
-        "M_tiles": M_tiles if M > 8 else 1,
+        "M_tiles": M_tiles,
         "total_tiles": total_tiles,
+        "per_token_compute": per_token_compute,
         "per_tile_compute": per_tile_compute,
         "per_tile_dma": round(per_tile_dma, 1),
         "estimated_cycles": estimated_cycles,
@@ -928,15 +929,11 @@ def _compute_formula_cycles(M: int, K: int, N: int, array_H: int, array_W: int) 
     tile_weight_bytes = math.ceil(array_H * array_W * w_bits / 8)
     tile_act_bytes = math.ceil(M * array_H * a_bits / 8)
 
-    if M <= 8:
-        per_tile_compute = array_H * (M + 1) + array_W
-        M_tiles = 1
-    else:
-        M_tiles = math.ceil(M / array_H)
-        if M_tiles == 1 and M < array_H:
-            per_tile_compute = array_H + array_W + M
-        else:
-            per_tile_compute = M_tiles * (array_H + array_W + array_H)
+    # BlockEngine broadcast model: per-token-per-tile compute = H + 4 (INT4/INT8).
+    sync_cycles = 2
+    acc_cycles = max(1, min(3, (w_bits + a_bits) // 8 + 1))
+    per_tile_compute = M * (array_H + sync_cycles + acc_cycles)
+    M_tiles = math.ceil(M / array_H) if M > array_H else 1
 
     per_tile_dma = (tile_weight_bytes + tile_act_bytes) / eff_bw
     first_tile_cold = per_tile_dma + per_tile_compute

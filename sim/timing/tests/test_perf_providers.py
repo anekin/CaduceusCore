@@ -195,7 +195,7 @@ class TestBlock64GreenPath:
 
     def test_mxu_64x64x64_estimate(self, block64_provider):
         result = block64_provider.estimate("mxu", "mmul", {"M": 64, "K": 64, "N": 64})
-        assert result["estimated_cycles"] == 465
+        assert result["estimated_cycles"] == 4494
         assert result["domain"] == "mxu"
         assert result["engine"] == "mxu"
         assert result["op"] == "mmul"
@@ -205,15 +205,15 @@ class TestBlock64GreenPath:
 
     def test_mxu_1_64_64_estimate(self, block64_provider):
         result = block64_provider.estimate("mxu", "mmul", {"M": 1, "K": 64, "N": 64})
-        assert result["estimated_cycles"] == 241
+        assert result["estimated_cycles"] == 117
 
     def test_mxu_1_2048_2048_estimate(self, block64_provider):
         result = block64_provider.estimate("mxu", "mmul", {"M": 1, "K": 2048, "N": 2048})
-        assert result["estimated_cycles"] == 47104
+        assert result["estimated_cycles"] == 69681
 
     def test_mxu_128_2048_2048_estimate(self, block64_provider):
         result = block64_provider.estimate("mxu", "mmul", {"M": 128, "K": 2048, "N": 2048})
-        assert result["estimated_cycles"] == 706560
+        assert result["estimated_cycles"] == 8913132
 
     def test_sfu_softmax_128_estimate(self, block64_provider):
         result = block64_provider.estimate("sfu", "softmax", {"elements": 128})
@@ -322,7 +322,7 @@ class TestBlock64GreenPath:
     def test_registry_dispatch_mxu(self, registry):
         registry.activate("spec-block64-v1")
         result = registry.estimate("mxu", "mmul", {"M": 64, "K": 64, "N": 64})
-        assert result["estimated_cycles"] == 465
+        assert result["estimated_cycles"] == 4494
         registry.rollback()
 
     def test_registry_dispatch_sfu(self, registry):
