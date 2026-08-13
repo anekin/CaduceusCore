@@ -81,18 +81,18 @@
 
 ## Final Verification Wave
 
-- [ ] F1. Plan compliance audit
+- [x] F1. Plan compliance audit
   What to do: 验证 `.omo/plans/dse-funcmodel-prefill-closure.md` 中 TODOs 全部 `- [x]`；每个 todo 都有 DoneClaim 记录且 red/green/mutation 命令与结果匹配。
   Command: `python3 scripts/audit_plan_compliance.py --plan .omo/plans/dse-funcmodel-prefill-closure.md --evidence-dir .omo/evidence/dse-funcmodel-prefill-closure/`
 
-- [ ] F2. Architecture / code quality audit
+- [x] F2. Architecture / code quality audit
   What to do: `lsp_diagnostics` on `sim/design_space_explorer.py` → zero errors；检查 `simulate_layer`/`simulate_prefill` 不引入全局可变状态；CLI 参数校验合理；TTFT 输出单位正确；pytest 全量通过。
   Command: `PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q`
 
-- [ ] F3. Real agent QA
+- [x] F3. Real agent QA
   What to do: 请独立 agent 检查报告中是否还有公式修正前的陈旧数值、规格 Gate 1b 是否清晰可执行、DSE TTFT 输出是否真正来自 `batch_m>1` 的 trace。
   Command: `python3 scripts/real_qa_check.py --mode dse-ttft --evidence .omo/evidence/task-dse-ttft-m128.json`
 
-- [ ] F4. Scope fidelity
+- [x] F4. Scope fidelity
   What to do: 确认未修改 RTL/未引入 VCS/未新增依赖；git diff 只包含 DSE、规格、报告、测试、证据。
   Command: `git diff --stat` + `git status --short`
