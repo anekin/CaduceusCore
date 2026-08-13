@@ -1,0 +1,47 @@
+PREFILL EVIDENCE AUDIT (todo 1 / dse-funcmodel-prefill-closure)
+===============================================================
+Date: 2026-08-13
+Head: b4dbadd953caa8a9b1ab073b6a4be64acb368606
+
+1. Qwen2.5-3B prefill-2000 values from .omo/evidence/task-20-uncertainty-kpis.json
+-------------------------------------------------------------------------------
+  prefill_cycles : 63,923,285,808
+  prefill_ms     : base 63,923.285808  | low 44,746.300066  | high 83,100.27155
+  ttft_ms        : base 63,924.189343  | low 44,747.203599  | high 83,101.175087
+  first_decode_cycles: 903,535
+  freq_mhz: 1000 | prompt_len: 2000 | layers: 36
+  canonical_hash: e1afc17481b2b96debcbadd3d77a6b55da285b8cb877eaa17eaff025224bff0e
+  verdict: pass (all_kpis_have_low_base_high, all_reports_have_canonical_hash)
+
+2. Cross-check prefill-128 Path A/B from .omo/evidence/task-16-qwen-spec-gates.json
+-------------------------------------------------------------------------------
+  path_a_total : 108,640,230
+  path_b_total : 108,639,758
+  total_error_pct: 0.0  (A vs B diff = 472 cycles, far below the 20% gate)
+  structural_op_count: Path A=612, Path B=612 -> pass
+  verdict: pass  -> Path A/B totals are SELF-CONSISTENT
+
+3. Report refresh (reports/func-model-perf-verification-report.md)
+-----------------------------------------------------------------
+  - Section 8.3: 60,223 ms -> 63,923 ms; effective prefill TPS 0.033 -> 31.3 tok/s;
+    E2E@128tok 71.8s(prefill 84%) -> 68.1s(prefill 94%)
+  - Section 10 (conclusion): TTFT ~60.2 s -> ~63.9 s; per_tile_compute
+    decode 192 -> 68 cycles, prefill 128,128 -> 136,000 cycles (667x -> 2,000x);
+    prefill share of E2E@128 84% -> 94%
+  - Section 3.2 prefill-2000 table already aligned with task-20 evidence (no change needed)
+  - grep "60,223" report -> empty
+  - Verification command:
+    python3 scripts/run_func_model_perf_signoff.py run --reports uncertainty-kpis
+        --cases qwen-prefill-2000
+    exit_code=0, verdict=pass
+
+4. Spec consistency (.omo/notes/func-model-perf-verification-spec.md)
+--------------------------------------------------------------------
+  Gate 3 prefill compute-bound description is CONSISTENT with current numbers:
+  - prefill BW insensitivity rule: BW x2 -> TTFT change <10% (compute-bound)
+  - endpoint state: "prefill endpoint: compute-bound (canonical formula aligned
+    with BlockEngine broadcast, per_tile_compute = M*68 dominant)" PASS
+  - TTFT (M=128) 3.86s > compute minimum 0.088s -> PASS
+
+VERDICT: PASS - prefill evidence is self-consistent, report refreshed to current
+canonical values, spec Gate 3 description consistent, signoff verification exits 0.

@@ -1,0 +1,64 @@
+# Task 2 — DSE TTFT Model Fix — Evidence
+
+plan:        .omo/plans/dse-funcmodel-prefill-closure.md (todo 2)
+head:        b4dbadd953caa8a9b1ab073b6a4be64acb368606
+date:        2026-08-13
+files:       sim/design_space_explorer.py, sim/tests/test_design_space_explorer.py
+
+## Changes
+- Module-level `_LLM_TRACE = generate_trace_from_spec("qwen2.5-3b", batch_m=1)` removed;
+  replaced by `_DEFAULT_LLM_SPEC = ("qwen2.5-3b", 1)` plus `_MODEL_ALIAS`/`_PREFILL_BATCH_M`.
+- `simulate_layer(config, batch_m=None)` regenerates the trace via
+  `generate_trace_from_spec(_MODEL_ALIAS, batch_m)`; `batch_m=None` defaults to 1 (decode).
+- New `simulate_prefill(config, batch_m, model_alias)` -> (prefill_cycles, weight_bytes);
+  shared cycle accounting extracted to `_simulate_ops()` (no duplicated trace logic).
+- New `ttft_ms_from_prefill(prefill_cycles, num_layers, freq_mhz)` ->
+  `prefill_cycles * num_layers / freq_mhz / 1000.0` ms (prefill only, no first-token decode).
+- `evaluate_config` LLM path computes `ttft_ms` (0.0 for CV mode) and emits it in
+  `config["ttft_ms"]`; JSON output adds top-level `ttft_ms` per result (non-CV).
+- CLI `--batch-m`: `type=int` (no choices) + validation `>= 1`.
+- Quick sweep dims now include (64, 64) so Block 64×64 (RTL Phase 1 config) is evaluated.
+
+## RED
+command: python3 -m pytest sim/tests/test_design_space_explorer.py::test_prefill_ttft -x
+result:  exit 4 — ImportError: cannot import name 'simulate_prefill'
+         from 'design_space_explorer' (function/field absent, as expected)
+
+## GREEN
+command: python3 -m pytest sim/tests/test_design_space_explorer.py -q
+result:  exit 0 — 6 passed (2 pre-existing + 4 new: test_prefill_ttft,
+         test_ttft_ms_from_prefill_formula, test_simulate_layer_defaults_to_batch_one,
+         test_cli_accepts_batch_m_128_and_emits_ttft_ms)
+
+## CLI verification (required command)
+command: cd sim && PYTHONPATH=. python design_space_explorer.py --quick --batch-m 128
+         --model-spec qwen2.5-3b --output /tmp/dse_ttft_m128.json
+result:  exit 0; 48 configs, 48 valid; Block 64×64 entries present with ttft_ms:
+         - bloc 64×64 INT4 1000MHz WC LPDDR5-64b : tok_s=25.1, ttft_ms=2649.49
+         - bloc 64×64 INT4 1000MHz WC LPDDR5-128b: tok_s=34.4, ttft_ms=2649.49
+         All pareto/top entries contain ttft_ms (0 missing).
+
+## Additional verification
+- batch sweep: --batch-m 2000 -> Block 64×64 ttft_ms = 41398.27 (exit 0).
+  Func Model prefill-2000 TTFT = 63,924 ms -> ratio 1.54x, inside [0.5x, 2.0x] PASS band.
+- validation: --batch-m 0 -> exit 2, "error: --batch-m must be >= 1".
+- backward compat: ran HEAD version vs new version with default --quick (batch 1):
+  21 common config labels, tok_s/area_mm2/power_w identical (NONE mismatch).
+- tok_s invariance: batch-m=1 vs batch-m=128 runs -> tok_s identical for all 24
+  common labels (decode stays batch-1); ttft_ms grows 29.1 -> 2649.49 ms.
+
+## MUTATION
+command: temporarily reverted --batch-m to choices=[1, 2], then ran
+         python3 design_space_explorer.py --quick --batch-m 128 --model-spec qwen2.5-3b
+result:  exit 2 — "error: argument --batch-m: invalid choice: 128 (choose from 1, 2)";
+         no output file written. Reverted after confirming.
+
+## Regression
+command: python3 -m pytest sim/tests/ -q --ignore=<wrapper+6 pre-existing missing-dep
+         modules> (cocotb/caduceus_device_protocol not installed in this env)
+result:  1369 passed, 19 failed, 4 errors, 1 skipped.
+         All 19 failures + 4 collection errors are PRE-EXISTING at HEAD
+         (verified: HEAD checkout of design_space_explorer.py reproduces the same
+         test_engines.py failures; failing modules do not import design_space_explorer;
+         failures reference missing spike/firmware/cocotb artifacts).
+         My changed module's tests: 6/6 passed.

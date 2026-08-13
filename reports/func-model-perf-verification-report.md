@@ -108,10 +108,10 @@ DMA:
 
 | workload | Path A total | Path B total | total_error_pct | 结果 |
 |----------|--------------|--------------|-----------------|------|
-| qwen25-3b-blk0-decode | 900,898 | 900,898 | 0.0% | ✅ PASS |
-| qwen25-3b-decode-c128-g1 | 32,730,072 | 32,730,072 | 0.0% | ✅ PASS |
-| qwen25-3b-prefill-16 | 511,851,816 | 511,851,816 | 0.0% | ✅ PASS |
-| qwen25-3b-prefill-128 | 4,091,517,432 | 4,091,517,432 | 0.0% | ✅ PASS |
+| qwen25-3b-blk0-decode | 2,519,940 | 2,519,842 | 0.0% | ✅ PASS |
+| qwen25-3b-decode-c128-g1 | 2,536,628 | 2,536,628 | 0.0% | ✅ PASS |
+| qwen25-3b-prefill-16 | 15,053,832 | 15,053,690 | 0.0% | ✅ PASS |
+| qwen25-3b-prefill-128 | 108,640,230 | 108,639,758 | 0.0% | ✅ PASS |
 
 **门禁**: Path A/B total 差异 ≤ 20%，structural 检查通过。
 
@@ -122,6 +122,24 @@ DMA:
 | weight_bytes 单调递增 | ✅ PASS |
 | total_decode_cycles 单调递增 | ✅ PASS |
 | 每 weight_byte 的 memory-bound ratio delta < 20% | ✅ PASS (max delta 0.079%) |
+
+### 3.5 DSE TTFT 一致性 (Gate 1b)
+
+**配置**: Block 64×64 @ 1GHz, LPDDR5-64b (WC), INT4，与 [验证规格 Gate 1b](../.omo/notes/func-model-perf-verification-spec.md) 对齐。TTFT 定义：`prefill_layer_cycles × num_layers / freq_mhz` [ms]，不含首 token decode（与 uncertainty-kpis 的 `prefill_ms` 对齐）。
+
+| Prefill 规模 (M) | DSE TTFT 目标 (ms) | Func Model TTFT (ms) | 比值 | 判定 |
+|------|:---:|:---:|:---:|:---:|
+| M=128 | **2,649.49** | **3,911.05** | **1.48×** | ✅ PASS |
+| M=2000 | **41,398.27** | **63,924.19** | **1.54×** | ✅ PASS |
+
+**门禁**: 0.5 × DSE_TTFT ≤ Func Model TTFT ≤ 2.0 × DSE_TTFT → PASS（量级一致，无系统性偏离）。
+
+**来源**:
+- DSE 目标: `.omo/evidence/task-3-dse-ttft-m128.json` / `task-3-dse-ttft-m2000.json`（`simulate_prefill` → `ttft_ms_from_prefill`，trace 按 `batch_m` 生成）
+- Func Model M=128: task-16 `qwen25-3b-prefill-128` Path A total (108,640,230) × 36 layers / 1GHz / 1000
+- Func Model M=2000: task-20 `ttft_ms.base`（63,924.19 ms）
+
+**说明**: DSE TTFT 模型已于 2026-08-13 修复（`simulate_layer` 按 `batch_m` 重新生成 trace，新增 `simulate_prefill`/`ttft_ms_from_prefill`，CLI `--batch-m` 放宽），DSE TTFT 现为可用验证目标，不再标记为"未建模"。残余差距来源于 trace 结构（7-op layer vs 17-op DAG）与层内并行假设，量级一致可接受。
 
 ---
 
@@ -333,19 +351,19 @@ E2E Latency = TTFT + (gen_len - 1) × decode_per_token
 | 256 tokens | 63,924 + 255×32.5 = **72.2 s** | 83,101 + 255×42.3 = 93.9 s | MXU Compute |
 | 1024 tokens | 63,924 + 1023×32.5 = **97.2 s** | 83,101 + 1023×42.3 = 126.4 s | MXU Compute → 渐变 Decode |
 
-> `decode_per_token = 1000 / decode_tps_base = 1000 / 10.99 ≈ 91.0 ms`
+> `decode_per_token = 1000 / decode_tps_base = 1000 / 30.75 ≈ 32.5 ms`
 
-**结论**：对于绝大多数交互式生成长度（gen_len = 16 ~ 1024），E2E 延迟的 **82% ~ 39%** 来自 prefill。Decode 的贡献随 gen_len 线性增长，但在 128 tokens 以内 prefill 仍然占主导。瓶颈切换点大约在 **gen_len ≈ 660 tokens** 处（prefill_time ≈ gen_len × decode_per_token）。
+**结论**：对于绝大多数交互式生成长度（gen_len = 16 ~ 1024），E2E 延迟的 **99% ~ 66%** 来自 prefill。Decode 的贡献随 gen_len 线性增长，但在 128 tokens 以内 prefill 仍然占主导。瓶颈切换点大约在 **gen_len ≈ 1,967 tokens** 处（prefill_time ≈ gen_len × decode_per_token）。
 
 ### 8.3 Decode 与 Prefill 瓶颈对比
 
 ```
              Decode (per token)          Prefill (2000 tokens)
              ─────────────────          ─────────────────────
-  Time:      33.7 ms        ←          60,223 ms
-  TPS base:  10.99 tok/s    ←          0.033 tok/s (effective)
+  Time:      32.5 ms        ←          63,923 ms
+  TPS base:  30.75 tok/s    ←          31.3 tok/s (effective)
   Bottleneck: BW (86.8%)    ←          MXU Compute (99%+)
-  Max E2E @ 128 tok: 71.8s（prefill 占 84%）
+  Max E2E @ 128 tok: 68.1s（prefill 占 94%）
 ```
 
 ### 8.4 端到端瓶颈归属图
@@ -354,7 +372,7 @@ E2E Latency = TTFT + (gen_len - 1) × decode_per_token
                     Prefill 阶段              Decode 阶段
                     ────────────              ──────────
      瓶颈:         ████████████████ Compute   ████████████ DRAM BW
-                     (计算 128K cycles/tile)     (86.8% DMA stall)
+                     (计算 136K cycles/tile)     (86.8% DMA stall)
      
      计算利用率:   ████████ ~50% (MXU busy)   ███ ~50% (MXU busy)
      
@@ -372,7 +390,7 @@ E2E Latency = TTFT + (gen_len - 1) × decode_per_token
 1. **uncalibrated 状态**: 所有数值均为 architecture-assumption estimates，需 RTL 实测校准。
 2. **不确定性带**: ±30%（cycle 0.7/1.3，throughput 取倒数），报告已给出 low/base/high。
 3. **SW Overhead**: 不进入 canonical total，仅作为 assumption-only 透明项。
-4. **Prefill 分析基于 canonical formula**：per-tile DMA 值来自 `_mxu_decode_cycles` 公式，未经过 BlockEngine 全仿真验证。实际 engine 的 prefill total_cycles 可能因双缓冲流水线和 weight-cache 优化而显著降低。
+4. **Prefill 分析已与 DSE BlockEngine 对齐**：canonical 公式已切换为 BlockEngine broadcast 模型（`per_tile_compute = M*(H+4)`），DSE TTFT 模型亦已修复（`simulate_layer` 按 `batch_m` 重新生成 trace，新增 `simulate_prefill`/`ttft_ms_from_prefill`）。Gate 1b 显示 Func Model 与 DSE TTFT 比值 1.48×–1.54×，落在 [0.5×, 2.0×] PASS 区间；残余差距来自 trace 结构（7-op layer vs 17-op DAG）与层内并行假设，属量级一致的可接受偏差。
 5. **CV 绝对数值**: 为基于 manifest shape 的架构级估计，未与实测视频流对齐。
 6. **RTL Calibration Phase**: 未来需填充 `rtl_head`、`eda_version`、`testbench_hash` 等预留字段，并将 `calibration_state` 迁移至 `rtl_calibrated`。
 
@@ -383,14 +401,14 @@ E2E Latency = TTFT + (gen_len - 1) × decode_per_token
 Func Model 性能验证阶段已完成。基于当前 64×64 Block Engine、INT4、1GHz、LPDDR5-6400 配置：
 
 **LLM Decode**
-- Qwen2.5-3B：~11 tok/s（base），~30 tok/s（全仿真）
+- Qwen2.5-3B：~31 tok/s（base），~30 tok/s（全仿真）
 - 瓶颈：DRAM BW（86.8% wall-clock），DMA stall 为主
 - 提升路径：增加 BW（位宽 / 3D DRAM），多核/大阵列无效
 
 **LLM Prefill**
-- Qwen2.5-3B，prompt=2000：TTFT ~60.2 s（base）
-- 瓶颈：**MXU 算力**，`per_tile_compute` 正比于 M，从 decode 的 192 cycles 增长到 prefill 的 128,128 cycles（667×）
-- Prefill 主导 E2E 延迟（128 token 生成中占 84%）
+- Qwen2.5-3B，prompt=2000：TTFT ~63.9 s（base）
+- 瓶颈：**MXU 算力**，`per_tile_compute` 正比于 M，从 decode 的 68 cycles 增长到 prefill 的 136,000 cycles（2,000×）
+- Prefill 主导 E2E 延迟（128 token 生成中占 94%）
 - 提升路径：增大 MXU 阵列 / 多核 / 更高频率
 
 **CV Inference**

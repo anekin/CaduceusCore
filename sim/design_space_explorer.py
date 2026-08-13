@@ -25,7 +25,9 @@ _CV_TRACE: List[Any] = []
 _CV_ONNX_PATH: str = ""
 
 _NUM_LAYERS: int = 28
-_LLM_TRACE: List[Tuple] = []
+_DEFAULT_LLM_SPEC: Tuple[str, int] = ("qwen2.5-3b", 1)
+_MODEL_ALIAS: str = _DEFAULT_LLM_SPEC[0]
+_PREFILL_BATCH_M: int = _DEFAULT_LLM_SPEC[1]
 _SEQ_KV: int = 2048      # KV cache sequence length for decode
 _KV_HEADS: int = 2        # num_kv_heads from model spec
 _HEAD_DIM: int = 128      # head_dim from model spec
@@ -52,8 +54,6 @@ def generate_trace_from_spec(alias: str, batch_m: int = 1) -> List[Tuple]:
     trace.append((m_ffn, I, H,    0, "FFN_down"))
     return trace
 
-
-_LLM_TRACE = generate_trace_from_spec("qwen2.5-3b", batch_m=1)
 
 SFU_CYCLES_PER_LAYER = {
     "attn": 33,   # softmax + layernorm + rope (simplified)
@@ -137,7 +137,7 @@ def _scenario_dram_configs(scenario: Dict[str, Any] | None, quick: bool) -> List
 def _scenario_dims(scenario: Dict[str, Any] | None, quick: bool) -> List[Tuple[int, int]]:
     if scenario is None:
         if quick:
-            return [(128, 128), (128, 256), (256, 256)]
+            return [(64, 64), (128, 128), (128, 256), (256, 256)]
         return [(64, 64), (96, 96), (128, 128), (128, 192),
                 (128, 256), (192, 256), (256, 256)]
 
@@ -189,13 +189,11 @@ def _compute_kv_cycles(config: Dict[str, Any], batch_m: int = 1) -> int:
     return int(kv_bytes / (eff_bw * kv_dram_eff))
 
 
-def simulate_layer(config: Dict[str, Any], batch_m: int = None) -> tuple:
-    """Simulate one transformer layer. Returns (total_cycles, weight_bytes).
+def _simulate_ops(config: Dict[str, Any], ops: List[Tuple], batch_m: int) -> Tuple[int, int]:
+    """Shared cycle accounting over an LLM op trace.
 
-    batch_m=1 for decode, >1 for prefill. If None, inferred from trace.
+    Returns (total_cycles, weight_bytes) for one transformer layer.
     """
-    if batch_m is None:
-        batch_m = _LLM_TRACE[0][0] if _LLM_TRACE else 1
     engine = create_engine(config)
     opts = config.get("optimizations", {})
     weight_cache = opts.get("weight_cache", False)
@@ -203,7 +201,6 @@ def simulate_layer(config: Dict[str, Any], batch_m: int = None) -> tuple:
     total = 0
     weight_bytes = 0
     i = 0
-    ops = _LLM_TRACE
 
     while i < len(ops):
         M, K, N, _, name = ops[i]
@@ -231,6 +228,37 @@ def simulate_layer(config: Dict[str, Any], batch_m: int = None) -> tuple:
     total += kv_cycles
 
     return total, weight_bytes
+
+
+def simulate_layer(config: Dict[str, Any], batch_m: int = None) -> tuple:
+    """Simulate one transformer layer. Returns (total_cycles, weight_bytes).
+
+    batch_m=1 for decode, >1 for prefill. If None, defaults to 1 and the
+    trace is regenerated from the current model spec (_MODEL_ALIAS).
+    """
+    if batch_m is None:
+        batch_m = 1
+    ops = generate_trace_from_spec(_MODEL_ALIAS, batch_m)
+    return _simulate_ops(config, ops, batch_m)
+
+
+def simulate_prefill(config: Dict[str, Any], batch_m: int, model_alias: str) -> tuple:
+    """Simulate one prefill layer for model_alias at batch_m.
+
+    Returns (prefill_cycles, weight_bytes) — per-layer cycles; multiply by
+    num_layers for the full-model prefill time.
+    """
+    ops = generate_trace_from_spec(model_alias, batch_m)
+    return _simulate_ops(config, ops, batch_m)
+
+
+def ttft_ms_from_prefill(prefill_cycles: int, num_layers: int, freq_mhz: int = 1000) -> float:
+    """TTFT [ms] = prefill_layer_cycles × num_layers / freq_mhz / 1000.
+
+    Aligned with the Func Model definition: prefill time excluding the first
+    decode token (see docs/func_model_performance_analysis.md).
+    """
+    return round(prefill_cycles * num_layers / freq_mhz / 1000.0, 2)
 
 
 def tok_s_from_layer(layer_cycles: int, num_layers: int, f_mhz: int = 1000) -> float:
@@ -341,10 +369,13 @@ def evaluate_config(cfg: Dict[str, Any], area_model: AreaModel,
         power = power_model.estimate(area_model, cfg, engine_type)
         sram_spill = cv_result.get("sram_spill_mb", 0.0)
         dw_util = _depthwise_util_from_cv_result(cv_result)
+        ttft_ms = 0.0
     else:
         layer_cycles, _ = simulate_layer(cfg)
         freq = int(cfg["mac_engine"].get("frequency_mhz", 1000))
         fps = tok_s_from_layer(layer_cycles, _NUM_LAYERS, freq)
+        prefill_cycles, _ = simulate_prefill(cfg, _PREFILL_BATCH_M, _MODEL_ALIAS)
+        ttft_ms = ttft_ms_from_prefill(prefill_cycles, _NUM_LAYERS, freq)
         area_result = area_model.estimate(cfg, engine_type)
         area = area_result["total_mm2"]
         power = power_model.estimate(area_model, cfg, engine_type)
@@ -382,6 +413,7 @@ def evaluate_config(cfg: Dict[str, Any], area_model: AreaModel,
             "memory_bandwidth_gbps": cfg.get("memory", {}).get("bandwidth_gbps", 0),
             "dram_width_bits": cfg.get("memory", {}).get("dram_width_bits", 0),
             "sram_l2_kb": cfg.get("sram", {}).get("l2_shared_kb", 0),
+            "ttft_ms": ttft_ms,
         },
     )
 
@@ -645,11 +677,14 @@ def main():
                         choices=[a for a in all_aliases() if get_spec(a).model_type == "llm"],
                         default=None,
                         help="LLM model spec alias for DSE")
-    parser.add_argument("--batch-m", type=int, choices=[1, 2], default=None,
-                        help="Batch M dimension for attention ops (1 or 2)")
+    parser.add_argument("--batch-m", type=int, default=None,
+                        help="Batch M dimension for attention ops (>=1; prefill mode)")
     parser.add_argument("--scenario", default=None,
                         help="Scenario name from sim/config/scenarios.yaml")
     args = parser.parse_args()
+
+    if args.batch_m is not None and args.batch_m < 1:
+        parser.error("--batch-m must be >= 1")
 
     if args.cv_model and (args.model_spec is not None or args.batch_m is not None or args.scenario is not None):
         parser.error("--cv-model is mutually exclusive with --model-spec, --batch-m, and --scenario")
@@ -663,7 +698,7 @@ def main():
     )
     batch_m = args.batch_m if args.batch_m is not None else 1
 
-    global _CV_MODEL, _CV_TRACE, _CV_ONNX_PATH, _LLM_TRACE, _NUM_LAYERS
+    global _CV_MODEL, _CV_TRACE, _CV_ONNX_PATH, _MODEL_ALIAS, _PREFILL_BATCH_M, _NUM_LAYERS
     _CV_MODEL = args.cv_model or ""
     if _CV_MODEL:
         if args.cv_model == "mobilenetv3-small":
@@ -683,7 +718,8 @@ def main():
             from cv.traces.resnet50_trace import generate_resnet50_trace
             _CV_TRACE = generate_resnet50_trace()
     else:
-        _LLM_TRACE = generate_trace_from_spec(model_spec, batch_m)
+        _MODEL_ALIAS = model_spec
+        _PREFILL_BATCH_M = batch_m
         _NUM_LAYERS = get_spec(model_spec).layers
 
     base_cfg = _apply_scenario(_load_base_config(), args.scenario)
@@ -822,6 +858,8 @@ def main():
                 }
                 d["engine_type"] = engine_map.get(prefix, prefix)
                 d["pareto"] = on_pareto
+            else:
+                d["ttft_ms"] = p.config.get("ttft_ms", 0.0)
             return d
 
         if _CV_MODEL:

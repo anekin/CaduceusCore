@@ -1,0 +1,96 @@
+todo 5: full regression, signoff, DoneClaim bundle, commit (dse-funcmodel-prefill-closure)
+date: 2026-08-13
+head: b4dbadd953caa8a9b1ab073b6a4be64acb368606
+
+1. Targeted DSE test suite
+--------------------------------------------------------------------------------
+command: PYTHONPATH=sim python -m pytest sim/tests/test_design_space_explorer.py -q
+result:  exit 0 — 6 passed in 0.28s
+
+2. Full regression (sim/tests + sim/timing/tests)
+--------------------------------------------------------------------------------
+command: PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q
+result:  collection aborted — 9 modules fail collection with pre-existing missing
+         dependencies (ModuleNotFoundError: cocotb / caduceus_device_protocol):
+           sim/tests/test_cv_conv2d_rtl.py, test_device_protocol.py,
+           test_device_protocol_cpp.py, test_device_server_per_conn.py,
+           test_runtime_rtl_transport.py, test_soc_pcie_dma.py,
+           sim/tests/wrapper/test_mxu_wrapper.py, test_sfu_wrapper.py,
+           test_vector_wrapper.py
+         These are the same missing-dep modules documented in task-2 evidence.
+
+command: PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q
+         --ignore=<the 9 modules above>
+result:  2142 passed, 19 failed, 4 errors, 1 skipped in 491.98s
+         The 19 failures + 4 errors are PRE-EXISTING AT HEAD, verified by
+         stashing sim/design_space_explorer.py + test_design_space_explorer.py
+         and re-running the failing subset at HEAD:
+           pytest test_engines.py test_cv_device_server.py
+             test_func_model_dut_adapter.py test_llama_dependency_lock.py
+             test_runtime_real_firmware.py test_spike_toolchain_manifest.py
+             test_soc_differential.py -q
+           -> identical 19 failed, 66 passed, 4 errors at HEAD.
+         None of the failing modules import design_space_explorer
+         (grep -l returned nothing), so the plan's DSE changes cannot be the
+         cause; failures reference missing spike/firmware/cocotb artifacts.
+         This plan's module tests: 6/6 passed.
+
+3. Func Model perf signoff — all-spec
+--------------------------------------------------------------------------------
+command: python3 scripts/run_func_model_perf_signoff.py run --all-spec
+result:  exit 0 — verdict "pass", elapsed 4.03s, run_id
+         20260813T024145-b4dbadd953ca-b34fa4412270
+         All stages pass: provider_formula_gates (104 rows, 0 failed),
+         qwen_cv_dual_path_gates (4+3 pass), sweeps, model_scaling,
+         uncertainty_kpis (qwen-prefill-2000/qwen-model-family/mobilenetv3/
+         resnet50/yolov8n), ... 8 stages, 0 failed.
+
+4. DSE signoff — TTFT evidence refresh
+--------------------------------------------------------------------------------
+command: cd sim && PYTHONPATH=. python design_space_explorer.py --quick
+         --batch-m 128 --model-spec qwen2.5-3b
+         --output .omo/evidence/task-dse-ttft-m128.json
+result:  exit 0 — 48 configs, 0 invalid; bloc 64×64 INT4 1000MHz WC LPDDR5-64b
+         ttft_ms = 2649.49 (matches plan expectation 2,649.49)
+         Note: from sim/ the relative output lands in sim/.omo/evidence/;
+         moved to repo-root .omo/evidence/task-dse-ttft-m128.json (same trap
+         as todo 3).
+
+command: cd sim && PYTHONPATH=. python design_space_explorer.py --quick
+         --batch-m 2000 --model-spec qwen2.5-3b
+         --output .omo/evidence/task-dse-ttft-m2000.json
+result:  exit 0; bloc 64×64 INT4 1000MHz WC LPDDR5-64b ttft_ms = 41398.27
+         (matches plan expectation 41,398.27); moved to repo-root
+         .omo/evidence/task-dse-ttft-m2000.json.
+         sha256(task-dse-ttft-m128.json) == sha256(task-3-dse-ttft-m128.json)
+         and same for m2000 — DSE output is deterministic.
+
+5. MUTATION (todo 5)
+--------------------------------------------------------------------------------
+command: temporarily broke batch_m passing in simulate_prefill()
+         (generate_trace_from_spec(model_alias, 1)), then ran
+         PYTHONPATH=sim python -m pytest sim/tests/test_design_space_explorer.py -q
+result:  1 failed, 5 passed — test_prefill_ttft FAILS with
+         "assert 1076464 > 1105117" (cycles_128 == cycles_1). Reverted.
+         Note: plan-declared mutation target simulate_layer() is OFF the DSE
+         TTFT path — evaluate_config() calls simulate_prefill(cfg,
+         _PREFILL_BATCH_M, _MODEL_ALIAS); breaking simulate_layer leaves all 6
+         tests green. The effective mutation target is simulate_prefill.
+         Mutation reverted; re-run: 6 passed.
+
+6. Git hygiene
+--------------------------------------------------------------------------------
+- Restored from HEAD (test-run side effects, not part of this plan):
+    .omo/evidence/task-0-signoff-v3-runner.txt
+    .omo/evidence/task-20-uncertainty-kpis.json   (previous-plan evidence)
+    .omo/evidence/task-23-perf-spec-ci.txt
+    .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+    .omo/notepads/phase6-rtl-verification/learnings.md
+    build/evidence/fm-cv-chain.txt
+    build/evidence/w3-4-mobilenetv3-fm.txt
+  (full pytest runs execute signoff-machinery tests that rewrite these.)
+- Committed only intended files; single commit.
+
+VERDICT: PASS — targeted + full regression (pre-existing failures unchanged),
+--all-spec signoff pass, DSE M=128/2000 evidence regenerated, DoneClaim bundle
+written, task-20 previous-plan evidence restored to HEAD.

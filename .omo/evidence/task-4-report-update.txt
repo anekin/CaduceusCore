@@ -1,0 +1,36 @@
+todo 4: update verification report (dse-funcmodel-prefill-closure)
+date: 2026-08-13
+
+Files modified:
+  reports/func-model-perf-verification-report.md
+  .omo/notepads/dse-funcmodel-prefill-closure/learnings.md (appended)
+
+Changes:
+1. Section 3.3 dual-path table reconciled against task-16 evidence
+   (blk0-decode 2,519,940/2,519,842; decode-c128-g1 2,536,628/2,536,628;
+    prefill-16 15,053,832/15,053,690; prefill-128 108,640,230/108,639,758).
+2. New Section 3.5 "DSE TTFT 一致性 (Gate 1b)": Block 64x64 @1GHz LPDDR5-64b WC INT4,
+   M=128 DSE 2,649.49 ms vs Func 3,911.05 ms (1.48x),
+   M=2000 DSE 41,398.27 ms vs Func 63,924.19 ms (1.54x),
+   both PASS within [0.5x, 2.0x].
+   Sources: .omo/evidence/task-3-dse-ttft-m128.json / task-3-dse-ttft-m2000.json,
+   task-16 qwen25-3b-prefill-128 Path A total, task-20 ttft_ms.base.
+3. Stale pre-fix numbers cleaned:
+   - 8.2 footnote: 1000/10.99≈91.0ms -> 1000/30.75≈32.5ms
+   - 8.2 conclusion: 82%~39% -> 99%~66%; switch ~660 -> ~1,967 tokens
+   - 8.3: 10.99 tok/s / 33.7ms -> 30.75 tok/s / 32.5ms
+   - 8.4: 128K cycles/tile -> 136K cycles/tile
+   - 10: ~11 tok/s (base) -> ~31 tok/s (base)
+4. Section 9 item 4 rephrased: prefill analysis now aligned with DSE BlockEngine
+   (canonical formula fix + DSE TTFT model fix; Gate 1b 1.48x-1.54x PASS).
+
+Note: report has no S1 migration table (report section 4 is CV). The "TTFT (M=128)
+(未建模)" row lives in .omo/notes/func-model-perf-verification-spec.md section 4,
+owned by todo 3 and left untouched per task constraint; report 3.5 states DSE TTFT
+is now modeled.
+
+Verification:
+  grep "60,223" reports/func-model-perf-verification-report.md  -> empty (no match)
+  TTFT ~60.2 s                                                   -> absent
+  python3 scripts/run_func_model_perf_signoff.py run --reports uncertainty-kpis \
+    --cases qwen-prefill-2000                                    -> exit 0, verdict pass
