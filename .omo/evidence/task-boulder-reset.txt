@@ -1,0 +1,24 @@
+task: 1. 复位 boulder.json 状态机并补登记新计划
+date: 2026-08-13
+head: 239f582
+
+BEFORE:
+  active_work_id: boulder-nudge-reset-580409ec
+  active_plan: /home/prj/zhengs/caduceuscore/CaduceusCore/.omo/plans/boulder-nudge-reset.md
+  plan_name: boulder-nudge-reset
+  status: active
+  works count: 4
+
+AFTER:
+  active_work_id: null
+  top-level keys: [schema_version, active_work_id, works, session_ids, session_origins, task_sessions]
+  works count: 5
+  boulder-nudge-reset status: completed
+  dse-funcmodel-prefill-closure-239f5820 status: completed
+
+VERIFICATION:
+  python3 -m json.tool .omo/boulder.json -> exit 0
+  python3 -c "assert active_work_id is None" -> exit 0
+  git status --short -> only .omo/plans/boulder-nudge-reset.md untracked (plan file)
+
+VERDICT: PASS
