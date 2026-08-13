@@ -7588,3 +7588,195 @@
 [22:08:03] Step 4: Generating summary...
 [22:08:03]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
 [22:08:03] === Iteration 521 Complete ===
+[00:02:43] === Overnight Loop Started ===
+[00:02:43] === Iteration 522 ===
+[00:02:43]   Self-check: clean
+[00:02:43]   Staleness: all checks healthy
+[00:02:43] Step 1: Checking model consistency...
+[00:02:43]   All models consistent ✅
+[00:02:43] Step 2: Running parameter sweep...
+[00:02:43]   Baseline: 24 tok/s
+[00:02:43] Step 3: Running E2E validation...
+[00:02:43]   E2E: 24.0 tok/s, target: ✅
+[00:02:43] Step 4: Generating summary...
+[00:02:43]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[00:02:43] === Iteration 522 Complete ===
+[02:02:03] === Overnight Loop Started ===
+[02:02:03] === Iteration 523 ===
+[02:02:03]   Self-check: clean
+[02:02:03]   Staleness: all checks healthy
+[02:02:03] Step 1: Checking model consistency...
+[02:02:03]   All models consistent ✅
+[02:02:03] Step 2: Running parameter sweep...
+[02:02:03]   Baseline: 24 tok/s
+[02:02:03] Step 3: Running E2E validation...
+[02:02:03]   E2E: 24.0 tok/s, target: ✅
+[02:02:03] Step 4: Generating summary...
+[02:02:03]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[02:02:03] === Iteration 523 Complete ===
+[04:01:23] === Overnight Loop Started ===
+[04:01:23] === Iteration 524 ===
+[04:01:23]   Self-check: clean
+[04:01:23]   Staleness: all checks healthy
+[04:01:23] Step 1: Checking model consistency...
+[04:01:23]   All models consistent ✅
+[04:01:23] Step 2: Running parameter sweep...
+[04:01:23]   Baseline: 24 tok/s
+[04:01:23] Step 3: Running E2E validation...
+[04:01:23]   E2E: 24.0 tok/s, target: ✅
+[04:01:23] Step 4: Generating summary...
+[04:01:23]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[04:01:23] === Iteration 524 Complete ===
+[04:01:35] === Overnight Loop Started ===
+[04:01:35] === Iteration 525 ===
+[04:01:35]   Self-check: clean
+[04:01:35]   Staleness: all checks healthy
+[04:01:35] Step 1: Checking model consistency...
+[04:01:35]   All models consistent ✅
+[04:01:35] Step 2: Running parameter sweep...
+[04:01:35]   Baseline: 24 tok/s
+[04:01:35] Step 3: Running E2E validation...
+[04:01:35]   E2E: 24.0 tok/s, target: ✅
+[04:01:35] Step 4: Generating summary...
+[04:01:35]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[04:01:35] === Iteration 525 Complete ===
+[06:02:23] === Overnight Loop Started ===
+[06:02:23] === Iteration 526 ===
+[06:02:23]   Self-check: clean
+[06:02:23]   Staleness: all checks healthy
+[06:02:23] Step 1: Checking model consistency...
+[06:02:23]   All models consistent ✅
+[06:02:23] Step 2: Running parameter sweep...
+[06:02:23]   Baseline: 24 tok/s
+[06:02:23] Step 3: Running E2E validation...
+[06:02:23]   E2E: 24.0 tok/s, target: ✅
+[06:02:23] Step 4: Generating summary...
+[06:02:23]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[06:02:23] === Iteration 526 Complete ===
+[08:07:02] === Overnight Loop Started ===
+[08:07:02] === Iteration 527 ===
+[08:07:02]   Self-check: clean
+[08:07:02]   Staleness: all checks healthy
+[08:07:02] Step 1: Checking model consistency...
+[08:07:02]   All models consistent ✅
+[08:07:02] Step 2: Running parameter sweep...
+[08:07:02]   Baseline: 24 tok/s
+[08:07:02] Step 3: Running E2E validation...
+[08:07:02]   E2E: 24.0 tok/s, target: ✅
+[08:07:02] Step 4: Generating summary...
+[08:07:02]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[08:07:02] === Iteration 527 Complete ===
+[10:04:57] === Overnight Loop Started ===
+[10:04:57] === Iteration 528 ===
+[10:04:57]   Self-check: clean
+[10:04:57]   Staleness: all checks healthy
+[10:04:57] Step 1: Checking model consistency...
+[10:04:57]   All models consistent ✅
+[10:04:57] Step 2: Running parameter sweep...
+[10:04:57]   Baseline: 24 tok/s
+[10:04:57] Step 3: Running E2E validation...
+[10:04:57]   E2E: 24.0 tok/s, target: ✅
+[10:04:57] Step 4: Generating summary...
+[10:04:57]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[10:04:57] === Iteration 528 Complete ===
+[12:03:14] === Overnight Loop Started ===
+[12:03:14] === Iteration 529 ===
+[12:03:14]   Self-check: clean
+[12:03:14]   Staleness: all checks healthy
+[12:03:14] Step 1: Checking model consistency...
+[12:03:14]   All models consistent ✅
+[12:03:14] Step 2: Running parameter sweep...
+[12:03:14]   Baseline: 24 tok/s
+[12:03:14] Step 3: Running E2E validation...
+[12:03:14]   E2E: 24.0 tok/s, target: ✅
+[12:03:14] Step 4: Generating summary...
+[12:03:14]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[12:03:14] === Iteration 529 Complete ===
+[14:03:17] === Overnight Loop Started ===
+[14:03:17] === Iteration 530 ===
+[14:03:17]   Self-check: clean
+[14:03:17]   Staleness: all checks healthy
+[14:03:17] Step 1: Checking model consistency...
+[14:03:17]   All models consistent ✅
+[14:03:17] Step 2: Running parameter sweep...
+[14:03:17]   Baseline: 24 tok/s
+[14:03:17] Step 3: Running E2E validation...
+[14:03:17]   E2E: 24.0 tok/s, target: ✅
+[14:03:17] Step 4: Generating summary...
+[14:03:17]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[14:03:17] === Iteration 530 Complete ===
+[14:06:58] === Overnight Loop Started ===
+[14:06:58] === Iteration 531 ===
+[14:06:58]   Self-check: clean
+[14:06:58]   Staleness: all checks healthy
+[14:06:58] Step 1: Checking model consistency...
+[14:06:58]   All models consistent ✅
+[14:06:58] Step 2: Running parameter sweep...
+[14:06:58]   Baseline: 24 tok/s
+[14:06:58] Step 3: Running E2E validation...
+[14:06:58]   E2E: 24.0 tok/s, target: ✅
+[14:06:58] Step 4: Generating summary...
+[14:06:58]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[14:06:58] === Iteration 531 Complete ===
+[14:07:00] [manual] Stale-comment cleanup: stripped 4 stale "~21.6 tok/s / .0f rounds to 22" claims (actual=24) from overnight_loop.py:25, validate_e2e.py:24, param_sweep_v2.py:2,77 per strip-not-update rule. No code logic change.
+[16:02:29] === Overnight Loop Started ===
+[16:02:29] === Iteration 532 ===
+[16:02:29]   Self-check: clean
+[16:02:29]   Staleness: all checks healthy
+[16:02:29] Step 1: Checking model consistency...
+[16:02:29]   All models consistent ✅
+[16:02:29] Step 2: Running parameter sweep...
+[16:02:29]   Baseline: 24 tok/s
+[16:02:29] Step 3: Running E2E validation...
+[16:02:29]   E2E: 24.0 tok/s, target: ✅
+[16:02:29] Step 4: Generating summary...
+[16:02:29]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[16:02:29] === Iteration 532 Complete ===
+[16:03:00] Manual audit: cron constraint cross-validation — actual vs prompt claims
+[16:03:00]   DRAM demand: actual 33.3 GB/s (prompt claimed 32.8) — dynamic, correct
+[16:03:00]   M=1 tok/s: actual ~24.0 (prompt claimed ~22) — dynamic, correct
+[16:03:00]   Batch range: actual 12-18 (prompt claimed 11-17) — dynamic, correct
+[16:03:00]   Interop projection: actual 46-74 (prompt claimed 42-67) — dynamic, correct
+[16:03:00]   Verdict: code clean, no hardcoded values. Staleness is in cron prompt only (stale-cron-user-constraints). Action: STRIP numeric claims per UPDATE-VS-STRIP trap.
+[16:03:00] Manual audit: cron constraint cross-validation (stale-cron-user-constraints detected)
+[16:03:00]   DRAM 33.3 (prompt 32.8) / M=1 24.0 (prompt 22) / batch 12-18 (prompt 11-17) / interop 46-74 (prompt 42-67)
+[16:03:00]   Verdict: code clean, dynamic values correct. Staleness only in cron prompt. Action: STRIP numeric claims.
+[18:03:26] === Overnight Loop Started ===
+[18:03:26] === Iteration 533 ===
+[18:03:26]   Self-check: clean
+[18:03:26]   Staleness: all checks healthy
+[18:03:26] Step 1: Checking model consistency...
+[18:03:26]   All models consistent ✅
+[18:03:26] Step 2: Running parameter sweep...
+[18:03:26]   Baseline: 24 tok/s
+[18:03:26] Step 3: Running E2E validation...
+[18:03:26]   E2E: 24.0 tok/s, target: ✅
+[18:03:26] Step 4: Generating summary...
+[18:03:26]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[18:03:26] === Iteration 533 Complete ===
+[20:02:49] === Overnight Loop Started ===
+[20:02:49] === Iteration 534 ===
+[20:02:49]   Self-check: clean
+[20:02:49]   Staleness: all checks healthy
+[20:02:49] Step 1: Checking model consistency...
+[20:02:49]   All models consistent ✅
+[20:02:49] Step 2: Running parameter sweep...
+[20:02:49]   Baseline: 24 tok/s
+[20:02:49] Step 3: Running E2E validation...
+[20:02:49]   E2E: 24.0 tok/s, target: ✅
+[20:02:49] Step 4: Generating summary...
+[20:02:49]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[20:02:49] === Iteration 534 Complete ===
+[22:05:53] === Overnight Loop Started ===
+[22:05:53] === Iteration 535 ===
+[22:05:53]   Self-check: clean
+[22:05:53]   Staleness: all checks healthy
+[22:05:53] Step 1: Checking model consistency...
+[22:05:53]   All models consistent ✅
+[22:05:53] Step 2: Running parameter sweep...
+[22:05:53]   Baseline: 24 tok/s
+[22:05:53] Step 3: Running E2E validation...
+[22:05:53]   E2E: 24.0 tok/s, target: ✅
+[22:05:53] Step 4: Generating summary...
+[22:05:53]   Summary: /Users/zheng/npu/sim/results/morning_summary.md
+[22:05:53] === Iteration 535 Complete ===

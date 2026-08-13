@@ -22,7 +22,7 @@ RESULTS_DIR = SIM_DIR / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
 # Configuration constants — keep in sync with validate_e2e.py target
-TARGET_TOK_S = 21  # M=1 decode target (DRAM BW bounded; actual ~21.6 tok/s, .0f rounds to 22)
+TARGET_TOK_S = 21  # M=1 decode target floor (DRAM BW bounded; actual cross-validated against E2E output)
 
 LOG_FILE = RESULTS_DIR / "overnight_loop.log"
 SUMMARY_FILE = RESULTS_DIR / "morning_summary.md"
