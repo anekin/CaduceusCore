@@ -37,15 +37,24 @@ def log(msg: str):
 
 
 def iter_count() -> int:
-    """Count completed iterations from log.
-    
-    Only counts "=== Iteration N ===" start markers, NOT the "Complete" lines.
-    Each run logs both a start and end marker; counting both would double-count.
+    """Return the highest completed iteration number from the log.
+
+    Uses max iteration number (anchored regex), NOT a substring count. Immune to:
+    - Duplicate start markers (early-dev re-runs of iterations 5, 7)
+    - Post-Analysis markers ("=== Iteration N Post-Analysis ===")
+    - Gaps in iteration numbering
+    The anchored pattern "=== Iteration N ===" excludes both "Complete" and
+    "Post-Analysis" variants naturally (both have extra text before the final "===").
     """
     if not LOG_FILE.exists():
         return 0
+    max_n = 0
     with open(LOG_FILE) as f:
-        return sum(1 for l in f if "=== Iteration" in l and "Complete" not in l)
+        for l in f:
+            m = re.search(r"=== Iteration (\d+) ===$", l)
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+    return max_n
 
 
 def check_model_consistency() -> List[str]:
@@ -590,13 +599,14 @@ def check_self() -> List[str]:
         if '"Decode (M=1)"' not in e2e_func and "'Decode (M=1)'" not in e2e_func:
             issues.append("self: e2e parser missing M=1 anchor — may capture wrong tok/s")
 
-    # 4. iter_count double-marker check
+    # 4. iter_count marker robustness check — must use anchored max-number regex
+    #    (excludes Complete/Post-Analysis variants, immune to duplicates/gaps)
     if 'def iter_count' in source:
         ic_start = source.find('def iter_count')
         ic_end = source.find('\ndef ', ic_start + 1)
         ic_func = source[ic_start:ic_end] if ic_end > 0 else source[ic_start:]
-        if '"Complete"' not in ic_func and "'Complete'" not in ic_func:
-            issues.append("self: iter_count() may double-count (missing 'Complete' exclusion)")
+        if '=== Iteration (\\d+) ===$' not in ic_func:
+            issues.append("self: iter_count() should use anchored max-number regex to avoid marker double-count")
 
     return issues
 
