@@ -1,0 +1,49 @@
+Task 1 — Phase 10 RTL Verification: p10 script skeleton + env check
+====================================================================
+Timestamp: 2026-08-17 11:07 (server local)
+Repo root: /home/prj/zhengs/caduceuscore/CaduceusCore
+
+Deliverables
+------------
+- scripts/p10_lib/p10_sz0001.sh   (p10_ssh / p10_chmod helpers, SZ0001=192.168.0.11, ssh ConnectTimeout=10 + BatchMode=yes)
+- scripts/p10_env_check.sh        (sources lib, validates bash syntax, REPO_ROOT, exec perms, SSH reachability)
+
+Commands run
+------------
+1. chmod +x scripts/p10_lib/p10_sz0001.sh scripts/p10_env_check.sh
+   -> PASS (both mode -rwxrwxr-x)
+
+2. bash -n scripts/p10_lib/p10_sz0001.sh
+   -> PASS (no syntax errors)
+
+3. bash -n scripts/p10_env_check.sh
+   -> PASS (no syntax errors)
+
+4. timeout 90 bash scripts/p10_env_check.sh        (success path, real SSH to sz0001)
+   Output:
+     [p10_env_check] bash syntax check
+     [p10_env_check] REPO_ROOT resolution
+     REPO_ROOT=/home/prj/zhengs/caduceuscore/CaduceusCore
+     [p10_env_check] SSH reachability (zhengs@192.168.0.11)
+     p10_ssh ready
+     [p10_env_check] OK
+   Exit code: 0
+   -> PASS (prints 'p10_ssh ready' and 'REPO_ROOT=...' as required)
+
+5. timeout 60 env SZ0001=192.0.2.1 bash scripts/p10_env_check.sh   (failure path, invalid IP)
+   Output tail:
+     [p10_env_check] SSH reachability (zhengs@192.0.2.1)
+     SSH unreachable: zhengs@192.0.2.1
+   Exit code: 1
+   -> PASS (non-zero exit + 'SSH unreachable'; ConnectTimeout=10 prevented hang)
+
+6. git status --short scripts/p9_lib/p9_sz0001.sh scripts/p9_env_check.sh
+   -> PASS (no output = p9 scripts unchanged; git diff --stat also empty)
+
+Cleanup receipts
+----------------
+- SZ0001 override used only as an ephemeral env var in a subshell for test #5;
+  no file was modified and no persistent env var change remains.
+- No temporary test files created.
+
+Overall status: PASS
