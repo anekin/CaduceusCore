@@ -1,0 +1,29 @@
+Task 2 - Phase 10 RTL Verification: sz0001 infra and resource check
+===================================================================
+Timestamp : 2026-08-17 11:14:23 CST (sz0001 local)
+Host      : sz0001
+Repo root : /home/prj/zhengs/caduceuscore/CaduceusCore
+
+--- Check 1: VCS module + version (vcs -ID) ---
+vcs script version : V-2023.12
+Compiler version = VCS V-2023.12-SP2_Full64
+vcs version ok
+
+--- Check 2: firmware build (firmware/build/npu_firmware.elf) ---
+found firmware/build/npu_firmware.elf (321880 bytes)
+firmware build ok
+
+--- Check 3: VCS license availability (lmstat) ---
+    sz0001: license server UP (MASTER) v11.16
+   snpslmd: UP v11.19
+license ok
+
+--- Check 4: CPU load (< 0.8 * nproc) ---
+load=16.80 nproc=112 limit=89.6
+cpu ok
+
+--- Check 5: build/ partition free space (>= 50 GB) ---
+/dev/mapper/centos-home  8.7T  8.4T  301G  97% /home
+disk ok (301 GB free)
+
+OVERALL: PASS
