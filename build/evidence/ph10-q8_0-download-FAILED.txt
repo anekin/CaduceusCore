@@ -1,0 +1,16 @@
+# Phase 10 T21: Q8_0 GGUF Download — FAILED (BLOCKED-NETWORK)
+# Generated: 2026-08-18 23:02:00
+# Host: sz0002
+# Status: BLOCKED-NETWORK
+# Target: /home/zhengs/models/qwen2.5-3b-instruct-q8_0.gguf
+#
+# All 3 download attempts failed or timed out (local and/or sz0001).
+# Download command: timeout 300 hf download \
+#   Qwen/Qwen2.5-3B-Instruct-GGUF qwen2.5-3b-instruct-q8_0.gguf --local-dir /home/zhengs/models
+
+BLOCKED-NETWORK: true
+retries: 3
+timeout_seconds: 300
+exit_code: network_unavailable
+note: External network unreachable (DNS/connect/timeout). This does NOT block
+     the Phase 10 main workflow.

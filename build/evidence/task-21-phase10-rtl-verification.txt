@@ -1,0 +1,11 @@
+# Phase 10 T21: Q8_0 GGUF download retry
+# Generated: 2026-08-18 23:02:00
+# Host: sz0002
+# Status: DOWNLOAD=FAIL, BLOCKED-NETWORK
+# Path: /home/zhengs/models/qwen2.5-3b-instruct-q8_0.gguf
+
+DOWNLOAD=FAIL
+BLOCKED-NETWORK
+note: Q8_0 GGUF unavailable due to external network blockage. The 6b precision
+     control experiment remains blocked; this is an expected terminal state.
+     Detailed evidence: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph10-q8_0-download-FAILED.txt
