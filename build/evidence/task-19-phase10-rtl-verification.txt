@@ -1,0 +1,82 @@
+Task 19 - Phase 10 RTL Verification: BUG-RTL-SOC-002 DRAM 8MB window constraint
+===============================================================================
+Timestamp start : 2026-08-18T16:54:48Z
+Timestamp end   : 2026-08-18T18:09:28Z
+Commit          : da9efccd944ccbd16c9331e3522ad6afe2ed99b9
+Driver host     : sz0002 (sz0002) — firmware build/audit local;
+                  FM-SOC regression executed on sz0001 via p10_ssh
+                  (ssh zhengs@192.168.0.11)
+
+dram_window_constraint_applied = yes
+  (checked before start: no prior task-11 pre-application — no
+   scripts/p10_dram_8mb.sh and no task-11 DRAM-window evidence existed;
+   no 'dram' constraint commit in git log at HEAD)
+
+Constraint method (low-regression-risk, per todo 19):
+  1. Policy: REJECT, not wrap. dispatch_cmd() in firmware/npu_firmware.c
+     validates every descriptor address range before issuing any
+     transaction. An out-of-window DRAM range marks the command failed
+     (status=1, completion error, LAST_STATUS marker 0x000070xx).
+     Wrapping was deliberately avoided: it would silently alias two
+     distinct buffers into the same physical window (adversarial-QA
+     'address wrap aliasing' probe — answered by choosing reject).
+  2. Window: DRAM_BASE=0x80000000, DRAM_SIZE=0x00800000 (8 MB),
+     DRAM_END=0x80800000 (was 0x0FF00000, an unused documentary macro).
+     dram_range_ok(addr,size) passes addresses below DRAM_BASE
+     (SRAM/MMIO/ROM are not DRAM) and rejects DRAM ranges outside
+     [DRAM_BASE, DRAM_END).
+  3. Coverage: command desc_addr + MMUL input/weight/output/scale +
+     SFU input/output + ROPE input/output + Vector a/b/o + DMA_COPY
+     src/dst + PCIe_DMA axi (sizes match the exact byte counts the
+     firmware transfers, incl. SFU/Vector scratch rounding).
+  4. Test configs: NOT modified. Audit of the FM-SOC RTL builders
+     (sim/rtl_soc_runner.py) shows every case already stays inside the
+     8 MB window (max P4 result end 0x8075_8000; wgt_dram 0x80200000;
+     descriptors 0x80000080-0x80001000). The firmware now enforces the
+     window, so future test configs that escape it fail loudly instead
+     of triggering backdoor/DRAM errors (the BUG-RTL-SOC-002 symptom).
+     dram_model.v untouched (16 MB RTL array, 8 MB harness backdoor cap
+     unchanged — no RTL recompilation risk).
+
+Firmware rebuild + static audit (local sz0002, log: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-19-fw-build.log):
+  make clean && make rc=0
+  dram_range_ok symbol in ELF : yes
+  .data_dram                   : [0x80000000 + 0x40000]
+  embedded DRAM pointer audit  : embedded_dram_pointer_words=4 out_of_8mb_window=0
+
+Commands executed (exact, via p10_ssh on sz0001):
+  FM-SOC   : bash sim/regression/run_fm_soc_all.sh   (33 cases)
+             (log: build/evidence/task-19-fm-soc.log)
+
+FM-SOC regression (todo 19 acceptance: 33/33, or 32/33 + known 10X residual):
+  fm_soc_pass    = 32    [MATCH(32/33 + 1 known pre-existing FM-SOC-10X residual)]
+  fm_soc_fail    = 1
+  FM-SOC failure details:
+    failed case(s): FM-SOC-10X 
+    reason: FM-SOC-10X failed: op00 RMSNORM pre-attn: SFU mismatch max_abs=2.95e+00
+    FM-SOC-10X signature matches the pre-existing failure documented in
+    build/evidence/f3-final-summary.txt (Phase 9 F3, 2026-08-06,
+    'CONFIRMED PRE-EXISTING', fails on d6b1adc too) and reproduced
+    deterministically in Wave 0 (task-3) and todo 8 (task-8).
+    NOT introduced by the todo 19 constraint.
+  constraint self-check: no 0x000070xx rejection marker in any case log (constraint never fired)
+
+Cleanup receipt:
+  - FM-SOC stage ran synchronously under a remote timeout guard;
+    no background jobs started by this script.
+  - Stray-process check on sz0001 (repo-scoped): PLI_TAB:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/pli.tab
+LICENSE:     27020@sz0001
+====================================
+151939 bash -c set -e; source /NAS/Tools/methodology/modules/init/bash; module load vcs/vcs_2023.12sp2; cd '/home/prj/zhengs/caduceuscore/CaduceusCore' && source sim/regression/run_env.sh && pgrep -af '/home/prj/zhengs/caduceuscore/CaduceusCore' 2>/dev/null | grep -E 'simv|p10dram8mb|run_ibex|run_fm_soc' || echo 'NO_STRAY_PROCESSES'
+151950 bash -c set -e; source /NAS/Tools/methodology/modules/init/bash; module load vcs/vcs_2023.12sp2; cd '/home/prj/zhengs/caduceuscore/CaduceusCore' && source sim/regression/run_env.sh &&  set +e export PYTHONPATH="/home/prj/zhengs/caduceuscore/CaduceusCore/sim" export TOPLEVEL="tb_sfu_wrapper" export TOPLEVEL_LANG="verilog" export MODULE="sim.tests.wrapper.test_sfu_wrapper" COCOTB_TESTCASE="test_sfu_softmax_normal" "/home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/simv_tb_sfu_wrapper" >> "/home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/p10-sfu-wrapper-run.log" 2>&1 echo "test_sfu_softmax_normal exit: $?" >> "/home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/p10-sfu-wrapper-run.log" 
+
+Verification:
+  PASS — firmware constraint compiled in; static audit clean;
+  FM-SOC regression matches the todo 19 acceptance criterion.
+
+Result: PASS
+
+Per-stage logs:
+  /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-19-fw-build.log
+  /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-19-fm-soc.log
+  /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-19-phase10-regression-run.log

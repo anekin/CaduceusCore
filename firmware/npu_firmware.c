@@ -13,7 +13,8 @@
 /* ── 内存布局 ───────────────────────────────────────────────────── */
 
 #define DRAM_BASE  0x80000000UL   // DRAM data (Host DDR)
-#define DRAM_SIZE  0x0FF00000UL   // ~255 MB
+#define DRAM_SIZE  0x00800000UL   // 8 MB — RTL dram_model regression window (BUG-RTL-SOC-002)
+#define DRAM_END   (DRAM_BASE + DRAM_SIZE)
 #define SRAM_BASE  0x20000000UL
 #define SRAM_SIZE  0x00400000UL   // 4 MB
 
@@ -438,10 +439,32 @@ static void write_completion(uint32_t cmd_id, uint32_t status) {
     NPU_DB->COMPLETION_STATUS[cmd_id] = status;
 }
 
+/* ── DRAM 8 MB 窗口约束 (BUG-RTL-SOC-002) ─────────────────────────────
+ *
+ * RTL 行为级 dram_model 只实现了一个小的稀疏窗口（SoC 回归里为 8 MB，
+ * cocotb backdoor preload/readback 也以 DRAM_BASE+8MB 为上限）。越界的
+ * 描述符会产生越窗 AXI 事务 (DECERR) 或 backdoor 报错；而把地址 wrap
+ * 回窗口会静默地把两个不同的 buffer 别名到同一片物理存储，更危险。
+ *
+ * 策略：REJECT —— 任何落在 DRAM 区但超出 [DRAM_BASE, DRAM_END) 的
+ * 访问区间，命令直接置错误状态（status=1），不发起事务。低于 DRAM_BASE
+ * 的地址（SRAM/MMIO/ROM）不属于 DRAM，不在本约束范围内。 */
+static int dram_range_ok(uint32_t addr, uint32_t size) {
+    if (addr < DRAM_BASE)
+        return 1;                       /* SRAM / 其他非 DRAM 区 */
+    if (addr >= DRAM_END || size > DRAM_SIZE)
+        return 0;                       /* 越出 8 MB 窗口 */
+    return (addr - DRAM_BASE) <= (DRAM_SIZE - size);
+}
+
 static int dispatch_cmd(cmd_entry_t *cmd) {
     uint32_t op = cmd->opcode;
     NPU_DB->LAST_STATUS = 0x00001000 | (op & 0xFF);
     int status = 1;
+
+    /* BUG-RTL-SOC-002: 命令描述符本身必须在可读窗口内（DRAM 或 SRAM）。 */
+    if (!dram_range_ok(cmd->desc_addr, sizeof(mmul_desc_t)))
+        goto cmd_done;
 
     if (op == 0) {  /* MMUL */
         mmul_desc_t desc;
@@ -449,7 +472,15 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
 
         if (desc.M == 0 || desc.K == 0 || desc.N == 0)
             status = 1;  /* corrupted descriptor */
-        else {
+        else if (!dram_range_ok(desc.input_addr,  desc.input_size)  ||
+                 !dram_range_ok(desc.weight_addr, desc.weight_size) ||
+                 !dram_range_ok(desc.output_addr, desc.output_size) ||
+                 (desc.scale_size > 0 &&
+                  !dram_range_ok(desc.scale_addr, desc.scale_size))) {
+            /* BUG-RTL-SOC-002: DRAM 数据地址越出 8 MB 窗口，拒绝执行。 */
+            NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
+            status = 1;
+        } else {
             const uint32_t TILE_H = 64;
             const uint32_t TILE_W = 64;
             const uint32_t TILE_WEIGHT_BYTES = TILE_H * TILE_W / 2;
@@ -523,37 +554,74 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
         NPU_DB->LAST_STATUS = 0x00004000 | (op & 0xFF);
         read_sfu_desc(cmd->desc_addr, &desc);
 
-        NPU_DB->LAST_STATUS = 0x00004100 | (op & 0xFF);
-        sfu_start(desc.sfu_op, desc.input_addr, desc.output_addr, desc.dim, 0, desc.pos);
-        status = 0;
+        uint32_t io_size = sfu_scratch_size(desc.dim);
+        if (!dram_range_ok(desc.input_addr, io_size) ||
+            !dram_range_ok(desc.output_addr, io_size)) {
+            NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
+            status = 1;
+        } else {
+            NPU_DB->LAST_STATUS = 0x00004100 | (op & 0xFF);
+            sfu_start(desc.sfu_op, desc.input_addr, desc.output_addr, desc.dim, 0, desc.pos);
+            status = 0;
+        }
     } else if (op == 0x05) {  /* ROPE: dim packs (head_dim << 16) | elements */
         sfu_desc_t desc;
         read_sfu_desc(cmd->desc_addr, &desc);
 
         uint32_t elements  = desc.dim & 0xFFFF;
         uint32_t head_dim  = (desc.dim >> 16) & 0xFFFF;
-        sfu_start(5, desc.input_addr, desc.output_addr,
-                  elements, head_dim, desc.pos);
-        status = 0;
+        uint32_t io_size   = sfu_scratch_size(elements);
+        if (!dram_range_ok(desc.input_addr, io_size) ||
+            !dram_range_ok(desc.output_addr, io_size)) {
+            NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
+            status = 1;
+        } else {
+            sfu_start(5, desc.input_addr, desc.output_addr,
+                      elements, head_dim, desc.pos);
+            status = 0;
+        }
     } else if (op >= 0x0F && op <= 0x14) {  /* Vector: VADD/VMUL/VRED_MAX/VRED_SUM/VCONV/VRESID */
         vector_desc_t desc;
         read_vector_desc(cmd->desc_addr, &desc);
 
         uint32_t hw_op = op - 0x0F;  /* 0x0F..0x14 -> 0..5 */
-        vector_start(hw_op, desc.a_addr, desc.b_addr, desc.o_addr, desc.dim);
-        status = 0;
+        uint32_t io_size = vector_scratch_size(desc.dim);
+        if (!dram_range_ok(desc.a_addr, io_size) ||
+            !dram_range_ok(desc.b_addr, io_size) ||
+            !dram_range_ok(desc.o_addr, io_size)) {
+            NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
+            status = 1;
+        } else {
+            vector_start(hw_op, desc.a_addr, desc.b_addr, desc.o_addr, desc.dim);
+            status = 0;
+        }
     } else if (op == 7) {  /* PCIe_DMA */
-        status = pcie_dma_exec(cmd->desc_addr);
+        /* axi_addr 可能是 SRAM 或 DRAM；len 字节必须落在可访问窗口内。 */
+        volatile const uint32_t *src =
+            (volatile const uint32_t *)(uintptr_t)cmd->desc_addr;
+        if (!dram_range_ok(src[2], src[3])) {
+            NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
+            status = 1;
+        } else {
+            status = pcie_dma_exec(cmd->desc_addr);
+        }
     } else if (op == 9 || op == 10 || op == 0x15 || op == 0x16) {  /* DMA_COPY */
         dma_copy_desc_t desc;
         read_dma_copy_desc(cmd->desc_addr, &desc);
 
-        dma_copy(desc.src_addr, desc.dst_addr, desc.size, 0);
-        status = 0;
+        if (!dram_range_ok(desc.src_addr, desc.size) ||
+            !dram_range_ok(desc.dst_addr, desc.size)) {
+            NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
+            status = 1;
+        } else {
+            dma_copy(desc.src_addr, desc.dst_addr, desc.size, 0);
+            status = 0;
+        }
     } else {
         status = 1;  /* unknown opcode */
     }
 
+cmd_done:
     NPU_DB->LAST_STATUS = 0x00002000 | (status & 0xFF);
     return status;
 }
