@@ -1,0 +1,41 @@
+Task 22 - Phase 10 RTL Verification: Bug ledger dedup + completeness check
+===========================================================================
+Timestamp     : 2026-08-18T18:45:17Z
+Commit        : 96a5be93ac6a4fdcdbe6c5bfdcaabb01cdb8c5a2
+Ledger        : /home/prj/zhengs/caduceuscore/CaduceusCore/docs/bugs/bugs-soc-rtl.md
+
+duplicate_count=0
+
+ID collisions (same ID, DIFFERENT content — pre-existing ledger quirk, NOT the P9-00D duplicate; informational):
+  BUG-RTL-SOC-005
+
+Open bugs:
+BUG-RTL-SOC-P9-00A [status=open] evidence: build/evidence/ph9-branch-A-insufficient.txt
+BUG-RTL-SOC-P9-00D [status=open] evidence: build/evidence/ph9-perf-residual.txt build/evidence/task-8-phase10-rtl-verification.txt
+BUG-MXU-P9-00B-broadcast-multitile [status=rtl-suspect] evidence: docs/bugs/BUG-MXU-P9-00B-broadcast-multitile.md build/evidence/ph9-divergence-report.txt
+BUG-RTL-SOC-002 [status=Open] evidence: build/evidence/task-19-phase10-rtl-verification.txt
+BUG-RTL-SOC-007 [status=Open] evidence: build/wave1/w1-3-rtl-op-summary.json docs/vector-workaround-3layer-issue.md
+
+Closed bugs:
+BUG-RTL-SOC-001 [status=Fixed] evidence: NONE
+BUG-RTL-SOC-003 [status=Fixed] evidence: NONE
+BUG-RTL-SOC-005 [status=Fixed] evidence: build/evidence/wrap-bug005-result.txt build/evidence/wrap-vec-regression.txt build/evidence/fix-module-regression.txt
+BUG-RTL-SOC-004 [status=Fixed] evidence: NONE
+BUG-RTL-SOC-006 [status=Fixed] evidence: .omo/evidence/task-7-p1-full-rtl.txt build/p1_full_rtl/evidence/FM-SOC-026.log
+BUG-RTL-SOC-WV-001 [status=Fixed] evidence: build/evidence/wrap-sfu-regression.txt build/evidence/wrap-bug007-result.txt build/evidence/wrap-bug005-result.txt build/evidence/task-18-phase10-rtl-verification.txt build/evidence/fix-module-regression.txt
+BUG-RTL-SOC-WV-007 [status=Fixed] evidence: build/evidence/wrap-bug007-result.txt build/evidence/wrap-mxu-regression.txt build/evidence/fix-module-regression.txt
+BUG-RTL-SOC-NNN [status=Open / Fixed] evidence: NONE
+
+Warnings (non-Phase-10 entries, informational):
+warning: BUG-RTL-SOC-006 references missing file: .omo/evidence/task-7-p1-full-rtl.txt
+
+Phase 10 evidence mapping (bug -> expected evidence file):
+  BUG-RTL-SOC-P9-00D -> build/evidence/task-8-phase10-rtl-verification.txt
+  BUG-RTL-SOC-002 -> build/evidence/task-19-phase10-rtl-verification.txt
+  BUG-RTL-SOC-WV-001 -> build/evidence/task-18-phase10-rtl-verification.txt
+
+Verification: PASS
+  duplicate_count=0 (must be 0)
+  phase10_evidence_complete=yes
+
+Result: PASS

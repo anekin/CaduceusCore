@@ -107,6 +107,7 @@ ValueError: Address 0x81FFFFC0 outside simulated DRAM window
 #### Verification
 
 FM-SOC-010 DRAM preload 无越界错误。
+Phase 10 (8MB window constraint, todo 19): build/evidence/task-19-phase10-rtl-verification.txt
 
 ---
 
@@ -480,32 +481,7 @@ Pending fix per Phase 9 plan.
 #### Verification
 
 Evidence: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph9-perf-residual.txt
-
-### BUG-RTL-SOC-P9-00D
-
-| 字段 | 内容 |
-|------|------|
-| **Date** | 2026-07-22 |
-| **Block** | Phase 9 T3 |
-| **Severity** | Major |
-| **Type** | integ |
-| **Status** | open |
-
-#### Symptom
-
-PERF residual cs<0.999 after Phase 9 T4 firmware+RTL fixes
-
-#### Root Cause
-
-Residual divergence after per-K-tile firmware loop + RTL accumulate mode fix; see /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph9-perf-residual.txt
-
-#### Fix
-
-Pending fix per Phase 9 plan.
-
-#### Verification
-
-Evidence: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph9-perf-residual.txt
+Phase 10 (PERF-06 M=32 fix, todo 8): build/evidence/task-8-phase10-rtl-verification.txt
 
 ---
 
@@ -532,6 +508,7 @@ Found during wrapper-level-verification T2 (Wave 1). 5 cocotb tests written for 
 After the fix STATUS.DONE asserts reliably. `test_sfu_softmax_normal` and `test_bug007_sfu_start_hold` now PASS. Three pre-existing wrapper functional issues remain unrelated to DONE assertion (`test_sfu_gelu_normal`, `test_sfu_width_converter_32to512`, `test_sfu_line_buffer_prefetch` output mismatches). `test_bug005_sfu_nonaligned_xprop` is designed for the sparse testbench and fails on `tb_sfu_wrapper` because that testbench lacks the expected `e_axi` bus; it PASSes on `tb_sfu_wrapper_sparse`.
 
 Evidence: build/evidence/wrap-sfu-regression.txt, build/evidence/wrap-bug007-result.txt, build/evidence/wrap-bug005-result.txt
+Phase 10 (SFU wrapper 3 output mismatches fixed, todo 18): build/evidence/task-18-phase10-rtl-verification.txt
 
 #### Root Cause
 
