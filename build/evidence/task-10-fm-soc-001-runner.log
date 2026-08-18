@@ -1,0 +1,64 @@
+[p10_fm_soc_001] Phase 10 Todo 10 — FM-SOC-001 Ibex RTL smoke (start 2026-08-18T16:53:04Z)
+[p10_fm_soc_001] Host=sz0001 ON_EDA=1 Commit=da9efccd944ccbd16c9331e3522ad6afe2ed99b9
+[p10_fm_soc_001] Stage A: preconditions (missing-binary / env-problem probes)
+[p10_fm_soc_001]   [OK] simv present+executable: /home/prj/zhengs/caduceuscore/CaduceusCore/build/ibex_full_rtl/simv_soc_ibex
+[p10_fm_soc_001]   [OK] BOOTROM_HEX firmware hex: /home/prj/zhengs/caduceuscore/CaduceusCore/firmware/build/npu_firmware.hex (md5=1c5c2b38f06fecd3517cc748da71a474)
+[p10_fm_soc_001]   [OK] reproduced FAIL signature in /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph9-36layer-checkpoint.txt (status: FAIL, cycles: 0, error: unknown)
+[p10_fm_soc_001] Stage B: isolated FM-SOC-001 run
+[p10_fm_soc_001]   runner exit=0 elapsed=59s
+[p10_fm_soc_001]   runner stdout (tail):
+    ============================================================
+    [RUN] FM-SOC-001
+    ============================================================
+    [PASS] FM-SOC-001
+    
+    ============================================================
+    [SUMMARY] Full RTL + Ibex (33-case FM-SOC regression)
+      PASS: 1
+      FAIL: 0
+      SKIP: 0
+      TOTAL: 1
+    ============================================================
+[p10_fm_soc_001]   case log: /home/prj/zhengs/caduceuscore/CaduceusCore/build/ibex_full_rtl/evidence/FM-SOC-001.log -> status=PASS cycles=787315 (finish=787315501 ps)
+[p10_fm_soc_001] Stage C: checkpoint-tool artifact diagnosis
+[p10_fm_soc_001]   checker (run_36layer_checkpoint.py) requires literal 'FAIL=0' in runner stdout:
+[p10_fm_soc_001]     'FAIL=0' ABSENT from runner output
+[p10_fm_soc_001]     runner prints 'FAIL: 0' (colon) -> checker never matches -> artifact confirmed
+[p10_fm_soc_001]   checker cycles regex 'after N cycles' vs case log:
+[p10_fm_soc_001]     regex ABSENT from case log -> cycles=0 even on PASS (artifact confirmed)
+[p10_fm_soc_001] Stage D: fixed-tool verification (scripts/run_36layer_checkpoint.py)
+[p10_fm_soc_001]   run_ibex_smoke() -> {"status": "PASS", "cycles": 787315, "stderr": ""} (rc=0)
+[p10_fm_soc_001]   fixed tool now reports PASS (verification OK)
+[p10_fm_soc_001] Stage E: cleanup
+[p10_fm_soc_001]   [WARN] stray processes: 116992 /home/prj/zhengs/caduceuscore/CaduceusCore/build/ibex_full_rtl/simv_soc_ibex +COCOTB +FM_SOC_CASE_ID=FM-SOC-001 +BOOTROM_HEX=/home/prj/zhengs/caduceuscore/CaduceusCore/firmware/build/npu_firmware.hex
+=== CaduceusCore EDA Environment ===
+VCS:         /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/bin/vcs
+VCS_HOME:    /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+Python:      Python 3.11.9
+PLI_TAB:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/pli.tab
+LICENSE:     27020@sz0001
+====================================
+[INFO] Reusing existing simv: /home/prj/zhengs/caduceuscore/CaduceusCore/build/ibex_full_rtl/simv_soc_ibex
+
+============================================================
+[RUN] FM-SOC-001
+============================================================
+[PASS] FM-SOC-001
+
+============================================================
+[SUMMARY] Full RTL + Ibex (33-case FM-SOC regression)
+  PASS: 1
+  FAIL: 0
+  SKIP: 0
+  TOTAL: 1
+============================================================
+[p10_fm_soc_001]   temp files removed: scripts/.p10_fm_soc_001_verify_tmp.py build/evidence/.task-10-runner-stdout.tmp
+[p10_fm_soc_001] Verdict: FM-SOC-001: PASS
+[p10_fm_soc_001] Evidence written: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-10-phase10-rtl-verification.txt
+[p10_fm_soc_001] Done. Final exit code: 0
+[p10_fm_soc_001] post-run annotation: the simv PID observed by the Stage E probe
+[p10_fm_soc_001] was a concurrent third-party full FM-SOC regression on sz0001
+[p10_fm_soc_001] (it progressed FM-SOC-001 -> 002 -> 003 after this script
+[p10_fm_soc_001] finished), not a leftover from this script's runs. Both of this
+[p10_fm_soc_001] script's sims exited synchronously (rc=0). Concurrent run left
+[p10_fm_soc_001] untouched per workspace isolation rules.

@@ -1,0 +1,60 @@
+# Phase 10 Todo 10 — FM-SOC-001 Ibex RTL Smoke: reproduce + resolve checkpoint FAIL
+# Generated: 2026-08-18T16:53:04Z
+# Commit: da9efccd944ccbd16c9331e3522ad6afe2ed99b9
+# Script: scripts/p10_fm_soc_001_smoke.sh
+# Host: sz0001 (ON_EDA=1; simulation executed on sz0001)
+# Simulator: /home/prj/zhengs/caduceuscore/CaduceusCore/build/ibex_full_rtl/simv_soc_ibex (module vcs/vcs_2023.12sp2)
+# Firmware: /home/prj/zhengs/caduceuscore/CaduceusCore/firmware/build/npu_firmware.hex (md5=1c5c2b38f06fecd3517cc748da71a474)
+
+## Isolated FM-SOC-001 run (reproduced in isolation)
+  Runner   : bash sim/regression/run_ibex_full_rtl.sh FM-SOC-001
+  Exit     : 0
+  Case log : /home/prj/zhengs/caduceuscore/CaduceusCore/build/ibex_full_rtl/evidence/FM-SOC-001.log
+    cocotb summary: TESTS=1 PASS=1 FAIL=0 SKIP=0
+    cycles: 787315 (from '$finish at simulation time 787315501 ps', 1 ns clock)
+  Status   : PASS
+
+## Root cause of the ph9-36layer-checkpoint.txt FAIL (toolchain artifact)
+  Checkpoint tool: scripts/run_36layer_checkpoint.py::run_ibex_smoke()
+  1. Status bug: the checker required the literal string 'FAIL=0' in the
+     runner's stdout, but run_ibex_full_rtl.sh prints 'FAIL: 0' (colon,
+     not equals). The match never succeeds, so even a passing run was
+     recorded as status=FAIL with error=unknown (stderr empty on a clean
+     run). Reproduced: 'FAIL=0' ABSENT from runner output; 'FAIL: 0' present.
+  2. Cycles bug: the checker searched the case log for 'after N cycles',
+     a string the log never contains, so cycles stayed 0 even on PASS.
+  Cross-checks:
+    - Standard regression build/evidence/ph9-regression-run.log:
+      [PASS] FM-SOC-001 (summary: PASS 33, FAIL 0 — full 33-case run).
+    - Atlas review gate build/evidence/36layer-review-gate.txt: independent
+      re-run PASS, TESTS=1 PASS=1 FAIL=0 SKIP=0, 787,012 cycles.
+  Conclusion: not a real functional failure; not a missing-binary or
+  environment problem (simv and firmware hex both present). Pure
+  checkpoint toolchain artifact in the pass-detection logic.
+
+## Fix applied
+  scripts/run_36layer_checkpoint.py (run_ibex_smoke):
+    - pass detection now gates on proc.returncode == 0 AND the case-log
+      marker 'TESTS=1 PASS=1 FAIL=0 SKIP=0' (same marker the runner gates on)
+    - cycle count now parses '$finish at simulation time <ps>' -> ps/1000
+      (1 ns testbench clock)
+
+## Fix verification (end-to-end through the fixed tool, sz0001)
+  python3 scripts/.p10_fm_soc_001_verify_tmp.py -> run_ibex_smoke()
+  Result: {"status": "PASS", "cycles": 787315, "stderr": ""}
+  (a second isolated smoke run executed through the fixed run_ibex_smoke())
+
+## Cleanup
+  temp files removed: scripts/.p10_fm_soc_001_verify_tmp.py build/evidence/.task-10-runner-stdout.tmp
+  This script's runs left no stray simv processes: both isolated sims exited
+  cleanly (runner rc=0 twice; fixed-tool run returned rc=0).
+  Note (post-run annotation): the shared-resource probe observed PID 116992
+  running FM-SOC-001 during the run. Follow-up verification shows this was a
+  concurrent third-party full FM-SOC regression on sz0001 (it progressed
+  FM-SOC-001 -> 002 -> 003 after this script finished; the case log was
+  overwritten at 16:55:41Z by that concurrent run with identical
+  deterministic content). It was NOT a leftover from this script and was
+  left untouched per workspace isolation rules.
+
+## Verdict
+  FM-SOC-001: PASS

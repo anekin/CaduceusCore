@@ -52,15 +52,16 @@ def run_ibex_smoke() -> Dict:
             cmd, shell=True, capture_output=True, text=True,
             cwd=str(_PROJECT), timeout=600,
         )
-        output = proc.stdout + "\n" + proc.stderr
-        if "PASS" in output and "FAIL=0" in output:
+        log_file = build_dir / "evidence" / "FM-SOC-001.log"
+        content = log_file.read_text() if log_file.exists() else ""
+        # The runner prints "FAIL: 0" (colon), never "FAIL=0"; gate on the
+        # same cocotb summary marker the runner itself checks, plus exit code.
+        if proc.returncode == 0 and "TESTS=1 PASS=1 FAIL=0 SKIP=0" in content:
             result["status"] = "PASS"
-            log_file = build_dir / "evidence" / "FM-SOC-001.log"
-            if log_file.exists():
-                content = log_file.read_text()
-                m = re.search(r'after (\d+) cycles', content)
-                if m:
-                    result["cycles"] = int(m.group(1))
+            # 1 ns testbench clock: cycles = $finish time in ps / 1000.
+            m = re.search(r'\$finish at simulation time\s+(\d+)', content)
+            if m:
+                result["cycles"] = int(m.group(1)) // 1000
         else:
             result["status"] = "FAIL"
             result["stderr"] = proc.stderr[-500:] if proc.stderr else "unknown"
