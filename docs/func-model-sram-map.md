@@ -179,17 +179,51 @@ subdivides into these local buffers.
 
 ---
 
-## 6. MXU SoC Wrapper Default Bases
+## 6. Engine SoC Wrapper Default Bases
 
-`rtl/wrapper/mxu_soc_wrapper.v` uses these default SRAM bases for the AXI4
-preload/store-out sequencers. They are compatible with the map above but can
-be overridden by firmware:
+### 6.1 MXU Wrapper (`rtl/wrapper/mxu_soc_wrapper.v`)
 
-| Register | Default Value | Purpose |
+The MXU wrapper exposes three base registers (`WRP_WEIGHT_BASE` `0x30`,
+`WRP_ACT_BASE` `0x34`, `WRP_OUT_BASE` `0x38`) that anchor the AXI4 preload and
+store-out sequencers. The **current RTL reset defaults** (verified against
+`mxu_soc_wrapper.v`, reset block, P9-B workaround) are:
+
+| Register | Reset Default | Purpose |
 |----------|--------------:|---------|
-| `WRP_WEIGHT_BASE` (`0x30`) | `0x2000_0000` | Weight tile SRAM base |
-| `WRP_ACT_BASE`    (`0x34`) | `0x2000_1000` | Activation tile SRAM base |
-| `WRP_OUT_BASE`    (`0x38`) | `0x2000_2000` | Output tile SRAM base |
+| `WRP_WEIGHT_BASE` (`0x30`) | `0x8002_0000` | Weight tile base (perf-test DRAM layout) |
+| `WRP_ACT_BASE`    (`0x34`) | `0x8001_0000` | Activation tile base (perf-test DRAM layout) |
+| `WRP_OUT_BASE`    (`0x38`) | `0x8003_0000` | Output tile base (perf-test DRAM layout) |
+
+> **Why DRAM addresses?** The reset defaults are hardcoded to the Cocotb perf
+> testbench DRAM layout (`act=0x8001_0000`, `wgt=0x8002_0000`,
+> `out=0x8003_0000`) as a workaround: GCC `-O2` was observed to misroute
+> `WRP_WEIGHT_BASE` / `WRP_ACT_BASE` APB writes to DMA MMIO space
+> (`0x4000_30xx`), so the wrapper needs correct defaults even when those writes
+> never arrive. These are DRAM addresses (`0x8000_0000` base), not SRAM map
+> addresses.
+
+> **Production / spec-canonical bases:** For SRAM-backed operation, firmware
+> must program these registers to the Section 2 map: weight `0x2000_0000`
+> (Bank A start), activation `0x2020_0000`, output `0x2028_0000`
+> (Accumulator/Output region). The registers are R/W and firmware writes
+> override the reset defaults. The perf-test DRAM defaults are a Phase 10
+> testbench workaround, not the canonical SRAM map.
+
+### 6.2 Vector Wrapper (`rtl/wrapper/vector_soc_wrapper.v`)
+
+The Vector wrapper exposes `WRP_A_BASE` `0x30`, `WRP_B_BASE` `0x34`,
+`WRP_O_BASE` `0x38`. Current RTL reset defaults match the Section 2 map:
+
+| Register | Reset Default | Purpose |
+|----------|--------------:|---------|
+| `WRP_A_BASE` (`0x30`) | `0x2030_0000` | Operand A base (Vector Workspace) |
+| `WRP_B_BASE` (`0x34`) | `0x2030_0000` | Operand B base (contiguous after A) |
+| `WRP_O_BASE` (`0x38`) | `0x2034_0000` | Output base (Scratch / Dtype-Convert) |
+
+A and B share the Vector Workspace base; operand B follows A contiguously at
+offset `length x 4` bytes, matching `GoldenExecutor` buffer allocation.
+`WRP_O_BASE` defaults into the Scratch region so VCONV results land in the
+dtype-convert window.
 
 ---
 
@@ -230,3 +264,5 @@ be overridden by firmware:
 - KV cache sizing: `sim/models/kv_cache.py`
 - SoC address map: `rtl/soc/README.md`
 - MXU wrapper bases: `rtl/wrapper/mxu_soc_wrapper.v`
+- Vector wrapper bases: `rtl/wrapper/vector_soc_wrapper.v`
+- Perf-test DRAM base workaround: `rtl/wrapper/mxu_soc_wrapper.v` reset block (P9-B comment)

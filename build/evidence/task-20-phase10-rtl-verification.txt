@@ -1,0 +1,46 @@
+# Phase 10 T20: MMIO spec gap closure (docs only)
+# Generated: 2026-08-19 00:48:05
+# Host: sz0002
+# Plan reference: .omo/plans/rtl-update-plan.md (top-level conclusion L10)
+# Status: DOCS-SYNC=PASS
+#
+# Gap disposition: DISPOSED (documented resolution, no RTL change)
+#   G1  MXU BIAS/SCALE stub
+#       -> docs/func-model-mmio-spec.md §7.2: Phase 1 NOT APPLICABLE
+#          (mmio_if.v offsets 0x20/0x24 exist and are writable; mxu_top.v
+#           ties off bias_addr_o/scale_addr_o; controller FSM never consumes
+#           them; Phase 1 testbenches drive broadcast buses directly)
+#   G2  Wrapper SRAM base documentation
+#       -> docs/func-model-sram-map.md §6.1: MXU reset defaults documented as
+#          perf-test DRAM bases 0x8001_0000/0x8002_0000/0x8003_0000
+#          (P9-B workaround for GCC -O2 APB misroute); production SRAM bases
+#          0x2000_0000/0x2020_0000/0x2028_0000 noted as firmware-programmed.
+#       -> §6.2: Vector wrapper defaults 0x2030_0000/0x2030_0000/0x2034_0000
+#          documented (spec-compliant, matches rtl-update-plan §7.4).
+#   G3  APB->MMIO write-strobe documentation sync
+#       -> docs/func-model-mmio-spec.md §1.1: cs = psel && penable (single
+#          latch at end of access phase). RTL rtl/wrapper/apb_to_mmio.v
+#          already implements the fix; docs now match.
+#   G4  INTC PENDING bit map (spec said HOST at bit[8]; RTL has bit[5])
+#       -> docs/func-model-mmio-spec.md §6: full 8-source map
+#          bit[0]=MXU bit[1]=SFU bit[2]=Vector bit[3]=DMA bit[4]=PCIe
+#          bit[5]=HOST bit[6]=Timer bit[7]=PCIe-DMA; §7.1 marked RESOLVED.
+#       -> No RTL change; documentation-only gap per rtl-update-plan §8.2.
+#
+# Gap disposition: REMAINING (future phase, explicitly deferred):
+#   F1  BIAS/SCALE functional wiring (controller reads bias/scale SRAM and
+#       applies during compute). Future phase when a golden reference requires
+#       it. Registers already reserved.
+#   F2  mxu_top SRAM-sourced weight/activation (DMA-style buffer fill and
+#       controller address sequencing). Deferred to Phase 1.5/SoC-only change;
+#       keeps existing tb_mxu.v broadcast path intact.
+#   F3  Weight Bank B ping-pong preload (wrapper currently single-bank
+#       contiguous preload). Requires firmware/DMA refresh or a Bank B base
+#       register. Sufficient for current Phase 1/SoC tests.
+#   F4  DMA linked-list descriptor chain traversal FSM (DESC_ADDR/DESC_CNT
+#       reserved in register file, FSM not implemented). Future phase.
+#   F5  Separate batch dimension (token count != M) as batch_cur register.
+#       Current m_tile outer loop + k_tile==0 reset gives per-token reset.
+#
+# RTL verification checks: see script output above.
+# No RTL files were modified by this task.

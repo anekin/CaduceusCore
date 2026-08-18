@@ -16,6 +16,7 @@ and DMA engine register interfaces.
 - `rtl/vector/README.md` — Vector MMIO map and op encoding
 - `rtl/ip/dma_wrapper.v` — DMA APB slave and descriptor FSM
 - `rtl/soc/apb_decoder.v` — APB decode and zero-wait-state response
+- `rtl/wrapper/apb_to_mmio.v` — APB→MMIO bridge (access-phase-only `cs` strobe)
 
 ---
 
@@ -40,6 +41,10 @@ The APB decoder and all engine APB slaves are **zero-wait-state**:
   (`psel=1, penable=0`) and 1 access cycle (`psel=1, penable=1`).
 - The register latch update occurs on the rising edge at the end of the access
   cycle.
+- The APB→MMIO bridge (`rtl/wrapper/apb_to_mmio.v`) gates the MMIO chip-select
+  with `penable`: `cs = psel && penable`. The MMIO slave therefore sees `cs=1`
+  only during the access phase and latches exactly once per transfer, matching
+  this spec.
 - Back-to-back writes to the same engine can be issued every **2 PCLK cycles**.
 - Reads are combinatorial; read data is valid during the access cycle.
 
@@ -336,12 +341,15 @@ All engines share the same completion-interrupt protocol:
 2. Engine completes the op and asserts its `irq` output for **one PCLK cycle**
    in the DONE state.
 3. The interrupt controller (`INTC`, base `0x4000_6000`) latches the event in
-   `INTC.PENDING`:
+   `INTC.PENDING` (full 8-source SoC map, `rtl/intc/intc_top.v`):
    - bit[0] = MXU done
    - bit[1] = SFU done
    - bit[2] = Vector done
    - bit[3] = DMA done
-   - bit[8] = HOST doorbell
+   - bit[4] = PCIe
+   - bit[5] = HOST doorbell
+   - bit[6] = Timer
+   - bit[7] = PCIe DMA
 4. The CPU interrupt `cpu_irq` is asserted when
    `popcount(PENDING & ENABLE) ≥ THRESHOLD` (default `THRESHOLD = 1`).
 5. Firmware interrupt handler:
@@ -406,7 +414,11 @@ assign irq_src = {pcie_dma_irq, timer_irq, host_irq, pcie_irq, dma_irq,
 - bit[6] = timer_irq
 - bit[7] = pcie_dma_irq
 
-**Status**: Documentation gap in the spec. The RTL correctly implements the full 8-source SoC map that includes PCIe and timer sources (bits 4, 6, 7 not listed in spec §6). The spec bit map in Section 6 should be updated to match `intc_top.v` bit allocation, and the doorbell address map should note that bit[5] (not bit[8]) is the HOST doorbell.
+**Status**: RESOLVED in docs (rtl-update-plan Phase 10). Section 6 above now
+lists the full 8-source map matching `intc_top.v` (HOST at bit[5], PCIe at
+bit[4], Timer at bit[6], PCIe DMA at bit[7]). No RTL change was required; the
+RTL was already correct. The earlier spec bit map in Section 6 (HOST at bit[8])
+was the documentation gap, now corrected.
 
 ### 7.2 MXU BIAS/SCALE Unimplemented in Phase 1
 
@@ -414,7 +426,16 @@ assign irq_src = {pcie_dma_irq, timer_irq, host_irq, pcie_irq, dma_irq,
 
 **RTL implements** (`rtl/mxu/mxu_top.v` lines 104-108): `bias_addr_o` and `scale_addr_o` are declared as outputs from `mmio_if` but annotated "unused (stubbed)" at the MXU top level. The controller FSM does not consume these values in Phase 1.
 
-**Status**: Documented Phase 1 gap. The MMIO registers exist and are writable (`rtl/mxu/mmio_if.v` offsets `0x20`/`0x24`), but no functional path uses them. This is acceptable for Phase 1 because module-level testbenches drive broadcast buses directly and bypass the MMIO path. BIAS/SCALE consumption will be wired in a future phase when the controller sequences weight scale and bias application during the compute loop.
+**Status**: **Phase 1: NOT APPLICABLE** (decision recorded in
+`.omo/plans/rtl-update-plan.md` §1.1/§3.4/§11). The MMIO registers exist and
+are writable (`rtl/mxu/mmio_if.v` offsets `0x20`/`0x24`), but no functional
+path consumes them in Phase 1. `mxu_top.v` ties off `bias_addr_o` and
+`scale_addr_o` as unused, and the controller FSM never reads them. This is
+acceptable because Phase 1 module-level testbenches drive the broadcast buses
+directly and bypass the MMIO path, and no golden reference in the Phase 1 op
+set requires bias/scale application. BIAS/SCALE consumption will be wired in a
+future phase when the controller sequences weight scale and bias application
+during the compute loop.
 
 ---
 
