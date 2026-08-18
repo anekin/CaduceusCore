@@ -150,6 +150,7 @@ module sfu_soc_wrapper #(
     localparam [11:0] SFU_CMD_OFF    = 12'h004;
     localparam [11:0] SFU_DIM_OFF    = 12'h014;
     localparam [11:0] SFU_CTRL_OFF   = 12'h000;
+    localparam [11:0] SFU_STATUS_OFF = 12'h008;
     reg [AXI_ADDR_WIDTH-1:0]   apb_i_addr;
     reg [15:0]                 apb_dim_reg;
     reg [3:0]                  apb_op_reg;
@@ -388,6 +389,10 @@ module sfu_soc_wrapper #(
     wire [31:0] cur_rdata_masked  = cur_rdata  & {{8{cur_byte_valid[3]}}, {8{cur_byte_valid[2]}}, {8{cur_byte_valid[1]}}, {8{cur_byte_valid[0]}}};
     wire [31:0] next_rdata_masked = next_rdata & {{8{next_byte_valid[3]}}, {8{next_byte_valid[2]}}, {8{next_byte_valid[1]}}, {8{next_byte_valid[0]}}};
 
+    // Drive masked read data to sfu_top.  The byte mask zeros padding beyond
+    // the configured tensor so uninitialized sparse-slave bytes become 0.
+    assign sfu_rdata_to_top = cur_hit  ? cur_rdata_masked  :
+                              next_hit ? next_rdata_masked : 32'd0;
 
     //=========================================================================
     // Write path — FIFO + line buffer
@@ -479,6 +484,11 @@ module sfu_soc_wrapper #(
     end
 
     wire partial_flush = (partial_flush_cnt == PARTIAL_FLUSH_CYCLES);
+
+    // The wrapper must not report completion until every write from sfu_top
+    // has been flushed to the AXI slave.  Otherwise software polls STATUS.DONE
+    // and reads output before the final partial line has left the write FIFO.
+    wire writes_idle = wr_fifo_empty && !wr_line_dirty && (wr_state == WR_IDLE);
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -611,8 +621,13 @@ module sfu_soc_wrapper #(
 
     // APB response: insert wait states while holding START for prefetch,
     // and for a short window after every START write to close the STATUS
-    // read race.
-    assign prdata  = apb_prdata;
+    // read race.  Also mask STATUS.DONE until the write FIFO/line buffer are
+    // idle, so software cannot read output before the final AXI write completes.
+    wire status_read = sfu_mmio_cs && !sfu_mmio_we &&
+                       (sfu_mmio_addr == SFU_STATUS_OFF);
+    wire [31:0] prdata_masked = status_read ?
+                                (apb_prdata & ~(32'd1 << 1)) : apb_prdata;
+    assign prdata  = writes_idle ? apb_prdata : prdata_masked;
     assign pready  = !start_hold && !post_start_stall_active;
     assign pslverr = 1'b0;
 

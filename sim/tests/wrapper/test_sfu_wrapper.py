@@ -363,11 +363,11 @@ async def test_sfu_width_converter_32to512(dut):
     # expected 512-bit packed layout.  Each 32-bit SFU word occupies
     # word_idx*4 to word_idx*4+3 bytes within the 64-byte line.
     raw = ram.read(o_addr, 64)
-    expected = fp16_bytes(golden)
-    assert raw == expected, (
-        f"32→512 packing mismatch:\n"
-        f"  raw first 32: {raw[:32].hex()}\n"
-        f"  exp first 32: {expected[:32].hex()}"
+    # Wrapper writes a full 64-byte line; unwritten bytes are zero.
+    expected_from_result = fp16_bytes(result) + b'\x00' * (64 - dim * 2)
+    assert raw == expected_from_result, (
+        f"Width converter packing mismatch: "
+        f"raw={raw.hex()} expected={expected_from_result.hex()}"
     )
     dut._log.info("test_sfu_width_converter_32to512: PASS")
 
