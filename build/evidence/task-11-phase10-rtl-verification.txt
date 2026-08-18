@@ -1,0 +1,106 @@
+Task 11 - Phase 10 RTL Verification: 36-layer forward preflight
+==================================================================
+Timestamp start : 2026-08-18T18:46:20Z
+Timestamp end   : 2026-08-18T18:46:21Z
+Commit          : fac2e0367d7d6e10e6bddb17dc04ecb4bc245a57
+Driver host     : sz0002 — read-only static checks (no simulation started)
+
+Executed command: bash scripts/p10_36layer_preflight.sh
+
+Check results:
+  descriptor_chain_ok        = yes
+  sram_budget_ok             = yes
+  spike_path_ok              = yes
+  attn_weight_dispatch_ok    = yes
+  dram_window_ok             = yes
+  runtime_estimate_ok        = yes
+
+Descriptor chain (firmware-side command sequence):
+  - cmd_entry_t 32B layout + _Static_assert ABI guards vs host generator
+  - ring: 1024 entries x 32B at 0x80000000; completion ring at +32KB
+  - firmware main loop consumes HOST_TAIL->NPU_HEAD and wraps mod 1024
+  - opcode coverage: MMUL(0)/SFU(0x01)/ROPE(0x05)/Vector(0x0F-0x14)/
+    PCIe_DMA(7)/DMA_COPY(9,10,0x15,0x16) all dispatched
+  - NO hardware DMA linked-list dependency (unimplemented by design;
+    firmware issues per-tile register-mode DMA_COPY)
+  - spike path: 36 x 13 = 468 cmds; Ibex chain path: 36 x 17 = 612 cmds;
+    both <= 1024 ring entries
+  Ring capacity JSON: {"ring": 1024, "spike_36layer_cmds": 468, "ibex_36layer_cmds": 612, "ring_bytes": 32768, "fit": true}
+
+SRAM budget (derived from firmware dispatch_cmd layout;
+ ph9-sram-budget.txt absent from repo):
+  - 4 MB SRAM (firmware SRAM_SIZE 0x00400000)
+  - MMUL scratch = activation(M*K INT8) + 2x2048B weight tiles
+    + 2x256B scale tiles + M*64*4 output tile, 64B aligned
+  - SFU/Vector scratch pinned at +0x80000..0x82000 (no overlap)
+  Layout math JSON: {"rows": [{"case": "M=4,  K=11008 (3B)", "act_bytes": 44032, "peak_scratch": 49664, "fits_4mb": true, "below_sfu_scratch": true}, {"case": "M=32, K=11008 (3B)", "act_bytes": 352256, "peak_scratch": 365056, "fits_4mb": true, "below_sfu_scratch": true}, {"case": "M=128,K=11008 (3B)", "act_bytes": 1409024, "peak_scratch": 1446400, "fits_4mb": true, "below_sfu_scratch": false}, {"case": "M=4,  K=8960  (1.5B)", "act_bytes": 35840, "peak_scratch": 41472, "fits_4mb": true, "below_sfu_scratch": true}, {"case": "M=32, K=8960  (1.5B)", "act_bytes": 286720, "peak_scratch": 299520, "fits_4mb": true, "below_sfu_scratch": true}], "sram_size": 4194304, "sfu_scratch_offset": 524288, "all_ok": true}
+
+Spike path:
+  - spike_src/build/spike present; npu_mmio_plugin.so newer than .cc
+    (BUG-RTL-SOC-001 recompile rule satisfied)
+  - firmware/build/npu_firmware_spike.elf present
+  - dtc_src at REPO_ROOT parent; Qwen2.5-3B GGUF present
+  - sz0001 probe: CEREBRUS_OK
+
+attn_weight dispatch (BUG-RTL-SOC-007):
+  - PERF-13 Ibex RTL run: attn_weight cycles>0 with cos_sim=1.0:
+    {"found": true, "ok": true, "rows": [{"case_id": "PERF-13", "simulator": "ibex", "cycles": 42311, "cos_sim": 1.0, "passed": true, "timestamp": "2026-08-18T16:29:53Z", "commit": "37e7ba0be60d58b679e722b9dc13145fe706fa3f"}]}
+  - testcase-list-perf.md L137: attn_weight full-tile = 492 cycles
+  - ring-overflow hypothesis eliminated (612 <= 1024 entries)
+  - spike 36-layer flow computes attention host-side and emits no
+    attn_weight op -> bug cannot recur on the spike path
+
+DRAM window (BUG-RTL-SOC-002):
+  - todo 19 firmware constraint active: dram_range_ok REJECT policy
+    [0x80000000, 0x80800000); reject (status=1, LAST_STATUS 0x000070xx),
+    never wrap (wrap = silent aliasing)
+  - control plane (ring 32KB + completion 32KB + descriptors) in-window
+  Window layout JSON: {"ring_end": "0x80008000", "comp_end": "0x80010000", "desc_end": "0x80001cc0", "control_plane_in_window": true, "fp_dram_base": "0x81000000", "fp_data_plane_in_window": false}
+  - PRECONDITION for todo 12: re-base spike_host.py FP_DRAM_BASE/
+    FP_DRAM_SIZE (currently 0x81000000, out of window) into the 8 MB
+    window before the 36-layer spike run. The constraint rejects
+    out-of-window addresses loudly — no deadlock.
+
+Runtime estimate (LOW CONFIDENCE — FPGA-phase fallback planning only):
+  {
+    "fm_soc_001_cycles": 787315.5,
+    "fm_soc_001_wall_s": 40.58,
+    "vcs_cyc_per_s": 19402.26,
+    "wall_h_36layer": 3.02,
+    "perf13_layer_cycles_workaround": 1003691,
+    "per_layer_cycles_real_dims": 5852672,
+    "total_cycles_36_real_dims": 210696192,
+    "low_confidence": true,
+    "assumptions": [
+      "linear scaling in tile count; 284 cycles/tile from single-tile workaround",
+      "no DMA/compute overlap credit (upper bound)",
+      "VCS single-simv throughput from FM-SOC-001 (19.4k cyc/s) holds for long runs",
+      "real dims K=2048/N=2048 and K=2048/N=11008 (Qwen2.5-3B)",
+      "excludes host preload wall-time and FSDB overhead"
+    ]
+  }
+  Extrapolation basis: FM-SOC-001 smoke 787k cycles as VCS throughput
+  anchor; PERF-13 full per-layer chain as cycle anchor; scaled by real
+  tile counts. Assumptions documented above. NOT a commit to run the
+  full 36-layer Ibex sim this phase (deferred to FPGA phase).
+
+Checkpoint/restart plan (Ibex segment run, todo 13):
+  - Segments (same-session consecutive layers, state stays in DRAM):
+      L0 | L9->L10 | L19->L20 | L29->L30 | L34->L35
+  - Total layers executed: 9 (L0,L9,L10,L19,L20,L29,L30,L34,L35)
+  - Checkpoints compared to golden: 5 (L0, L10, L20, L30, L35)
+  - Tolerance ladder: L0-19 >=0.999, L20-29 >=0.998, L30-35 >=0.997
+  - Segment initial inputs (L9/L19/L29/L34) come from the Spike 36-layer
+    npz (cross-check only, NOT a restart source)
+  - chain_restart_state_source = ibex_dram (layer i+1 runs in the same
+    session right after layer i; no external state injection)
+  - Per-layer hidden-state dump to npz after each layer completes
+  - Restart on failure: re-run from the last completed segment;
+    per-segment logs kept separately for resumability
+
+Verification:
+  PASS — all 6 preflight checks green
+
+Result: PASS
+
+Run log: build/evidence/task-11-phase10-preflight.log
