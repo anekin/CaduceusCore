@@ -1,0 +1,56 @@
+# Phase 10 Todo 9 — PERF-06 Causality Gate: full PERF regression + testcase-list sync
+# Generated: 2026-08-18T14:18:19Z
+# Commit: 7aec7a35540b616a79979b1c883dd5dbd8973d45
+# Script: scripts/p10_perf06_causality_gate.sh
+# Firmware: /home/prj/zhengs/caduceuscore/CaduceusCore/firmware/build/npu_firmware.hex (md5=bb3d9edf3d41b0f081fca3290a3590e5)
+# Simulator: /home/prj/zhengs/caduceuscore/CaduceusCore/build/ibex_full_rtl/simv_soc_ibex (sz0001, module vcs/vcs_2023.12sp2)
+
+## Regression results (21/21 PASS)
+
+PERF-01        PASS   cos_sim=1.000000   cycles=136493   evidence=w4-perf-p0.txt
+PERF-02        PASS   cos_sim=-          cycles=136493   evidence=w4-perf-p0.txt
+PERF-03        PASS   cos_sim=-          cycles=136493   evidence=w4-perf-p0.txt
+PERF-04        PASS   cos_sim=1.000000   cycles=130470   evidence=w4-perf-p0.txt
+PERF-05        PASS   cos_sim=1.000000   cycles=130478   evidence=w4-perf-p1.txt
+PERF-06        PASS   cos_sim=1.000000   cycles=144176   evidence=w4-perf-p1.txt
+PERF-07        PASS   cos_sim=-          cycles=500      evidence=w4-perf-p1.txt
+PERF-08        PASS   cos_sim=-          cycles=130478   evidence=w4-perf-p1.txt
+PERF-09        PASS   cos_sim=1.000000   cycles=136493   evidence=w4-perf-p2.txt
+PERF-10        PASS   cos_sim=1.000000   cycles=271126   evidence=w4-perf-p2.txt
+PERF-11        PASS   cos_sim=1.000000   cycles=515490   evidence=w4-perf-p2.txt
+PERF-12        PASS   cos_sim=-          cycles=136493   evidence=w4-perf-p2.txt
+PERF-13        PASS   cos_sim=1.000000   cycles=1003691  evidence=w4-perf-p3.txt
+PERF-14        PASS   cos_sim=-          cycles=0        evidence=w4-perf-p3.txt
+PERF-15        PASS   cos_sim=-          cycles=258818   evidence=w4-perf-p3.txt
+PERF-16        PASS   cos_sim=-          cycles=258818   evidence=w4-perf-p3.txt
+PERF-17        PASS   cos_sim=1.000000   cycles=130478   evidence=w4-perf-p4.txt
+PERF-18        PASS   cos_sim=-          cycles=71044    evidence=w4-perf-p4.txt
+PERF-19        PASS   cos_sim=-          cycles=130478   evidence=w4-perf-p4.txt
+PERF-20        PASS   cos_sim=-          cycles=130472   evidence=w4-perf-p4.txt
+FULLCHAIN      PASS   cos_sim=1.000000   cycles=130478   evidence=fullchain-pipeline.txt
+
+PERF-06 cos_sim>=0.999: PASS (cos_sim=1.000000)
+testcase-list: 21/21 PASS
+stats-line-synced: true
+stats-line: Phase 10 状态: PASS 21 | NOT RESOLVED 0 | analytical 8 (subset of PASS)
+
+## Testcase-list changes (rtl/testcase-list-perf.md)
+  PERF-06 row: 🔶 NOT RESOLVED -> ✅ PASS (evidence w4-perf-p1.txt + this file)
+  stats line:  'Phase 9 状态: PASS 17 | NOT RESOLVED 2 | ...'
+               -> 'Phase 10 状态: PASS 21 | NOT RESOLVED 0 | ...'
+  last-updated: 2026-08-18T14:18:19Z
+
+## Stage exit codes (sz0001)
+  test_w4_perf_p0=0
+  test_w4_perf_p1=0
+  test_w4_perf_p2=0
+  test_w4_perf_p3=0
+  test_w4_perf_p4=0
+  test_w4_perf_fullchain=0
+
+## Note (out of gate scope, pre-existing)
+  test_w4_perf_fullchain_sfu_vector (5-op FULLCHAIN-SFU-VEC variant) is not part of this
+  gate: current firmware ring dispatch has no SFU/Vector opcode cases (since the
+  b0096d0 software-stack rewrite), matching the p9_perfect_batch.sh fullchain batch
+  which uses test_w4_perf_fullchain (MMUL segment). Row FULLCHAIN-SFU-VEC keeps its
+  Phase 8 PASS evidence; firmware SFU/Vector ring dispatch is tracked separately.

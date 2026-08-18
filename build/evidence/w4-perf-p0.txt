@@ -1,7 +1,4 @@
-# Phase 9 re-run 2026-07-22T02:29:26Z commit=819a34bbef1b61d15a66b902ea17e5f0ccceeac0 source=rtl
-{"case_id": "PERF-01", "simulator": "ibex", "status": "PASS", "cycles": 134914, "commit": "819a34bbef1b61d15a66b902ea17e5f0ccceeac0", "timestamp": "2026-07-22T02:29:51Z", "cos_sim": 1.0, "M": 1, "K": 256, "N": 64, "tiles": 4}
-{"case_id": "PERF-02", "simulator": "ibex", "status": "PASS", "cycles": 134914, "commit": "819a34bbef1b61d15a66b902ea17e5f0ccceeac0", "timestamp": "2026-07-22T02:29:51Z", "note": "K>64 firmware dispatch"}
-{"case_id": "PERF-03", "simulator": "ibex", "status": "PASS", "cycles": 134914, "commit": "819a34bbef1b61d15a66b902ea17e5f0ccceeac0", "timestamp": "2026-07-22T02:29:51Z", "tiles": 4, "note": "per-tile cycle in total"}
-{"case_id": "PERF-04", "simulator": "ibex", "status": "PASS", "cycles": 128838, "commit": "819a34bbef1b61d15a66b902ea17e5f0ccceeac0", "timestamp": "2026-07-22T02:30:04Z", "cos_sim": 1.0, "M": 1, "K": 128, "N": 128, "tiles": 4}
-{"case_id": "PERF-05", "simulator": "ibex", "status": "PASS", "cycles": 128832, "commit": "819a34bbef1b61d15a66b902ea17e5f0ccceeac0", "timestamp": "2026-07-22T02:30:28Z", "cos_sim": 1.0, "M": 1, "K": 128, "N": 128, "tiles": 4}
-{"case_id": "PERF-06", "simulator": "ibex", "status": "FAIL", "cycles": 129974, "commit": "819a34bbef1b61d15a66b902ea17e5f0ccceeac0", "timestamp": "2026-07-22T02:30:42Z", "cos_sim": 0.053543, "M": 32, "K": 128, "N": 128}
+{"case_id": "PERF-01", "simulator": "ibex", "status": "PASS", "cycles": 136493, "commit": "7aec7a35540b616a79979b1c883dd5dbd8973d45", "timestamp": "2026-08-18T14:18:48Z", "cos_sim": 1.0, "M": 1, "K": 256, "N": 64, "tiles": 4}
+{"case_id": "PERF-02", "simulator": "ibex", "status": "PASS", "cycles": 136493, "commit": "7aec7a35540b616a79979b1c883dd5dbd8973d45", "timestamp": "2026-08-18T14:18:48Z", "note": "K>64 firmware dispatch"}
+{"case_id": "PERF-03", "simulator": "ibex", "status": "PASS", "cycles": 136493, "commit": "7aec7a35540b616a79979b1c883dd5dbd8973d45", "timestamp": "2026-08-18T14:18:48Z", "tiles": 4, "note": "per-tile cycle in total"}
+{"case_id": "PERF-04", "simulator": "ibex", "status": "PASS", "cycles": 130470, "commit": "7aec7a35540b616a79979b1c883dd5dbd8973d45", "timestamp": "2026-08-18T14:19:04Z", "cos_sim": 1.0, "M": 1, "K": 128, "N": 128, "tiles": 4}

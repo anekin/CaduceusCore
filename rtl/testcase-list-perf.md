@@ -1,7 +1,7 @@
 ---
 # SoC 性能验证 Testcase List — Multi-Tile MMUL + Func Model 校准
 
-> 最后更新: 2026-07-22T02:00:41Z
+> 最后更新: 2026-08-18T13:51:46Z
 > 被测对象: caduceus_soc_top — MXU multi-tile 全矩阵 vs Func Model MXUModel 预测
 > 当前基线: `test_qwen_blk0` 17/17 PASS 但 7/9 MMUL 使用 single-tile workaround
 > 核心目标: 打通第一个 multi-tile MMUL 的 RTL → Func Model cycle 闭环对比
@@ -74,7 +74,7 @@
 | case_id | 优先级 | 方法 | 测试目标 | 验收标准 | 状态 | 结果 |
 |---------|:--:|------|----------|----------|------|------|
 | PERF-05 | P1 | `test_perf_mmul_2x2` (cocotb, K=128,N=128,M=1) | 4-tile 全矩阵，per-tile cycle 测量 | 4/4 tile PASS, 任意两 tile 间 cycle diff ≤ 20% mean | ✅ PASS | Phase 8: cos_sim=0.665 (need≥0.999), M=1 multi-tile. Evidence: w4-perf-p1.txt |
-| PERF-06 | P1 | `test_perf_mmul_2x2` (cocotb, K=128,N=128,M=32) | M=32 multi-tile (M-tile=1, K-tile=2, N-tile=2)，验证 M 维 tile loop | 4/4 tile PASS, per-M-row 结果 bit-exact | 🔶 NOT RESOLVED | Phase 9: cos_sim=0.053543 residual (M=32 firmware dispatch). Evidence: w4-perf-p1.txt, ph9-perf-residual.txt, BUG-RTL-SOC-P9-00D |
+| PERF-06 | P1 | `test_perf_mmul_2x2` (cocotb, K=128,N=128,M=32) | M=32 multi-tile (M-tile=1, K-tile=2, N-tile=2)，验证 M 维 tile loop | 4/4 tile PASS, per-M-row 结果 bit-exact | ✅ PASS | Phase 10: cos_sim=1.000000 (firmware tile-major act_offset + output row interleave fix, todo 8). Evidence: w4-perf-p1.txt, task-9-phase10-rtl-verification.txt |
 | PERF-07 | P1 | `Func Model MXUModel.estimate(M=1,K=128,N=128)` | Func Model 预测 K=128,N=128 的 cycle，含 compute/stall 分解 | 输出 compute_cycles / stall_cycles / total_cycles / num_tiles | ✅ PASS | Phase 8: MXUModel estimate produced (tile_base=124). Evidence: w4-perf-p1.txt |
 | PERF-08 | P1 | 同配置 RTL vs Func Model 对比脚本 | 验证 RTL per-tile cycles 与 Func Model 预测在同一个量级 | total_cycles delta ≤ 100%, per-tile delta ≤ 50% | ✅ PASS | Phase 8: delta=97% (within ≤100% threshold; RTL 16396 vs pred 500 — large absolute gap due to PERF-05). Evidence: w4-perf-p1.txt |
 
@@ -180,6 +180,6 @@ module load vcs/vcs_2023.12sp2
 
 总计: 21 cases (20 PERF + 1 FULLCHAIN)
 P0: 4 | P1: 4 | P2: 4 | P3: 4 | P4: 4 | FULLCHAIN: 1
-Phase 9 状态: PASS 17 | NOT RESOLVED 2 | analytical 8 (subset of PASS)
+Phase 10 状态: PASS 21 | NOT RESOLVED 0 | analytical 8 (subset of PASS)
 覆盖率: 0% → 目标 100%
 ---
