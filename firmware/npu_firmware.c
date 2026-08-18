@@ -480,7 +480,7 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
                 uint32_t n_start = n_tile * TILE_W;
                 uint32_t n_end   = (n_start + TILE_W < desc.N) ? (n_start + TILE_W) : desc.N;
                 uint32_t tile_width = n_end - n_start;
-                uint32_t out_offset = out_sram + n_start * 4;
+                uint32_t out_offset = out_sram + n_tile * desc.M * TILE_W * 4;
 
                 for (uint32_t k_block = 0; k_block < num_blocks; k_block++) {
                     uint32_t k_start = k_block * TILE_H;
@@ -501,7 +501,7 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
                         dma_copy(desc.scale_addr + scale_offset, s_addr_abs, TILE_SCALE_BYTES, 0);
                     }
 
-                    uint32_t act_offset     = act_sram + k_start * desc.M;
+                    uint32_t act_offset     = act_sram + k_start * TILE_H;
                     uint32_t act_offset_abs = NPU_SRAM_BASE + act_offset;
                     uint32_t out_offset_abs = NPU_SRAM_BASE + out_offset;
                     uint32_t accumulate_ctrl = (k_block > 0) ? 4 : 0;
@@ -510,8 +510,11 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
                               s_addr_abs, desc.M, block_height, tile_width, accumulate_ctrl);
                 }
 
-                dma_copy(NPU_SRAM_BASE + out_offset, desc.output_addr + n_start * 4,
-                         desc.M * tile_width * 4, 1);
+                for (uint32_t m = 0; m < desc.M; m++) {
+                    dma_copy(NPU_SRAM_BASE + out_offset + m * tile_width * 4,
+                             desc.output_addr + (m * desc.N + n_start) * 4,
+                             tile_width * 4, 1);
+                }
             }
             status = 0;
         }

@@ -1,0 +1,30 @@
+# Phase 10 Todo 8 — PERF-06 Firmware Offset Fix Verification
+# Generated: 2026-08-18T13:34:12Z
+# Commit: fd27a172a4af
+
+## Fix applied (firmware/npu_firmware.c dispatch_cmd, two changes)
+  1. act_offset = act_sram + k_start * TILE_H   (was: k_start * desc.M)
+     Root cause (todo 7): row-major M-stride against the tile-major
+     activation layout; K-tile stride is TILE_H*TILE_H bytes (4096).
+     Offset units: 1 byte per INT8 element (dense pack), so TILE_H
+     elements == TILE_H bytes.
+  2. Output DMA interleave: per-n_tile SRAM regions are now disjoint
+     (out_offset = out_sram + n_tile*M*TILE_W*4) and each row is DMA'd
+     separately into row-major DRAM at (m*N + n_start)*4.
+     Previously n_tile=1's store region overlapped n_tile=0's rows and
+     the single contiguous DMA clobbered rows 1..M-1 (only row 0 was
+     ever correct). Empirical signature before fix 2: row 0 perfect,
+     rows 1..16 wrong, rows 17..31 zero (never-written DRAM).
+
+## Results (after fix, threshold cos_sim >= 0.999)
+  PERF-05 (M=1,K=128,N=128): cos_sim=1.000000 cycles=130478 status=PASS  before=0.554298 (todo 7) / M=1
+  PERF-06 (M=32,K=128,N=128): cos_sim=1.000000 cycles=144176 status=PASS  before=0.019153 (todo 7) / 0.053543 (Phase 9 w4-perf-p1) / M=32
+  PERF-06-M64 (M=64,K=128,N=128): cos_sim=1.000000 cycles=158320 status=PASS  before=n/a (no dedicated before run; old formula == corrected for M=64)
+  PERF-07 (Func Model estimate): PASS (analytical, MXUModel.estimate, tile_base=124)
+
+## Verdict
+  PERF-06 M=32 cos_sim >= 0.999: PASS
+  PERF-05 M=1  control cos_sim >= 0.999: PASS
+  PERF-06-M64 full-tile control cos_sim >= 0.999: PASS
+
+ROOT_CAUSE_FIXED=YES: firmware act_offset tile-major stride + output row interleave
