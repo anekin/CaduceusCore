@@ -360,6 +360,60 @@ class CocotbBridge:
 
         self._last_golden_matched_output: Optional[bytes] = None
 
+        # ── Diagnostic probe state (todo 4: DMA readback root-cause) ────────
+        # Disabled by default; set COCOTB_BRIDGE_DIAG_DMA=1 to re-enable.
+        self._diag_dma_enabled = os.environ.get("COCOTB_BRIDGE_DIAG_DMA", "0") == "1"
+        self._diag_dma_state = {
+            "ch0": {"src": None, "dst": None, "size": None},
+            "ch1": {"src": None, "dst": None, "size": None},
+        }
+        if self._diag_dma_enabled and COCOTB_AVAILABLE and self.dut is not None:
+            try:
+                cocotb.start_soon(self._diag_dma_apb_monitor())
+            except Exception as e:
+                logger.warning(f"DMA APB monitor failed to start: {e}")
+
+    async def _diag_dma_apb_monitor(self):
+        """Background APB bus monitor: logs all DMA register writes.
+
+        Runs for the lifetime of the CocotbBridge.  Captures firmware-driven
+        APB writes to the dma_wrapper (which do not go through _apb_write)
+        as well as Python-driven writes, so CH0/CH1 register values can be
+        reconstructed for both the FM-SOC and PERF paths.
+        """
+        while True:
+            await RisingEdge(self.dut.clk)
+            try:
+                psel = int(self.dut.u_dut.u_ibex_wrapper.apb_psel.value)
+                penable = int(self.dut.u_dut.u_ibex_wrapper.apb_penable.value)
+                pwrite = int(self.dut.u_dut.u_ibex_wrapper.apb_pwrite.value)
+                pready = int(self.dut.u_dut.u_ibex_wrapper.apb_pready.value)
+                if not (psel and penable and pwrite and pready):
+                    continue
+                addr = int(self.dut.u_dut.u_ibex_wrapper.apb_paddr.value)
+                data = int(self.dut.u_dut.u_ibex_wrapper.apb_pwdata.value)
+                if DMA_BASE <= addr <= DMA_BASE + 0x3C:
+                    off = addr - DMA_BASE
+                    logger.warning(
+                        f"[DIAG-DMA-APB] offset=0x{off:02X} value=0x{data:08X}"
+                    )
+                    if off == 0x10:
+                        self._diag_dma_state["ch0"]["src"] = data
+                    elif off == 0x14:
+                        self._diag_dma_state["ch0"]["dst"] = data
+                    elif off == 0x18:
+                        self._diag_dma_state["ch0"]["size"] = data
+                    elif off == 0x20:
+                        self._diag_dma_state["ch1"]["src"] = data
+                    elif off == 0x24:
+                        self._diag_dma_state["ch1"]["dst"] = data
+                    elif off == 0x28:
+                        self._diag_dma_state["ch1"]["size"] = data
+                    elif off == 0x04 and (data & 0x1):
+                        self._diag_dma_log_state("start")
+            except Exception:
+                pass
+
     # ── Initialization ────────────────────────────────────────────────────
 
     def init_golden(self):
@@ -663,6 +717,25 @@ class CocotbBridge:
             seg_val = (word_val >> (boff * 8)) & ((1 << (seg_len * 8)) - 1)
             out.extend(seg_val.to_bytes(seg_len, "little"))
 
+        # DIAG-PROBE(todo4): snapshot DRAM bytes that overlap the tracked CH1
+        # destination region so we can verify whether the DMA write landed.
+        if self._diag_dma_enabled:
+            ch1 = self._diag_dma_state["ch1"]
+            if ch1["dst"] is not None and ch1["size"] is not None:
+                dst = ch1["dst"]
+                size = ch1["size"]
+                ov_start = max(dst, addr)
+                ov_end = min(dst + size, addr + length)
+                if ov_start < ov_end:
+                    self._diag_dma_log_state("dram_read")
+                    rel = ov_start - dst
+                    nb = min(32, ov_end - ov_start)
+                    seg = out[ov_start - addr:ov_start - addr + nb]
+                    logger.warning(
+                        f"[DIAG-DMA-DATA] DRAM CH1-dst @0x{ov_start:08X} "
+                        f"rel={rel} len={nb} bytes={seg.hex()}"
+                    )
+
         return bytes(out)
 
     async def _sram_backdoor_read(self, addr: int, length: int) -> bytes:
@@ -692,6 +765,25 @@ class CocotbBridge:
             word_val = int(word_str, 2)
             seg_val = (word_val >> (boff * 8)) & ((1 << (seg_len * 8)) - 1)
             out.extend(seg_val.to_bytes(seg_len, "little"))
+
+        # DIAG-PROBE(todo4): snapshot SRAM bytes that overlap the tracked CH1
+        # source region so we can compare source data to DRAM readback.
+        if self._diag_dma_enabled:
+            ch1 = self._diag_dma_state["ch1"]
+            if ch1["src"] is not None and ch1["size"] is not None:
+                src = ch1["src"]
+                size = ch1["size"]
+                ov_start = max(src, addr)
+                ov_end = min(src + size, addr + length)
+                if ov_start < ov_end:
+                    self._diag_dma_log_state("sram_read")
+                    rel = ov_start - src
+                    nb = min(32, ov_end - ov_start)
+                    seg = out[ov_start - addr:ov_start - addr + nb]
+                    logger.warning(
+                        f"[DIAG-DMA-DATA] SRAM CH1-src @0x{ov_start:08X} "
+                        f"rel={rel} len={nb} bytes={seg.hex()}"
+                    )
 
         return bytes(out)
 
@@ -1050,6 +1142,14 @@ class CocotbBridge:
         """
         logger.info(f"configure_dma: src=0x{src:08X}, dst=0x{dst:08X}, size={size}")
 
+        # DIAG-PROBE(todo4): record Python-driven CH0 configuration.
+        if self._diag_dma_enabled:
+            logger.warning(
+                f"[DIAG-DMA-PYTHON] configure_dma CH0 "
+                f"src=0x{src:08X} dst=0x{dst:08X} size={size}"
+            )
+            self._diag_dma_state["ch0"] = {"src": src, "dst": dst, "size": size}
+
         await self._apb_write(DMA_BASE + 0x10, src)   # CH0_SRC
         await self._apb_write(DMA_BASE + 0x14, dst)   # CH0_DST
         await self._apb_write(DMA_BASE + 0x18, size)  # CH0_SIZE
@@ -1068,6 +1168,14 @@ class CocotbBridge:
             size: Transfer size in bytes
         """
         logger.info(f"configure_dma_ch1: src=0x{src:08X}, dst=0x{dst:08X}, size={size}")
+
+        # DIAG-PROBE(todo4): record Python-driven CH1 configuration.
+        if self._diag_dma_enabled:
+            logger.warning(
+                f"[DIAG-DMA-PYTHON] configure_dma_ch1 CH1 "
+                f"src=0x{src:08X} dst=0x{dst:08X} size={size}"
+            )
+            self._diag_dma_state["ch1"] = {"src": src, "dst": dst, "size": size}
 
         await self._apb_write(DMA_BASE + 0x18, 0)     # CH0_SIZE = 0
         await self._apb_write(DMA_BASE + 0x20, src)   # CH1_SRC
@@ -1102,6 +1210,7 @@ class CocotbBridge:
                     if err:
                         logger.error(f"DMA transfer error: cdma_status_error=0x{err:01X}")
                         return False
+                    self._diag_dma_log_state("complete")
                     logger.info("DMA transfer complete (cdma_status_valid)")
                     return True
                 await self.wait_cycles(1)
@@ -1109,6 +1218,7 @@ class CocotbBridge:
             for _ in range(timeout):
                 status = await self._apb_read(DMA_BASE + 0x08)
                 if status & 0x2:
+                    self._diag_dma_log_state("complete")
                     logger.info(f"DMA transfer complete: STATUS=0x{status:08X}")
                     return True
                 if status & 0x4:
@@ -1118,6 +1228,19 @@ class CocotbBridge:
 
         logger.error(f"DMA transfer timeout after {timeout} cycles")
         return False
+
+    def _diag_dma_log_state(self, label: str):
+        """Log the currently tracked DMA CH0/CH1 descriptor state."""
+        if not self._diag_dma_enabled:
+            return
+        st = self._diag_dma_state
+        c0 = st["ch0"]
+        c1 = st["ch1"]
+        logger.warning(
+            f"[DIAG-DMA-STATE:{label}] "
+            f"CH0 src=0x{c0['src'] or 0:08X} dst=0x{c0['dst'] or 0:08X} size={c0['size'] or 0} "
+            f"CH1 src=0x{c1['src'] or 0:08X} dst=0x{c1['dst'] or 0:08X} size={c1['size'] or 0}"
+        )
 
     # ── NPU Instruction Execution ─────────────────────────────────────────
 
@@ -2081,6 +2204,26 @@ class CocotbBridge:
         """
         self._apb_write_cache[addr] = data
         logger.debug(f"APB WR: 0x{addr:08X} ← 0x{data:08X}")
+
+        # DIAG-PROBE(todo4): log every DMA APB register write so firmware and
+        # Python paths can be compared without changing configuration logic.
+        # The background APB monitor captures firmware-driven writes; this
+        # fallback captures Python-driven writes if the monitor is unavailable.
+        if self._diag_dma_enabled and DMA_BASE <= addr <= DMA_BASE + 0x3C:
+            off = addr - DMA_BASE
+            logger.warning(f"[DIAG-DMA-APB-PYTHON] offset=0x{off:02X} value=0x{data:08X}")
+            if off == 0x10:
+                self._diag_dma_state["ch0"]["src"] = data
+            elif off == 0x14:
+                self._diag_dma_state["ch0"]["dst"] = data
+            elif off == 0x18:
+                self._diag_dma_state["ch0"]["size"] = data
+            elif off == 0x20:
+                self._diag_dma_state["ch1"]["src"] = data
+            elif off == 0x24:
+                self._diag_dma_state["ch1"]["dst"] = data
+            elif off == 0x28:
+                self._diag_dma_state["ch1"]["size"] = data
 
         if self.dut is None:
             return
