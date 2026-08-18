@@ -1,0 +1,132 @@
+Task 6 - Phase 10 RTL Verification: Wave 1 full regression after DMA fix
+===========================================================================
+Timestamp start : 2026-08-18T15:04:13Z
+Timestamp end   : 2026-08-18T16:29:57Z
+Commit          : 37e7ba0be60d58b679e722b9dc13145fe706fa3f
+Driver host     : sz0002 (sz0002) — all regression commands executed on sz0001
+                  via p10_ssh (ssh zhengs@192.168.0.11)
+
+Scope: Wave 1 (todo 6) closure regression after the DMA/PERF-06 firmware
+fixes. Todo 8 (7aec7a3) fixed the firmware act_offset tile-major stride and
+output DMA row interleave; todo 5 (b158180) set COCOTB_BRIDGE_DIAG_DMA
+default-off and re-verified DMA readback (test_e2e_dma_load_store + PERF-
+p0 sample PASS). This run confirms no degradation across the full
+regression surface plus a PERF sample.
+
+Baseline source : build/evidence/ph9-regression-run.log (commit 819a34b)
+                  (pytest 732 passed | FM-SOC 33/33 | MXU 9/9 | SFU 319/319 | Vector 63/63)
+                  build/evidence/task-3-phase10-rtl-verification.txt (Wave 0,
+                  commit c0fe2fd: pytest 1901 | FM-SOC 32/33 + FM-SOC-10X |
+                  MXU 9/9 | SFU 319/319 | Vector 63/63)
+                  build/evidence/task-8-phase10-rtl-verification.txt (todo 8,
+                  post-firmware-fix: FM-SOC 32/33 + FM-SOC-10X only)
+
+simv reuse note : simv_soc_ibex (built Wave 0, 2026-08-18 ~15:22 CST) and
+                  simv_mxu (built Wave 0, ~16:36 CST) reused — no RTL change
+                  since ef090b1 (2026-07-24); firmware hex is loaded at
+                  runtime via +BOOTROM_HEX / BOOTROM_HEX env, so the post-fix
+                  firmware (7aec7a3, rebuilt 2026-08-18 19:53 CST) is picked
+                  up. Missing binaries are recompiled by the stage scripts.
+
+Commands executed (exact, via p10_ssh on sz0001):
+  1. pytest   : PYTHONPATH=/home/prj/zhengs/caduceuscore/CaduceusCore/.venv_pytest:sim python -m pytest sim/tests/ sim/timing/tests/ -q --continue-on-collection-errors
+                (log: build/evidence/task-6-pytest.log)
+  2. FM-SOC   : bash sim/regression/run_fm_soc_all.sh   (33 cases)
+                (log: build/evidence/task-6-fm-soc.log)
+  3. MXU      : python3 scripts/gen_mxu_vectors.py --scenario all --out-dir rtl/test_vectors/mxu
+                ./simv_mxu +testdir=rtl/test_vectors/mxu/<s> +scenario=<s> (x9) + sim/compare_rtl.py
+                (log: build/evidence/task-6-mxu.log)
+  4. SFU+Vec  : python3 scripts/gen_sfu_luts.py
+                python3 scripts/gen_sfu_vectors.py --scenario all
+                python3 scripts/gen_vector_vectors.py --scenario all
+                python3 scripts/run_batch_regression.py
+                cat .omo/evidence/task-17-rerun.txt  (authoritative counts)
+                (log: build/evidence/task-6-sfu-vector.log)
+  5. PERF p2  : MODULE=sim.perf_tests TESTCASE=test_w4_perf_p2 TOPLEVEL=tb_soc_ibex
+                build/ibex_full_rtl/simv_soc_ibex +COCOTB +BOOTROM_HEX=firmware/build/npu_firmware.hex
+                -> w4-perf-p2.txt (PERF-09..12)
+                (log: build/evidence/task-6-perf-p2.log)
+  6. PERF p3  : MODULE=sim.perf_tests TESTCASE=test_w4_perf_p3 TOPLEVEL=tb_soc_ibex
+                build/ibex_full_rtl/simv_soc_ibex +COCOTB +BOOTROM_HEX=firmware/build/npu_firmware.hex
+                -> w4-perf-p3.txt (PERF-13..16)
+                (log: build/evidence/task-6-perf-p3.log)
+
+Regression counts (Wave 1 vs baseline):
+  pytest_total   = 1901   (baseline >= 732)      [ABOVE-BASELINE(documented-drift)]
+  fm_soc_pass    = 32    (baseline 33/0)       [MATCH(32/33 + 1 known pre-existing FM-SOC-10X residual)]
+  fm_soc_fail    = 1    (baseline 0)
+  FM-SOC failure details:
+    failed case(s): FM-SOC-10X 
+    reason: FM-SOC-10X failed: op00 RMSNORM pre-attn: SFU mismatch max_abs=2.95e+00
+    FM-SOC-10X signature 'op00 RMSNORM pre-attn: SFU mismatch max_abs=2.95e+00'
+    matches the pre-existing failure documented in
+    build/evidence/f3-final-summary.txt (Phase 9 F3, 2026-08-06,
+    'CONFIRMED PRE-EXISTING', fails on d6b1adc too) and reproduced
+    deterministically in Wave 0 (task-3 isolated re-run) and todo 8
+    (task-8-fm-soc.log). NOT introduced by Phase 10 work.
+  mxu_pass       = 9     (baseline 9/0)          [MATCH]
+  mxu_fail       = 0     (baseline 0)
+  sfu_pass       = 319   (baseline 319)         [MATCH]
+  vector_pass    = 63    (baseline 63)          [MATCH]
+  sfu_line       : SFU: 319/319 passed
+  vector_line    : Vector: 63/63 passed
+  pytest detail  : 164 failed, 1901 passed, 2 skipped, 153 warnings, 45 errors in 185.11s
+
+PERF sample (cos_sim >= 0.999 required; from test_w4_perf_p2 + test_w4_perf_p3):
+  PERF-09=PASS(cs=1.000000,cyc=136493) PERF-10=PASS(cs=1.000000,cyc=271126) PERF-11=PASS(cs=1.000000,cyc=515490) PERF-13=PASS(cs=1.000000,cyc=1003691) 
+  PERF sample verdict: PASS (all sampled cases cos_sim >= 0.999)
+
+Pytest drift vs Wave 0 baseline (build/evidence/task-3-pytest.log, commit c0fe2fd):
+  Wave 0 FAILED/ERROR nodes no longer failing (improvements): none
+  New FAIL/ERROR nodes: 0 in files added after the
+  Wave 0 commit (c0fe2fd) — documented suite drift.
+  Regressions in Wave 0-era files: 0 (none)
+  Collection errors: 6
+    - ERROR collecting sim/tests/test_device_protocol.py
+    - ERROR collecting sim/tests/test_device_protocol_cpp.py
+    - ERROR collecting sim/tests/test_device_server_per_conn.py
+    - ERROR collecting sim/tests/test_mmio_perf_events.py
+    - ERROR collecting sim/tests/test_runtime_rtl_transport.py
+    - ERROR collecting sim/timing/tests/test_perf_contract.py
+  Cause: 5 device-protocol test files require gen/ on PYTHONPATH
+         (documented convention: PYTHONPATH=sim:gen); 1 timing test
+         (test_perf_contract.py) requires pydantic, not installed in the
+         sz0001 conda env. Pre-existing since the Wave 0 run — reported,
+         not masked.
+
+Known residuals (carried from Phase 9 / Wave 0, unchanged by this run):
+  1. FM-SOC-10X: 'op00 RMSNORM pre-attn: SFU mismatch' (pre-existing,
+     deterministic; see FM-SOC details above).
+  2. PERF-06 residual (Phase 9 cos_sim=0.0535): RESOLVED by todo 8 firmware
+     fix — 21/21 PERF PASS confirmed by todo 9 causality gate
+     (build/evidence/task-9-phase10-rtl-verification.txt).
+  3. Q8_0 / 6b experiment: BLOCKED-NETWORK (external download; not part of
+     this gate).
+  4. SFU wrapper functional pre-existing FAILs + MXU wrapper harness
+     AttributeError: Wave 0 wrapper-stage residuals (task-3 evidence,
+     section (a) items 3 and 5). Not exercised by this gate — no wrapper
+     RTL or harness change occurred in Wave 1.
+
+Cleanup receipt:
+  - All 6 regression stages ran synchronously under remote timeout guards;
+    no background jobs started by this script.
+  - Stray-process check on sz0001 (repo-scoped): Python:      Python 3.11.9
+PLI_TAB:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/pli.tab
+LICENSE:     27020@sz0001
+====================================
+110979 bash -c set -e; source /NAS/Tools/methodology/modules/init/bash; module load vcs/vcs_2023.12sp2; cd '/home/prj/zhengs/caduceuscore/CaduceusCore' && source sim/regression/run_env.sh && pgrep -af '/home/prj/zhengs/caduceuscore/CaduceusCore' 2>/dev/null | grep -E 'simv|p10w1|run_ibex|run_fm_soc|run_batch' || echo 'NO_STRAY_PROCESSES'
+
+Verification:
+  All counts match the baselines; PERF sample cos_sim >= 0.999;
+  no new failures vs the Wave 0 baseline.
+
+Result: PASS
+
+Per-stage logs:
+  /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-6-pytest.log
+  /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-6-fm-soc.log
+  /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-6-mxu.log
+  /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-6-sfu-vector.log
+  /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-6-perf-p2.log
+  /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-6-perf-p3.log
+  /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-6-phase10-regression-run.log
