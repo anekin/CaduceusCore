@@ -276,10 +276,10 @@ static void mxu_start(uint32_t i_addr, uint32_t w_addr, uint32_t o_addr,
 }
 
 #define SFU_SCRATCH_IN  (NPU_SRAM_BASE + 0x80000)
-#define SFU_SCRATCH_OUT (NPU_SRAM_BASE + 0x80400)
-#define VEC_SCRATCH_A   (NPU_SRAM_BASE + 0x81000)
-#define VEC_SCRATCH_B   (NPU_SRAM_BASE + 0x81400)
-#define VEC_SCRATCH_O   (NPU_SRAM_BASE + 0x81800)
+#define SFU_SCRATCH_OUT (NPU_SRAM_BASE + 0x88000)
+#define VEC_SCRATCH_A   (NPU_SRAM_BASE + 0x300000)
+#define VEC_SCRATCH_B   (NPU_SRAM_BASE + 0x310000)
+#define VEC_SCRATCH_O   (NPU_SRAM_BASE + 0x320000)
 
 static uint32_t sfu_scratch_size(uint32_t elements) {
     uint32_t bytes = elements * 2;
