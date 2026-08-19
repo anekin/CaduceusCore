@@ -1,0 +1,38 @@
+# Phase 10 Final Wave F4 — Scope Fidelity Gate
+# Date: 2026-08-19T02:44:37Z
+# Commit: 2d82f69163c09dbbc11b90770d940720b3557aae (2d82f69)
+# Baseline: a187fc641f836fb6c3ef734a945ed14caddff0f5
+# Command: bash scripts/p10_f4_scope_gate.sh
+# Plan: .omo/plans/phase10-rtl-verification.md (Scope: Must have / Must NOT have)
+
+SCOPE_VERDICT=PASS
+arc_model_frozen=PASS
+requirements_unchanged=PASS
+soc_top_functional_additions=PASS
+rtl_whitelist=PASS
+unexpected_files=PASS
+changed_file_count=76
+
+# caduceus_soc_top.v delta (expected, todo 13):
+#   doorbell backdoor ports (todo 13): db_bkdoor_we/sel/wdata/rdata added to port list; .bkdoor_we/sel/wdata/rdata wired to doorbell instance; timer_irq_i line gained trailing comma
+
+# Failures:
+#   (none)
+
+# RTL source files changed from baseline:
+#   rtl/soc/caduceus_soc_top.v
+#   rtl/soc/doorbell.v
+#   rtl/soc/sram_ctrl.v
+#   rtl/tb/tb_mixed.v
+#   rtl/tb/tb_soc.v
+#   rtl/tb/tb_soc_ibex.v
+#   rtl/wrapper/sfu_soc_wrapper.v
+
+# Notes:
+#   baseline_source=file(ph10-base-commit.txt)
+#   Scope boundaries (plan Must NOT have): no new RTL features;
+#   no Arc Model changes (design_space_explorer.py frozen legacy copy);
+#   no new toolchain dependencies; all out-of-scope items recorded.
+#   Expected deviations documented in-scope: doorbell backdoor ports
+#   (todo 13), SFU wrapper fixes (todo 18), sram_ctrl SRAM_DEBUG ifdef,
+#   testbench tie-offs, firmware PERF-06/DRAM-window fixes.
