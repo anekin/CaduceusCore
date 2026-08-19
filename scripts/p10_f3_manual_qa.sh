@@ -155,8 +155,9 @@ else
 fi
 
 # Snapshot pre-run hashes of all task-* evidence files (excl. task-F3).
-(cd "$EVID" && find . -maxdepth 1 -type f -name 'task-*-phase10-rtl-verification.txt' \
-    ! -name 'task-F3-*' -print0 | sort -z | xargs -0 sha256sum) > "$F3_TMP/pre.sha256" 2>/dev/null || true
+# Bare filenames (no ./ prefix) so the classifier compares like-for-like.
+(cd "$EVID" && ls task-*-phase10-rtl-verification.txt 2>/dev/null \
+    | grep -v '^task-F3-' | xargs -r sha256sum) > "$F3_TMP/pre.sha256" 2>/dev/null || true
 
 # =============================================================================
 # Phase 2 — DMA readback fix reproduction (todo 5)
@@ -396,8 +397,8 @@ fi
 # Phase 5 — Manifest post-check + record + final evidence
 # =============================================================================
 log "=== Phase 5: manifest post-check ==="
-(cd "$EVID" && find . -maxdepth 1 -type f -name 'task-*-phase10-rtl-verification.txt' \
-    ! -name 'task-F3-*' -print0 | sort -z | xargs -0 sha256sum) > "$F3_TMP/post.sha256" 2>/dev/null || true
+(cd "$EVID" && ls task-*-phase10-rtl-verification.txt 2>/dev/null \
+    | grep -v '^task-F3-' | xargs -r sha256sum) > "$F3_TMP/post.sha256" 2>/dev/null || true
 
 MANIFEST_CLASSIFY="$(P10F3_PRE="$F3_TMP/pre.sha256" P10F3_POST="$F3_TMP/post.sha256" python3 <<'PYEOF'
 import os
@@ -456,8 +457,8 @@ if [ "$MANIFEST_ADDED" != "-" ]; then
 fi
 
 # Write/refresh the canonical manifest.
-(cd "$EVID" && find . -maxdepth 1 -type f -name 'task-*-phase10-rtl-verification.txt' \
-    ! -name 'task-F3-*' -print0 | sort -z | xargs -0 sha256sum) > "$MANIFEST"
+(cd "$EVID" && ls task-*-phase10-rtl-verification.txt 2>/dev/null \
+    | grep -v '^task-F3-' | xargs -r sha256sum) > "$MANIFEST"
 MANIFEST_COUNT=$(wc -l < "$MANIFEST" | tr -d ' ')
 
 if [ "$MANIFEST_PRE" = "NONE" ]; then
