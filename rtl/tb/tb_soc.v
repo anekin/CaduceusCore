@@ -205,7 +205,13 @@ module tb_soc;
         .pcie_dma_tx_wr_req_tlp_eop (pcie_dma_tx_wr_req_tlp_eop),
         .pcie_dma_tx_wr_req_tlp_ready(pcie_dma_tx_wr_req_tlp_ready),
 
-        .timer_irq_i             (timer_irq)
+        .timer_irq_i             (timer_irq),
+
+        // Doorbell backdoor (unused in this TB; tied off)
+        .db_bkdoor_we            (1'b0),
+        .db_bkdoor_sel           (2'b0),
+        .db_bkdoor_wdata         (32'd0),
+        .db_bkdoor_rdata         ()
     );
 
     //=========================================================================
