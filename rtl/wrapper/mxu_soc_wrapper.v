@@ -657,10 +657,12 @@ module mxu_soc_wrapper #(
     // Guard against X propagation on the store-out data path.
     always @(posedge clk or negedge rst_n) begin
         if (rst_n) begin
+`ifdef MXU_WRP_DEBUG
             if (m_axi_wvalid && $isunknown(m_axi_wdata))
                 $warning("%t: mxu_soc_wrapper store-out WDATA contains X", $time);
             if (m_axi_wvalid && $isunknown(so_acc_data))
                 $warning("%t: mxu_soc_wrapper store-out acc_data contains X", $time);
+`endif
         end
     end
 

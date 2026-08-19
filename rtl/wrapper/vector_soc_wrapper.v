@@ -409,6 +409,7 @@ module vector_soc_wrapper #(
 
                 SEQ_STORE_W: begin
                     if (m_axi_wvalid && m_axi_wready) begin
+`ifdef VEC_WRP_DEBUG
                         if (seq_chunk >= CHUNKS_MAX)
                             $warning("[VEC_WRP_STORE] seq_chunk %0d >= CHUNKS_MAX %0d — buffer overflow", seq_chunk, CHUNKS_MAX);
                         $display("[VEC_WRP_STORE] chunk=%0d beat=%0d wlast=%b addr=0x%08X data=0x%016X",
@@ -417,6 +418,7 @@ module vector_soc_wrapper #(
                         if ($isunknown(m_axi_wdata))
                             $warning("[VEC_WRP_STORE] X/Z data driven to AXI at chunk=%0d beat=%0d addr=0x%08X",
                                      seq_chunk, seq_beat, seq_beat_addr);
+`endif
                         if (m_axi_wlast) begin
                             // Current chunk done
                             if (seq_chunk == wrp_chunks - 1) begin
