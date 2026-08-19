@@ -363,18 +363,25 @@ fi
 log "=== Phase 4: Ibex segment run (todo 13, 9-layer checkpoint subset) ==="
 IBEX_OK=1
 IBEX_LOG="$EVID/task-F3-ibex.log"
-log "  running bash scripts/p10_36layer_ibex.sh (timeout=${IBEX_TIMEOUT}s)..."
-timeout "$IBEX_TIMEOUT" bash "$IBEX_SCRIPT" > "$IBEX_LOG" 2>&1
-IBEX_RC=$?
-if [ "$IBEX_RC" -ne 0 ]; then
-  fail "p10_36layer_ibex.sh exited ${IBEX_RC} (log: ${IBEX_LOG})"
-  tail -30 "$IBEX_LOG" || true
+# Concurrency guard: run_ibex_segment_run.sh exits via `pkill -f
+# simv_soc_ibex_seg`, which would kill an unrelated concurrent segment run.
+if p10_ssh "pgrep -f simv_soc_ibex_seg" >/dev/null 2>&1; then
+  fail "another simv_soc_ibex_seg is running on sz0001 — refusing to overlap (re-run F3 after it finishes)"
   IBEX_OK=0
-elif grep -q 'ALL ASSERTIONS PASS' "$IBEX_LOG"; then
-  log "  p10_36layer_ibex.sh: ALL ASSERTIONS PASS"
 else
-  fail "p10_36layer_ibex.sh rc=0 but assertions not confirmed in log"
-  IBEX_OK=0
+  log "  running bash scripts/p10_36layer_ibex.sh (timeout=${IBEX_TIMEOUT}s)..."
+  timeout "$IBEX_TIMEOUT" bash "$IBEX_SCRIPT" > "$IBEX_LOG" 2>&1
+  IBEX_RC=$?
+  if [ "$IBEX_RC" -ne 0 ]; then
+    fail "p10_36layer_ibex.sh exited ${IBEX_RC} (log: ${IBEX_LOG})"
+    tail -30 "$IBEX_LOG" || true
+    IBEX_OK=0
+  elif grep -q 'ALL ASSERTIONS PASS' "$IBEX_LOG"; then
+    log "  p10_36layer_ibex.sh: ALL ASSERTIONS PASS"
+  else
+    fail "p10_36layer_ibex.sh rc=0 but assertions not confirmed in log"
+    IBEX_OK=0
+  fi
 fi
 
 # Independent re-verification of the todo-13 evidence fields.
