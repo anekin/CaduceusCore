@@ -102,9 +102,20 @@ if [ "$RUN_RC" -ne 0 ] || ! grep -qE 'TESTS=1 PASS=1 FAIL=0' "$RUN_LOG" 2>/dev/n
 fi
 
 echo "=== p10_fm3_measure: assertions ==="
-[ -f "$EVIDENCE" ] || { echo "ASSERT FAIL : evidence missing: $EVIDENCE"; exit 1; }
+# NFS negative-dentry caching can hide files created by the sz0001-side
+# process from the local client immediately after the run; poll briefly.
+_ev_wait() {
+    local path="$1"
+    local i
+    for i in $(seq 1 20); do
+        [ -e "$path" ] && return 0
+        sleep 1
+    done
+    return 1
+}
+_ev_wait "$EVIDENCE" || { echo "ASSERT FAIL : evidence missing: $EVIDENCE"; exit 1; }
 [ "$(stat -c %Y "$EVIDENCE")" -ge "$START_TS" ] || { echo "ASSERT FAIL : evidence stale"; exit 1; }
-[ -f "$TRACE" ] || { echo "ASSERT FAIL : raw cycle trace missing: $TRACE"; exit 1; }
+_ev_wait "$TRACE" || { echo "ASSERT FAIL : raw cycle trace missing: $TRACE"; exit 1; }
 
 grep -qE '^overlap_ratio=[0-9]+\.[0-9]{2}$' "$EVIDENCE" \
     || { echo "ASSERT FAIL : overlap_ratio=X.XX line missing/invalid"; exit 1; }

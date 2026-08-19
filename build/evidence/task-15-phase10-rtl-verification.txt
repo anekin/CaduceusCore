@@ -1,7 +1,7 @@
 Task 15 - Phase 10 RTL Verification: FM-3 weight-streaming overlap RTL measurement
 ======================================================================
-Timestamp start : 2026-08-19T08:51:00Z
-Commit          : 701401f49184422284274a489568f65c2ed70a55
+Timestamp start : 2026-08-19T08:58:23Z
+Commit          : 8de422f3541c6d8033abf726e371f8be9a91d8c5
 Command         : scripts/p10_fm3_measure.sh
 Driver host     : sz0001 (Ibex SoC VCS + cocotb, firmware doorbell dispatch)
 Model           : /home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf
@@ -24,4 +24,4 @@ sanity_reference=act @ int4_weights (RTL mxu_top scale_addr_o is stubbed; no per
 raw_trace=build/evidence/fm3-cycle-trace.csv
 method=per-cycle DMA STATUS.BUSY (dma_wrapper fsm_state) vs MXU controller status_busy sampling during one firmware-dispatched weight-streaming MMUL; overlap_ratio = overlap_cycles / dma_preload_cycles (DRAM->SRAM weight+scale+activation preload hidden behind MXU compute).
 Overall: PASS
-Timestamp end  : 2026-08-19T08:51:00Z
+Timestamp end  : 2026-08-19T08:58:23Z
