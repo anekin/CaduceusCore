@@ -17,7 +17,7 @@ mxu:
   activation_precision_bits: 8  # INT8（激活用 INT8 中间表示，BF16 转 INT8 由硬件处理）
   accumulate_precision_bits: 32 # INT32
   dataflow: weight_stationary
-  double_buffer: true
+  double_buffer: false  # FM-3 calibrated from RTL (todo 16): single weight_buffer + sequential controller FSM, overlap 0.00
   ops_per_mac: 2               # multiply + accumulate
 
 sram:

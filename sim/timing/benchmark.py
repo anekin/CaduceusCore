@@ -84,6 +84,7 @@ def _compute_weight_streaming_overlap_ratio(
     tile_W = int(mxu_cfg.get("array_width", 64))
     weight_bits = int(mxu_cfg.get("weight_precision_bits", 4))
     act_bits = int(mxu_cfg.get("activation_precision_bits", 8))
+    double_buffer = bool(mxu_cfg.get("double_buffer", True))
     broadcast_sync = 2
     def _accumulate(wb: int, ab: int) -> int:
         return max(1, min(3, (wb + ab) // 8 + 1))
@@ -110,7 +111,7 @@ def _compute_weight_streaming_overlap_ratio(
     for M, K, N in gems:
         ratio = dma.estimate_tile_double_buffer_overlap(
             M, K, N, tile_H, tile_W, weight_bits, act_bits,
-            per_tile_compute,
+            per_tile_compute, double_buffer=double_buffer,
         )
         # Weight by total weight bytes for this GEMM
         wbytes = math.ceil(K * N * weight_bits / 8)

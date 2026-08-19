@@ -12,6 +12,14 @@
 #   Stage 3  If |RTL - FM| <= 0.05 already: verify (timing pytest) and PASS
 #            with no parameter change.
 #   Stage 4  Otherwise run a bounded search over the REAL calibration knobs:
+#              - mxu.double_buffer              (sim/config/npu_config.yaml L20,
+#                                                the MXU weight-buffer ping-pong
+#                                                capability gate consumed by
+#                                                estimate_tile_double_buffer_overlap;
+#                                                false = single-buffered weight
+#                                                SRAM, sequential dispatch,
+#                                                overlap 0.0 — the FM-3 RTL
+#                                                reality)
 #              - broadcast_sync            (sim/timing/benchmark.py L87)
 #              - _accumulate register term (sim/timing/benchmark.py L88-L89)
 #              - memory.bandwidth_bytes_per_cycle
@@ -277,8 +285,12 @@ gems = [
 ]
 weights = [math.ceil(K * N * wb / 8) for _M, K, N in gems]
 
-def weighted(bw: float, bs: int, reg: int) -> float:
+def weighted(bw: float, bs: int, reg: int, dbl: int) -> float:
     """Mirror of benchmark._compute_weight_streaming_overlap_ratio."""
+    if not dbl:
+        # mxu.double_buffer=False: single-buffered weight SRAM, sequential
+        # per-tile dispatch — no DMA can be hidden behind compute.
+        return 0.0
     c = dict(cfg)
     c["memory"] = dict(cfg.get("memory", {}))
     c["memory"]["bandwidth_bytes_per_cycle"] = float(bw)
@@ -289,7 +301,7 @@ def weighted(bw: float, bs: int, reg: int) -> float:
     wsum = 0.0
     for (M, K, N), w in zip(gems, weights):
         r = dma.estimate_tile_double_buffer_overlap(
-            M, K, N, tile_H, tile_W, wb, ab, per_tile)
+            M, K, N, tile_H, tile_W, wb, ab, per_tile, double_buffer=True)
         wsum += r * w
         tot += w
     return round(wsum / tot, 2) if tot > 0 else 0.0
@@ -297,21 +309,26 @@ def weighted(bw: float, bs: int, reg: int) -> float:
 BASE_BW = float(cfg["memory"]["bandwidth_bytes_per_cycle"])
 BASE_BS = 2
 BASE_REG = 1
-base_fm = weighted(BASE_BW, BASE_BS, BASE_REG)
-print(f"SEARCH_BASE bw={BASE_BW} bs={BASE_BS} reg={BASE_REG} "
+BASE_DBL = 1
+base_fm = weighted(BASE_BW, BASE_BS, BASE_REG, BASE_DBL)
+print(f"SEARCH_BASE bw={BASE_BW} bs={BASE_BS} reg={BASE_REG} dbl={BASE_DBL} "
       f"fm={base_fm:.2f} delta={abs(rtl - base_fm):.4f}")
 
 # bw grid in bytes/cycle (51.2 = LPDDR5-6400 raw; 43.52 = raw*0.85 efficiency
 # floor; lower values probe the effective DMA-path bandwidth the RTL actually
 # achieves — flagged for todo-17 review when a large excursion is selected).
+# dbl grid: 1 = double-buffered weight SRAM (baseline), 0 = single-buffered
+# (mxu.double_buffer=false) — the FM-3 RTL-measured reality where the
+# controller FSM serializes LOAD_W/LOAD_A/COMPUTE/STORE_OUT per tile.
 BW_GRID = [51.2, 48.0, 45.0, 43.52, 40.0, 36.0, 32.0, 30.0, 28.0, 26.0,
            25.6, 24.0, 22.0, 20.0, 18.0]
 rows = []
-for bw in BW_GRID:
-    for bs in range(0, 5):
-        for reg in range(0, 3):
-            fm = weighted(bw, bs, reg)
-            rows.append((abs(rtl - fm), bw, bs, reg, fm))
+for dbl in (1, 0):
+    for bw in BW_GRID:
+        for bs in range(0, 5):
+            for reg in range(0, 3):
+                fm = weighted(bw, bs, reg, dbl)
+                rows.append((abs(rtl - fm), bw, bs, reg, dbl, fm))
 rows.sort()
 feasible = [r for r in rows if r[0] <= 0.05 + 1e-9]
 if feasible:
@@ -320,17 +337,18 @@ if feasible:
     feasible.sort(key=lambda r: (r[0],
                                  abs(r[1] - BASE_BW) / BASE_BW
                                  + abs(r[2] - BASE_BS) / 5.0
-                                 + abs(r[3] - BASE_REG) / 3.0))
-    d, bw, bs, reg, fm = feasible[0]
-    print(f"SEARCH_BEST feasible=1 bw={bw} bs={bs} reg={reg} "
+                                 + abs(r[3] - BASE_REG) / 3.0
+                                 + abs(r[4] - BASE_DBL)))
+    d, bw, bs, reg, dbl, fm = feasible[0]
+    print(f"SEARCH_BEST feasible=1 bw={bw} bs={bs} reg={reg} dbl={dbl} "
           f"fm={fm:.2f} delta={d:.4f}")
 else:
-    d, bw, bs, reg, fm = rows[0]
-    print(f"SEARCH_BEST feasible=0 bw={bw} bs={bs} reg={reg} "
+    d, bw, bs, reg, dbl, fm = rows[0]
+    print(f"SEARCH_BEST feasible=0 bw={bw} bs={bs} reg={reg} dbl={dbl} "
           f"fm={fm:.2f} delta={d:.4f} (best-effort)")
 print("SEARCH_TOP10")
-for d, bw, bs, reg, fm in rows[:10]:
-    print(f"  bw={bw:<5} bs={bs} reg={reg} fm={fm:.2f} delta={d:.4f}")
+for d, bw, bs, reg, dbl, fm in rows[:10]:
+    print(f"  dbl={dbl} bw={bw:<5} bs={bs} reg={reg} fm={fm:.2f} delta={d:.4f}")
 PYEOF
   ( cd "$ROOT" && PYTHONPATH=sim python3 "$SCRATCH/search.py" "$RTL_RAW" > "$SCRATCH/search.out" 2>&1 )
   SEARCH_RC=$?
@@ -343,6 +361,7 @@ PYEOF
     BEST_BW=$(echo "$BEST_LINE" | grep -oE 'bw=[0-9.]+' | cut -d= -f2)
     BEST_BS=$(echo "$BEST_LINE" | grep -oE 'bs=[0-9]+' | cut -d= -f2)
     BEST_REG=$(echo "$BEST_LINE" | grep -oE 'reg=[0-9]+' | cut -d= -f2)
+    BEST_DBL=$(echo "$BEST_LINE" | grep -oE 'dbl=[01]' | cut -d= -f2)
     log "Stage 5: $BEST_LINE"
     if [ "$BEST_FEASIBLE" = "0" ]; then
       record_failure "no feasible knob combination reaches |delta|<=0.05 (best-effort delta in search table below); real knobs saturate — a structural model revision is needed, not forced parameters"
@@ -358,10 +377,11 @@ PARAM_CHANGES=""
 APPLY_ATTEMPTED=0
 if [ "${verdict_fail:-0}" = "0" ] && [ "$SEARCH_RAN" = "1" ]; then
   APPLY_ATTEMPTED=1
-  log "Stage 6: applying edits bw=$BEST_BW bs=$BEST_BS reg=$BEST_REG"
-  APPLY_OUT=$(cd "$ROOT" && python3 - "$BEST_BW" "$BEST_BS" "$BEST_REG" <<'PYEOF'
+  log "Stage 6: applying edits bw=$BEST_BW bs=$BEST_BS reg=$BEST_REG dbl=$BEST_DBL"
+  APPLY_OUT=$(cd "$ROOT" && python3 - "$BEST_BW" "$BEST_BS" "$BEST_REG" "$BEST_DBL" <<'PYEOF'
 import re, sys
 bw = float(sys.argv[1]); bs = int(sys.argv[2]); reg = int(sys.argv[3])
+dbl = int(sys.argv[4])
 edits = []
 def replace(path, old, new):
     with open(path, encoding="utf-8") as f:
@@ -383,6 +403,8 @@ cur_reg = int(m.group(1)) if m else 1
 yaml_src = open("sim/config/npu_config.yaml", encoding="utf-8").read()
 m = re.search(r"^  bandwidth_bytes_per_cycle: ([0-9.]+) ", yaml_src, re.M)
 cur_bw = float(m.group(1)) if m else 51.2
+m = re.search(r"^  double_buffer: (true|false)", yaml_src, re.M)
+cur_dbl = 1 if (m.group(1) == "true" if m else True) else 0
 
 if bs != cur_bs:
     replace("sim/timing/benchmark.py",
@@ -396,8 +418,17 @@ if abs(bw - cur_bw) > 1e-9:
     replace("sim/config/npu_config.yaml",
             f"  bandwidth_bytes_per_cycle: {cur_bw}  # 51.2 GB/s @ 1GHz = 51.2 bytes/cycle",
             f"  bandwidth_bytes_per_cycle: {bw}  # FM-3 calibrated from RTL overlap (todo 16); was {cur_bw}")
+if dbl != cur_dbl:
+    if dbl == 1:
+        replace("sim/config/npu_config.yaml",
+                f"  double_buffer: false  # FM-3 calibrated from RTL (todo 16): single weight_buffer + sequential controller FSM, overlap 0.00",
+                f"  double_buffer: true")
+    else:
+        replace("sim/config/npu_config.yaml",
+                f"  double_buffer: true",
+                f"  double_buffer: false  # FM-3 calibrated from RTL (todo 16): single weight_buffer + sequential controller FSM, overlap 0.00")
 print("EDITED:" + ",".join(edits) if edits else "EDITED:NONE")
-print(f"CUR bs={cur_bs} reg={cur_reg} bw={cur_bw}")
+print(f"CUR bs={cur_bs} reg={cur_reg} bw={cur_bw} dbl={cur_dbl}")
 PYEOF
 )
   APPLY_RC=$?
@@ -410,8 +441,11 @@ PYEOF
     CUR_BS_OLD=$(echo "$CUR_INFO" | grep -oE 'bs=[0-9]+' | cut -d= -f2)
     CUR_REG_OLD=$(echo "$CUR_INFO" | grep -oE 'reg=[0-9]+' | cut -d= -f2)
     CUR_BW_OLD=$(echo "$CUR_INFO" | grep -oE 'bw=[0-9.]+' | cut -d= -f2)
-    PARAM_CHANGES="  before: broadcast_sync=${CUR_BS_OLD:-2}, _accumulate_reg=${CUR_REG_OLD:-1}, bw=${CUR_BW_OLD:-51.2}
-  after : broadcast_sync=$BEST_BS, _accumulate_reg=$BEST_REG, bw=$BEST_BW"
+    CUR_DBL_OLD=$(echo "$CUR_INFO" | grep -oE 'dbl=[01]' | cut -d= -f2)
+    DBL_OLD_STR=$([ "${CUR_DBL_OLD:-1}" = "1" ] && echo true || echo false)
+    DBL_NEW_STR=$([ "$BEST_DBL" = "1" ] && echo true || echo false)
+    PARAM_CHANGES="  before: mxu.double_buffer=${DBL_OLD_STR}, broadcast_sync=${CUR_BS_OLD:-2}, _accumulate_reg=${CUR_REG_OLD:-1}, bw_bytes_per_cycle=${CUR_BW_OLD:-51.2}
+  after : mxu.double_buffer=${DBL_NEW_STR}, broadcast_sync=$BEST_BS, _accumulate_reg=$BEST_REG, bw_bytes_per_cycle=$BEST_BW"
     log "Stage 6: applied ($EDITED_FILES) [$CUR_INFO]"
   fi
 fi

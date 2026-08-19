@@ -228,6 +228,7 @@ class DMAModel:
         tile_H: int, tile_W: int,
         weight_bits: int, act_bits: int,
         per_tile_compute_cycles: int,
+        double_buffer: bool = True,
     ) -> float:
         """Compute weight_streaming_overlap_ratio via tile-level double-buffering.
 
@@ -251,12 +252,19 @@ class DMAModel:
         act_bits: Activation precision (e.g. 8 for INT8).
         per_tile_compute_cycles: Compute cycles per tile (broadcast + MAC +
             accumulate).
+        double_buffer: MXU weight-buffer ping-pong capability (mirrors the
+            ``mxu.double_buffer`` config knob).  When False the weight SRAM is
+            single-buffered and the controller FSM serializes
+            LOAD_W/LOAD_A/COMPUTE/STORE_OUT per tile — every tile's DMA is
+            fully exposed and the overlap ratio is 0.0.  Calibrated from the
+            FM-3 RTL measurement (todo 16: overlap_ratio=0.00).
 
         Returns
         -------
         overlap_ratio : float in [0, 1]
             Fraction of total weight DMA hidden behind compute.  Returns 0.0
-            when total DMA is zero (sentinel for unsupported / degenerate).
+            when total DMA is zero (sentinel for unsupported / degenerate)
+            and when double-buffering is disabled.
 
         Notes
         -----
@@ -267,6 +275,11 @@ class DMAModel:
         import math
 
         if M <= 0 or K <= 0 or N <= 0:
+            return 0.0
+
+        if not double_buffer:
+            # Single-buffered weight SRAM: DMA and compute are fully
+            # sequential per tile, so no DMA can be hidden behind compute.
             return 0.0
 
         K_tiles = math.ceil(K / max(tile_H, 1))

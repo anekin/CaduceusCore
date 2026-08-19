@@ -156,6 +156,21 @@ class TestEstimateTileDoubleBufferOverlap:
         # DMA is negligible → nearly all hidden
         assert ratio >= 0.9, f"Infinite BW: expected ≥ 0.9, got {ratio}"
 
+    def test_double_buffer_false_returns_zero(self):
+        """Given a single-buffered MXU (mxu.double_buffer=False), when the
+        overlap is estimated, then the ratio must be 0.0 because the RTL
+        controller serializes LOAD_W/LOAD_A/COMPUTE/STORE_OUT per tile
+        (FM-3 RTL calibration, todo 16: measured overlap_ratio=0.00)."""
+        dma = _make_dma()
+        ratio = dma.estimate_tile_double_buffer_overlap(
+            M=1, K=512, N=256,
+            tile_H=self._TILE_H, tile_W=self._TILE_W,
+            weight_bits=self._W_BITS, act_bits=self._A_BITS,
+            per_tile_compute_cycles=self._PER_TILE_COMPUTE,
+            double_buffer=False,
+        )
+        assert ratio == 0.0
+
     def test_overlap_monotonic_with_bw(self):
         """Higher BW → more DMA hiding → higher overlap ratio."""
         dma_low = _make_dma({"memory": {"bandwidth_bytes_per_cycle": 10.0}})

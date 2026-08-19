@@ -1,0 +1,67 @@
+[p10_fm3] Stage 1: RTL overlap_ratio=0.00 (from /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-15-phase10-rtl-verification.txt)
+[p10_fm3] Stage 2: calibration target files clean (git diff empty)
+[p10_fm3] Stage 3: Func Model baseline benchmark start (2026-08-19T09:28:11Z)
+[p10_fm3] Stage 3: benchmark rc=0
+[p10_fm3] Stage 3: fm_overlap_before=0.98 rtl_overlap=0.00 delta_before=0.9800
+[p10_fm3] Stage 5: |delta|=0.9800 > 0.05 — searching real calibration knobs
+[p10_fm3] Stage 5: SEARCH_BEST feasible=1 bw=51.2 bs=2 reg=1 dbl=0 fm=0.00 delta=0.0000
+[p10_fm3] Stage 6: applying edits bw=51.2 bs=2 reg=1 dbl=0
+[p10_fm3] Stage 6: applied (sim/config/npu_config.yaml) [CUR bs=2 reg=1 bw=51.2 dbl=1]
+[p10_fm3] Stage 7: re-run benchmark after adjustment (2026-08-19T09:28:12Z)
+[p10_fm3] Stage 7: fm_overlap_after=0.0 delta_after=0.0000
+[p10_fm3] Stage 8: Func Model verification (pytest sim/timing/tests)
+[p10_fm3] Stage 8: verification PASS (774 passed)
+[p10_fm3] Evidence written: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-16-phase10-rtl-verification.txt
+Task 16 - Phase 10 RTL Verification: FM-3 weight-streaming overlap calibration
+===============================================================================
+Timestamp start : 2026-08-19T09:28:11Z
+Timestamp end   : 2026-08-19T09:30:27Z
+Commit          : 60107d69a2919c6c3d8ea97e4ab56f1ec857d46f
+Driver host     : sz0002 — Func Model benchmark + verification run locally
+                  (pure Python; no VCS required; p10_lib sourced for REPO_ROOT)
+
+Workload        : qwen2.5-3b (Q4_K_M, INT4xINT8, decode 7-GEMM weighted
+                  average — same workload as todo 15 FM-3 measurement)
+RTL source      : /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-15-phase10-rtl-verification.txt
+
+rtl_overlap=0.00
+fm_overlap_before=0.98
+fm_overlap=0.00
+|delta|=0.00 (acceptance: |delta|<=0.05)
+
+Updated parameters (real knobs only):
+  before: mxu.double_buffer=true, broadcast_sync=2, _accumulate_reg=1, bw_bytes_per_cycle=51.2
+  after : mxu.double_buffer=false, broadcast_sync=2, _accumulate_reg=1, bw_bytes_per_cycle=51.2
+  files touched  : sim/config/npu_config.yaml
+  cross_engine_gap annotation (sim/perf_tests.py L261): unchanged — FM-1
+  same-engine gap basis (crossbar_wait=2, sram_stall=1, vcov_bubble=1);
+  a different quantity from weight-streaming overlap, not an overlap knob.
+
+Commands executed (exact):
+  PYTHONPATH=sim python -m sim.timing.benchmark --model qwen2.5-3b --output <scratch>/bench
+  (knob search: PYTHONPATH=sim python3 <scratch>/search.py 0.00)
+  PYTHONPATH=sim python -m sim.timing.benchmark --model qwen2.5-3b --output <scratch>/bench_after
+  PYTHONPATH=sim python -m pytest sim/timing/tests/ -q
+
+Func Model verification:
+  pytest sim/timing/tests: 774 passed
+
+Knob sensitivity (top-10 of bw x broadcast_sync x _accumulate_reg grid):
+  dbl=0 bw=18.0  bs=0 reg=0 fm=0.00 delta=0.0000
+  dbl=0 bw=18.0  bs=0 reg=1 fm=0.00 delta=0.0000
+  dbl=0 bw=18.0  bs=0 reg=2 fm=0.00 delta=0.0000
+  dbl=0 bw=18.0  bs=1 reg=0 fm=0.00 delta=0.0000
+  dbl=0 bw=18.0  bs=1 reg=1 fm=0.00 delta=0.0000
+  dbl=0 bw=18.0  bs=1 reg=2 fm=0.00 delta=0.0000
+  dbl=0 bw=18.0  bs=2 reg=0 fm=0.00 delta=0.0000
+  dbl=0 bw=18.0  bs=2 reg=1 fm=0.00 delta=0.0000
+  dbl=0 bw=18.0  bs=2 reg=2 fm=0.00 delta=0.0000
+  dbl=0 bw=18.0  bs=3 reg=0 fm=0.00 delta=0.0000
+
+Verification:
+  PASS — |RTL-FM delta| <= 0.05 after Func Model verification.
+
+Result: PASS
+
+Run log: task-16-phase10-calibration.log
+[p10_fm3] FM-3 calibration succeeded: rtl_overlap=0.00 fm_overlap=0.0 |delta|=0.0000. Exit 0.
