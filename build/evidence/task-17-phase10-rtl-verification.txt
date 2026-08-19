@@ -1,0 +1,25 @@
+# Phase 10 T17: FM-3 weight-streaming overlap calibration report
+# Generated: 2026-08-19 17:36:57
+# Host: sz0002
+# Commit: 9106bcf
+# Command: bash scripts/p10_fm3_report.sh
+# Status: PASS
+# Summary: report generated with Method/Measurement/Calibration/Residual Error sections
+#
+# Inputs:
+#   /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-15-phase10-rtl-verification.txt
+#   /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-16-phase10-rtl-verification.txt
+# Outputs:
+#   /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph10-fm3-calibration-report.md
+#   /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-17-phase10-rtl-verification.txt
+
+STATUS=PASS
+commit=9106bcf
+command=bash scripts/p10_fm3_report.sh
+report_generated=yes
+sections_verified=yes
+overlap_ratio=0.00
+rtl_overlap=0.00
+fm_overlap=0.00
+delta=0.0000
+report=/home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph10-fm3-calibration-report.md
