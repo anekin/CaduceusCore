@@ -1,0 +1,55 @@
+Command: /home/prj/zhengs/caduceuscore/CaduceusCore/build/ibex_full_rtl/simv_soc_ibex +COCOTB +BOOTROM_HEX=/home/prj/zhengs/caduceuscore/CaduceusCore/firmware/build/npu_firmware.hex -l /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-15-phase10-run.log
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Aug 19 16:48 2026
+
+============================================================
+[TB] tb_soc_ibex — CaduceusCore Ibex-RTL Testbench
+[TB] Clock: 1 GHz (period = 1 ns)
+[TB] DUT: caduceus_soc_top with internal Ibex RV32IMC
+============================================================
+[TB] Reset released at cycle 4 (t=5000 ns)
+
+[TB] COCOTB mode — waiting for Python control...
+$finish at simulation time            232218501
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 232218501 ps
+CPU Time:    121.960 seconds;       Data structure size:  12.5Mb
+Wed Aug 19 16:51:00 2026
+v1.9.0 from /NAS/Tools/anaconda3/envs/py3.11/lib/python3.11/site-packages/cocotb
+     0.00ns INFO     cocotb                             Seeding Python random module with 1787129343
+     0.00ns INFO     cocotb.regression                  pytest not found, install it to enable better AssertionError messages
+     0.00ns INFO     cocotb.regression                  Found test sim.p10_fm3_measure.test_fm3_overlap_measure
+     0.00ns INFO     cocotb.regression                  running test_fm3_overlap_measure (1/1)
+
+============================================================
+[TB] tb_soc_ibex — CaduceusCore Ibex-RTL Testbench
+[TB] Clock: 1 GHz (period = 1 ns)
+[TB] DUT: caduceus_soc_top with internal Ibex RV32IMC
+============================================================
+[TB] Reset released at cycle 4 (t=5000 ns)
+
+[TB] COCOTB mode — waiting for Python control...
+[FM3] loading Q4_K_M weights from /home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf
+[NPU-PY] Loaded 435 tensors, 3397.1M elements in 85.1s
+[FM3] weight slice blk.0.attn_q.weight[:512, :256] -> M=1 K=512 N=256
+[FM3] packed: weights=65536B scales=8192B act=32768B
+  8660.50ns WARNING  cocotb_bridge                      DRAM word 64 contains X; treating as 0
+  8664.50ns WARNING  cocotb_bridge                      DRAM word 0 contains X; treating as 0
+[FM3] dispatch ok=True rows=204 cos_sim_sanity=1.000000
+[FM3] metrics: {'dma_preload_cycles': 82247, 'mxu_compute_cycles': 2304, 'overlap_cycles': 0, 'dma_busy_cycles_total': 82491, 'weight_dma_cycles': 50528, 'weight_overlap_cycles': 0, 'scale_dma_cycles': 6560, 'activation_dma_cycles': 25159, 'output_dma_cycles': 244, 'other_dma_cycles': 0, 'window_cycles': 223549}
+[FM3] overlap_ratio=0.00 (overlap=0 / preload=82247)
+232218.50ns INFO     cocotb.regression                  test_fm3_overlap_measure passed
+232218.50ns INFO     cocotb.regression                  ******************************************************************************************************
+                                                        ** TEST                                          STATUS  SIM TIME (ns)  REAL TIME (s)  RATIO (ns/s) **
+                                                        ******************************************************************************************************
+                                                        ** sim.p10_fm3_measure.test_fm3_overlap_measure   PASS      232218.50         117.16       1982.00  **
+                                                        ******************************************************************************************************
+                                                        ** TESTS=1 PASS=1 FAIL=0 SKIP=0                             232218.50         117.26       1980.31  **
+                                                        ******************************************************************************************************
+                                                        
+$finish at simulation time            232218501
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 232218501 ps
+CPU Time:    121.960 seconds;       Data structure size:  12.5Mb
+Wed Aug 19 16:51:00 2026
