@@ -362,6 +362,7 @@ fi
 # =============================================================================
 log "=== Phase 4: Ibex segment run (todo 13, 9-layer checkpoint subset) ==="
 IBEX_OK=1
+IBEX_RC="skipped"
 IBEX_LOG="$EVID/task-F3-ibex.log"
 # Concurrency guard: run_ibex_segment_run.sh exits via `pkill -f
 # simv_soc_ibex_seg`, which would kill an unrelated concurrent segment run.
@@ -384,9 +385,16 @@ else
   fi
 fi
 
-# Independent re-verification of the todo-13 evidence fields.
+# Independent re-verification of the todo-13 evidence fields (only when the
+# segment run was actually attempted; the concurrency guard already records
+# its own FAIL otherwise).
 T13_EVID="$EVID/task-13-phase10-rtl-verification.txt"
-if [ -f "$T13_EVID" ]; then
+if [ "$IBEX_RC" = "skipped" ]; then
+  :  # guard already recorded the FAIL
+elif [ ! -f "$T13_EVID" ]; then
+  fail "task-13 evidence missing after segment run: $T13_EVID"
+  IBEX_OK=0
+else
   for field in "engine=ibex" "ibex_executed=L0,L9,L10,L19,L20,L29,L30,L34,L35" \
                "checkpoints=L0,L10,L20,L30,L35" "chain_restart=true" \
                "chain_restart_state_source=ibex_dram" "segment_input_source=spike_npz" \
@@ -395,9 +403,6 @@ if [ -f "$T13_EVID" ]; then
       && log "  evidence field OK   : $field" \
       || { fail "evidence field missing: $field"; IBEX_OK=0; }
   done
-else
-  fail "task-13 evidence missing after segment run: $T13_EVID"
-  IBEX_OK=0
 fi
 
 # =============================================================================
