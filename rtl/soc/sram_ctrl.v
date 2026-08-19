@@ -283,8 +283,10 @@ module sram_ctrl #(
 
             // ── Accept write data beats (W channel) ─────────────────────────
             if (w_active && w_w_accepted) begin
+`ifdef SRAM_DEBUG
                 $display("[SRAM_WR] awid=%0d addr=0x%08X beat=%0d wlast=%b wstrb=0x%016X data=0x%016X",
                          w_id, w_beat_addr, w_beat, s_axi_wlast, s_axi_wstrb, s_axi_wdata[63:0]);
+`endif
                 // Write merged data to memory if within range
                 if (addr_in_range(w_beat_addr))
                     mem[addr_to_idx(w_beat_addr)] <= w_mem_new;

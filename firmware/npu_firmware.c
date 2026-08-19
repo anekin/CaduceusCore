@@ -271,8 +271,11 @@ static void mxu_start(uint32_t i_addr, uint32_t w_addr, uint32_t o_addr,
     npu_start(&mxu->CMD);
     npu_wait_done(&mxu->STATUS);
     /* Give the wrapper store-out FIFO time to drain to SRAM before the
-     * caller starts a DMA read of the output tile. */
-    for (volatile uint32_t d = 0; d < 2000; d++) __asm__ volatile("nop");
+     * caller starts a DMA read of the output tile.  The store-out is ~208
+     * cycles (cocotb_bridge store_wait); 256 nops (~1 kcycle) is a safe
+     * margin.  The prior 2000-nop drain was a Spike-functional-flow workaround
+     * (FM-SOC-032 ran 28 blocks without it) and cost ~6 kcycle/tile on RTL. */
+    for (volatile uint32_t d = 0; d < 256; d++) __asm__ volatile("nop");
 }
 
 #define SFU_SCRATCH_IN  (NPU_SRAM_BASE + 0x80000)

@@ -2378,6 +2378,87 @@ class CocotbBridge:
         logger.debug(f"Doorbell backdoor RD: 0x{addr:08X} ({reg_name}) -> 0x{value:08X}")
         return value
 
+    # ── Ibex Segment-Run Control Layer (todo 13) ─────────────────────────
+    # Same-session multi-layer execution (L0 | L9->L10 | L19->L20 | L29->L30
+    # | L34->L35).  Within one VCS session the control layer preloads the
+    # DRAM/SRAM images, rings the on-chip Ibex firmware through the doorbell,
+    # polls NPU_HEAD, and reads back per-layer hidden state — never asserting
+    # reset between layers, so DRAM keeps the chained hidden state.
+
+    SEGMENT_DRAM_WINDOW = 8 * 1024 * 1024   # todo-19 RTL dram_model window
+    SEGMENT_RING_SIZE   = 1024               # firmware ring entries (mod 1024)
+    SEGMENT_WORD_BYTES  = 64                 # 512-bit DRAM/SRAM word
+
+    async def segment_preload(self, dram: bytes, sram: bytes = b"") -> None:
+        """Backdoor-preload DRAM (and optional SRAM) images into the RTL.
+
+        Writes full 64-byte words through the tb ``dram_bkdoor_*`` ports only
+        (no hierarchical VPI access), so the design can be compiled without
+        ``-debug_access+all``.
+        """
+        if len(dram) > self.SEGMENT_DRAM_WINDOW:
+            raise ValueError(f"dram image {len(dram)} B exceeds 8 MB window")
+        wb = self.SEGMENT_WORD_BYTES
+        for word_idx in range(0, (len(dram) + wb - 1) // wb):
+            seg = dram[word_idx * wb:word_idx * wb + wb].ljust(wb, b"\x00")
+            self.dut.dram_bkdoor_addr.value = word_idx
+            self.dut.dram_bkdoor_wdata.value = int.from_bytes(seg, "little")
+            self.dut.dram_bkdoor_req.value = 1
+            while not int(self.dut.dram_bkdoor_ack.value):
+                await RisingEdge(self.dut.clk)
+            self.dut.dram_bkdoor_req.value = 0
+            while int(self.dut.dram_bkdoor_ack.value):
+                await RisingEdge(self.dut.clk)
+        if sram:
+            await self._sram_backdoor_write(SRAM_BASE, sram)
+
+    async def segment_read_dram(self, addr: int, length: int) -> bytes:
+        """Backdoor-read a DRAM region via the tb ``dram_bkdoor_rdata`` port."""
+        off = addr - DRAM_BASE
+        out = bytearray()
+        wb = self.SEGMENT_WORD_BYTES
+        for word_idx in range(off // wb, (off + length + wb - 1) // wb):
+            self.dut.dram_bkdoor_raddr.value = word_idx
+            await RisingEdge(self.dut.clk)
+            word_str = str(self.dut.dram_bkdoor_rdata.value)
+            if "x" in word_str.lower():
+                word_str = word_str.replace("x", "0").replace("X", "0")
+            word_val = int(word_str, 2)
+            word_start = word_idx * wb
+            seg_start = max(word_start, off)
+            seg_end = min(word_start + wb, off + length)
+            seg_len = seg_end - seg_start
+            boff = seg_start - word_start
+            seg_val = (word_val >> (boff * 8)) & ((1 << (seg_len * 8)) - 1)
+            out.extend(seg_val.to_bytes(seg_len, "little"))
+        return bytes(out)
+
+    async def segment_kick(self, host_tail: int) -> None:
+        """Ring the Ibex firmware via the tb doorbell backdoor write port."""
+        self.dut.db_bkdoor_sel.value = 0      # HOST_TAIL
+        self.dut.db_bkdoor_wdata.value = host_tail
+        self.dut.db_bkdoor_we.value = 1
+        await RisingEdge(self.dut.clk)
+        self.dut.db_bkdoor_we.value = 0
+
+    async def segment_read_head(self) -> int:
+        """Read the firmware NPU_HEAD via the tb doorbell backdoor read port."""
+        self.dut.db_bkdoor_sel.value = 1      # NPU_HEAD
+        await RisingEdge(self.dut.clk)
+        return int(self.dut.db_bkdoor_rdata.value)
+
+    async def segment_wait(self, expected_head: int, timeout_cycles: int,
+                           poll_interval: int = 50000) -> bool:
+        """Poll NPU_HEAD until it reaches ``expected_head`` (mod 1024)."""
+        exp = expected_head % self.SEGMENT_RING_SIZE
+        elapsed = 0
+        while elapsed < timeout_cycles:
+            if await self.segment_read_head() == exp:
+                return True
+            await self.wait_cycles(poll_interval)
+            elapsed += poll_interval
+        return False
+
     # ── INTC / IRQ Helpers ────────────────────────────────────────────────
 
     async def poll_intc_pending(self, mask: int, timeout: int = 1000) -> int:

@@ -90,7 +90,13 @@ module caduceus_soc_top #(
     input  wire         pcie_dma_tx_wr_req_tlp_ready,
 
     // ── Timer interrupt (external; tie to 0 if unused) ────────────────────
-    input  wire         timer_irq_i
+    input  wire         timer_irq_i,
+
+    // ── Doorbell backdoor (cocotb, no VPI debug access) ───────────────────
+    input  wire         db_bkdoor_we,
+    input  wire [1:0]   db_bkdoor_sel,
+    input  wire [31:0]  db_bkdoor_wdata,
+    output wire [31:0]  db_bkdoor_rdata
 );
 
     //=========================================================================
@@ -1351,7 +1357,12 @@ module caduceus_soc_top #(
         .pready        (apb_pready_i[5]),
         .pslverr       (apb_pslverr_i[5]),
 
-        .doorbell_irq  (doorbell_irq)
+        .doorbell_irq  (doorbell_irq),
+
+        .bkdoor_we     (db_bkdoor_we),
+        .bkdoor_sel    (db_bkdoor_sel),
+        .bkdoor_wdata  (db_bkdoor_wdata),
+        .bkdoor_rdata  (db_bkdoor_rdata)
     );
 
     //─────────────────────────────────────────────────────────────────────────

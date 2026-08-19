@@ -139,6 +139,29 @@ module tb_soc_ibex;
     end
 
     //=========================================================================
+    // Cocotb DRAM backdoor read interface (no VPI debug access needed)
+    //=========================================================================
+    reg  [17:0]  dram_bkdoor_raddr;
+    wire [511:0] dram_bkdoor_rdata;
+
+    assign dram_bkdoor_rdata = u_dut.u_dram_model.mem[dram_bkdoor_raddr];
+
+    //=========================================================================
+    // Cocotb doorbell backdoor (no VPI debug access needed)
+    //=========================================================================
+    reg          db_bkdoor_we;
+    reg  [1:0]   db_bkdoor_sel;
+    reg  [31:0]  db_bkdoor_wdata;
+    wire [31:0]  db_bkdoor_rdata;
+
+    initial begin
+        db_bkdoor_we    = 1'b0;
+        db_bkdoor_sel   = 2'd0;
+        db_bkdoor_wdata = 32'd0;
+        dram_bkdoor_raddr = 18'd0;
+    end
+
+    //=========================================================================
     // DUT: caduceus_soc_top (Ibex RTL CPU inside)
     //=========================================================================
     caduceus_soc_top #(
@@ -190,7 +213,12 @@ module tb_soc_ibex;
         .pcie_dma_tx_wr_req_tlp_eop (pcie_dma_tx_wr_req_tlp_eop),
         .pcie_dma_tx_wr_req_tlp_ready(pcie_dma_tx_wr_req_tlp_ready),
 
-        .timer_irq_i             (timer_irq)
+        .timer_irq_i             (timer_irq),
+
+        .db_bkdoor_we            (db_bkdoor_we),
+        .db_bkdoor_sel           (db_bkdoor_sel),
+        .db_bkdoor_wdata         (db_bkdoor_wdata),
+        .db_bkdoor_rdata         (db_bkdoor_rdata)
     );
 
     //=========================================================================
@@ -296,12 +324,16 @@ module tb_soc_ibex;
     end
 
     //=========================================================================
-    // Simulation Timeout (50M cycles)
+    // Simulation Timeout (5G cycles)
     //=========================================================================
+    // Raised from 50M cycles: the phase-10 Ibex segment run (todo 13) executes
+    // 9 transformer layers back-to-back in one session (L0 | L9->L10 |
+    // L19->L20 | L29->L30 | L34->L35) with per-wave DRAM backdoor preload; a
+    // single 3B layer is ~5.8M cycles, so 9 layers + preload exceed 50M.
     initial begin
-        #50000000;  // 50 ms = 50M cycles @ 1 GHz
+        #5000000000;  // 5 s = 5G cycles @ 1 GHz
         if (!sim_done_flag) begin
-            $display("[TMO] Simulation timeout after 50M cycles");
+            $display("[TMO] Simulation timeout after 5G cycles");
             $display("FAIL: TIMEOUT");
             $finish;
         end

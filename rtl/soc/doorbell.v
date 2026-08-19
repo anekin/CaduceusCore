@@ -36,7 +36,15 @@ module doorbell (
     output wire        pslverr,
 
     // ── Doorbell interrupt (to INTC source bit 5: host) ─────────────────
-    output wire        doorbell_irq
+    output wire        doorbell_irq,
+
+    // ── Cocotb backdoor (no VPI debug access needed; host writes HOST_TAIL
+    //    and reads NPU_HEAD through these ports so the tb can drive them
+    //    without -debug_access+all on the whole design) ─────────────────
+    input  wire        bkdoor_we,
+    input  wire [1:0]  bkdoor_sel,
+    input  wire [31:0] bkdoor_wdata,
+    output wire [31:0] bkdoor_rdata
 );
 
     //=========================================================================
@@ -73,6 +81,14 @@ module doorbell (
             npu_head_reg  <= 32'd0;
             host_head_reg <= 32'd0;
             npu_tail_reg  <= 32'd0;
+        end else if (bkdoor_we) begin
+            case (bkdoor_sel)
+                2'b00: host_tail_reg <= bkdoor_wdata;
+                2'b01: npu_head_reg  <= bkdoor_wdata;
+                2'b10: host_head_reg <= bkdoor_wdata;
+                2'b11: npu_tail_reg  <= bkdoor_wdata;
+                default: ;
+            endcase
         end else if (write_en) begin
             case (reg_sel)
                 2'b00: host_tail_reg <= pwdata;
@@ -109,5 +125,14 @@ module doorbell (
     // Doorbell interrupt — combinational, HOST_TAIL != NPU_HEAD
     //=========================================================================
     assign doorbell_irq = (host_tail_reg != npu_head_reg);
+
+    //=========================================================================
+    // Cocotb backdoor read — combinational register mux
+    //=========================================================================
+    assign bkdoor_rdata = (bkdoor_sel == 2'b00) ? host_tail_reg :
+                          (bkdoor_sel == 2'b01) ? npu_head_reg  :
+                          (bkdoor_sel == 2'b10) ? host_head_reg :
+                          (bkdoor_sel == 2'b11) ? npu_tail_reg  :
+                          32'd0;
 
 endmodule
