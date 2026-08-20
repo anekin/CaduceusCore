@@ -58,7 +58,9 @@ def _setup_mmul(
     num_blocks = (K + 127) // 128
     scales = np.ones((num_blocks, N), dtype=np.float32)
 
-    model.host_write_data(act_addr, act)
+    from cocotb_bridge import pack_int8_activation_tile_major
+    model.host_write_data(act_addr, np.frombuffer(
+        pack_int8_activation_tile_major(act.tobytes(), M, K), dtype=np.uint8))
     model.host_write_data(wgt_addr, wgt_packed)
     model.host_write_data(scale_addr, scales.ravel())
     model.host_write_descriptor(
@@ -67,7 +69,7 @@ def _setup_mmul(
         weight_addr=wgt_addr,
         output_addr=out_addr,
         scale_addr=scale_addr,
-        input_size=act.nbytes,
+        input_size=((K + 63) // 64) * 4096,
         weight_size=wgt_packed.nbytes,
         output_size=M * N * 4,
         scale_size=scales.nbytes,

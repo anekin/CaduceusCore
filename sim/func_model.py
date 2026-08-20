@@ -243,8 +243,10 @@ class FuncModel:
         # Host writes data to DRAM
         wgt_addr, act_addr, out_addr, scale_addr = (
             0x80020000, 0x80010000, 0x81000000, 0x80100000)
+        from cocotb_bridge import pack_int8_activation_tile_major
         self.host_write_data(wgt_addr, np.frombuffer(wgt_tile_bytes, dtype=np.uint8))
-        self.host_write_data(act_addr, act)
+        self.host_write_data(act_addr, np.frombuffer(
+            pack_int8_activation_tile_major(act.tobytes(), M, K), dtype=np.uint8))
         self.host_write_data(scale_addr, np.frombuffer(scale_tile_bytes, dtype=np.float32))
 
         desc_addr = 0x80000080
@@ -252,7 +254,7 @@ class FuncModel:
             input_addr=act_addr, weight_addr=wgt_addr, output_addr=out_addr,
             scale_addr=scale_addr,
             scale_size=len(scale_tile_bytes),
-            input_size=act.nbytes, weight_size=len(wgt_tile_bytes),
+            input_size=((K + 63) // 64) * 4096, weight_size=len(wgt_tile_bytes),
             output_size=M * N * 4,
             M=M, K=K, N=N)
         self.host_write_command(0, desc_addr)

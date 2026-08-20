@@ -1372,6 +1372,7 @@ class P0SpikeRunner:
             golden = spec["golden"]
             region = spec.get("region", "sram")
             fp16_tol = spec.get("fp16_tol")
+            fp32_tol = spec.get("fp32_tol")
             if region == "sram":
                 actual = await self._sram_backdoor_read(addr - self.SRAM_BASE, size)
             else:
@@ -1386,6 +1387,23 @@ class P0SpikeRunner:
                     logger.error(
                         f"mismatch {key}: addr=0x{addr:08X} "
                         f"max_fp16_err={max_err:.6f} > tol={fp16_tol}"
+                    )
+                    mismatches.append(key)
+            elif fp32_tol:
+                # ISSUE-13B: scaled MMUL outputs are FP32; the RTL dequant
+                # path (double-precision product, then round) can differ from
+                # the numpy fp32 golden by <= 1 ulp, so compare with a small
+                # relative tolerance instead of byte equality.
+                import numpy as np
+                g = np.frombuffer(golden, dtype=np.float32)
+                a = np.frombuffer(actual, dtype=np.float32)
+                if g.size != a.size or not np.allclose(
+                        a, g, rtol=fp32_tol, atol=fp32_tol * 1e-2, equal_nan=True):
+                    max_err = float(np.max(np.abs(
+                        a.astype(np.float64) - g.astype(np.float64))))
+                    logger.error(
+                        f"mismatch {key}: addr=0x{addr:08X} "
+                        f"max_fp32_err={max_err:.6e} > tol={fp32_tol}"
                     )
                     mismatches.append(key)
             elif actual != golden:
@@ -1458,8 +1476,9 @@ class P0SpikeRunner:
         wgt_f32 = rng.randn(K, N).astype(np.float32)
         from quantize import quantize_int4_per_block
         wgt_packed, wgt_scales, _ = quantize_int4_per_block(wgt_f32, 128)
-        golden = GoldenMXU().matmul_int32(act, wgt_packed, M, K, N)
-        golden_bytes = golden.astype(np.int32).tobytes()
+        golden = GoldenMXU().matmul_int4_per_block(act, wgt_packed, wgt_scales,
+                                                   M, K, N, group_size=128)
+        golden_bytes = golden.astype(np.float32).tobytes()
 
         act_dram = 0x80010000
         wgt_dram = 0x80200000
@@ -1494,7 +1513,8 @@ class P0SpikeRunner:
             "num_cmds": 1,
             "compare": {
                 "out": {"addr": out_dram, "size": len(golden_bytes),
-                        "golden": golden_bytes, "region": "dram"},
+                        "golden": golden_bytes, "region": "dram",
+                        "fp32_tol": 1e-4},
             },
         }
         return model, expected, False
@@ -1694,8 +1714,9 @@ class P1SpikeRunner(P0SpikeRunner):
             M=M, K=K, N=N,
         )
         self._write_cmd(model, cmd_idx, self._OP_MMUL, desc_addr)
-        golden = GoldenMXU().matmul_int32(act, wgt_packed, M, K, N)
-        return model, golden.astype(np.int32).tobytes()
+        golden = GoldenMXU().matmul_int4_per_block(act, wgt_packed, scales,
+                                                   M, K, N, group_size=128)
+        return model, golden.astype(np.float32).tobytes()
 
     def _build_009(self):
         M, K, N = 1, 4, 2
@@ -1733,7 +1754,8 @@ class P1SpikeRunner(P0SpikeRunner):
             "num_cmds": 1,
             "compare": {
                 "out": {"addr": out_dram, "size": M * N * 4,
-                        "golden": golden, "region": "dram"},
+                        "golden": golden, "region": "dram",
+                        "fp32_tol": 1e-4},
             },
         }
         return model, expected, False
@@ -1888,7 +1910,8 @@ class P1SpikeRunner(P0SpikeRunner):
             M=M, K=K, N=N,
         )
         self._write_cmd(model, 0, self._OP_MMUL, mmul_desc)
-        golden_mmul = GoldenMXU().matmul_int32(act, wgt_packed, M, K, N)
+        golden_mmul = GoldenMXU().matmul_int4_per_block(act, wgt_packed, scales,
+                                                        M, K, N, group_size=128)
 
         sfu_len = 16
         sfu_in_addr = 0x80120000
@@ -1928,7 +1951,7 @@ class P1SpikeRunner(P0SpikeRunner):
             "num_cmds": 3,
             "compare": {
                 "mmul_out": {"addr": out_addr, "size": M * N * 4,
-                             "golden": golden_mmul.astype(np.int32).tobytes(),
+                             "golden": golden_mmul.astype(np.float32).tobytes(),
                              "region": "dram"},
                 "sfu_out": {"addr": sfu_out_addr, "size": sfu_len * 2,
                             "golden": golden_sfu.astype(np.float16).tobytes(),
@@ -2103,7 +2126,8 @@ class P2P3SpikeRunner(P1SpikeRunner):
             wgt = rng.randint(-8, 8, size=K * N, dtype=np.int8)
             wgt_packed = GoldenMXU.pack_int4(wgt)
             scales = np.ones(((K + 127) // 128, N), dtype=np.float32)
-            golden = GoldenMXU().matmul_int32(act, wgt_packed, M, K, N)
+            golden = GoldenMXU().matmul_int4_per_block(act, wgt_packed, scales,
+                                                       M, K, N, group_size=128)
 
             act_wrapped = self._reformat_act_for_mxu_wrapper(act, M, K)
             wgt_wrapped = self._reformat_wgt_for_mxu_wrapper(wgt_packed, K, N)
@@ -2128,7 +2152,7 @@ class P2P3SpikeRunner(P1SpikeRunner):
                 M=M, K=K, N=N,
             )
             self._write_cmd_entry(model, cmd_idx, self._OP_MMUL, desc_addr)
-            goldens.append((out_addr, golden.astype(np.int32).tobytes(), np.int32, None))
+            goldens.append((out_addr, golden.astype(np.float32).tobytes(), np.float32, None))
             cmd_idx += 1
 
         sfu_cfg = [
@@ -2290,7 +2314,8 @@ class P2P3SpikeRunner(P1SpikeRunner):
         wgt = rng.randint(-8, 8, size=K * N, dtype=np.int8)
         wgt_packed = GoldenMXU.pack_int4(wgt)
         scales = np.ones(((K + 127) // 128, N), dtype=np.float32)
-        golden = GoldenMXU().matmul_int32(act, wgt_packed, M, K, N)
+        golden = GoldenMXU().matmul_int4_per_block(act, wgt_packed, scales,
+                                                   M, K, N, group_size=128)
 
         act_wrapped = self._reformat_act_for_mxu_wrapper(act, M, K)
         wgt_wrapped = self._reformat_wgt_for_mxu_wrapper(wgt_packed, K, N)
@@ -2319,7 +2344,7 @@ class P2P3SpikeRunner(P1SpikeRunner):
             "num_cmds": 2,
             "compare": {
                 "odd_mmul": {"addr": out_addr, "size": M * N * 4,
-                             "golden": golden.astype(np.int32).tobytes(),
+                             "golden": golden.astype(np.float32).tobytes(),
                              "region": "dram"},
             },
         }
@@ -2333,7 +2358,8 @@ class P2P3SpikeRunner(P1SpikeRunner):
         wgt = np.zeros(K * N, dtype=np.int8)
         wgt_packed = GoldenMXU.pack_int4(wgt)
         scales = np.ones(((K + 127) // 128, N), dtype=np.float32)
-        golden = GoldenMXU().matmul_int32(act, wgt_packed, M, K, N)
+        golden = GoldenMXU().matmul_int4_per_block(act, wgt_packed, scales,
+                                                   M, K, N, group_size=128)
 
         act_wrapped = self._reformat_act_for_mxu_wrapper(act, M, K)
         wgt_wrapped = self._reformat_wgt_for_mxu_wrapper(wgt_packed, K, N)
@@ -2380,7 +2406,7 @@ class P2P3SpikeRunner(P1SpikeRunner):
             "num_cmds": 2,
             "compare": {
                 "mxu_zero": {"addr": out_addr, "size": M * N * 4,
-                             "golden": golden.astype(np.int32).tobytes(),
+                             "golden": golden.astype(np.float32).tobytes(),
                              "region": "dram"},
                 "vec_zero": {"addr": o_addr, "size": dim * 4,
                              "golden": np.zeros(dim, dtype=np.int32).tobytes(),
@@ -2712,7 +2738,8 @@ class P4SpikeRunner(P2P3SpikeRunner):
                 wgt_packed = np.frombuffer(weights[idx], dtype=np.uint8)
                 num_blocks = (K + 127) // 128
                 scales = np.ones((num_blocks, N), dtype=np.float32)
-                golden = GoldenMXU().matmul_int32(act, wgt_packed, M, K, N)
+                golden = GoldenMXU().matmul_int4_per_block(act, wgt_packed, scales,
+                                                           M, K, N, group_size=128)
 
                 act_wrapped = self._reformat_act_for_mxu_wrapper(act, M, K)
                 wgt_wrapped = self._reformat_wgt_for_mxu_wrapper(wgt_packed, K, N)
@@ -2746,7 +2773,7 @@ class P4SpikeRunner(P2P3SpikeRunner):
                     M=M, K=K, N=N,
                 )
                 cmds.append((self._OP_MMUL, desc_addr))
-                outputs[idx] = (out_addr, golden.astype(np.int32))
+                outputs[idx] = (out_addr, golden.astype(np.float32))
 
             elif opcode in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
                 if opcode == "ROPE":
@@ -3228,7 +3255,7 @@ class P4SpikeRunner(P2P3SpikeRunner):
 
             if opcode == "MMUL":
                 out_bytes = await self._pcie_tlp_read(out_addr, golden.nbytes)
-                out_arr = np.frombuffer(out_bytes, dtype=np.int32)
+                out_arr = np.frombuffer(out_bytes, dtype=np.float32)
                 if idx == corrupt_op_idx:
                     original = np.asarray(meta["original_golden"]).ravel()
                     if np.array_equal(out_arr, original):

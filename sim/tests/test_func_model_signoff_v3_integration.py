@@ -107,7 +107,9 @@ def test_full_soc_chain_mmul_sfu_vector_dma():
     dma_dram_out = 0x8100_0000
 
     # Write data to SRAM
-    model.sram[act_sram:act_sram + activations.nbytes] = activations.tobytes()
+    from cocotb_bridge import pack_int8_activation_tile_major
+    act_packed = pack_int8_activation_tile_major(activations.tobytes(), M, K)
+    model.sram[act_sram:act_sram + len(act_packed)] = act_packed
     model.sram[wgt_sram:wgt_sram + len(wgt_packed)] = wgt_packed.tobytes()
     model.sram[scale_sram:scale_sram + scales.nbytes] = scales.tobytes()
 
@@ -286,7 +288,9 @@ def test_soc_chain_3_repeat_consistency():
         bridge = model.bridge
 
         # Write test data to SRAM
-        model.sram[0x0000:0x0000 + activations.nbytes] = activations.tobytes()
+        from cocotb_bridge import pack_int8_activation_tile_major
+        act_packed = pack_int8_activation_tile_major(activations.tobytes(), M, K)
+        model.sram[0x0000:0x0000 + len(act_packed)] = act_packed
         model.sram[0x1000:0x1000 + len(wgt_packed)] = wgt_packed.tobytes()
         model.sram[0x1500:0x1500 + scales.nbytes] = scales.tobytes()
 
@@ -422,12 +426,16 @@ def test_concurrent_host_npu_operation():
     dma_act2_addr = 0x8000_0000
     dma_wgt2_addr = 0x8001_0000
     dma_scl2_addr = 0x8002_0000
-    model.pcie.tlp_write(dma_act2_addr, act2.tobytes())
+    from cocotb_bridge import pack_int8_activation_tile_major
+    act2_packed = pack_int8_activation_tile_major(act2.tobytes(), M, K)
+    model.pcie.tlp_write(dma_act2_addr, act2_packed)
     model.pcie.tlp_write(dma_wgt2_addr, wgt2_packed.tobytes())
     model.pcie.tlp_write(dma_scl2_addr, scales2.tobytes())
 
     # ═══ Chain-1: Execute MXU → SFU → Vector ═══════════════════════════
-    model.sram[0x0000:0x0000 + act1.nbytes] = act1.tobytes()
+    from cocotb_bridge import pack_int8_activation_tile_major
+    act1_packed = pack_int8_activation_tile_major(act1.tobytes(), M, K)
+    model.sram[0x0000:0x0000 + len(act1_packed)] = act1_packed
     model.sram[0x1000:0x1000 + len(wgt1_packed)] = wgt1_packed.tobytes()
     model.sram[0x1500:0x1500 + scales1.nbytes] = scales1.tobytes()
 
@@ -455,7 +463,7 @@ def test_concurrent_host_npu_operation():
     dma_load_sram = 0x6000
     bridge.handle('write', DMA.BASE + DMA.CH0_SRC, dma_act2_addr)
     bridge.handle('write', DMA.BASE + DMA.CH0_DST, Addr.SRAM_BASE + dma_load_sram)
-    bridge.handle('write', DMA.BASE + DMA.CH0_SIZE, act2.nbytes)
+    bridge.handle('write', DMA.BASE + DMA.CH0_SIZE, len(act2_packed))
     bridge.handle('write', DMA.BASE + DMA.CMD, 1)
     assert bridge.handle('read', DMA.BASE + DMA.STATUS, 0) == 2
 
@@ -646,7 +654,9 @@ def test_interrupt_driven_chain_dispatch():
     off_act = act_addr - Addr.DRAM_BASE
     off_wgt = wgt_addr - Addr.DRAM_BASE
     off_scl = scale_addr - Addr.DRAM_BASE
-    model.dram[off_act:off_act + activations.nbytes] = activations.tobytes()
+    from cocotb_bridge import pack_int8_activation_tile_major
+    act_packed = pack_int8_activation_tile_major(activations.tobytes(), M, K)
+    model.dram[off_act:off_act + len(act_packed)] = act_packed
     model.dram[off_wgt:off_wgt + len(wgt_packed)] = wgt_packed.tobytes()
     model.dram[off_scl:off_scl + scales.nbytes] = scales.tobytes()
 
@@ -661,7 +671,7 @@ def test_interrupt_driven_chain_dispatch():
         output_addr=out_addr, scale_addr=scale_addr,
         input_sram=0x20000000, weight_sram=0x20004000,
         output_sram=0x20008000, scale_sram=0x2000C000,
-        input_size=activations.nbytes, weight_size=len(wgt_packed),
+        input_size=len(act_packed), weight_size=len(wgt_packed),
         output_size=M * N * 4, scale_size=scales.nbytes,
         M=M, K=K, N=N,
     )

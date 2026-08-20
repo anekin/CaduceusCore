@@ -300,6 +300,10 @@ async def ibex_execute_layer(bridge, model, hidden, weights, layer, dims,
 
     # Wave 11: final VRESID consuming the hardware down-MMUL output
     down_out_hw = sh._read_tensor(model, ffn_out_addr, (M, H), np.float32)
+    _progress(f"[VRESID L{layer}] down_out_hw min={float(np.nanmin(down_out_hw)):.4f} "
+              f"max={float(np.nanmax(down_out_hw)):.4f} "
+              f"nan={int(np.isnan(down_out_hw).sum())}/{down_out_hw.size} "
+              f"ffn_scale={ffn_scale:.6f}")
     ops = new_wave()
     sh._add_vector_op(ops, model, residual1_addr, ffn_out_addr, l_out_addr, VEC_OP_ADD,
                       np.rint(residual1 * P10_RESID_SCALE).astype(np.int32),

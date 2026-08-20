@@ -146,12 +146,14 @@ def test_pcie_integration():
     out_addr = 0x8100_0000
     scale_addr = 0x8011_0000
 
-    model.pcie.tlp_write(act_addr, act.tobytes())
+    from cocotb_bridge import pack_int8_activation_tile_major
+    act_packed = pack_int8_activation_tile_major(act.tobytes(), M, K)
+    model.pcie.tlp_write(act_addr, act_packed)
     model.pcie.tlp_write(wgt_addr, wgt_packed.tobytes())
     model.pcie.tlp_write(scale_addr, scales.tobytes())
 
-    verify_act = model.pcie.tlp_read(act_addr, act.nbytes)
-    assert verify_act == act.tobytes(), "TLP readback of activation data mismatch"
+    verify_act = model.pcie.tlp_read(act_addr, len(act_packed))
+    assert verify_act == act_packed, "TLP readback of activation data mismatch"
 
     bridge = model.bridge
     bridge.handle('write', MXU.BASE + MXU.CTRL, 0)
@@ -724,14 +726,16 @@ def test_firmware_bootflow():
     scale_addr = 0x80110000
     desc_addr = 0x80000080
 
-    model.host_write_data(act_addr, act_data)
+    from cocotb_bridge import pack_int8_activation_tile_major
+    model.host_write_data(act_addr, np.frombuffer(
+        pack_int8_activation_tile_major(act_data.tobytes(), M, K), dtype=np.uint8))
     model.host_write_data(wgt_addr, wgt_packed)
     model.host_write_data(scale_addr, scales.ravel())
 
     model.host_write_descriptor(desc_addr,
         input_addr=act_addr, weight_addr=wgt_addr, output_addr=out_addr,
         scale_addr=scale_addr, scale_size=int(scales.nbytes),
-        input_size=int(act_data.nbytes), weight_size=int(len(wgt_packed)),
+        input_size=((K + 63) // 64) * 4096, weight_size=int(len(wgt_packed)),
         output_size=M * N * 4,
         M=M, K=K, N=N)
 
@@ -1327,7 +1331,7 @@ def _doorbell_write_mmul_desc(model: FuncModel, desc_addr: int,
                                act_addr: int, wgt_addr: int, out_addr: int,
                                scale_addr: int, M: int, K: int, N: int):
     """Write an MMUL descriptor to DRAM."""
-    act_size = M * K
+    act_size = ((K + 63) // 64) * 4096
     wgt_size = (K * N + 1) // 2
     out_size = M * N * 4
     scale_size = ((K + 127) // 128) * N * 4
@@ -1343,6 +1347,7 @@ def _doorbell_setup_mmul(model: FuncModel, M: int, K: int, N: int,
                          scale_addr: int, desc_addr: int,
                          rng: np.random.RandomState = None):
     """Write deterministic MMUL input/weight/scale data to DRAM."""
+    from cocotb_bridge import pack_int8_activation_tile_major
     from golden_executor import GoldenMXU
     if rng is None:
         rng = _RNG_DB
@@ -1351,7 +1356,8 @@ def _doorbell_setup_mmul(model: FuncModel, M: int, K: int, N: int,
     wgt_packed = GoldenMXU.pack_int4(wgt)
     num_blocks = (K + 127) // 128
     scales = np.ones((num_blocks, N), dtype=np.float32)
-    model.host_write_data(act_addr, act)
+    model.host_write_data(act_addr, np.frombuffer(
+        pack_int8_activation_tile_major(act.tobytes(), M, K), dtype=np.uint8))
     model.host_write_data(wgt_addr, wgt_packed)
     model.host_write_data(scale_addr, scales.ravel())
     _doorbell_write_mmul_desc(model, desc_addr, act_addr, wgt_addr, out_addr,
@@ -1638,7 +1644,9 @@ def _blk0_run_mmul(model: FuncModel, op: dict, manifest: dict) -> dict:
     o_addr = int(op["sram_output_addr"], 16)
     w_addr = 0x00000
 
-    model.sram[i_addr : i_addr + len(input_bytes)] = input_bytes
+    from cocotb_bridge import pack_int8_activation_tile_major
+    act_packed = pack_int8_activation_tile_major(input_bytes, M_eff, K_eff)
+    model.sram[i_addr : i_addr + len(act_packed)] = act_packed
     model.sram[w_addr : w_addr + len(weight_bytes)] = weight_bytes
 
     bridge = model.bridge
@@ -2000,7 +2008,10 @@ def test_boundary_max_odd_shapes():
     scale_addr_big = 0x8060_0000
     out_addr_big = 0x8100_0000
 
-    model.host_write_data(act_addr_big, act_big)
+    from cocotb_bridge import pack_int8_activation_tile_major
+    model.host_write_data(act_addr_big, np.frombuffer(
+        pack_int8_activation_tile_major(act_big.tobytes(), M_big, K_big),
+        dtype=np.uint8))
     model.host_write_data(wgt_addr_big, wgt_big_packed)
     model.host_write_data(scale_addr_big, scales_big.ravel())
 
@@ -2030,7 +2041,10 @@ def test_boundary_max_odd_shapes():
     act_off_odd = 0x50000
     wgt_off_odd = 0x60000
     out_off_odd = 0x70000
-    model.sram[act_off_odd:act_off_odd + act_odd.nbytes] = act_odd.tobytes()
+    from cocotb_bridge import pack_int8_activation_tile_major
+    act_odd_packed = pack_int8_activation_tile_major(act_odd.tobytes(),
+                                                     M_odd, K_odd)
+    model.sram[act_off_odd:act_off_odd + len(act_odd_packed)] = act_odd_packed
     model.sram[wgt_off_odd:wgt_off_odd + len(wgt_odd_packed)] = wgt_odd_packed.tobytes()
 
     bridge.handle('write', MXU.BASE + MXU.CTRL, 0)
@@ -2428,7 +2442,9 @@ def _chain_run_block(
             act = np.frombuffer(input_bytes, dtype=np.int8).reshape(M_eff, K_eff)
             w_addr = block_base
             weight_bytes = weights[idx]
-            _chain_dram_write(model, i_addr, input_bytes)
+            from cocotb_bridge import pack_int8_activation_tile_major
+            act_packed = pack_int8_activation_tile_major(input_bytes, M_eff, K_eff)
+            _chain_dram_write(model, i_addr, act_packed)
             _chain_dram_write(model, w_addr, weight_bytes)
             bridge.handle("write", MXU.BASE + MXU.CTRL, 0)
             bridge.handle("write", MXU.BASE + MXU.I_ADDR, i_addr)
@@ -2648,6 +2664,7 @@ def _e2e_blk0_load_input(op, manifest):
     """Load and return the input bytes + element count for one op."""
     opcode = op["opcode"]
     if opcode == "MMUL":
+        from cocotb_bridge import pack_int8_activation_tile_major
         dims = op["dimensions"]
         M_eff = min(dims.get("M", 1), 64)
         K_eff = min(dims.get("K", 0), 64)
@@ -2658,7 +2675,8 @@ def _e2e_blk0_load_input(op, manifest):
         input_bytes = input_full[:need]
         if len(input_bytes) < need:
             input_bytes = input_bytes + b"\x00" * (need - len(input_bytes))
-        return input_bytes, M_eff * K_eff
+        packed = pack_int8_activation_tile_major(input_bytes, M_eff, K_eff)
+        return packed, M_eff * K_eff
 
     if opcode in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
         input_hex = op.get("input_hex")
@@ -2734,7 +2752,12 @@ def _e2e_blk0_golden(op, manifest, input_bytes, weight_bytes=None):
         M_eff = min(dims.get("M", 1), 64)
         K_eff = min(dims.get("K", 0), 64)
         N_eff = min(dims.get("N", 0), 64)
-        act = np.frombuffer(input_bytes[:M_eff * K_eff], dtype=np.int8).reshape(M_eff, K_eff)
+        # input_bytes is the tile-packed broadcast layout; unpack column-major
+        act_tiles = np.frombuffer(
+            input_bytes[:((K_eff + 63) // 64) * 4096], dtype=np.uint8
+        ).reshape(-1, 64, 64)
+        act = act_tiles.transpose(2, 0, 1).reshape(64, -1)
+        act = act[:M_eff, :K_eff].astype(np.int8)
         wgt_packed = np.frombuffer(weight_bytes, dtype=np.uint8)
         num_blocks = (K_eff + 127) // 128
         scales = np.ones((num_blocks, N_eff), dtype=np.float32)
@@ -2863,7 +2886,7 @@ def test_e2e_host_pcie_doorbell_firmware_scaled_blk0():
                 addrs["desc"],
                 input_addr=addrs["input"], weight_addr=addrs["weight"],
                 output_addr=addrs["output"], scale_addr=addrs["scale"],
-                input_size=M_eff * K_eff,
+                input_size=((K_eff + 63) // 64) * 4096,
                 weight_size=len(weight_bytes),
                 output_size=M_eff * N_eff * 4,
                 scale_size=num_blocks * N_eff * 4,

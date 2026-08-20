@@ -73,9 +73,11 @@ def test_host_write_command_dispatch():
     desc_addr = 0x8000_0080
 
     # Write activation and weight data to DRAM via PCIe TLP
+    from cocotb_bridge import pack_int8_activation_tile_major
+    act_packed = pack_int8_activation_tile_major(act_buf.tobytes(), M, K)
     off_act = act_addr - Addr.DRAM_BASE
     off_wgt = wgt_addr - Addr.DRAM_BASE
-    model.dram[off_act:off_act + act_buf.nbytes] = act_buf.tobytes()
+    model.dram[off_act:off_act + len(act_packed)] = act_packed
     model.dram[off_wgt:off_wgt + len(packed_wgt)] = packed_wgt
 
     # Write descriptor to DRAM
@@ -85,7 +87,7 @@ def test_host_write_command_dispatch():
         output_addr=out_addr, scale_addr=scale_addr,
         input_sram=0x20000000, weight_sram=0x20004000,
         output_sram=0x20008000, scale_sram=0x2000C000,
-        input_size=act_buf.nbytes, weight_size=len(packed_wgt),
+        input_size=len(act_packed), weight_size=len(packed_wgt),
         output_size=M * N * 4, scale_size=8,
         M=M, K=K, N=N,
     )
@@ -327,7 +329,9 @@ def test_host_cpu_full_end_to_end():
     host_out_dram = 0x8100_0000 # Host-visible DRAM for final readback
 
     # ── Step 1: Host writes activations, weights, scales to SRAM ──────
-    model.sram[0x1000:0x1000 + activations.nbytes] = activations.tobytes()
+    from cocotb_bridge import pack_int8_activation_tile_major
+    act_packed = pack_int8_activation_tile_major(activations.tobytes(), M, K)
+    model.sram[0x1000:0x1000 + len(act_packed)] = act_packed
     model.sram[0x2000:0x2000 + len(wgt_packed)] = wgt_packed.tobytes()
     model.sram[0x2500:0x2500 + scales.nbytes] = scales.tobytes()
 

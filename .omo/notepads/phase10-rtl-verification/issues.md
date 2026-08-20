@@ -97,7 +97,7 @@ Compiled new `simv_soc_ibex_seg` (0 errors/0 warnings) and ran
 TESTS=1 PASS=1
 ```
 
-## ISSUE-13B (open, out of scope here): Ibex hardware outputs garbage — ladder FAIL
+## ISSUE-13B (root-caused + fixed): Ibex hardware outputs garbage — ladder FAIL
 
 The completed 01:39 run ended `ladder=FAIL`: `hw_cos` 0.048/0.030/0.011/
 0.007/0.022 for L0/L10/L20/L30/L35, `hw_range` contains INT_MIN, while the
@@ -114,3 +114,76 @@ Evidence preserved here:
 - `evidence-completed-run-2026-08-20-0139.txt`
 - `runlog-completed-run-2026-08-20-0139.log`
 - `progresslog-completed-run-2026-08-20-0139.log`
+
+### Root cause (two independent numerical bugs, both confirmed by probe)
+
+A new minimal probe (`sim/rtl_soc_mmul_probe.py`, one FFN-down MMUL tile +
+VRESID through the on-chip Ibex) reproduced the garbage on the old simv
+(`nan=372/768`, `cos=nan`) and passes after the fix (`cos=1.000000`).
+
+1. **Activation packing violated the hardware broadcast layout.**
+   `spike_host._pack_act_tile_major_contig()` wrote the INT8 activation
+   ROW-major (`tile = act[:, k_lo:k_hi].reshape(-1)`), but the
+   mxu_soc_wrapper broadcast presents 64-byte word `c` of each 4096-byte
+   K-tile as column `k` (byte `r` = act[r, k]) — the layout documented by
+   `cocotb_bridge.pack_int8_activation_tile_major()` and used by every
+   passing FM-SOC MMUL test.  With the row-major buffer, cycle 0 presented
+   all 64 activations of row 0 and cycles 1–63 presented zeros, so the MAC
+   array accumulated only the FIRST K-term (`acc[0,c] = act[0,0]*w[0,c]` —
+   verified: hardware acc -42 vs golden -1427).  Every MMUL output in the
+   chain was therefore garbage.
+
+2. **MXU never applied the per-block scales (stubbed since Phase 1).**
+   `mxu_top.v` declares `scale_addr_o` as "unused (stubbed)"; the
+   store-out wrote raw INT32 accumulation to SRAM/DRAM.  The Func Model
+   golden (`GoldenMXU.matmul_int4_per_block`, and the FuncModel MMIO
+   handler the same firmware chain runs against on Spike) applies
+   per-128-block FP32 scales and accumulates in FP32.  The segment run
+   reads the MMUL-down output as FP32 — raw INT32 re-interpreted as FP32
+   is a denormal (~0) for positive accumulators and **NaN for any negative
+   accumulator** (exponent bits 0xFF), which the `astype(np.int32)` cast
+   turns into INT_MIN.  The firmware already DMAs the per-tile scale row
+   into SRAM and programs SCALE_ADDR + CTRL[2] (accumulate) per command —
+   the RTL simply ignored both.
+
+### Fix
+
+- `rtl/mxu/controller.v`: `mac_reset_acc` now fires at the first K-tile of
+  every command (each MXU call computes a fresh INT32 partial).
+- `rtl/wrapper/mxu_soc_wrapper.v`: latches MXU SCALE_ADDR (0x24) and
+  CTRL[2] from the APB→MMIO stream; the store-out FSM fetches the 256-byte
+  per-tile scale row from SRAM at store-out time (SCALE_ADDR is only
+  written after the preload handshake, so a preload-time fetch would read
+  the previous command's scale) and writes
+  `fp32 = acc[col] * scale[col]`, accumulated across commands when
+  CTRL[2]=1, per Func Model semantics.  SCALE_ADDR==0 keeps the raw-INT32
+  path.  Command-scoped scale/acc-mode are latched at row-capture time so
+  the asynchronous drain is immune to the next command's MMIO writes.
+- `sim/spike_host.py`: `_pack_act_tile_major_contig()` now emits the
+  column-major broadcast layout.
+- `sim/mmio_bridge.py`: `_run_mxu_compute()` gathers activations in the
+  broadcast layout (ceil(K/64) back-to-back 4096-byte tiles).
+- `sim/tile_scheduler.py` + legacy FuncModel test fixtures: aligned the
+  Python firmware emulation and direct-bridge tests with the hardware
+  activation layout.
+- FM-SOC MMUL goldens updated from `matmul_int32` to
+  `matmul_int4_per_block` (FP32) for scale-carrying descriptors; FM-SOC-003
+  and FM-SOC-010 compare with a small FP32 tolerance (RTL dequant rounds
+  through double precision, ≤1 ulp vs numpy).
+
+### Verification
+
+- `sim/rtl_soc_mmul_probe.py` (single MMUL-down + VRESID via Ibex RTL):
+  pre-fix `nan=372/768 cos=nan` (root cause confirmed) → post-fix
+  `nan=0 cos=1.000000`, VRESID `cos=1.000000` bit-exact.
+- simv rebuilt 0 errors, warning profile identical to the pre-fix build
+  (27 pre-existing vendored-IP warnings).
+- FM-SOC regression (Ibex RTL): FM-SOC-001/003/007/009/010/024/026/027/
+  028/029 and FM-SOC-032 PASS.  FM-SOC-10X still fails at op00 RMSNorm
+  (pre-existing SFU issue, unrelated to MMUL).
+- Python pytest: no new failures vs HEAD baseline (test_soc_fm 46/46).
+
+### Status
+
+Fixed and committed; `ibex-seg-run` restarted with the rebuilt simv
+(todo 14 ladder verification pending the ~7.5 h run).

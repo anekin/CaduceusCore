@@ -196,7 +196,13 @@ module controller (
                 S_LOAD_W: begin
                     status_busy    <= 1'b1;
                     weight_load_en <= 1'b1;
-                    mac_reset_acc  <= (k_tile == 16'd0 && !ctrl_acc_mode) ? 1'b1 : 1'b0;
+                    // ISSUE-13B: each CMD.START computes a FRESH INT32 partial
+                    // for its K-tile(s); the accumulator always resets at the
+                    // first K-tile of a command.  Cross-command accumulation
+                    // (per-block scale + FP32 dequant) now happens in the
+                    // mxu_soc_wrapper store-out path, which consumes
+                    // CTRL[2] (ctrl_acc_mode) for the FP32 accumulate flag.
+                    mac_reset_acc  <= (k_tile == 16'd0) ? 1'b1 : 1'b0;
 
                     // k_cur = min(64, K - k_tile*64), 7-bit (1..64)
                     dim_rem = {1'b0, K} - {1'b0, (k_tile * MAX_TILE)};

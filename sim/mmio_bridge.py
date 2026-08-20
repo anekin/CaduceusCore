@@ -207,7 +207,6 @@ class MMIOBridge:
         firmware-compatible tiled order (for each N-tile, for each K-tile,
         TILE_WEIGHT_BYTES + TILE_SCALE_BYTES). See _reorder_weights_to_firmware_tiles().
         """
-        act_bytes = M * K
         wgt_packed_bytes = (K * N + 1) // 2
         xbar = self._crossbar
 
@@ -219,9 +218,15 @@ class MMIOBridge:
             o_abs = self._to_crossbar_addr(raw_o)
             s_abs = self._to_crossbar_addr(raw_s)
 
-            act = np.frombuffer(
-                xbar.read(CrossbarModel.MASTER_MXU, i_abs, act_bytes),
-                dtype=np.int8).reshape(M, K)
+            # ISSUE-13B: activations are staged in the mxu_soc_wrapper
+            # broadcast layout — ceil(K/64) back-to-back 4096-byte K-tiles;
+            # 64-byte word c of each tile holds column k (byte r = act[r, k]).
+            act_k_tiles = (K + 63) // 64
+            act_tiles = np.frombuffer(
+                xbar.read(CrossbarModel.MASTER_MXU, i_abs, act_k_tiles * 64 * 64),
+                dtype=np.uint8).reshape(act_k_tiles, 64, 64)
+            act = act_tiles.transpose(2, 0, 1).reshape(64, act_k_tiles * 64)
+            act = act[:M, :K].astype(np.int8).copy()
             wgt_packed = np.frombuffer(
                 xbar.read(CrossbarModel.MASTER_MXU, w_abs, wgt_packed_bytes),
                 dtype=np.uint8)
@@ -288,7 +293,11 @@ class MMIOBridge:
         if not sram:
             return
 
-        act = np.frombuffer(sram[i_off:i_off + act_bytes], dtype=np.int8).reshape(M, K)
+        act_k_tiles = (K + 63) // 64
+        act_tiles = np.frombuffer(sram[i_off:i_off + act_k_tiles * 64 * 64],
+                                  dtype=np.uint8).reshape(act_k_tiles, 64, 64)
+        act = act_tiles.transpose(2, 0, 1).reshape(64, act_k_tiles * 64)
+        act = act[:M, :K].astype(np.int8).copy()
         wgt_packed = np.frombuffer(sram[w_off:w_off + wgt_packed_bytes], dtype=np.uint8)
 
         if s_off > 0:

@@ -138,7 +138,11 @@ def tile_mmul(desc: dict, mmio_write, mmio_read, wait_done,
             wait_done(DMA_BASE, DMA.STATUS)
 
             # ── MXU partial compute ────────────────────────────
-            act_offset = act_sram + k_start
+            # ISSUE-13B: activations are staged in the mxu_soc_wrapper
+            # broadcast layout: 64 K-rows per 4096-byte tile (word c of the
+            # tile holds column k).  This emulation's K-blocks are 128 rows
+            # high, so block k_block starts at packed tile (k_start // 64).
+            act_offset = act_sram + (k_start // 64) * 4096
             dim0 = (M & 0xFFFF) | ((block_height & 0xFFFF) << 16)
             ctrl_val = 4 if k_block > 0 else 0  # bit[2] = ACCUMULATE after first block
 

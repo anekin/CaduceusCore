@@ -585,15 +585,19 @@ def _reorder_weights_to_firmware_tiles(packed: np.ndarray, scales: np.ndarray,
 
 def _pack_act_tile_major_contig(act: np.ndarray, M: int, K: int) -> np.ndarray:
     """Pack a row-major [M,K] INT8 activation into the firmware's tile-major
-    layout: each 64-wide K-tile stores M*64 contiguous bytes followed by zero
-    padding to 4096 bytes (firmware walks activations at k_block*4096 stride)."""
+    layout matching the mxu_soc_wrapper broadcast: each 4096-byte K-tile holds
+    64 columns; 64-byte word c of a K-tile contains activation column k (byte r
+    = act[r, k]), zero-padded to 64 bytes.  The firmware walks activations at
+    k_block*4096 stride."""
     k_tiles = (K + 63) // 64
     out = np.zeros(k_tiles * 4096, dtype=np.uint8)
+    act2 = np.ascontiguousarray(act)
     for kt in range(k_tiles):
-        k_lo = kt * 64
-        k_hi = min(k_lo + 64, K)
-        tile = np.ascontiguousarray(act[:, k_lo:k_hi]).reshape(-1)
-        out[kt * 4096:kt * 4096 + tile.size] = tile
+        for c in range(64):
+            k = kt * 64 + c
+            if k >= K:
+                continue
+            out[kt * 4096 + c * 64:kt * 4096 + c * 64 + M] = act2[:, k]
     return out
 
 

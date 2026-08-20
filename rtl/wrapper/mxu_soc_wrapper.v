@@ -169,6 +169,22 @@ module mxu_soc_wrapper #(
     reg [15:0] wrp_n;              // output N dimension (columns) per logical row
     reg        wrp_load_done;      // WRP_STATUS[0]
 
+    // ── ISSUE-13B: per-block scale / FP32 dequant state ────────────────
+    // mxu_top's SCALE_ADDR (MMIO 0x24) and CTRL[2] (MMIO 0x00) are latched
+    // from the APB→MMIO write stream.  When SCALE_ADDR != 0 the store-out
+    // FSM fetches the 64-float32 per-tile scale row from SRAM into scale_buf
+    // (the firmware writes SCALE_ADDR only after the preload handshake, so
+    // the fetch must happen at store-out time), then converts each INT32
+    // accumulator to
+    //     fp32 = acc * scale[col]   (accumulated across commands when CTRL[2])
+    // and stores the FP32 row back to SRAM.  This matches the Func Model
+    // matmul_int4_per_block semantics (per-command scaled partial, FP32
+    // accumulate).  SCALE_ADDR == 0 keeps the raw-INT32 store-out path.
+    reg [31:0] wrp_scale_base;
+    reg        wrp_acc_mode;
+    (* ram_style = "distributed" *) reg [31:0] scale_buf [0:63];
+    real fp32_acc [0:63][0:63];
+
     wire       wrp_cs     = psel && (paddr >= 12'h030) && (paddr <= 12'h048);
     wire       wrp_trigger = wrp_cs && pwrite && penable && (paddr == OFF_WRP_CMD) && pwdata[0];
 
@@ -203,6 +219,19 @@ module mxu_soc_wrapper #(
 
     // Derived N: from MXU DIM1, fall back to wrp_n register.
     wire [15:0] wrp_n_derived = (dim1_n != 16'd0) ? dim1_n : wrp_n;
+
+    // ── ISSUE-13B: latch MXU core SCALE_ADDR / CTRL[2] from MMIO writes ──
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            wrp_scale_base <= 32'd0;
+            wrp_acc_mode   <= 1'b0;
+        end else if (mmio_we) begin
+            if (mmio_addr == 12'h24)
+                wrp_scale_base <= mmio_wdata;
+            if (mmio_addr == 12'h00)
+                wrp_acc_mode <= mmio_wdata[2];
+        end
+    end
 
     // Wrapper register writes
     // ── P9-B: Hardcode wrapper base addresses to match testbench DRAM layout.
@@ -332,8 +361,10 @@ module mxu_soc_wrapper #(
     // Compute beat counts from K-tile size
     // weight: K_TILE × 64 int4 / 2 (packed) / 64 bytes_per_beat = K_TILE / 2 beats
     // activation: K_TILE × 64 int8 / 64 bytes_per_beat = K_TILE beats
+    // scale: 64 float32 = 256 B = 4 × 64-byte beats
     localparam WEIGHT_BEATS_PER_K = 8'd32;
     localparam ACT_BEATS_PER_K    = 8'd64;
+    localparam SCALE_BEATS        = 8'd4;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -421,22 +452,6 @@ module mxu_soc_wrapper #(
     end
 
     //=========================================================================
-    // AXI4 Read Address channel (driven by pre-load sequencer)
-    //=========================================================================
-    wire pl_issuing_w_ar = (pl_state == PL_LOAD_W_AR);
-    wire pl_issuing_a_ar = (pl_state == PL_LOAD_A_AR);
-
-    assign m_axi_arid    = 8'h00;
-    assign m_axi_araddr  = pl_issuing_w_ar ? pl_cur_addr :
-                           pl_issuing_a_ar ? pl_cur_addr : 32'd0;
-    assign m_axi_arlen   = (pl_issuing_w_ar ? (WEIGHT_BEATS_PER_K - 8'd1) :
-                            pl_issuing_a_ar ? (ACT_BEATS_PER_K - 8'd1)    : 8'd0);
-    assign m_axi_arsize  = 3'd6;    // 64 bytes per beat (2^6 = 64)
-    assign m_axi_arburst = 2'd1;    // INCR
-    assign m_axi_arvalid = pl_issuing_w_ar || pl_issuing_a_ar;
-    assign m_axi_rready  = (pl_state == PL_LOAD_W_R) || (pl_state == PL_LOAD_A_R);
-
-    //=========================================================================
     // Broadcast Bus Driver
     //=========================================================================
     // The controller iterates K-tiles inside one (M,N) tile group.  The
@@ -512,10 +527,6 @@ module mxu_soc_wrapper #(
     // row R data is valid on the cycle after store_row becomes R.  We capture
     // each row into a small FIFO and drain it with AXI4 write bursts.
 
-    localparam [2:0] SO_IDLE     = 3'd0;
-    localparam [2:0] SO_WRITE_AW = 3'd1;   // issue AW
-    localparam [2:0] SO_WRITE_W  = 3'd2;   // issue W beats
-
     // Row-capture timing: store_row changes each cycle while store_out is high.
     // acc_out_bus_o follows store_row combinationally, so when store_row becomes
     // R the bus already carries row R data.  Capture on every store_row change
@@ -544,33 +555,67 @@ module mxu_soc_wrapper #(
 
     (* ram_style = "distributed" *) reg [2047:0] so_fifo_data [0:SO_FIFO_DEPTH-1];
     (* ram_style = "distributed" *) reg [5:0]    so_fifo_row  [0:SO_FIFO_DEPTH-1];
+    (* ram_style = "distributed" *) reg          so_fifo_acc  [0:SO_FIFO_DEPTH-1];
     reg [SO_FIFO_PTR_W-1:0] so_fifo_wr_ptr;
     reg [SO_FIFO_PTR_W-1:0] so_fifo_rd_ptr;
+
+    // ISSUE-13B: the scale base and accumulate flag are command-scoped and are
+    // only guaranteed valid from CMD.START onward, so they are latched at row
+    // capture time instead of being sampled during the (asynchronous) drain.
+    reg [31:0] so_scale_base;
+    reg        so_acc_mode;
 
     wire so_fifo_empty = (so_fifo_wr_ptr == so_fifo_rd_ptr);
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             so_fifo_wr_ptr <= {SO_FIFO_PTR_W{1'b0}};
-        end else if (so_capture_en) begin
-            so_fifo_data[so_fifo_wr_ptr] <= mxu_acc_out_bus;
-            so_fifo_row[so_fifo_wr_ptr]  <= so_capture_row;
-            so_fifo_wr_ptr <= so_fifo_wr_ptr + 1'b1;
+            so_scale_base  <= 32'd0;
+        end else begin
+            if (so_store_rising)
+                so_scale_base <= wrp_scale_base;
+            if (so_capture_en) begin
+                so_fifo_data[so_fifo_wr_ptr] <= mxu_acc_out_bus;
+                so_fifo_row[so_fifo_wr_ptr]  <= so_capture_row;
+                so_fifo_acc[so_fifo_wr_ptr]  <= wrp_acc_mode;
+                so_fifo_wr_ptr <= so_fifo_wr_ptr + 1'b1;
+            end
         end
     end
 
     // AXI4 write FSM drains the FIFO.
+    // ISSUE-13B: when the firmware programmed SCALE_ADDR the FSM first fetches
+    // the 256 B per-tile scale row from SRAM (the firmware writes SCALE_ADDR
+    // only after the preload handshake completes, so the fetch must happen at
+    // store-out time), then dequantizes each row: fp32 = acc*scale[col],
+    // accumulated across commands into fp32_acc[row][col] when CTRL[2]=1.
+    localparam [2:0] SO_IDLE        = 3'd0;
+    localparam [2:0] SO_WRITE_AW    = 3'd1;   // issue AW
+    localparam [2:0] SO_WRITE_W     = 3'd2;   // issue W beats
+    localparam [2:0] SO_RD_SCALE_AR = 3'd3;   // issue AR for scale tile
+    localparam [2:0] SO_RD_SCALE_R  = 3'd4;   // collect R beats for scale tile
+    localparam [2:0] SO_TRANSFORM   = 3'd5;   // int32 row × scale → fp32 row
+
     reg [2:0]    so_state;
-    reg [2047:0] so_acc_data;
+    reg [2047:0] so_acc_data;      // raw INT32 row popped from the FIFO
+    reg [2047:0] so_fp32_data;     // row driven on the AXI W channel
     reg [5:0]    so_row;
     reg [3:0]    so_w_beat;
+    reg [7:0]    so_scale_beat;
+    integer      so_lane;
+    real         so_prod;
+    reg [2047:0] so_cap_word;
+
+    wire so_issuing_s_ar = (so_state == SO_RD_SCALE_AR);
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             so_state     <= SO_IDLE;
             so_acc_data  <= 2048'd0;
+            so_fp32_data <= 2048'd0;
             so_row       <= 6'd0;
             so_w_beat    <= 4'd0;
+            so_scale_beat <= 8'd0;
             so_fifo_rd_ptr <= {SO_FIFO_PTR_W{1'b0}};
         end else begin
             case (so_state)
@@ -578,10 +623,54 @@ module mxu_soc_wrapper #(
                     if (!so_fifo_empty) begin
                         so_acc_data    <= so_fifo_data[so_fifo_rd_ptr];
                         so_row         <= so_fifo_row[so_fifo_rd_ptr];
+                        so_acc_mode    <= so_fifo_acc[so_fifo_rd_ptr];
                         so_fifo_rd_ptr <= so_fifo_rd_ptr + 1'b1;
                         so_w_beat      <= 4'd0;
-                        so_state       <= SO_WRITE_AW;
+                        so_scale_beat  <= 8'd0;
+                        if (so_scale_base != 32'd0) begin
+                            so_state <= SO_RD_SCALE_AR;
+                        end else begin
+                            so_fp32_data <= so_fifo_data[so_fifo_rd_ptr];
+                            so_state     <= SO_WRITE_AW;
+                        end
                     end
+                end
+
+                SO_RD_SCALE_AR: begin
+                    if (m_axi_arvalid && m_axi_arready)
+                        so_state <= SO_RD_SCALE_R;
+                end
+
+                SO_RD_SCALE_R: begin
+                    if (m_axi_rvalid && m_axi_rready) begin
+                        for (so_lane = 0; so_lane < 16; so_lane = so_lane + 1)
+                            scale_buf[(so_scale_beat * 8'd16) + so_lane[3:0]] <= m_axi_rdata[so_lane*32 +: 32];
+                        so_scale_beat <= so_scale_beat + 8'd1;
+                        if (m_axi_rlast)
+                            so_state <= SO_TRANSFORM;
+                    end
+                end
+
+                SO_TRANSFORM: begin
+                    // scale_buf is fully loaded here (all 4 beats landed).
+                    so_cap_word = 2048'd0;
+                    for (so_lane = 0; so_lane < 64; so_lane = so_lane + 1) begin
+                        if ($isunknown(so_acc_data[so_lane*32 +: 32]) ||
+                            $isunknown(scale_buf[so_lane]))
+                            so_prod = 0.0;
+                        else
+                            so_prod = $itor($signed(so_acc_data[so_lane*32 +: 32])) *
+                                      $bitstoshortreal(scale_buf[so_lane]);
+                        if (!so_acc_mode)
+                            fp32_acc[so_row][so_lane] = so_prod;
+                        else
+                            fp32_acc[so_row][so_lane] =
+                                fp32_acc[so_row][so_lane] + so_prod;
+                        so_cap_word[so_lane*32 +: 32] =
+                            $shortrealtobits(fp32_acc[so_row][so_lane]);
+                    end
+                    so_fp32_data <= so_cap_word;
+                    so_state     <= SO_WRITE_AW;
                 end
 
                 SO_WRITE_AW: begin
@@ -602,6 +691,26 @@ module mxu_soc_wrapper #(
             endcase
         end
     end
+
+    //=========================================================================
+    // AXI4 Read Address channel (driven by pre-load sequencer and the
+    // store-out scale fetch, which never overlap)
+    //=========================================================================
+    wire pl_issuing_w_ar = (pl_state == PL_LOAD_W_AR);
+    wire pl_issuing_a_ar = (pl_state == PL_LOAD_A_AR);
+
+    assign m_axi_arid    = 8'h00;
+    assign m_axi_araddr  = pl_issuing_w_ar ? pl_cur_addr :
+                           pl_issuing_a_ar ? pl_cur_addr :
+                           so_issuing_s_ar ? so_scale_base : 32'd0;
+    assign m_axi_arlen   = (pl_issuing_w_ar ? (WEIGHT_BEATS_PER_K - 8'd1) :
+                            pl_issuing_a_ar ? (ACT_BEATS_PER_K - 8'd1)    :
+                            so_issuing_s_ar ? (SCALE_BEATS - 8'd1)        : 8'd0);
+    assign m_axi_arsize  = 3'd6;    // 64 bytes per beat (2^6 = 64)
+    assign m_axi_arburst = 2'd1;    // INCR
+    assign m_axi_arvalid = pl_issuing_w_ar || pl_issuing_a_ar || so_issuing_s_ar;
+    assign m_axi_rready  = (pl_state == PL_LOAD_W_R) || (pl_state == PL_LOAD_A_R) ||
+                           (so_state == SO_RD_SCALE_R);
 
     // Store-out AXI4 AW channel
     // Per-store-row byte count:
@@ -649,7 +758,7 @@ module mxu_soc_wrapper #(
                                        ((64'h1 << (32'd1 << so_awsize)) - 64'h1);
     wire [63:0] so_wstrb             = so_beat_mask << so_beat_offset;
 
-    assign m_axi_wdata  = (so_acc_data >> so_beat_shift) << so_beat_offset_bits;
+    assign m_axi_wdata  = (so_fp32_data >> so_beat_shift) << so_beat_offset_bits;
     assign m_axi_wstrb  = so_wstrb;
     assign m_axi_wlast  = (so_w_beat == so_awlen[3:0]);
     assign m_axi_wvalid = (so_state == SO_WRITE_W);
@@ -660,8 +769,14 @@ module mxu_soc_wrapper #(
 `ifdef MXU_WRP_DEBUG
             if (m_axi_wvalid && $isunknown(m_axi_wdata))
                 $warning("%t: mxu_soc_wrapper store-out WDATA contains X", $time);
-            if (m_axi_wvalid && $isunknown(so_acc_data))
-                $warning("%t: mxu_soc_wrapper store-out acc_data contains X", $time);
+            if (m_axi_wvalid && $isunknown(so_fp32_data))
+                $warning("%t: mxu_soc_wrapper store-out fp32_data contains X", $time);
+            // ISSUE-13B probe: log the first lane of every scaled store-out
+            // row so the scale/dequant path can be traced in the sim log.
+            if (so_state == SO_TRANSFORM)
+                $display("%t: [MXU_WRP_SCALE] row=%0d lane0 acc=%0d scale=%08x acc_mode=%0b",
+                         $time, so_row, $signed(so_acc_data[31:0]), scale_buf[0],
+                         so_acc_mode);
 `endif
         end
     end
