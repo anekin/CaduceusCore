@@ -396,7 +396,7 @@ def _write_evidence(results, meta):
 def _save_npz(fp32_states, hw_states, emb, dims, meta):
     NPZ_PATH.parent.mkdir(parents=True, exist_ok=True)
     data = {"input_embedding": emb.astype(np.float32)}
-    for L in EXECUTED_LAYERS:
+    for L in sorted(fp32_states):
         data[f"layer_{L}_output"] = fp32_states[L].astype(np.float32)
         data[f"hw_layer_{L}_output"] = hw_states[L].astype(np.int32)
     m = {
