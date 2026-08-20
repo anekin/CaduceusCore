@@ -485,6 +485,15 @@ async def test_soc_ibex_segment_run(dut):
         _progress(f"[SEGMENT] start {seg_desc} "
                   f"(elapsed={time.time() - t0:.0f}s)")
 
+        # Segment boundary: force a FULL DRAM preload so hardware DRAM is
+        # re-synchronized with the Python image.  Delta preloads within a
+        # segment only refresh words the Python image changed, so regions the
+        # hardware modified during the previous segment (MMUL/VRESID outputs
+        # Python never read back) would otherwise keep stale hardware data.
+        await bridge.segment_preload(bytes(model.dram), force_full=True)
+        _progress(f"[SEGMENT] boundary full preload done "
+                  f"(elapsed={time.time() - t0:.0f}s)")
+
         for L in ([chk] if pre is None else [pre, chk]):
             _progress(f"[SEGMENT] dispatching L{L} (elapsed={time.time() - t0:.0f}s)")
             fp32_out = sh._forward_layer(hidden, weights, L, n_heads=heads,

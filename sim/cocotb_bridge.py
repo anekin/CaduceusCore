@@ -2486,7 +2486,7 @@ class CocotbBridge:
                 self._preload_report(progress_cb, done, total, t0)
 
     async def segment_preload(self, dram: bytes, sram: bytes = b"",
-                              progress_cb=None) -> None:
+                              progress_cb=None, force_full: bool = False) -> None:
         """Backdoor-preload DRAM (and optional SRAM) images into the RTL.
 
         Two write paths:
@@ -2503,6 +2503,10 @@ class CocotbBridge:
         also safe because dirty-to-zero words are always rewritten on every
         later delta preload.
 
+        ``force_full=True`` bypasses the delta optimization: the whole image
+        is treated as dirty (segment boundaries use this so hardware DRAM is
+        re-synchronized with the Python image before a new segment starts).
+
         ``progress_cb(pct, done, total)`` is invoked roughly every 10% of
         the words written.
         """
@@ -2512,7 +2516,10 @@ class CocotbBridge:
         last = getattr(self, "_preload_last_dram", None)
         n_total = (len(dram) + wb - 1) // wb
         arr = np.frombuffer(dram, dtype=np.uint8)
-        if last is not None and len(last) == len(dram):
+        if force_full:
+            dirty = np.ones(n_total, dtype=bool)
+            full = True
+        elif last is not None and len(last) == len(dram):
             diff = arr != np.frombuffer(last, dtype=np.uint8)
             dirty = np.any(diff.reshape(-1, wb), axis=1)
             full = False
