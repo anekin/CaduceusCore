@@ -71,6 +71,38 @@ WAVE_TIMEOUT_CYCLES = 100_000_000
 POLL_INTERVAL = 20_000
 
 EVIDENCE_PATH = _REPO / "build" / "evidence" / "task-13-phase10-rtl-verification.txt"
+PROGRESS_PATH = _REPO / "build" / "evidence" / "task-13-phase10-progress.log"
+
+# ── Progress visibility ────────────────────────────────────────────────
+# The segment run's stdout travels through ssh|tee pipes where both Python
+# and VCS buffer output, so log lines can lag reality by minutes (todo 13
+# hang diagnosis).  Every milestone is additionally appended to a plain
+# file with an explicit flush — `tail -f` on that file always shows true
+# progress, independent of pipe buffering.
+_progress_fp = None
+
+
+def _progress(msg: str) -> None:
+    global _progress_fp
+    try:
+        if _progress_fp is None:
+            PROGRESS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            _progress_fp = open(PROGRESS_PATH, "a", encoding="utf-8")
+        _progress_fp.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
+        _progress_fp.flush()
+    except Exception:
+        pass
+    print(msg, flush=True)
+
+
+def _close_progress() -> None:
+    global _progress_fp
+    if _progress_fp is not None:
+        try:
+            _progress_fp.close()
+        except Exception:
+            pass
+        _progress_fp = None
 NPZ_PATH = _REPO / "build" / "evidence" / "ph10-36layer-ibex-checkpoints.npz"
 SPIKE_NPZ = _REPO / "build" / "evidence" / "ph10-36layer-spike.npz"
 GOLDEN_DIR = _REPO / "rtl" / "test_vectors" / "soc_e2e" / "qwen25-3b-36layer"
@@ -168,18 +200,22 @@ async def ibex_execute_layer(bridge, model, hidden, weights, layer, dims,
     state = {"offset": ring_offset}
 
     async def run_wave(ops, readback=None):
+        _progress(f"[WAVE L{layer}] start cmds={len(ops)}")
         t0 = time.time()
         n = _ibex_schedule_chain(model, ops, state["offset"])
         state["offset"] += n
-        await bridge.segment_preload(bytes(model.dram))
+        await bridge.segment_preload(
+            bytes(model.dram),
+            progress_cb=lambda pct, done, total: _progress(
+                f"[SEGMENT] preloading dram {pct}% ({done}/{total} words)"))
         t1 = time.time()
         await bridge.segment_kick(state["offset"])
         ok = await bridge.segment_wait(state["offset"], WAVE_TIMEOUT_CYCLES,
                                        POLL_INTERVAL)
         t2 = time.time()
         cyc = int(bridge.dut.sim_cycle.value) if hasattr(bridge.dut, "sim_cycle") else -1
-        print(f"[WAVE L{layer}] cmds={n} preload={t1 - t0:.1f}s "
-              f"compute={t2 - t1:.1f}s sim_cycle={cyc} ok={ok}")
+        _progress(f"[WAVE L{layer}] done cmds={n} preload={t1 - t0:.1f}s "
+                  f"compute={t2 - t1:.1f}s sim_cycle={cyc} ok={ok}")
         if not ok:
             head = await bridge.segment_read_head()
             raise RuntimeError(
@@ -273,6 +309,23 @@ async def ibex_execute_layer(bridge, model, hidden, weights, layer, dims,
 
     hw_l_out = sh._read_tensor(model, l_out_addr, (M, H), np.int32)
     return hw_l_out, consumed
+
+
+def _partial_meta(model_path, commit, command, dims, elapsed):
+    """Meta for an incremental checkpoint npz save (final save uses full meta)."""
+    return {
+        "engine": "ibex",
+        "checkpoints": CHECKPOINTS,
+        "chain_restart": True,
+        "chain_restart_state_source": "ibex_dram",
+        "segment_input_source": "spike_npz",
+        "dims": dims,
+        "model": model_path,
+        "commit": commit,
+        "command": command,
+        "elapsed_s": elapsed,
+        "partial": True,
+    }
 
 
 def _load_spike_npz():
@@ -378,7 +431,7 @@ async def test_soc_ibex_segment_run(dut):
     except Exception:
         hostname = "unknown"
 
-    print(f"[SEGMENT] loading weights from {model_path}")
+    print(f"[SEGMENT] loading weights from {model_path}", flush=True)
     weights = load_weights_from_gguf(model_path)
     H = int(weights["blk.0.attn_norm.weight"].shape[0])
     I = int(weights["blk.0.ffn_gate.weight"].shape[0])
@@ -400,6 +453,14 @@ async def test_soc_ibex_segment_run(dut):
 
     model = FuncModel(dram_mb=8, sram_kb=4096)
 
+    # Fresh progress log per run; milestones append with explicit flush.
+    try:
+        with open(PROGRESS_PATH, "w", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%H:%M:%S')} [SEGMENT] test start "
+                    f"commit={commit} model={model_path}\n")
+    except Exception:
+        pass
+
     fp32_states = {}
     hw_states = {}
     checkpoint_results = []
@@ -417,8 +478,11 @@ async def test_soc_ibex_segment_run(dut):
             hidden = spike_layers[seg_in]["fp32"].astype(np.float32).copy()
             seg_desc = (f"L{pre}->L{chk}: segment input=L{seg_in} from spike npz, "
                         f"chain_restart_state_source=ibex_dram")
+        _progress(f"[SEGMENT] start {seg_desc} "
+                  f"(elapsed={time.time() - t0:.0f}s)")
 
         for L in ([chk] if pre is None else [pre, chk]):
+            _progress(f"[SEGMENT] dispatching L{L} (elapsed={time.time() - t0:.0f}s)")
             fp32_out = sh._forward_layer(hidden, weights, L, n_heads=heads,
                                          n_kv_heads=kv_heads, head_dim=head_dim)
             hw_l_out, consumed = await ibex_execute_layer(
@@ -428,8 +492,8 @@ async def test_soc_ibex_segment_run(dut):
             fp32_states[L] = fp32_out.astype(np.float32)
             hw_states[L] = hw_l_out.astype(np.int32)
             hw_f32 = hw_l_out.astype(np.float32) / P10_RESID_SCALE
-            print(f"[SEGMENT] L{L}: cmds={consumed} ring_offset={ring_offset} "
-                  f"hw_range=[{int(hw_l_out.min())},{int(hw_l_out.max())}]")
+            _progress(f"[SEGMENT] L{L}: cmds={consumed} ring_offset={ring_offset} "
+                      f"hw_range=[{int(hw_l_out.min())},{int(hw_l_out.max())}]")
             if L in CHECKPOINTS:
                 golden = sh._load_golden_layer(str(GOLDEN_DIR), L)
                 cos = _cos(fp32_out, golden)
@@ -441,8 +505,13 @@ async def test_soc_ibex_segment_run(dut):
                     "hw_cos": float(_cos(hw_f32, golden)),
                     "hw_max": float(np.max(np.abs(hw_f32 - golden.astype(np.float32)))),
                 })
-                print(f"  [CHECKPOINT L{L}] cos_sim={cos:.6f} threshold={thr} "
-                      f"hw_cos={checkpoint_results[-1]['hw_cos']:.6f}")
+                _progress(f"  [CHECKPOINT L{L}] cos_sim={cos:.6f} threshold={thr} "
+                          f"hw_cos={checkpoint_results[-1]['hw_cos']:.6f}")
+                _save_npz(fp32_states, hw_states, emb, dims,
+                          _partial_meta(model_path, commit, command, dims,
+                                        time.time() - t0))
+                _progress(f"  [CHECKPOINT] saved L{L} "
+                          f"(npz layers={sorted(fp32_states.keys())})")
             if pre is not None and L == pre:
                 spike_hw = spike_layers[pre]["hw"].astype(np.float32) / P10_RESID_SCALE
                 cc = _cos(hw_f32, spike_hw)
@@ -452,8 +521,8 @@ async def test_soc_ibex_segment_run(dut):
                     "status": "PASS" if cc >= thr else "FAIL",
                     "ok": cc >= thr,
                 })
-                print(f"  [CROSSCHECK L{pre}] ibex_vs_spike_cos={cc:.6f} "
-                      f"threshold={thr} (non-gating)")
+                _progress(f"  [CROSSCHECK L{pre}] ibex_vs_spike_cos={cc:.6f} "
+                          f"threshold={thr} (non-gating)")
             hidden = hw_f32.copy()
 
         segment_records.append(seg_desc)
@@ -475,6 +544,7 @@ async def test_soc_ibex_segment_run(dut):
     _write_evidence(results, meta)
     _save_npz(fp32_states, hw_states, emb, dims, meta)
 
-    print(f"[SEGMENT] done: 9 layers, 5 checkpoints, ladder={'PASS' if ladder_pass else 'FAIL'}, "
-          f"elapsed={elapsed:.1f}s")
+    _progress(f"[SEGMENT] done: 9 layers, 5 checkpoints, "
+              f"ladder={'PASS' if ladder_pass else 'FAIL'}, elapsed={elapsed:.1f}s")
+    _close_progress()
     assert ladder_pass, f"checkpoint ladder failed: {checkpoint_results}"

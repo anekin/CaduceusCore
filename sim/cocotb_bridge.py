@@ -33,6 +33,7 @@ Usage:
 import json
 import os
 import struct
+import tempfile
 import time
 import logging
 from typing import Optional, Dict, List, Tuple, Any
@@ -2388,20 +2389,91 @@ class CocotbBridge:
     SEGMENT_DRAM_WINDOW = 8 * 1024 * 1024   # todo-19 RTL dram_model window
     SEGMENT_RING_SIZE   = 1024               # firmware ring entries (mod 1024)
     SEGMENT_WORD_BYTES  = 64                 # 512-bit DRAM/SRAM word
+    SEGMENT_BULK_FNAME_BYTES = 96            # tb dram_bkdoor_fname reg width
 
-    async def segment_preload(self, dram: bytes, sram: bytes = b"") -> None:
-        """Backdoor-preload DRAM (and optional SRAM) images into the RTL.
+    @staticmethod
+    def _pack_bulk_fname(path: str) -> int:
+        """Pack an ASCII path into the tb's 96-byte dram_bkdoor_fname reg."""
+        b = path.encode("utf-8")
+        if len(b) >= CocotbBridge.SEGMENT_BULK_FNAME_BYTES:
+            raise ValueError(
+                f"bulk hex-file path too long for tb reg: {len(b)} >= "
+                f"{CocotbBridge.SEGMENT_BULK_FNAME_BYTES}: {path}")
+        return int.from_bytes(
+            b + b"\x00" * (CocotbBridge.SEGMENT_BULK_FNAME_BYTES - len(b)),
+            "big")
 
-        Writes full 64-byte words through the tb ``dram_bkdoor_*`` ports only
-        (no hierarchical VPI access), so the design can be compiled without
-        ``-debug_access+all``.
+    def _preload_report(self, progress_cb, done: int, total: int, t0: float):
+        pct = done * 100 // max(1, total)
+        logger.info(f"[PRELOAD] {done}/{total} words ({pct}%) "
+                    f"{time.time() - t0:.1f}s")
+        if progress_cb is not None:
+            progress_cb(pct, done, total)
+
+    async def _dram_bulk_load(self, arr, dirty_idx, t0, progress_cb) -> None:
+        """Bulk-load dirty word ranges via the tb's runtime $readmemh port.
+
+        Converts each contiguous run of dirty 64-byte words to a hex file
+        (128 hex digits per line, little-endian word value) and triggers
+        ``dram_bkdoor_bgo`` so the tb $readmemh's it into
+        ``u_dut.u_dram_model.mem`` in zero simulation time.  This removes
+        the per-word VPI handshake that made preload ~0.2-0.8 ms/word.
         """
-        if len(dram) > self.SEGMENT_DRAM_WINDOW:
-            raise ValueError(f"dram image {len(dram)} B exceeds 8 MB window")
         wb = self.SEGMENT_WORD_BYTES
-        for word_idx in range(0, (len(dram) + wb - 1) // wb):
+        runs = []
+        prev = None
+        for i in dirty_idx:
+            i = int(i)
+            if prev is None or i != prev + 1:
+                runs.append([i, i])
+            else:
+                runs[-1][1] = i
+            prev = i
+
+        total = len(dirty_idx)
+        done = 0
+        report_every = max(1, total // 10)
+        fd, path = tempfile.mkstemp(prefix="dram_bulk_", suffix=".hex",
+                                    dir="/tmp")
+        os.close(fd)
+        try:
+            for s, e in runs:
+                n = e - s + 1
+                lines = []
+                for wi in range(s, e + 1):
+                    seg = arr[wi * wb:wi * wb + wb]
+                    lines.append(
+                        f"{int.from_bytes(seg.tobytes(), 'little'):0128x}\n")
+                with open(path, "w", encoding="utf-8") as f:
+                    f.writelines(lines)
+
+                self.dut.dram_bkdoor_fname.value = self._pack_bulk_fname(path)
+                self.dut.dram_bkdoor_bs.value = s
+                self.dut.dram_bkdoor_be.value = e
+                self.dut.dram_bkdoor_bgo.value = 1
+                while not int(self.dut.dram_bkdoor_bdone.value):
+                    await RisingEdge(self.dut.clk)
+                self.dut.dram_bkdoor_bgo.value = 0
+                while int(self.dut.dram_bkdoor_bdone.value):
+                    await RisingEdge(self.dut.clk)
+                done += n
+                if done == total or done % report_every < n:
+                    self._preload_report(progress_cb, done, total, t0)
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+    async def _dram_word_write(self, dram, dirty_idx, t0, progress_cb) -> None:
+        """Fallback per-word backdoor write (tb req/ack handshake)."""
+        wb = self.SEGMENT_WORD_BYTES
+        total = len(dirty_idx)
+        report_every = max(1, total // 10)
+        done = 0
+        for word_idx in dirty_idx:
             seg = dram[word_idx * wb:word_idx * wb + wb].ljust(wb, b"\x00")
-            self.dut.dram_bkdoor_addr.value = word_idx
+            self.dut.dram_bkdoor_addr.value = int(word_idx)
             self.dut.dram_bkdoor_wdata.value = int.from_bytes(seg, "little")
             self.dut.dram_bkdoor_req.value = 1
             while not int(self.dut.dram_bkdoor_ack.value):
@@ -2409,6 +2481,57 @@ class CocotbBridge:
             self.dut.dram_bkdoor_req.value = 0
             while int(self.dut.dram_bkdoor_ack.value):
                 await RisingEdge(self.dut.clk)
+            done += 1
+            if done % report_every == 0:
+                self._preload_report(progress_cb, done, total, t0)
+
+    async def segment_preload(self, dram: bytes, sram: bytes = b"",
+                              progress_cb=None) -> None:
+        """Backdoor-preload DRAM (and optional SRAM) images into the RTL.
+
+        Two write paths:
+          - bulk (todo 13): dirty 64-byte words are loaded through the tb's
+            runtime ``$readmemh`` port in contiguous runs — milliseconds per
+            wave instead of tens of seconds.
+          - fallback: the original per-word ``dram_bkdoor_req/ack``
+            handshake (used when the tb predates the bulk port).
+
+        Delta optimization: the 8 MB DRAM image is largely identical between
+        consecutive waves — only freshly scheduled descriptors/tensors/
+        weights change, so only dirty words are rewritten.  The first call
+        skips all-zero words (the tb zero-initializes DRAM at t=0), which is
+        also safe because dirty-to-zero words are always rewritten on every
+        later delta preload.
+
+        ``progress_cb(pct, done, total)`` is invoked roughly every 10% of
+        the words written.
+        """
+        if len(dram) > self.SEGMENT_DRAM_WINDOW:
+            raise ValueError(f"dram image {len(dram)} B exceeds 8 MB window")
+        wb = self.SEGMENT_WORD_BYTES
+        last = getattr(self, "_preload_last_dram", None)
+        n_total = (len(dram) + wb - 1) // wb
+        arr = np.frombuffer(dram, dtype=np.uint8)
+        if last is not None and len(last) == len(dram):
+            diff = arr != np.frombuffer(last, dtype=np.uint8)
+            dirty = np.any(diff.reshape(-1, wb), axis=1)
+            full = False
+        else:
+            # First preload: only non-zero words need writing (tb zero-inits
+            # DRAM at t=0); the rest of the window is already 0.
+            dirty = np.any(arr.reshape(-1, wb) != 0, axis=1)
+            full = True
+        dirty_idx = np.flatnonzero(dirty)
+        n_dirty = int(dirty_idx.size)
+        logger.info(
+            f"[PRELOAD] {'full' if full else 'delta'} preload: "
+            f"{n_dirty}/{n_total} words ({n_dirty * wb // 1024} KB)")
+        t0 = time.time()
+        if n_dirty and hasattr(self.dut, "dram_bkdoor_bgo"):
+            await self._dram_bulk_load(arr, dirty_idx, t0, progress_cb)
+        elif n_dirty:
+            await self._dram_word_write(dram, dirty_idx, t0, progress_cb)
+        self._preload_last_dram = bytes(dram)
         if sram:
             await self._sram_backdoor_write(SRAM_BASE, sram)
 
@@ -2449,14 +2572,43 @@ class CocotbBridge:
 
     async def segment_wait(self, expected_head: int, timeout_cycles: int,
                            poll_interval: int = 50000) -> bool:
-        """Poll NPU_HEAD until it reaches ``expected_head`` (mod 1024)."""
+        """Poll NPU_HEAD until it reaches ``expected_head`` (mod 1024).
+
+        Poll windows use absolute-time ``Timer`` waits instead of per-cycle
+        ``ClockCycles`` awaits.  The tb clock is 1 GHz (1 cycle = 1 ns), so
+        ``Timer(poll_interval, "ns")`` advances exactly ``poll_interval``
+        cycles per poll.  This removes the per-edge VPI callback from the
+        clock signal during the compute phase: measured ~13x higher
+        simulated-cycle throughput (890k vs 67k cycles/s) than the previous
+        edge-by-edge polling, and ~13x less poll overhead per window.
+
+        Progress is logged every 50 polls (~1M cycles @ poll_interval=20k)
+        so the long compute windows are visible in the run log.
+        """
         exp = expected_head % self.SEGMENT_RING_SIZE
         elapsed = 0
+        polls = 0
+        head = -1
         while elapsed < timeout_cycles:
-            if await self.segment_read_head() == exp:
+            head = await self.segment_read_head()
+            if head == exp:
+                logger.info(
+                    f"[WAIT] head={exp} reached after {elapsed} cycles "
+                    f"({polls} polls)"
+                )
                 return True
-            await self.wait_cycles(poll_interval)
+            await Timer(poll_interval, units="ns")
             elapsed += poll_interval
+            polls += 1
+            if polls % 50 == 0:
+                logger.info(
+                    f"[WAIT] head={head} want={exp} "
+                    f"elapsed={elapsed}/{timeout_cycles} cycles"
+                )
+        logger.warning(
+            f"[WAIT] TIMEOUT head={head} want={exp} "
+            f"elapsed={elapsed} cycles ({polls} polls)"
+        )
         return False
 
     # ── INTC / IRQ Helpers ────────────────────────────────────────────────

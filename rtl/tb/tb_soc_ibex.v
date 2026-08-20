@@ -139,6 +139,48 @@ module tb_soc_ibex;
     end
 
     //=========================================================================
+    // Cocotb DRAM bulk backdoor load (todo 13 preload optimization)
+    //=========================================================================
+    // The per-word req/ack interface above costs one VPI round-trip per
+    // 64-byte word (~0.2-0.8 ms/word under VCS), which made the 8 MB DRAM
+    // image preload take tens of seconds per wave.  This bulk port instead
+    // has Python write the dirty word ranges of the image to a hex file and
+    // trigger a runtime $readmemh, which VCS executes natively in zero
+    // simulation time (milliseconds for the whole range).
+    reg [8*96-1:0] dram_bkdoor_fname;   // 96-byte ASCII hex-file path
+    reg [17:0]     dram_bkdoor_bs;      // first word index to load
+    reg [17:0]     dram_bkdoor_be;      // last word index to load (inclusive)
+    reg            dram_bkdoor_bgo;     // 1-cycle pulse: load file into mem
+    reg            dram_bkdoor_bdone;   // 1 until bgo drops
+
+    initial begin
+        dram_bkdoor_fname = {8*96{1'b0}};
+        dram_bkdoor_bs    = 18'd0;
+        dram_bkdoor_be    = 18'd0;
+        dram_bkdoor_bgo   = 1'b0;
+        dram_bkdoor_bdone = 1'b0;
+    end
+
+    // Zero-initialize the DRAM at t=0 (todo 13): the 8 MB segment-run image
+    // is mostly zeros, so Python can skip all-zero words on the first
+    // preload; firmware DMA then reads deterministic 0 instead of X.
+    integer dram_zero_idx;
+    initial begin
+        for (dram_zero_idx = 0; dram_zero_idx < 262144; dram_zero_idx = dram_zero_idx + 1)
+            u_dut.u_dram_model.mem[dram_zero_idx] = 512'd0;
+    end
+
+    always @(posedge clk) begin
+        if (dram_bkdoor_bgo && !dram_bkdoor_bdone) begin
+            $readmemh(dram_bkdoor_fname, u_dut.u_dram_model.mem,
+                      dram_bkdoor_bs, dram_bkdoor_be);
+            dram_bkdoor_bdone <= 1'b1;
+        end else if (!dram_bkdoor_bgo) begin
+            dram_bkdoor_bdone <= 1'b0;
+        end
+    end
+
+    //=========================================================================
     // Cocotb DRAM backdoor read interface (no VPI debug access needed)
     //=========================================================================
     reg  [17:0]  dram_bkdoor_raddr;

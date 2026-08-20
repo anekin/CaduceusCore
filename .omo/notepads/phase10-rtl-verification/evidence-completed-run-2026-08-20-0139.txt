@@ -1,0 +1,50 @@
+Task 13 - Phase 10 RTL Verification: Ibex 36-layer checkpoint-subset segment run
+======================================================================
+Timestamp start : 2026-08-19T17:39:03Z
+Commit          : 806269a01aabd6611e2e5c35a30d605260b047ab
+Command         : scripts/p10_36layer_ibex.sh
+Driver host     : sz0001 (Ibex SoC VCS + firmware)
+Model           : /home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf
+Dims            : {"hidden_size": 2048, "intermediate_size": 11008, "q_dim": 2048, "kv_dim": 256, "num_heads": 16, "num_kv_heads": 2, "heads": 16, "kv_heads": 2, "head_dim": 128, "num_hidden_layers": 36, "rope_theta": 1000000.0, "rms_eps": 1e-06}
+engine=ibex
+ibex_executed=L0,L9,L10,L19,L20,L29,L30,L34,L35
+checkpoints=L0,L10,L20,L30,L35
+chain_restart=true
+chain_restart_state_source=ibex_dram
+segment_input_source=spike_npz
+commands_dispatched=306
+elapsed_s=26900.9
+
+Segment sessions (same VCS session, DRAM state passed between consecutive layers):
+L0: input=embedding (prompt token), checkpoint=L0
+L9->L10: segment input=L8 from spike npz, chain_restart_state_source=ibex_dram
+L19->L20: segment input=L18 from spike npz, chain_restart_state_source=ibex_dram
+L29->L30: segment input=L28 from spike npz, chain_restart_state_source=ibex_dram
+L34->L35: segment input=L33 from spike npz, chain_restart_state_source=ibex_dram
+
+Per-checkpoint tolerance ladder (Ibex hidden state vs Func Model golden):
+  ladder: L0-19 >= 0.999, L20-29 >= 0.998, L30-35 >= 0.997
+layer=0 engine=ibex cos_sim=1.000000 threshold=0.999 status=PASS chain_restart_state_source=ibex_dram
+layer=10 engine=ibex cos_sim=0.044340 threshold=0.999 status=FAIL chain_restart_state_source=ibex_dram
+layer=20 engine=ibex cos_sim=0.020416 threshold=0.998 status=FAIL chain_restart_state_source=ibex_dram
+layer=30 engine=ibex cos_sim=-0.018323 threshold=0.997 status=FAIL chain_restart_state_source=ibex_dram
+layer=35 engine=ibex cos_sim=0.061528 threshold=0.997 status=FAIL chain_restart_state_source=ibex_dram
+
+Hardware l_out transparency (Ibex DRAM VRESID int32 vs golden, non-gating):
+layer=0 hw_l_out_cos_sim=0.048176 max_abs=2.0972e+06
+layer=10 hw_l_out_cos_sim=0.029927 max_abs=2.0975e+06
+layer=20 hw_l_out_cos_sim=0.011146 max_abs=2.0978e+06
+layer=30 hw_l_out_cos_sim=0.006807 max_abs=2.0972e+06
+layer=35 hw_l_out_cos_sim=0.022274 max_abs=2.0972e+06
+
+Cross-check: Ibex pre-layer output vs Spike same-layer output (non-gating):
+layer=9 ibex_vs_spike_cos_sim=0.044320 threshold=0.999 status=FAIL cross_check_mismatch=L9
+layer=19 ibex_vs_spike_cos_sim=0.020417 threshold=0.999 status=FAIL cross_check_mismatch=L19
+layer=29 ibex_vs_spike_cos_sim=-0.035304 threshold=0.998 status=FAIL cross_check_mismatch=L29
+layer=34 ibex_vs_spike_cos_sim=0.057527 threshold=0.997 status=FAIL cross_check_mismatch=L34
+
+Summary:
+  checkpoints_passed=1/5
+  LADDER=FAIL
+  Overall: FAIL
+  Timestamp end: 2026-08-19T17:39:03Z
