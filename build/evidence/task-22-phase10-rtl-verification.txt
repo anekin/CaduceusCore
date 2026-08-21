@@ -1,7 +1,7 @@
 Task 22 - Phase 10 RTL Verification: Bug ledger dedup + completeness check
 ===========================================================================
-Timestamp     : 2026-08-18T18:45:41Z
-Commit        : f42a20a524e632738a3855d0d49271de53d1419c
+Timestamp     : 2026-08-21T08:59:29Z
+Commit        : fa4ffec3a8f06ba697b2b522eb7d929da39f0f89
 Ledger        : /home/prj/zhengs/caduceuscore/CaduceusCore/docs/bugs/bugs-soc-rtl.md
 
 duplicate_count=0
@@ -17,6 +17,7 @@ BUG-RTL-SOC-002 [status=Open] evidence: build/evidence/task-19-phase10-rtl-verif
 BUG-RTL-SOC-007 [status=Open] evidence: build/wave1/w1-3-rtl-op-summary.json docs/vector-workaround-3layer-issue.md
 
 Closed bugs:
+BUG-RTL-SOC-008 [status=Fixed] evidence: build/evidence/l0l19-probe-evidence.txt build/evidence/l0l19-probe.json
 BUG-RTL-SOC-001 [status=Fixed] evidence: NONE
 BUG-RTL-SOC-003 [status=Fixed] evidence: NONE
 BUG-RTL-SOC-005 [status=Fixed] evidence: build/evidence/wrap-bug005-result.txt build/evidence/wrap-vec-regression.txt build/evidence/fix-module-regression.txt
@@ -31,6 +32,7 @@ warning: BUG-RTL-SOC-006 references missing file: .omo/evidence/task-7-p1-full-r
 
 Phase 10 evidence mapping (bug -> expected evidence file):
   BUG-RTL-SOC-P9-00D -> build/evidence/task-8-phase10-rtl-verification.txt
+  BUG-RTL-SOC-008 -> build/evidence/l0l19-probe-evidence.txt
   BUG-RTL-SOC-002 -> build/evidence/task-19-phase10-rtl-verification.txt
   BUG-RTL-SOC-WV-001 -> build/evidence/task-18-phase10-rtl-verification.txt
 

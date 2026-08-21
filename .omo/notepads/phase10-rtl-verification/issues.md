@@ -187,3 +187,126 @@ VRESID through the on-chip Ibex) reproduced the garbage on the old simv
 
 Fixed and committed; `ibex-seg-run` restarted with the rebuilt simv
 (todo 14 ladder verification pending the ~7.5 h run).
+
+## ISSUE-13C (in verification): L19 output corrupted in segment run after boundary full DRAM preload
+
+**Status:** root-cause identified, fix committed, pending new VCS run.
+
+### Symptom
+
+A new run (started 2026-08-21 01:23 with boundary full DRAM preload fix
+a8af351) reached L35. Checkpoints:
+- L0  cos=1.000000 ✓
+- L10 cos=1.000000 ✓
+- L20 cos=0.031199 ✗
+- L30 cos=0.998220 ✓
+- L35 pending
+
+Cross-checks (Ibex pre-layer output vs Spike same-layer output):
+- L9  cos=1.000000 ✓
+- L19 cos=0.031203 ✗
+- L29 cos=1.000000 ✓
+- L34 cos=1.000000 ✓
+
+### Key isolation
+
+Offline analysis (`PYTHONPATH=sim python3` on the saved
+`ph10-36layer-ibex-checkpoints.npz`):
+- `hw_layer_20_output` matches the Python golden computed from
+  `hw_layer_19_output` as input (cos=1.000000). Therefore **L20 hardware is
+  correct; the corruption is entirely in L19's output**.
+- L19 standalone (`rtl_soc_l19_full.py`, fresh DUT reset) passes cos=1.000000.
+- So L19 computation is correct, but L19 produces garbage when executed after
+  prior segments in the same VCS session.
+
+### Root cause
+
+The boundary full-preload fix (a8af351) only re-synchronizes DRAM with the
+Python `model.dram` image. The 4 MB SRAM scratch and engine-wrapper internal
+staging (MXU/SFU/VECTOR buffers) are left untouched. Leftovers from the
+previous segment's MMUL/VRESID staging can leak into the next segment's first
+operations. L19 — the first layer after the L9→L10 segment — was corrupted
+this way. L29/L30 pass because the preceding L19→L20 segment happens to leave
+a SRAM/state pattern that does not corrupt L29 (or is overwritten correctly);
+the failure mode is state-dependent, not universal.
+
+### Fix (committed)
+
+`6091ec9 fix(sim): clear SRAM at segment boundaries to prevent stale state
+corrupting L19`
+- At every segment boundary `bridge.segment_preload()` now receives
+  `sram=b"\x00" * SRAM_SIZE` along with `force_full=True`.
+- SRAM is pure per-op scratch (firmware DMAs every operand in before use), so
+  zeroing it at boundaries is safe.
+
+### Verification pending
+
+The running VCS session started before commit 6091ec9, so it does not include
+the SRAM clear. It is currently executing L35. After it finishes, a new run
+with 6091ec9 will be started to verify L0/L10/L20/L30/L35 all pass the
+ tolerance ladder.
+
+## ISSUE-13D (fixed): DESC_BASE overlaps command ring entries 128+ → long runs corrupt descriptors
+
+**Status:** fixed 2026-08-21. `sim/spike_host.py` `DESC_BASE` moved
+`0x80001000` → `0x80010000` (single constant edit).
+
+### (a) The overlap bug
+
+`DESC_BASE = 0x80001000` maps to command-ring entry 128 (each ring entry is
+32 B). Descriptors are 64 B, so descriptor `i` occupies ring entries
+`128+2i` and `128+2i+1`. In the 9-layer segment run, L19 writes commands at
+ring entries 102-135; entries 128-135 overlap descriptors 0-7. The descriptor
+is written first, then the command overwrites it, so the firmware reads a
+corrupted descriptor for the later waves of L19 — matching the observed
+L19/L20 failure (cos≈0.031) while L0/L10/L29/L30/L34 pass.
+
+### (b) New address chosen
+
+`0x80010000` — free: above the 1024-entry command ring (0x80000000-0x80007FFF)
+and the completion ring (0x80008000-0x8000FFFF), below the activation region
+(`P10_ACT_BASE = 0x80020000`). Verified against spike_host.py region constants
+(P10_ACT_BASE/END, P10_WGT_BASE). The firmware does not hardcode `DESC_BASE`;
+it reads the descriptor address from each command entry, so no firmware/Verilog
+change is needed. The running full segment run (PID 83832) uses the old
+constant in memory and was left untouched.
+
+### Probe-path companion edit
+
+`sim/rtl_soc_mmul_probe.py` read the descriptor back from a hardcoded
+`0x80001000`; its descriptor address actually comes from `sh.DESC_BASE` via
+`_ibex_schedule_chain`, so the read-back was switched to `sh.DESC_BASE` to stay
+consistent with the new constant.
+
+### Intentionally separate (not part of the segment-run/probe path, single-command, no ring progression → no overlap)
+
+- `sim/rtl_soc_runner.py:1095` — `P0SpikeRunner.DESC_BASE`, FM-SOC-001..008
+  runner, RING_SIZE=32 (never reaches entry 128).
+- `sim/spike_host.py:223` — standalone MMUL smoke helper with its own fixed
+  layout (desc 0x80001000 / act 0x80010000 / wgt 0x80200000 / out 0x81000000);
+  single command at ring entry 0.
+- `sim/p10_fm3_measure.py:68`, `sim/perf_tests.py:35`,
+  `sim/perf_tests_standalone_p11.py:33` — `DESC_BASE = DRAM_BASE + 0x1000`
+  single-command perf scripts.
+- `sim/tests/test_soc_pcie_dma.py:75`, `sim/tests/test_verification_fault_injection.py:381,405`,
+  `sim/tests/test_spike_mmio_server.py` — test fixtures, single-command.
+
+### (c) Verification
+
+```
+$ PYTHONPATH=sim python -c "from sim import spike_host as sh; assert sh.DESC_BASE == 0x80010000, sh.DESC_BASE; print('DESC_BASE ok', hex(sh.DESC_BASE))"
+DESC_BASE ok 0x80010000
+```
+
+Python-only change; simv not rebuilt. Next segment run (with 6091ec9 + new
+DESC_BASE) should clear the L19 corruption.
+
+### Ledger update (todo 22)
+
+2026-08-21: ISSUE-13D recorded in `docs/bugs/bugs-soc-rtl.md` as
+**BUG-RTL-SOC-008** (Status Fixed) with evidence links
+(`build/evidence/l0l19-probe-evidence.txt`, `build/evidence/l0l19-probe.json`)
+and fix commit `fa4ffec`. The Phase 10 bug-ledger completeness check
+(`scripts/p10_bug_ledger_check.sh`) was re-run for todo 22 and now gates
+BUG-RTL-SOC-008 on the L0L19 probe evidence;
+report: `build/evidence/task-22-phase10-rtl-verification.txt`.

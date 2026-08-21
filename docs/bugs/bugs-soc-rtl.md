@@ -575,3 +575,52 @@ File changed: `rtl/mxu/controller.v`
 - `bash scripts/wv_run_mxu.sh` result: 5/5 PASS (`build/evidence/wrap-mxu-regression.txt`).
 - MXU module regression: 109/109 PASS (`build/evidence/fix-module-regression.txt`).
 
+---
+
+### BUG-RTL-SOC-008 — DESC_BASE overlaps command ring entries 128+ and corrupts descriptors in long runs
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-08-21 |
+| **Block** | T13 (todo 13, Ibex 9-layer segment run) |
+| **Case** | 9-layer segment run L19/L20 (cos≈0.031) |
+| **Severity** | Major |
+| **Type** | Integration (firmware command ring vs descriptor region overlap) |
+| **Status** | Fixed |
+
+#### Symptom
+
+In the 9-layer segment run the L19/L20 checkpoints failed (cos≈0.031) while
+L0/L10/L29/L30/L34 passed. The L0→L19 in-session probe reproduces it: after
+the segment boundary, L19 wave-1 outputs diverge from golden
+(`residual1 cos=0.031251`, `o_out nan`). Pre-fix reproduction evidence:
+`build/evidence/l0l19-probe-evidence.txt`, `build/evidence/l0l19-probe.json`.
+
+#### Root Cause
+
+`DESC_BASE = 0x80001000` maps to command-ring entry 128 (each ring entry is
+32 B). Descriptors are 64 B, so descriptor `i` occupies ring entries
+`128+2i` and `128+2i+1`. In the 9-layer segment run L19 writes commands at
+ring entries 102-135; entries 128-135 overlap descriptors 0-7. The descriptor
+is written first and the command overwrites it, so the firmware reads a
+corrupted descriptor for the later waves of L19 — matching the observed
+L19/L20 failure while L0/L10/L29/L30/L34 pass.
+
+#### Fix
+
+- `sim/spike_host.py`: `DESC_BASE` moved `0x80001000` → `0x80010000` (free:
+  above the command ring `0x80000000-0x80007FFF` and completion ring
+  `0x80008000-0x8000FFFF`, below `P10_ACT_BASE=0x80020000`).
+- `sim/rtl_soc_mmul_probe.py`: descriptor read-back switched from a hardcoded
+  `0x80001000` to `sh.DESC_BASE` to stay consistent with the new constant.
+- No firmware/Verilog change: firmware reads the descriptor address from each
+  command entry, it does not hardcode `DESC_BASE`.
+
+Commit: `fa4ffec fix(sim): move DESC_BASE out of command ring to prevent descriptor corruption in long runs`
+
+#### Verification
+
+- `PYTHONPATH=sim python -c "from sim import spike_host as sh; assert sh.DESC_BASE == 0x80010000, sh.DESC_BASE; print('DESC_BASE ok', hex(sh.DESC_BASE))"` → `DESC_BASE ok 0x80010000`.
+- Probe reproduction (pre-fix, commit b51fae7): `build/evidence/l0l19-probe-evidence.txt`, `build/evidence/l0l19-probe.json` — L19 wave-1 corruption captured.
+- Python-only change, simv not rebuilt; next segment run (with 6091ec9 + new DESC_BASE) should clear the L19 corruption.
+

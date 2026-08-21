@@ -43,10 +43,12 @@ record_failure() { failures+=("$*"); }
 #   P9-00D  (PERF residual / PERF-06)   -> todo 8  evidence
 #   BUG-002 (DRAM 8 MB window)          -> todo 19 evidence
 #   WV-001  (SFU wrapper output)        -> todo 18 evidence
+#   008     (DESC_BASE vs command ring) -> todo 13 L0L19 probe evidence
 declare -A P10_EVIDENCE
 P10_EVIDENCE[BUG-RTL-SOC-P9-00D]="build/evidence/task-8-phase10-rtl-verification.txt"
 P10_EVIDENCE[BUG-RTL-SOC-002]="build/evidence/task-19-phase10-rtl-verification.txt"
 P10_EVIDENCE[BUG-RTL-SOC-WV-001]="build/evidence/task-18-phase10-rtl-verification.txt"
+P10_EVIDENCE[BUG-RTL-SOC-008]="build/evidence/l0l19-probe-evidence.txt"
 
 # =============================================================================
 # parse_ledger — extract per-bug records from the markdown ledger.
