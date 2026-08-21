@@ -49,7 +49,7 @@ except ImportError:
                 return f
             return _deco
 
-from cocotb_bridge import CocotbBridge, DRAM_BASE  # noqa: E402
+from cocotb_bridge import CocotbBridge, DRAM_BASE, SRAM_SIZE  # noqa: E402
 from func_model import FuncModel  # noqa: E402
 from q4_dequant import load_weights_from_gguf  # noqa: E402
 from opcodes import EngineOp  # noqa: E402
@@ -486,12 +486,16 @@ async def test_soc_ibex_segment_run(dut):
                   f"(elapsed={time.time() - t0:.0f}s)")
 
         # Segment boundary: force a FULL DRAM preload so hardware DRAM is
-        # re-synchronized with the Python image.  Delta preloads within a
-        # segment only refresh words the Python image changed, so regions the
-        # hardware modified during the previous segment (MMUL/VRESID outputs
-        # Python never read back) would otherwise keep stale hardware data.
-        await bridge.segment_preload(bytes(model.dram), force_full=True)
-        _progress(f"[SEGMENT] boundary full preload done "
+        # re-synchronized with the Python image, and zero the SRAM scratch so
+        # engine staging leftovers from the previous segment cannot leak into
+        # the next segment's ops.  Delta preloads within a segment only
+        # refresh words the Python image changed, so regions the hardware
+        # modified during the previous segment (MMUL/VRESID outputs Python
+        # never read back) would otherwise keep stale hardware data.
+        await bridge.segment_preload(bytes(model.dram),
+                                     sram=b"\x00" * SRAM_SIZE,
+                                     force_full=True)
+        _progress(f"[SEGMENT] boundary full preload + SRAM clear done "
                   f"(elapsed={time.time() - t0:.0f}s)")
 
         for L in ([chk] if pre is None else [pre, chk]):
