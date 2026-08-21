@@ -146,6 +146,17 @@ def check_model_consistency() -> List[str]:
             ctx = e2e_code[max(0, m.start()-20):m.end()+20].strip()
             issues.append(f"validate_e2e.py: hardcoded performance constant detected: ...{ctx}...")
 
+    # Check cross-file target sync (pattern: cross-file-target-desync)
+    # overnight_loop.py TARGET_TOK_S and validate_e2e.py M1_TARGET_TOK_S are the SAME
+    # semantic target and MUST match. If they desync, E2E validation and summary use
+    # different thresholds → false pass/fail (historically caused 89+ false failures).
+    m1_target_match = re.search(r'M1_TARGET_TOK_S\s*=\s*(\d+)', e2e_code)
+    if m1_target_match and int(m1_target_match.group(1)) != TARGET_TOK_S:
+        issues.append(
+            f"validate_e2e.py: M1_TARGET_TOK_S={m1_target_match.group(1)} desyncs from "
+            f"overnight_loop.py TARGET_TOK_S={TARGET_TOK_S}"
+        )
+
     # Check subprocess callees (param_sweep files) for hardcoded targets
     # Fix for error pattern #26: consistency-check-coverage-gap
     for sweep_file in ["param_sweep_v2.py", "param_sweep.py"]:
@@ -336,6 +347,23 @@ def fix_issues(issues: List[str]) -> int:
                 f.write(content)
             fixed += 1
             log(f"    Fixed weight_preloaded default in compiler.py")
+        elif "M1_TARGET_TOK_S" in issue and "desyncs" in issue:
+            e2e_path = SIM_DIR / "validate_e2e.py"
+            with open(e2e_path) as f:
+                content = f.read()
+            # Sync validate_e2e.py's M1_TARGET_TOK_S to overnight_loop.py's TARGET_TOK_S
+            # (overnight_loop.py is the loop driver; its TARGET_TOK_S is the source of truth)
+            import re as _re_sync
+            new_content = _re_sync.sub(r'M1_TARGET_TOK_S\s*=\s*\d+',
+                                 f'M1_TARGET_TOK_S = {TARGET_TOK_S}',
+                                 content, count=1)
+            if new_content != content:
+                with open(e2e_path, "w") as f:
+                    f.write(new_content)
+                fixed += 1
+                log(f"    Synced validate_e2e.py M1_TARGET_TOK_S to {TARGET_TOK_S}")
+            else:
+                log("    M1_TARGET_TOK_S sync: no change (pattern not found)")
         elif "broken import" in issue:
             # Extract file path from issue and auto-fix
             import re as _re
