@@ -25,7 +25,7 @@ async def test_bulk_and_word(dut):
     for w in range(n_words):
         if w == 130000:
             continue  # leave zero: exercises zero-skip + tb zero-init
-        img[w * 64:w * 64 + 4] = ((w + 0xDEAD0000) & 0xFFFFFFFF).to_bytes(
+        img[w * 64:w * 64 + 4] = ((w + 0x5A5A0000) & 0xFFFFFFFF).to_bytes(
             4, "little")
     img_bytes = bytes(img)
 
