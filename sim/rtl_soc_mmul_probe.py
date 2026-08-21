@@ -141,8 +141,8 @@ async def test_mmul_down_probe(dut):
         print(f"[PROBE-SRAM] expect wgt:  {packed_re[:64].tobytes().hex()}", flush=True)
         print(f"[PROBE-SRAM] expect scale:{scales_re[:16].tobytes().hex()}", flush=True)
         # RTL DRAM at the descriptor source addresses vs python model.dram
-        desc_w = struct.unpack("<15I", bytes(model.dram[0x80001000 - DRAM_BASE:
-                                                      0x80001000 - DRAM_BASE + 60]))
+        desc_w = struct.unpack("<15I", bytes(model.dram[sh.DESC_BASE - DRAM_BASE:
+                                                       sh.DESC_BASE - DRAM_BASE + 60]))
         wgt_addr, scale_addr = desc_w[1], desc_w[3]
         for (nm, a, ln) in (("dram-wgt", wgt_addr, 64), ("dram-scale", scale_addr, 16)):
             raw = await bridge.segment_read_dram(a, ln)
