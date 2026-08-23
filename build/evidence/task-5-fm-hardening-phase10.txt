@@ -1,0 +1,66 @@
+task-5-fm-hardening-phase10 evidence
+====================================
+Timestamp: 2026-08-23T02:38:57Z
+Base commit: 0122771 test(sim): ring-stress wrap scenario crossing entry 128
+
+Acceptance: PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset -v
+Result: PASS (1 passed in ~16s, runtime < 2 minutes)
+
+Named tests:
+  test_scaled_chain_baseline_pinned ......... PASSED (baseline characterization,
+                                             pins current 3-layer direct-chain behavior)
+  test_multi_layer_persistent_offset ........ PASSED (final_cos=1.000000000, printed;
+                                             numeric assert final_cos >= 0.999 in test body)
+
+Scenario (all asserted inside test_multi_layer_persistent_offset):
+  - Reuses the 28-block scaled chain fixture (tests/test_soc_fm.py:2453-2764):
+    blk0_manifest.json, _chain_build_cache, scaled INT4 block weights
+    (scale = 0.90 + i*0.01), direct bridge path _chain_run_block as the
+    per-op-golden-validated reference.
+  - 11 layers x 19 ring commands = 208 commands (>= 200) scheduled through
+    FuncModel.host_write_command + firmware.run_loop; doorbell NEVER reset
+    between layers (persistent ring offset).
+  - Cumulative offset wrap: FuncModel firmware ring is 16 entries; 208 commands
+    -> 13 full wraps (208 % 16 == 0). Asserted per command:
+    host_tail == k % 16 before issue, (k+1) % 16 after issue, npu_head ==
+    (k+1) % 16 after drain; layer-start offsets asserted to advance across
+    layers (not reset).
+  - address_space.contract_check(ring_entries=1024, desc_base=0x80600000,
+    desc_count=208, act_base=0x80800000) passes;
+    command_ring.assert_desc_clear_of_used_regions(...) passes; plus an
+    explicit assertion that the descriptor pool is disjoint from every
+    per-layer block region (the BUG-RTL-SOC-008 layout class — a pool inside
+    a live block region was caught by this very test during development and
+    moved from 0x80100000 to 0x80600000).
+  - Every op dispatched through the firmware ring path (genuine dispatch);
+    MMUL data-flow keeps the direct bridge path (firmware MMUL is scale-based
+    FP32 while the chain's VRESID consumes INT32 — see learnings) with an
+    additional genuine MMUL ring command per op diverted to scratch.
+  - Per-layer output (VCONV ring command, INT32->FP16) is bit-identical to the
+    direct-path golden for all 11 layers; per-op SFU/Vector goldens asserted
+    inside the ring path too.
+  - final_cos computed on the last layer vs golden: 1.000000000 >= 0.999
+    (numerical assertion, not string matching).
+
+QA scenarios:
+  happy  - 208 commands at persistent offset, wrap correct, final_cos=1.000000000
+           >= 0.999: PASS (above).
+  failure- corruption injection (ISSUE-13D shape) asserted inside the same test:
+           the layer-5 op14 VMUL ring command's descriptor ADDRESS is corrupted
+           by one slot (desc_addr + 64), which holds a planted valid-but-wrong
+           (SILU-shaped) descriptor; firmware silently executes the wrong op.
+           Asserted: layers 0-4 stay bit-identical to golden, layer 5 output
+           mismatches golden -> PASS. The per-op golden for the corrupted op is
+           deliberately skipped (divergence asserted at layer level).
+
+Regression:
+  PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py -q
+  Result: PASS (50 passed) — no regression in the fixture's own suite.
+  PYTHONPATH=sim python -m pytest sim/tests/test_command_ring.py sim/tests/test_spike_host_overlap.py -q
+  Result: PASS (12 passed) — dependency todos 2/3 machinery unaffected.
+  Full new file: 2 passed in 30.16s (< 2 minutes).
+
+Files created/modified:
+  Created: sim/tests/test_soc_fm_long_sequence.py
+  Created: build/evidence/task-5-fm-hardening-phase10.txt
+  Modified: .omo/notepads/fm-hardening-phase10/learnings.md (append)

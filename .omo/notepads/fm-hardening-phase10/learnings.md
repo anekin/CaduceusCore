@@ -102,3 +102,38 @@
 - Failure injection: monkeypatch `mmio_bridge.MMIOBridge._run_mxu_compute` (class attr, so it also binds on instances created after the patch) forcing `accumulate=False` while firmware still writes CTRL[2]=1 → output == partial1 exactly (max_abs_diff=0.0) and diverges from the accumulated golden by 573 — the gate is real, not borderline.
 - Orthogonality to todo 6: scales all-ones (todo 6 owns non-trivial scale VALUES); todo 7 owns the accumulation semantics between commands. Distinct DRAM addresses from todo 6's tests.
 - Full `test_soc_fm.py`: 50 passed / 0 failed (todo-6 baseline 48 + 2 new). Evidence: `build/evidence/task-7-fm-hardening-phase10.txt`.
+
+## [2026-08-23] Todo 5 — long-sequence persistent-offset FM gate
+- Created `sim/tests/test_soc_fm_long_sequence.py` (2 tests, whole file 30s < 2min):
+  - `test_scaled_chain_baseline_pinned`: baseline characterization FIRST — pins the
+    current 3-layer direct-chain FP16 fingerprints (hard-coded md5s captured today)
+    + determinism + pairwise-distinct layers.
+  - `test_multi_layer_persistent_offset`: 11 layers x 19 ring commands = 208 (>=200)
+    through `host_write_command` + `firmware.run_loop`, doorbell never reset between
+    layers; per-command wrap assertions (host_tail/npu_head == k % 16), 208 % 16 == 0
+    (13 full wraps); every layer output bit-identical to the direct-path golden;
+    `final_cos=1.000000000` asserted numerically >= 0.999.
+- Key design constraint discovered (not in the plan): the firmware dispatcher routes
+  MMUL to `tile_mmul`, which ALWAYS applies an FP32 scale (`matmul_int4_per_block`
+  semantics) — the chain fixture's VRESID consumes the output buffer as INT32, and
+  the firmware emulator has no INT32 MMUL dispatch. Routing data-flow MMULs through
+  the ring would silently change numerics, and changing the scheduling algorithm is
+  forbidden — so the data-flow MMUL keeps the direct bridge path and every MMUL also
+  gets a genuine ring command diverted to a scratch region. Everything else
+  (SFU/Vector/VCONV) is ring-driven end-to-end, and per-op goldens are asserted on
+  the ring path.
+- Address-layout bug caught by the test itself during development: first desc-pool
+  choice 0x80100000 overlapped block 3's scratch region ([0x800D0000, 0x80110000))
+  and clobbered ROPE inputs mid-run. Moved to 0x80600000 and added an explicit
+  descriptor-pool-vs-block-region disjointness assertion — the exact BUG-RTL-SOC-008
+  class the gate must catch, now enforced inside the test.
+- Failure injection: corrupt the layer-5 op14 VMUL ring command's descriptor ADDRESS
+  by one slot (+64), planting a valid-but-wrong SILU-shaped descriptor there — the
+  silent wrong-op shape of BUG-RTL-SOC-008. Firmware executes it with status 'done',
+  layers 0-4 stay bit-identical, layer 5 output mismatches golden (asserted). The
+  per-op golden for the corrupted op is deliberately skipped; divergence is asserted
+  at layer level. A pre-VCONV ring command carries the previous block's residual
+  (INT32->FP16) exactly like the fixture's `_chain_vector_conv`.
+- Verified: acceptance command exit 0 (~16s), `test_soc_fm.py` 50 passed (no
+  regression), dependency suites test_command_ring + test_spike_host_overlap 12
+  passed. Evidence: `build/evidence/task-5-fm-hardening-phase10.txt`.
