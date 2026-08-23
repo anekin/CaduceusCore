@@ -1,5 +1,5 @@
 # Phase 10 T20: MMIO spec gap closure (docs only)
-# Generated: 2026-08-19 00:48:05
+# Generated: 2026-08-19 00:49:00
 # Host: sz0002
 # Plan reference: .omo/plans/rtl-update-plan.md (top-level conclusion L10)
 # Status: DOCS-SYNC=PASS

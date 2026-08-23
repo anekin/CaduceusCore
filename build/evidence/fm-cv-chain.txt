@@ -1,6 +1,6 @@
 ======================================================================
 FM-2 MobileNetV3 Conv2D->VRESID->SiLU Chain Verification
-Timestamp: 2026-07-28T03:37:32Z
+Timestamp: 2026-08-20T07:00:02Z
 Layer: MobileNetV3-Small features.0.0  (16@3x3 s2)
 Dims: M=12544 K=27 N=16  length=200704
 Expanded program: ['MMUL', 'VRESID', 'VCONV', 'SILU']

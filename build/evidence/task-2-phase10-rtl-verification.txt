@@ -1,6 +1,6 @@
 Task 2 - Phase 10 RTL Verification: sz0001 infra and resource check
 ===================================================================
-Timestamp : 2026-08-17 11:14:23 CST (sz0001 local)
+Timestamp : 2026-08-17 11:17:05 CST (sz0001 local)
 Host      : sz0001
 Repo root : /home/prj/zhengs/caduceuscore/CaduceusCore
 
@@ -19,11 +19,11 @@ firmware build ok
 license ok
 
 --- Check 4: CPU load (< 0.8 * nproc) ---
-load=16.80 nproc=112 limit=89.6
+load=16.89 nproc=112 limit=89.6
 cpu ok
 
 --- Check 5: build/ partition free space (>= 50 GB) ---
-/dev/mapper/centos-home  8.7T  8.4T  301G  97% /home
-disk ok (301 GB free)
+/dev/mapper/centos-home  8.7T  8.4T  300G  97% /home
+disk ok (300 GB free)
 
 OVERALL: PASS
