@@ -34,7 +34,9 @@ sys.path.insert(0, str(_REPO / "ggml-npu"))
 import cocotb  # noqa: E402
 from cocotb_bridge import CocotbBridge, DRAM_BASE, SRAM_SIZE  # noqa: E402
 from func_model import FuncModel  # noqa: E402
+from golden_executor import GoldenMXU  # noqa: E402
 from q4_dequant import load_weights_from_gguf  # noqa: E402
+from quantize import quantize_int4_per_block  # noqa: E402
 import spike_host as sh  # noqa: E402
 import rtl_soc_segment_run as segrun  # noqa: E402
 
@@ -82,10 +84,32 @@ def _record(name: str, hw: np.ndarray, golden: np.ndarray) -> dict:
     }
 
 
+def _compute_mmul_expected(input_i8: np.ndarray, W_f32: np.ndarray,
+                           M: int, K: int, N: int) -> np.ndarray:
+    """Dequantized MMUL output expected from the hardware descriptor.
+
+    The probe readbacks are compared against the hardware-expected values, not
+    the model's FP32 semantic golden, because the Phase-10 descriptor dispatches
+    INT4-per-block MMULs whose outputs are scaled partial sums.  Using the
+    dequantized expected output isolates descriptor/quantization effects from
+    genuine hardware corruption.
+    """
+    packed, scales, _ = quantize_int4_per_block(W_f32, 128)
+    return GoldenMXU().matmul_int4_per_block(input_i8, packed, scales,
+                                             M, K, N, group_size=128)
+
+
 async def _read_dram(bridge, addr: int, shape, dtype) -> np.ndarray:
     n = int(np.prod(shape)) * np.dtype(dtype).itemsize
     data = await bridge.segment_read_dram(addr, n)
     return np.frombuffer(bytes(data), dtype=dtype).reshape(shape)
+
+
+def _read_model(model, addr: int, shape, dtype) -> np.ndarray:
+    """Read a tensor from the Python model.dram image (after explicit readback)."""
+    off = addr - DRAM_BASE
+    n = int(np.prod(shape)) * np.dtype(dtype).itemsize
+    return np.frombuffer(model.dram[off:off + n], dtype=dtype).reshape(shape)
 
 
 def _dump_json(state: dict) -> None:
@@ -179,6 +203,9 @@ async def _ibex_execute_layer_probe(bridge, model, hidden, weights, layer, dims,
             raise RuntimeError(
                 f"L{layer}: wave timeout head={head} expected={state['offset'] % RING_SIZE}")
         if readback:
+            # Brief wait so any trailing AXI write responses land in the DRAM
+            # model before the backdoor readback snapshots the bytes.
+            await bridge.wait_cycles(1000)
             for (addr, length) in readback:
                 data = await bridge.segment_read_dram(addr, length)
                 off = addr - DRAM_BASE
@@ -211,22 +238,38 @@ async def _ibex_execute_layer_probe(bridge, model, hidden, weights, layer, dims,
     sh._add_mmul_op(ops, model, v_in_addr, v_out_addr, packed_v, scales_v, M, H, KD, v_i8)
     packed_o, scales_o, _, _ = sh._quantize_weight_for_mmul(w[f"blk.{layer}.attn_output.weight"])
     sh._add_mmul_op(ops, model, o_in_addr, o_out_addr, packed_o, scales_o, M, H, H, attn_i8)
-    sh._add_vector_op(ops, model, hidden_addr, o_out_addr, residual1_addr, sh.VEC_OP_ADD,
+    # Consumer ops overwrite their input DRAM addresses with golden reference
+    # data, so stage those inputs separately and preserve producer outputs.
+    resid_a_addr = sh._allocate_dram(H * 4)
+    resid_b_addr = sh._allocate_dram(H * 4)
+    sh._add_vector_op(ops, model, resid_a_addr, resid_b_addr, residual1_addr, sh.VEC_OP_ADD,
                       np.rint(hidden * P10_RESID_SCALE).astype(np.int32),
                       np.rint(o * P10_RESID_SCALE).astype(np.int32), H)
-    sh._add_sfu_op(ops, model, residual1_addr, ffn_in_addr, sh.SFU_OP_RMSNORM,
+    rmsnorm_in_addr = sh._allocate_dram(H * 2)
+    sh._add_sfu_op(ops, model, rmsnorm_in_addr, ffn_in_addr, sh.SFU_OP_RMSNORM,
                    residual1.astype(np.float16), H)
-    consumed += await run_wave(ops)
+    wave1_readback = [
+        (q_out_addr, M * QD * 4),
+        (k_out_addr, M * KD * 4),
+        (v_out_addr, M * KD * 4),
+        (o_out_addr, M * H * 4),
+        (residual1_addr, M * H * 4),
+        (ffn_in_addr, M * H * 2),
+    ]
+    consumed += await run_wave(ops, readback=wave1_readback)
+
+    q_exp = _compute_mmul_expected(q_i8, w[f"blk.{layer}.attn_q.weight"], M, H, QD)
+    o_exp = _compute_mmul_expected(attn_i8, w[f"blk.{layer}.attn_output.weight"], M, H, H)
 
     if probe is not None:
         recs = [
-            _record("q_out", await _read_dram(bridge, q_out_addr, (M, QD), np.float32), q),
-            _record("k_out", await _read_dram(bridge, k_out_addr, (M, KD), np.float32), k),
-            _record("v_out", await _read_dram(bridge, v_out_addr, (M, KD), np.float32), v),
-            _record("o_out", await _read_dram(bridge, o_out_addr, (M, H), np.float32), o),
-            _record("residual1", await _read_dram(bridge, residual1_addr, (M, H), np.int32),
+            _record("q_out", _read_model(model, q_out_addr, (M, QD), np.float32), q_exp),
+            _record("k_out", _read_model(model, k_out_addr, (M, KD), np.float32), k),
+            _record("v_out", _read_model(model, v_out_addr, (M, KD), np.float32), v),
+            _record("o_out", _read_model(model, o_out_addr, (M, H), np.float32), o_exp),
+            _record("residual1", _read_model(model, residual1_addr, (M, H), np.int32),
                     np.rint(residual1 * P10_RESID_SCALE)),
-            _record("ffn_in", await _read_dram(bridge, ffn_in_addr, (M, H), np.float32),
+            _record("ffn_in", _read_model(model, ffn_in_addr, (M, H), np.float16),
                     ffn_input),
         ]
         probe["waves"].append({"wave": "w1", "cmds": len(ops), "tensors": recs})
@@ -234,6 +277,10 @@ async def _ibex_execute_layer_probe(bridge, model, hidden, weights, layer, dims,
         for r in recs:
             _log(f"[PROBE L{layer} w1] {r['name']} cos={r['cos']:.6f} "
                  f"hw=[{r['min']:.3f},{r['max']:.3f}] g=[{r['g_min']:.3f},{r['g_max']:.3f}]")
+
+    gate_exp = _compute_mmul_expected(gate_i8, w[f"blk.{layer}.ffn_gate.weight"].T, M, H, I)
+    up_exp = _compute_mmul_expected(up_i8, w[f"blk.{layer}.ffn_up.weight"].T, M, H, I)
+    down_exp = _compute_mmul_expected(ffn_i8, w[f"blk.{layer}.ffn_down.weight"].T, M, I, H)
 
     # Waves 2-4: FFN gate (N-tiled, two 2048-col tiles per wave) + SiLU
     tile_n = 2048
@@ -245,14 +292,19 @@ async def _ibex_execute_layer_probe(bridge, model, hidden, weights, layer, dims,
                                    w[f"blk.{layer}.ffn_gate.weight"].T, M, H, I,
                                    gate_i8, tile_n, t_lo, t_hi)
         if t_hi >= n_tiles:
-            sh._add_sfu_op(ops, model, gate_out_addr, silu_addr, sh.SFU_OP_SILU,
+            silu_in_addr = sh._allocate_dram(I * 2)
+            sh._add_sfu_op(ops, model, silu_in_addr, silu_addr, sh.SFU_OP_SILU,
                            gate.astype(np.float16), I)
-        consumed += await run_wave(ops)
+        wave24_readback = [
+            (gate_out_addr, M * I * 4),
+            (silu_addr, M * I * 2),
+        ] if t_hi >= n_tiles else None
+        consumed += await run_wave(ops, readback=wave24_readback)
         if probe is not None and t_hi >= n_tiles:
             recs = [
-                _record("gate_out", await _read_dram(bridge, gate_out_addr, (M, I), np.float32),
-                        gate),
-                _record("silu", await _read_dram(bridge, silu_addr, (M, I), np.float32),
+                _record("gate_out", _read_model(model, gate_out_addr, (M, I), np.float32),
+                        gate_exp),
+                _record("silu", _read_model(model, silu_addr, (M, I), np.float16),
                         silu_gate),
             ]
             probe["waves"].append({"wave": "w2-4", "cmds": len(ops), "tensors": recs})
@@ -269,17 +321,22 @@ async def _ibex_execute_layer_probe(bridge, model, hidden, weights, layer, dims,
                                    w[f"blk.{layer}.ffn_up.weight"].T, M, H, I,
                                    up_i8, tile_n, t_lo, t_hi)
         if t_hi >= n_tiles:
-            sh._add_vector_op(ops, model, silu_addr, up_out_addr, ffn_hidden_addr,
+            vmul_a_addr = sh._allocate_dram(I * 4)
+            vmul_b_addr = sh._allocate_dram(I * 4)
+            sh._add_vector_op(ops, model, vmul_a_addr, vmul_b_addr, ffn_hidden_addr,
                               sh.VEC_OP_MUL, silu_gate.astype(np.int32),
                               up.astype(np.int32), I)
-        consumed += await run_wave(ops)
+        wave57_readback = [
+            (up_out_addr, M * I * 4),
+            (ffn_hidden_addr, M * I * 4),
+        ] if t_hi >= n_tiles else None
+        consumed += await run_wave(ops, readback=wave57_readback)
         if probe is not None and t_hi >= n_tiles:
             recs = [
-                _record("up_out", await _read_dram(bridge, up_out_addr, (M, I), np.float32),
-                        up),
-                _record("ffn_hidden", await _read_dram(bridge, ffn_hidden_addr, (M, I),
-                                                       np.int32),
-                        np.rint(ffn_hidden * P10_RESID_SCALE)),
+                _record("up_out", _read_model(model, up_out_addr, (M, I), np.float32),
+                        up_exp),
+                _record("ffn_hidden", _read_model(model, ffn_hidden_addr, (M, I), np.int32),
+                        silu_gate.astype(np.int32) * up.astype(np.int32)),
             ]
             probe["waves"].append({"wave": "w5-7", "cmds": len(ops), "tensors": recs})
             _dump_json(probe)
@@ -295,12 +352,12 @@ async def _ibex_execute_layer_probe(bridge, model, hidden, weights, layer, dims,
         sh._add_mmul_tiles_phase10(ops, model, ffn_out_in_addr, ffn_out_addr,
                                    w[f"blk.{layer}.ffn_down.weight"].T, M, I, H,
                                    ffn_i8, tile_n_dn, t, t + 1)
-        readback = [(ffn_out_addr, H * 4)] if t == n_tiles_dn - 1 else None
+        readback = [(ffn_out_addr, M * H * 4)] if t == n_tiles_dn - 1 else None
         consumed += await run_wave(ops, readback=readback)
         if probe is not None and t == n_tiles_dn - 1:
             recs = [
-                _record("ffn_out", await _read_dram(bridge, ffn_out_addr, (M, H), np.float32),
-                        down),
+                _record("ffn_out", _read_model(model, ffn_out_addr, (M, H), np.float32),
+                        down_exp),
             ]
             probe["waves"].append({"wave": "w8-10", "cmds": len(ops), "tensors": recs})
             _dump_json(probe)
@@ -315,7 +372,9 @@ async def _ibex_execute_layer_probe(bridge, model, hidden, weights, layer, dims,
          f"nan={int(np.isnan(down_out_hw).sum())}/{down_out_hw.size} "
          f"ffn_scale={ffn_scale:.6f}")
     ops = new_wave()
-    sh._add_vector_op(ops, model, residual1_addr, ffn_out_addr, l_out_addr, sh.VEC_OP_ADD,
+    vresid_a_addr = sh._allocate_dram(H * 4)
+    vresid_b_addr = sh._allocate_dram(H * 4)
+    sh._add_vector_op(ops, model, vresid_a_addr, vresid_b_addr, l_out_addr, sh.VEC_OP_ADD,
                       np.rint(residual1 * P10_RESID_SCALE).astype(np.int32),
                       np.rint(down_out_hw * ffn_scale * P10_RESID_SCALE).astype(np.int32),
                       H)

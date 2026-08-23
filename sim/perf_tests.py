@@ -37,22 +37,24 @@ RING_BASE = DRAM_BASE
 DOORBELL_HTAIL = 0x40005000
 DOORBELL_NHEAD = 0x40005004
 TILE = 64
-TILE_SCALE_BYTES = TILE * 4  # 256 bytes per tile: 64 FP16 scales (padded to 4B each)
+TILE_SCALE_BYTES = TILE * 4  # 256 bytes per tile: 64 FP32 scales (ISSUE-13B store-out format)
 
 def _make_scales(K, N, value=1.0):
-    """Generate per-block scale data for the firmware path.
-    
-    Scales are FP16 values, 4 bytes per N-column (padded), per K-block.
-    Total: (K/TILE) * (N/TILE) * TILE_SCALE_BYTES bytes.
+    """Generate per-tile FP32 scale data for the firmware doorbell path.
+
+    ISSUE-13B (cf6736b): the mxu_soc_wrapper store-out fetches a 256-byte
+    per-tile scale row of 64 FP32 values and dequantizes each column
+    (fp32 = acc * scale[col]).  The firmware dispatches one MXU command per
+    64-wide K-block and DMAs one scale tile per (n_tile, k_block) at offset
+    (n_tile * num_blocks + k_block) * 256, so the buffer must be laid out
+    [n_tile][k_block][64 fp32] with num_blocks = ceil(K/64) (NOT per-128,
+    which is the Func-Model matmul_int4_per_block grouping).  The pre-fix
+    version had the correct size/layout but FP16-padded values, which the
+    store-out reads as FP32 denormals (~0).
     """
-    import struct
-    k_blocks = (K + TILE - 1) // TILE
-    n_tiles = (N + TILE - 1) // TILE
-    fp16_val = struct.pack("<e", np.float16(value))  # 2 bytes
-    padded_val = fp16_val + b'\x00\x00'  # 4 bytes per scale
-    tile_data = padded_val * TILE  # 64 scales per tile
-    total = tile_data * k_blocks * n_tiles
-    return total
+    num_blocks = (K + 63) // 64
+    n_tiles = (N + 63) // 64
+    return np.ones((n_tiles, num_blocks, 64), dtype=np.float32) * np.float32(value)
 
 def _git():
     try:
@@ -160,10 +162,10 @@ class PR:
 
         await self.b._dram_backdoor_write(ad, act_packed)
         await self.b._dram_backdoor_write(wd, wp_packed)
-        await self.b._dram_backdoor_write(scale_addr, scales)
+        await self.b._dram_backdoor_write(scale_addr, scales.tobytes())
 
         desc = _pack_mmul_desc(ad, wd, od, scale_addr, 0, 0, 0, 0,
-                               len(act_packed), len(wp_packed), M*N*4, len(scales),
+                               len(act_packed), len(wp_packed), M*N*4, scales.nbytes,
                                M, K, N)
         await self.b._dram_backdoor_write(DESC_BASE, desc)
         # Advance ring: write command to next slot, increment tail
@@ -182,7 +184,10 @@ class PR:
         # Wait for DRAM writes to settle (48-cycle DDR latency + safety margin)
         await ClockCycles(self.d.clk, 200)
         raw = await self.b._dram_backdoor_read(od, M*N*4)
-        out = np.frombuffer(bytes(raw), dtype=np.int32).reshape(M,N)
+        # ISSUE-13B (cf6736b): scaled MMUL store-out writes FP32
+        # (acc * scale); read back FP32 and compare against the INT32
+        # golden cast to float (scale=1.0 keeps values identical, cos ~1.0).
+        out = np.frombuffer(bytes(raw), dtype=np.float32).reshape(M,N)
         a, g = out.flatten().astype(float), golden.flatten().astype(float)
         na, ng = np.linalg.norm(a), np.linalg.norm(g)
         cs = np.dot(a,g)/(na*ng) if na>0 and ng>0 else 0.0
