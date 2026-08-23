@@ -184,7 +184,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   QA scenarios: happy — 4 脚本存在、语法通过、F1 脚本如实报告当前证据状态；failure — 删除任一脚本后 `bash -n` 失败/文件缺失检查失败。Evidence `build/evidence/task-13-fm-hardening-phase10.txt`
   Commit: Y | feat(scripts): add FM hardening F-wave gate scripts
 
-- [ ] 14. 验证方法论文档同步 + gap report 状态回填 + 新 notepad
+- [x] 14. 验证方法论文档同步 + gap report 状态回填 + 新 notepad
   What to do / Must NOT do: (a) `docs/verification_methodology.md` FM 验证节新增小节：内存布局契约（address_space/command_ring）、scale/accumulate golden 要求、段边界协议、RTL/固件变更后反向依赖门禁（含 `scripts/fm_reverse_dependency_gate.sh` 用法）；(b) `.omo/notepads/phase10-rtl-verification/func-model-verification-gap-report.md` §5-6 提案**如实**回填：M1→todo 3、M2→todo 1、S1→todo 5、S2→todo 4、A1→todo 2、A2→todo 2、AL2→todo 9 标注"已落地为 fm-hardening-phase10 计划 todo N"；**T1/T2（firmware_memory_contract.json 双向比对）与 AL1（forward 路径 per-layer 环重置 vs 段跑累计偏移的对齐）明确标注"deferred，未纳入本计划"**，不得伪称已实现；(c) 新建 `.omo/notepads/fm-verification-hardening/learnings.md` 记录关键决策（6 类 bug→守卫映射表、FM-SOC runner 差异化布局决策、device_server 排除理由、tests-after 选择）。Must NOT 改其他文档；Must NOT 伪造"已实现"状态。
   Parallelization: Wave 3 | Blocked by: 1-13 | Blocks: —
   References: `docs/verification_methodology.md:78-106`（FM 验证节）; `.omo/notepads/phase10-rtl-verification/func-model-verification-gap-report.md:53-95`（§5-6 提案清单）
