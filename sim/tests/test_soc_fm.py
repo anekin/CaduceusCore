@@ -1682,6 +1682,133 @@ def test_mmul_scale_nonzero_fp16_scale_collapse():
     )
 
 
+def _doorbell_run_accumulate_mmul(model: FuncModel, M: int, K: int, N: int,
+                                  act_addr: int, wgt_addr: int, out_addr: int,
+                                  scale_addr: int, desc_addr: int):
+    """Queue one doorbell MMUL whose K splits into exactly two firmware
+    K-blocks chained to the same output accumulator.
+
+    K=256 → tile_scheduler.tile_mmul issues two MXU commands (K=128 each)
+    to the same SRAM output accumulator; the second command carries
+    CTRL[2]=1 accumulate (tile_scheduler.py:148, npu_firmware.c:541).
+
+    Returns (output_fp32, partial0, partial1, golden_full):
+      - output_fp32:  DRAM output after the two-command accumulate chain
+      - partial0/1:   matmul_int4_per_block golden for each K-block slice
+      - golden_full:  matmul_int4_per_block over the full K
+    """
+    from engine.isa import OpCode
+
+    assert (M, K, N) == (1, 256, 128), (
+        "accumulate-chain helper pinned to M=1, K=256, N=128: exactly two "
+        "K=128 firmware commands and contiguous weight-tile offsets")
+
+    act, wgt_packed, scales = _doorbell_setup_mmul(
+        model, M, K, N, act_addr, wgt_addr, out_addr, scale_addr, desc_addr)
+    model.host_write_command(OpCode.MMUL, desc_addr)
+    results = model.firmware.run_loop(max_commands=1)
+    assert len(results) == 1 and results[0]['status'] == 'done', \
+        f"MMUL command failed: {results}"
+
+    out_off = out_addr - Addr.DRAM_BASE
+    out_fw = np.frombuffer(
+        model.dram[out_off:out_off + M * N * 4], dtype=np.float32).reshape(M, N)
+
+    gmxu = GoldenMXU()
+    act2d = act.reshape(M, K)
+    half = K // 2
+    half_bytes = (half * N + 1) // 2
+    partial0 = gmxu.matmul_int4_per_block(
+        act2d[:, :half], wgt_packed[:half_bytes], scales[:1, :],
+        M, half, N, group_size=128)
+    partial1 = gmxu.matmul_int4_per_block(
+        act2d[:, half:], wgt_packed[half_bytes:], scales[1:2, :],
+        M, half, N, group_size=128)
+    golden_full = gmxu.matmul_int4_per_block(
+        act2d, wgt_packed, scales, M, K, N, group_size=128)
+    return out_fw, partial0, partial1, golden_full
+
+
+def test_mmul_accumulate():
+    """CTRL[2] accumulate: two K-block commands chained to one output address.
+
+    One doorbell MMUL descriptor with K=256 makes the firmware chain two MXU
+    commands (K=128 each) to the same output accumulator; the second carries
+    CTRL[2]=1 accumulate. The final output must equal the first command's
+    fresh partial plus the second command's fresh partial (mmio_bridge.py:
+    268-278 "existing + result"), and must match the golden built by
+    combining matmul_int4_per_block partials. This is orthogonal to the
+    scale-value coverage in test_mmul_scale_nonzero: scales are all-ones
+    here; what is under test is the accumulation between the two commands.
+    """
+    model = FuncModel()
+
+    M, K, N = 1, 256, 128
+    act_addr, wgt_addr, out_addr, scale_addr, desc_addr = (
+        0x8001_4000, 0x8002_8000, 0x8100_4000, 0x8011_4000, 0x8000_02C0)
+
+    out_fw, partial0, partial1, golden_full = _doorbell_run_accumulate_mmul(
+        model, M, K, N, act_addr, wgt_addr, out_addr, scale_addr, desc_addr)
+
+    golden_accum = partial0 + partial1
+
+    # 1. Accumulate semantics: existing + fresh == partial0 + partial1
+    assert np.allclose(out_fw, golden_accum, rtol=1e-5, atol=1e-5), (
+        "accumulate mismatch vs combined partials: max_abs_diff="
+        f"{np.max(np.abs(out_fw - golden_accum)):.3e}"
+    )
+    # 2. Matches the full-K golden
+    assert np.allclose(out_fw, golden_full, rtol=1e-5, atol=1e-5), (
+        "accumulate mismatch vs full-K golden: max_abs_diff="
+        f"{np.max(np.abs(out_fw - golden_full)):.3e}"
+    )
+    # 3. Anti-vacuous: the first partial is non-trivial and contributed
+    assert np.max(np.abs(partial0)) > 0, "first K-block partial is zero"
+    assert not np.allclose(out_fw, partial1, rtol=1e-5, atol=1e-5), (
+        "anti-vacuous fail: output equals only the second partial "
+        "(accumulate silently ignored)"
+    )
+
+
+def test_mmul_accumulate_ignore_ctrl2(monkeypatch):
+    """Failure injection: bridge ignores CTRL[2] → output is only the 2nd partial.
+
+    Monkeypatches MMIOBridge._run_mxu_compute to force accumulate=False while
+    the firmware still sets CTRL[2]=1 on the second K-block command. The
+    second command then overwrites the first partial, so the output must
+    equal only the second partial (and NOT the accumulated golden). This
+    proves the happy-path assertion would catch a CTRL[2]-ignored regression
+    rather than silently passing.
+    """
+    import mmio_bridge as mb
+
+    orig_run = mb.MMIOBridge._run_mxu_compute
+
+    def _force_no_accumulate(self, mxu, M, K, N, raw_i, raw_w, raw_o, raw_s,
+                             accumulate):
+        return orig_run(self, mxu, M, K, N, raw_i, raw_w, raw_o, raw_s, False)
+
+    monkeypatch.setattr(mb.MMIOBridge, "_run_mxu_compute", _force_no_accumulate)
+
+    model = FuncModel()
+
+    M, K, N = 1, 256, 128
+    act_addr, wgt_addr, out_addr, scale_addr, desc_addr = (
+        0x8001_4000, 0x8002_8000, 0x8100_4000, 0x8011_4000, 0x8000_02C0)
+
+    out_fw, partial0, partial1, _ = _doorbell_run_accumulate_mmul(
+        model, M, K, N, act_addr, wgt_addr, out_addr, scale_addr, desc_addr)
+
+    # With accumulate ignored, the second command overwrites the output.
+    assert np.allclose(out_fw, partial1, rtol=1e-5, atol=1e-5), (
+        "injection failed to take effect: expected output to be only the "
+        f"second partial (max_abs_diff={np.max(np.abs(out_fw - partial1)):.3e})"
+    )
+    assert not np.allclose(out_fw, partial0 + partial1, rtol=1e-5, atol=1e-5), (
+        "injection failed: output still equals the accumulated result"
+    )
+
+
 # ══════════════════════════════════════════════════════════════════════
 # P2 — Full blk.0 17-op chain, single-tile MMUL workaround (FM-SOC-027)
 # ══════════════════════════════════════════════════════════════════════

@@ -58,6 +58,20 @@
 - Full `test_soc_fm.py` re-run: 48 passed / 0 failed. Evidence: `build/evidence/task-6-fm-hardening-phase10.txt`.
 
 
+## [2026-08-23] Todo 10 — segment-boundary SRAM-clear contract (ISSUE-13C)
+- Added `SegmentBoundaryError` to `sim/cocotb_bridge.py` and `clear_sram: bool = False` parameter to `segment_preload()`.
+- Contract: `force_full=True` (segment boundary DRAM re-sync) + `clear_sram=True` requires `sram == b"\x00" * SRAM_SIZE`; any other value raises `SegmentBoundaryError`.
+- `sim/rtl_soc_segment_run.py` segment boundary call site now passes `clear_sram=True` alongside the existing `sram=b"\x00" * SRAM_SIZE` / `force_full=True`.
+- Single-segment/probe callers keep `clear_sram=False` (default) and are not forced to pass `sram`.
+- `sim/test_dram_bulk.py` gained `test_bulk_with_sram_clear`: seeds SRAM with a non-zero pattern, calls `segment_preload(..., clear_sram=True)`, and verifies head/tail zeroing via backdoor readback.
+- `sim/tests/test_segment_boundary.py` (new) provides pure-Python FM coverage:
+  - `test_two_segment_sram_clear`: segment 1 leaves SRAM dirty, boundary preload clears it, segment 2 starts clean.
+  - `test_segment_boundary_error_injection`: empty, non-zero, and wrong-size SRAM all raise `SegmentBoundaryError` in boundary mode.
+  - `test_clear_sram_default_allows_empty_sram`: legacy callers with `clear_sram=False` are unaffected.
+- `test_dram_bulk.py` also had to guard its `import cocotb` with try/except so `pytest sim/test_dram_bulk.py -v` exits 0 on hosts without cocotb installed (the cocotb RTL tests are then simply collected as 0 items).
+- Acceptance: `PYTHONPATH=sim python -m pytest sim/tests/test_segment_boundary.py::test_two_segment_sram_clear -v` exit 0; `PYTHONPATH=sim python -m pytest sim/test_dram_bulk.py -v` exit 0.
+- Evidence: `build/evidence/task-10-fm-hardening-phase10.txt`.
+
 ## [2026-08-23] Todo 2 — scheduling-time assertions + stale preflight DESC_BASE
 - `spike_host.schedule_chain` now asserts `address_space.contract_check(desc_base=DESC_BASE, desc_count=len(ops), act_base=address_space.P10_ACT_BASE)` as its FIRST statement — `act_base` passed explicitly (todo 1 default skips assertion (b); see todo 1 learnings).
 - `spike_host.write_cmd_entry` carries a per-entry guard `contract_check(desc_base=desc_addr, desc_count=1, act_base=P10_ACT_BASE)` so direct callers (run_pcie_dma_smoke, segment-run entries) are covered even outside schedule_chain.
@@ -67,3 +81,13 @@
 - `scripts/p10_36layer_preflight.sh`: 5b heredoc now imports DESC_BASE/FP_DRAM_BASE from sim/spike_host.py (`PYTHONPATH="$ROOT/sim"`); 5c polarity flipped from "out-of-window is expected" to "out-of-window is a regression" (its old OUT branch was dead code); :446/:496/:696 text now reflects FP_DRAM_BASE=0x80020000 in-window. No region constant value changed.
 - Regression on this host: full sim/tests = 19 failed / 1412 passed / 13 errors — failures/errors are environment-affected legacy (cocotb collection errors, missing spike artifacts, engine perf baselines); none in changed paths. spike_host-dependent suites (test_soc_fm/qwen3b/firmware/mmio_bridge/ring_entry_abi) 95 passed.
 - Evidence: `build/evidence/task-2-fm-hardening-phase10.txt`.
+
+## [2026-08-23] Todo 7 — accumulate-path golden hardening (CTRL[2] two-command chain)
+- Added `sim/tests/test_soc_fm.py::test_mmul_accumulate` + `test_mmul_accumulate_ignore_ctrl2` + shared helper `_doorbell_run_accumulate_mmul`, reusing `_doorbell_setup_mmul` (todo-6's data/descriptor setup).
+- Mechanism confirmed before writing: a single doorbell MMUL descriptor with K=256 makes `tile_scheduler.tile_mmul` chain TWO MXU commands (K=128 each) to the same SRAM output accumulator, with `ctrl_val = 4 if k_block > 0 else 0` (`tile_scheduler.py:148` — the Python analogue of `npu_firmware.c:541`). Two SEPARATE descriptors to the same output address would NOT accumulate (each dispatch restarts k_block=0), so "两命令链" = the intra-descriptor K-split chain.
+- Weight-tile layout constraint: N=128 is load-bearing. The firmware reads tile (k_block=1) at DRAM offset `TILE_WEIGHT_BYTES`=8192 from `weight_addr`; only N=128 makes the contiguous packed buffer (`(256*128+1)//2`=16384B) align with the two 8192B tile offsets. N=64 (or any N<TILE_W) would require explicit tile-major weight placement. Same reason todo 6 used N=128.
+- Golden is built by combining two `matmul_int4_per_block(group_size=128)` partials on packed-byte slices `wgt_packed[:8192]` / `wgt_packed[8192:]`. First-attempt bug: passing the UNPACKED `unpack_int4(wgt_packed).reshape(K,N)` slices as `weight_packed` crashes inside `unpack_int4` (it unpacks its input). matmul_int4_per_block expects packed bytes, not int8 values.
+- Happy path is bit-exact (max_abs_diff=0.0 vs both the combined partials and the full-K golden) — bridge accumulate order (existing+fresh fp32) matches the golden's fp32 block accumulation. Anti-vacuous gates: partial0 non-trivial (max_abs≈564) and output != partial1.
+- Failure injection: monkeypatch `mmio_bridge.MMIOBridge._run_mxu_compute` (class attr, so it also binds on instances created after the patch) forcing `accumulate=False` while firmware still writes CTRL[2]=1 → output == partial1 exactly (max_abs_diff=0.0) and diverges from the accumulated golden by 573 — the gate is real, not borderline.
+- Orthogonality to todo 6: scales all-ones (todo 6 owns non-trivial scale VALUES); todo 7 owns the accumulation semantics between commands. Distinct DRAM addresses from todo 6's tests.
+- Full `test_soc_fm.py`: 50 passed / 0 failed (todo-6 baseline 48 + 2 new). Evidence: `build/evidence/task-7-fm-hardening-phase10.txt`.

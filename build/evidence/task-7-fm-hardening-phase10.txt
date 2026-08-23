@@ -1,0 +1,69 @@
+# Task 7 — fm-hardening-phase10: accumulate path golden hardening (CTRL[2])
+Timestamp: 2026-08-23
+Git HEAD (pre-commit): 391dea0da1d5fa6c11fb9ed4afff2abcdb3d1db1
+Files: sim/tests/test_soc_fm.py (+124 lines)
+  - _doorbell_run_accumulate_mmul() helper       (doorbell MMUL, K=256 two-command chain)
+  - test_mmul_accumulate                         (happy)
+  - test_mmul_accumulate_ignore_ctrl2            (failure injection, monkeypatch accumulate off)
+
+## What was implemented
+Doorbell-path MMUL accumulate regression (CTRL[2]=1 on the second K-block
+command of one descriptor chain):
+  - One MMUL descriptor with M=1, K=256, N=128 -> tile_scheduler.tile_mmul
+    chains TWO MXU commands (K=128 each) to the same SRAM output
+    accumulator; the second command carries CTRL[2]=1 accumulate
+    (tile_scheduler.py:148, npu_firmware.c:541).
+  - mmio_bridge.py:268-278 accumulate semantics asserted explicitly:
+      final output == partial0 + partial1
+    where each partial is GoldenMXU.matmul_int4_per_block(group_size=128)
+    computed on its own K-slice (0:128 and 128:256) — the "golden built by
+    combining matmul_int4_per_block partials" per plan C3.
+  - Output also asserted equal to the full-K matmul_int4_per_block golden,
+    and an anti-vacuous gate asserts the first partial is non-trivial and
+    that the output is NOT just the second partial.
+  - Orthogonal to todo 6: scales are all-ones here (todo 6 covers non-trivial
+    scale VALUES); what is under test is the accumulation between the two
+    commands. Distinct DRAM addresses from the todo 6 tests.
+  - Failure-injection variant monkeypatches MMIOBridge._run_mxu_compute to
+    force accumulate=False while firmware still sets CTRL[2]=1; asserts the
+    output then equals ONLY the second partial (and != accumulated golden),
+    proving the happy-path assertion would catch a CTRL[2]-ignored
+    regression.
+
+## Acceptance command
+PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py::test_mmul_accumulate -v
+  -> PASSED [100%]  (exit 0)
+
+## Failure QA (CTRL[2] ignored must yield only the second partial)
+PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py::test_mmul_accumulate_ignore_ctrl2 -v
+  -> PASSED [100%]  (exit 0; the test asserts the injected wrong result)
+
+## Key assertion output (numerical proof the guard is real)
+happy   max_abs_diff vs combined partials = 0.000e+00   (bit-exact)
+happy   max_abs_diff vs full-K golden     = 0.000e+00
+happy   max_abs(partial0)                 = 5.640e+02   (non-trivial first partial)
+happy   allclose(out, partial1)?          = False       (accumulate really happened)
+inject  max_abs_diff vs partial1          = 0.000e+00   (output is exactly the 2nd partial)
+inject  max_abs_diff vs accumulated       = 5.730e+02   (diverges from accumulated golden)
+
+## Regression check (no new failures)
+Doorbell+scale+accumulate subset (10 tests):
+PYTHONPATH=sim python -m pytest \
+  sim/tests/test_soc_fm.py::test_doorbell_single_mmul_interrupt \
+  sim/tests/test_soc_fm.py::test_doorbell_three_command_queue \
+  sim/tests/test_soc_fm.py::test_doorbell_ring_wrap_16 \
+  sim/tests/test_soc_fm.py::test_doorbell_corrupted_descriptor_rejected \
+  sim/tests/test_soc_fm.py::test_doorbell_ring_overflow \
+  sim/tests/test_soc_fm.py::test_boundary_max_odd_shapes \
+  sim/tests/test_soc_fm.py::test_mmul_scale_nonzero \
+  sim/tests/test_soc_fm.py::test_mmul_scale_nonzero_fp16_scale_collapse \
+  sim/tests/test_soc_fm.py::test_mmul_accumulate \
+  sim/tests/test_soc_fm.py::test_mmul_accumulate_ignore_ctrl2 -v
+  -> 10 passed in 1.00s
+
+Full file:
+PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py -q
+  -> 50 passed, 52 warnings in 50.31s   (todo-6 baseline was 48 passed; +2 new, 0 failed)
+
+## Result
+PASS
