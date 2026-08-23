@@ -1586,6 +1586,102 @@ def test_doorbell_ring_overflow():
         model.host_write_command(OpCode.MMUL, desc_addr)
 
 
+def _doorbell_run_scale_mmul(model: FuncModel, M: int, K: int, N: int,
+                             act_addr: int, wgt_addr: int, out_addr: int,
+                             scale_addr: int, desc_addr: int,
+                             scale_bytes: bytes,
+                             scales_for_golden: np.ndarray):
+    """Queue one doorbell MMUL with the scale region written as raw bytes.
+
+    The scale region is written in the FM bridge-reader layout
+    ``[ceil(K/128)][N]`` fp32 contiguous (mmio_bridge.py:248-252), NOT the
+    firmware per-64 layout. Returns (output_fp32, golden_fp32) for the caller
+    to compare.
+    """
+    from engine.isa import OpCode
+
+    act, wgt_packed, _ = _doorbell_setup_mmul(
+        model, M, K, N, act_addr, wgt_addr, out_addr, scale_addr, desc_addr)
+    model.host_write_data(scale_addr, np.frombuffer(scale_bytes, dtype=np.uint8))
+    model.host_write_command(OpCode.MMUL, desc_addr)
+    results = model.firmware.run_loop(max_commands=1)
+    assert len(results) == 1 and results[0]['status'] == 'done', \
+        f"MMUL command failed: {results}"
+
+    out_off = out_addr - Addr.DRAM_BASE
+    out_fw = np.frombuffer(
+        model.dram[out_off:out_off + M * N * 4], dtype=np.float32).reshape(M, N)
+    golden = GoldenMXU().matmul_int4_per_block(
+        act.reshape(M, K), wgt_packed, scales_for_golden, M, K, N, group_size=128)
+    return out_fw, golden
+
+
+def test_mmul_scale_nonzero():
+    """SCALE_ADDR!=0 doorbell MMUL with non-trivial random FP32 per-block scales.
+
+    Covers the scale-golden blind spot left by the existing all-ones coverage
+    (test_doorbell_single_mmul_interrupt, test_boundary_max_odd_shapes):
+      - scale_addr != 0 in the descriptor, dispatched via the FM doorbell path
+      - scale buffer written in the bridge-reader layout [ceil(K/128)][N] fp32
+        (mmio_bridge.py:248-252), NOT the firmware per-64 layout
+      - K=256, M=1, N=128 -> num_blocks=2 exercises the multi-block scale path
+      - random scales in [0.5, 1.5) make FP16-collapse / vacuous-scale bugs
+        produce a guaranteed mismatch
+    """
+    model = FuncModel()
+
+    M, K, N = 1, 256, 128
+    num_blocks = (K + 127) // 128
+    assert num_blocks == 2, "K=256 must map to 2 scale blocks"
+    act_addr, wgt_addr, out_addr, scale_addr, desc_addr = (
+        0x8001_0000, 0x8002_0000, 0x8100_0000, 0x8011_0000, 0x8000_0080)
+
+    rng = np.random.RandomState(20260823)
+    scales = rng.uniform(0.5, 1.5, size=(num_blocks, N)).astype(np.float32)
+    assert scales.shape == (2, 128)
+
+    out_fw, golden = _doorbell_run_scale_mmul(
+        model, M, K, N, act_addr, wgt_addr, out_addr, scale_addr, desc_addr,
+        scales.tobytes(), scales)
+
+    assert np.allclose(out_fw, golden, rtol=1e-5, atol=1e-5), (
+        f"scaled MMUL mismatch: max_abs_diff="
+        f"{np.max(np.abs(out_fw - golden)):.3e}"
+    )
+
+
+def test_mmul_scale_nonzero_fp16_scale_collapse():
+    """Failure injection: scale region written as FP16 bytes must mismatch golden.
+
+    Replicates the F3-discovered PERF regression shape (FP16-in-FP32 scale
+    write): the 2*128 fp32 scale region is written as 2*128 fp16 bytes (half
+    the length). The firmware/bridge reads it back as fp32, the output
+    collapses, and the golden comparison must FAIL. This test asserts the
+    mismatch, so a regression that makes the comparison vacuous is caught.
+    """
+    model = FuncModel()
+
+    M, K, N = 1, 256, 128
+    num_blocks = (K + 127) // 128
+    act_addr, wgt_addr, out_addr, scale_addr, desc_addr = (
+        0x8001_0000, 0x8002_0000, 0x8100_0000, 0x8011_0000, 0x8000_0080)
+
+    rng = np.random.RandomState(20260823)
+    scales = rng.uniform(0.5, 1.5, size=(num_blocks, N)).astype(np.float32)
+    fp16_bytes = scales.astype(np.float16).tobytes()
+    assert len(fp16_bytes) == num_blocks * N * 2, \
+        "FP16 injection must halve the fp32 scale region"
+
+    out_fw, golden = _doorbell_run_scale_mmul(
+        model, M, K, N, act_addr, wgt_addr, out_addr, scale_addr, desc_addr,
+        fp16_bytes, scales)
+
+    assert not np.allclose(out_fw, golden, rtol=1e-5, atol=1e-5), (
+        "FP16-in-FP32 scale write must NOT match the fp32 golden "
+        "(failure injection did not produce a mismatch)"
+    )
+
+
 # ══════════════════════════════════════════════════════════════════════
 # P2 — Full blk.0 17-op chain, single-tile MMUL workaround (FM-SOC-027)
 # ══════════════════════════════════════════════════════════════════════

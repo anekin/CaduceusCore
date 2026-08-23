@@ -1,0 +1,50 @@
+# Task 6 — fm-hardening-phase10: scale path golden hardening
+Timestamp: 2026-08-23
+Git HEAD: cb35c21 docs(notepad): initialize fm-hardening-phase10 notepad
+Files: sim/tests/test_soc_fm.py (+96 lines)
+  - _doorbell_run_scale_mmul() helper (doorbell MMUL + raw scale-bytes write)
+  - test_mmul_scale_nonzero                       (happy)
+  - test_mmul_scale_nonzero_fp16_scale_collapse   (failure injection)
+
+## What was implemented
+Doorbell-path MMUL regression (SCALE_ADDR != 0) with non-trivial random FP32
+per-block scales:
+  - M=1, K=256, N=128 -> num_blocks = (256+127)//128 = 2 (multi-block scale path)
+  - scale buffer written in the FM bridge-reader layout [ceil(K/128)][N] fp32
+    contiguous (mmio_bridge.py:248-252), NOT the firmware per-64 layout
+  - scales = rng.uniform(0.5, 1.5) fp32, seed 20260823
+  - descriptor via host_write_descriptor (scale_addr=0x8011_0000, scale_size=1024)
+  - dispatched via host_write_command(OpCode.MMUL) -> firmware run_loop
+  - output compared vs GoldenMXU.matmul_int4_per_block(group_size=128)
+    with rtol=1e-5, atol=1e-5
+  - failure-injection variant writes the scale region as FP16 bytes (half
+    length, F3 PERF-bug shape) and asserts the golden comparison FAILS
+    (not np.allclose), so a vacuous comparison regression is caught in-suite.
+
+## Acceptance command
+PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py::test_mmul_scale_nonzero -v
+  -> PASSED [100%]  (exit 0)
+
+## Failure QA (FP16-in-FP32 scale write must fail the comparison)
+PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py::test_mmul_scale_nonzero_fp16_scale_collapse -v
+  -> PASSED [100%]  (exit 0; the test asserts mismatch)
+
+## Key assertion output (numerical proof the guard is real)
+happy  max_abs_diff = 0.0           allclose(rtol=1e-5, atol=1e-5) = True
+fp16   max_abs_diff = 868.5571899   allclose = False
+
+## Regression check (no new failures)
+PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py -q
+  -> 48 passed, 50 warnings in 49.79s
+
+Doorbell subset re-run:
+PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py::test_doorbell_single_mmul_interrupt \
+  sim/tests/test_soc_fm.py::test_doorbell_three_command_queue \
+  sim/tests/test_soc_fm.py::test_doorbell_ring_wrap_16 \
+  sim/tests/test_soc_fm.py::test_doorbell_corrupted_descriptor_rejected \
+  sim/tests/test_soc_fm.py::test_doorbell_ring_overflow \
+  sim/tests/test_soc_fm.py::test_boundary_max_odd_shapes -v
+  -> 6 passed in 0.83s
+
+## Result
+PASS
