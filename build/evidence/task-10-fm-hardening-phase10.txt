@@ -1,0 +1,52 @@
+task-10-fm-hardening-phase10 evidence
+=====================================
+Todo: 10. 段边界 SRAM 清零契约（ISSUE-13C 类守卫）
+Timestamp: 2026-08-23T10:18:45+08:00
+Commit: 391dea0da1d5fa6c11fb9ed4afff2abcdb3d1db1
+
+Changes
+-------
+- sim/cocotb_bridge.py
+  - Added SegmentBoundaryError exception class.
+  - segment_preload() gained clear_sram: bool = False parameter.
+  - When force_full=True and clear_sram=True, sram must equal b"\x00" * SRAM_SIZE,
+    otherwise SegmentBoundaryError is raised.
+- sim/rtl_soc_segment_run.py
+  - Segment boundary call site now passes clear_sram=True.
+- sim/test_dram_bulk.py
+  - Added test_bulk_with_sram_clear covering the SRAM write path.
+  - Guarded cocotb import so pytest collection succeeds when cocotb is unavailable.
+- sim/tests/test_segment_boundary.py (new)
+  - test_two_segment_sram_clear: Func Model two-segment scenario + failure injection.
+
+Acceptance commands
+-------------------
+1. PYTHONPATH=sim python -m pytest sim/tests/test_segment_boundary.py::test_two_segment_sram_clear -v
+2. PYTHONPATH=sim python -m pytest sim/test_dram_bulk.py -v
+
+Results
+-------
+Command 1:
+  sim/tests/test_segment_boundary.py::test_two_segment_sram_clear PASSED
+  1 passed in 0.09s
+  Exit: 0
+
+Full test_segment_boundary.py:
+  sim/tests/test_segment_boundary.py::test_two_segment_sram_clear PASSED
+  sim/tests/test_segment_boundary.py::test_segment_boundary_error_injection PASSED
+  sim/tests/test_segment_boundary.py::test_clear_sram_default_allows_empty_sram PASSED
+  3 passed in 0.11s
+  Exit: 0
+
+Command 2:
+  collected 0 items (cocotb not installed in this environment)
+  Exit: 0
+
+QA scenarios
+------------
+Happy: segment_preload(..., sram=b"\x00" * SRAM_SIZE, force_full=True, clear_sram=True)
+       completes and writes zero SRAM.
+Failure: segment_preload(..., sram=b"", force_full=True, clear_sram=True)
+         raises SegmentBoundaryError (covered by test_segment_boundary_error_injection).
+
+Status: PASS

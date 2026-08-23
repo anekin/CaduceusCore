@@ -501,7 +501,8 @@ async def test_soc_ibex_segment_run(dut):
         # never read back) would otherwise keep stale hardware data.
         await bridge.segment_preload(bytes(model.dram),
                                      sram=b"\x00" * SRAM_SIZE,
-                                     force_full=True)
+                                     force_full=True,
+                                     clear_sram=True)
         _progress(f"[SEGMENT] boundary full preload + SRAM clear done "
                   f"(elapsed={time.time() - t0:.0f}s)")
 

@@ -117,6 +117,19 @@ WRP_ACT_BASE    = 0x34
 WRP_OUT_BASE    = 0x38
 WRP_A_BASE      = 0x30
 WRP_B_BASE      = 0x34
+
+
+class SegmentBoundaryError(Exception):
+    """Raised when a segment-boundary preload violates the SRAM-clear contract.
+
+    ISSUE-13C: stale SRAM scratch from the previous segment can leak into the
+    next segment's first operations.  ``force_full=True`` re-synchronizes DRAM,
+    but SRAM must also be explicitly zeroed.  This exception guards that the
+    caller actually supplied a full zero SRAM image when it opts into the
+    boundary-clear mode.
+    """
+
+
 WRP_O_BASE      = 0x38
 WRP_CMD         = 0x3C
 WRP_STATUS      = 0x40
@@ -2486,7 +2499,8 @@ class CocotbBridge:
                 self._preload_report(progress_cb, done, total, t0)
 
     async def segment_preload(self, dram: bytes, sram: bytes = b"",
-                              progress_cb=None, force_full: bool = False) -> None:
+                              progress_cb=None, force_full: bool = False,
+                              clear_sram: bool = False) -> None:
         """Backdoor-preload DRAM (and optional SRAM) images into the RTL.
 
         Two write paths:
@@ -2507,9 +2521,22 @@ class CocotbBridge:
         is treated as dirty (segment boundaries use this so hardware DRAM is
         re-synchronized with the Python image before a new segment starts).
 
+        ``clear_sram=True`` opts into the segment-boundary SRAM-clear
+        contract (ISSUE-13C).  When combined with ``force_full=True`` the
+        caller must supply a ``sram`` image consisting of exactly
+        ``SRAM_SIZE`` zero bytes; otherwise ``SegmentBoundaryError`` is
+        raised.  Single-segment and probe callers leave ``clear_sram=False``
+        (the default) and are not required to pass ``sram``.
+
         ``progress_cb(pct, done, total)`` is invoked roughly every 10% of
         the words written.
         """
+        if force_full and clear_sram and sram != b"\x00" * SRAM_SIZE:
+            raise SegmentBoundaryError(
+                f"segment boundary clear_sram contract violated: "
+                f"expected {SRAM_SIZE} zero bytes, got {len(sram)} bytes "
+                f"(non-zero prefix={sram[:16].hex() if sram else '<empty>'})"
+            )
         if len(dram) > self.SEGMENT_DRAM_WINDOW:
             raise ValueError(f"dram image {len(dram)} B exceeds 8 MB window")
         wb = self.SEGMENT_WORD_BYTES
