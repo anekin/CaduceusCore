@@ -234,9 +234,12 @@ def gen_python(schema: dict[str, Any]) -> str:
     lines.append("# ═══ Ring Buffer Configuration ═══")
     lines.append("")
     rc = schema["rings"]["configuration"]
+    lines.append(f"RING_BASE             = 0x{int(rc['ring_buffer_addr'], 16):08X}")
     lines.append(f"RING_ENTRIES          = {rc['ring_entries']}")
     lines.append(f"CMD_ENTRY_SIZE        = {rc['cmd_entry_size']}")
+    lines.append(f"COMPLETION_RING_ADDR  = 0x{int(rc['completion_ring_addr'], 16):08X}")
     lines.append(f"COMPLETION_ENTRY_SIZE = {rc['completion_entry_size']}")
+    lines.append(f"TILE_SCALE_BYTES      = {rc['tile_scale_bytes']}")
     lines.append("")
 
     return "\n".join(lines)
@@ -370,9 +373,12 @@ def gen_c_header(schema: dict[str, Any]) -> str:
     # Ring configuration
     lines.append("/* ── Ring Buffer Configuration ──────────────────────────────── */")
     rc = schema["rings"]["configuration"]
+    lines.append(f"#define NPU_RING_BUFFER_ADDR 0x{int(rc['ring_buffer_addr'], 16):08X}UL")
     lines.append(f"#define NPU_RING_ENTRIES {rc['ring_entries']}")
     lines.append(f"#define NPU_CMD_ENTRY_SIZE {rc['cmd_entry_size']}")
+    lines.append(f"#define NPU_COMPLETION_RING_ADDR 0x{int(rc['completion_ring_addr'], 16):08X}UL")
     lines.append(f"#define NPU_COMPLETION_ENTRY_SIZE {rc['completion_entry_size']}")
+    lines.append(f"#define NPU_TILE_SCALE_BYTES {rc['tile_scale_bytes']}")
     lines.append("")
 
     lines.append("#ifdef __cplusplus")
@@ -441,9 +447,12 @@ def gen_firmware_header(schema: dict[str, Any]) -> str:
     # Ring sizes
     lines.append("/* ── ABI Ring Buffer Configuration ──────────────────────────── */")
     rc = schema["rings"]["configuration"]
+    lines.append(f"#define NPU_ABI_RING_BUFFER_ADDR 0x{int(rc['ring_buffer_addr'], 16):08X}UL")
     lines.append(f"#define NPU_ABI_RING_ENTRIES {rc['ring_entries']}")
     lines.append(f"#define NPU_ABI_CMD_ENTRY_SIZE {rc['cmd_entry_size']}")
+    lines.append(f"#define NPU_ABI_COMPLETION_RING_ADDR 0x{int(rc['completion_ring_addr'], 16):08X}UL")
     lines.append(f"#define NPU_ABI_COMPLETION_ENTRY_SIZE {rc['completion_entry_size']}")
+    lines.append(f"#define NPU_ABI_TILE_SCALE_BYTES {rc['tile_scale_bytes']}")
     lines.append("")
 
     # Engine opcodes
@@ -556,9 +565,12 @@ def gen_sv_package(schema: dict[str, Any]) -> str:
     # Ring configuration
     lines.append("  // ── Ring Buffer Configuration ─────────────────────────────")
     rc = schema["rings"]["configuration"]
+    lines.append(f"  localparam logic [31:0] NPU_RING_BUFFER_ADDR = 32'h{int(rc['ring_buffer_addr'], 16):08X};")
     lines.append(f"  localparam int unsigned NPU_RING_ENTRIES = {rc['ring_entries']};")
     lines.append(f"  localparam int unsigned NPU_CMD_ENTRY_SIZE = {rc['cmd_entry_size']};")
+    lines.append(f"  localparam logic [31:0] NPU_COMPLETION_RING_ADDR = 32'h{int(rc['completion_ring_addr'], 16):08X};")
     lines.append(f"  localparam int unsigned NPU_COMPLETION_ENTRY_SIZE = {rc['completion_entry_size']};")
+    lines.append(f"  localparam int unsigned NPU_TILE_SCALE_BYTES = {rc['tile_scale_bytes']};")
     lines.append("")
 
     lines.append("endpackage : npu_abi_pkg")
@@ -589,6 +601,19 @@ def gen_markdown(schema: dict[str, Any]) -> str:
     for name in sorted(schema["address_regions"]):
         reg = schema["address_regions"][name]
         lines.append(f"| `{name}` | `{reg['base']}` | `{reg['size']}` | {reg['description']} |")
+    lines.append("")
+
+    lines.append("## Ring Buffer Configuration")
+    lines.append("")
+    rc = schema["rings"]["configuration"]
+    lines.append("| Parameter | Value | Description |")
+    lines.append("|-----------|-------|-------------|")
+    lines.append(f"| `ring_buffer_addr` | `{rc['ring_buffer_addr']}` | Command ring base address |")
+    lines.append(f"| `ring_entries` | `{rc['ring_entries']}` | Number of command ring entries |")
+    lines.append(f"| `cmd_entry_size` | `{rc['cmd_entry_size']}` | Bytes per command ring entry |")
+    lines.append(f"| `completion_ring_addr` | `{rc['completion_ring_addr']}` | Completion ring base address |")
+    lines.append(f"| `completion_entry_size` | `{rc['completion_entry_size']}` | Bytes per completion entry |")
+    lines.append(f"| `tile_scale_bytes` | `{rc['tile_scale_bytes']}` | Per-tile FP32 scale buffer size (firmware grouping) |")
     lines.append("")
 
     # Each module

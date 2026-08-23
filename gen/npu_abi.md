@@ -21,6 +21,17 @@
 | `SRAM` | `0x20000000` | `0x00400000` | NPU unified compute buffer SRAM (4 MB) |
 | `VECTOR` | `0x40002000` | `0x00001000` | Vector Engine MMIO (4 KB) |
 
+## Ring Buffer Configuration
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `ring_buffer_addr` | `0x80000000` | Command ring base address |
+| `ring_entries` | `1024` | Number of command ring entries |
+| `cmd_entry_size` | `32` | Bytes per command ring entry |
+| `completion_ring_addr` | `0x80008000` | Completion ring base address |
+| `completion_entry_size` | `32` | Bytes per completion entry |
+| `tile_scale_bytes` | `256` | Per-tile FP32 scale buffer size (firmware grouping) |
+
 ## DMA
 > **Base:** `0x40003000` | Direct Memory Access — axi_cdma engine with 2 channels (ch0: DRAM→SRAM load, ch1: SRAM→DRAM store) and descriptor chain mode.
 

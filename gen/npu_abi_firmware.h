@@ -126,9 +126,12 @@
 #define NPU_ABI_DESC_VECTOR__unused_14_OFFSET 56
 
 /* ── ABI Ring Buffer Configuration ──────────────────────────── */
+#define NPU_ABI_RING_BUFFER_ADDR 0x80000000UL
 #define NPU_ABI_RING_ENTRIES 1024
 #define NPU_ABI_CMD_ENTRY_SIZE 32
+#define NPU_ABI_COMPLETION_RING_ADDR 0x80008000UL
 #define NPU_ABI_COMPLETION_ENTRY_SIZE 32
+#define NPU_ABI_TILE_SCALE_BYTES 256
 
 /* ── ABI Engine Opcodes ─────────────────────────────────────── */
 #define NPU_ABI_ENGINE_OP_MMUL 0  /* MXU */

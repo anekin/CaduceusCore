@@ -188,8 +188,11 @@ package npu_abi_pkg;
   localparam logic [6:0] NPU_INTC_TIMER_BIT = 7'h40;
 
   // ── Ring Buffer Configuration ─────────────────────────────
+  localparam logic [31:0] NPU_RING_BUFFER_ADDR = 32'h80000000;
   localparam int unsigned NPU_RING_ENTRIES = 1024;
   localparam int unsigned NPU_CMD_ENTRY_SIZE = 32;
+  localparam logic [31:0] NPU_COMPLETION_RING_ADDR = 32'h80008000;
   localparam int unsigned NPU_COMPLETION_ENTRY_SIZE = 32;
+  localparam int unsigned NPU_TILE_SCALE_BYTES = 256;
 
 endpackage : npu_abi_pkg

@@ -295,9 +295,12 @@ typedef struct {
 #define INTC_TIMER (1U << 6)  /* Timer interrupt */
 
 /* ── Ring Buffer Configuration ──────────────────────────────── */
+#define NPU_RING_BUFFER_ADDR 0x80000000UL
 #define NPU_RING_ENTRIES 1024
 #define NPU_CMD_ENTRY_SIZE 32
+#define NPU_COMPLETION_RING_ADDR 0x80008000UL
 #define NPU_COMPLETION_ENTRY_SIZE 32
+#define NPU_TILE_SCALE_BYTES 256
 
 #ifdef __cplusplus
 }

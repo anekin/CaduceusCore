@@ -12,8 +12,11 @@
 
 /* ── 内存布局 ───────────────────────────────────────────────────── */
 
-#define DRAM_BASE  0x80000000UL   // DRAM data (Host DDR)
-#define DRAM_SIZE  0x00800000UL   // 8 MB — RTL dram_model regression window (BUG-RTL-SOC-002)
+#define DRAM_BASE  NPU_ABI_DRAM_BASE   // DRAM data (Host DDR)
+/* DRAM_SIZE is deliberately the 8 MB RTL regression window, NOT the 2 GB
+ * chip-level DRAM size declared in the ABI (NPU_ABI_DRAM_SIZE). The 8 MB
+ * constraint comes from BUG-RTL-SOC-002 and is enforced by dram_range_ok(). */
+#define DRAM_SIZE  0x00800000UL
 #define DRAM_END   (DRAM_BASE + DRAM_SIZE)
 #define SRAM_BASE  0x20000000UL
 #define SRAM_SIZE  0x00400000UL   // 4 MB
@@ -25,10 +28,10 @@
 
 /* ── Ring Buffer 配置 ────────────────────────────────────────────── */
 
-#define RING_BUF_ADDR        DRAM_BASE
-#define RING_ENTRIES         1024
-#define CMD_DESC_SIZE        32
-#define COMPLETION_RING_ADDR (DRAM_BASE + RING_ENTRIES * CMD_DESC_SIZE)
+#define RING_BUF_ADDR        NPU_ABI_RING_BUFFER_ADDR
+#define RING_ENTRIES         NPU_ABI_RING_ENTRIES
+#define CMD_DESC_SIZE        NPU_ABI_CMD_ENTRY_SIZE
+#define COMPLETION_RING_ADDR NPU_ABI_COMPLETION_RING_ADDR
 
 /* 命令描述符结构 (与 Host 约定) */
 typedef struct __attribute__((packed, aligned(4))) {
@@ -487,7 +490,7 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
             const uint32_t TILE_H = 64;
             const uint32_t TILE_W = 64;
             const uint32_t TILE_WEIGHT_BYTES = TILE_H * TILE_W / 2;
-            const uint32_t TILE_SCALE_BYTES  = TILE_W * 4;
+            const uint32_t TILE_SCALE_BYTES  = NPU_ABI_TILE_SCALE_BYTES;
             const uint32_t SRAM_ALIGN = 64;
 
             // Place activation first, then double-buffered weights/scales and

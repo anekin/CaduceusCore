@@ -1581,7 +1581,8 @@
       "cmd_entry_size": 32,
       "completion_ring_addr": "0x80008000",
       "completion_entry_size": 32,
-      "description": "Firmware ring buffer configuration. Ring buffer starts at DRAM_BASE (0x80000000). Completion ring follows immediately after the command ring (ring_entries \u00d7 cmd_entry_size bytes)."
+      "tile_scale_bytes": 256,
+      "description": "Firmware ring buffer configuration. Ring buffer starts at DRAM_BASE (0x80000000). Completion ring follows immediately after the command ring (ring_entries \u00d7 cmd_entry_size bytes). tile_scale_bytes is the per-tile FP32 scale buffer size used by the firmware MMUL path (64 columns \u00d7 4 bytes); the Python tile_scheduler intentionally uses a wider 128-column grouping (512B)."
     }
   },
   "status_codes": {

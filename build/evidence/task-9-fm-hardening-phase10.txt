@@ -1,0 +1,57 @@
+Task 9 — ABI 常量单一来源：schema → 生成头 → firmware 引用 + 跨语言数值比对
+Timestamp: 2026-08-23T09:48:36+08:00
+Commit: f5229b6586a7a6413c6cb74d70855f9148747c6d
+
+Changes made:
+  - spec/npu_abi.json: added rings.configuration.tile_scale_bytes = 256
+  - scripts/gen_npu_abi.py: generate NPU_ABI_RING_BUFFER_ADDR, NPU_ABI_COMPLETION_RING_ADDR,
+    NPU_ABI_TILE_SCALE_BYTES (plus non-ABI variants in npu_abi.h/.py/.sv/.md)
+  - gen/npu_abi_firmware.h: regenerated
+  - firmware/npu_firmware.c: DRAM_BASE/RING_BUF_ADDR/RING_ENTRIES/CMD_DESC_SIZE/
+    COMPLETION_RING_ADDR/TILE_SCALE_BYTES now reference generated ABI macros;
+    DRAM_SIZE kept handwritten as 0x00800000 with comment explaining the 8 MB
+    RTL regression window (BUG-RTL-SOC-002), distinct from ABI 2 GB DRAM_SIZE.
+  - sim/tile_scheduler.py: added INTENTIONAL divergence comment at TILE_W=128
+    (firmware per-64 / 256B vs Python per-128 / 512B).
+  - sim/tests/test_npu_abi_constants.py: new cross-language constant comparison test.
+
+Verification commands and results:
+
+1. python3 scripts/gen_npu_abi.py --check
+   Result: PASS (exit 0)
+   Output: All generated artifacts match the schema.
+
+2. make -C firmware
+   Result: PASS (exit 0)
+   Output: build/npu_firmware.elf, build/npu_firmware_spike.elf built successfully.
+
+3. PYTHONPATH=sim python -m pytest sim/tests/test_npu_abi_constants.py -v
+   Result: PASS (exit 0)
+   Output:
+     sim/tests/test_npu_abi_constants.py::test_abi_dram_base_matches_address_space PASSED
+     sim/tests/test_npu_abi_constants.py::test_abi_ring_config_matches_command_ring PASSED
+     sim/tests/test_npu_abi_constants.py::test_abi_completion_ring_addr_matches_address_space PASSED
+     sim/tests/test_npu_abi_constants.py::test_abi_tile_scale_matches_firmware_grouping PASSED
+     sim/tests/test_npu_abi_constants.py::test_abi_dram_size_regression_window_is_distinct PASSED
+     5 passed in 0.09s
+
+4. PYTHONPATH=sim PATH=".../spike_src/build:$PATH" python3 sim/spike_host.py \
+      --mode mmul_smoke --model $HOME/models/qwen2.5-1.5b-instruct-q4_k_m.gguf \
+      --layers 1 --ops Q_proj
+   Result: FAIL (exit 1) — Spike Host Summary: 0 PASS, 1 FAIL, max_diff=7.64e+02
+   Note: This is a documented pre-existing failure. The same command fails on the
+   baseline with the same symptom (see .omo/notepads/func-model-gap-closure/issues.md
+   Issue 002 / BUG-SOC-FM-005). It is not introduced by the constant-reference
+   changes in this todo; the firmware control flow and arithmetic are unchanged.
+
+Additional regression checks:
+  - PYTHONPATH=sim python -m pytest sim/tests/test_address_space.py sim/tests/test_command_ring.py \
+      sim/tests/test_npu_abi_schema.py sim/tests/test_npu_abi_bindings.py -q
+    Result: PASS — 53 passed in 0.67s
+  - python3 scripts/contract_check.py --check
+    Result: PASS — 555 checks passed, 0 drift errors.
+
+Conclusion:
+  - Schema/generator/firmware/Python constant cross-checks are all green.
+  - Spike mmul_smoke remains red due to an unrelated pre-existing numerical mismatch;
+    no firmware control flow was changed in this todo.

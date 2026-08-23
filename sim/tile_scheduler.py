@@ -12,7 +12,8 @@ SRAM layout (512KB → 256KB target):
 """
 
 TILE_H = 128
-TILE_W = 128
+TILE_W = 128  # INTENTIONAL divergence: firmware MMUL groups scales per 64 columns (256B);
+              # the Python tile_scheduler uses a 128-column grouping (512B) for SRAM scheduling.
 TILE_WEIGHT_BYTES = TILE_H * TILE_W // 2  # 8KB INT4 packed
 TILE_SCALE_BYTES = TILE_W * 4              # 512B FP32
 
