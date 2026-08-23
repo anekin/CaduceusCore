@@ -29,7 +29,8 @@ class FuncModel:
 
     def __init__(self, dram_mb: int = 64, sram_kb: int = 512,
                  use_spike: Optional[bool] = None,
-                 perf_session: Optional["PerformanceSession"] = None):
+                 perf_session: Optional["PerformanceSession"] = None,
+                 ring_size: int = 16):
         # Memories
         self.dram = bytearray(dram_mb * 1024 * 1024)
         self.sram = bytearray(sram_kb * 1024)
@@ -65,7 +66,7 @@ class FuncModel:
             'crossbar': self.crossbar,
             'dram': self.dram, 'sram': self.sram,
         }
-        self.firmware = self._create_firmware(sim_modules, self.bridge, use_spike)
+        self.firmware = self._create_firmware(sim_modules, self.bridge, use_spike, ring_size)
 
         # RISC-V emulator in SoC mode (Ibex replacement)
         self.riscv = RISCVMini(
@@ -85,17 +86,20 @@ class FuncModel:
         ))
 
     @staticmethod
-    def _create_firmware(sim_modules: dict, bridge: MMIOBridge, use_spike: Optional[bool]) -> "NPUFirmware":
+    def _create_firmware(sim_modules: dict, bridge: MMIOBridge, use_spike: Optional[bool],
+                         ring_size: int = 16) -> "NPUFirmware":
         if use_spike is None:
             env = os.environ.get("CADUCEUS_USE_SPIKE", "").lower()
             if not env:
                 # No explicit preference: default to NPUFirmware. Spike is
                 # opt-in via use_spike=True or CADUCEUS_USE_SPIKE=1.
-                return NPUFirmware(sim_modules=sim_modules, bridge=bridge)
+                return NPUFirmware(sim_modules=sim_modules, bridge=bridge,
+                                   ring_size=ring_size)
             use_spike = env not in ("0", "false", "no")
 
         if use_spike is False:
-            return NPUFirmware(sim_modules=sim_modules, bridge=bridge)
+            return NPUFirmware(sim_modules=sim_modules, bridge=bridge,
+                               ring_size=ring_size)
 
         # Lazy import breaks a circular dependency with sim.spike_mmio_server.
         from spike_firmware import SpikeFirmware, _spike_available

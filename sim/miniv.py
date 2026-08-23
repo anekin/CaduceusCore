@@ -438,11 +438,14 @@ class NPUFirmware:
     Uses the same MMIO register addresses from regmap.py.
     """
 
-    def __init__(self, sim_modules: dict, bridge=None):
+    def __init__(self, sim_modules: dict, bridge=None, ring_size: int = 16):
         """
         sim_modules: {'mxu': GoldenMXU, 'sfu': GoldenSFU, 'vector': GoldenVector,
                        'dma': GoldenDMA, 'dram': bytearray, 'sram': bytearray}
         bridge: MMIOBridge instance for register communication
+        ring_size: command-ring entries in this emulator (default 16, the
+            legacy device-protocol size; ring-stress tests construct with
+            command_ring.RING_ENTRIES=1024 to match firmware/npu_firmware.c).
         """
         import warnings
         warnings.warn(
@@ -455,7 +458,7 @@ class NPUFirmware:
         self.bridge = bridge
         self.doorbell = {'host_tail': 0, 'npu_head': 0}
         self.ring_buffer_addr = 0x80000000  # Ring Buffer in DRAM
-        self.ring_size = 16  # entries
+        self.ring_size = ring_size  # entries
         self.irq_pending = 0
         self._irq_serviced = False
 

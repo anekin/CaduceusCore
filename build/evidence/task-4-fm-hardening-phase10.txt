@@ -1,0 +1,53 @@
+task-4-fm-hardening-phase10 evidence
+====================================
+Timestamp: 2026-08-23T02:23:53Z
+Base commit: e77f7a5 test(sim): FM regression for MMUL accumulate mode
+
+Acceptance: PYTHONPATH=sim python -m pytest sim/tests/test_command_ring_stress.py::test_ring_wrap_at_entry_128 -v
+Result: PASS (1 passed in 0.46s, runtime < 30s)
+
+Named tests:
+  test_ring_wrap_at_entry_128 ... PASSED
+  test_desc_base_inside_ring_rejected ... PASSED (failure injection)
+  test_default_ring_size_unchanged ... PASSED
+
+Scenario (all asserted inside test_ring_wrap_at_entry_128):
+  - FuncModel(ring_size=1024) == command_ring.RING_ENTRIES (matches firmware/npu_firmware.c).
+  - Doorbell pre-seeded at persistent ring offset 120 (host_tail == npu_head == 120, MMIO mirrored).
+  - 140 MMUL commands queued: ring entries 120..259 written, crossing entry 128
+    (0x80001000, the pre-fix DESC_BASE that BUG-RTL-SOC-008 corrupted); the entry
+    physically verified to hold a command (opcode == OpCode.MMUL).
+  - Descriptors allocated sequentially at DESC_BASE (stride 64, desc i = DESC_BASE + i*64).
+  - (a) address_space.contract_check(desc_base=DESC_BASE, desc_count=140,
+      act_base=P10_ACT_BASE) passes; regions_overlap(desc_region, command_ring /
+      completion_ring) both False.
+  - (b) 140/140 completions: ordered results carry cmd_id (ring-relative index)
+      and status == 'done'; npu_head/HOST_HEAD/NPU_HEAD MMIO == advance_head(120,140).
+  - (c) 140/140 outputs match GoldenMXU.matmul_int4_per_block (rtol=1e-5).
+  - expected_head wrap semantics: expected_head(1023)==1023, expected_head(1024)==0,
+    advance_head(1023,1)==0; then the persistent offset is driven until the head
+    physically wraps 1023 -> 0 (at cumulative command 904), asserting per-command
+    head == command_ring.advance_head(START_OFFSET, total) (no raw % anywhere).
+  - Post-wrap corruption check: descriptor 0 bytes in DRAM identical before/after
+    the full ring wrap (the exact overwrite class BUG-RTL-SOC-008 produced).
+
+QA scenarios:
+  happy  - 140-command chain completes, completion cmd_ids all correct, outputs all
+           match golden: PASS (above).
+  failure- PYTHONPATH=sim python -m pytest sim/tests/test_command_ring_stress.py::test_desc_base_inside_ring_rejected -v
+           monkeypatches address_space.DESC_BASE to entry 128 (0x80001000);
+           contract_check raises OverlapError ("completion-ring") -> test passes,
+           proving the gate trips on the BUG-RTL-SOC-008 layout: PASS.
+
+Regression:
+  PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py sim/tests/test_firmware.py \
+    sim/tests/test_npu_firmware_deprecation.py sim/tests/test_command_ring.py \
+    sim/tests/test_address_space.py -q
+  Result: PASS (82 passed) — default ring_size=16 behavior unchanged.
+
+Files created/modified:
+  Created: sim/tests/test_command_ring_stress.py
+  Created: build/evidence/task-4-fm-hardening-phase10.txt
+  Modified: sim/miniv.py (NPUFirmware.__init__ ring_size param, default 16)
+  Modified: sim/func_model.py (FuncModel.__init__/_create_firmware ring_size param, default 16)
+  Modified: .omo/notepads/fm-hardening-phase10/learnings.md (append)
