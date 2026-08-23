@@ -2,12 +2,12 @@ SIGNOFF_METRIC {"case": "unknown", "key": "spike.mode", "value": "mmul_smoke"}
 ======================================================================
 Spike Host: qwen2.5-1.5b-instruct-q4_k_m.gguf  layers=1  ops=['Q_proj']
 ======================================================================
-[NPU-PY] Loaded 339 tensors, 1777.1M elements in 55.2s
+[NPU-PY] Loaded 339 tensors, 1777.1M elements in 57.0s
   [FAIL] L0 Q_proj       (1536x1536)
     max_diff=7.64e+02
 SIGNOFF_METRIC {"case": "unknown", "key": "spike.exit_code", "value": 1}
 SIGNOFF_METRIC {"case": "unknown", "key": "spike.tolerance_result", "value": "FAIL"}
-SIGNOFF_METRIC {"case": "unknown", "key": "spike.elapsed_s", "value": 58.99}
+SIGNOFF_METRIC {"case": "unknown", "key": "spike.elapsed_s", "value": 60.939}
 
 ======================================================================
 Spike Host Summary: 0 PASS, 1 FAIL
