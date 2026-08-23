@@ -1,0 +1,55 @@
+# Task 12 — fm-hardening-phase10: FM attn_weight coverage (BUG-RTL-SOC-007 FM-side gap)
+Timestamp: 2026-08-23
+Git HEAD (pre-commit): c3dc40f5a7852e798c3d5b876846ef5815ab2a19
+Files: sim/tests/test_soc_fm.py (+109 lines)
+  - _doorbell_run_attn_weight_mmul() helper        (doorbell MMUL, PERF-13 attn_weight shape)
+  - test_mmul_attn_weight_shape                    (happy)
+  - test_mmul_attn_weight_shape_not_dispatched     (failure injection, dispatch suppressed)
+
+## What was implemented
+Doorbell/bridge-path MMUL with the PERF-13 attn_weight shape (sim/perf_tests.py:255):
+  - M=32, K=32, N=64 issued via host_write_command(OpCode.MMUL) + firmware
+    run_loop — NOT the spike_host forward path (which never emits an
+    attn_weight GEMM, the structural FM blind spot for BUG-RTL-SOC-007).
+  - Deliberately N=64 (not N=128): todo 6/7 are load-bearing on N=128 for
+    weight-tile alignment, so this test pins the K<64 / N=64 single-tile
+    shape they do not cover.
+  - Deterministic random INT8 activations/weights with fixed seed
+    RandomState(20260812); activations packed with
+    cocotb_bridge.pack_int8_activation_tile_major, weights with
+    GoldenMXU.pack_int4.
+  - Scale buffer in the FM bridge-reader layout: num_blocks=ceil(K/128)=1,
+    [1][64] fp32 contiguous (mmio_bridge.py:248-252). Non-trivial random
+    scales in [0.5, 1.5). For N<=TILE_W the firmware's tile DMA
+    (tile_scheduler.py:137, tile_width*4 bytes) coincides with the bridge
+    layout, so both readers see the same buffer.
+  - Asserts: command completes with status='done'; output matches
+    GoldenMXU.matmul_int4_per_block(group_size=128) within
+    rtol=1e-5, atol=1e-5; anti-vacuous golden non-triviality gate.
+  - Failure injection: monkeypatches miniv.NPUFirmware._dispatch so the
+    descriptor is never dispatched and no completion status is written
+    (status 'unknown', output DRAM untouched). Asserts the happy-path
+    gates then fail: status != 'done' AND zero output != golden.
+
+## Acceptance command
+PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py::test_mmul_attn_weight_shape -v
+  -> 1 passed in 0.34s  (exit 0)
+
+## Failure QA (dispatch suppressed must fail the happy-path gates)
+PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py::test_mmul_attn_weight_shape_not_dispatched -v
+  -> 1 passed in 0.12s  (exit 0; the test asserts the injected wrong state)
+
+## Key assertion output (numerical proof the guard is real)
+happy   status          = done
+happy   max_abs(golden) = 5.573e+02   (non-trivial golden)
+happy   max_abs_diff    = 0.000e+00   (bit-exact vs matmul_int4_per_block)
+inject  status          = unknown     (completion never written)
+inject  out all zero    = True
+inject  max_abs_diff    = 5.573e+02   (zero output diverges from golden)
+
+## Regression check (no new failures)
+PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py -q
+  -> 52 passed, 54 warnings in 49.50s   (todo-7 baseline was 50 passed; +2 new, 0 failed)
+
+## Result
+PASS

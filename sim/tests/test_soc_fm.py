@@ -1809,6 +1809,115 @@ def test_mmul_accumulate_ignore_ctrl2(monkeypatch):
     )
 
 
+def _doorbell_run_attn_weight_mmul(model: FuncModel, M: int, K: int, N: int,
+                                   act_addr: int, wgt_addr: int, out_addr: int,
+                                   scale_addr: int, desc_addr: int,
+                                   rng: np.random.RandomState):
+    """Queue and run one doorbell MMUL with the PERF-13 attn_weight shape.
+
+    M=32, K=32, N=64 (sim/perf_tests.py:255): K<128 → num_blocks=ceil(32/128)=1
+    and N=64 < TILE_W=128 → one N-tile, so tile_mmul issues exactly ONE MXU
+    command (k_block=0, ctrl=0, no accumulate). The scale buffer is written
+    in the FM bridge-reader layout [1][64] fp32 contiguous (mmio_bridge.py:
+    248-252); the firmware only DMA's tile_width*4=256 scale bytes for this
+    shape (tile_scheduler.py:137), so the two layouts coincide for N≤128.
+
+    Returns (out_fp32, golden_fp32, results) for the caller to compare.
+    """
+    from engine.isa import OpCode
+
+    act, wgt_packed, _ = _doorbell_setup_mmul(
+        model, M, K, N, act_addr, wgt_addr, out_addr, scale_addr, desc_addr,
+        rng=rng)
+    num_blocks = (K + 127) // 128
+    assert num_blocks == 1, "K=32 must map to a single scale block"
+    scales = rng.uniform(0.5, 1.5, size=(num_blocks, N)).astype(np.float32)
+    assert scales.shape == (1, N)
+    model.host_write_data(scale_addr, scales.ravel())
+    model.host_write_command(OpCode.MMUL, desc_addr)
+    results = model.firmware.run_loop(max_commands=1)
+    assert len(results) == 1, f"expected 1 result, got {results}"
+
+    out_off = out_addr - Addr.DRAM_BASE
+    out_fw = np.frombuffer(
+        model.dram[out_off:out_off + M * N * 4], dtype=np.float32).reshape(M, N)
+    golden = GoldenMXU().matmul_int4_per_block(
+        act.reshape(M, K), wgt_packed, scales, M, K, N, group_size=128)
+    return out_fw, golden, results
+
+
+def test_mmul_attn_weight_shape():
+    """PERF-13 attn_weight shape (M=32, K=32, N=64) via the FM doorbell path.
+
+    The spike_host forward path never emits an attn_weight MMUL (host-side
+    attention has no separate attention-weight GEMM), so this shape was a
+    structural FM coverage gap (BUG-RTL-SOC-007 FM side; RTL root cause is
+    out of scope). Deliberately keeps N=64 (not N=128): todo 6/7 are
+    load-bearing on N=128 for weight-tile alignment, so this test pins the
+    K<64 / N=64 single-tile shape they do not cover.
+    """
+    model = FuncModel()
+
+    M, K, N = 32, 32, 64  # sim/perf_tests.py:255 PERF-13 ("attn_weight")
+    act_addr, wgt_addr, out_addr, scale_addr, desc_addr = (
+        0x8001_8000, 0x8002_C000, 0x8100_8000, 0x8011_8000, 0x8000_0300)
+
+    out_fw, golden, results = _doorbell_run_attn_weight_mmul(
+        model, M, K, N, act_addr, wgt_addr, out_addr, scale_addr, desc_addr,
+        np.random.RandomState(20260812))
+
+    # Command must actually execute.
+    assert results[0]['status'] == 'done', (
+        f"attn_weight MMUL command failed: {results[0]}"
+    )
+    # Output must match the matmul_int4_per_block golden.
+    assert np.allclose(out_fw, golden, rtol=1e-5, atol=1e-5), (
+        "attn_weight MMUL mismatch: max_abs_diff="
+        f"{np.max(np.abs(out_fw - golden)):.3e}"
+    )
+    # Anti-vacuous: the golden is non-trivial, so the comparison is real.
+    assert np.max(np.abs(golden)) > 0, "attn_weight golden is unexpectedly zero"
+
+
+def test_mmul_attn_weight_shape_not_dispatched(monkeypatch):
+    """Failure injection: descriptor never dispatched → happy-path gate fails.
+
+    Monkeypatches NPUFirmware._dispatch so the attn_weight command is never
+    executed and no completion status is written ('unknown', output DRAM
+    untouched). Re-running the happy-path checks must then FAIL: the status
+    assertion sees 'unknown' (not 'done') and the all-zero output diverges
+    from the non-trivial golden. This proves the happy-path assertions would
+    catch a regression that silently drops the command (the "completion not
+    written" QA scenario), rather than passing vacuously.
+    """
+    from miniv import NPUFirmware
+
+    def _never_dispatch(self, cmd):
+        return {'opcode': cmd['opcode'], 'status': 'unknown',
+                'error': 'dispatch suppressed (failure injection)'}
+
+    monkeypatch.setattr(NPUFirmware, '_dispatch', _never_dispatch)
+
+    model = FuncModel()
+
+    M, K, N = 32, 32, 64
+    act_addr, wgt_addr, out_addr, scale_addr, desc_addr = (
+        0x8001_8000, 0x8002_C000, 0x8100_8000, 0x8011_8000, 0x8000_0300)
+
+    out_fw, golden, results = _doorbell_run_attn_weight_mmul(
+        model, M, K, N, act_addr, wgt_addr, out_addr, scale_addr, desc_addr,
+        np.random.RandomState(20260812))
+
+    assert results[0]['status'] != 'done', (
+        "injection failed: command reported 'done' despite suppressed dispatch"
+    )
+    assert np.max(np.abs(golden)) > 0, "golden is unexpectedly zero"
+    assert not np.allclose(out_fw, golden, rtol=1e-5, atol=1e-5), (
+        "injection failed: output still matches golden "
+        "(dispatch suppression had no effect)"
+    )
+
+
 # ══════════════════════════════════════════════════════════════════════
 # P2 — Full blk.0 17-op chain, single-tile MMUL workaround (FM-SOC-027)
 # ══════════════════════════════════════════════════════════════════════

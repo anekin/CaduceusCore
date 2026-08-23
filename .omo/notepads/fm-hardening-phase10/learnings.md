@@ -137,3 +137,12 @@
 - Verified: acceptance command exit 0 (~16s), `test_soc_fm.py` 50 passed (no
   regression), dependency suites test_command_ring + test_spike_host_overlap 12
   passed. Evidence: `build/evidence/task-5-fm-hardening-phase10.txt`.
+
+## [2026-08-23] Todo 12 — FM attn_weight coverage (BUG-RTL-SOC-007 FM-side gap)
+- Added `sim/tests/test_soc_fm.py::test_mmul_attn_weight_shape` + `test_mmul_attn_weight_shape_not_dispatched` + shared helper `_doorbell_run_attn_weight_mmul`, reusing `_doorbell_setup_mmul` (todo 6/7's doorbell data/descriptor setup) with an own RandomState(20260812) seed and own DRAM addresses (0x8001_8000/0x8002_C000/0x8100_8000/0x8011_8000/0x8000_0300).
+- Shape: PERF-13 attn_weight M=32, K=32, N=64 (`sim/perf_tests.py:255`). K=32 → num_blocks=1, N=64 → one N-tile, so `tile_mmul` issues exactly ONE MXU command (k_block=0, ctrl=0) — no accumulate, no multi-tile. This is why todo 6/7's N=128 alignment reasoning is NOT needed here: with N≤TILE_W the firmware scale DMA (tile_width*4=256B, tile_scheduler.py:137) coincides with the bridge-reader layout [1][64] fp32 contiguous (mmio_bridge.py:248-252), so the two layouts agree and the same buffer feeds both readers.
+- Happy path is bit-exact (max_abs_diff = 0.0) with non-trivial random scales in [0.5,1.5); golden max_abs ≈ 557, so the anti-vacuous gate (golden non-zero) is stable under the fixed seed.
+- Failure injection chosen per plan QA ("命令不执行、completion 不写"): monkeypatch `miniv.NPUFirmware._dispatch` (class attr, so instances created after the patch are covered — same pattern as todo 7) to return status 'unknown' without dispatching. Under injection: status != 'done', output DRAM all-zero, max_abs_diff ≈ 557 vs golden — both happy-path gates (status, golden) demonstrably fail, proving the guard is real.
+- Scope guardrails honored: no RTL touched, spike_host forward path untouched (the gap being closed IS that forward never emits attn_weight — the test issues the op through the doorbell instead), no new dependencies.
+- Full `test_soc_fm.py`: 52 passed / 0 failed (todo-7 baseline 50 + 2 new). Evidence: `build/evidence/task-12-fm-hardening-phase10.txt`.
+
