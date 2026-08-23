@@ -366,7 +366,7 @@ IBEX_RC="skipped"
 IBEX_LOG="$EVID/task-F3-ibex.log"
 # Concurrency guard: run_ibex_segment_run.sh exits via `pkill -f
 # simv_soc_ibex_seg`, which would kill an unrelated concurrent segment run.
-if p10_ssh "pgrep -f simv_soc_ibex_seg" >/dev/null 2>&1; then
+if p10_ssh "pgrep -f 'simv_soc_ibex_se[g]'" >/dev/null 2>&1; then
   fail "another simv_soc_ibex_seg is running on sz0001 — refusing to overlap (re-run F3 after it finishes)"
   IBEX_OK=0
 else

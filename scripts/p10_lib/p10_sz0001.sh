@@ -15,7 +15,7 @@ source sim/regression/run_env.sh && ${1-}"
   }
 else
   p10_ssh() {
-    ssh -o ConnectTimeout=10 -o BatchMode=yes "${ZHENGS}@${SZ0001}" "set -e; source /NAS/Tools/methodology/modules/init/bash; module load vcs/vcs_2023.12sp2; cd '${REPO_ROOT}' && source sim/regression/run_env.sh && ${1-}"
+    ssh -o ConnectTimeout=10 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=120 "${ZHENGS}@${SZ0001}" "set -e; source /NAS/Tools/methodology/modules/init/bash; module load vcs/vcs_2023.12sp2; cd '${REPO_ROOT}' && source sim/regression/run_env.sh && ${1-}"
   }
 fi
 p10_chmod() { chmod +x "$@"; }

@@ -135,6 +135,29 @@ classify() {
         scripts/run_36layer_checkpoint.py)
             echo "OK:todo 10 FM-SOC-001 smoke gate fix (checkpoint runner)" ;;
 
+        # ── sim: todo 16 FM-3 overlap calibration touch points (plan todo 16,
+        #    explicitly names sim/models/dma.py + sim/timing/benchmark.py) ──
+        sim/config/npu_config.yaml|sim/models/dma.py|sim/timing/benchmark.py|sim/timing/tests/test_tile_double_buffer.py)
+            echo "OK:todo 16 FM-3 overlap calibration (double_buffer knob, commit 9106bcf)" ;;
+
+        # ── sim: ISSUE-13B activation broadcast layout alignment (commit cf6736b) ──
+        sim/mmio_bridge.py)
+            echo "OK:ISSUE-13B activation broadcast layout in _run_mxu_compute" ;;
+        sim/tile_scheduler.py)
+            echo "OK:ISSUE-13B firmware emulation aligned to hardware activation layout" ;;
+        sim/func_model.py)
+            echo "OK:ISSUE-13B FuncModel golden activation packing matches RTL layout" ;;
+        sim/rtl_soc_runner.py)
+            echo "OK:ISSUE-13B FP32 tolerance compare for scaled MMUL outputs" ;;
+
+        # ── sim: ISSUE-13A bulk DRAM preload (commit 93697bf) ──
+        sim/profile_dram_preload.py|sim/test_dram_bulk.py)
+            echo "OK:ISSUE-13A bulk DRAM preload profiler + regression smoke test" ;;
+
+        # ── sim: ISSUE-13A/B/C/D debug probes (todo 13 segment-run root-cause) ──
+        sim/rtl_soc_l0_l19_probe.py|sim/rtl_soc_l19_full.py|sim/rtl_soc_l19_probe.py|sim/rtl_soc_mmul_probe.py|sim/rtl_soc_state_probe.py)
+            echo "OK:ISSUE-13A/B/C/D debug probes for todo 13 segment-run root-cause" ;;
+
         # ── RTL: content-checked SoC top ──
         rtl/soc/caduceus_soc_top.v)
             echo "SOC_TOP" ;;
@@ -144,6 +167,15 @@ classify() {
             echo "OK:todo 13 cocotb backdoor registers (host_tail/npu_head/host_head/npu_tail)" ;;
         rtl/soc/sram_ctrl.v)
             echo "OK:todo 13 SRAM_DEBUG ifdef guard on \$display (cosmetic)" ;;
+
+        # ── RTL: verification-driven fixes (documented in plan C5b + notepad
+        #    ISSUE-13A/B — found by the todo 13/14 segment run) ──
+        rtl/mxu/controller.v)
+            echo "OK:ISSUE-13B mac_reset_acc at first K-tile of every command (cf6736b)" ;;
+        rtl/wrapper/mxu_soc_wrapper.v)
+            echo "OK:C5b MXU SCALE stub implementation + ISSUE-13B per-block FP32 scale store-out (cf6736b)" ;;
+        rtl/wrapper/vector_soc_wrapper.v)
+            echo "OK:VEC_WRP_DEBUG ifdef guard on debug prints for long Ibex runs (95ef1c8)" ;;
         rtl/wrapper/sfu_soc_wrapper.v)
             echo "OK:todo 18 SFU wrapper output mismatch fixes (status/gelu/width/line_buffer)" ;;
         rtl/tb/*)
@@ -382,7 +414,14 @@ fi
     echo "#   no new toolchain dependencies; all out-of-scope items recorded."
     echo "#   Expected deviations documented in-scope: doorbell backdoor ports"
     echo "#   (todo 13), SFU wrapper fixes (todo 18), sram_ctrl SRAM_DEBUG ifdef,"
-    echo "#   testbench tie-offs, firmware PERF-06/DRAM-window fixes."
+    echo "#   testbench tie-offs, firmware PERF-06/DRAM-window fixes,"
+    echo "#   verification-driven fixes found by the todo 13/14 segment run"
+    echo "#   (ISSUE-13A bulk DRAM preload; ISSUE-13B MXU per-block FP32 scale"
+    echo "#   store-out + controller first-K-tile reset + activation broadcast"
+    echo "#   layout alignment; ISSUE-13C SRAM segment-boundary clear;"
+    echo "#   ISSUE-13D DESC_BASE move; debug probes rtl_soc_*_probe.py), and"
+    echo "#   todo 16 FM-3 calibration files (npu_config.yaml, models/dma.py,"
+    echo "#   timing/benchmark.py, timing/tests/test_tile_double_buffer.py)."
 } > "$OUT_FILE"
 
 echo "[p10_f4_scope_gate] Evidence written to ${OUT_FILE#${REPO_ROOT}/}"
