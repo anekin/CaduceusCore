@@ -1,11 +1,11 @@
 Task F2 - Phase 10 RTL Verification: Code quality review
 ===========================================================================
-Timestamp     : 2026-08-19T02:51:33Z
-Commit        : 0e05e623d5fe5509c2ca039393b9d9a14df0ae50
+Timestamp     : 2026-08-21T19:19:12Z
+Commit        : 1268eff26df90c5399d237387cd97709cb5628c2
 Baseline      : a187fc641f836fb6c3ef734a945ed14caddff0f5 (a187fc6 evidence: boulder reset state diff)
 Baseline src  : build/evidence/ph10-base-commit.txt
 
-Scope         : 15 changed source file(s) (.v/.c/.h/.py)
+Scope         : 34 changed source file(s) (.v/.c/.h/.py)
 Commands executed (exact):
   1. grep residue : git diff "$BASE" HEAD -- <file> | grep -E '^+' | sed 's/^+//' | grep -nE '\b(TODO|FIXME|HACK|XXX)\b'
   2. grep debug   : same added-line stream | grep -nE '0x[0-9A-Fa-f]*(DEAD|BEEF|CAFE|F00D)[0-9A-Fa-f]*|breakpoint\(|pdb\.set_trace|ipdb\.set_trace|[[:space:]]assert False[[:space:]]*$'
@@ -18,32 +18,52 @@ residue_check      : OK
 hardcoded_check    : OK
 style_trailing_ws  : none
 pytest_host        : sz0001
-pytest             : 164 failed, 1901 passed, 45 errors
+pytest             : 164 failed, 1902 passed, 45 errors
 pytest_baseline    : 164 failed, 1901 passed, 45 errors (build/evidence/task-3-phase10-rtl-verification.txt)
 pytest_delta       : failed=0 errors=0
 lint_tool          : none
 lint_ok            : yes
 
-Changed source files (15):
+Changed source files (34):
   firmware/npu_firmware.c
+  rtl/mxu/controller.v
   rtl/soc/caduceus_soc_top.v
   rtl/soc/doorbell.v
   rtl/soc/sram_ctrl.v
   rtl/tb/tb_mixed.v
   rtl/tb/tb_soc.v
   rtl/tb/tb_soc_ibex.v
+  rtl/wrapper/mxu_soc_wrapper.v
   rtl/wrapper/sfu_soc_wrapper.v
+  rtl/wrapper/vector_soc_wrapper.v
   scripts/run_36layer_checkpoint.py
   sim/cocotb_bridge.py
+  sim/func_model.py
+  sim/mmio_bridge.py
+  sim/models/dma.py
   sim/p10_diag_perf06.py
+  sim/p10_fm3_measure.py
   sim/p10_verify_perf06.py
+  sim/profile_dram_preload.py
+  sim/rtl_soc_l0_l19_probe.py
+  sim/rtl_soc_mmul_probe.py
+  sim/rtl_soc_runner.py
   sim/rtl_soc_segment_run.py
   sim/spike_host.py
+  sim/test_dram_bulk.py
+  sim/tests/test_func_model_signoff_v3_host.py
+  sim/tests/test_func_model_signoff_v3_integration.py
+  sim/tests/test_soc_boundary.py
+  sim/tests/test_soc_fm.py
   sim/tests/wrapper/test_sfu_wrapper.py
+  sim/tile_scheduler.py
+  sim/timing/benchmark.py
+  sim/timing/tests/test_tile_double_buffer.py
 
 Info:
-  - absolute-path hardcode in sim/spike_host.py (informational): 545:+        _cadence_lib = "/home/EDA/cadence/CEREBRUS22.15_P/tools.lnx86/lib/64bit" 
-  - no linter available (ruff/flake8/pylint absent) — lint fallback: ast.parse syntax gate on 7 changed .py file(s)
+  - absolute-path hardcode in sim/profile_dram_preload.py (informational): 80:+    model_path = "/home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf" 
+  - absolute-path hardcode in sim/spike_host.py (informational): 550:+        _cadence_lib = "/home/EDA/cadence/CEREBRUS22.15_P/tools.lnx86/lib/64bit" 
+  - no linter available (ruff/flake8/pylint absent) — lint fallback: ast.parse syntax gate on 23 changed .py file(s)
 
 Verification: PASS
   new_lint_errors    : 0

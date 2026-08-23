@@ -1,6 +1,6 @@
 # Phase 10 Final Wave F4 — Scope Fidelity Gate
-# Date: 2026-08-19T02:45:35Z
-# Commit: a909a8278266c8a287a434bf024886e2b6e45feb (a909a82)
+# Date: 2026-08-21T19:24:17Z
+# Commit: 1268eff26df90c5399d237387cd97709cb5628c2 (1268eff)
 # Baseline: a187fc641f836fb6c3ef734a945ed14caddff0f5
 # Command: bash scripts/p10_f4_scope_gate.sh
 # Plan: .omo/plans/phase10-rtl-verification.md (Scope: Must have / Must NOT have)
@@ -11,7 +11,7 @@ requirements_unchanged=PASS
 soc_top_functional_additions=PASS
 rtl_whitelist=PASS
 unexpected_files=PASS
-changed_file_count=78
+changed_file_count=133
 
 # caduceus_soc_top.v delta (expected, todo 13):
 #   doorbell backdoor ports (todo 13): db_bkdoor_we/sel/wdata/rdata added to port list; .bkdoor_we/sel/wdata/rdata wired to doorbell instance; timer_irq_i line gained trailing comma
@@ -20,13 +20,16 @@ changed_file_count=78
 #   (none)
 
 # RTL source files changed from baseline:
+#   rtl/mxu/controller.v
 #   rtl/soc/caduceus_soc_top.v
 #   rtl/soc/doorbell.v
 #   rtl/soc/sram_ctrl.v
 #   rtl/tb/tb_mixed.v
 #   rtl/tb/tb_soc.v
 #   rtl/tb/tb_soc_ibex.v
+#   rtl/wrapper/mxu_soc_wrapper.v
 #   rtl/wrapper/sfu_soc_wrapper.v
+#   rtl/wrapper/vector_soc_wrapper.v
 
 # Notes:
 #   baseline_source=file(ph10-base-commit.txt)
@@ -35,4 +38,11 @@ changed_file_count=78
 #   no new toolchain dependencies; all out-of-scope items recorded.
 #   Expected deviations documented in-scope: doorbell backdoor ports
 #   (todo 13), SFU wrapper fixes (todo 18), sram_ctrl SRAM_DEBUG ifdef,
-#   testbench tie-offs, firmware PERF-06/DRAM-window fixes.
+#   testbench tie-offs, firmware PERF-06/DRAM-window fixes,
+#   verification-driven fixes found by the todo 13/14 segment run
+#   (ISSUE-13A bulk DRAM preload; ISSUE-13B MXU per-block FP32 scale
+#   store-out + controller first-K-tile reset + activation broadcast
+#   layout alignment; ISSUE-13C SRAM segment-boundary clear;
+#   ISSUE-13D DESC_BASE move; debug probes rtl_soc_*_probe.py), and
+#   todo 16 FM-3 calibration files (npu_config.yaml, models/dma.py,
+#   timing/benchmark.py, timing/tests/test_tile_double_buffer.py).

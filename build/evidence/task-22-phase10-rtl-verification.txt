@@ -1,7 +1,7 @@
 Task 22 - Phase 10 RTL Verification: Bug ledger dedup + completeness check
 ===========================================================================
-Timestamp     : 2026-08-21T08:59:29Z
-Commit        : fa4ffec3a8f06ba697b2b522eb7d929da39f0f89
+Timestamp     : 2026-08-21T09:01:14Z
+Commit        : e25031d97d3d300a8c8c02426f7d488691625c92
 Ledger        : /home/prj/zhengs/caduceuscore/CaduceusCore/docs/bugs/bugs-soc-rtl.md
 
 duplicate_count=0
