@@ -1,0 +1,48 @@
+task-8-fm-hardening-phase10 evidence
+====================================
+Timestamp: 2026-08-23T01:31:51Z
+Base commit: cb35c21 docs(notepad): initialize fm-hardening-phase10 notepad
+
+Acceptance: PYTHONPATH=sim python -m pytest sim/tests/test_packer_equivalence.py -v
+Result: PASS (10 passed, exit 0)
+
+  test_packers_byte_identical[1-64] ...... PASSED
+  test_packers_byte_identical[1-128] ..... PASSED
+  test_packers_byte_identical[64-128] .... PASSED
+  test_packers_byte_identical[32-256] .... PASSED
+  test_packers_byte_identical[1-2048] .... PASSED
+  test_packers_byte_identical[64-2048] ... PASSED
+  test_layout_is_column_major_broadcast .. PASSED
+  test_row_major_variant_would_fail[64-128] .. PASSED
+  test_row_major_variant_would_fail[32-256] .. PASSED
+  test_row_major_variant_would_fail[64-2048] . PASSED
+
+  All 6 grid points: spike_host._pack_act_tile_major_contig output ==
+  cocotb_bridge.pack_int8_activation_tile_major output, byte-for-byte.
+
+Failure injection (QA failure scenario):
+  monkeypatch swaps spike_host._pack_act_tile_major_contig for the pre-fix
+  row-major variant (_pack_act_row_major_pre_fix); the byte comparison
+  diverges and the assertion fails for every multi-row grid point
+  (M=1 excluded because row-major == column-major byte layout at M=1,
+  which is exactly why ISSUE-13B only surfaced in the real multi-row
+  chain).  Proves the guard catches the ISSUE-13B regression.
+
+Layout pin:
+  test_layout_is_column_major_broadcast checks word c byte r of each
+  4096-byte K-tile == act[r, k] (k = kt*64 + c) at (M,K)=(64,130),
+  including the zero-pad tail — a regression where BOTH packers drift to
+  the same wrong layout is also caught.
+
+Additional verification:
+  PYTHONPATH=sim python -m pytest sim/tests/test_command_ring.py sim/tests/test_address_space.py -q
+  Result: PASS (19 passed) — no collateral damage to W1 contract tests.
+
+Files created/modified:
+  Created: sim/tests/test_packer_equivalence.py
+  Created: build/evidence/task-8-fm-hardening-phase10.txt
+  Modified: .omo/notepads/fm-hardening-phase10/learnings.md (append)
+
+Scope check:
+  Neither packer implementation touched (spike_host.py:588-603 and
+  cocotb_bridge.py:166-187 unchanged).
