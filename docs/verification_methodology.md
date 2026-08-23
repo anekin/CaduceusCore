@@ -128,6 +128,27 @@ Phase 10 复盘结论：Func Model 数值上已 bit-exact，缺的是布局/契�
 cd CaduceusCore && ./scripts/fm_reverse_dependency_gate.sh --dry-run
 ```
 
+## FM → RTL 交付门禁（Pre-RTL Signoff Gate）
+
+fm-hardening-phase10 的复盘结论是：Func Model 数值本身已 bit-exact，但布局/契约层缺失系统化的前置守卫，导致 6 类问题必须等到 7.5h 的 RTL 段跑才暴露。为避免下一个 SoC 在 RTL 验证阶段再回头补 FM，所有 Func Model 在交付 RTL 之前必须通过下表门禁。
+
+| # | 检查项 | 守卫目标 | 门禁命令 |
+|---|--------|----------|----------|
+| 1 | 地址空间与命令环布局契约 | descriptor/activation/weight 不重叠；环回绕语义正确 | `PYTHONPATH=sim python -m pytest sim/tests/test_address_space.py sim/tests/test_command_ring.py sim/tests/test_spike_host_overlap.py -q` |
+| 2 | 环回绕与长序列压力场景 | BUG-RTL-SOC-008 类在 FM 秒级复现 | `PYTHONPATH=sim python -m pytest sim/tests/test_command_ring_stress.py sim/tests/test_soc_fm_long_sequence.py -q` |
+| 3 | scale/accumulate golden 加固 | 非平凡 FP32 scale、CTRL[2] 累加与 `matmul_int4_per_block` 对齐 | `PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py::test_mmul_scale_nonzero sim/tests/test_soc_fm.py::test_mmul_accumulate -v` |
+| 4 | 双 packer 等价与 ABI 常量一致性 | spike_host/cocotb_bridge 布局不漂移；Python/C 常量同源 | `PYTHONPATH=sim python -m pytest sim/tests/test_packer_equivalence.py sim/tests/test_npu_abi_constants.py -q` |
+| 5 | 段边界 SRAM 清零协议 | ISSUE-13C 类残留数据不泄漏到下一段 | `PYTHONPATH=sim python -m pytest sim/tests/test_segment_boundary.py -q` |
+| 6 | RTL/firmware 变更反向依赖门禁 | RTL/firmware/桥接改动自动触发 FM + W4-PERF 回归 | `./scripts/fm_reverse_dependency_gate.sh --dry-run` |
+
+**冻结面（范围门禁）**：任何进入 RTL 验证前的提交，不得改动 `rtl/`、`sim/arc_model.py`、`sim/design_space_explorer.py`、`sim/quantize.py`、`ggml-npu/`、`requirements.txt`。若确需改动，必须重跑 F4 范围门禁并通过：
+
+```bash
+bash scripts/fm_hardening_f4_scope_gate.sh
+```
+
+**决策记录**：P0/P1/P2P3 vs P4 布局差异化处置、`sim/device_server.py` RING_SIZE=16 排除理由、tests-after 策略等关键设计，详见 `.omo/notepads/fm-verification-hardening/learnings.md`。
+
 ## E2E 验证
 
 **目标**：验证全栈数据流正确性（llama.cpp 视角）。

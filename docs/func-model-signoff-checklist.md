@@ -182,6 +182,26 @@ reference (L0 max_abs=6.05, max_rel=42.68 at tol=1e-01). This is a pre-existing
 accuracy gap from the INT4 quantization / dequantization paths, not a regression
 from the bug fixes.
 
+## Post-v3 Func Model Hardening Signoff (fm-hardening-phase10)
+
+> **Date**: 2026-08-23
+> **Scope**: Phase 10 bug-class hardening — layout/ring, scale/accumulate golden, packer equivalence, ABI constant drift, segment-boundary SRAM, reverse-dependency gate.
+
+This section captures the additional signoff evidence produced after the v3 Func Model signoff above. It is mandatory for any Func Model baseline that will be handed off to SoC RTL verification.
+
+| Signoff ID | Description | Status | Evidence |
+|---|---|---|---|
+| F-FM-H01 | Address-space contract module + per-runner layout checks | ✅ PASS | `sim/tests/test_address_space.py`, `sim/tests/test_spike_host_overlap.py` |
+| F-FM-H02 | Command-ring single source of truth + `% 64` elimination | ✅ PASS | `sim/tests/test_command_ring.py`, `sim/tests/test_command_ring_stress.py` |
+| F-FM-H03 | Scale-carrying MMUL golden hardening (SCALE_ADDR≠0) | ✅ PASS | `sim/tests/test_soc_fm.py::test_mmul_scale_nonzero` |
+| F-FM-H04 | Accumulate (CTRL[2]) two-command-chain golden hardening | ✅ PASS | `sim/tests/test_soc_fm.py::test_mmul_accumulate` |
+| F-FM-H05 | Dual activation packer byte-equivalence + column-major contract | ✅ PASS | `sim/tests/test_packer_equivalence.py` |
+| F-FM-H06 | ABI constants single source (schema → C header → Python) | ✅ PASS | `sim/tests/test_npu_abi_constants.py`, `python3 scripts/gen_npu_abi.py --check` |
+| F-FM-H07 | Segment-boundary SRAM-clear contract (ISSUE-13C) | ✅ PASS | `sim/tests/test_segment_boundary.py`, `sim/test_dram_bulk.py` |
+| F-FM-H08 | RTL/firmware reverse-dependency gate + F-wave scripts | ✅ PASS | `scripts/fm_reverse_dependency_gate.sh`, `scripts/fm_hardening_f{1..4}.sh` |
+
+**Verification summary**: F1 Plan compliance audit `APPROVE` (14/14 evidence PASS), F2 Code quality `APPROVE` (0 residue, 0 new pytest failures), F4 Scope fidelity `APPROVE` (0 scope creep). F3 Real manual QA was blocked solely by the pre-existing Spike `mmul_smoke` failure (BUG-SOC-FM-005, `max_diff=7.64e+02`); all other F3 stages (firmware build, reverse-gate dry-run, W4-PERF p0/p1, FM-SOC-001/003/032) passed.
+
 ## SoC Data-Path Gaps — NOT Blocking Current Signoff
 
 Six SoC-level data paths identified in `docs/soc-fm-gap-spec.md` have **no Python
