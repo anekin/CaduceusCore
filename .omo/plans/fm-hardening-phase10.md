@@ -100,7 +100,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   QA scenarios: happy — `PYTHONPATH=sim python -c "from sim import command_ring as cr; assert cr.expected_head(1300)==1300%1024; print('RING OK')"`；failure — P0 runner 调度 33 命令抛 `RingOverflowError`（新断言单测覆盖）。Evidence `build/evidence/task-3-fm-hardening-phase10.txt`
   Commit: Y | refactor(sim): unify command-ring config into sim/command_ring.py
 
-- [ ] 4. ring-stress 回绕场景（BUG-RTL-SOC-008 类在 FM 速度下的复现守卫）
+- [x] 4. ring-stress 回绕场景（BUG-RTL-SOC-008 类在 FM 速度下的复现守卫）
   What to do / Must NOT do: 新增 `sim/tests/test_command_ring_stress.py`：纯 Python Func Model 场景——140 条命令、起始环偏移 120（跨 entry 128）、`expected_head` 从 1023 回绕到 0；descriptor 在 DESC_BASE 依次分配；断言 (a) `address_space.contract_check()` 通过且 descriptor 区与环不相交、(b) 每条命令完成记录 cmd_id 与状态正确、(c) 每条命令输出与 golden 匹配。命名测试 `test_ring_wrap_at_entry_128`。**环大小前置**：FuncModel 固件模拟默认 `ring_size=16`（`sim/miniv.py:457`，`sim/func_model.py:139` 直接读取），无法容纳 140 命令/偏移 120——本 todo 需把 `ring_size` 提为 `NPUFirmware` 构造参数（默认仍 16，行为不变），测试内以 `ring_size=1024` 构造（与 `command_ring.RING_ENTRIES` 一致），或等价地在测试 fixture 中覆盖。Must NOT 触碰 RTL/VCS；运行时间 < 30s。
   Parallelization: Wave 1 | Blocked by: 2, 3 | Blocks: —
   References: `sim/tests/test_soc_fm.py:1511-1580`（doorbell ring wrap/corrupt/overflow 现有用例模式）; `sim/func_model.py:131-149`（host_write_command ring-full 逻辑）; `sim/command_ring.py`、`sim/address_space.py`（todo 1/3 产物）; `.omo/notepads/phase10-rtl-verification/func-model-verification-gap-report.md:64-65`（S2 提案）
@@ -108,7 +108,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   QA scenarios: happy — 140 命令链完成、完成环 cmd_id 全对、输出全匹配；failure — 测试内 `monkeypatch` DESC_BASE=0x80001000 时 `contract_check()` 抛 OverlapError 导致测试失败（证明门禁有效）。Evidence `build/evidence/task-4-fm-hardening-phase10.txt`
   Commit: Y | test(sim): ring-stress wrap scenario crossing entry 128
 
-- [ ] 5. 长序列持久偏移 FM 门禁（多段链在 Func Model 速度跑通）
+- [x] 5. 长序列持久偏移 FM 门禁（多段链在 Func Model 速度跑通）
   What to do / Must NOT do: 新增 `sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset`：复用 28-block scaled chain fixture 模式（`test_soc_fm.py:2453-2764`），以**持久环偏移**（不按层重置）调度 ≥200 条命令（9 层等效），断言累计偏移正确回绕、每层输出与 golden 匹配、末层 cos ≥ 0.999。纯 Python，运行时间 < 2 分钟。Must NOT 用 VCS；Must NOT 改调度算法。
   Parallelization: Wave 1 | Blocked by: 2, 3 | Blocks: —
   References: `sim/tests/test_soc_fm.py:2453-2764`（28-block scaled chain 模式）; `sim/func_model.py:131-149`; `.omo/notepads/phase10-rtl-verification/func-model-verification-gap-report.md:63`（S1 提案）
@@ -126,7 +126,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   QA scenarios: happy — 随机 scale 下输出与 golden ≤1 ulp；failure — scale 区域按 FP16 字节写（模拟 F3 发现的 FP16-in-FP32 格式错误，`perf_tests.py` 修复前形态）→ 输出坍缩、断言失败。Evidence `build/evidence/task-6-fm-hardening-phase10.txt`
   Commit: Y | test(sim): FM regression for scale-carrying MMUL path
 
-- [ ] 7. accumulate 路径 golden 加固（CTRL[2] 两命令链 FM 回归）
+- [x] 7. accumulate 路径 golden 加固（CTRL[2] 两命令链 FM 回归）
   What to do / Must NOT do: 新增 `sim/tests/test_soc_fm.py::test_mmul_accumulate`：同一输出地址两命令链，第二条 CTRL[2]=1，断言结果 == 第一段 partial + 第二段 fresh partial（`mmio_bridge.py:268-278` 语义），且与用 `matmul_int4_per_block` 分块组合的 golden 一致。Must NOT 与 todo 6 合并（scale 与 accumulate 正交，需独立归因）。
   Parallelization: Wave 2 | Blocked by: — | Blocks: 11
   References: `sim/mmio_bridge.py:139`（accumulate = CTRL bit2）、`:268-278`（accumulate 累加实现）; `firmware/npu_firmware.c:541`（accumulate_ctrl = (k_block>0)?4:0）; `sim/tests/test_soc_fm.py:2557-2835`（多块 scaled chain 模式）
@@ -150,7 +150,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   QA scenarios: happy — 上述 4 命令全过；failure — 手改 `firmware/npu_firmware.c` 某常量回错误值后 `make -C firmware` 或 ABI 断言/数值比对测试失败（按所选机制）。Evidence `build/evidence/task-9-fm-hardening-phase10.txt`
   Commit: Y | refactor(firmware): source ring constants from generated ABI header
 
-- [ ] 10. 段边界 SRAM 清零契约（ISSUE-13C 类守卫）
+- [x] 10. 段边界 SRAM 清零契约（ISSUE-13C 类守卫）
   What to do / Must NOT do: `sim/cocotb_bridge.py` `segment_preload()`（:2488-2543）新增 `clear_sram: bool = False` 参数：当 `force_full=True and clear_sram=True` 时断言 `sram == b"\x00" * SRAM_SIZE`（否则抛 `SegmentBoundaryError`）；`sim/rtl_soc_segment_run.py:495-497` 调用点传 `clear_sram=True`。新增 `sim/tests/test_segment_boundary.py::test_two_segment_sram_clear`：FuncModel 层两段连续场景（段间边界清零语义断言）+ `sim/test_dram_bulk.py` 补 sram 传参变体覆盖写路径。Must NOT 改 RTL；Must NOT 强制单段调用方（probe 类）传 sram（它们 clear_sram=False）。
   Parallelization: Wave 2 | Blocked by: — | Blocks: —
   References: `sim/cocotb_bridge.py:2488-2543`（segment_preload、SRAM 仅在 sram 非空时写）; `sim/rtl_soc_segment_run.py:495-497`（6091ec9 的 sram 清零调用点）; `sim/test_dram_bulk.py:33,48`（现有无 sram 调用）; `.omo/notepads/phase10-rtl-verification/issues.md:222-247`（ISSUE-13C 根因）
