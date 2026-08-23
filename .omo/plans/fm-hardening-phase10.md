@@ -176,7 +176,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   QA scenarios: happy — 执行且与 golden 匹配；failure — 测试内让该命令不执行（completion 不写）→ 断言失败。Evidence `build/evidence/task-12-fm-hardening-phase10.txt`
   Commit: Y | test(sim): FM attn_weight op coverage
 
-- [ ] 13. 创作 F 波门禁脚本（fm_hardening_f1..f4）并 dry-run 验证
+- [x] 13. 创作 F 波门禁脚本（fm_hardening_f1..f4）并 dry-run 验证
   What to do / Must NOT do: 新建四个脚本（每个 ≤100 行，语义与下方 Final verification wave 的 What/Command 一致，不得自证——脚本只执行客观检查）：`scripts/fm_hardening_f1_audit.sh`（检查 `build/evidence/task-{1..14}-fm-hardening-phase10.txt` 存在且终态 PASS；重跑各 todo 的 pytest acceptance 命令并比对退出码）；`scripts/fm_hardening_f2_code_quality.sh`（grep TODO/FIXME/HACK 残留于新增文件；`bash -n` 所有改动 .sh；pytest 全量与 task-3 基线 diff failed=0/errors=0）；`scripts/fm_hardening_f3_manual_qa.sh`（全量 pytest + `make -C firmware` + Spike smoke + 反向依赖门禁 dry-run + sz0001 上 W4-PERF p0/p1 抽查 + **FM-SOC 001/003（P0）与 FM-SOC-032（P4）抽查**，即 F3 的 (a)-(e) 全部五项）；`scripts/fm_hardening_f4_scope_gate.sh`（git diff --name-only 白名单核对 + 冻结文件 diff 为空断言）。每个脚本完成后做一次 dry-run/语法验证。Must NOT 让任何脚本无条件 exit 0；Must NOT 在脚本中重复实现批次逻辑（复用现有入口）。
   Parallelization: Wave 3 | Blocked by: 1-12 | Blocks: 14
   References: `scripts/p10_f1_audit.sh`、`scripts/p10_f2_code_quality.sh`、`scripts/p10_f3_manual_qa.sh`、`scripts/p10_f4_scope_gate.sh`（Phase 10 既有 F 波脚本，模式参照）; `sim/regression/run_w4_perf_batch.sh`; `scripts/p10_lib/p10_sz0001.sh`
