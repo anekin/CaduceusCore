@@ -1,0 +1,17 @@
+make: Entering directory '/home/prj/zhengs/caduceuscore/CaduceusCore/firmware'
+/usr/bin/riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 -Wall -Wextra -O2 -g3 -fno-inline -ffreestanding -nostdlib -nodefaultlibs -fno-common -fno-builtin -I. -I../gen -c npu_firmware.c -o build/npu_firmware.o
+/usr/bin/riscv64-unknown-elf-gcc build/startup.o build/npu_firmware.o build/test_data.o -march=rv32im -mabi=ilp32 -nostdlib -nodefaultlibs -T link.ld -Wl,-Map=build/npu_firmware.map -o build/npu_firmware.elf
+/usr/bin/riscv64-unknown-elf-size build/npu_firmware.elf
+   text	   data	    bss	    dec	    hex	filename
+   4808	 262272	      4	 267084	  4134c	build/npu_firmware.elf
+/usr/bin/riscv64-unknown-elf-objcopy -O binary -R .data_dram build/npu_firmware.elf build/npu_firmware.tmp.bin
+od -A n -t x4 -v build/npu_firmware.tmp.bin | awk '{for(i=1;i<=NF;i++) print $i}' > build/npu_firmware.hex
+rm -f build/npu_firmware.tmp.bin
+/usr/bin/riscv64-unknown-elf-objcopy -O binary -j .data_dram build/npu_firmware.elf build/npu_firmware.dram.bin
+od -A n -t x4 -v build/npu_firmware.dram.bin | awk '{for(i=1;i<=NF;i++) print $i}' > build/dram_init.hex
+rm -f build/npu_firmware.dram.bin
+/usr/bin/riscv64-unknown-elf-gcc build/startup.o build/npu_firmware.o build/test_data.o -march=rv32im -mabi=ilp32 -nostdlib -nodefaultlibs -T spike_link.ld -Wl,-Map=build/npu_firmware_spike.map -o build/npu_firmware_spike.elf
+/usr/bin/riscv64-unknown-elf-size build/npu_firmware_spike.elf
+   text	   data	    bss	    dec	    hex	filename
+   4808	      0	      4	   4812	   12cc	build/npu_firmware_spike.elf
+make: Leaving directory '/home/prj/zhengs/caduceuscore/CaduceusCore/firmware'

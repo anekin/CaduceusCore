@@ -1,0 +1,80 @@
+# Task 13 — fm-hardening-phase10: F 波门禁脚本创作 + dry-run 验证
+Timestamp: 2026-08-23T06:05:00Z
+Commit: 52824651034db44779508c323e8789786b01ebdd (base; scripts committed in follow-up feat commit)
+Plan: .omo/plans/fm-hardening-phase10.md todo 13
+Plan base (F4/F2): b542cc5b36a80dd2a73ab0fd0fc1ffeb1d99447b
+
+## Deliverables (4 scripts, each <=100 lines, set -euo pipefail, no unconditional exit 0)
+  scripts/fm_hardening_f1_audit.sh        (92 lines)  evidence status + acceptance rerun
+  scripts/fm_hardening_f2_code_quality.sh (73 lines)  residue / bash -n / pytest-baseline
+  scripts/fm_hardening_f3_manual_qa.sh    (98 lines)  5-stage manual QA (local + sz0001)
+  scripts/fm_hardening_f4_scope_gate.sh   (49 lines)  whitelist + frozen-file gate
+
+## Verification
+
+### 1. Syntax gate (todo 13 acceptance #1)
+Command: bash -n scripts/fm_hardening_f1_audit.sh scripts/fm_hardening_f2_code_quality.sh \
+         scripts/fm_hardening_f3_manual_qa.sh scripts/fm_hardening_f4_scope_gate.sh
+Result: exit 0 (all four)
+
+### 2. File presence (todo 13 acceptance #3)
+Command: ls scripts/fm_hardening_f*.sh
+Result: 4 files, exit 0
+
+### 3. F1 plan compliance audit (post-commit run)
+Command: bash scripts/fm_hardening_f1_audit.sh
+Result: exit 0. todo=01..12 evidence=PASS with acceptance commands re-run green;
+  todo=09 spike smoke SKIP-ENV (model/EDA-dependent, covered by F3);
+  todo=10 dram_bulk SKIP-ENV(0-collected) — cocotb absent on this host, same state
+  the todo-10 evidence itself recorded; todo=13 evidence=PASS (this file);
+  todo=14 PENDING (unchecked plan todo, blocked on todo 13).
+  Summary: pass=13 fail=0 pending=1.
+
+### 4. F2 code quality (post-commit run)
+Command: bash scripts/fm_hardening_f2_code_quality.sh
+Result: exit 0. 39 changed source files scanned since plan base; 0 residue markers;
+  bash -n clean on all changed .sh (incl. the 4 new gates + fm_reverse_dependency_gate.sh
+  + p10_36layer_preflight.sh); pytest 19 failed / 2198 passed / 13 errors vs baseline
+  19 failed / 13 errors (min of task-3 legacy 164/45 and recorded gate state) => 0 new.
+
+### 5. F4 scope gate
+Command: bash scripts/fm_hardening_f4_scope_gate.sh
+Result: exit 0. 56 changed files since b542cc5b all whitelisted
+  (sim/ firmware/ scripts/ docs/ spec/npu_abi.json gen/ build/evidence/ .omo/);
+  frozen surface rtl/ + sim/arc_model.py + sim/design_space_explorer.py +
+  sim/quantize.py + ggml-npu/ + requirements.txt: zero changes (range diff + worktree).
+
+### 6. F3 manual QA (full real run, sz0001 reachable — no deferral)
+Command: bash scripts/fm_hardening_f3_manual_qa.sh
+Result: exit 1 (honest gate outcome; see below). Stages:
+  (a) full pytest        : PASS — 19 failed / 2198 passed / 13 errors = baseline (0 new)
+  (b) make -C firmware   : PASS
+  (c) spike mmul_smoke   : FAIL — "Spike Host Summary: 0 PASS, 1 FAIL",
+      max_diff=7.64e+02 on L0 Q_proj. Identical to the pre-existing signature
+      recorded in task-9 evidence (BUG-SOC-FM-005 / func-model-gap-closure
+      Issue 002, reproduced on the unchanged baseline). The gate reports the
+      red honestly instead of waiving it — per plan F3 the smoke must be green
+      for full F3 approval; this predates fm-hardening-phase10 and is tracked
+      separately (out of scope: 本计划不修 RTL bug).
+  (d) reverse gate dry-run: PASS (clean; .omo/last_fm_gate.json state matches)
+  (e) sz0001 spot checks : PASS — W4-PERF batches via
+      sim/regression/run_w4_perf_batch.sh (p0=4/p1=4 PASS records verified in
+      w4-perf-p0/p1.txt) + FM-SOC-001/003 (P0 runner) and FM-SOC-032 (P4 runner,
+      28-block chain, ~25 min VCS) all "[PASS]" via run_fm_soc_all.sh.
+  Receipts: build/evidence/task-F3-{spike-smoke,firmware-build,reverse-gate-dryrun,
+  w4-perf,FM-SOC-001,FM-SOC-003,FM-SOC-032}.log + task-F3-fm-hardening-phase10.txt
+
+### 7. Negative checks (gate is real, not unconditional)
+  - F1 on a checked todo with missing evidence => FAIL (checked-todo semantics).
+  - F2 residue regex self-reference avoided via split quoting; a real marker
+    comment in a changed source file fails the gate (pattern tested during bring-up).
+  - F4 with any frozen/out-of-scope file => FAIL (frozen set empty today).
+  - F3 exit 1 on the failing spike stage proves the gate does not self-waive.
+
+## Bring-up notes (recorded in learnings.md)
+  - F1 verdict default bug (initialized FAIL) fixed; rc-capture bug in acceptance
+    rerun fixed; 0-collected => SKIP-ENV rule added (todo-10 evidence parity).
+  - F3 first full run crashed at the evidence-write step ("VERDICT: unbound
+    variable" — a comment/assignment line gluing bug); fixed and re-run clean.
+
+Result: PASS

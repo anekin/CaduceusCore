@@ -158,3 +158,25 @@
 - Scope guardrails honored: no RTL touched, spike_host forward path untouched (the gap being closed IS that forward never emits attn_weight — the test issues the op through the doorbell instead), no new dependencies.
 - Full `test_soc_fm.py`: 52 passed / 0 failed (todo-7 baseline 50 + 2 new). Evidence: `build/evidence/task-12-fm-hardening-phase10.txt`.
 
+## [2026-08-23] Todo 13 — F-wave gate scripts (fm_hardening_f1..f4)
+- Created 4 scripts: `scripts/fm_hardening_f1_audit.sh` (92 lines), `fm_hardening_f2_code_quality.sh` (73), `fm_hardening_f3_manual_qa.sh` (98), `fm_hardening_f4_scope_gate.sh` (49). All ≤100 lines, `set -euo pipefail`, self-documenting headers, no unconditional exit 0. Modeled on the p10_f* templates but deliberately scoped to the task spec.
+- F1 design decisions:
+  - Terminal state = LAST `(Result|Status|OVERALL|Overall verdict): PASS|FAIL` marker (plus standalone `^PASS$`) in each evidence file — task-3 ends with bare `PASS`, task-9's last marker is the regression-check PASS (its earlier spike-smoke `Result: FAIL` is superseded). This reproduces how each todo was actually judged.
+  - Acceptance rerun extracts backtick commands from the plan's "Acceptance criteria" lines; classification: pytest/python/bash-n/make/ls/rev-gate-dry-run → run (expect rc 0); spike smoke/`--model`/W4-PERF/FM-SOC → SKIP-ENV; static greps and quoted test names → SKIP-STATIC; self-invocation of f1 → skip-self (recursion).
+  - A rerun that exits 5 with "collected 0 items" (sim/test_dram_bulk.py without cocotb) is SKIP-ENV, not FAIL — todo-10's own evidence recorded this exact 0-collected environment state ("cocotb not installed in this environment").
+  - Unchecked plan todos (checkbox `- [ ]`) with missing evidence are PENDING — reported loudly but not gated (todo 14 is blocked on this todo). Checked todos with missing/non-PASS evidence are FAIL. At final-wave time all boxes are checked → strict.
+- F2 design: residue scan over ADDED lines of changed source files (.py/.c/.h/.v/.sh) only — prose "todo N" references in notepads are normal (learnings.md legitimately contains "TODO 2 NOTE:"). Residue regex is built with split quoting (`TO""DO`) so the gate never self-matches. Baseline = min(task-3 legacy 164/45, recorded gate state 19/13) → 19 failed / 13 errors on this host.
+- F3 design: five stages (a)-(e); sz0001 stages reuse `run_w4_perf_batch.sh` (no batch logic re-implemented) and `run_fm_soc_all.sh <case>` per the MUST-NOT; `--dry-run` prints the exact remote commands; unreachable sz0001 → DEFERRED(no-ssh) with a clear message. Per MUST DO, any failing local stage fails the gate — the spike smoke red is NOT self-waived.
+- F4 design: PLAN_BASE `b542cc5b` fixed (env-overridable); whitelist sim/ firmware/ scripts/ docs/ spec/npu_abi.json gen/ build/evidence/ .omo/ — gen/ and the regenerated w4-perf/fullchain evidence files are legitimate todo 9/11 artifacts, so they are whitelisted (the task summary listed only a subset); frozen surface rtl/ + arc_model/design_space_explorer/quantize/ggml-npu/requirements.txt checked in both the range diff AND the working tree.
+- Bugs found and fixed during bring-up (each would have silently weakened the gate):
+  1. F1 verdict was initialized to FAIL and never set to PASS in the happy path → every green todo reported FAIL. Fixed with an explicit UNKNOWN→PASS finalize step.
+  2. F1's `elif [ "$?" -eq 5 ]` inside if/elif/else lost the original rc in the else branch — `$?` there is the elif condition's rc, not bash -c's. Fixed by capturing rc at the top of the else block.
+  3. F3: removing a blank line glued the section-divider comment onto the `VERDICT=...` assignment line, so VERDICT was never assigned → "unbound variable" crash at the evidence write (found on the FIRST full run, after all five stages had executed). Fixed by restoring the newline.
+- Verification (all real runs, this host + sz0001):
+  - `bash -n` on all 4 scripts: exit 0.
+  - F1 (pre-commit): 12 PASS + 2 PENDING (todos 13/14 unchecked), exit 0; (post-commit): 13 PASS + 14 PENDING, exit 0.
+  - F2: 36→39 changed source files scanned, 0 residue, shell syntax clean, pytest 19 failed / 2198 passed / 13 errors = recorded-gate baseline exactly → exit 0.
+  - F4: 56 changed files classified, 0 frozen/out-of-scope → exit 0.
+  - F3 full run (real sz0001 execution): (a) pytest 19/2198/13 = baseline, (b) firmware build PASS, (c) spike smoke FAIL — `Spike Host Summary: 0 PASS, 1 FAIL`, `max_diff=7.64e+02` on L0 Q_proj, identical to the pre-existing BUG-SOC-FM-005 signature recorded in task-9 evidence, (d) reverse-gate dry-run clean, (e) W4-PERF p0/p1 PASS (4+4 PASS records) + FM-SOC-001/003 (P0) PASS + FM-SOC-032 (P4, ~25 min VCS) PASS → F3 exit 1, the honest gate outcome: the smoke red predates this plan and is tracked separately; the gate reports it rather than waiving it.
+- Evidence: `build/evidence/task-13-fm-hardening-phase10.txt`; F3 receipts in `build/evidence/task-F3-*.log`.
+

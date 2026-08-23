@@ -1,0 +1,60 @@
+/NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+=== CaduceusCore EDA Environment ===
+VCS:         /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/bin/vcs
+VCS_HOME:    /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+Python:      Python 3.11.9
+PLI_TAB:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/pli.tab
+LICENSE:     27020@sz0001
+====================================
+=== CaduceusCore EDA Environment ===
+VCS:         /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/bin/vcs
+VCS_HOME:    /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+Python:      Python 3.11.9
+PLI_TAB:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/pli.tab
+LICENSE:     27020@sz0001
+====================================
+
+============================================================
+[BATCH] test_w4_perf_fullchain — task25a - Full-Chain Pipeline
+============================================================
+[PASS] task25a - Full-Chain Pipeline
+
+============================================================
+[BATCH] test_w4_perf_p4 — task25 - P4 Deep Analysis (PERF-17..20)
+============================================================
+[PASS] task25 - P4 Deep Analysis (PERF-17..20)
+
+============================================================
+[BATCH] test_w4_perf_p3 — task24 - P3 All MMULs + Chain (PERF-13..16)
+============================================================
+[PASS] task24 - P3 All MMULs + Chain (PERF-13..16)
+
+============================================================
+[BATCH] test_w4_perf_p2 — task23 - P2 Weight Streaming (PERF-09..12)
+============================================================
+[PASS] task23 - P2 Weight Streaming (PERF-09..12)
+
+============================================================
+[BATCH] test_w4_perf_p1 — task22 - P1 Multi-Tile Baseline (PERF-05..08)
+============================================================
+[PASS] task22 - P1 Multi-Tile Baseline (PERF-05..08)
+
+============================================================
+[BATCH] test_w4_perf_p0 — task21 - P0 Infrastructure (PERF-01..04)
+============================================================
+[PASS] task21 - P0 Infrastructure (PERF-01..04)
+
+============================================================
+[W4-PERF SUMMARY]
+  PASS: 6
+  FAIL: 0
+  TOTAL: 6
+============================================================
+
+[EVIDENCE CHECK]
+  [OK] w4-perf-p0.txt (4 lines)
+  [OK] w4-perf-p1.txt (4 lines)
+  [OK] w4-perf-p2.txt (4 lines)
+  [OK] w4-perf-p3.txt (4 lines)
+  [OK] w4-perf-p4.txt (4 lines)
+  [OK] fullchain-pipeline.txt (1 lines)

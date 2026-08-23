@@ -1,0 +1,36 @@
+/NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+=== CaduceusCore EDA Environment ===
+VCS:         /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/bin/vcs
+VCS_HOME:    /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+Python:      Python 3.11.9
+PLI_TAB:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/pli.tab
+LICENSE:     27020@sz0001
+====================================
+=== CaduceusCore EDA Environment ===
+VCS:         /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/bin/vcs
+VCS_HOME:    /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+Python:      Python 3.11.9
+PLI_TAB:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/pli.tab
+LICENSE:     27020@sz0001
+====================================
+=== CaduceusCore EDA Environment ===
+VCS:         /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/bin/vcs
+VCS_HOME:    /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+Python:      Python 3.11.9
+PLI_TAB:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/pli.tab
+LICENSE:     27020@sz0001
+====================================
+[INFO] Reusing existing simv: /home/prj/zhengs/caduceuscore/CaduceusCore/build/ibex_full_rtl/simv_soc_ibex
+
+============================================================
+[RUN] FM-SOC-032
+============================================================
+[PASS] FM-SOC-032
+
+============================================================
+[SUMMARY] Full RTL + Ibex (33-case FM-SOC regression)
+  PASS: 1
+  FAIL: 0
+  SKIP: 0
+  TOTAL: 1
+============================================================

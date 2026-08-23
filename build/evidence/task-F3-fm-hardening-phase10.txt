@@ -1,0 +1,5 @@
+FM-hardening F3 — real manual QA: FAIL
+Timestamp: 2026-08-23T05:29:14Z  host: sz0002  commit: 52824651034db44779508c323e8789786b01ebdd
+Baseline: 19 failed / 13 errors (min of task-3 legacy + recorded gate state)
+  (a) pytest: 19 failed, 2198 passed, 1 skipped, 171 warnings, 13 errors in 549.85s (0:09:09) | (b) firmware: PASS | (c) spike: FAIL rc=1
+  (d) reverse-gate dry-run: PASS(clean) | (e) sz0001 W4-PERF p0/p1 + FM-SOC-001/003/032: PASS (dry-run=0)
