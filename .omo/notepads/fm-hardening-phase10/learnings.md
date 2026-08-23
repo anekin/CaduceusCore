@@ -4,6 +4,17 @@
 - Plan approved and pushed to origin/main. Starting execution.
 - Wave 1 dependency: todo 1 and todo 3 can run in parallel; todo 2 depends on 1; todos 4/5 depend on 2+3.
 
+## [2026-08-23] Todo 3 — command_ring unification
+- Created `sim/command_ring.py` as the single source for ring constants and helpers.
+- Migrated all 8 `% 64` sites in `sim/spike_host.py` to `command_ring.expected_head()`.
+- `sim/rtl_soc_segment_run.py` and `sim/cocotb_bridge.py` now import ring size from `command_ring`.
+- FM-SOC runner differentiated layout:
+  - P0/P1/P2P3 keep `DESC_BASE=0x80001000` + `RING_SIZE=32`; added `assert_ring_size` and scoped `assert_desc_clear_of_used_regions` guard, annotated with `BUG-RTL-SOC-008`.
+  - P4 uses block-relative descriptor base `0x80048000` (block 0); added `address_space.contract_check(ring_entries=1024, desc_base=..., desc_count=23, act_base=0x80800000)` and `BUG-RTL-SOC-008` annotation.
+- `sim/device_server.py:95` `RING_SIZE=16` left unchanged with a comment explaining it is excluded from unification (host-device protocol path).
+- Discovered and fixed edge case in `address_space.contract_check`: `act_base=0x80800000` (DRAM_END) is a legal exclusive upper bound even though it lies on the half-open window boundary; updated the window check to allow `act_base == DRAM_END`.
+- Evidence: `build/evidence/task-3-fm-hardening-phase10.txt`.
+
 ## [2026-08-23] Todo 1 done — sim/address_space.py contract module
 - Created `sim/address_space.py` + 14 pytest cases in `sim/tests/test_address_space.py`; acceptance + QA scenarios all pass.
 - Design decisions:
