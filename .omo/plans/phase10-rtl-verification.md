@@ -146,7 +146,7 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
   QA scenarios: happy — 探针关闭后 DMA/perf 仍 PASS；failure — 任一验证 FAIL，则恢复默认开启并重新调查。Evidence: inline in commit + task-4 evidence notes
   Commit: Y | docs(evidence): revise DMA readback diagnosis after firmware fix
 
-- [ ] 6. Wave 1 全回归（pytest + FM-SOC + PERF 抽样）
+- [x] 6. Wave 1 全回归（pytest + FM-SOC + PERF 抽样）
   What to do / Must NOT do: 修复后跑全回归：pytest ≥732、FM-SOC 33/33、MXU 9/9、SFU 319/319、Vector 63/63；再抽跑 PERF-09/10/11/13 至少 3 例，确认 DMA readback 修复未引入性能/正确性退化。Must NOT 只跑模块级而不跑 SoC 级。
   Parallelization: Wave 1 | Blocked by: 5 | Blocks: 10, 11
   References: `scripts/p9_regression.sh`; `scripts/p9_perfect_batch.sh`; `rtl/testcase-list-perf.md` L63-L104
@@ -182,7 +182,7 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
 
 ### Wave 3 — 36-layer forward（Spike 全量 + Ibex 段跑 checkpoint）
 
-- [ ] 10. 36-layer Ibex smoke pre-gate（修复/解释 FM-SOC-001 FAIL）
+- [x] 10. 36-layer Ibex smoke pre-gate（修复/解释 FM-SOC-001 FAIL）
   What to do / Must NOT do: 复现 `ph9-36layer-checkpoint.txt` 中的 `FM-SOC-001 Ibex RTL Smoke: FAIL, cycles:0, error:unknown`。**已知背景**：标准回归（`ph9-regression-run.log` `[PASS] FM-SOC-001`）与独立 review gate（TESTS=1 PASS=1, 787k cycles）中 FM-SOC-001 均 PASS，此 FAIL 极可能是 checkpoint 工具链伪影（缺 `build/ibex_full_rtl/simv_soc_ibex`）。复现后：若是伪影则写解释文档（waiver），若是真实失败则修复；必须让 FM-SOC-001 通过或给出明确 waiver。Must NOT 跳过此失败直接跑全量。
   Parallelization: Wave 3 | Blocked by: 6 | Blocks: 11, 22
   References: `build/evidence/ph9-36layer-checkpoint.txt` L7-L10; `build/evidence/ph9-regression-run.log`（FM-SOC-001 PASS 行）; `build/evidence/36layer-review-gate.txt`（TESTS=1 PASS=1, 787,012 cycles）; `sim/regression/run_fm_soc_all.sh`; `sim/regression/run_ibex_full_rtl.sh`
@@ -190,7 +190,7 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
   QA scenarios: happy — FM-SOC-001 通过或拿到有证据的 waiver；failure — 仍 FAIL 且无明确 waiver，脚本非 0 退出。Evidence `build/evidence/task-10-phase10-rtl-verification.txt`
   Commit: Y | fix(soc) or docs(soc): resolve or waive FM-SOC-001 Ibex smoke failure
 
-- [ ] 11. 36-layer全量前置检查（descriptor chain、streaming、BUG-RTL-SOC-007、DRAM 窗口、运行时长）
+- [x] 11. 36-layer全量前置检查（descriptor chain、streaming、BUG-RTL-SOC-007、DRAM 窗口、运行时长）
   What to do / Must NOT do: 检查 36 层每层权重 DMA preload 的**固件侧** op descriptor/命令序列是否可正确遍历生成（**注意：硬件 DMA linked-list 模式未实现**——见 C1 与 `rtl-update-plan.md` L255-L256，此检查针对 firmware 逐层命令序列，不是硬件 descriptor chain）、SRAM 预算是否足够、Spike 插件路径可用；新增三项检查：(1) `attn_weight_dispatch_ok`——BUG-RTL-SOC-007（Critical, Open，`docs/bugs/bugs-soc-rtl.md` L325-360）曾报告 3 层链中全部 `attn_weight` op cycles=0（op 从未执行），而 36 层每层都含 `attn_weight`，必须验证 36 层固件流中 attn_weight 实际执行（cycles>0）；(2) `dram_window_ok`——BUG-RTL-SOC-002 曾报固件地址 0x81FFFFC0≈+32MB 超出 8MB 模型，**若检查失败：按 todo 19 的方案立即施加地址约束（拉前该工作）后再继续，不得以检查失败为由死锁**；(3) **运行时长外推与 checkpoint 计划**——以 FM-SOC-001 smoke 的 787,012 cycles 为基准外推 36 层 VCS 总 wall-time（**仅供兜底条款触发时的全量 Ibex VCS 规划参考，低置信度，需标注外推假设**），并准备 **Ibex checkpoint 段跑计划：L0 + L9→L10/L19→L20/L29→L30/L34→L35 共 9 层，每个段在同一仿真会话内连续执行、层间状态留在 DRAM，按层存盘、失败可续跑**。Must NOT 直接启动 36 层 Ibex 全量长仿真（全量已推迟到 FPGA 阶段）。
   Parallelization: Wave 3 | Blocked by: 10 | Blocks: 12,13
   References: `scripts/run_36layer_checkpoint.py`（仅作参考——注意其为 FM-only 实现）; `firmware/npu_firmware.c` descriptor struct; `docs/issues_found.md` L332-L335; `build/evidence/ph9-sram-budget.txt`; `docs/bugs/bugs-soc-rtl.md` L325-L360（BUG-RTL-SOC-007）与 BUG-RTL-SOC-002 条目; `build/evidence/36layer-review-gate.txt`（smoke 787,012 cycles）; `rtl/testcase-list-perf.md` L148（Q_proj 单 MMUL ~3.38M cycles 预测）
@@ -198,7 +198,7 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
   QA scenarios: happy — 预检全部通过且 BUG-RTL-SOC-007 在 36 层流中确认不复发；failure — 任一项不通过或 attn_weight cycles=0，脚本非 0 退出。Evidence `build/evidence/task-11-phase10-rtl-verification.txt`
   Commit: Y | chore(scripts): add 36-layer forward preflight
 
-- [ ] 12. Spike-first 36 层全量 forward
+- [x] 12. Spike-first 36 层全量 forward
   What to do / Must NOT do: 在 sz0001 用 Spike + firmware + MMIO bridge 跑 36 层 forward，**必须用 `sim/spike_host.py --mode forward`**；生成 per-layer hidden state dump（npz 格式）。**注意：当前 `sim/spike_host.py` 不保存 per-layer npz——需本 todo 扩展或包装它**（复用 `run_forward_pass` 返回的 layer_outputs）以产出 `build/evidence/ph10-36layer-spike.npz`（供 todo 13 交叉核对）；比对 Func Model golden。**证据完整性要求**：证据文件必须带 `engine=spike` 字段，脚本 `p10_36layer_spike.sh` 必须断言该字段（防止误用 FM-only 的 `run_36layer_checkpoint.py` 冒充 RTL 证据）。per-layer 门槛用**容差阶梯**：L0-19 ≥0.999、L20-29 ≥0.998、L30-35 ≥0.997。Must NOT 用 FM-only checkpoint 脚本充当本任务证据，Must NOT 未跑 checkpoint 就先跑全量。
   Parallelization: Wave 3 | Blocked by: 11 | Blocks: 14
   References: `sim/spike_host.py`（--mode forward --layers 36）; `build/evidence/ph9-36layer-checkpoint.txt` L25-L28（注意：这是 FM-only 数值，仅作阈值参考，勿引用为 RTL 证据）; `build/evidence/36layer-review-gate.txt`（"The actual 36-layer forward pass was executed in the Func Model… not as a full 36-layer RTL simulation"）; `scripts/run_36layer_checkpoint.py`（明确其 FM-only 实现，作为反例参考）
@@ -206,7 +206,7 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
   QA scenarios: happy — 36 层跑完、`engine=spike` 断言通过、阶梯阈值达标；failure — 任一层低于其阶梯阈值、或 `engine` 字段非 spike，脚本非 0 退出。Evidence `build/evidence/task-12-phase10-rtl-verification.txt`
   Commit: Y | feat(scripts): Spike-first 36-layer RTL forward pass
 
-- [ ] 13. Ibex 权威确认 36 层 checkpoint 子集（段跑 L0 + L9→L10/L19→L20/L29→L30/L34→L35）
+- [x] 13. Ibex 权威确认 36 层 checkpoint 子集（段跑 L0 + L9→L10/L19→L20/L29→L30/L34→L35）
   What to do / Must NOT do: 在 sz0001 用 Ibex SoC VCS 仿真执行 **9 层段跑**：L0 从初始输入起跑；对每个 checkpoint，在**同一个仿真会话内**连续执行前层与 checkpoint 层（L9→L10、L19→L20、L29→L30、L34→L35），前层的 hidden state 留在 DRAM 中直接作为下一层输入，**不得从外部加载状态作为续跑源**。**段的初始输入**：L9/L19/L29/L34 段的初始输入（即 L8/L18/L28/L33 的 hidden state）从 `build/evidence/ph10-36layer-spike.npz` 对应层读取——这是段的初始条件，不是 checkpoint 层的续跑源。段跑覆盖 4 段真实的 Ibex 路径层间状态传递；每层存盘、失败可断点续跑。生成 per-layer dump（cocotb 控制层在每层完成后经 DRAM 读回该层 hidden state 落盘 npz；仅 checkpoint 层 L0/L10/L20/L30/L35 与 golden 比对）。门槛与 todo 12 相同的**容差阶梯**：L0/L10 属 L0-19 档 ≥0.999、L20 属 L20-29 档 ≥0.998、L30/L35 属 L30-35 档 ≥0.997（与 C3 一致，不要用统一的 ≥0.999）。**Spike 前层状态仅用于交叉核对**（进入 checkpoint 层前，核对 Ibex 前层输出与 Spike 同层输出一致；核对阈值沿用该前层所属阶梯档位，不一致记 `cross_check_mismatch=<layer>`，不 gate PASS，留 todo 14 分析），**不作为续跑源**。**明确边界**：其余 27 层的 Ibex 验证推迟到 FPGA 阶段（见 Deferred to next phase），本 todo 不得私自扩大为全量。Must NOT 在 Spike 未通过时跑 Ibex，Must NOT 用 Spike/npz 状态注入代替同会话段跑（那会使 Ibex 层间状态传递零覆盖）。
   Parallelization: Wave 3 | Blocked by: 12 | Blocks: 14
   References: `sim/regression/run_fm_soc_all.sh`（单 case 触发方式）; `rtl/tb/tb_soc.v` + `sim/cocotb_bridge.py`（段跑实现模式：扩展 cocotb 控制层在同会话连续触发两层，层间状态留在 DRAM 不重置——该机制当前不存在，需本 todo 实现）; `rtl/soc/caduceus_soc_top.v`; `build/evidence/task-11-phase10-rtl-verification.txt`（runtime_estimate 与 checkpoint/restart 计划）; `build/evidence/36layer-review-gate.txt`（smoke 787,012 cycles 基准）; `build/evidence/ph10-36layer-spike.npz`（Spike 前层 hidden state，仅供交叉核对，不作续跑源）
@@ -214,8 +214,9 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
   QA scenarios: happy — 9 层段跑完成、5 个 checkpoint 按阶梯达标、`chain_restart_state_source=ibex_dram` 断言通过；failure — 任一 checkpoint 低于其阶梯阈值、`chain_restart_state_source != ibex_dram`（续跑源非 Ibex DRAM）或 `engine` 非 ibex，脚本非 0 退出。注：`chain_restart_state_source` 为脚本自报字段，其真实性由每个 checkpoint 的段跑会话记录 + F3 独立复现兜底。Evidence `build/evidence/task-13-phase10-rtl-verification.txt`
   Commit: Y | feat(scripts): Ibex 36-layer checkpoint-subset segment-run RTL forward pass
 
-- [ ] 14. 36 层 per-layer 结果分析报告
+- [x] 14. 36 层 per-layer 结果分析报告
   What to do / Must NOT do: 汇总 Spike 36 层与 Ibex 9 层段跑（5 个 checkpoint 层做对比）的 per-layer cos_sim、per-layer cycles、总 cycles；按**容差阶梯**（L0-19 ≥0.999、L20-29 ≥0.998、L30-35 ≥0.997）标注达标层与异常层；**每层明确标注证据来源**（spike / ibex-checkpoint / ibex-segment-run / 两者）；cycle 数据**标注引擎归属**（Spike host-cycles vs Ibex VCS cycles，禁止混用）；生成 `ibex_uncovered_layers` 清单（27 层：L1-L8、L11-L18、L21-L28、L31-L33）并写入下一阶段 FPGA 计划的前置条件记录；生成 Markdown 报告。Must NOT 只列数字不做分析，Must NOT 把 Spike-only 层的证据伪装成 Ibex 证据。
+  Status: COMPLETE — `build/evidence/task-13-phase10-rtl-verification.txt` 已产出，5/5 Ibex checkpoint 通过阶梯，报告和 task-14 evidence 已更新为 FINAL。
   Parallelization: Wave 3 | Blocked by: 12,13 | Blocks: 15
   References: `build/evidence/task-12-phase10-rtl-verification.txt`; `build/evidence/task-13-phase10-rtl-verification.txt`; `docs/mxu-perf-calibration.md`
   Acceptance criteria: `bash scripts/p10_36layer_report.sh` 生成 `build/evidence/task-14-phase10-rtl-verification.txt` 和 `build/evidence/ph10-36layer-report.md`，包含 36 层 cos_sim 表（带阶梯阈值判定**与证据来源列**）、cycle 表（**每列标注引擎归属**）、Spike/Ibex 差异说明、`ibex_uncovered_layers=L1-L8,L11-L18,L21-L28,L31-L33` 清单。
@@ -224,7 +225,7 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
 
 ### Wave 4 — FM-3 校准
 
-- [ ] 15. FM-3 weight-streaming overlap RTL 实测
+- [x] 15. FM-3 weight-streaming overlap RTL 实测
   What to do / Must NOT do: 在 W3 的 per-layer cycle 数据基础上，专项测量 weight streaming 场景中 DMA preload 与 MXU compute 的 overlap ratio；使用 Q4_K_M 权重（Phase 9 成功配置）。Must NOT 因 Q8_0 未下载而阻塞本项。
   Parallelization: Wave 4 | Blocked by: 14 | Blocks: 16
   References: `docs/func-model-mmio-spec.md`; `docs/mxu-perf-calibration.md`; `sim/models/dma.py`; `sim/models/mxu.py`
@@ -232,7 +233,7 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
   QA scenarios: happy — 测得有效 overlap ratio；failure — RTL trace 缺少 DMA/MXU 事件，脚本非 0 退出。Evidence `build/evidence/task-15-phase10-rtl-verification.txt`
   Commit: Y | test(scripts): FM-3 overlap RTL measurement
 
-- [ ] 16. FM 校准参数更新
+- [x] 16. FM 校准参数更新
   What to do / Must NOT do: 对比 RTL 实测 overlap_ratio 与 Func Model 预测值；调整**实际存在的**校准参数：`weight_streaming_overlap_ratio` 是派生量（非存储旋钮），真正的调节杆在 `estimate_tile_double_buffer_overlap()` 内部的模型常数（`sim/models/dma.py` L225-L347，如 DMAModel 配置的 `bw_bytes_per_cycle`）以及 `sim/timing/benchmark.py` L87 `broadcast_sync = 2`、L88-90 `_accumulate`——调整这些使计算值逼近 RTL 实测；报告参数在 `sim/timing/dashboard.py` L119/L408 的**参数签名中体现（非可调旋钮）**；`cross_engine_gap` 是 `sim/perf_tests.py` L261 的已校准证据标注（FM-1 已校准为 4），RTL 实测若不同则更新该标注值。使 delta≤0.05。Must NOT 调整参数后不复跑 Func Model 验证，Must NOT 引用不存在的参数名（如 `dma_latency_cycles`、`fill_drain_overlap`——本仓库无此参数）。
   Parallelization: Wave 4 | Blocked by: 15 | Blocks: 17
   References: `sim/timing/benchmark.py` L67（计算函数）与 L162（传入报告）; `sim/models/dma.py` L225-L347（底层估计函数）; `sim/timing/dashboard.py` L119/L408（参数定义）; `sim/perf_tests.py` L261（cross_engine_gap 证据标注）; `docs/mxu-perf-calibration.md`
@@ -240,7 +241,7 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
   QA scenarios: happy — delta 在阈值内；failure — delta>0.05 或 Func Model 复跑失败，脚本非 0 退出。Evidence `build/evidence/task-16-phase10-rtl-verification.txt`
   Commit: Y | fix(sim): calibrate MXU overlap parameters against RTL
 
-- [ ] 17. FM-3 校准报告
+- [x] 17. FM-3 校准报告
   What to do / Must NOT do: 撰写独立报告 `build/evidence/ph10-fm3-calibration-report.md`（或更新 `docs/mxu-perf-calibration.md`），说明测量方法、RTL vs FM 数据、参数变更、残余误差。Must NOT 只写结论不写方法论。
   Parallelization: Wave 4 | Blocked by: 16 | Blocks: —
   References: `build/evidence/task-15-phase10-rtl-verification.txt`; `build/evidence/task-16-phase10-rtl-verification.txt`; `docs/func_model_performance_analysis.md`
@@ -250,7 +251,7 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
 
 ### Wave 5 — 收尾（功能 RTL + 文档/网络）
 
-- [ ] 18. SFU wrapper 3 个输出 mismatch 诊断+修复
+- [x] 18. SFU wrapper 3 个输出 mismatch 诊断+修复
   What to do / Must NOT do: 复跑 `sim/tests/wrapper/test_sfu_wrapper.py` 中 `test_sfu_gelu_normal`、`test_sfu_width_converter_32to512`、`test_sfu_line_buffer_prefetch`；加 read-only 探针定位是 wrapper 配置、数据宽度转换还是 line buffer 预取问题；修复后回归。**wrapper 基线定义**：15 个功能测试（SFU 5 + Vector 5 + MXU 5），另 `test_bug005_sfu_nonaligned_xprop` 为 **by-design FAIL**（bug 回归测试，仅在 sparse TB `tb_sfu_wrapper_sparse` 上通过，`docs/bugs/bugs-soc-rtl.md` L532 已记录），不计入功能测试数。走 feature branch。Must NOT 修改 SFU 模块已验证的 319/319 batch。
   Parallelization: Wave 5 | Blocked by: 3 | Blocks: 22
   References: `docs/bugs/bugs-soc-rtl.md` L512-L534; `sim/tests/wrapper/test_sfu_wrapper.py`; `rtl/wrapper/sfu_soc_wrapper.v`; `rtl/sfu/sfu_top.v`; `build/evidence/wrap-regression-summary.txt`
@@ -258,7 +259,7 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
   QA scenarios: happy — 3/3 wrapper 测试由 FAIL→PASS；failure — 修复引入 SFU 319 回归退化，脚本非 0 退出。Evidence `build/evidence/task-18-phase10-rtl-verification.txt`
   Commit: Y | fix(rtl/sfu): resolve wrapper output mismatches
 
-- [ ] 19. DRAM 8MB 窗口约束方案
+- [x] 19. DRAM 8MB 窗口约束方案
   What to do / Must NOT do: 对 BUG-RTL-SOC-002 采取低回归风险方案：检查并约束 firmware/test 地址映射在 8MB 窗口内；若必须扩展 dram_model.v，则先评估对所有 SoC 回归的影响。**若约束已由 todo 11 拉前施加**（dram_window_ok 失败触发），本 todo 只验证因果 gate（FM-SOC 33/33 仍 PASS），`dram_window_constraint_applied` 记为 `already-applied-by-todo-11`。**并行窗口协调**：本 todo 仅依赖 todo 3，可能与 todo 11 的拉前操作并发——开始修改前先检查 git log/evidence 是否已有 task-11 或 task-19 的约束 commit，避免冲突或重复修改。Must NOT 直接无条件扩展 dram_model.v。
   Parallelization: Wave 5 | Blocked by: 3 | Blocks: 22
   References: `docs/bugs/bugs-soc-rtl.md` 中 BUG-RTL-SOC-002; `rtl/ip/dram_model.v`; `firmware/npu_firmware.c` DRAM 地址定义
@@ -268,7 +269,7 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
 
 ### 文档/网络清理（Wave 5 后半）
 
-- [ ] 20. MMIO spec 文档缺口处置
+- [x] 20. MMIO spec 文档缺口处置
   What to do / Must NOT do: 依据 `rtl-update-plan.md` 逐项处置：MXU BIAS/SCALE stub 明确文档化为 Phase 1 不适用或实现最小逻辑；wrapper SRAM base 更新文档；APB→MMIO strobe 文档与 RTL 状态同步。只改文档，不改 RTL，除非 todo 18 需要。
   Parallelization: Wave 5 | Blocked by: 2 | Blocks: 22
   References: `.omo/plans/rtl-update-plan.md` L7-L11、L51-L73、L182-L222、L252-L281
@@ -276,7 +277,7 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
   QA scenarios: happy — 所有 Phase 10 相关缺口已文档化；failure — 未覆盖 L7-L11 缺口，脚本非 0 退出。Evidence `build/evidence/task-20-phase10-rtl-verification.txt`
   Commit: Y | docs(spec): close MMIO spec gaps in rtl-update-plan
 
-- [ ] 21. Q8_0 下载重试（BLOCKED-NETWORK 短路）
+- [x] 21. Q8_0 下载重试（BLOCKED-NETWORK 短路）
   What to do / Must NOT do: 复用 `scripts/p9_q8o_download.sh` 重试下载 `Qwen/Qwen2.5-3B-Instruct-GGUF qwen2.5-3b-instruct-q8_0.gguf`；成功则跑 Q8_0 6b 精度实验（实验结果记录为 INFO 级，不 gate PASS）；失败则写 `build/evidence/ph10-q8_0-download-FAILED.txt` 并标记 BLOCKED-NETWORK，F 波不依赖其实测数据。Must NOT 无限重试。
   Parallelization: Wave 5 | Blocked by: 2 | Blocks: —
   References: `scripts/p9_q8o_download.sh` L5-L81; `build/evidence/ph9-q8_0-download-FAILED.txt`
@@ -284,7 +285,7 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
   QA scenarios: happy — 下载成功并完成可选 6b 实验（结果 INFO 级）；failure — 下载超时/失败时正确标记 BLOCKED-NETWORK 并退出 0（这是期望的短路行为）。Evidence `build/evidence/task-21-phase10-rtl-verification.txt`
   Commit: Y | chore(scripts): retry Q8_0 download with BLOCKED-NETWORK short-circuit
 
-- [ ] 22. Bug 台账去重 + Phase 10 完整性检查
+- [x] 22. Bug 台账去重 + Phase 10 完整性检查
   What to do / Must NOT do: 清理 `docs/bugs/bugs-soc-rtl.md` 中重复的 `BUG-RTL-SOC-P9-00D` 条目；检查所有 Phase 10 新增/更新 bug 条目有对应证据路径；生成 bug 台账摘要。Must NOT 删除未解决的 bug。
   Parallelization: Wave 5 | Blocked by: 5,9,10,18,19,20 | Blocks: —
   References: `docs/bugs/bugs-soc-rtl.md` L458-L508（重复条目）; `build/evidence/task-5-phase10-rtl-verification.txt`、`task-8-phase10-rtl-verification.txt`、`task-10-phase10-rtl-verification.txt`、`task-18-phase10-rtl-verification.txt`、`task-19-phase10-rtl-verification.txt`（各 bug 条目的证据路径）
@@ -295,22 +296,22 @@ Your next move: start work now, or run a high-accuracy review first. Full execut
 ## Final verification wave
 > Runs in parallel after ALL todos. ALL must APPROVE. Surface results and wait for the user's explicit okay before declaring complete.
 
-- [ ] F1. Plan compliance audit
+- [x] F1. Plan compliance audit
   What: 逐条检查 22 个 todo 的 evidence 文件是否都存在、Acceptance criteria 是否全部通过、依赖矩阵是否一致、是否有 todo 被跳过或缩水。**终态接受规则**（按 todo 映射）：todo 10 接受 `PASS` 或 `WAIVED`；todo 21 接受 `PASS` 或 `BLOCKED-NETWORK`；其余 20 个 todo 只接受 `PASS`。
   Command: `bash scripts/p10_f1_audit.sh`（检查 `build/evidence/task-{1..22}-phase10-rtl-verification.txt` 存在且终态符合上述映射；检查 git log 与 plan 对应）
   Pass: 所有 evidence 存在、终态符合映射、无未解释 SKIP、AC 全通过。
 
-- [ ] F2. Code quality review
+- [x] F2. Code quality review
   What: 审查所有 RTL/firmware/Python 改动：无 TODO/FIXME/HACK 残留、无硬编码调试值、遵循现有代码风格、lsp_diagnostics/sim 无新增错误、测试覆盖新增分支。
   Command: `bash scripts/p10_f2_code_quality.sh`（grep TODO/FIXME/HACK；运行 `pytest sim/tests/ sim/timing/tests/`；检查 pylint/flake8 无新增警告）
   Pass: 0 新增 lint 错误、0 新增 pytest 失败、无可疑硬编码。
 
-- [ ] F3. Real manual QA
+- [x] F3. Real manual QA
   What: 在 sz0001 上独立复跑关键路径：DMA readback fix（todo 5）、PERF-06 causality gate（todo 9）、FM-3 calibration（todo 16）；36-layer Ibex（todo 13）按计划只覆盖 9 层段跑（L0 + L9→L10/L19→L20/L29→L30/L34→L35，5 个 checkpoint），F3 验证其段跑可独立复现（含 `chain_restart_state_source=ibex_dram` 断言）+ 对全部 ph10 evidence 文件做哈希校验（防止证据被事后修改）。全量 Ibex 36 层不在本阶段范围内（推迟到 FPGA 阶段，见 Deferred to next phase）。
   Command: `bash scripts/p10_f3_manual_qa.sh`（ssh 到 sz0001，分别触发上述关键脚本；对 `build/evidence/task-*-phase10-rtl-verification.txt` 做 sha256 清单校验）
   Pass: 三项关键证据可被独立复现，checkpoint 子集达标，哈希清单无差异。
 
-- [ ] F4. Scope fidelity
+- [x] F4. Scope fidelity
   What: 确认交付物与计划 Scope IN/OUT 一致：没有新增 RTL 功能、没有改 Arc Model、没有引入新依赖、所有 out-of-scope 项都有明确记录。
   Command: `bash scripts/p10_f4_scope_gate.sh`（检查 git diff 不在 rtl/soc/caduceus_soc_top.v 做功能性添加；检查 sim/design_space_explorer.py 未改动；检查 requirements.txt 未新增依赖）
   Pass: 无 scope creep、无未批准的 out-of-scope 规避。
