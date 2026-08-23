@@ -1,0 +1,47 @@
+task-3-fm-hardening-phase10 evidence
+====================================
+Timestamp: 2026-08-23T01:19:59Z
+Base commit: 717dc13 feat(sim): add DRAM address-space contract module
+
+Acceptance: PYTHONPATH=sim python -m pytest sim/tests/test_command_ring.py -q
+Result: PASS (5 passed)
+
+Named tests:
+  test_p0_scoped_layout_guard ... PASSED
+  test_p4_layout_contract ..... PASSED
+
+Additional verification:
+  PYTHONPATH=sim python -m pytest sim/tests/test_command_ring.py sim/tests/test_address_space.py -q
+  Result: PASS (19 passed)
+
+  PYTHONPATH=sim python -c "import spike_host; import rtl_soc_segment_run; import cocotb_bridge; import rtl_soc_runner"
+  Result: PASS (all modules import cleanly)
+
+Grep verification:
+  grep -n "% 64" sim/spike_host.py
+  Result: no output (8 sites migrated to command_ring.expected_head)
+
+  grep -n "BUG-RTL-SOC-008" sim/rtl_soc_runner.py
+  Output:
+    1098:    # BUG-RTL-SOC-008: DESC_BASE sits inside the 1024-entry firmware ring region.
+    1361:        # BUG-RTL-SOC-008: P0 keeps DESC_BASE=0x80001000 + RING_SIZE=32.
+    2600:    # BUG-RTL-SOC-008: block-relative descriptor base; verified below to sit
+    2716:        # BUG-RTL-SOC-008: verify P4 descriptor layout is outside the ring.
+
+  grep -n "contract_check\|assert_desc_clear_of_used_regions" sim/rtl_soc_runner.py | head
+  Output:
+    1365:        command_ring.assert_desc_clear_of_used_regions(
+    2717:        address_space.contract_check(
+
+Files created/modified:
+  Created: sim/command_ring.py
+  Created: sim/tests/test_command_ring.py
+  Created: build/evidence/task-3-fm-hardening-phase10.txt
+  Modified: sim/address_space.py (import ring constants from command_ring; allow act_base==DRAM_END as exclusive bound)
+  Modified: sim/spike_host.py (8 x % 64 -> command_ring.expected_head)
+  Modified: sim/rtl_soc_segment_run.py (import RING_SIZE from command_ring)
+  Modified: sim/cocotb_bridge.py (import SEGMENT_RING_SIZE from command_ring)
+  Modified: sim/rtl_soc_runner.py (P0 scoped guard + P4 contract_check + BUG-RTL-SOC-008 annotations)
+  Modified: sim/device_server.py (exclusion comment for RING_SIZE=16 host-device path)
+
+PASS

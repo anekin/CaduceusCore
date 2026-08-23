@@ -65,6 +65,9 @@ except ImportError:
 
 from regmap import Addr, MXU, SFU, VECTOR, DMA, DOORBELL, INTC
 
+import command_ring
+import address_space
+
 try:
     from spike_rtl_bridge import RTLMMIOBridge, SimpleAPBMaster, serve_rtl
     SPIKE_RTL_BRIDGE_AVAILABLE = True
@@ -1092,6 +1095,8 @@ class P0SpikeRunner:
     SRAM_BASE = Addr.SRAM_BASE
     DRAM_BASE = Addr.DRAM_BASE
     RING_BASE = Addr.DRAM_BASE
+    # BUG-RTL-SOC-008: DESC_BASE sits inside the 1024-entry firmware ring region.
+    # Safe only because this runner uses RING_SIZE=32 and asserts <=32 cmds.
     DESC_BASE = 0x80001000
     DESC_STRIDE = 64
     CMD_SIZE = 8 * 4
@@ -1352,8 +1357,19 @@ class P0SpikeRunner:
             return False, f"Unknown case {case_id}"
 
         model, expected, expect_mismatch = builders[case_id]()
+        num_cmds = expected["num_cmds"]
+        # BUG-RTL-SOC-008: P0 keeps DESC_BASE=0x80001000 + RING_SIZE=32.
+        # The descriptor region is safe only if <=32 cmds and it does not
+        # overlap the command/completion slots this runner actually uses.
+        command_ring.assert_ring_size(num_cmds, self.RING_SIZE)
+        command_ring.assert_desc_clear_of_used_regions(
+            desc_base=self.DESC_BASE,
+            desc_count=num_cmds,
+            ring_usage_end=self.RING_BASE + self.RING_SIZE * self.CMD_ENTRY_SIZE,
+            completion_usage_end=command_ring.COMPLETION_RING_ADDR + self.RING_SIZE * 32,
+        )
         await self._preload_rtl(model)
-        ok = await self._run_spike(model, expected["num_cmds"])
+        ok = await self._run_spike(model, num_cmds)
         if not ok:
             return False, "Spike firmware timeout"
 
@@ -2581,6 +2597,8 @@ class P4SpikeRunner(P2P3SpikeRunner):
     _P4_RESULT_STRIDE = 0x0000_2000
 
     # Per-block buffer allocator state
+    # BUG-RTL-SOC-008: block-relative descriptor base; verified below to sit
+    # outside the 1024-entry command/completion rings.
     _P4_DESC_BASE_REL = 0x0003_8000          # descriptors at the top of the block
     _P4_DATA_BASE_REL = 0x0000_1000          # data buffers start here
 
@@ -2695,6 +2713,13 @@ class P4SpikeRunner(P2P3SpikeRunner):
         outputs: Dict[int, Tuple[int, np.ndarray]] = {}
         vector_chunks: List[Tuple[int, int]] = []
         desc_base = block_base + self._P4_DESC_BASE_REL
+        # BUG-RTL-SOC-008: verify P4 descriptor layout is outside the ring.
+        address_space.contract_check(
+            ring_entries=command_ring.RING_ENTRIES,
+            desc_base=desc_base,
+            desc_count=23,
+            act_base=0x80800000,
+        )
         alloc_off = self._P4_DATA_BASE_REL
 
         def alloc(size: int, align: int = 512) -> int:

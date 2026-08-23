@@ -36,17 +36,20 @@ class WindowError(ValueError):
     """An address falls outside the 8 MB DRAM window [DRAM_BASE, DRAM_END)."""
 
 
-DRAM_BASE = 0x80000000
+from command_ring import (
+    RING_BASE as DRAM_BASE,
+    RING_ENTRIES,
+    CMD_ENTRY_SIZE,
+    COMPLETION_RING_ADDR,
+    DESC_STRIDE,
+)
+
 DRAM_SIZE = 0x00800000
 DRAM_END = DRAM_BASE + DRAM_SIZE
 
-RING_ENTRIES = 1024
-CMD_ENTRY_SIZE = 32
 COMPLETION_ENTRY_SIZE = 32
-COMPLETION_RING_ADDR = 0x80008000
 
 DESC_BASE = 0x80010000
-DESC_STRIDE = 64
 
 FP_DRAM_BASE = 0x80020000
 FP_DRAM_SIZE = 0x007E0000
@@ -128,7 +131,9 @@ def contract_check(
                 f"{name} [{lo:#x}, {hi:#x}) falls outside the 8 MB DRAM "
                 f"window [{DRAM_BASE:#x}, {DRAM_END:#x})"
             )
-    if act_base is not None and not addr_in_window(act_base):
+    # act_base is an exclusive upper bound; DRAM_END itself is a legal bound
+    # even though it is outside the half-open window (fm-hardening-phase10 todo 3).
+    if act_base is not None and not (addr_in_window(act_base) or act_base == DRAM_END):
         raise WindowError(
             f"act_base {act_base:#x} falls outside the 8 MB DRAM window"
         )

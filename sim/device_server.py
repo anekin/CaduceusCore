@@ -92,6 +92,8 @@ DRAM_BUFFER_END = Addr.DRAM + 0x0300_0000   # 48 MiB buffer window
 RING_BUFFER_ADDR = 0x8000_0000
 RING_SLOT_SIZE = 32   # bytes per slot in DRAM ring buffer
 RING_ENTRY_SIZE = 24  # bytes of payload carried in the protocol cmd_blob
+# RING_SIZE=16 governs the host-device protocol path and is excluded from
+# the command_ring unification in fm-hardening-phase10 todo 3.
 RING_SIZE = 16
 
 # Blob flattening constants.

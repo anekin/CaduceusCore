@@ -32,6 +32,8 @@ from quantize import quantize_int4_per_block
 from regmap import Addr, DOORBELL, MXU
 from spike_mmio_server import DEFAULT_SOCK_PATH, serve
 
+import command_ring
+
 
 # ── Paths ──────────────────────────────────────────────────────────
 
@@ -41,7 +43,7 @@ FIRMWARE_ELF = PROJECT / "firmware" / "build" / "npu_firmware.elf"
 FIRMWARE_SPIKE_ELF = PROJECT / "firmware" / "build" / "npu_firmware_spike.elf"
 PLUGIN_SO = PROJECT / "spike_src" / "plugins" / "npu_mmio_plugin.so"
 
-FIRMWARE_RING_BASE = 0x80000000  # hard-coded in C firmware as DRAM_BASE
+FIRMWARE_RING_BASE = command_ring.RING_BASE  # hard-coded in C firmware as DRAM_BASE
 
 # C firmware mmul_desc_t uses a 15-field packed layout
 # (input/weight/output/scale addr + input/weight/output/scale sram + sizes + M,K,N).
@@ -61,7 +63,7 @@ PCIE_DMA_DESC_FMT = "<6I"
 PCIE_DMA_DESC_SIZE = struct.calcsize(PCIE_DMA_DESC_FMT)
 
 CMD_ENTRY_FMT = "<8I"
-CMD_ENTRY_SIZE = struct.calcsize(CMD_ENTRY_FMT)
+CMD_ENTRY_SIZE = command_ring.CMD_ENTRY_SIZE
 
 DESC_BASE = 0x80010000
 DESC_STRIDE = 64
@@ -172,8 +174,8 @@ def schedule_chain(model: FuncModel, ops: list) -> int:
 
 
 def poll_completion(model: FuncModel, expected_count: int, timeout: float = 180.0) -> bool:
-    """Poll NPU_HEAD until it reaches expected_count (mod 64)."""
-    expected_head = expected_count % 64
+    """Poll NPU_HEAD until it reaches expected_count (mod RING_ENTRIES)."""
+    expected_head = command_ring.expected_head(expected_count)
     deadline = time.time() + timeout
     while time.time() < deadline:
         head = model.bridge._status.get(DOORBELL.BASE + DOORBELL.NPU_HEAD, 0)
@@ -253,7 +255,7 @@ def run_one_op(gguf_path: str, layer: int, op: str, M: int = 1) -> bool:
     _cleanup_spike(proc, server)
 
     if not done:
-        print(f"  [FAIL] L{layer} {op:12s} — timeout waiting for NPU_HEAD={1 % 64}")
+        print(f"  [FAIL] L{layer} {op:12s} — timeout waiting for NPU_HEAD={command_ring.expected_head(1)}")
         return False
 
     # Read output tensor from model.dram
@@ -930,7 +932,7 @@ def run_forward_pass(gguf_path: str, prompt: str, layers: int = 2,
         finally:
             _cleanup_spike(proc, server)
         if not done:
-            print(f"  [FAIL] forward — timeout waiting for NPU_HEAD={len(ops) % 64}")
+            print(f"  [FAIL] forward — timeout waiting for NPU_HEAD={command_ring.expected_head(len(ops))}")
             return {"ok": False, "layer_outputs": [], "op_coverage": {}, "errors": []}
         consumed += len(ops)
 
@@ -1206,7 +1208,7 @@ def _execute_layer_waves_phase10(model: FuncModel, hidden: np.ndarray,
             _cleanup_spike(proc, server)
         if not done:
             raise RuntimeError(
-                f"L{layer}: wave timeout waiting for NPU_HEAD={len(ops) % 64}")
+                f"L{layer}: wave timeout waiting for NPU_HEAD={command_ring.expected_head(len(ops))}")
         return len(ops)
 
     q_i8, _ = _int8_quantize(normed)
@@ -1663,7 +1665,7 @@ def run_pcie_dma_smoke(direction: int = 0, len_bytes: int = 64) -> bool:
     finally:
         _cleanup_spike(proc, server)
 
-    expected_head = 1 % 64
+    expected_head = command_ring.expected_head(1)
     if done:
         print(f"  [PASS] pcie_dma — opcode 7 dispatched, NPU_HEAD={expected_head}")
         return True
@@ -1706,14 +1708,14 @@ def run_chain_smoke(op_types: list) -> tuple:
     results = []
     if not done:
         head = model.bridge._status.get(DOORBELL.BASE + DOORBELL.NPU_HEAD, 0)
-        print(f"  [FAIL] chain — timeout: NPU_HEAD={head}, expected={len(ops) % 64}")
+        print(f"  [FAIL] chain — timeout: NPU_HEAD={head}, expected={command_ring.expected_head(len(ops))}")
         for t, _ in goldens:
             results.append((t, False))
         return results, False
 
-    # Verify NPU_HEAD == len(ops) (mod 64)
+    # Verify NPU_HEAD == len(ops) (mod RING_ENTRIES)
     head = model.bridge._status.get(DOORBELL.BASE + DOORBELL.NPU_HEAD, 0)
-    expected_head = len(ops) % 64
+    expected_head = command_ring.expected_head(len(ops))
     if head != expected_head:
         print(f"  [FAIL] NPU_HEAD={head}, expected={expected_head}")
         for t, _ in goldens:
@@ -1759,7 +1761,7 @@ def run_chain_file(ops_file: str) -> bool:
         _cleanup_spike(proc, server)
 
     if not done:
-        print(f"  [FAIL] chain — timeout waiting for NPU_HEAD={len(ops) % 64}")
+        print(f"  [FAIL] chain — timeout waiting for NPU_HEAD={command_ring.expected_head(len(ops))}")
         return False
     print(f"  [PASS] chain — {len(ops)} commands consumed")
     return True

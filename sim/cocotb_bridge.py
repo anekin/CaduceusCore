@@ -2387,7 +2387,7 @@ class CocotbBridge:
     # reset between layers, so DRAM keeps the chained hidden state.
 
     SEGMENT_DRAM_WINDOW = 8 * 1024 * 1024   # todo-19 RTL dram_model window
-    SEGMENT_RING_SIZE   = 1024               # firmware ring entries (mod 1024)
+    from command_ring import RING_ENTRIES as SEGMENT_RING_SIZE  # firmware ring entries
     SEGMENT_WORD_BYTES  = 64                 # 512-bit DRAM/SRAM word
     SEGMENT_BULK_FNAME_BYTES = 96            # tb dram_bkdoor_fname reg width
 
