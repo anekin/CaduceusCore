@@ -1,4 +1,4 @@
-{"case_id": "PERF-01", "simulator": "ibex", "status": "PASS", "cycles": 136493, "commit": "7aec7a35540b616a79979b1c883dd5dbd8973d45", "timestamp": "2026-08-18T14:18:48Z", "cos_sim": 1.0, "M": 1, "K": 256, "N": 64, "tiles": 4}
-{"case_id": "PERF-02", "simulator": "ibex", "status": "PASS", "cycles": 136493, "commit": "7aec7a35540b616a79979b1c883dd5dbd8973d45", "timestamp": "2026-08-18T14:18:48Z", "note": "K>64 firmware dispatch"}
-{"case_id": "PERF-03", "simulator": "ibex", "status": "PASS", "cycles": 136493, "commit": "7aec7a35540b616a79979b1c883dd5dbd8973d45", "timestamp": "2026-08-18T14:18:48Z", "tiles": 4, "note": "per-tile cycle in total"}
-{"case_id": "PERF-04", "simulator": "ibex", "status": "PASS", "cycles": 130470, "commit": "7aec7a35540b616a79979b1c883dd5dbd8973d45", "timestamp": "2026-08-18T14:19:04Z", "cos_sim": 1.0, "M": 1, "K": 128, "N": 128, "tiles": 4}
+{"case_id": "PERF-01", "simulator": "ibex", "status": "PASS", "cycles": 38939, "commit": "13c29f52b046ba404ae439df2c9a3618e435bb15", "timestamp": "2026-08-23T03:39:47Z", "cos_sim": 1.0, "M": 1, "K": 256, "N": 64, "tiles": 4}
+{"case_id": "PERF-02", "simulator": "ibex", "status": "PASS", "cycles": 38939, "commit": "13c29f52b046ba404ae439df2c9a3618e435bb15", "timestamp": "2026-08-23T03:39:47Z", "note": "K>64 firmware dispatch"}
+{"case_id": "PERF-03", "simulator": "ibex", "status": "PASS", "cycles": 38939, "commit": "13c29f52b046ba404ae439df2c9a3618e435bb15", "timestamp": "2026-08-23T03:39:47Z", "tiles": 4, "note": "per-tile cycle in total"}
+{"case_id": "PERF-04", "simulator": "ibex", "status": "PASS", "cycles": 32916, "commit": "13c29f52b046ba404ae439df2c9a3618e435bb15", "timestamp": "2026-08-23T03:39:51Z", "cos_sim": 1.0, "M": 1, "K": 128, "N": 128, "tiles": 4}

@@ -160,7 +160,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
 
 ### Wave 3 — 接线与文档
 
-- [ ] 11. 反向依赖自动门禁脚本（RTL/firmware 变更 → 自动重跑 pytest + W4-PERF + scale 回归）
+- [x] 11. 反向依赖自动门禁脚本（RTL/firmware 变更 → 自动重跑 pytest + W4-PERF + scale 回归）
   What to do / Must NOT do: 新建 `scripts/fm_reverse_dependency_gate.sh`：(a) 状态文件 `.omo/last_fm_gate.json` 记录上次门禁通过时的 git HEAD + 每个敏感文件的内容哈希（`git hash-object`）；(b) 敏感文件清单（**覆盖 Phase 10 实际变更过的全部 RTL 面**）：`rtl/mxu/*.v`、`rtl/soc/*.v`、`rtl/sfu/*.v`、`rtl/vector/*.v`、`rtl/wrapper/*.v`（含 mxu/sfu/vector_soc_wrapper，95ef1c8 的 vector_soc_wrapper 变更必须在列）、`rtl/ip/*.v`、`firmware/npu_firmware.c`、`firmware/npu-regmap.h`、`gen/npu_abi_firmware.h`、`sim/golden_executor.py`、`sim/mmio_bridge.py`、`sim/perf_tests.py`、`sim/cocotb_bridge.py`、`sim/tile_scheduler.py`、`sim/func_model.py`；(c) 有变更时执行：`PYTHONPATH=sim python -m pytest sim/tests/ -q`（新增 0 失败）+ sz0001 上 W4-PERF 6 批次（复用 `sim/regression/run_w4_perf_batch.sh`，经 `p10_ssh`）+ todo 6/7 用例；(d) 全部通过则写状态文件 exit 0，任一失败 exit 1；`--dry-run` 只打印将执行项（干净时 exit 0，有 diff 时 exit 1）。Must NOT 重复实现批次逻辑；Must NOT 替代 F1-F4 最终波。
   Parallelization: Wave 3 | Blocked by: 3, 6, 7, 9 | Blocks: 13
   References: `sim/regression/run_w4_perf_batch.sh`（6 批次现成入口）; `scripts/p10_f3_manual_qa.sh:199-254`（Phase 3 批次调用模式）; `scripts/p10_lib/p10_sz0001.sh`（p10_ssh）; `sim/perf_tests.py:222-224`（PERF-06 位置）; `.omo/notepads/phase10-rtl-verification/issues.md:559-588`（F3 发现 PERF 回归的教训）、`:678-706`（Phase 10 实际变更文件清单，敏感清单以此为准）

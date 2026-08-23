@@ -1,4 +1,4 @@
-{"case_id": "PERF-05", "simulator": "ibex", "status": "PASS", "cycles": 130478, "commit": "7aec7a35540b616a79979b1c883dd5dbd8973d45", "timestamp": "2026-08-18T14:19:36Z", "cos_sim": 1.0, "M": 1, "K": 128, "N": 128, "tiles": 4}
-{"case_id": "PERF-06", "simulator": "ibex", "status": "PASS", "cycles": 144176, "commit": "7aec7a35540b616a79979b1c883dd5dbd8973d45", "timestamp": "2026-08-18T14:19:54Z", "cos_sim": 1.0, "M": 32, "K": 128, "N": 128}
-{"case_id": "PERF-07", "simulator": "ibex", "status": "PASS", "cycles": 500, "commit": "7aec7a35540b616a79979b1c883dd5dbd8973d45", "timestamp": "2026-08-18T14:19:54Z", "method": "MXUModel.estimate", "tile_base": 124}
-{"case_id": "PERF-08", "simulator": "ibex", "status": "PASS", "cycles": 130478, "commit": "7aec7a35540b616a79979b1c883dd5dbd8973d45", "timestamp": "2026-08-18T14:19:54Z", "predicted": 500, "delta_pct": 99.6}
+{"case_id": "PERF-05", "simulator": "ibex", "status": "PASS", "cycles": 32924, "commit": "13c29f52b046ba404ae439df2c9a3618e435bb15", "timestamp": "2026-08-23T03:39:26Z", "cos_sim": 1.0, "M": 1, "K": 128, "N": 128, "tiles": 4}
+{"case_id": "PERF-06", "simulator": "ibex", "status": "PASS", "cycles": 46622, "commit": "13c29f52b046ba404ae439df2c9a3618e435bb15", "timestamp": "2026-08-23T03:39:32Z", "cos_sim": 1.0, "M": 32, "K": 128, "N": 128}
+{"case_id": "PERF-07", "simulator": "ibex", "status": "PASS", "cycles": 500, "commit": "13c29f52b046ba404ae439df2c9a3618e435bb15", "timestamp": "2026-08-23T03:39:32Z", "method": "MXUModel.estimate", "tile_base": 124}
+{"case_id": "PERF-08", "simulator": "ibex", "status": "PASS", "cycles": 32924, "commit": "13c29f52b046ba404ae439df2c9a3618e435bb15", "timestamp": "2026-08-23T03:39:32Z", "predicted": 500, "delta_pct": 98.5}
