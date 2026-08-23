@@ -104,6 +104,30 @@ cd sim && PYTHONPATH=. python3 arc_model.py --model $HOME/models/qwen2.5-1.5b-in
 cd CaduceusCore && PYTHONPATH=sim python3 sim/func_model.py
 ```
 
+### 契约加固（fm-hardening-phase10）
+
+Phase 10 复盘结论：Func Model 数值上已 bit-exact，缺的是布局/契约层守卫。fm-hardening-phase10 为 FM 验证补齐四类契约，让 6 类曾需 7.5h RTL 段跑才暴露的 bug 在纯 Python 秒级触发。
+
+**内存布局契约**（`sim/address_space.py` + `sim/command_ring.py`）
+- `address_space.py` 拥有 DRAM 区域表（命令环/完成环/descriptor 池/activation/weight）与重叠、8MB 窗口检查：`regions_overlap()`、`addr_in_window()`、`contract_check()`；调度期断言 descriptor 区与环区不相交，违反抛 `OverlapError`/`WindowError`。
+- `command_ring.py` 是环配置唯一事实源（RING_BASE、RING_ENTRIES=1024、CMD_ENTRY_SIZE=32、COMPLETION_RING_ADDR、DESC_STRIDE），提供 `ring_entry_addr()`、`advance_head()`、`expected_head()`。
+- BUG-RTL-SOC-008（DESC_BASE 与命令环重叠）现可在 FM 秒级复现：注入 `DESC_BASE=0x80001000` 会使 `schedule_chain()` 抛 `OverlapError`（`sim/tests/test_spike_host_overlap.py`）。
+
+**scale/accumulate golden 要求**（对齐 `matmul_int4_per_block`）
+- scale：SCALE_ADDR!=0 + 非平凡 FP32 scale（随机 [0.5,1.5]），scale 缓冲按桥接读取器布局 `[ceil(K/128)][N]` fp32 写；输出与 `matmul_int4_per_block(group_size=128)` 对齐（fp32_tol rtol=atol=1e-5），K=256 覆盖多 scale-block 路径（`test_soc_fm.py::test_mmul_scale_nonzero`）。
+- accumulate：CTRL[2] 两命令链（K=256 拆 2×128 同输出地址），结果 == 第一段 partial + 第二段 fresh partial，与 `matmul_int4_per_block` 分块组合 golden 一致（`test_soc_fm.py::test_mmul_accumulate`）。
+
+**段边界 SRAM 清零协议**（`clear_sram` 契约）
+- `segment_preload(force_full=True, clear_sram=True)` 要求 `sram == b"\x00" * SRAM_SIZE`，否则抛 `SegmentBoundaryError`（`sim/cocotb_bridge.py`）；段跑调用点传 `clear_sram=True`，单段/probe 调用保持默认 `clear_sram=False`（`sim/tests/test_segment_boundary.py`）。
+
+**反向依赖门禁**
+- `scripts/fm_reverse_dependency_gate.sh`：RTL/firmware/桥接文件变更 → 自动重跑全量 pytest + W4-PERF 6 批次 + scale/accumulate 回归，状态持久化于 `.omo/last_fm_gate.json`。
+- `--dry-run` 只打印将执行项、不执行任何动作：干净状态 exit 0，有敏感文件 diff 时 exit 1。
+
+```bash
+cd CaduceusCore && ./scripts/fm_reverse_dependency_gate.sh --dry-run
+```
+
 ## E2E 验证
 
 **目标**：验证全栈数据流正确性（llama.cpp 视角）。

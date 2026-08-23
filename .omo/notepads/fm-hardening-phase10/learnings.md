@@ -180,3 +180,10 @@
   - F3 full run (real sz0001 execution): (a) pytest 19/2198/13 = baseline, (b) firmware build PASS, (c) spike smoke FAIL — `Spike Host Summary: 0 PASS, 1 FAIL`, `max_diff=7.64e+02` on L0 Q_proj, identical to the pre-existing BUG-SOC-FM-005 signature recorded in task-9 evidence, (d) reverse-gate dry-run clean, (e) W4-PERF p0/p1 PASS (4+4 PASS records) + FM-SOC-001/003 (P0) PASS + FM-SOC-032 (P4, ~25 min VCS) PASS → F3 exit 1, the honest gate outcome: the smoke red predates this plan and is tracked separately; the gate reports it rather than waiving it.
 - Evidence: `build/evidence/task-13-fm-hardening-phase10.txt`; F3 receipts in `build/evidence/task-F3-*.log`.
 
+## [2026-08-23] Todo 14 — 文档同步：methodology + gap report 回填 + 新 notepad
+- `docs/verification_methodology.md` FM 验证节新增「契约加固（fm-hardening-phase10）」小节：内存布局契约（`sim/address_space.py` + `sim/command_ring.py`）、scale/accumulate golden 要求（对齐 `matmul_int4_per_block`）、段边界 `clear_sram` 协议、反向依赖门禁用法（`./scripts/fm_reverse_dependency_gate.sh --dry-run`）。
+- gap report §5-6 回填：M1→todo 3、M2→todo 1、S1→todo 5、S2→todo 4、A1/A2→todo 2、AL2→todo 9 标注「已落地为 fm-hardening-phase10 todo N」；T1/T2（firmware_memory_contract.json 双向比对）与 AL1（forward 路径 per-layer 环重置 vs 段跑累计偏移对齐）如实标注「deferred，未纳入本计划」，未伪称已实现。
+- 新建 `.omo/notepads/fm-verification-hardening/learnings.md`：6 bug 类→守卫映射表、FM-SOC runner 差异化布局决策（P0/P1/P2P3 vs P4）、`device_server.py` RING_SIZE=16 排除理由、tests-after 选择。
+- 验证：methodology diff 含「反向依赖」字样（grep ≥1）；gap report 中 fm-hardening-phase10 ≥7 处、deferred ≥3 处（grep 验收通过）；learnings 文件存在。
+- Evidence: `build/evidence/task-14-fm-hardening-phase10.txt`.
+

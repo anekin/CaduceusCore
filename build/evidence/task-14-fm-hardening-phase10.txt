@@ -1,0 +1,48 @@
+# Task 14 - fm-hardening-phase10: 验证方法论文档同步 + gap report 状态回填 + 新 notepad
+Timestamp: 2026-08-23T06:12:37Z
+Commit: e0a8e3d0671ae9df377b57e9a5d748a7a285a9f8 (base; docs committed in follow-up docs commit)
+Plan: .omo/plans/fm-hardening-phase10.md todo 14
+
+## Deliverables
+  1. docs/verification_methodology.md (+24 lines): FM 验证节新增「契约加固（fm-hardening-phase10）」小节
+  2. .omo/notepads/phase10-rtl-verification/func-model-verification-gap-report.md: §5-6 提案状态回填
+  3. .omo/notepads/fm-verification-hardening/learnings.md (new, 34 lines): 6 bug 类→守卫映射 + 关键决策
+  4. .omo/notepads/fm-hardening-phase10/learnings.md (+7 lines): todo 14 条目追加
+
+## Methodology subsection (4 required topics covered)
+  - 内存布局契约: sim/address_space.py (region table / regions_overlap / addr_in_window /
+    contract_check) + sim/command_ring.py (RING_ENTRIES=1024 / CMD_ENTRY_SIZE=32 /
+    ring_entry_addr / advance_head / expected_head); BUG-RTL-SOC-008 现可 FM 秒级复现
+  - scale/accumulate golden 要求: 对齐 matmul_int4_per_block(group_size=128)，SCALE_ADDR!=0
+    非平凡 FP32 scale 按 [ceil(K/128)][N] fp32 布局 + CTRL[2] 两命令链 accumulate
+  - 段边界 SRAM 清零协议: segment_preload(force_full=True, clear_sram=True) 要求
+    sram == b"\x00" * SRAM_SIZE，否则 SegmentBoundaryError
+  - 反向依赖门禁: scripts/fm_reverse_dependency_gate.sh 用法 + --dry-run 语义
+
+## Gap report §5-6 backfill
+  - 已落地为 fm-hardening-phase10 todo N: M1→3, M2→1, S1→5, S2→4, A1→2, A2→2, AL2→9
+  - deferred，未纳入本计划: T1/T2 (firmware_memory_contract.json 双向比对), AL1
+    (forward per-layer 环重置 vs 段跑累计偏移对齐)，未伪称已实现
+  - §6 action items 状态注记同步 (ST1/LT1→todo 1/2/3, ST2/LT4→todo 4/5, LT3 的 AL2→todo 9,
+    LT2 与 LT3 的 AL1 部分 deferred)
+
+## Verification (acceptance criteria)
+  Command: git diff docs/verification_methodology.md | grep -cE "反向依赖|reverse-dependency"
+  Result: 1 (acceptance >= 1), PASS
+  Command: ls .omo/notepads/fm-verification-hardening/learnings.md
+  Result: exists, 34 lines, PASS
+  Command: grep -c "fm-hardening-phase10" .omo/notepads/phase10-rtl-verification/func-model-verification-gap-report.md
+  Result: 8 (>= 7: M1/M2/S1/S2/A1/A2/AL2 共 7 处 + §6 注记 1 处), PASS
+  Command: grep -c "deferred" .omo/notepads/phase10-rtl-verification/func-model-verification-gap-report.md
+  Result: 4 (>= 3: T1/T2/AL1 共 3 处 + §6 注记 1 处), PASS
+  Item-level check: grep -oE "(已落地为 fm-hardening-phase10 todo [0-9]+|deferred，未纳入本计划)"
+  Result: 11 markers on the correct proposal lines (M1=3 M2=1 S1=5 S2=4 A1=2 A2=2 AL2=9;
+    T1/T2/AL1=deferred), PASS
+
+## Scope guardrails
+  - No RTL / code / script / config changes; docs + notepads + evidence only.
+  - T1/T2/AL1 marked deferred, not claimed implemented.
+  - Pre-existing working-tree modifications (build/evidence/*, firmware/build/*,
+    .omo/evidence/*, other notepads) untouched by this todo.
+
+Result: PASS

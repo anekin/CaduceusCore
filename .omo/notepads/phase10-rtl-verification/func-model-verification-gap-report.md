@@ -56,30 +56,32 @@ Categorized, actionable items. The goal: a memory-layout defect must fail fast a
 
 **Modeling**
 
-- M1. Add a `CommandRing` model to Func Model / the bridge that tracks ring base, entry size, ring size, head, tail, and cumulative offset, matching `firmware/npu_firmware.c` (`RING_ENTRIES=1024`, 32 B entries, completion ring immediately after). Both the Python firmware emulation and the Spike path should drive commands through it rather than raw `host_write_data` calls.
-- M2. Add an `AddressSpaceContract` module that owns the DRAM region table (command ring, completion ring, descriptor pool, activations, weights, outputs) and answers "does region A overlap region B". Check it on every run start, not only after a bug is found.
+- M1. Add a `CommandRing` model to Func Model / the bridge that tracks ring base, entry size, ring size, head, tail, and cumulative offset, matching `firmware/npu_firmware.c` (`RING_ENTRIES=1024`, 32 B entries, completion ring immediately after). Both the Python firmware emulation and the Spike path should drive commands through it rather than raw `host_write_data` calls. **（已落地为 fm-hardening-phase10 todo 3）**
+- M2. Add an `AddressSpaceContract` module that owns the DRAM region table (command ring, completion ring, descriptor pool, activations, weights, outputs) and answers "does region A overlap region B". Check it on every run start, not only after a bug is found. **（已落地为 fm-hardening-phase10 todo 1）**
 
 **Scenario**
 
-- S1. Make long-sequence / segment-run command generation a standard Func Model gate, not an RTL-only gate. A Func Model run scheduling many layers back-to-back with a persistent ring offset, at Python speed, would have reached entry 128 in seconds.
-- S2. Add a ring-stress scenario that deliberately drives cumulative ring offsets across the full ring size, including wrap-around and the boundary region (entries 128+), as a first-class regression case.
+- S1. Make long-sequence / segment-run command generation a standard Func Model gate, not an RTL-only gate. A Func Model run scheduling many layers back-to-back with a persistent ring offset, at Python speed, would have reached entry 128 in seconds. **（已落地为 fm-hardening-phase10 todo 5）**
+- S2. Add a ring-stress scenario that deliberately drives cumulative ring offsets across the full ring size, including wrap-around and the boundary region (entries 128+), as a first-class regression case. **（已落地为 fm-hardening-phase10 todo 4）**
 
 **Assertion**
 
-- A1. Runtime assertions when scheduling commands in Func Model: descriptor base region disjoint from ring region; command count within ring size; wrap-around detection with an explicit warning or failure.
-- A2. On descriptor write, assert `DESC_BASE + i * DESC_STRIDE` does not fall inside `[RING_BASE, RING_BASE + RING_SIZE * 32)`. This check alone would have flagged BUG-RTL-SOC-008 at the first multi-descriptor schedule.
+- A1. Runtime assertions when scheduling commands in Func Model: descriptor base region disjoint from ring region; command count within ring size; wrap-around detection with an explicit warning or failure. **（已落地为 fm-hardening-phase10 todo 2）**
+- A2. On descriptor write, assert `DESC_BASE + i * DESC_STRIDE` does not fall inside `[RING_BASE, RING_BASE + RING_SIZE * 32)`. This check alone would have flagged BUG-RTL-SOC-008 at the first multi-descriptor schedule. **（已落地为 fm-hardening-phase10 todo 2）**
 
 **Trace**
 
-- T1. Generate a `firmware_memory_contract.json` from Func Model runs: ring base/size, descriptor range used, completion ring range, and observed max ring offset. Persist it per scenario so RTL firmware traces can be diffed against it.
-- T2. In the RTL segment run, dump the same contract from the firmware's actual DRAM usage and compare it to the Func Model contract before the numeric ladder runs. A mismatch here is cheaper to debug than a `cos≈0.031` at L19.
+- T1. Generate a `firmware_memory_contract.json` from Func Model runs: ring base/size, descriptor range used, completion ring range, and observed max ring offset. Persist it per scenario so RTL firmware traces can be diffed against it. **（deferred，未纳入本计划）**
+- T2. In the RTL segment run, dump the same contract from the firmware's actual DRAM usage and compare it to the Func Model contract before the numeric ladder runs. A mismatch here is cheaper to debug than a `cos≈0.031` at L19. **（deferred，未纳入本计划）**
 
 **Alignment**
 
-- AL1. Ensure the Func Model command scheduler matches `firmware/npu_firmware.c` ring management exactly: same ring size, same wrap-around, same completion placement. Today the Python forward path resets the ring per layer while the RTL segment path accumulates, an inconsistency that hid the bug.
-- AL2. Where a constant exists in both Python and C (ring base, entry size, descriptor stride), add a cross-language consistency test.
+- AL1. Ensure the Func Model command scheduler matches `firmware/npu_firmware.c` ring management exactly: same ring size, same wrap-around, same completion placement. Today the Python forward path resets the ring per layer while the RTL segment path accumulates, an inconsistency that hid the bug. **（deferred，未纳入本计划）**
+- AL2. Where a constant exists in both Python and C (ring base, entry size, descriptor stride), add a cross-language consistency test. **（已落地为 fm-hardening-phase10 todo 9）**
 
 ## 6. Short-term vs long-term action items
+
+> 状态注记（2026-08-23）：本节 action items 已按 §5 提案的状态处置，不再单独立项：ST1（M2/A2）→ fm-hardening-phase10 todo 1/2，ST2（S2）→ todo 4，ST3 即本文档与验证方法论文档；LT1（M1）→ todo 3，LT4（S1 类）→ todo 5，LT3 的 AL2 部分 → todo 9；LT2（T1/T2）与 LT3 的 AL1 部分 deferred，未纳入本计划。
 
 **Short-term (before the next segment run)**
 
