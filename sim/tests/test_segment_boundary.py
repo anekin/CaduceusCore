@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from sim.cocotb_bridge import CocotbBridge, SegmentBoundaryError, SRAM_BASE, SRAM_SIZE
+from cocotb_bridge import CocotbBridge, SegmentBoundaryError, SRAM_BASE, SRAM_SIZE
 
 
 class DummyDut:

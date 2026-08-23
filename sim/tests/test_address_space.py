@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 from sim import spike_host
-from sim.address_space import (
+from address_space import (
     CMD_ENTRY_SIZE,
     COMPLETION_RING_ADDR,
     DESC_BASE,
