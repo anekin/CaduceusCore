@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Phase 10 RTL Verification — Retrospective</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0e27;
+      --bg-2: #11183a;
+      --bg-3: #1a234e;
+      --text: #e8ecff;
+      --muted: #9aa4d6;
+      --cyan: #00d4ff;
+      --amber: #ffb347;
+      --green: #2ee8a0;
+      --red: #ff6b6b;
+      --border: rgba(255,255,255,0.08);
+      --shadow: 0 12px 40px rgba(0,0,0,0.35);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: rgba(10,14,39,0.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      z-index: 1000;
+      padding: 0.75rem 1.5rem;
+    }
+    nav ul {
+      list-style: none;
+      margin: 0; padding: 0;
+      display: flex;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    nav a { font-size: 0.85rem; font-weight: 500; color: var(--muted); }
+    nav a:hover { color: var(--cyan); }
+    section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
+    h1, h2, h3 { margin: 0 0 1rem; line-height: 1.25; }
+    h1 { font-size: clamp(2rem, 6vw, 3.5rem); font-weight: 700; }
+    h2 { font-size: clamp(1.5rem, 4vw, 2.2rem); font-weight: 700; color: var(--cyan); }
+    h3 { font-size: 1.15rem; font-weight: 600; color: var(--amber); }
+    .subtitle { color: var(--muted); font-size: 1.1rem; max-width: 700px; }
+    .hero { padding-top: 8rem; text-align: center; }
+    .hero h1 span { color: var(--cyan); }
+    .hero .badges {
+      display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; margin: 1.5rem 0 2rem;
+    }
+    .badge {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      padding: 0.4rem 0.9rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .badge.ok { color: var(--green); border-color: rgba(46,232,160,0.25); }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin: 2.5rem 0;
+    }
+    .stat {
+      background: linear-gradient(180deg, var(--bg-2), var(--bg-3));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem;
+      text-align: center;
+      box-shadow: var(--shadow);
+      transition: transform 0.2s;
+    }
+    .stat:hover { transform: translateY(-4px); }
+    .stat-v {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(1.6rem, 4vw, 2.2rem);
+      font-weight: 700;
+      color: var(--cyan);
+      line-height: 1.1;
+    }
+    .stat-v.amber { color: var(--amber); }
+    .stat-v.green { color: var(--green); }
+    .stat-l { font-size: 0.78rem; color: var(--muted); margin-top: 0.4rem; }
+    .card {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      box-shadow: var(--shadow);
+    }
+    .card h3 { margin-top: 0; }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1rem;
+    }
+    .timeline {
+      position: relative;
+      padding-left: 1.5rem;
+      border-left: 2px solid var(--border);
+    }
+    .timeline-item { position: relative; margin-bottom: 2rem; }
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -1.85rem; top: 0.3rem;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 0 4px var(--bg);
+    }
+    .timeline-item.done::before { background: var(--green); }
+    .timeline-item.warn::before { background: var(--amber); }
+    .timeline-item.fail::before { background: var(--red); }
+    .timeline-meta { font-size: 0.8rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem; }
+    th, td { padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: var(--amber); font-weight: 600; background: rgba(255,255,255,0.03); }
+    tr:hover td { background: rgba(255,255,255,0.03); }
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(0,212,255,0.08);
+      padding: 0.15rem 0.35rem;
+      border-radius: 5px;
+      font-size: 0.85em;
+    }
+    .tag {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 5px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .tag-pass { background: rgba(46,232,160,0.12); color: var(--green); }
+    .tag-warn { background: rgba(255,179,71,0.12); color: var(--amber); }
+    .tag-fail { background: rgba(255,107,107,0.12); color: var(--red); }
+    .problem-solution {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+    .ps-row {
+      display: grid;
+      grid-template-columns: minmax(180px,1fr) minmax(180px,1fr);
+      gap: 1rem;
+    }
+    @media (max-width: 680px) {
+      .ps-row { grid-template-columns: 1fr; }
+      nav ul { gap: 0.75rem; }
+    }
+    .footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 3rem 1rem; border-top: 1px solid var(--border); }
+    .methodology ol { padding-left: 1.25rem; }
+    .methodology li { margin-bottom: 0.75rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <ul>
+      <li><a href="#cover">Cover</a></li>
+      <li><a href="#workflow">Workflow</a></li>
+      <li><a href="#timeline">Timeline</a></li>
+      <li><a href="#problems">Problems</a></li>
+      <li><a href="#efficiency">Efficiency</a></li>
+      <li><a href="#lessons">Lessons</a></li>
+      <li><a href="#methodology">Methodology</a></li>
+      <li><a href="#summary">Summary</a></li>
+    </ul>
+  </nav>
+
+  <section id="cover" class="hero">
+    <h1>Phase 10 RTL Verification <span>Retrospective</span></h1>
+    <p class="subtitle">DMA readback, PERF-06 M=32, 36-layer Spike + Ibex segment run, FM-3 calibration, and final-wave signoff.</p>
+    <div class="badges">
+      <span class="badge ok">F1 APPROVE</span>
+      <span class="badge ok">F2 APPROVE</span>
+      <span class="badge ok">F3 APPROVE</span>
+      <span class="badge ok">F4 APPROVE</span>
+      <span class="badge">Work ID 4b4b4835</span>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-v" data-target="122" data-suffix="h">0</div><div class="stat-l">Total elapsed</div></div>
+      <div class="stat"><div class="stat-v green" data-target="26" data-suffix="/26">0</div><div class="stat-l">Tasks completed</div></div>
+      <div class="stat"><div class="stat-v green" data-target="36" data-suffix="/36">0</div><div class="stat-l">Spike layers PASS</div></div>
+      <div class="stat"><div class="stat-v green" data-target="5" data-suffix="/5">0</div><div class="stat-l">Ibex checkpoints PASS</div></div>
+      <div class="stat"><div class="stat-v" data-target="21" data-suffix="/21">0</div><div class="stat-l">PERF cases PASS</div></div>
+      <div class="stat"><div class="stat-v amber" data-target="26">0</div><div class="stat-l">Evidence files</div></div>
+      <div class="stat"><div class="stat-v" data-target="10">0</div><div class="stat-l">Subagent sessions</div></div>
+      <div class="stat"><div class="stat-v amber" data-target="21855806" data-format="millions" data-suffix="M">0</div><div class="stat-l">Total tokens</div></div>
+      <div class="stat"><div class="stat-v" data-target="76.62" data-decimals="2">0</div><div class="stat-l">Reported cost</div></div>
+      <div class="stat"><div class="stat-v" data-target="45">0</div><div class="stat-l">Commits</div></div>
+    </div>
+  </section>
+
+  <section id="workflow">
+    <h2>Agent Workflow</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Main orchestrator</h3>
+        <p>Atlas / Sisyphus-Junior maintained the plan, dependency matrix, and wave gating. Long VCS jobs ran on <code>sz0001</code> (192.168.0.11) via <code>p10_ssh</code>.</p>
+      </div>
+      <div class="card">
+        <h3>Parallel subagents</h3>
+        <p>Short status-check and probe tasks ran in parallel while the main Ibex segment simulation executed. This prevented the main session from blocking on 7+ hour runs.</p>
+      </div>
+      <div class="card">
+        <h3>Evidence discipline</h3>
+        <p>Every todo produced <code>build/evidence/task-N-phase10-rtl-verification.txt</code>. Final-wave F3 independently reproduced DMA, PERF-06, and the Ibex segment run.</p>
+      </div>
+      <div class="card">
+        <h3>Model mix</h3>
+        <p>Most work used <code>kimi-k2.7-code</code>; the F3 manual QA session used <code>deepseek-v4-pro</code>. Token/cost data comes from the OpenCode <code>session</code> table.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="timeline">
+    <h2>Execution Timeline</h2>
+    <div class="timeline">
+      <div class="timeline-item done">
+        <div class="timeline-meta">Aug 17 — Wave 0</div>
+        <h3>Skeleton + baseline</h3>
+        <p>Created p10 script library, validated sz0001 infra, re-ran Phase 9 regression. Captured known residuals: PERF-06, FM-SOC-10X, wrapper failures, Q8_0 blocked.</p>
+      </div>
+      <div class="timeline-item done">
+        <div class="timeline-meta">Aug 18 — Wave 1</div>
+        <h3>DMA readback fix</h3>
+        <p>Diagnosed CH1 zeros as firmware output row-interleave (already fixed by <code>7aec7a3</code>). Disabled diagnostic probe and re-verified DMA/perf paths.</p>
+      </div>
+      <div class="timeline-item done">
+        <div class="timeline-meta">Aug 18 — Wave 2</div>
+        <h3>PERF-06 M=32 closure</h3>
+        <p>Proved RTL control signals were identical for M=1 and M=32. Fixed firmware <code>act_offset</code> tile-major stride and output row interleave. Full PERF suite 21/21 PASS.</p>
+      </div>
+      <div class="timeline-item warn">
+        <div class="timeline-meta">Aug 18–22 — Wave 3</div>
+        <h3>36-layer forward</h3>
+        <p>Spike 36/36 PASS. Ibex 9-layer segment run required four fixes: progress logging (ISSUE-13A), activation layout + per-block scale (ISSUE-13B), SRAM boundary clear (ISSUE-13C), and DESC_BASE overlap (ISSUE-13D). Final 5/5 checkpoints PASS.</p>
+      </div>
+      <div class="timeline-item done">
+        <div class="timeline-meta">Aug 19 — Wave 4</div>
+        <h3>FM-3 calibration</h3>
+        <p>RTL overlap measured 0.00. Adjusted Func Model <code>mxu.double_buffer=false</code>; delta 0.00 vs threshold 0.05.</p>
+      </div>
+      <div class="timeline-item done">
+        <div class="timeline-meta">Aug 18–19 — Wave 5</div>
+        <h3>Cleanup</h3>
+        <p>SFU wrapper 5/5 PASS, DRAM 8 MB reject window, MMIO docs sync, Q8_0 BLOCKED-NETWORK, bug ledger dedup.</p>
+      </div>
+      <div class="timeline-item warn">
+        <div class="timeline-meta">Aug 21–22 — Final Wave</div>
+        <h3>F1–F4 signoff</h3>
+        <p>Each gate failed once for honest reasons: F1 missing evidence, F2 hardcoded test pattern, F3 PERF test-format drift, F4 outdated whitelist. All re-ran APPROVE.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="problems">
+    <h2>Problems & Solutions</h2>
+    <div class="problem-solution">
+      <div class="ps-row">
+        <div class="card">
+          <h3>Problem: DMA CH1 readback zeros</h3>
+          <p><span class="tag tag-warn">Wave 1</span></p>
+          <p>PERF path could not read MXU output back from DRAM.</p>
+        </div>
+        <div class="card">
+          <h3>Solution</h3>
+          <p>Compared FM-SOC vs PERF CH0/CH1 register values and DRAM snapshots. Root cause was firmware output DMA row interleave, already fixed by <code>7aec7a3</code>. No bridge change needed.</p>
+        </div>
+      </div>
+      <div class="ps-row">
+        <div class="card">
+          <h3>Problem: PERF-06 M=32 cos_sim 0.05</h3>
+          <p><span class="tag tag-warn">Wave 2</span></p>
+          <p>M=32 matrix multiplication failed while M=1 was closer to passing.</p>
+        </div>
+        <div class="card">
+          <h3>Solution</h3>
+          <p>Signal probes ruled out RTL accumulator reset. A mini-model falsified the firmware offset formula. Fixed <code>act_offset = k_start * TILE_H</code> and corrected output row interleave.</p>
+        </div>
+      </div>
+      <div class="ps-row">
+        <div class="card">
+          <h3>Problem: Ibex segment run NaN/INT_MIN</h3>
+          <p><span class="tag tag-fail">Wave 3 / ISSUE-13B</span></p>
+          <p>First completed segment run ended with ladder FAIL and NaN outputs.</p>
+        </div>
+        <div class="card">
+          <h3>Solution</h3>
+          <p>Two independent bugs: activation buffer was row-major instead of column-major broadcast layout, and MXU store-out ignored per-block FP32 scales. Fixed controller/wrapper and Python layout alignment.</p>
+        </div>
+      </div>
+      <div class="ps-row">
+        <div class="card">
+          <h3>Problem: L19 corruption after boundary</h3>
+          <p><span class="tag tag-fail">Wave 3 / ISSUE-13C</span></p>
+          <p>L19 standalone passed but failed when chained after L9→L10.</p>
+        </div>
+        <div class="card">
+          <h3>Solution</h3>
+          <p>Full-DRAM preload was not enough; 4 MB SRAM scratch and wrapper staging held stale state. Zeroed SRAM at every segment boundary.</p>
+        </div>
+      </div>
+      <div class="ps-row">
+        <div class="card">
+          <h3>Problem: DESC_BASE ring overlap</h3>
+          <p><span class="tag tag-fail">Wave 3 / ISSUE-13D</span></p>
+          <p>L19/L20 still corrupted after SRAM fix.</p>
+        </div>
+        <div class="card">
+          <h3>Solution</h3>
+          <p>Descriptors (64 B) collided with command-ring entries (32 B) at offset ≥128. Moved <code>DESC_BASE</code> from <code>0x80001000</code> to <code>0x80010000</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="efficiency">
+    <h2>Efficiency Analysis</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Time</h3>
+        <p>Total orchestration elapsed ≈122 h. The dominant real work was a 7.7 h Ibex VCS segment run and a 34 min Spike 36-layer run. The rest was regression, diagnosis, and gate re-runs.</p>
+      </div>
+      <div class="card">
+        <h3>Tokens & cost</h3>
+        <p>11 OpenCode sessions, 2,516 messages, 21.9 M tokens, reported cost 76.62. The main ultraworker session accounted for 18.7 M input tokens; the rest were short subagent status/probe tasks.</p>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>Value</th><th>Source</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Wall-clock elapsed</td><td>~122 h</td><td><code>.omo/boulder.json</code></td></tr>
+        <tr><td>Spike 36-layer</td><td>2,047 s (~34 min)</td><td><code>task-12</code></td></tr>
+        <tr><td>Ibex 9-layer segment run</td><td>27,826 s (~7.7 h)</td><td><code>task-13</code></td></tr>
+        <tr><td>OpenCode sessions</td><td>11</td><td><code>session</code> table</td></tr>
+        <tr><td>Messages</td><td>2,516</td><td><code>message</code> table</td></tr>
+        <tr><td>Tokens</td><td>21,855,806</td><td><code>session</code> table</td></tr>
+        <tr><td>Reported cost</td><td>76.62</td><td><code>session.cost</code></td></tr>
+        <tr><td>Commits</td><td>45</td><td><code>git log</code></td></tr>
+      </tbody>
+    </table>
+    <p class="subtitle">The largest time savings came from 24/7 execution and parallel status checks. The largest time cost came from running the full segment run repeatedly while iterating on state/layout bugs.</p>
+  </section>
+
+  <section id="lessons">
+    <h2>Lessons Learned</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Compare paths, not blocks</h3>
+        <p>When two flows share the same RTL but behave differently, capture their register configurations and data snapshots before blaming the controller.</p>
+      </div>
+      <div class="card">
+        <h3>One failure can hide multiple bugs</h3>
+        <p>PERF-06 needed both the tile-major offset fix and the output row-interleave fix. Re-run cleanly after each change.</p>
+      </div>
+      <div class="card">
+        <h3>Long-run corruption is state, not logic</h3>
+        <p>If a layer passes standalone but fails chained, audit SRAM, wrapper staging, and address-space layout before re-running hours of simulation.</p>
+      </div>
+      <div class="card">
+        <h3>Layout is a correctness contract</h3>
+        <p>Func Model did not catch DESC_BASE overlap because it lacks an address-space layer. Add an <code>AddressSpaceContract</code> check and ring-stress regression.</p>
+      </div>
+      <div class="card">
+        <h3>Make long runs observable</h3>
+        <p>The 94-minute silent run was killed because no progress file existed. Flush progress lines and save incremental checkpoints.</p>
+      </div>
+      <div class="card">
+        <h3>Calibrate constants, not derived metrics</h3>
+        <p>FM-3 overlap is computed from <code>mxu.double_buffer</code>, <code>broadcast_sync</code>, etc. Adjust those, not a non-existent stored ratio.</p>
+      </div>
+      <div class="card">
+        <h3>Gates should fail honestly</h3>
+        <p>F1–F4 each failed once for real reasons. Updating the gates made the signoff trustworthy.</p>
+      </div>
+      <div class="card">
+        <h3>Probes vs hardware-expected output</h3>
+        <p>L0L19 intermediates looked wrong until compared against dequantized hardware-expected values with correct layout and dtype.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="methodology" class="methodology">
+    <h2>Long-Run RTL Debug Methodology</h2>
+    <div class="card">
+      <ol>
+        <li><strong>Reproduce</strong> — one minimal command, one exact commit.</li>
+        <li><strong>Probe</strong> — add read-only instrumentation before editing logic.</li>
+        <li><strong>Falsify</strong> — run a mini-model or isolated case against each hypothesis.</li>
+        <li><strong>Fix</strong> — edit the smallest layer (firmware &gt; test &gt; RTL).</li>
+        <li><strong>Causal gate</strong> — re-run the failing case and one neighbor.</li>
+        <li><strong>Full regression</strong> — run the relevant regression surface.</li>
+        <li><strong>Independent QA</strong> — reproduce key evidence from a clean state.</li>
+        <li><strong>Document</strong> — evidence file, bug ledger entry, notepad note.</li>
+      </ol>
+    </div>
+
+    <h3>Pre-long-run checklist</h3>
+    <div class="card">
+      <ul>
+        <li>Ring / descriptor / completion / data regions do not overlap.</li>
+        <li>SRAM budget confirmed for the largest layer shape.</li>
+        <li>Progress logging flushed to file every ~10%.</li>
+        <li>Incremental checkpoint saves enabled.</li>
+        <li>Smallest representative case runs end-to-end first.</li>
+        <li>No conflicting <code>simv</code> process on the target host.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="summary">
+    <h2>Summary & Next Steps</h2>
+    <div class="card">
+      <h3>What closed</h3>
+      <p>All 22 todos and F1–F4 are APPROVE. DMA readback, PERF-06, 36-layer Spike, Ibex 9-layer checkpoints, FM-3 calibration, SFU wrapper fixes, DRAM window, MMIO docs, and bug ledger are complete.</p>
+      <h3>What remains</h3>
+      <ul>
+        <li>27 Ibex layers (<code>L1-L8, L11-L18, L21-L28, L31-L33</code>) are deferred to the FPGA phase.</li>
+        <li>FM-SOC-10X RMSNorm pre-attn residual remains pre-existing.</li>
+        <li>Q8_0 6b precision experiment is blocked by network.</li>
+        <li>Add Func Model <code>AddressSpaceContract</code> and ring-stress regression to catch layout bugs early.</li>
+      </ul>
+      <h3>Artifacts</h3>
+      <p>
+        <a href="debug_retrospective.md">debug_retrospective.md</a> ·
+        <a href="debug_experience_guide.md">debug_experience_guide.md</a> ·
+        <a href="../plans/phase10-rtl-verification.md">plan</a> ·
+        <a href="../../../build/evidence/ph10-36layer-report.md">36-layer report</a> ·
+        <a href="../../../build/evidence/ph10-fm3-calibration-report.md">FM-3 report</a>
+      </p>
+    </div>
+  </section>
+
+  <div class="footer">
+    Generated by Sisyphus-Junior on 2026-08-22 · grounded in <code>.omo/boulder.json</code>, <code>build/evidence/task-*</code>, and the OpenCode <code>session</code> table.
+  </div>
+
+  <script>
+    function animateValue(el, start, end, duration, decimals, suffix, format) {
+      const range = end - start;
+      const startTime = performance.now();
+      function step(now) {
+        const progress = Math.min((now - startTime) / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        let value = start + range * ease;
+        if (format === 'millions') value = value / 1000000;
+        let text = value.toFixed(decimals);
+        if (format === 'millions') text = parseFloat(text).toFixed(decimals);
+        el.textContent = text + (suffix || '');
+        if (progress < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const el = entry.target;
+          const target = parseFloat(el.dataset.target);
+          const suffix = el.dataset.suffix || '';
+          const decimals = el.dataset.format === 'millions' ? 1 : (parseInt(el.dataset.decimals) || 0);
+          const format = el.dataset.format || '';
+          animateValue(el, 0, target, 1500, decimals, suffix, format);
+          observer.unobserve(el);
+        }
+      });
+    }, { threshold: 0.5 });
+
+    document.querySelectorAll('.stat-v').forEach(el => observer.observe(el));
+  </script>
+</body>
+</html>
