@@ -194,22 +194,22 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
 
 ## Final verification wave
 > Runs in parallel after ALL todos. ALL must APPROVE. Surface results and wait for the user's explicit okay before declaring complete.
-- [ ] F1. Plan compliance audit
+- [x] F1. Plan compliance audit
   What: 逐条核对 14 个 todo 的 evidence 文件存在、acceptance 命令可复跑通过、依赖矩阵一致、无跳过/缩水。
   Command: `bash scripts/fm_hardening_f1_audit.sh`（由 todo 13 创作；检查 `build/evidence/task-{1..14}-fm-hardening-phase10.txt` 存在且终态 PASS；重跑每个 todo 的 pytest acceptance 命令并比对退出码）
   Pass: 全部 evidence 存在、14/14 acceptance 复跑通过。
 
-- [ ] F2. Code quality review
+- [x] F2. Code quality review
   What: 审查新增/修改的 Python 与 shell 代码：无 TODO/FIXME/HACK 残留、无硬编码魔数（区域常量只允许出现在 `sim/address_space.py`/`sim/command_ring.py`/schema）、无新增 pytest 失败、`bash -n` 通过。
   Command: `bash scripts/fm_hardening_f2_code_quality.sh`（由 todo 13 创作；grep 残留；`bash -n` 所有改动的 .sh；`PYTHONPATH=sim python -m pytest sim/tests/ -q` 与 task-3 基线 diff：failed=0, errors=0）
   Pass: 0 残留、0 新增失败、所有 shell 语法通过。
 
-- [ ] F3. Real manual QA
+- [~] F3. Real manual QA
   What: 独立复跑关键链路：(a) 全量 pytest（新增用例全过）；(b) `make -C firmware` + Spike smoke（todo 9 固件改动复验）；(c) `./scripts/fm_reverse_dependency_gate.sh` 干净状态 `--dry-run` exit 0；(d) 在 sz0001 上实际跑一次 W4-PERF 批次抽查（至少 p0/p1 两批）确认门禁真实可用；(e) FM-SOC 抽查 FM-SOC-001/003（P0 runner）与 **FM-SOC-032（P4 runner，验证 todo 3 的 P4 verify-and-annotate 守卫未破坏 P4 布局）**。
   Command: `bash scripts/fm_hardening_f3_manual_qa.sh`（由 todo 13 创作；逐项执行并落证据，覆盖 (a)-(e) 五项）
   Pass: 五项全过。
 
-- [ ] F4. Scope fidelity
+- [x] F4. Scope fidelity
   What: 确认无 scope creep：`git diff` 只含 sim/ 新增与接线、firmware 常量引用、scripts/、docs/、spec/npu_abi.json；`rtl/` 零改动；`sim/arc_model.py`、`sim/design_space_explorer.py`、`requirements.txt`、`sim/quantize.py`、`ggml-npu/` 零改动。
   Command: `bash scripts/fm_hardening_f4_scope_gate.sh`（由 todo 13 创作；git diff --name-only 白名单核对 + 冻结文件 diff 为空断言）
   Pass: 无越界文件、冻结文件零改动。
