@@ -168,7 +168,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   QA scenarios: happy — 干净状态 dry-run exit 0；failure — 模拟 PERF 失败（临时改 `sim/perf_tests.py` 期望值后运行门禁）→ exit 1 且输出指明失败批次，随后恢复。Evidence `build/evidence/task-11-fm-hardening-phase10.txt`
   Commit: Y | feat(scripts): reverse-dependency regression gate for RTL/firmware changes
 
-- [ ] 12. FM attn_weight 覆盖场景（BUG-RTL-SOC-007 的 FM 侧结构缺口）
+- [x] 12. FM attn_weight 覆盖场景（BUG-RTL-SOC-007 的 FM 侧结构缺口）
   What to do / Must NOT do: 新增 `sim/tests/test_soc_fm.py::test_mmul_attn_weight_shape`：经 FM doorbell/桥接路径下发 attn_weight 形状 MMUL（M=32,K=32,N=64，对齐 `sim/perf_tests.py:255` PERF-13），断言命令实际执行（completion 状态 = 成功）且输出与 golden 匹配——补上 spike_host forward 路径从不发射 attn_weight op 导致的结构性盲区。Must NOT 追 RTL 根因（BUG-RTL-SOC-007 的 RTL 侧排除）。
   Parallelization: Wave 3 | Blocked by: — | Blocks: 13
   References: `sim/perf_tests.py:255`（PERF-13 attn_weight 参数）; `sim/spike_host.py:402-414`（_forward_attention host-side，说明为何 spike 路径无 attn_weight）; `docs/bugs/bugs-soc-rtl.md:324-359`（BUG-RTL-SOC-007，仅作背景）; `scripts/p10_36layer_preflight.sh:361`（attn_weight 派发检查）
