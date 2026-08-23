@@ -1,0 +1,42 @@
+Task 1 - fm-hardening-phase10: DRAM address-space contract module
+=================================================================
+Timestamp       : 2026-08-23T01:13:50Z
+Commit          : feat(sim): add DRAM address-space contract module
+                  (this evidence file is part of that commit; resolve the hash
+                   via: git log --oneline -1 -- build/evidence/task-1-fm-hardening-phase10.txt)
+Files created   : sim/address_space.py
+                  sim/tests/test_address_space.py
+
+Acceptance command (exact):
+  PYTHONPATH=sim python -m pytest sim/tests/test_address_space.py -v
+
+Output (tail):
+  sim/tests/test_address_space.py::test_region_table_matches_spike_host_constants PASSED [  7%]
+  sim/tests/test_address_space.py::test_region_table_matches_abi_constants PASSED [ 14%]
+  sim/tests/test_address_space.py::test_desc_region_disjoint_from_ring PASSED [ 21%]
+  sim/tests/test_address_space.py::test_desc_in_window PASSED              [ 28%]
+  sim/tests/test_address_space.py::test_regions_touching_boundaries_do_not_overlap PASSED [ 35%]
+  sim/tests/test_address_space.py::test_regions_overlap_detects_true_overlaps PASSED [ 42%]
+  sim/tests/test_address_space.py::test_named_regions_are_mutually_disjoint PASSED [ 50%]
+  sim/tests/test_address_space.py::test_all_named_regions_fit_in_8mb_window PASSED [ 57%]
+  sim/tests/test_address_space.py::test_contract_check_happy_qa_command PASSED [ 64%]
+  sim/tests/test_address_space.py::test_contract_check_desc_below_completion_end_raises_overlap PASSED [ 71%]
+  sim/tests/test_address_space.py::test_contract_check_act_base_bound_enforced_and_skippable PASSED [ 78%]
+  sim/tests/test_address_space.py::test_contract_check_window_violations_raise_window_error PASSED [ 85%]
+  sim/tests/test_address_space.py::test_parameterized_ring_entries_per_runner_layouts PASSED [ 92%]
+  sim/tests/test_address_space.py::test_contract_check_defaults_use_module_constants PASSED [100%]
+
+  ============================== 14 passed in 0.11s ==============================
+  PYTEST_EXIT=0
+
+QA scenarios (exact commands):
+  happy   : PYTHONPATH=sim python -c "from sim import address_space as a; a.contract_check(desc_base=0x80010000, desc_count=20); print('CONTRACT OK')"
+            -> CONTRACT OK (exit 0)
+  failure : PYTHONPATH=sim python -c "from sim import address_space as a; a.contract_check(desc_base=0x80001000, desc_count=20)"
+            -> sim.address_space.OverlapError: desc_base 0x80001000 falls below completion-ring end 0x80010000 (ring_entries=1024) (exit 1)
+
+Static checks:
+  PYTHONPATH=sim python -m py_compile sim/address_space.py sim/tests/test_address_space.py  -> OK
+  pyflakes sim/address_space.py sim/tests/test_address_space.py                            -> CLEAN
+
+Result: PASS
