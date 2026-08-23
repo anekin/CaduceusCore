@@ -443,9 +443,10 @@ fi
 # applied the low-risk constraint: firmware REJECTS out-of-window DRAM ranges
 # (status=1, LAST_STATUS 0x000070xx) instead of wrapping (wrap = silent
 # aliasing). Control plane verified in-window here; the spike forward data
-# allocator (FP_DRAM_BASE=0x81000000) sits outside the window and is handled
-# by the reject policy — re-basing it in-window is a recorded PRECONDITION
-# for todo 12 (no deadlock: the constraint already fails loudly).
+# allocator (FP_DRAM_BASE, imported from sim/spike_host.py in 5b) has been
+# re-based in-window (0x80020000) by fm-hardening-phase10 — the former
+# todo 12 PRECONDITION is resolved and no data-plane address remains outside
+# the window.
 # =============================================================================
 log "== CHECK 5: DRAM window (BUG-RTL-SOC-002) =="
 
@@ -461,19 +462,21 @@ else
 fi
 
 # 5b. Control plane addresses inside the window.
-WINDOW_RESULT=$(python3 - <<'PY'
+WINDOW_RESULT=$(PYTHONPATH="$ROOT/sim" python3 - <<'PY'
 import json
+from spike_host import DESC_BASE, FP_DRAM_BASE
 DRAM_BASE = 0x80000000
 DRAM_END  = 0x80800000   # 8 MB
 ring       = 1024
 ring_end   = DRAM_BASE + ring * 32          # command ring
 comp_end   = ring_end   + ring * 32         # completion ring
-DESC_BASE  = 0x80001000                     # spike_host DESC_BASE
+# DESC_BASE / FP_DRAM_BASE come from sim/spike_host.py (fm-hardening-phase10
+# todo 2: no hardcoded copies — a stale value here cannot drift silently).
 desc_end   = DESC_BASE + 51 * 64            # worst per-layer chain (51 ops)
-FP_DRAM_BASE = 0x81000000                   # spike_host forward allocator
 fp_in_window = FP_DRAM_BASE < DRAM_END
 print(json.dumps({
     "ring_end": hex(ring_end), "comp_end": hex(comp_end),
+    "desc_base": hex(DESC_BASE),
     "desc_end": hex(desc_end),
     "control_plane_in_window": comp_end <= DRAM_END and desc_end <= DRAM_END,
     "fp_dram_base": hex(FP_DRAM_BASE),
@@ -489,13 +492,12 @@ else
   fail "5b control-plane address outside 8 MB window"
 fi
 
-# 5c. Data plane: spike forward allocator base is OUTSIDE the window.
-#     The todo 19 constraint handles it (reject, not wrap). Record the
-#     todo 12 precondition explicitly.
-if echo "$WINDOW_RESULT" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if not d["fp_data_plane_in_window"] else 1)'; then
-  log "  5c data plane: FP_DRAM_BASE=0x81000000 is OUT of window — handled by reject constraint (no silent aliasing)"
-  log "  5c PRECONDITION (todo 12): re-base sim/spike_host.py FP_DRAM_BASE/FP_DRAM_SIZE into [0x80000000,0x80800000) before the 36-layer spike run"
-  log "  5c NOTE: spike path uses the Func Model DRAM (128 MB) — only the firmware reject policy is affected; Ibex path (todo 13) already stays in-window per todo 19 audit"
+# 5c. Data plane: FP_DRAM_BASE is now in-window (re-based by
+#     fm-hardening-phase10); an out-of-window base is a regression.
+if echo "$WINDOW_RESULT" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d["fp_data_plane_in_window"] else 1)'; then
+  log "  5c data plane: FP_DRAM_BASE is IN window — no reject-policy involvement (no silent aliasing)"
+else
+  fail "5c data-plane address outside 8 MB window"
 fi
 
 # 5d. Todo 19 evidence exists.
@@ -692,10 +694,9 @@ fi
   echo "    never wrap (wrap = silent aliasing)"
   echo "  - control plane (ring 32KB + completion 32KB + descriptors) in-window"
   echo "  Window layout JSON: $WINDOW_RESULT"
-  echo "  - PRECONDITION for todo 12: re-base spike_host.py FP_DRAM_BASE/"
-  echo "    FP_DRAM_SIZE (currently 0x81000000, out of window) into the 8 MB"
-  echo "    window before the 36-layer spike run. The constraint rejects"
-  echo "    out-of-window addresses loudly — no deadlock."
+  echo "  - FP_DRAM_BASE/FP_DRAM_SIZE re-based in-window (0x80020000) by"
+  echo "    fm-hardening-phase10 — the todo 12 PRECONDITION is resolved; the"
+  echo "    reject policy now covers no spike data-plane address (no deadlock)."
   echo ""
   echo "Runtime estimate (LOW CONFIDENCE — FPGA-phase fallback planning only):"
   echo "$RUNTIME_RESULT" | sed 's/^/  /'

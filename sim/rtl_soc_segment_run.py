@@ -55,6 +55,7 @@ from q4_dequant import load_weights_from_gguf  # noqa: E402
 from opcodes import EngineOp  # noqa: E402
 
 import spike_host as sh  # noqa: E402
+import address_space  # noqa: E402
 
 FIRMWARE_RING_BASE = sh.FIRMWARE_RING_BASE
 DESC_BASE = sh.DESC_BASE
@@ -457,6 +458,11 @@ async def test_soc_ibex_segment_run(dut):
     assert M == 1, f"segment run requires M=1, got {M}"
 
     model = FuncModel(dram_mb=8, sram_kb=4096)
+
+    # fm-hardening-phase10 todo 2: layout contract once at startup; per-op
+    # descriptor re-checks live in sh.write_cmd_entry().
+    address_space.contract_check(desc_base=DESC_BASE, desc_count=34,
+                                 act_base=sh.P10_ACT_BASE)
 
     # Fresh progress log per run; milestones append with explicit flush.
     try:

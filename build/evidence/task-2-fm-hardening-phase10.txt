@@ -1,0 +1,72 @@
+Task 2 - fm-hardening-phase10: scheduling-time assertions + stale preflight DESC_BASE
+====================================================================================
+Timestamp       : 2026-08-23T03:05:00Z
+Commit          : fix(sim): wire ring-overlap assertions and fix stale preflight DESC_BASE
+                  (this evidence file is part of that commit; resolve the hash
+                   via: git log --oneline -1 -- build/evidence/task-2-fm-hardening-phase10.txt)
+Files modified  : sim/spike_host.py
+                  sim/rtl_soc_segment_run.py
+                  scripts/p10_36layer_preflight.sh
+Files created   : sim/tests/test_spike_host_overlap.py
+
+Acceptance command (exact):
+  PYTHONPATH=sim python -m pytest sim/tests/test_spike_host_overlap.py -v
+
+Output (tail):
+  ...::test_schedule_chain_happy_path_writes_descriptors_and_doorbell PASSED [ 14%]
+  ...::test_schedule_chain_empty_qa_command PASSED                      [ 28%]
+  ...::test_schedule_chain_stale_desc_base_raises_overlap_before_any_write PASSED [ 42%]
+  ...::test_schedule_chain_desc_count_past_act_base_raises PASSED       [ 57%]
+  ...::test_schedule_chain_out_of_window_desc_raises_window_error PASSED [ 71%]
+  ...::test_write_cmd_entry_rejects_desc_below_completion_end PASSED    [ 85%]
+  ...::test_write_cmd_entry_happy_path_writes_entry PASSED              [100%]
+  ============================ 7 passed in 0.37s =============================
+  PYTEST_EXIT=0
+
+Static checks (exact commands):
+  grep -n "0x80001000\|0x81000000" scripts/p10_36layer_preflight.sh
+  -> no output (exit 1; all 5 stale hard-coded references removed)
+
+  bash -n scripts/p10_36layer_preflight.sh
+  -> exit 0
+
+  PYTHONPATH=sim python -m py_compile sim/spike_host.py sim/rtl_soc_segment_run.py sim/tests/test_spike_host_overlap.py
+  -> OK (pyflakes: only pre-existing warnings, none in edited ranges)
+
+QA scenarios (exact commands):
+  happy   : PYTHONPATH=sim python -c "from sim import spike_host as sh; sh.schedule_chain([]); print('SCHEDULE OK')"
+            -> SCHEDULE OK (exit 0)
+  failure : PYTHONPATH=sim python -c "from sim import spike_host as sh; sh.DESC_BASE=0x80001000; sh.schedule_chain([0]*20)"
+            -> address_space.OverlapError: desc_base 0x80001000 falls below completion-ring end 0x80010000 (ring_entries=1024) (exit 1)
+            The guard fires before any per-op access: schedule_chain asserts
+            contract_check(desc_base=DESC_BASE, desc_count=len(ops),
+            act_base=P10_ACT_BASE) as its first statement.
+
+Wiring details:
+  - spike_host.schedule_chain: signature reordered to (ops, model=None) so the
+    QA scenarios can exercise the contract without a FuncModel; the doorbell
+    write is skipped when model is None. All 4 internal call sites updated.
+  - spike_host.write_cmd_entry: per-entry guard
+    contract_check(desc_base=desc_addr, desc_count=1, act_base=P10_ACT_BASE)
+    covers the direct callers (run_pcie_dma_smoke) and every segment-run entry.
+  - rtl_soc_segment_run.test_soc_ibex_segment_run: one-time startup
+    contract_check(desc_base=DESC_BASE, desc_count=34, act_base=sh.P10_ACT_BASE).
+  - p10_36layer_preflight.sh 5b: DESC_BASE/FP_DRAM_BASE imported from
+    sim/spike_host.py (PYTHONPATH="$ROOT/sim"); 5c flipped to assert the
+    in-window state; :446 comment / :496 log / :696 summary text updated to
+    the resolved in-window state (FP_DRAM_BASE=0x80020000). No region
+    constant value changed.
+
+Regression:
+  PYTHONPATH=sim python -m pytest sim/tests/ -q --continue-on-collection-errors
+  -> 19 failed, 1412 passed, 1 skipped, 13 errors (this host; cocotb/spike
+     artifacts absent). All failures/errors are environment-affected legacy
+     (cocotb collection errors, missing spike artifacts, engine perf
+     baselines, CV blob detection) — none touch the changed paths.
+  spike_host-dependent suites re-run: test_soc_fm, test_qwen3b_full_forward,
+  test_qwen3b_per_layer_compare, test_firmware, test_mmio_bridge,
+  test_ring_entry_abi -> 95 passed.
+  todo 1/3 acceptance pair re-run: test_address_space + test_command_ring +
+  test_spike_host_overlap -> 26 passed.
+
+Result: PASS

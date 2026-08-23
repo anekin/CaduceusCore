@@ -33,6 +33,7 @@ from regmap import Addr, DOORBELL, MXU
 from spike_mmio_server import DEFAULT_SOCK_PATH, serve
 
 import command_ring
+import address_space
 
 
 # ── Paths ──────────────────────────────────────────────────────────
@@ -140,7 +141,15 @@ def write_dma_copy_descriptor(model: FuncModel, desc_addr: int,
 
 def write_cmd_entry(model: FuncModel, ring_index: int,
                     opcode: int, desc_addr: int, flags: int = 0):
-    """Write a cmd_entry_t into the firmware ring buffer."""
+    """Write a cmd_entry_t into the firmware ring buffer.
+
+    Scheduling-time contract (fm-hardening-phase10 todo 2): the descriptor
+    this entry points at must sit clear of the command/completion rings and
+    below the activation arena — a stray ``desc_addr`` fails loudly with
+    ``OverlapError`` before anything is written (BUG-RTL-SOC-008 guard).
+    """
+    address_space.contract_check(desc_base=desc_addr, desc_count=1,
+                                 act_base=address_space.P10_ACT_BASE)
     addr = FIRMWARE_RING_BASE + ring_index * CMD_ENTRY_SIZE
     buf = struct.pack(CMD_ENTRY_FMT,
                       opcode, desc_addr, flags,
@@ -148,8 +157,18 @@ def write_cmd_entry(model: FuncModel, ring_index: int,
     model.host_write_data(addr, np.frombuffer(buf, dtype=np.uint8))
 
 
-def schedule_chain(model: FuncModel, ops: list) -> int:
-    """Write descriptors and command entries for a list of ops, then ring HOST_TAIL."""
+def schedule_chain(ops: list, model: FuncModel = None) -> int:
+    """Write descriptors and command entries for a list of ops, then ring HOST_TAIL.
+
+    The DRAM address-space contract is asserted up front (fm-hardening-phase10
+    todo 2): a stale ``DESC_BASE`` or an over-long chain raises
+    ``OverlapError``/``WindowError`` before any descriptor or command entry is
+    written. ``model`` is optional so the contract can be exercised without a
+    FuncModel instance (QA scenario); the doorbell is only rung when a model
+    is present.
+    """
+    address_space.contract_check(desc_base=DESC_BASE, desc_count=len(ops),
+                                 act_base=address_space.P10_ACT_BASE)
     for i, op in enumerate(ops):
         desc_addr = DESC_BASE + i * DESC_STRIDE
         op_type = op['type']
@@ -169,7 +188,8 @@ def schedule_chain(model: FuncModel, ops: list) -> int:
         else:
             raise ValueError(f"Unknown op type: {op_type}")
         write_cmd_entry(model, i, opcode, desc_addr, flags=op.get('flags', 0))
-    model.bridge.handle('write', DOORBELL.BASE + DOORBELL.HOST_TAIL, len(ops))
+    if model is not None:
+        model.bridge.handle('write', DOORBELL.BASE + DOORBELL.HOST_TAIL, len(ops))
     return len(ops)
 
 
@@ -925,7 +945,7 @@ def run_forward_pass(gguf_path: str, prompt: str, layers: int = 2,
             model.crossbar.sram[:] = bytearray(len(model.sram))
         model.bridge.handle('write', DOORBELL.BASE + DOORBELL.NPU_HEAD, 0)
         model.bridge.handle('write', DOORBELL.BASE + DOORBELL.HOST_TAIL, 0)
-        schedule_chain(model, ops)
+        schedule_chain(ops, model)
         proc, server = _launch_spike(model)
         try:
             done = poll_completion(model, len(ops))
@@ -1200,7 +1220,7 @@ def _execute_layer_waves_phase10(model: FuncModel, hidden: np.ndarray,
             model.crossbar.sram[:] = bytearray(len(model.sram))
         model.bridge.handle('write', DOORBELL.BASE + DOORBELL.NPU_HEAD, 0)
         model.bridge.handle('write', DOORBELL.BASE + DOORBELL.HOST_TAIL, 0)
-        schedule_chain(model, ops)
+        schedule_chain(ops, model)
         proc, server = _launch_spike(model)
         try:
             done = poll_completion(model, len(ops))
@@ -1697,7 +1717,7 @@ def run_chain_smoke(op_types: list) -> tuple:
         ops.append(op)
         goldens.append((t, gold))
 
-    schedule_chain(model, ops)
+    schedule_chain(ops, model)
 
     proc, server = _launch_spike(model)
     try:
@@ -1753,7 +1773,7 @@ def run_chain_file(ops_file: str) -> bool:
     model = FuncModel(sram_kb=SRAM_KB)
     model.firmware.ring_buffer_addr = FIRMWARE_RING_BASE
 
-    schedule_chain(model, ops)
+    schedule_chain(ops, model)
     proc, server = _launch_spike(model)
     try:
         done = poll_completion(model, len(ops))
