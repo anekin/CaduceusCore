@@ -21,7 +21,7 @@ from engine.multicore import MultiCoreTimeline, FIFOConfig
 from npu_sim import NPUSimulator, generate_qwen3b_trace
 
 # v2 targets — DRAM BW bounded at ~76% utilization for M=1 decode
-M1_TARGET_TOK_S = 21  # M=1 decode target (DRAM BW bounded; actual ~21.6 tok/s, .0f rounds to 22)
+M1_TARGET_TOK_S = 21  # M=1 decode target floor (DRAM BW bounded; actual cross-validated against E2E output)
 # M≥2 pipeline target derived from inter-op parallelism projection
 # batch_min*4 gives inter-op ceiling; pipeline with 2 cores ≈ half that
 M2_PIPELINE_TARGET_MULTIPLIER = 2.0  # batch_tok_s × multiplier for pipeline target

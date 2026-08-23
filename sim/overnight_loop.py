@@ -22,7 +22,7 @@ RESULTS_DIR = SIM_DIR / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
 # Configuration constants — keep in sync with validate_e2e.py target
-TARGET_TOK_S = 21  # M=1 decode target (DRAM BW bounded; actual ~21.6 tok/s, .0f rounds to 22)
+TARGET_TOK_S = 21  # M=1 decode target floor (DRAM BW bounded; actual cross-validated against E2E output)
 
 LOG_FILE = RESULTS_DIR / "overnight_loop.log"
 SUMMARY_FILE = RESULTS_DIR / "morning_summary.md"
@@ -37,15 +37,24 @@ def log(msg: str):
 
 
 def iter_count() -> int:
-    """Count completed iterations from log.
-    
-    Only counts "=== Iteration N ===" start markers, NOT the "Complete" lines.
-    Each run logs both a start and end marker; counting both would double-count.
+    """Return the highest completed iteration number from the log.
+
+    Uses max iteration number (anchored regex), NOT a substring count. Immune to:
+    - Duplicate start markers (early-dev re-runs of iterations 5, 7)
+    - Post-Analysis markers ("=== Iteration N Post-Analysis ===")
+    - Gaps in iteration numbering
+    The anchored pattern "=== Iteration N ===" excludes both "Complete" and
+    "Post-Analysis" variants naturally (both have extra text before the final "===").
     """
     if not LOG_FILE.exists():
         return 0
+    max_n = 0
     with open(LOG_FILE) as f:
-        return sum(1 for l in f if "=== Iteration" in l and "Complete" not in l)
+        for l in f:
+            m = re.search(r"=== Iteration (\d+) ===$", l)
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+    return max_n
 
 
 def check_model_consistency() -> List[str]:
@@ -136,6 +145,17 @@ def check_model_consistency() -> List[str]:
         for m in _re_hc.finditer(pattern, e2e_code):
             ctx = e2e_code[max(0, m.start()-20):m.end()+20].strip()
             issues.append(f"validate_e2e.py: hardcoded performance constant detected: ...{ctx}...")
+
+    # Check cross-file target sync (pattern: cross-file-target-desync)
+    # overnight_loop.py TARGET_TOK_S and validate_e2e.py M1_TARGET_TOK_S are the SAME
+    # semantic target and MUST match. If they desync, E2E validation and summary use
+    # different thresholds → false pass/fail (historically caused 89+ false failures).
+    m1_target_match = re.search(r'M1_TARGET_TOK_S\s*=\s*(\d+)', e2e_code)
+    if m1_target_match and int(m1_target_match.group(1)) != TARGET_TOK_S:
+        issues.append(
+            f"validate_e2e.py: M1_TARGET_TOK_S={m1_target_match.group(1)} desyncs from "
+            f"overnight_loop.py TARGET_TOK_S={TARGET_TOK_S}"
+        )
 
     # Check subprocess callees (param_sweep files) for hardcoded targets
     # Fix for error pattern #26: consistency-check-coverage-gap
@@ -327,6 +347,23 @@ def fix_issues(issues: List[str]) -> int:
                 f.write(content)
             fixed += 1
             log(f"    Fixed weight_preloaded default in compiler.py")
+        elif "M1_TARGET_TOK_S" in issue and "desyncs" in issue:
+            e2e_path = SIM_DIR / "validate_e2e.py"
+            with open(e2e_path) as f:
+                content = f.read()
+            # Sync validate_e2e.py's M1_TARGET_TOK_S to overnight_loop.py's TARGET_TOK_S
+            # (overnight_loop.py is the loop driver; its TARGET_TOK_S is the source of truth)
+            import re as _re_sync
+            new_content = _re_sync.sub(r'M1_TARGET_TOK_S\s*=\s*\d+',
+                                 f'M1_TARGET_TOK_S = {TARGET_TOK_S}',
+                                 content, count=1)
+            if new_content != content:
+                with open(e2e_path, "w") as f:
+                    f.write(new_content)
+                fixed += 1
+                log(f"    Synced validate_e2e.py M1_TARGET_TOK_S to {TARGET_TOK_S}")
+            else:
+                log("    M1_TARGET_TOK_S sync: no change (pattern not found)")
         elif "broken import" in issue:
             # Extract file path from issue and auto-fix
             import re as _re
@@ -345,11 +382,12 @@ def fix_issues(issues: List[str]) -> int:
                 with open(filepath) as f:
                     content = f.read()
                 if old_prefix in content:
+                    num_replaced = content.count(old_prefix)
                     content = content.replace(old_prefix, new_prefix)
                     with open(filepath, "w") as f:
                         f.write(content)
-                    fixed += 1
-                    log(f"    Fixed broken import in {filepath}: {old_prefix} → {new_prefix}")
+                    fixed += num_replaced
+                    log(f"    Fixed {num_replaced} broken import(s) in {filepath}: {old_prefix} → {new_prefix}")
                 else:
                     log(f"    Pattern not found in {filepath} (may already be fixed)")
             else:
@@ -589,13 +627,14 @@ def check_self() -> List[str]:
         if '"Decode (M=1)"' not in e2e_func and "'Decode (M=1)'" not in e2e_func:
             issues.append("self: e2e parser missing M=1 anchor — may capture wrong tok/s")
 
-    # 4. iter_count double-marker check
+    # 4. iter_count marker robustness check — must use anchored max-number regex
+    #    (excludes Complete/Post-Analysis variants, immune to duplicates/gaps)
     if 'def iter_count' in source:
         ic_start = source.find('def iter_count')
         ic_end = source.find('\ndef ', ic_start + 1)
         ic_func = source[ic_start:ic_end] if ic_end > 0 else source[ic_start:]
-        if '"Complete"' not in ic_func and "'Complete'" not in ic_func:
-            issues.append("self: iter_count() may double-count (missing 'Complete' exclusion)")
+        if '=== Iteration (\\d+) ===$' not in ic_func:
+            issues.append("self: iter_count() should use anchored max-number regex to avoid marker double-count")
 
     return issues
 
