@@ -146,6 +146,13 @@ def check_model_consistency() -> List[str]:
             ctx = e2e_code[max(0, m.start()-20):m.end()+20].strip()
             issues.append(f"validate_e2e.py: hardcoded performance constant detected: ...{ctx}...")
 
+    # Check for stale conclusion strings contradicting architecture (2026-08-24)
+    # M=1 decode is DRAM-bandwidth-bound; any "带宽不是瓶颈" or "tiling 开销占主导"
+    # conclusion for M=1 decode contradicts the DRAM-bound model (77% utilization).
+    for stale in ["带宽不是瓶颈", "tiling 开销占主导"]:
+        if stale in e2e_code:
+            issues.append(f"validate_e2e.py: stale conclusion '{stale}' (M=1 decode is DRAM-bound, not compute/tiling-bound)")
+
     # Check cross-file target sync (pattern: cross-file-target-desync)
     # overnight_loop.py TARGET_TOK_S and validate_e2e.py M1_TARGET_TOK_S are the SAME
     # semantic target and MUST match. If they desync, E2E validation and summary use
