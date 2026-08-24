@@ -1,0 +1,37 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 28 items
+
+sim/tests/test_apb_register_conformance.py::test_peripheral_register_conformance[MXU] PASSED [  3%]
+sim/tests/test_apb_register_conformance.py::test_peripheral_register_conformance[SFU] PASSED [  7%]
+sim/tests/test_apb_register_conformance.py::test_peripheral_register_conformance[VECTOR] PASSED [ 10%]
+sim/tests/test_apb_register_conformance.py::test_peripheral_register_conformance[DMA] PASSED [ 14%]
+sim/tests/test_apb_register_conformance.py::test_peripheral_register_conformance[PCIe] PASSED [ 17%]
+sim/tests/test_apb_register_conformance.py::test_peripheral_register_conformance[DOORBELL] PASSED [ 21%]
+sim/tests/test_apb_register_conformance.py::test_peripheral_register_conformance[INTC] PASSED [ 25%]
+sim/tests/test_apb_register_conformance.py::test_peripheral_register_conformance[PCIE_DMA] PASSED [ 28%]
+sim/tests/test_apb_register_conformance.py::test_ctrl_happy_write_readback[MXU] PASSED [ 32%]
+sim/tests/test_apb_register_conformance.py::test_ctrl_happy_write_readback[SFU] PASSED [ 35%]
+sim/tests/test_apb_register_conformance.py::test_ctrl_happy_write_readback[VECTOR] PASSED [ 39%]
+sim/tests/test_apb_register_conformance.py::test_ctrl_happy_write_readback[DMA] PASSED [ 42%]
+sim/tests/test_apb_register_conformance.py::test_ctrl_happy_write_readback[PCIE_DMA] PASSED [ 46%]
+sim/tests/test_apb_register_conformance.py::test_status_readonly_write_ignored[MXU] PASSED [ 50%]
+sim/tests/test_apb_register_conformance.py::test_status_readonly_write_ignored[SFU] PASSED [ 53%]
+sim/tests/test_apb_register_conformance.py::test_status_readonly_write_ignored[VECTOR] PASSED [ 57%]
+sim/tests/test_apb_register_conformance.py::test_status_readonly_write_ignored[DMA] PASSED [ 60%]
+sim/tests/test_apb_register_conformance.py::test_status_readonly_write_ignored[PCIE_DMA] PASSED [ 64%]
+sim/tests/test_apb_register_conformance.py::test_factory_fields_match_regmap[MXU] PASSED [ 67%]
+sim/tests/test_apb_register_conformance.py::test_factory_fields_match_regmap[SFU] PASSED [ 71%]
+sim/tests/test_apb_register_conformance.py::test_factory_fields_match_regmap[VECTOR] PASSED [ 75%]
+sim/tests/test_apb_register_conformance.py::test_factory_fields_match_regmap[DMA] PASSED [ 78%]
+sim/tests/test_apb_register_conformance.py::test_factory_fields_match_regmap[PCIe] PASSED [ 82%]
+sim/tests/test_apb_register_conformance.py::test_factory_fields_match_regmap[DOORBELL] PASSED [ 85%]
+sim/tests/test_apb_register_conformance.py::test_factory_fields_match_regmap[INTC] PASSED [ 89%]
+sim/tests/test_apb_register_conformance.py::test_factory_fields_match_regmap[PCIE_DMA] PASSED [ 92%]
+sim/tests/test_apb_register_conformance.py::test_intc_ack_w1c_clears_only_written_bits PASSED [ 96%]
+sim/tests/test_apb_register_conformance.py::test_all_four_access_modes_exercised PASSED [100%]
+
+============================== 28 passed in 0.14s ==============================
