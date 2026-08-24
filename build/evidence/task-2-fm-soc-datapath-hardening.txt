@@ -1,0 +1,67 @@
+==============================================================================
+Task 2 - fm-soc-datapath-hardening: INTC ENABLE/THRESHOLD gating (SOC-17/FW-10)
+Date: 2026-08-24 14:24:52
+Changes: sim/mmio_bridge.py (_set_irq only) + sim/tests/test_intc_gating.py (new)
+==============================================================================
+
+── PHASE 1: Baseline characterization (unchanged _set_irq) ──────────────────
+Command: PYTHONPATH=sim python -m pytest sim/tests/test_intc_gating.py -v
+Result: 3/3 baseline tests PASS - pins old unconditional notify behaviour
+
+── PHASE 1b: Pre-change regression of INTC-adjacent files ───────────────────
+Command: PYTHONPATH=sim python -m pytest test_soc_fm.py test_soc_boundary.py
+         test_intc_keyerror_fix.py test_mmio_bridge.py
+         test_func_model_signoff_v3_{intc,integration,doorbell}.py -q
+Result: 95 passed, 0 failed
+
+── PHASE 2: Implementation ───────────────────────────────────────────────────
+sim/mmio_bridge.py _set_irq() now evaluates:
+  cpu_irq = |(PENDING & ENABLE) and popcount(PENDING & ENABLE) >= THRESHOLD
+ENABLE defaults to 0x1FF (all 9 FM sources) when never programmed (legacy
+open-default contract preserved); PENDING always set regardless of ENABLE.
+
+── PHASE 3: Acceptance command 1 ─────────────────────────────────────────────
+Command: PYTHONPATH=sim python -m pytest sim/tests/test_intc_gating.py -v
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 10 items
+
+sim/tests/test_intc_gating.py::test_default_state_notifies PASSED        [ 10%]
+sim/tests/test_intc_gating.py::test_single_source_irq_asserts_cpu_irq PASSED [ 20%]
+sim/tests/test_intc_gating.py::test_enable_mask_blocks_disabled_source PASSED [ 30%]
+sim/tests/test_intc_gating.py::test_threshold_gates_below_popcount PASSED [ 40%]
+sim/tests/test_intc_gating.py::test_multi_source_concurrent_notifies PASSED [ 50%]
+sim/tests/test_intc_gating.py::test_multi_source_threshold_waits_for_count PASSED [ 60%]
+sim/tests/test_intc_gating.py::test_ack_clears_pending_and_irq_can_reassert PASSED [ 70%]
+sim/tests/test_intc_gating.py::test_wfi_wake_on_gated_irq PASSED         [ 80%]
+sim/tests/test_intc_gating.py::test_wfi_no_wake_when_masked PASSED       [ 90%]
+sim/tests/test_intc_gating.py::test_failure_enable_zero_blocks_cpu_irq_regardless_of_pending PASSED [100%]
+
+============================== 10 passed in 0.08s ==============================
+
+── PHASE 4: Acceptance command 2 ─────────────────────────────────────────────
+Command: PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py -q
+....................................................                     [100%]
+=============================== warnings summary ===============================
+sim/tests/test_soc_fm.py: 54 warnings
+  /home/prj/zhengs/caduceuscore/CaduceusCore/sim/func_model.py:96: DeprecationWarning: NPUFirmware is deprecated; use Spike + real firmware ELF for golden reference verification. NPUFirmware remains available for fast smoke tests.
+    return NPUFirmware(sim_modules=sim_modules, bridge=bridge,
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+52 passed, 54 warnings in 55.56s
+
+── PHASE 5: INTC-adjacent regression pre vs post change ─────────────────────
+pre-change:  95 passed, 0 failed
+post-change: 95 passed, 0 failed  → 0 new failures
+
+── PHASE 6: Full sim/tests suite (--continue-on-collection-errors) ──────────
+Result: 19 failed, 1482 passed, 1 skipped, 13 errors (matches known legacy
+baseline; 0 INTC/interrupt/doorbell failures; 13 collection errors are
+pre-existing cocotb-missing environments)
+
+── VERDICT ───────────────────────────────────────────────────────────────────
+PASS: test_intc_gating.py 10/10 (>=6 required); test_soc_fm.py 52 passed,
+0 new failures; full suite shows 0 new failures.

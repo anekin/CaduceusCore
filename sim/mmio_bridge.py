@@ -762,11 +762,25 @@ class MMIOBridge:
         return addr
 
     def _set_irq(self, module_bit: int):
+        """Set INTC PENDING bit; raise cpu_irq only when the enabled-pending
+        popcount meets THRESHOLD (mirrors rtl/intc/intc_top.v):
+
+            cpu_irq = |(PENDING & ENABLE) and popcount(PENDING & ENABLE) >= THRESHOLD
+
+        ENABLE defaults to 0x1FF (all 9 FM sources) when never programmed so
+        legacy interrupt flows keep working; once ENABLE is written, masked
+        sources can no longer raise cpu_irq.  PENDING is always set — ENABLE
+        gates the cpu_irq assertion, not the pending register.
+        """
         base = INTC.BASE
         self._status[base + INTC.PENDING] = \
             self._status.get(base + INTC.PENDING, 0) | (1 << module_bit)
-        if self.irq_notify_callback:
-            self.irq_notify_callback()
+        enable = self._status.get(base + INTC.ENABLE, 0x1FF)
+        threshold = self._status.get(base + INTC.THRESHOLD, 0)
+        enabled_pending = self._status.get(base + INTC.PENDING, 0) & enable
+        if enabled_pending != 0 and bin(enabled_pending).count('1') >= threshold:
+            if self.irq_notify_callback:
+                self.irq_notify_callback()
 
     @property
     def trace(self) -> list:
