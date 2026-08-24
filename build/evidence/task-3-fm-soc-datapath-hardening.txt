@@ -1,0 +1,25 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 5 items
+
+sim/tests/test_crossbar_arbitration.py::test_round_robin_aw_fairness_three_masters PASSED [ 20%]
+sim/tests/test_crossbar_arbitration.py::test_round_robin_ar_fairness_dram PASSED [ 40%]
+sim/tests/test_crossbar_arbitration.py::test_decerr_unmapped_address_rejected_without_grant PASSED [ 60%]
+sim/tests/test_crossbar_arbitration.py::test_axi_id_composition_master_id_shift_txn_id PASSED [ 80%]
+sim/tests/test_crossbar_arbitration.py::test_failure_injection_tampered_grant_history PASSED [100%]
+
+=============================== warnings summary ===============================
+sim/tests/test_crossbar_arbitration.py::test_round_robin_aw_fairness_three_masters
+sim/tests/test_crossbar_arbitration.py::test_round_robin_ar_fairness_dram
+sim/tests/test_crossbar_arbitration.py::test_decerr_unmapped_address_rejected_without_grant
+sim/tests/test_crossbar_arbitration.py::test_axi_id_composition_master_id_shift_txn_id
+sim/tests/test_crossbar_arbitration.py::test_failure_injection_tampered_grant_history
+  /home/prj/zhengs/caduceuscore/CaduceusCore/sim/func_model.py:96: DeprecationWarning: NPUFirmware is deprecated; use Spike + real firmware ELF for golden reference verification. NPUFirmware remains available for fast smoke tests.
+    return NPUFirmware(sim_modules=sim_modules, bridge=bridge,
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 5 passed, 5 warnings in 0.30s =========================
+EXIT_CODE=0
