@@ -1,0 +1,62 @@
+Task 1 - fm-soc-datapath-hardening: PCIe TLP complete chain FM verification guard (SOC-13)
+=================================================================
+Timestamp       : 2026-08-24T06:03:39Z
+Commit          : test(sim): PCIe TLP complete chain FM verification guard
+                  (this evidence file is part of that commit; resolve the hash
+                   via: git log --oneline -1 -- build/evidence/task-1-fm-soc-datapath-hardening.txt)
+Files created   : sim/tests/test_pcie_tlp_chain.py
+
+Acceptance command (exact):
+  PYTHONPATH=sim python -m pytest sim/tests/test_pcie_tlp_chain.py -v
+
+Output (full):
+  ============================= test session starts ==============================
+  platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+  cachedir: .pytest_cache
+  rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+  plugins: anyio-4.13.0
+  collecting ... collected 10 items
+
+  sim/tests/test_pcie_tlp_chain.py::test_tlp_write_read_4kb_roundtrip_bit_exact PASSED [ 10%]
+  sim/tests/test_pcie_tlp_chain.py::test_tlp_4kb_split_by_mps_256 PASSED   [ 20%]
+  sim/tests/test_pcie_tlp_chain.py::test_tlp_unaligned_payload_padding PASSED [ 30%]
+  sim/tests/test_pcie_tlp_chain.py::test_bar_routing_sram_lands_in_sram PASSED [ 40%]
+  sim/tests/test_pcie_tlp_chain.py::test_bar_routing_dram_lands_in_dram PASSED [ 50%]
+  sim/tests/test_pcie_tlp_chain.py::test_bar_isolation_sram_write_does_not_affect_dram PASSED [ 60%]
+  sim/tests/test_pcie_tlp_chain.py::test_bar_isolation_dram_write_does_not_affect_sram PASSED [ 70%]
+  sim/tests/test_pcie_tlp_chain.py::test_failure_injection_tampered_payload_detected PASSED [ 80%]
+  sim/tests/test_pcie_tlp_chain.py::test_out_of_bar_address_rejected PASSED [ 90%]
+  sim/tests/test_pcie_tlp_chain.py::test_msi_send_sets_state PASSED        [100%]
+
+  ============================== warnings summary ===============================
+  sim/tests/test_pcie_tlp_chain.py: 10 warnings
+    DeprecationWarning: NPUFirmware is deprecated; use Spike + real firmware ELF
+    for golden reference verification. NPUFirmware remains available for fast smoke tests.
+  ======================= 10 passed, 10 warnings in 0.74s =======================
+  PYTEST_EXIT=0
+
+QA scenarios (exact commands):
+  happy   : PYTHONPATH=sim python -m pytest sim/tests/test_pcie_tlp_chain.py::test_tlp_write_read_4kb_roundtrip_bit_exact -v
+            -> PASSED (exit 0)
+  failure : PYTHONPATH=sim python -c "
+            from func_model import FuncModel
+            m = FuncModel(); a = 0x8000_7000
+            p = bytes(range(256))
+            m.pcie.tlp_write(a, p)
+            m.dram[a - 0x8000_0000 + 42] ^= 0xFF
+            r = m.pcie.tlp_read(a, 256)
+            assert r != p
+            print('TAMPER DETECTED: readback differs at byte 42:', hex(r[42]))
+            "
+            -> TAMPER DETECTED: readback differs at byte 42: 0xd5 (exit 0;
+               the guard asserts the mismatch exists, proving tamper detection is real)
+
+Static checks:
+  PYTHONPATH=sim python -m py_compile sim/tests/test_pcie_tlp_chain.py  -> OK
+  pyflakes sim/tests/test_pcie_tlp_chain.py                            -> CLEAN
+
+Model/scope checks:
+  git diff --stat sim/models/pcie.py                                   -> (empty; model untouched)
+  git diff --stat rtl/                                                 -> (empty; zero RTL changes)
+
+Result: PASS
