@@ -1,0 +1,14 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 5 items
+
+sim/tests/test_firmware_boot_sequence.py::test_boot_sets_pc_and_sp_and_loads_hex PASSED [ 20%]
+sim/tests/test_firmware_boot_sequence.py::test_step_runs_from_reset_into_firmware_main PASSED [ 40%]
+sim/tests/test_firmware_boot_sequence.py::test_boot_doorbell_first_command_completes PASSED [ 60%]
+sim/tests/test_firmware_boot_sequence.py::test_corrupt_boot_rom_step_does_not_advance PASSED [ 80%]
+sim/tests/test_firmware_boot_sequence.py::test_boot_rom_isolation_dmem_writes PASSED [100%]
+
+============================== 5 passed in 0.38s ===============================
