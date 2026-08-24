@@ -1,0 +1,50 @@
+Task 5 - fm-soc-datapath-hardening: Ibex shared address space cross-engine FM guard (SOC-16)
+=================================================================
+Timestamp       : 2026-08-24T00:00:00Z
+Files created   : sim/tests/test_ibex_shared_address_space.py
+
+Acceptance command (exact):
+  PYTHONPATH=sim python -m pytest sim/tests/test_ibex_shared_address_space.py -v
+
+Output (full):
+  ============================= test session starts ==============================
+  platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+  cachedir: .pytest_cache
+  rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+  plugins: anyio-4.13.0
+  collecting ... collected 5 items
+
+  sim/tests/test_ibex_shared_address_space.py::test_ibex_sram_write_mxu_read_consistent PASSED [ 20%]
+  sim/tests/test_ibex_shared_address_space.py::test_ibex_dram_write_mxu_read_consistent PASSED [ 40%]
+  sim/tests/test_ibex_shared_address_space.py::test_dmem_isolation_from_sram_dram PASSED [ 60%]
+  sim/tests/test_ibex_shared_address_space.py::test_boot_rom_isolation PASSED [ 80%]
+  sim/tests/test_ibex_shared_address_space.py::test_failure_injection_dmem_write_not_visible_in_sram PASSED [100%]
+
+  =============================== warnings summary ===============================
+  sim/tests/test_ibex_shared_address_space.py::test_ibex_sram_write_mxu_read_consistent
+  sim/tests/test_ibex_shared_address_space.py::test_ibex_dram_write_mxu_read_consistent
+  sim/tests/test_ibex_shared_address_space.py::test_dmem_isolation_from_sram_dram
+  sim/tests/test_ibex_shared_address_space.py::test_boot_rom_isolation
+  sim/tests/test_ibex_shared_address_space.py::test_failure_injection_dmem_write_not_visible_in_sram
+    /home/prj/zhengs/caduceuscore/CaduceusCore/sim/func_model.py:96: DeprecationWarning: NPUFirmware is deprecated; use Spike + real firmware ELF for golden reference verification. NPUFirmware remains available for fast smoke tests.
+      return NPUFirmware(sim_modules=sim_modules, bridge=bridge,
+
+  -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+  ======================== 5 passed, 5 warnings in 0.33s =========================
+  PYTEST_EXIT=0
+
+QA scenarios:
+  happy   : Ibex writes SRAM[0x100] -> MXU reads SRAM[0x100] -> values match
+            -> test_ibex_sram_write_mxu_read_consistent PASSED (also verifies MXU->Ibex reverse direction)
+  failure : write DMEM -> read SRAM -> values differ
+            -> test_failure_injection_dmem_write_not_visible_in_sram PASSED (SRAM and MXU port both blind to the DMEM value)
+
+Regression check (adjacent existing Ibex tests unchanged):
+  PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py::test_ibex_memory_access \
+    sim/tests/test_soc_fm.py::test_boot_rom_loading \
+    sim/tests/test_soc_fm.py::test_riscv_dmem_isolation \
+    sim/tests/test_soc_fm.py::test_riscv_mmio_routing -q  -> 4 passed
+
+Model files modified: NONE (sim/miniv.py _mem_read/_mem_write untouched, per plan)
+
+Result: PASS
