@@ -198,22 +198,22 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
 
 ## Final verification wave
 > Runs in parallel after ALL todos. ALL must APPROVE. Surface results and wait for the user's explicit okay before declaring complete.
-- [ ] F1. Plan compliance audit
+- [x] F1. Plan compliance audit
   What: 逐条核对 14 个 todo 的 evidence 文件存在、acceptance 命令可复跑通过。
   Command: 需更新 `scripts/fm_hardening_f1_audit.sh` 使其接受计划名参数（`FM_PLAN_NAME` 环境变量，默认 `fm-hardening-phase10`），或新增 `scripts/fm_soc_datapath_f1_audit.sh` 检查 `build/evidence/task-{1..14}-fm-soc-datapath-hardening.txt` 存在且终态 PASS；重跑各 todo 的 pytest acceptance 命令并比对退出码。不得无条件 exit 0。
   Pass: 全部 evidence 存在、14/14 acceptance 复跑通过。
 
-- [ ] F2. Code quality review
+- [x] F2. Code quality review
   What: 无 TODO/FIXME/HACK 残留、无新增 pytest 失败、`bash -n` 通过。
   Command: `bash scripts/fm_hardening_f2_code_quality.sh`
   Pass: 0 残留、0 新增失败、所有 shell 语法通过。
 
-- [ ] F3. Real manual QA
+- [x] F3. Real manual QA
   What: 全量 pytest + `make -C firmware` + 反向依赖门禁 dry-run + 28 层 FM gate + MobileNetV3 FM chain spot check。
   Command: `bash scripts/fm_hardening_f3_manual_qa.sh`
   Pass: 五项全过（Spike smoke 已知问题标 known-issue）。
 
-- [ ] F4. Scope fidelity
+- [x] F4. Scope fidelity
   What: `git diff` 只含 sim/tests/ 新增、sim/mmio_bridge.py INTC 门控、scripts/、docs/、.omo/；`rtl/` 零改动；冻结文件零改动。
   Command: `bash scripts/fm_hardening_f4_scope_gate.sh`
   Pass: 无越界文件、冻结文件零改动。
