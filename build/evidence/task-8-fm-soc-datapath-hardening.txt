@@ -1,0 +1,22 @@
+===== task-8-fm-soc-datapath-hardening run: 2026-08-24T06:54:37Z =====
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 3 items
+
+sim/tests/test_spike_ibex_ring_alignment.py::test_happy_both_paths_drain_208_with_identical_head_progression PASSED [ 33%]
+sim/tests/test_spike_ibex_ring_alignment.py::test_failure_injection_ring_size_16_wraps_against_spike_1024 PASSED [ 66%]
+sim/tests/test_spike_ibex_ring_alignment.py::test_completion_status_and_host_head_mirror_alignment PASSED [100%]
+
+=============================== warnings summary ===============================
+sim/tests/test_spike_ibex_ring_alignment.py::test_happy_both_paths_drain_208_with_identical_head_progression
+sim/tests/test_spike_ibex_ring_alignment.py::test_happy_both_paths_drain_208_with_identical_head_progression
+sim/tests/test_spike_ibex_ring_alignment.py::test_failure_injection_ring_size_16_wraps_against_spike_1024
+  /home/prj/zhengs/caduceuscore/CaduceusCore/sim/func_model.py:96: DeprecationWarning: NPUFirmware is deprecated; use Spike + real firmware ELF for golden reference verification. NPUFirmware remains available for fast smoke tests.
+    return NPUFirmware(sim_modules=sim_modules, bridge=bridge,
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 3 passed, 3 warnings in 3.28s =========================
+EXIT_CODE=0
