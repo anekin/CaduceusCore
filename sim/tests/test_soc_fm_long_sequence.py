@@ -61,9 +61,9 @@ _BASELINE_LAYERS = 3        # baseline characterization run length
 _CORRUPT_LAYER = 5          # 0-based layer whose op14 VMUL descriptor address is corrupted
 _CORRUPT_OP_IDX = 14        # VMUL gate*up
 
-_DESC_BASE = 0x8060_0000    # descriptor pool: above all block regions, below scratch/results
-_SCRATCH_MMUL_OUT = 0x8070_0000   # ring-MMUL FP32 output scratch (not part of layer data flow)
-_SCRATCH_SCALE = 0x8070_4000      # ones-scale scratch for ring MMUL commands
+_DESC_BASE = 0x8071_0000    # descriptor pool: right after block 27, below scratch/results
+_SCRATCH_MMUL_OUT = 0x8072_0000   # ring-MMUL FP32 output scratch (not part of layer data flow)
+_SCRATCH_SCALE = 0x8072_4000      # ones-scale scratch for ring MMUL commands
 _ACT_BASE = 0x8080_0000           # DRAM window end (results start here)
 
 _ELEMS_FINAL = 2560         # final per-layer FP16 vector length (fixture convention)
@@ -161,14 +161,26 @@ def _run_ring_layers(ctx: dict, n_layers: int,
 
     # And from every per-layer block region (the BUG-RTL-SOC-008 layout class:
     # a descriptor pool inside live data regions silently corrupts op inputs).
+    # Check ALL 28 fixture block regions (not just the scheduled layers): the
+    # desc pool and scratch must be clear of the full 7 MB block span so the
+    # 28-layer gate (Todo 11) cannot collide at any block.
     desc_end = _DESC_BASE + _expected_command_count(n_layers) * 64
-    for blk in range(n_layers):
+    scratch_end = _SCRATCH_MMUL_OUT + 0x10000
+    for blk in range(tsf._CHAIN_NUM_BLOCKS):
         block_base = tsf._CHAIN_BLOCK_BASE + blk * tsf._CHAIN_BLOCK_STRIDE
         block_end = block_base + tsf._CHAIN_BLOCK_STRIDE
         assert desc_end <= block_base or _DESC_BASE >= block_end, (
             f"descriptor pool [0x{_DESC_BASE:08x}, 0x{desc_end:08x}) overlaps "
             f"block {blk} [0x{block_base:08x}, 0x{block_end:08x})"
         )
+        assert scratch_end <= block_base or _SCRATCH_MMUL_OUT >= block_end, (
+            f"scratch [0x{_SCRATCH_MMUL_OUT:08x}, 0x{scratch_end:08x}) overlaps "
+            f"block {blk} [0x{block_base:08x}, 0x{block_end:08x})"
+        )
+    assert _SCRATCH_MMUL_OUT >= desc_end, (
+        f"scratch [0x{_SCRATCH_MMUL_OUT:08x}, ...) overlaps descriptor pool "
+        f"[0x{_DESC_BASE:08x}, 0x{desc_end:08x})"
+    )
 
     model = FuncModel(dram_mb=256)
     ring_size = model.firmware.ring_size

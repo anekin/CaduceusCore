@@ -1,0 +1,65 @@
+=== Task 10: 28-layer DRAM layout relocation (E2E-04 前置) ===
+
+--- Command 1: acceptance layout check ---
+$ PYTHONPATH=sim python -c "from sim.tests.test_soc_fm_long_sequence import _DESC_BASE, _SCRATCH_MMUL_OUT; from sim.tests.test_soc_fm import _CHAIN_BLOCK_BASE, _CHAIN_BLOCK_STRIDE; assert _DESC_BASE >= _CHAIN_BLOCK_BASE + 28*_CHAIN_BLOCK_STRIDE; assert _DESC_BASE + 531*64 < 0x80800000; assert _SCRATCH_MMUL_OUT + 0x10000 < 0x80800000; assert _SCRATCH_MMUL_OUT >= _DESC_BASE + 531*64; print('LAYOUT OK')"
+LAYOUT OK
+exit_code=0
+
+--- Command 2: PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm_long_sequence.py -v ---
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 2 items
+
+sim/tests/test_soc_fm_long_sequence.py::test_scaled_chain_baseline_pinned PASSED [ 50%]
+sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset PASSED [100%]
+
+=============================== warnings summary ===============================
+sim/tests/test_soc_fm_long_sequence.py::test_scaled_chain_baseline_pinned
+sim/tests/test_soc_fm_long_sequence.py::test_scaled_chain_baseline_pinned
+sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset
+sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset
+sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset
+  /home/prj/zhengs/caduceuscore/CaduceusCore/sim/func_model.py:96: DeprecationWarning: NPUFirmware is deprecated; use Spike + real firmware ELF for golden reference verification. NPUFirmware remains available for fast smoke tests.
+    return NPUFirmware(sim_modules=sim_modules, bridge=bridge,
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 2 passed, 5 warnings in 32.73s ========================
+exit_code=0
+
+--- Command 3: failure-injection sanity (old layout must trip the overlap guard) ---
+$ PYTHONPATH=sim python -c "
+from sim.tests import test_soc_fm as tsf
+blk = 23
+block_base = tsf._CHAIN_BLOCK_BASE + blk * tsf._CHAIN_BLOCK_STRIDE
+block_end = block_base + tsf._CHAIN_BLOCK_STRIDE
+old_desc = 0x8060_0000
+old_desc_end = old_desc + 208 * 64
+print(f'old desc pool:  0x{old_desc:08x}-0x{old_desc_end:08x}')
+print(f'block {blk}:        0x{block_base:08x}-0x{block_end:08x}')
+overlap = not (old_desc_end <= block_base or old_desc >= block_end)
+print('old-layout overlap with block 23:', overlap)
+assert overlap
+new_desc = 0x8071_0000
+new_desc_end = new_desc + 531 * 64
+overlap_new = any(not (new_desc_end <= tsf._CHAIN_BLOCK_BASE + b*tsf._CHAIN_BLOCK_STRIDE or new_desc >= tsf._CHAIN_BLOCK_BASE + (b+1)*tsf._CHAIN_BLOCK_STRIDE) for b in range(28))
+assert not overlap_new
+print('new layout clear of all 28 blocks:', not overlap_new)
+print('GUARD BITES OK')
+"
+old desc pool:  0x80600000-0x80603400
+block 23:        0x805d0000-0x80610000
+old-layout overlap with block 23: True
+new layout clear of all 28 blocks: True
+GUARD BITES OK
+exit_code=0
+
+--- Layout summary (post-change) ---
+  _DESC_BASE        = 0x80710000 (block 27 ends at 0x80710000)
+  desc pool end     = 0x807184C0 (531 x 64 B)
+  _SCRATCH_MMUL_OUT = 0x80720000
+  _SCRATCH_SCALE    = 0x80724000
+  scratch end       = 0x80730000 (< 0x80800000 results window)
+PASS

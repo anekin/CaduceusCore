@@ -141,7 +141,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   QA scenarios: happy — JSON 与 address_space/command_ring 数值一致；failure — 篡改 JSON RING_ENTRIES=512 → 比对失败。Evidence `build/evidence/task-9-fm-soc-datapath-hardening.txt`
   Commit: Y | feat(scripts): firmware memory contract JSON generation + verification
 
-- [ ] 10. 28 层 DRAM 布局重排（E2E-04 前置）
+- [x] 10. 28 层 DRAM 布局重排（E2E-04 前置）
   What to do / Must NOT do: 修改 `sim/tests/test_soc_fm_long_sequence.py` 的 DRAM 布局常量。当前布局在 28 层时碰撞分析如下：
   - block 23 范围 `0x805D_0000–0x8061_0000`，`_DESC_BASE=0x8060_0000` + 531×64=`0x8060_84C0` 落在 block 23 内部 → **descriptor pool 与 block 23 碰撞**。
   - block 27 范围 `0x806D_0000–0x8071_0000`，`_SCRATCH_MMUL_OUT=0x8070_0000` 落在 block 27 内部 → **scratch 与 block 27 碰撞**。

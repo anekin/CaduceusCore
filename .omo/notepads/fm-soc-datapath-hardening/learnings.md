@@ -1,5 +1,41 @@
 # fm-soc-datapath-hardening — Learnings
 
+## Todo 10: 28 层 DRAM 布局重排（E2E-04 前置）
+
+### Findings (2026-08-24)
+- Modified ONLY test-local constants in `sim/tests/test_soc_fm_long_sequence.py`:
+  `_DESC_BASE` 0x8060_0000 → **0x8071_0000** (exactly block 27 end =
+  `_CHAIN_BLOCK_BASE + 28×_CHAIN_BLOCK_STRIDE`), `_SCRATCH_MMUL_OUT`
+  0x8070_0000 → **0x8072_0000**, `_SCRATCH_SCALE` → 0x8072_4000.
+  `sim/address_space.py` and `sim/command_ring.py` untouched — the global
+  `assert_desc_clear_of_used_regions` signature is not extended; instead the
+  test-local block-overlap loop (the same guard role, P0/P1/P2P3-scoped) now
+  iterates `tsf._CHAIN_NUM_BLOCKS` (28) instead of `range(n_layers)` (11), and
+  asserts three disjointness pairs: desc-pool vs block, scratch vs block, and
+  scratch vs desc pool. Scratch size pinned at 0x10000 (matches the acceptance
+  math; the actual MMUL scratch usage is M×N×4 ≤ 0x4000 + scale ≤ 0x100).
+- **Why 28 blocks and not `n_layers`**: with `_NUM_LAYERS=11` the old loop only
+  covered blocks 0–10, which is why the old `_DESC_BASE=0x8060_0000` never
+  tripped — it collides with block **23** (0x805D_0000–0x8061_0000), a region
+  the 11-layer test never touches. Covering all 28 fixture blocks makes the
+  guard bite at the old layout today (proved by failure-injection sanity: old
+  desc pool overlaps block 23 → assert fires) and keeps Todo 11's 28-layer gate
+  safe without further layout work.
+- Acceptance command prints `LAYOUT OK`, exit 0:
+  `_DESC_BASE` = 0x8071_0000 ≥ block0+28×stride; desc pool end 0x8071_84C0
+  (531×64) < 0x8080_0000; scratch end 0x8073_0000 < 0x8080_0000;
+  `_SCRATCH_MMUL_OUT` ≥ desc pool end.
+- `test_soc_fm_long_sequence.py -v` → **2 passed in 32.73s, exit 0**
+  (baseline fingerprints and the 208-command persistent-offset gate unchanged —
+  layout relocation is behavior-neutral at 11 layers). 5 DeprecationWarnings
+  (NPUFirmware) benign, consistent with Todos 1–9.
+- **Todo 11 readiness**: block 27's weights live at 0x806D_0000 and the desc
+  pool starts at 0x8071_0000, so no descriptor can be clobbered by any block's
+  weight/activation writes; results stay at 0x8080_0000. The only remaining
+  Todo 11 changes are `_NUM_LAYERS` 11→28 and the ring-wrap assertion
+  (531 % 16 = 3, not 0). Evidence in
+  `build/evidence/task-10-fm-soc-datapath-hardening.txt`.
+
 ## Todo 7: 固件 boot 序列 FM 验证守卫（SOC-18）
 
 ### Findings (2026-08-24)
