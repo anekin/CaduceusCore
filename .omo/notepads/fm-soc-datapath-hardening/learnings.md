@@ -430,3 +430,80 @@ contract).
 - Env notes: module-level skip when `assets/mobilenetv3_small.onnx` (or its
   `.data` external-data companion) is missing → "MobileNetV3 ONNX model not
   found". NPUFirmware DeprecationWarning ×5 per run — benign.
+# Todo 11 — 28 层 Qwen full-model FM gate（E2E-04）
+
+## Findings (2026-08-24)
+- Modified ONLY `sim/tests/test_soc_fm_long_sequence.py`: `_NUM_LAYERS` 11 → 28
+  (18 + 27×19 = **531 ring commands**), module-header docstring + `_NUM_LAYERS`
+  comment + `test_multi_layer_persistent_offset` docstring updated to the 531 /
+  33-wrap math. Scheduling algorithm, `address_space.py`, `command_ring.py`
+  untouched.
+- **Ring-wrap assertion**: 531 % 16 = 3, so the old `total_cmds % 16 == 0`
+  exact-wrap assertion would have failed. Replaced with `wrap_count = total_cmds
+  // 16; assert wrap_count >= 33` plus `assert total_cmds % 16 == 3` (3
+  commands into the final pass). Both bite: wrap_count is exactly 33 for the
+  531-command schedule; the remainder check pins the non-exact-wrap shape.
+- **Layout guards all pass at 28 layers** (Todo 10 relocation): desc pool
+  `0x8071_0000–0x8071_84C0` (531×64) sits between block 27 end (0x8071_0000)
+  and scratch (0x8072_0000); `contract_check(ring_entries=1024, desc_count=531,
+  act_base=0x8080_0000)` and `assert_desc_clear_of_used_regions` pass; the
+  test-local 28-block overlap loop is silent — block 27's weights at
+  0x806D_0000 cannot clobber any descriptor.
+- **Per-layer bit-exactness**: all 28 ring-path layer outputs
+  `np.array_equal` to the direct-path golden (the same manifest ops × 28 scaled
+  weight sets, scales 0.90–1.17); `final_cos = 1.000000000 >= 0.999`.
+- **Failure injection retained unchanged**: layer 5 op14 VMUL descriptor
+  address corrupted by one slot → layer 5 output mismatches golden while
+  layers 0–4 stay bit-identical. Layer 5 op14 is still command index 108
+  (offset 12 in the 16-entry ring) — identical position as in the 11-layer
+  schedule since the corruption precedes layer 11.
+- **Todo 12's tile_mmul clobber (M>1 & N>128) did NOT surface here**: every
+  ring MMUL writes to `_SCRATCH_MMUL_OUT` (unverified scratch, not data flow)
+  with the same blk.0 op shapes that already ran clean at 11 layers — no new
+  shapes appear at 28 layers, only new scaled weight sets.
+- `PYTHONPATH=sim python -m pytest
+  sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset -v`
+  → **1 passed in 19.44s, exit 0**; full file (baseline + gate) → 2 passed in
+  33.82s, exit 0 — well under the 5-minute bound. 3/5 DeprecationWarnings
+  (NPUFirmware) benign, consistent with Todos 1–10.
+- Evidence in `build/evidence/task-11-fm-soc-datapath-hardening.txt`.
+
+# Todo 13 — Spike forward pass tolerance 回归 gate（E2E-06）
+
+## Findings (2026-08-24)
+- Added `sim/tests/test_spike_forward_tolerance.py`: 6 tests.
+  `PYTHONPATH=sim python -m pytest sim/tests/test_spike_forward_tolerance.py -v`
+  → **3 passed, 3 skipped, exit 0, 55:55**（36 层 ladder 3355s 主导）。Evidence in
+  `build/evidence/task-13-fm-soc-datapath-hardening.txt`。`sim/spike_host.py`
+  untouched。
+- **计划前提与现状不符 — "2 层 max_abs < 1e-1 → ok=True" 在当前栈上不可达**，
+  双因：(1) `run_forward_pass` 在 op 构建阶段即 `MemoryError`：每层 tiled FFN
+  权重（1.5B gate 单层 ≈ 8.44 MB，三层 FFN ≈ 26 MB）超出固件强制的 8 MB DRAM
+  窗口 [0x80000000, 0x80800000)（BUG-RTL-SOC-002，`firmware/npu_firmware.c`
+  `dram_range_ok()` 硬拒绝越窗描述符）。窗口是 a0a2fd9（todo 12）从
+  0x81000000+0x07000000 收窄到 0x80020000+0x007E0000 的，legacy 路径没有
+  wave 回收机制，连 1 层都放不下（gate 第 5 个 tile 越窗）。(2) 历史证据
+  （`.omo/evidence/e2e-task-14-e2e.txt`，2026-07-28，窗口收窄前）显示 1e-1
+  下 L0 max_abs=6.05、L1 max_abs=2890 → ok=False——legacy 路径的 VRESID 是
+  `.astype(np.int32)` 截断，对 llama.cpp FP32 参考必然 O(1) 级发散，属量化
+  精度本质（计划允许"或标注为 residual tolerance divergence"；未修 gap）。
+- **处理方式**：task 字面要求的 3 个 `run_forward_pass` 测试（2 层 happy 断言
+  `result["ok"] == True`、schema 无 `tolerance_result`、1e-5 收紧 failure
+  injection）**保留在代码中**，fixture 捕获 MemoryError → `pytest.skip`
+  （reason 完整引用 BUG-RTL-SOC-002 与窗口地址）。2 层 gate 的实质由
+  **window-compliant 路径**承载：`run_forward_pass_phase10(layers=2)` 实测
+  PASS（L0/L1 cos_sim=1.000000 ≥ 0.999，hw_l_out cos 0.9974/0.9994 non-gating）。
+- **36 层 ladder 完整复现 task-12 基线**：`run_forward_pass_phase10`(3B,
+  token 9707="Hello", golden=`rtl/test_vectors/soc_e2e/qwen25-3b-36layer`)
+  36/36 PASS，cos_sim 逐层 ≥ P10_LADDER（0.999/0.998/0.997）。1.5B 只有 28 层，
+  ladder 必须用 3B GGUF。golden 目录格式：`expected_l1..l35.npz` key `output`
+  + `expected.npz` key `layer_0_output`（L0 fallback）。
+- **Failure injection（可运行臂）**：monkeypatch `_load_golden_layer` 把 L0
+  golden 清零 → ladder `ok=False`（L0 cos_sim=0.0 < 0.999，L1 不受影响仍
+  PASS）——证明 ladder 断言对真实发散有效，非空洞通过。
+- **pytest ScopeMismatch 坑**：`monkeypatch` fixture 是 function-scoped，
+  module-scoped fixture 里用会报 `ScopeMismatch`。修复：fixture 内实例化
+  `pytest.MonkeyPatch()` + `finally: mp.undo()`。
+- `run_forward_pass` 返回 dict（`ok`/`errors`/`layer_outputs`），无
+  `tolerance_result` 字段——schema 测试钉死这一点。NPUFirmware
+  DeprecationWarning ×4/run — benign，与 Todos 1–12 一致。

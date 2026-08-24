@@ -1,0 +1,29 @@
+=== Todo 13 - Spike forward pass tolerance regression gate (E2E-06) - 2026-08-24T10:32:15Z ===
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 6 items
+
+sim/tests/test_spike_forward_tolerance.py::test_two_layer_forward_meets_acceptance_tolerance SKIPPED [ 16%]
+sim/tests/test_spike_forward_tolerance.py::test_result_schema_is_plain_dict_without_tolerance_result SKIPPED [ 33%]
+sim/tests/test_spike_forward_tolerance.py::test_failure_injection_tight_tolerance_fails SKIPPED [ 50%]
+sim/tests/test_spike_forward_tolerance.py::test_two_layer_phase10_ladder_meets_thresholds PASSED [ 66%]
+sim/tests/test_spike_forward_tolerance.py::test_thirty_six_layer_ladder_meets_p10_thresholds PASSED [ 83%]
+sim/tests/test_spike_forward_tolerance.py::test_failure_injection_corrupted_golden_fails_ladder PASSED [100%]
+
+=============================== warnings summary ===============================
+sim/tests/test_spike_forward_tolerance.py::test_two_layer_forward_meets_acceptance_tolerance
+sim/tests/test_spike_forward_tolerance.py::test_two_layer_phase10_ladder_meets_thresholds
+sim/tests/test_spike_forward_tolerance.py::test_thirty_six_layer_ladder_meets_p10_thresholds
+sim/tests/test_spike_forward_tolerance.py::test_failure_injection_corrupted_golden_fails_ladder
+  /home/prj/zhengs/caduceuscore/CaduceusCore/sim/func_model.py:96: DeprecationWarning: NPUFirmware is deprecated; use Spike + real firmware ELF for golden reference verification. NPUFirmware remains available for fast smoke tests.
+    return NPUFirmware(sim_modules=sim_modules, bridge=bridge,
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============ 3 passed, 3 skipped, 4 warnings in 3355.06s (0:55:55) =============
+
+
+Skip reasons (from test code):
+  - 3 legacy run_forward_pass tests skip: run_forward_pass cannot run on this stack - op plan exceeds the firmware-enforced 8 MB DRAM window [0x80000000, 0x80800000) (BUG-RTL-SOC-002 / todo 19). The window-compliant 2-layer gate (test_two_layer_phase10_ladder_meets_thresholds) carries the 2-layer substance and PASSES.

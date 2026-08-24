@@ -1,0 +1,59 @@
+=== Task 11: 28-layer Qwen full-model FM gate (E2E-04) ===
+
+--- Command 1: acceptance gate ---
+$ PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset -v -s
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 1 item
+
+sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset final_cos=1.000000000
+PASSED
+
+=============================== warnings summary ===============================
+sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset
+sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset
+sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset
+  /home/prj/zhengs/caduceuscore/CaduceusCore/sim/func_model.py:96: DeprecationWarning: NPUFirmware is deprecated; use Spike + real firmware ELF for golden reference verification. NPUFirmware remains available for fast smoke tests.
+    return NPUFirmware(sim_modules=sim_modules, bridge=bridge,
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 1 passed, 3 warnings in 19.44s ========================
+exit_code=0
+
+--- Command 2: full-file regression (both gates share helpers) ---
+$ PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm_long_sequence.py -v
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 2 items
+
+sim/tests/test_soc_fm_long_sequence.py::test_scaled_chain_baseline_pinned PASSED [ 50%]
+sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset PASSED [100%]
+
+=============================== warnings summary ===============================
+sim/tests/test_soc_fm_long_sequence.py::test_scaled_chain_baseline_pinned
+sim/tests/test_soc_fm_long_sequence.py::test_scaled_chain_baseline_pinned
+sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset
+sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset
+sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset
+  /home/prj/zhengs/caduceuscore/CaduceusCore/sim/func_model.py:96: DeprecationWarning: NPUFirmware is deprecated; use Spike + real firmware ELF for golden reference verification. NPUFirmware remains available for fast smoke tests.
+    return NPUFirmware(sim_modules=sim_modules, bridge=bridge,
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 2 passed, 5 warnings in 33.82s ========================
+exit_code=0
+
+Summary:
+- _NUM_LAYERS = 28 -> 18 + 27*19 = 531 ring commands (asserted via _expected_command_count).
+- Persistent 16-entry ring offset: 531 // 16 = 33 wraps, 531 % 16 = 3 (no longer an exact wrap).
+- wrap_count >= 33 asserted; total_cmds % 16 == 3 asserted.
+- All 28 layer outputs bit-identical to direct-path golden (np.array_equal).
+- final_cos = 1.000000000 >= 0.999.
+- Failure injection retained: layer 5 op14 VMUL descriptor-address corruption ->
+  layer 5 output mismatches golden while layers 0-4 stay bit-identical.
+- Runtime 19.44s (single gate) / 33.82s (full file) — well under the 5-minute bound.

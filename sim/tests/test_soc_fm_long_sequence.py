@@ -17,8 +17,8 @@ Design notes
 - The ring path schedules EVERY op of every layer as a doorbell ring command
   (``FuncModel.host_write_command`` + ``firmware.run_loop``) and never touches
   the doorbell between layers. The FuncModel firmware emulator ring is 16
-  entries, so 11 layers x 19 commands = 208 commands wrap the offset 13 times
-  (208 % 16 == 0).
+  entries, so 18 + 27 x 19 = 531 commands wrap the offset 33 times with 3
+  commands into the next pass (531 % 16 == 3).
 - MMUL split (forced by firmware semantics, not by choice): the firmware
   dispatcher routes MMUL to ``tile_mmul``, which always applies an FP32 scale
   (``matmul_int4_per_block`` semantics); the chain's VRESID consumes the output
@@ -56,7 +56,7 @@ from command_ring import assert_desc_clear_of_used_regions
 from tests import test_soc_fm as tsf
 
 # ── Scenario constants ──────────────────────────────────────────────────
-_NUM_LAYERS = 11            # 11 layers x 19 commands = 208 >= 200 (block 0 has 18)
+_NUM_LAYERS = 28            # 18 + 27*19 = 531 commands (block 0 has 18, layers 1-27 have 19)
 _BASELINE_LAYERS = 3        # baseline characterization run length
 _CORRUPT_LAYER = 5          # 0-based layer whose op14 VMUL descriptor address is corrupted
 _CORRUPT_OP_IDX = 14        # VMUL gate*up
@@ -430,11 +430,11 @@ def test_scaled_chain_baseline_pinned():
 
 
 def test_multi_layer_persistent_offset():
-    """>=200 ring commands across 11 layers at a persistent (never-reset) ring offset.
+    """>=200 ring commands across 28 layers at a persistent (never-reset) ring offset.
 
     - Every op is scheduled through the doorbell ring and executed by the
       firmware dispatcher; the ring offset accumulates across layers and wraps
-      modulo the 16-entry ring (208 commands -> 13 full wraps).
+      modulo the 16-entry ring (531 commands -> 33 full wraps + 3 remainder).
     - Each layer output is bit-identical to the direct-path golden reference.
     - final_cos (cosine similarity of the last layer output vs golden) is
       asserted numerically to be >= 0.999.
@@ -459,10 +459,15 @@ def test_multi_layer_persistent_offset():
     print(f"final_cos={final_cos:.9f}")
     assert final_cos >= 0.999, f"final layer cosine too low: {final_cos:.9f}"
 
-    # Cumulative offset must advance across layers and wrap to 0 after 208 cmds.
+    # Cumulative offset must advance across layers; 531 commands wrap the
+    # 16-entry ring 33 times with 3 commands into the next pass.
     assert len(set(layer_offsets)) > 1, "ring offset must advance across layers (not reset)"
-    # 208 % 16 == 0: after the full schedule the ring has wrapped exactly.
-    assert total_cmds % 16 == 0, "scenario must end on an exact ring wrap"
+    wrap_count = total_cmds // 16
+    assert wrap_count >= 33, (
+        f"expected >= 33 ring wraps for {total_cmds} commands, got {wrap_count}"
+    )
+    # 531 % 16 == 3: the schedule no longer ends on an exact ring wrap.
+    assert total_cmds % 16 == 3, "scenario must end 3 commands into the final ring pass"
 
     # ── Failure injection: corrupt a mid-chain descriptor address ──
     corrupt_outs, corrupt_cmds, _ = _run_ring_layers(

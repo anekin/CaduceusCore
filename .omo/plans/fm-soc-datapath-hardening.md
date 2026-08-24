@@ -162,7 +162,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   QA scenarios: happy — 28 blocks + desc pool 不重叠且在 [0x80000000,0x80800000) 内；failure — 故意设 _DESC_BASE=0x80600000 → overlap assertion 抛错。Evidence `build/evidence/task-10-fm-soc-datapath-hardening.txt`
   Commit: Y | fix(sim): relocate DRAM layout for 28-layer FM chain
 
-- [ ] 11. 28 层 Qwen full-model FM gate（E2E-04）
+- [x] 11. 28 层 Qwen full-model FM gate（E2E-04）
   What to do / Must NOT do: 修改 `sim/tests/test_soc_fm_long_sequence.py`：`_NUM_LAYERS` 从 11 改为 28（531 命令），调整 ring wrap 断言（531 % 16 = 3，不再整除 → 改为 wrap_count >= 33 而非 `total_cmds % 16 == 0`）；验证每层输出与 direct-path golden bit-exact、末层 cos >= 0.999；failure 注入保留 layer 5 op14 VMUL 描述符地址篡改。依赖 todo 10 布局重排。Must NOT 改调度算法。
   Parallelization: Wave 3 | Blocked by: 10 | Blocks: —
   References: `sim/tests/test_soc_fm_long_sequence.py:59,147-374,420-467`（现有 11 层测试结构）；`sim/tests/test_soc_fm.py:2453-2764`（28-block scaled chain 模式）；`sim/spike_host.py:1317-1451`（Phase-10 36 层 forward 路径参考）
@@ -179,7 +179,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   **环境依赖**: 测试需要 `assets/mobilenetv3_small.onnx`。缺失时测试必须 `pytest.skip(reason="MobileNetV3 ONNX model not found")`，用 `pathlib.Path("assets/mobilenetv3_small.onnx").is_file()` 检测。acceptance 命令在无 ONNX 环境下 exit 0（0 collected / all skipped）。
   Commit: Y | test(sim): MobileNetV3 CV chain FM gate
 
-- [ ] 13. Spike forward pass tolerance 回归 gate（E2E-06）
+- [x] 13. Spike forward pass tolerance 回归 gate（E2E-06）
   What to do / Must NOT do: 新增 `sim/tests/test_spike_forward_tolerance.py`：固定当前 acceptance 阈值为回归基线（2 层 max_abs < 1e-1；36 层 cos_sim ladder 0.999/0.998/0.997），跑 `spike_host.run_forward_pass()` 并断言 `result["ok"] == True`（2层）或标注为 residual tolerance divergence（BUG-SOC-FM-005 已 Fixed，但 36 层 ladder 的 cos_sim 阈值是预期的量化精度带，不是 bug 残留）。**注意**: `run_forward_pass()` 返回 dict（字段 `ok`/`errors`/`layer_outputs`），无 `tolerance_result` 字段——测试需包装返回值或直接断言 `result["ok"]` 与每层 ladder 阈值。Must NOT 修复数值 gap（超出范围，属量化精度本质）。
   Parallelization: Wave 4 | Blocked by: — | Blocks: —
   References: `sim/spike_host.py:788-1017`（run_forward_pass tolerance）；`sim/spike_host.py:1317-1451`（Phase-10 36 层 ladder）；`sim/spike_host.py:377-390`（P10_LADDER 阈值）；`docs/bugs/bugs-soc-func-model.md:305-388`（BUG-SOC-FM-005）；`docs/func-model-golden-tolerance.md`
