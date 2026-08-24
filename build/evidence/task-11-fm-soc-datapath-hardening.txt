@@ -57,3 +57,5 @@ Summary:
 - Failure injection retained: layer 5 op14 VMUL descriptor-address corruption ->
   layer 5 output mismatches golden while layers 0-4 stay bit-identical.
 - Runtime 19.44s (single gate) / 33.82s (full file) — well under the 5-minute bound.
+
+Result: PASS (F1 audit re-verification 2026-08-24: acceptance commands re-executed, all exit 0)

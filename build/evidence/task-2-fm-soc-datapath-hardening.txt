@@ -65,3 +65,5 @@ pre-existing cocotb-missing environments)
 ── VERDICT ───────────────────────────────────────────────────────────────────
 PASS: test_intc_gating.py 10/10 (>=6 required); test_soc_fm.py 52 passed,
 0 new failures; full suite shows 0 new failures.
+
+Result: PASS (F1 audit re-verification 2026-08-24: acceptance commands re-executed, all exit 0)

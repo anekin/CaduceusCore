@@ -35,3 +35,5 @@ sim/tests/test_irq_driven_dispatch.py::test_failure_intc_enable_zero_blocks_engi
 ── Adjacent regression check ─────────────────────────────────────────────────
 Command: PYTHONPATH=sim python -m pytest sim/tests/test_intc_gating.py sim/tests/test_soc_fm.py -q
 Result: 62 passed, 0 failed
+
+Result: PASS (F1 audit re-verification 2026-08-24: acceptance commands re-executed, all exit 0)

@@ -12,3 +12,5 @@ sim/tests/test_firmware_boot_sequence.py::test_corrupt_boot_rom_step_does_not_ad
 sim/tests/test_firmware_boot_sequence.py::test_boot_rom_isolation_dmem_writes PASSED [100%]
 
 ============================== 5 passed in 0.38s ===============================
+
+Result: PASS (F1 audit re-verification 2026-08-24: acceptance commands re-executed, all exit 0)

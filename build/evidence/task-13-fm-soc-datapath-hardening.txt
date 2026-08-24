@@ -27,3 +27,5 @@ sim/tests/test_spike_forward_tolerance.py::test_failure_injection_corrupted_gold
 
 Skip reasons (from test code):
   - 3 legacy run_forward_pass tests skip: run_forward_pass cannot run on this stack - op plan exceeds the firmware-enforced 8 MB DRAM window [0x80000000, 0x80800000) (BUG-RTL-SOC-002 / todo 19). The window-compliant 2-layer gate (test_two_layer_phase10_ladder_meets_thresholds) carries the 2-layer substance and PASSES.
+
+Result: PASS (F1 audit re-verification 2026-08-24: acceptance commands re-executed, all exit 0)

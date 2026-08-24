@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # =============================================================================
-# fm_hardening_f1_audit.sh — F1: plan compliance audit (fm-hardening-phase10)
+# fm_hardening_f1_audit.sh — F1: plan compliance audit
+# Plan selectable via FM_PLAN_NAME (default: fm-hardening-phase10):
+#   .omo/plans/${FM_PLAN_NAME}.md + build/evidence/task-{N}-${FM_PLAN_NAME}.txt
 # Checks per todo 1..14:
-#   1. build/evidence/task-{N}-fm-hardening-phase10.txt exists and its LAST
+#   1. build/evidence/task-{N}-${FM_PLAN_NAME}.txt exists and its LAST
 #      PASS/FAIL marker ("Result: PASS" / "Status: PASS" / "Overall verdict:
 #      PASS" / standalone PASS) says PASS.
 #   2. Acceptance rerun: pytest/python/bash acceptance commands extracted from
 #      the plan's "Acceptance criteria (agent-executable)" lines are re-run;
 #      exit code must be 0.  Model/EDA-dependent commands (spike smoke, W4-PERF,
-#      FM-SOC) are SKIP-ENV and static greps SKIP-STATIC — reported, never
+#      FM-SOC, Spike-binary-dependent guard tests like
+#      test_spike_forward_tolerance / test_spike_ibex_ring_alignment) are
+#      SKIP-ENV and static greps SKIP-STATIC — reported, never
 #      silently waived.  Self-invocation of this script is skipped (recursion).
 #      A rerun that collects 0 items because cocotb is absent on this host
 #      (pytest rc 5 + "collected 0 items", e.g. sim/test_dram_bulk.py) is
@@ -21,7 +25,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-PLAN=".omo/plans/fm-hardening-phase10.md"
+FM_PLAN_NAME="${FM_PLAN_NAME:-fm-hardening-phase10}"
+PLAN=".omo/plans/${FM_PLAN_NAME}.md"
 EVD="build/evidence"
 LOG="$(mktemp /tmp/fm_f1_cmd.XXXXXX)"
 
@@ -37,7 +42,7 @@ acceptance_cmds() {  # backtick-quoted commands of todo $1's acceptance line
 runnable() {  # classify one acceptance command
   case "$1" in
     *fm_hardening_f1_audit*) echo skip-self ;;
-    *--model*|*run_w4_perf*|*run_fm_soc*|*p10_ssh*) echo skip-env ;;
+    *--model*|*run_w4_perf*|*run_fm_soc*|*p10_ssh*|*test_spike_ibex_ring_alignment*|*test_spike_forward_tolerance*) echo skip-env ;;
     PYTHONPATH=*|python3\ *|python\ *|make\ -C\ firmware*|bash\ -n\ *|ls\ scripts/*|./scripts/fm_reverse_dependency_gate.sh*) echo run ;;
     *) echo skip-static ;;
   esac
@@ -45,7 +50,7 @@ runnable() {  # classify one acceptance command
 
 pass=0; fail=0; pend=0
 for n in $(seq 1 14); do
-  ev="${EVD}/task-${n}-fm-hardening-phase10.txt"
+  ev="${EVD}/task-${n}-${FM_PLAN_NAME}.txt"
   checked="$(checked_todo "$n")"
   state="MISSING"; verdict="UNKNOWN"; detail=""; acc=""
   if [ -f "$ev" ]; then
@@ -88,5 +93,5 @@ for n in $(seq 1 14); do
     "$n" "$checked" "$state" "$acc" "$verdict" "${detail:+ ($detail)}"
 done
 rm -f "$LOG"
-echo "F1 summary: pass=${pass} fail=${fail} pending=${pend} (audited 14/14)"
+echo "F1 summary: plan=${FM_PLAN_NAME} pass=${pass} fail=${fail} pending=${pend} (audited 14/14)"
 [ "$fail" -eq 0 ]

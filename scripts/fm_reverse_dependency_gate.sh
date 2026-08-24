@@ -38,6 +38,14 @@ SENSITIVE_PATTERNS=(
   "firmware/npu_firmware.c" "firmware/npu-regmap.h" "gen/npu_abi_firmware.h"
   "sim/golden_executor.py" "sim/mmio_bridge.py" "sim/perf_tests.py"
   "sim/cocotb_bridge.py" "sim/tile_scheduler.py" "sim/func_model.py"
+  # fm-soc-datapath-hardening guards (todo 14): the new FM SoC datapath guard
+  # tests — RTL/firmware/bridge changes must re-run these guards.
+  "sim/tests/test_pcie_tlp_chain.py" "sim/tests/test_intc_gating.py"
+  "sim/tests/test_crossbar_arbitration.py" "sim/tests/test_apb_register_conformance.py"
+  "sim/tests/test_ibex_shared_address_space.py" "sim/tests/test_irq_driven_dispatch.py"
+  "sim/tests/test_firmware_boot_sequence.py" "sim/tests/test_spike_ibex_ring_alignment.py"
+  "sim/tests/test_memory_contract.py" "sim/tests/test_soc_fm_long_sequence.py"
+  "sim/tests/test_mobilenetv3_fm_chain.py" "sim/tests/test_spike_forward_tolerance.py"
 )
 BASE_FAILED="${FM_GATE_BASE_FAILED:-164}"   # task-3 legacy baseline (bootstrap only)
 BASE_ERRORS="${FM_GATE_BASE_ERRORS:-45}"

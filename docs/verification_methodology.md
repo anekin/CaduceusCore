@@ -140,6 +140,19 @@ fm-hardening-phase10 的复盘结论是：Func Model 数值本身已 bit-exact�
 | 4 | 双 packer 等价与 ABI 常量一致性 | spike_host/cocotb_bridge 布局不漂移；Python/C 常量同源 | `PYTHONPATH=sim python -m pytest sim/tests/test_packer_equivalence.py sim/tests/test_npu_abi_constants.py -q` |
 | 5 | 段边界 SRAM 清零协议 | ISSUE-13C 类残留数据不泄漏到下一段 | `PYTHONPATH=sim python -m pytest sim/tests/test_segment_boundary.py -q` |
 | 6 | RTL/firmware 变更反向依赖门禁 | RTL/firmware/桥接改动自动触发 FM + W4-PERF 回归 | `./scripts/fm_reverse_dependency_gate.sh --dry-run` |
+| 7 | PCIe TLP 完整链守卫（SOC-13） | tlp_write→BAR 路由→crossbar→SRAM/DRAM 写入→tlp_read bit-exact；4KB 载荷按 MPS=256B 分裂；BAR 路由隔离；载荷篡改→readback 失配 | `PYTHONPATH=sim python -m pytest sim/tests/test_pcie_tlp_chain.py -v` |
+| 8 | INTC ENABLE/THRESHOLD 门控（SOC-17 / FW-10） | `popcount(PENDING & ENABLE) >= THRESHOLD` 才置 cpu_irq；ENABLE=0 屏蔽、THRESHOLD 门控、ACK 清除、WFI 唤醒 | `PYTHONPATH=sim python -m pytest sim/tests/test_intc_gating.py -v` |
+| 9 | AXI 仲裁公平性（SOC-14） | 多 master 并发 round-robin 交替公平；DECERR 地址拒绝；AXI ID 路由 master_id<<8\|txn_id | `PYTHONPATH=sim python -m pytest sim/tests/test_crossbar_arbitration.py -v` |
+| 10 | APB 寄存器 conformance（SOC-15） | 8 个 peripheral write→readback 序列语义（rw/r/w/w1c）与 `regmap.py` 一致；写只读寄存器值不变 | `PYTHONPATH=sim python -m pytest sim/tests/test_apb_register_conformance.py -v` |
+| 11 | Ibex 共享地址空间跨引擎（SOC-16） | Ibex 经 crossbar 写 SRAM→MXU 读一致（双向）；DMEM/boot ROM 隔离 | `PYTHONPATH=sim python -m pytest sim/tests/test_ibex_shared_address_space.py -v` |
+| 12 | IRQ 驱动 firmware 调度（FW-10） | op 完成由 IRQ（非 STATUS 轮询）驱动调度下一命令；抑制 IRQ→firmware 停滞 | `PYTHONPATH=sim python -m pytest sim/tests/test_irq_driven_dispatch.py -v` |
+| 13 | 固件 boot 序列（SOC-18） | PC=0→step() 执行真实 firmware hex 进 main→doorbell poll→首命令完成；boot ROM 隔离 | `PYTHONPATH=sim python -m pytest sim/tests/test_firmware_boot_sequence.py -v` |
+| 14 | Spike↔Ibex ring 管理对齐（FW-08） | 208 命令两路径 NPU_HEAD/HOST_HEAD/COMPLETION_STATUS 一致；ring_size 分歧注入→wrap 行为分歧 | `PYTHONPATH=sim python -m pytest sim/tests/test_spike_ibex_ring_alignment.py -v` |
+| 15 | firmware 内存契约（FW-09） | FM 生成 JSON 与 address_space/command_ring/spec 三源一致；篡改 RING_ENTRIES→比对失败 | `python3 scripts/gen_firmware_memory_contract.py --check && PYTHONPATH=sim python -m pytest sim/tests/test_memory_contract.py -v` |
+| 16 | 28 层 Qwen full-model FM gate（E2E-04） | 531 命令持久偏移跑通；末层 cos ≥ 0.999；ring wrap ≥ 33；layer 5 op14 篡改→失配 | `PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset -v` |
+| 17 | MobileNetV3 CV chain FM gate（E2E-05） | 全图 doorbell ring 调度；GEMM 层与 golden cos_sim ≥ 0.99；权重地址篡改→单层失配 | `PYTHONPATH=sim python -m pytest sim/tests/test_mobilenetv3_fm_chain.py -v` |
+| 18 | Spike forward tolerance 回归（E2E-06） | 2 层 max_abs < 1e-1；36 层 cos_sim 逐层 ≥ P10_LADDER（0.999/0.998/0.997）；阈值收紧→ok=False | `PYTHONPATH=sim python -m pytest sim/tests/test_spike_forward_tolerance.py -v` |
+| 19 | ABORT/MXU idle 既有覆盖（E2E-08） | attn_weight shape 分发守卫 + 无 idle gap 连续分发回归（fm-hardening-phase10 遗留，已 ✅） | `PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py::test_mmul_attn_weight_shape sim/tests/test_soc_fm.py::test_mmul_attn_weight_shape_not_dispatched -v` |
 
 **冻结面（范围门禁）**：任何进入 RTL 验证前的提交，不得改动 `rtl/`、`sim/arc_model.py`、`sim/design_space_explorer.py`、`sim/quantize.py`、`ggml-npu/`、`requirements.txt`。若确需改动，必须重跑 F4 范围门禁并通过：
 

@@ -188,7 +188,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   **环境依赖**: 测试需要 Spike binary + `firmware/build/npu_firmware_spike.elf`（注意：不是 `npu_firmware.elf`，`sim/spike_firmware.py:28` 定义 `FIRMWARE_ELF` 指向 spike 版本）+ GGUF 模型（`$HOME/models/qwen2.5-1.5b-instruct-q4_k_m.gguf`）。缺失时测试必须 `pytest.skip(reason="Spike/GGUF not available")`，复用 `sim/spike_firmware._is_spike_available()` + `pathlib.Path(model_path).is_file()` 检测。acceptance 命令在无 Spike/GGUF 环境下 exit 0（all skipped）。
   Commit: Y | test(sim): Spike forward pass tolerance regression gate
 
-- [ ] 14. 文档同步 + 反向依赖门禁更新
+- [x] 14. 文档同步 + 反向依赖门禁更新
   What to do / Must NOT do: (a) 更新 `docs/verification_methodology.md` FM → RTL 交付门禁表，把新增 11 项守卫纳入门禁清单；(b) 更新 `.omo/plans/soc-rtl-verification-vplan.md` 中 14 项缺口的状态：在每行缺口描述旁插入 feature ID 标记（`SOC-13`/`SOC-14`/`SOC-15`/`SOC-16`/`SOC-17`/`SOC-18`/`FW-08`/`FW-09`/`FW-10`/`E2E-04`/`E2E-05`/`E2E-06`/`E2E-08`），并将状态从 ❌/⚠️ 改为 ✅（E2E-07 性能 calibration 仍 ❌）；(c) 更新 `scripts/fm_reverse_dependency_gate.sh` 敏感文件清单，加入新增测试文件。Must NOT 改其他文档。
   Parallelization: Wave 4 | Blocked by: 1-13 | Blocks: —
   References: `docs/verification_methodology.md:131-150`（FM → RTL 交付门禁表）；`.omo/plans/soc-rtl-verification-vplan.md`（vplan 缺口状态）；`scripts/fm_reverse_dependency_gate.sh:36-41`（敏感文件清单）

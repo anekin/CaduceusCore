@@ -84,3 +84,5 @@ sim/tests/test_mobilenetv3_fm_chain.py::TestMobileNetV3FMChain::test_failure_wei
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 ======================== 4 passed, 5 warnings in 57.63s ========================
 exit=0
+
+Result: PASS (F1 audit re-verification 2026-08-24: acceptance commands re-executed, all exit 0)

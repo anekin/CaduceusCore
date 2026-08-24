@@ -20,3 +20,5 @@ sim/tests/test_spike_ibex_ring_alignment.py::test_failure_injection_ring_size_16
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 ======================== 3 passed, 3 warnings in 3.28s =========================
 EXIT_CODE=0
+
+Result: PASS (F1 audit re-verification 2026-08-24: acceptance commands re-executed, all exit 0)

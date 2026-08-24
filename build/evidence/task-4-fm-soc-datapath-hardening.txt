@@ -35,3 +35,5 @@ sim/tests/test_apb_register_conformance.py::test_intc_ack_w1c_clears_only_writte
 sim/tests/test_apb_register_conformance.py::test_all_four_access_modes_exercised PASSED [100%]
 
 ============================== 28 passed in 0.14s ==============================
+
+Result: PASS (F1 audit re-verification 2026-08-24: acceptance commands re-executed, all exit 0)

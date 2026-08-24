@@ -43,15 +43,27 @@
     "sim/cocotb_bridge.py": "db254889145d6b20ce109be8ab7effde6f4c5995",
     "sim/func_model.py": "133ad8bf2916a46d85beffce0ceabc43c2b1eeae",
     "sim/golden_executor.py": "b30d6086ed58cbecc044cc99d0d0d56e56c7d455",
-    "sim/mmio_bridge.py": "014e1ce482aa9fbd7e19ce241e73ab7481cbcaaa",
+    "sim/mmio_bridge.py": "f3a63daab812d8009328a0200e14f56da6f12c67",
     "sim/perf_tests.py": "6795fd9e53cb1d0f2af1569862edbe94b7878ba0",
+    "sim/tests/test_apb_register_conformance.py": "190cd62a2ff3269e24277588b5e9ab7d2e292dc0",
+    "sim/tests/test_crossbar_arbitration.py": "9edd6346e81ab56711b114b578dfeaf5262dbfb8",
+    "sim/tests/test_firmware_boot_sequence.py": "11efd4df78bc045a45422647519c9a73b2caa237",
+    "sim/tests/test_ibex_shared_address_space.py": "6f4d18ff2f10da5633084cda2da70e143f3eb789",
+    "sim/tests/test_intc_gating.py": "56c0f39ef62ad89d801b9ed24e17582fa06735f3",
+    "sim/tests/test_irq_driven_dispatch.py": "0c48585c89ff41e02c432a649d4168a2465201f1",
+    "sim/tests/test_memory_contract.py": "015748f1c6a38b83847a72bfdab9406d7a6ca0fd",
+    "sim/tests/test_mobilenetv3_fm_chain.py": "e58062570a1b704b3cb31a551bde92c8016dea72",
+    "sim/tests/test_pcie_tlp_chain.py": "7cf907d036af38c2007274d09898482c7d03228f",
+    "sim/tests/test_soc_fm_long_sequence.py": "9a5b420540b847536621fe10658f3a1b8f94baa1",
+    "sim/tests/test_spike_forward_tolerance.py": "1700c047d3eaf1a02b9b89c72b6390a1140a7f85",
+    "sim/tests/test_spike_ibex_ring_alignment.py": "b75090c75a88ba6bc9aae239939e33751c5e3b6b",
     "sim/tile_scheduler.py": "3d6f84590fec42762b6cadc2fbda0d8774b2b989"
   },
-  "head": "13c29f52b046ba404ae439df2c9a3618e435bb15",
+  "head": "86fa32c442fea102ad4e0648e03e1df9ecbc9c20",
   "pytest": {
     "errors": 13,
     "failed": 19,
     "passed": 1424
   },
-  "timestamp": "2026-08-23T03:39:51Z"
+  "timestamp": "2026-08-24T10:53:25Z"
 }

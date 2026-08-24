@@ -87,12 +87,12 @@
 
 | Feature | Gap # | 状态 | 说明 | 阻塞影响 |
 |---------|:-----:|:----:|------|----------|
-| PCIe TLP 功能模型（TLP 解析/BAR 路由/MSI-X） | #7 | ❌ 未覆盖 | Func Model `host_write_*` 直接写 DRAM，无 TLP 解析；RTL wrapper test 只验证 EP 侧，未覆盖 host→TLP→AXI→SRAM/DRAM 完整链 | host↔NPU 真实 PCIe 数据通路无 FM golden |
-| AXI Crossbar 仲裁行为模型 | #8 | ⚠️ 部分 | RTL stress 验证了并发无错，但 Func Model MMIOBridge 绕过 crossbar 直接访问；无 Python 级仲裁序/反压模型 | 仲裁公平性/反压边界无 FM 预测 |
-| APB-MMIO 统一寄存器模型 | #1 | ⚠️ 部分 | APB decoder 功能验证，但无统一寄存器抽象，per-engine `_handle_*` 各自重实现 | 寄存器语义一致性无单一事实源 |
-| Ibex→AXI 共享地址空间 | #2 | ⚠️ 部分 | RISCVMini 独立 `self.mem`，未与 FuncModel SRAM/DRAM 共享地址空间；Ibex RTL boot 可跑但 FM 层无共享访存模型 | CPU 数据访问路径无 FM 对齐 |
-| IRQ 链路（engine→INTC→CPU WFI 唤醒） | #9 | ⚠️ 部分 | INTC 模块级验证 + Ibex doorbell IRQ smoke，但 WFI 为 NOP，无完整 engine→INTC→CPU 中断唤醒链 | 中断驱动 firmware 调度无 FM 验证 |
-| Ibex 固件 boot→DMEM→MMIO→poll IRQ 序列 | #11 | ⚠️ 部分 | NPUFirmware 绕过 RISCVMini，无 boot 序列模型；Ibex RTL 可 boot 到 main()，但 FM 层无等价 | 固件控制流与 FM 不对齐 |
+| PCIe TLP 功能模型（TLP 解析/BAR 路由/MSI-X）SOC-13 | #7 | ✅ FM 守卫 | TLP→BAR 路由→crossbar→SRAM/DRAM 完整链 + MPS=256B 分裂 + 载荷篡改注入由 `test_pcie_tlp_chain.py` 覆盖（fm-soc-datapath-hardening todo 1） | host↔NPU 真实 PCIe 数据通路 FM golden 已就位 |
+| AXI Crossbar 仲裁行为模型 SOC-14 | #8 | ✅ FM 守卫 | round-robin 交替公平 / DECERR 拒绝 / AXI ID 路由由 `test_crossbar_arbitration.py` grant 历史断言覆盖（todo 3） | 仲裁公平性有 FM 预测 |
+| APB-MMIO 统一寄存器模型 SOC-15 | #1 | ✅ FM 守卫 | 8 个 peripheral write→readback 语义（rw/r/w/w1c）与 `regmap.py` conformance replay gate（`test_apb_register_conformance.py`，todo 4） | 寄存器语义一致性有单一事实源比对 |
+| Ibex→AXI 共享地址空间 SOC-16 | #2 | ✅ FM 守卫 | RISCVMini 经 crossbar 与 FuncModel SRAM/DRAM 共享访存双向一致性 + DMEM/boot ROM 隔离（`test_ibex_shared_address_space.py`，todo 5） | CPU 数据访问路径有 FM 对齐 |
+| IRQ 链路（engine→INTC→CPU WFI 唤醒）SOC-17 | #9 | ✅ FM 守卫 | ENABLE/THRESHOLD 门控 + ACK 清除 + WFI 唤醒 + 多源并发（`test_intc_gating.py`，todo 2） | 中断唤醒链有 FM 验证 |
+| Ibex 固件 boot→DMEM→MMIO→poll IRQ 序列 SOC-18 | #11 | ✅ FM 守卫 | 真实 firmware hex 从 reset vector 执行进 main→doorbell poll→首命令完成（`test_firmware_boot_sequence.py`，todo 7） | 固件控制流与 FM 对齐 |
 
 ---
 
@@ -114,9 +114,9 @@
 
 | Feature | 状态 | 说明 |
 |---------|:----:|------|
-| Spike 固件与 Ibex 固件行为对齐 | ⚠️ 部分 | Spike 路径与 Ibex 路径的 ring 管理/调度细节未做交叉一致性 gate（fm-hardening AL1 deferred） |
-| `firmware_memory_contract.json` 双向比对 | ❌ 未覆盖 | fm-hardening T1/T2 deferred：无 FM 生成内存契约 JSON 与 RTL 固件实际 DRAM 用量比对 |
-| 中断驱动 firmware 调度（WFI 唤醒） | ⚠️ 部分 | 模块级 INTC + smoke，无完整中断驱动控制流验证 |
+| Spike 固件与 Ibex 固件行为对齐 FW-08 | ✅ FM 守卫 | 208 命令两路径 NPU_HEAD/HOST_HEAD/COMPLETION_STATUS 交叉比对 + ring_size=16 wrap 分歧注入（`test_spike_ibex_ring_alignment.py`，todo 8） |
+| `firmware_memory_contract.json` 双向比对 FW-09 | ✅ FM 守卫 | `scripts/gen_firmware_memory_contract.py --check` + `test_memory_contract.py` 三源比对（address_space/command_ring/spec/npu_abi.json），篡改 RING_ENTRIES 注入（todo 9） |
+| 中断驱动 firmware 调度（WFI 唤醒）FW-10 | ✅ FM 守卫 | IRQ 驱动（非 STATUS 轮询）调度 + 抑制 IRQ / ENABLE=0 stall 注入（`test_irq_driven_dispatch.py`，todo 6） |
 
 ---
 
@@ -134,11 +134,11 @@
 
 | Feature | 状态 | 说明 |
 |---------|:----:|------|
-| 多层（≥9 层）full-model forward pass | ❌ 未覆盖 | 当前段跑仅验证 checkpoint 子集；无完整 28 层 RTL signoff |
-| MobileNetV3 全推理 | ❌ 未覆盖 | `rtl_development_plan.md` 明确“留待后续 Phase”；im2col→GEMM 通路引擎层已验证，但 SoC 级未跑 |
-| Spike E2E forward pass tolerance | ⚠️ 部分 | Qwen2.5-1.5B forward 可跑但数值 gap vs llama.cpp 存在（BUG-SOC-FM-005 pre-existing） |
+| 多层（≥9 层）full-model forward pass E2E-04 | ✅ FM 守卫 | 28 层 531 命令持久偏移 FM gate（`test_soc_fm_long_sequence.py`，todo 10/11），末层 cos ≥ 0.999；RTL 段跑扩到 28 层仍待执行 |
+| MobileNetV3 全推理 E2E-05 | ✅ FM 守卫 | 全图 doorbell ring 调度 + golden 逐层比对（`test_mobilenetv3_fm_chain.py`，todo 12），50/52 conv cos=1.0；SoC 级 RTL 段跑仍待执行 |
+| Spike E2E forward pass tolerance E2E-06 | ✅ FM 守卫 | 阈值回归基线钉死（`test_spike_forward_tolerance.py`，todo 13）：2 层 max_abs < 1e-1、36 层 cos_sim 逐层 ≥ P10_LADDER；数值 gap 属量化精度本质 |
 | 性能 calibration | ❌ 未覆盖 | `calibration_state=uncalibrated`；`soc-perf-report.md` 数字是 simulation proxy，非 silicon calibrated |
-| attn_weight RTL dispatch | ⚠️ 部分 | BUG-RTL-SOC-007 Open；FM 侧已补 `test_mmul_attn_weight_shape` 覆盖，但 RTL dispatch 根因未修 |
+| attn_weight RTL dispatch E2E-08 | ✅ FM 守卫 | FM 侧 ABORT/MXU idle 覆盖已就位（`test_mmul_attn_weight_shape(_not_dispatched)` + `test_bug007_consecutive_dispatch`）；BUG-RTL-SOC-007 RTL dispatch 根因仍 Open（RTL 侧排除） |
 
 ---
 
