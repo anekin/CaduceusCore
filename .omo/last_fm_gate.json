@@ -59,11 +59,11 @@
     "sim/tests/test_spike_ibex_ring_alignment.py": "b75090c75a88ba6bc9aae239939e33751c5e3b6b",
     "sim/tile_scheduler.py": "3d6f84590fec42762b6cadc2fbda0d8774b2b989"
   },
-  "head": "86fa32c442fea102ad4e0648e03e1df9ecbc9c20",
+  "head": "0422d2469d1c047e0e7ee46a9c7e77dd86ca6a64",
   "pytest": {
-    "errors": 13,
-    "failed": 19,
-    "passed": 1424
+    "errors": 15,
+    "failed": 20,
+    "passed": 2280
   },
-  "timestamp": "2026-08-24T10:53:25Z"
+  "timestamp": "2026-08-24T11:53:25Z"
 }

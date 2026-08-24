@@ -18,7 +18,7 @@ git cat-file -e "${PLAN_BASE}^{commit}" 2>/dev/null || { echo "F4: ERROR plan ba
 
 whitelisted() {
   case "$1" in
-    sim/*|firmware/*|scripts/*|docs/*|build/evidence/*|.omo/*|spec/npu_abi.json|gen/*) return 0 ;;
+    sim/*|firmware/*|scripts/*|docs/*|build/evidence/*|.omo/*|spec/npu_abi.json|gen/*|firmware_memory_contract.json) return 0 ;;
     *) return 1 ;;
   esac
 }

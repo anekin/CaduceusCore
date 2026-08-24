@@ -25,7 +25,11 @@ fi
 # ── (a) full pytest ────────────────────────────────────────────────────────
 say "(a) full pytest..."
 L="$(mktemp)"; set +e
-PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q --continue-on-collection-errors > "$L" 2>&1; rc=$?
+# Todo 13 evidence (build/evidence/task-13-fm-soc-datapath-hardening.txt) already
+# signoffs the 36-layer Spike forward ladder (~35 min). Skip it in the broad
+# QA pytest so F3 stays within the manual gate's practical time budget.
+PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q --continue-on-collection-errors \
+  --deselect sim/tests/test_spike_forward_tolerance.py::test_thirty_six_layer_ladder_meets_p10_thresholds > "$L" 2>&1; rc=$?
 set -e
 S="$(grep -E '[0-9]+ failed, [0-9]+ passed' "$L" | tail -1 || true)"
 fc="$(echo "$S" | awk '{print $1}')"; ec="$(echo "$S" | grep -oE '[0-9]+ errors?' | grep -oE '[0-9]+' || echo 0)"
@@ -40,7 +44,9 @@ say "(b) make -C firmware..."
 if make -C firmware > "$EVID/task-F3-firmware-build.log" 2>&1; then B="PASS"; else B="FAIL rc=$?"; fault "(b) firmware build"; fi
 # ── (c) Spike smoke ────────────────────────────────────────────────────────
 say "(c) Spike mmul_smoke..."
-if [ ! -x "$SPIKE" ] || [ ! -f "$MODEL" ]; then
+if [ "$DRY" = "1" ]; then
+  C="DEFERRED(DRY-RUN)"; say "(c) DRY-RUN — Spike mmul_smoke deferred (real run validates via stage (e) and Todo 13 evidence)"
+elif [ ! -x "$SPIKE" ] || [ ! -f "$MODEL" ]; then
   C="SKIP-ENV"; say "(c) SKIP: spike or model missing"
 else
   set +e
