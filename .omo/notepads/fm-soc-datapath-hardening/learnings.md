@@ -1,5 +1,58 @@
 # fm-soc-datapath-hardening — Learnings
 
+## Todo 7: 固件 boot 序列 FM 验证守卫（SOC-18）
+
+### Findings (2026-08-24)
+- Added `sim/tests/test_firmware_boot_sequence.py`: 5 tests.
+  `PYTHONPATH=sim python -m pytest sim/tests/test_firmware_boot_sequence.py -v`
+  → 5 passed, exit 0. Evidence in `build/evidence/task-7-fm-soc-datapath-hardening.txt`.
+  Neighboring `test_soc_fm.py -q` → 52 passed (0 new failures).
+- **step() genuinely executes the real `npu_firmware.hex`** from the reset
+  vector through `startup.S` into `firmware_main()`. Proven not by PC motion
+  alone but by firmware-side observables: `INTC.ENABLE==0x1FF` (programmed by
+  firmware_main), doorbell `LAST_STATUS==0xAA` (the firmware's own
+  completion-ring write/readback self-test) and the `0xDEADBEEF` marker at
+  COMPLETION_RING_ADDR (0x80008000) in DRAM. ~2000-4000 steps suffice.
+- **Step-driven MMUL dispatch completes end-to-end**: submit via
+  `host_write_command` → continue stepping → HOST_HEAD/NPU_HEAD advance to 1,
+  `LAST_STATUS==0x2000` (success pattern), and the completion-ring entry
+  (cmd_id=0, status=0) overwrites the 0xDEADBEEF debug marker — the marker
+  transition is the anti-vacuous proof that `write_completion()` really ran.
+- **RV32M mul misdecode (emulator gap, unchanged per scope)**: `RISCVMini`
+  decodes `mul` (opcode 0x33, funct7=0x01) as `sub`. In the C firmware's MMUL
+  copy-back, `desc.output_addr + (m*desc.N + n_start)*4` with m=0 compiles to
+  a mul; misdecoded, `0*2` becomes `-2`, shifting the copy-back destination to
+  `0x80FFFFF8` instead of `0x81000000`. Verified empirically: the golden value
+  (50.0) IS computed correctly and lands at the shifted address. Consequence:
+  golden numeric output is intentionally NOT asserted in this guard —
+  bit-exact numerics for the same ABI stay in
+  `test_soc_fm.py::test_firmware_bootflow` (Python dispatch) and Spike signoff.
+  If mul decoding is ever fixed in miniv.py, the copy-back assert could be
+  upgraded to golden equality.
+- **WFI encoding mismatch (emulator gap)**: real firmware WFI is
+  `0x10500073` (funct12=0x105); `RISCVMini.step()` matches funct12==0x305
+  (a different SYSTEM instruction). So the doorbell poll loop runs as a busy
+  poll in the FM — harmless here because MMIO reads are synchronous and the
+  command is observed deterministically. `test_soc_fm.py:605` deliberately
+  uses 0x305 for the WFI-wake test; the real-firmware path never hits that
+  branch.
+- **boot() sp is provisional**: `NPUFirmware.boot()` sets sp=DMEM top
+  (0x20000), but `startup.S` overwrites it with the linked `_stack_top`
+  symbol (DMEM top minus the 16 KB STACK_SIZE region, 0x14010 in the current
+  build). By the time firmware_main polls, sp≈0x13FD0 (a few frames deep).
+  The guard asserts sp moved off the provisional value into DMEM rather than
+  pinning the build-specific `_stack_top`.
+- **Failure injection**: corrupting the loaded image's reset-vector word
+  (trap-table padding 0x00000000 → EBREAK 0x00100073) makes `step()` return
+  False with PC and `instructions_executed` frozen at 0; healthy control
+  advances PC 0→4 and executes 1 instruction. Corrupting word 0 (the
+  vectored trap table region) is deterministic — the image at PC=0 is part
+  of the loaded ROM.
+- **Boot ROM isolation** asserted as Todo 5 prescribed: byte-snapshot of the
+  ROM unchanged after DMEM/SRAM/DRAM writes (each write readback-checked to
+  prove it landed). The Todo 5 quirk (`_mem_write` allows writing the ROM
+  region itself) is untouched.
+
 ## Todo 5: Ibex 共享地址空间跨引擎 FM 验证守卫（SOC-16）
 
 - **Routing model (unchanged)**: `RISCVMini` SoC mode decode is: Boot ROM `0x0000_0000–0xFFFF` → `_boot_rom`; DMEM `0x0001_0000–0x1_FFFF` → `self.dmem` (local, NOT on crossbar); MMIO `0x4000_0000–0x7FFF_FFFF` → bridge callback; SRAM/DRAM → `CrossbarModel.read/write` (DECERR via `ValueError` otherwise). `_mem_read/_mem_write` were NOT modified.
@@ -135,6 +188,55 @@ contract).
 - INTC-adjacent files pre/post: 95 → 95 passed (0 new failures).
 - Full sim/tests: 19 failed / 1482 passed / 1 skipped / 13 errors — matches
   known legacy baseline; zero INTC-related failures.
+# Todo 8 — Spike↔Ibex ring 管理对齐 FM 验证守卫（FW-08）
+
+## Findings (2026-08-24)
+- Added `sim/tests/test_spike_ibex_ring_alignment.py`: 3 tests (happy head
+  alignment, ring_size=16 wrap divergence failure injection, COMPLETION_STATUS
+  + HOST_HEAD mirror). `PYTHONPATH=sim python -m pytest
+  sim/tests/test_spike_ibex_ring_alignment.py -v` → **3 passed, exit 0, 3.3s**
+  (Spike stack present on this host). Evidence in
+  `build/evidence/task-8-fm-soc-datapath-hardening.txt`.
+- **Two paths, one drain model**: the real firmware (`firmware_main`) drains
+  ALL pending commands in a single Spike boot (`while (npu_head != host_tail)`)
+  from the 1024-entry ring (`NPU_ABI_RING_ENTRIES`), writing
+  `COMPLETION_STATUS[head]` per dispatch via doorbell MMIO — so the completion
+  index set IS the dispatch-time head sequence (0..207 for 208 commands). The
+  Python NPUFirmware advances head per `run_loop(1)` call. Happy test drives
+  NPUFirmware with `FuncModel(ring_size=1024)` (same trick as the ring-stress
+  tests) so both paths end at NPU_HEAD=HOST_HEAD=208 with zero wraps.
+- **Spike-path trace is final-state + completion-array only**: the bridge
+  `_status` exposes the post-drain NPU_HEAD/HOST_HEAD (written once at the end
+  of the firmware drain loop) and the per-index COMPLETION_STATUS array; the
+  DRAM completion ring written by Spike is NOT readable post-hoc (Spike memory
+  is discarded on process exit), so the per-command head progression on the
+  Spike side is recovered from the COMPLETION_STATUS index set, not from DRAM.
+- **Byte-identical ring entries cross-check**: `spike_host.write_cmd_entry`
+  (`<8I` fmt) and `FuncModel.host_write_command` (`<IQI8x`, 24 B + zero pad)
+  produce byte-identical 32 B entries for the same (opcode, desc_addr, flags)
+  because desc_addr < 2^32 — asserted as `ring_bytes` equality between paths.
+- **Op class choice**: SFU softmax (ring op 0x01, sub-op 0) and Vector VADD
+  (0x0F) are the proven-completing intersection of both dispatchers
+  (`test_runtime_real_firmware.py` for the C firmware; long-sequence gate for
+  NPUFirmware). MMUL (tile_mmul) and DMA_COPY were avoided: slow on the
+  NPUFirmware path / descriptor-semantics mismatch (C DMA_COPY vs Python
+  DMA_LD), respectively.
+- **Failure injection is the real wrap divergence**: NPUFirmware(ring_size=16)
+  produces heads `(k+1)%16` — 13 wraps, final head 0 — vs firmware 208. The
+  guard asserts the exact wrap pattern, the wrap count (208//16), AND the
+  divergence from the spike reference (heads[15]==0 vs 16, final 0 vs 208).
+- **Env/robustness notes**: skip via `spike_firmware._is_spike_available()`
+  (checks `spike_src/build/spike` + `npu_mmio_plugin.so` +
+  `firmware/build/npu_firmware_spike.elf`, NOT `npu_firmware.elf`); skip
+  behavior verified by monkeypatching `_is_spike_available` → `pytest.skip`
+  raises `Skipped`. `sram_kb=4096` is required — the firmware's
+  SFU_SCRATCH (0x20080000) / VEC_SCRATCH (0x20300000) exceed the default
+  512 KB SRAM. Spike launch/cleanup is wrapped in try/finally with
+  `_cleanup_spike` so a drain timeout never leaks the process or the
+  `/tmp/npu_mmio.sock` socket. Module-scoped `spike_trace` fixture runs the
+  real firmware path exactly once per session (≈3 s total).
+- `FuncModel` DeprecationWarning (NPUFirmware) fires 3× per run — benign,
+  consistent with the rest of the suite.
 # Todo 9 — firmware_memory_contract.json 生成与比对（FW-09）
 
 ## Findings (2026-08-24)
@@ -170,3 +272,50 @@ contract).
 - Determinism: JSON serialized with sort_keys + 2-space indent; `--check`
   regenerates (incl. the FM run) and diffs against the on-disk file, matching
   the `gen_npu_abi.py --check` regenerate-and-compare pattern.
+# Todo 6 — IRQ-driven firmware dispatch FM guard (FW-10)
+
+## Findings (2026-08-24)
+- Added `sim/tests/test_irq_driven_dispatch.py`: 4 tests (happy 3-command
+  stream, no-polling contrast, monkeypatch stall, INTC ENABLE=0 stall).
+  `PYTHONPATH=sim python -m pytest sim/tests/test_irq_driven_dispatch.py -v`
+  → 4 passed, exit 0. Evidence in
+  `build/evidence/task-6-fm-soc-datapath-hardening.txt`.
+  Adjacent regression: `test_intc_gating.py + test_soc_fm.py` → 62 passed,
+  0 failed. No `firmware/npu_firmware.c` or `sim/mmio_bridge.py` changes.
+- **Dispatch mechanism (unchanged)**: `NPUFirmware._wait_done` is IRQ-driven
+  exactly when `self.riscv is not None` — it spins on `_irq_serviced`, which
+  only `dispatch_interrupt` (the RISC-V trap handler) sets. The STATUS-poll
+  branch (`while bridge.handle('read', STATUS) & 1`) is dead code while bound.
+  Guard proves both directions: bound run = zero STATUS reads (spy on both
+  `bridge.handle` AND `riscv.mmio_callback` — the callback is captured at
+  `FuncModel.__init__`, so patching `bridge.handle` alone is NOT enough to
+  observe CPU-side reads); unbound run = STATUS reads appear (anti-vacuous).
+- **Failure injection (monkeypatch)**: suppress `bridge.irq_notify_callback`
+  → `_set_irq` still accumulates INTC.PENDING, but the CPU never wakes.
+  Firmware consumes command 1 and spins in `_wait_done`; the engine STATUS
+  is DONE yet no completion is signaled — the stall assertion
+  (NPU_HEAD=1, HOST_HEAD=0, engine done, trap handler never ran) fails if
+  anyone adds a polling fallback to the IRQ path. Restoring notify + setting
+  `riscv.interrupt_pending=True` wakes the spinner and drains the remaining
+  commands — deterministic, bounded, no infinite loop.
+- **Failure injection (Todo 2 gating)**: explicit INTC ENABLE=0 produces the
+  identical stall through the real `_set_irq` gate (`notified == []` proves
+  the gate blocked, not a monkeypatch). This is the end-to-end tie-in of
+  Todo 2's `cpu_irq = |(PENDING&ENABLE) and popcount(...) >= THRESHOLD`.
+- **Deterministic-bounded stall pattern**: `run_loop` runs in a daemon
+  thread; a `_dispatch` spy records the first command entry, main thread
+  waits on that, asserts the stall after a 0.2 s grace, then restores IRQ
+  and joins. No wall-clock flakiness — the stall is a pure flag wait.
+- **MMUL dispatch raises multiple IRQs**: tile_mmul waits (DMA act/wgt/scale/
+  out + MXU compute) each complete via their own IRQ trap, so the serviced
+  source list for one MMUL is [3,3,3,0,3]; assert `{0,1,2,3,8} ⊆ serviced`
+  (engine sources + doorbell bit 8), not exact sequences.
+- **Explicit ENABLE programming**: all tests program INTC ENABLE=0x1FF /
+  THRESHOLD=1 up front (Todo 2's open-default would work, but explicit
+  programming makes the gating semantics deterministic and documents that
+  the happy path runs under a programmed gate).
+- **INTC PENDING accumulates host bits**: `host_write_command` raises source
+  bit 8 per command; `_handle_irq` services the LOWEST pending bit, so
+  engine bits (0–3) always win over the doorbell bit during `_wait_done`,
+  and leftover bit 8 is drained at the next run_loop iteration top.
+- NPUFirmware DeprecationWarning ×4 per run — benign, matches Todos 1–5.

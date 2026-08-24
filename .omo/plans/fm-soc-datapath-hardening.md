@@ -108,7 +108,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   QA scenarios: happy — Ibex 写 SRAM[0x100] → MXU 读 SRAM[0x100] 一致；failure — 写 DMEM → 读 SRAM → 值不同。Evidence `build/evidence/task-5-fm-soc-datapath-hardening.txt`
   Commit: Y | test(sim): Ibex shared address space cross-engine guard
 
-- [ ] 6. 中断驱动 firmware 调度 FM 验证守卫（FW-10）
+- [x] 6. 中断驱动 firmware 调度 FM 验证守卫（FW-10）
   What to do / Must NOT do: 新增 `sim/tests/test_irq_driven_dispatch.py`：多命令流中 op N 完成由 IRQ 信号驱动（非 STATUS 轮询）→ firmware 调度 op N+1；验证无轮询 fallback（当 riscv bound 时）；failure 注入：抑制 IRQ → firmware 不前进。依赖 todo 2 的 ENABLE/THRESHOLD 门控。Must NOT 改 `firmware/npu_firmware.c` 控制流。
   Parallelization: Wave 2 | Blocked by: 2 | Blocks: —
   References: `sim/miniv.py:490-519,720-735`（NPUFirmware.run_loop/_wait_done 中断驱动）；`sim/miniv.py:521-546`（dispatch_interrupt）；`sim/func_model.py:79-83`（riscv.irq_handler + firmware.bind_riscv）；`docs/soc-fm-gap-spec.md:1005`（test_firmware_interrupt_dispatch 设计）
@@ -116,7 +116,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   QA scenarios: happy — 3 命令流全由 IRQ 驱动完成；failure — monkeypatch 抑制 IRQ → firmware 停在第 1 命令。Evidence `build/evidence/task-6-fm-soc-datapath-hardening.txt`
   Commit: Y | test(sim): IRQ-driven firmware dispatch guard
 
-- [ ] 7. 固件 boot 序列 FM 验证守卫（SOC-18）
+- [x] 7. 固件 boot 序列 FM 验证守卫（SOC-18）
   What to do / Must NOT do: 新增 `sim/tests/test_firmware_boot_sequence.py`：验证 `NPUFirmware.boot()` 设置 PC=0、sp=DMEM top、加载 hex → `RISCVMini.step()` 从 reset 执行进到 firmware main → doorbell poll → 首条命令完成；验证 boot ROM 隔离（DMEM 写不影响 boot ROM）。复用 `NPUFirmware.boot` + `RISCVMini.load_hex` 现有实现。Must NOT 改 `RISCVMini` 指令集。
   Parallelization: Wave 2 | Blocked by: 5 | Blocks: —
   References: `sim/miniv.py:477-488`（NPUFirmware.boot）；`sim/miniv.py:349-374`（RISCVMini.load_hex）；`sim/func_model.py:84-86`（firmware.boot 调用）；`sim/tests/test_soc_fm.py:687`（现有 test_firmware_bootflow）；`docs/soc-fm-gap-spec.md:839-1016`
@@ -124,7 +124,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   QA scenarios: happy — boot → step() → doorbell → MMUL dispatch → done；failure — boot ROM 损坏 → step() 不前进。Evidence `build/evidence/task-7-fm-soc-datapath-hardening.txt`
   Commit: Y | test(sim): firmware boot sequence FM guard
 
-- [ ] 8. Spike↔Ibex ring 管理对齐 FM 验证守卫（FW-08）
+- [x] 8. Spike↔Ibex ring 管理对齐 FM 验证守卫（FW-08）
   What to do / Must NOT do: 新增 `sim/tests/test_spike_ibex_ring_alignment.py`：同一组 208 命令分别通过 Spike 路径（`spike_host.schedule_chain` + `_launch_spike`）和 NPUFirmware 路径（`host_write_command` + `run_loop`）执行，交叉比对 NPU_HEAD/HOST_HEAD/COMPLETION_STATUS 和 ring wrap 行为一致；failure 注入：篡改一条路径的 ring_size → 行为分歧。Must NOT 改 `spike_host.py` 或 `miniv.py` 的 ring 管理逻辑。
   Parallelization: Wave 2 | Blocked by: — | Blocks: —
   References: `sim/spike_host.py:160-205`（schedule_chain/poll_completion）；`sim/miniv.py:490-519`（NPUFirmware.run_loop）；`sim/command_ring.py:13-70`（shared constants/helpers）；`sim/tests/test_soc_fm_long_sequence.py`（208 命令模式）；`sim/tests/test_npu_firmware_deprecation.py`
