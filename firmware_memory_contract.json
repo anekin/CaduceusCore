@@ -1,0 +1,45 @@
+{
+  "generated_by": "scripts/gen_firmware_memory_contract.py",
+  "note": "Derived artifact \u2014 sources of truth are sim/address_space.py, sim/command_ring.py and spec/npu_abi.json. Do not edit by hand.",
+  "regions": {
+    "activation": {
+      "base": "0x80020000",
+      "size": 1835008
+    },
+    "command_ring": {
+      "base": "0x80000000",
+      "size": 32768
+    },
+    "completion_ring": {
+      "base": "0x80008000",
+      "size": 32768
+    },
+    "descriptor_pool": {
+      "base": "0x80010000",
+      "size": 65536
+    },
+    "weight": {
+      "base": "0x801e0000",
+      "size": 6422528
+    }
+  },
+  "ring": {
+    "CMD_ENTRY_SIZE": 32,
+    "COMPLETION_ENTRY_SIZE": 32,
+    "COMPLETION_RING_ADDR": "0x80008000",
+    "DESC_STRIDE": 64,
+    "RING_BASE": "0x80000000",
+    "RING_ENTRIES": 1024
+  },
+  "run": {
+    "desc_base": "0x80010000",
+    "desc_count": 16,
+    "desc_end": "0x80010400",
+    "desc_stride": 64,
+    "final_host_tail": 0,
+    "final_npu_head": 0,
+    "firmware_ring_size": 16,
+    "max_ring_offset_observed": 15,
+    "total_commands": 16
+  }
+}

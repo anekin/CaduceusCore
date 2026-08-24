@@ -133,7 +133,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   **环境依赖**: 测试需要 Spike binary + `firmware/build/npu_firmware_spike.elf`（注意：不是 `npu_firmware.elf`，`sim/spike_firmware.py:28` 定义 `FIRMWARE_ELF` 指向 spike 版本）。缺失时测试必须 `pytest.skip(reason="Spike binary not available")`，复用 `sim/spike_firmware._is_spike_available()` 检测模式。acceptance 命令在无 Spike 环境下 exit 0（0 collected / all skipped）。
   Commit: Y | test(sim): Spike↔Ibex ring alignment guard
 
-- [ ] 9. `firmware_memory_contract.json` 生成与比对（FW-09）
+- [x] 9. `firmware_memory_contract.json` 生成与比对（FW-09）
   What to do / Must NOT do: 新增 `scripts/gen_firmware_memory_contract.py`：从 `sim/address_space.py` REGIONS + `sim/command_ring.py` 常量 + 实际 run 的 descriptor range/max ring offset 生成 JSON 契约文件；新增 `sim/tests/test_memory_contract.py`：验证 FM 生成的 JSON 与 `spec/npu_abi.json` 常量一致；failure 注入：篡改 JSON 中 RING_ENTRIES → 比对失败。Must NOT 把 JSON 作为新事实源（事实源仍是 `address_space.py`/`command_ring.py`/`spec/npu_abi.json`）。
   Parallelization: Wave 2 | Blocked by: — | Blocks: —
   References: `sim/address_space.py:61-149`（REGIONS/contract_check）；`sim/command_ring.py:13-70`（constants/guards）；`spec/npu_abi.json:1435,1579-1582`（rings.configuration）；`sim/tests/test_npu_abi_constants.py`（现有常量比对模式）

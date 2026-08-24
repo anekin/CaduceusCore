@@ -135,3 +135,38 @@ contract).
 - INTC-adjacent files pre/post: 95 → 95 passed (0 new failures).
 - Full sim/tests: 19 failed / 1482 passed / 1 skipped / 13 errors — matches
   known legacy baseline; zero INTC-related failures.
+# Todo 9 — firmware_memory_contract.json 生成与比对（FW-09）
+
+## Findings (2026-08-24)
+- Added `scripts/gen_firmware_memory_contract.py` + `sim/tests/test_memory_contract.py`
+  + committed `firmware_memory_contract.json` (REPO root).
+  `python3 scripts/gen_firmware_memory_contract.py --check` → exit 0;
+  `PYTHONPATH=sim python -m pytest sim/tests/test_memory_contract.py -v` →
+  9 passed, exit 0. Evidence in `build/evidence/task-9-fm-soc-datapath-hardening.txt`.
+- **JSON is a derived artifact, never a truth source**: `build_contract()` assembles
+  `regions` (address_space.REGIONS), `ring` (command_ring constants +
+  COMPLETION_ENTRY_SIZE), and `run` (observed from an actual minimal FuncModel
+  doorbell MMUL run — descriptor range used, firmware_ring_size, observed max
+  ring offset, final heads). `compare_contract()` re-derives everything from
+  address_space/command_ring; the pytest adds the third source
+  (spec/npu_abi.json rings.configuration).
+- **"Actual run" is real, not hardcoded**: the generator executes 16 tiny
+  MMUL commands (M=1,K=4,N=2) through `host_write_command`/`run_loop` and
+  records doorbell bookkeeping (max_ring_offset_observed=15, final heads=0 mod
+  the FuncModel firmware ring_size=16). Mirrors `test_doorbell_ring_wrap_16`
+  semantics; no test-module imports, so todo 10's layout relocation can't
+  silently corrupt this contract.
+- **Import quirk**: `scripts/gen_firmware_memory_contract.py` must insert BOTH
+  REPO and REPO/sim into sys.path — `func_model` imports `gen.npu_abi`
+  (REPO-level package), and the acceptance command runs without PYTHONPATH.
+- **Failure injection**: deep-copy JSON → `ring.RING_ENTRIES = 512` →
+  `compare_contract` returns a mismatch naming RING_ENTRIES (test asserts
+  non-empty + key mention + disagreement with `command_ring.RING_ENTRIES`).
+  A second injection (region base tamper) guards the regions path.
+- **contract_check interplay**: with the tampered RING_ENTRIES=512 the
+  completion-ring end moves to 0x80004000, so contract_check alone would NOT
+  catch the tamper (desc_base 0x80010000 still clears it) — the direct
+  constant comparison is what bites. Both guards live in compare_contract.
+- Determinism: JSON serialized with sort_keys + 2-space indent; `--check`
+  regenerates (incl. the FM run) and diffs against the on-disk file, matching
+  the `gen_npu_abi.py --check` regenerate-and-compare pattern.

@@ -1,0 +1,30 @@
+=== Task 9: firmware_memory_contract.json generation + verification (FW-09) ===
+
+--- Command 1: python3 scripts/gen_firmware_memory_contract.py --check ---
+Firmware memory contract check
+  Sources: sim/address_space.py, sim/command_ring.py
+  OK: generated contract matches the sources of truth
+  OK: /home/prj/zhengs/caduceuscore/CaduceusCore/firmware_memory_contract.json matches a freshly generated contract
+PASS
+exit_code=0
+
+--- Command 2: PYTHONPATH=sim python -m pytest sim/tests/test_memory_contract.py -v ---
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 9 items
+
+sim/tests/test_memory_contract.py::test_contract_regions_match_address_space PASSED [ 11%]
+sim/tests/test_memory_contract.py::test_contract_ring_matches_command_ring PASSED [ 22%]
+sim/tests/test_memory_contract.py::test_contract_ring_matches_abi_ring_configuration PASSED [ 33%]
+sim/tests/test_memory_contract.py::test_contract_run_section_satisfies_address_contract PASSED [ 44%]
+sim/tests/test_memory_contract.py::test_on_disk_contract_file_is_fresh PASSED [ 55%]
+sim/tests/test_memory_contract.py::test_compare_contract_reports_no_mismatch PASSED [ 66%]
+sim/tests/test_memory_contract.py::test_write_contract_roundtrip PASSED  [ 77%]
+sim/tests/test_memory_contract.py::test_failure_injection_ring_entries_tamper_detected PASSED [ 88%]
+sim/tests/test_memory_contract.py::test_failure_injection_region_base_tamper_detected PASSED [100%]
+
+============================== 9 passed in 0.16s ===============================
+exit_code=0
