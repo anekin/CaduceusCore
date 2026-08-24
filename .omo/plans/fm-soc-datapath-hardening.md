@@ -170,7 +170,7 @@ Your next move: approve, or run a high-accuracy review first. Full execution det
   QA scenarios: happy — 28 层 531 命令持久偏移跑通、末层 cos >= 0.999；failure — layer 5 op14 篡改 → layer 5 输出失配。Evidence `build/evidence/task-11-fm-soc-datapath-hardening.txt`
   Commit: Y | test(sim): 28-layer full-model FM persistent-offset gate
 
-- [ ] 12. MobileNetV3 CV chain FM gate（E2E-05）
+- [x] 12. MobileNetV3 CV chain FM gate（E2E-05）
   What to do / Must NOT do: 新增 `sim/tests/test_mobilenetv3_fm_chain.py`：用 `sim/cv/cv_trace.py:generate_mobilenetv3_trace(onnx_path)` 或 `sim/cv/onnx_importer.py:import_mobilenetv3` 获取层列表，转换为 `{mmul,sfu,vector}` op dict，通过 `FuncModel.host_write_command` + `firmware.run_loop` 调度为 ring 命令；验证每层输出与 `GoldenMXU.matmul_int4_per_block` golden cos_sim >= 0.99。复用 `sim/cv/cv_command_ir.py` 转换模式和 `sim/tests/test_cv_mobilenetv3.py` golden 比对模式。Must NOT 改 `sim/cv/` 模块代码。
   Parallelization: Wave 3 | Blocked by: — | Blocks: —
   References: `sim/cv/cv_trace.py:175`（generate_mobilenetv3_trace）；`sim/cv/onnx_importer.py`（import_mobilenetv3）；`sim/cv/cv_command_ir.py`（convert_layer_list/convert_mobilenetv3_graph）；`sim/tests/test_cv_mobilenetv3.py`（W3.4 golden 比对模式）；`sim/tests/test_soc_fm_long_sequence.py:131-145`（_issue ring 调度模式）

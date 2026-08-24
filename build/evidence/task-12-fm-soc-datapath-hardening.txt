@@ -1,0 +1,86 @@
+=== Todo 12 — MobileNetV3 CV chain FM gate (E2E-05) — 2026-08-24T07:43:26Z ===
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.0.3, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/prj/zhengs/caduceuscore/CaduceusCore
+plugins: anyio-4.13.0
+collecting ... collected 4 items
+
+sim/tests/test_mobilenetv3_fm_chain.py::TestMobileNetV3FMChain::test_op_dict_conversion PASSED
+sim/tests/test_mobilenetv3_fm_chain.py::TestMobileNetV3FMChain::test_full_chain_ring_vs_golden Total ring commands: 8137 (ring wraps: 508, chain wall: 11.6s)
+layer                                               M      K      N   cmds        cos  exact
+--------------------------------------------------------------------------------------------
+node_Conv_506                                   12544   None     16    196   1.000000   True
+node_Conv_508                                    3136   None     16    784   1.000000   True
+node_conv2d_2                                       1   None      8      1   1.000000   True
+node_conv2d_3                                       1   None     16      1   0.000000   True
+node_Conv_510                                    3136   None     16     49   1.000000   True
+node_Conv_512                                    3136   None     72     49   1.000000   True
+node_Conv_514                                     784   None     72    936   1.000000   True
+node_Conv_516                                     784   None     24     13   1.000000   True
+node_Conv_518                                     784   None     88     13   1.000000   True
+node_Conv_520                                     784   None     88   1144   1.000000   True
+node_Conv_522                                     784   None     24     13   1.000000   True
+node_Conv_524                                     784   None     96     13   1.000000   True
+node_Conv_526                                     196   None     96    384   1.000000   True
+node_conv2d_13                                      1   None     24      1   1.000000   True
+node_conv2d_14                                      1   None     96      1   0.000000   True
+node_Conv_528                                     196   None     40      4   1.000000   True
+node_Conv_530                                     196   None    240      8   1.000000   True
+node_Conv_532                                     196   None    240    960   1.000000   True
+node_conv2d_18                                      1   None     64      1   1.000000   True
+node_conv2d_19                                      1   None    240      2   1.000000   True
+node_Conv_534                                     196   None     40      4   1.000000   True
+node_Conv_536                                     196   None    240      8   1.000000   True
+node_Conv_538                                     196   None    240    960   1.000000   True
+node_conv2d_23                                      1   None     64      1   1.000000   True
+node_conv2d_24                                      1   None    240      2   1.000000   True
+node_Conv_540                                     196   None     40      4   1.000000   True
+node_Conv_542                                     196   None    120      4   1.000000   True
+node_Conv_544                                     196   None    120    480   1.000000   True
+node_conv2d_28                                      1   None     32      1   1.000000   True
+node_conv2d_29                                      1   None    120      1   1.000000   True
+node_Conv_546                                     196   None     48      4   1.000000   True
+node_Conv_548                                     196   None    144      8   1.000000   True
+node_Conv_550                                     196   None    144    576   1.000000   True
+node_conv2d_33                                      1   None     40      1   1.000000   True
+node_conv2d_34                                      1   None    144      2   1.000000   True
+node_Conv_552                                     196   None     48      4   1.000000   True
+node_Conv_554                                     196   None    288     12   1.000000   True
+node_Conv_556                                      49   None    288    288   1.000000   True
+node_conv2d_38                                      1   None     72      1   1.000000   True
+node_conv2d_39                                      1   None    288      3   1.000000   True
+node_Conv_558                                      49   None     96      1   1.000000   True
+node_Conv_560                                      49   None    576      5   1.000000   True
+node_Conv_562                                      49   None    576    576   1.000000   True
+node_conv2d_43                                      1   None    144      2   1.000000   True
+node_conv2d_44                                      1   None    576      5   1.000000   True
+node_Conv_564                                      49   None     96      1   1.000000   True
+node_Conv_566                                      49   None    576      5   1.000000   True
+node_Conv_568                                      49   None    576    576   1.000000   True
+node_conv2d_48                                      1   None    144      2   1.000000   True
+node_conv2d_49                                      1   None    576      5   1.000000   True
+node_Conv_570                                      49   None     96      1   1.000000   True
+node_Conv_572                                      49   None    576      5   1.000000   True
+node_linear                                         1    576   1024      8   1.000000   True
+node_linear_1                                       1   1024   1000      8   1.000000   True
+
+Final classifier logits: shape=(1000,) std=2.1534 argmax=858
+Conv layers with cos_sim >= 0.99: 50/52 (2 degenerate zero-vs-zero layers, bit-exact)
+PASSED
+sim/tests/test_mobilenetv3_fm_chain.py::TestMobileNetV3FMChain::test_chain_determinism PASSED
+sim/tests/test_mobilenetv3_fm_chain.py::TestMobileNetV3FMChain::test_failure_weight_address_tamper Failure injection OK: tampered weight address of node_Conv_542 -> cos=0.031230 (< 0.99), all other 53 layers unchanged
+PASSED
+
+=============================== warnings summary ===============================
+sim/tests/test_mobilenetv3_fm_chain.py::TestMobileNetV3FMChain::test_full_chain_ring_vs_golden
+sim/tests/test_mobilenetv3_fm_chain.py::TestMobileNetV3FMChain::test_chain_determinism
+sim/tests/test_mobilenetv3_fm_chain.py::TestMobileNetV3FMChain::test_chain_determinism
+sim/tests/test_mobilenetv3_fm_chain.py::TestMobileNetV3FMChain::test_failure_weight_address_tamper
+sim/tests/test_mobilenetv3_fm_chain.py::TestMobileNetV3FMChain::test_failure_weight_address_tamper
+  /home/prj/zhengs/caduceuscore/CaduceusCore/sim/func_model.py:96: DeprecationWarning: NPUFirmware is deprecated; use Spike + real firmware ELF for golden reference verification. NPUFirmware remains available for fast smoke tests.
+    return NPUFirmware(sim_modules=sim_modules, bridge=bridge,
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 4 passed, 5 warnings in 57.63s ========================
+exit=0

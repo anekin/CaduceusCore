@@ -355,3 +355,78 @@ contract).
   engine bits (0–3) always win over the doorbell bit during `_wait_done`,
   and leftover bit 8 is drained at the next run_loop iteration top.
 - NPUFirmware DeprecationWarning ×4 per run — benign, matches Todos 1–5.
+# Todo 12 — MobileNetV3 CV chain FM gate（E2E-05）
+
+## Findings (2026-08-24)
+- Added `sim/tests/test_mobilenetv3_fm_chain.py`: 4 tests (op-dict conversion,
+  full-chain ring vs golden, determinism, weight-address tamper injection).
+  `PYTHONPATH=sim python -m pytest sim/tests/test_mobilenetv3_fm_chain.py -v`
+  → 4 passed, exit 0, ~58 s. Evidence in
+  `build/evidence/task-12-fm-soc-datapath-hardening.txt`.
+  Neighboring `sim/cv/tests/test_cv_traces.py` → 7 passed (sim/cv untouched).
+- **Gate substance**: the full MobileNetV3-Small graph (124 nodes: 52 convs +
+  11 depthwise + 2 Gemm classifier heads + SE blocks + residuals) runs through
+  the doorbell ring: 8137 MMUL ring commands, 508 ring wraps (16-entry ring,
+  persistent offset), every command drained by `NPUFirmware._dispatch` →
+  `tile_mmul` → bridge `_run_mxu_compute`. All 54 GEMM layers bit-exact vs
+  `GoldenMXU.matmul_int4_per_block`; 50/52 conv layers cos_sim = 1.0,
+  2 layers are degenerate zero-vs-zero (see below). Chain wall ≈ 12 s.
+- **Pre-existing FM gap found (worked around, NOT fixed — scope)**: `tile_mmul`
+  computes the output-tile offset as `out_sram + n_start*4` (column stride
+  128 floats), which matches the tile size only for M == 1. For M > 1 with
+  N > 128 the second N-tile overlaps the first and clobbers it (SRAM
+  accumulator AND DRAM output). All ring MMULs here are therefore chunked to
+  M ≤ 64 AND N ≤ 128 per command; the golden reference is the same
+  matmul_int4_per_block math so chunking is row/column-independent and
+  bit-exactness holds. The M ≤ 64 limit is the broadcast activation layout
+  (64 K-indices per 4096-byte tile, 64 M-rows per tile); the N ≤ 128 limit is
+  purely the tile_mmul stride bug. Worth a dedicated FM bug ticket (impact:
+  any M>1 MMUL with N>128 through the Python firmware emulator is silently
+  wrong — the todo-11 ring MMULs escaped because their outputs went to
+  unverified scratch).
+- **Firmware data layouts (verified bit-exact against `_run_mxu_compute`)**:
+  (1) weights: per (n_tile, k_block) FIXED 8192-byte slots at
+  `(n_tile*num_blocks+k_block)*TILE_WEIGHT_BYTES` — a dense repack (no slot
+  padding) reads garbage for k_block ≥ 1; (2) block scales: fixed 512-byte
+  slots, first `tile_width*4` bytes = `scales[k_block, n_tile]`;
+  (3) activations: `pack_int8_activation_tile_major` broadcast layout, and the
+  descriptor `input_size` must be the FULL packed size (`ceil(K/64)*4096`),
+  not M*K — otherwise the DMA under-copies and the bridge reads stale SRAM.
+- **Activation scale folding**: the ring MMUL has no activation-scale path
+  (tile_mmul always applies FP32 block scales), so the INT8 activation scale
+  is folded into the weight block scales (`scales_eff = w_scales * a_s`).
+  Golden uses the same folded scales → bit-exact.
+- **Depthwise decomposition**: ONNX depthwise weights are `(C_out, 1, kH, kW)`
+  with `groups == in_channels` — `groups == w.shape[1]` is FALSE; the
+  importer's `type == "depthwise_conv"` tag is the reliable detector.
+  Scheduled per input channel (K = kh*kw, N = 1), the same decomposition as
+  the W3.4 golden. The block-diagonal single-GEMM alternative overflows the
+  64 KB activation SRAM region for 5×5 depthwise with C ≥ 41 (K = 25*C).
+- **Chain wiring**: conv/Gemm layers execute on the ring; non-conv ops
+  (HardSwish/HardSigmoid/Relu/SE ReduceMean+Mul/residual Add/head
+  ReduceMean+Reshape) are identical numpy on both paths and feed the next conv
+  the same value — only GEMM layers are verifiable against the matmul golden.
+  Real ONNX initializers (weights + bias) make it a genuine MobileNetV3 chain;
+  bias is added host-side to the chained value (raw ring-vs-golden compare is
+  bias-free). Residual Adds consume `getitem_*` tensors — wired via node
+  input/output names, not last-output heuristics. The head `Concat` mixes a
+  runtime Shape output with a constant initializer — lookup must fall back to
+  init_map. `ReduceMean.keepdims` must be read by attribute NAME (attribute[0]
+  is `noop_with_empty_axes`).
+- **Degenerate zero-vs-zero layers (legitimate)**: with the random N(0,1)
+  input, the first SE reduce conv (`node_conv2d_3` / fc2, and one more later)
+  sees a ReLU that zeroes its input → both ring and golden outputs are exactly
+  zero. cos of zero vectors is undefined (0.0 by convention here); the gate
+  asserts bit-exactness for these and cos ≥ 0.99 for the other 50 layers.
+  Not a modeling bug — data-dependent ReLU saturation.
+- **Failure injection**: the weight address of one mid-chain pointwise conv
+  (chosen deterministically at conv index 52//2 → `node_Conv_542`) is shifted
+  +64 bytes into its own weight buffer → that layer's cos drops to 0.031
+  while all other 53 layers stay bit-exact (downstream layers chain from the
+  corrupted value in BOTH paths, so they still match their golden — exactly
+  one layer diverges, which is the point).
+- **Determinism**: two independent ring-chain runs produce identical per-layer
+  outputs (asserted), pinning the doorbell/IRQ/tile-mmul path stability.
+- Env notes: module-level skip when `assets/mobilenetv3_small.onnx` (or its
+  `.data` external-data companion) is missing → "MobileNetV3 ONNX model not
+  found". NPUFirmware DeprecationWarning ×5 per run — benign.
