@@ -1652,3 +1652,751 @@ PYTHONPATH=sim python3 -m pytest sim/tests/test_cv_e2e.py -q
 ### Notes
 
 - These optional polish items were all implemented during earlier waves; this entry records the final skeptical re-verification triggered by the TODO continuation check.
+
+## 2026-08-24 12:14 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1194/test_compare_perfect_match0/golden.npz`, device `fm://python`, model `/tmp/pytest-of-zhengs/pytest-1194/test_compare_perfect_match0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1194/test_compare_perfect_match0/qwen-per-layer-compare-20260824T121421.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 12:14 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1194/test_compare_first_and_last_on0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1194/test_compare_first_and_last_on0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1194/test_compare_first_and_last_on0/qwen-per-layer-compare-20260824T121421.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 12:14 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1194/test_compare_fails_when_first_0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1194/test_compare_fails_when_first_0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=0.808317, max_abs_diff=1.0000e+01, passed=False.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1194/test_compare_fails_when_first_0/qwen-per-layer-compare-20260824T121421.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 12:14 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1194/test_main_returns_nonzero_when0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1194/test_main_returns_nonzero_when0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_1)**: cos_sim=0.917269, max_abs_diff=1.0000e+01, passed=False.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1194/test_main_returns_nonzero_when0/qwen-per-layer-compare-20260824T121421.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 12:24 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1195/test_compare_perfect_match0/golden.npz`, device `fm://python`, model `/tmp/pytest-of-zhengs/pytest-1195/test_compare_perfect_match0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1195/test_compare_perfect_match0/qwen-per-layer-compare-20260824T122426.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 12:24 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1195/test_compare_first_and_last_on0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1195/test_compare_first_and_last_on0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1195/test_compare_first_and_last_on0/qwen-per-layer-compare-20260824T122426.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 12:24 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1195/test_compare_fails_when_first_0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1195/test_compare_fails_when_first_0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=0.808317, max_abs_diff=1.0000e+01, passed=False.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1195/test_compare_fails_when_first_0/qwen-per-layer-compare-20260824T122426.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 12:24 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1195/test_main_returns_nonzero_when0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1195/test_main_returns_nonzero_when0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_1)**: cos_sim=0.917269, max_abs_diff=1.0000e+01, passed=False.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1195/test_main_returns_nonzero_when0/qwen-per-layer-compare-20260824T122426.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:23 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1197/test_compare_perfect_match0/golden.npz`, device `fm://python`, model `/tmp/pytest-of-zhengs/pytest-1197/test_compare_perfect_match0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1197/test_compare_perfect_match0/qwen-per-layer-compare-20260824T142321.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:23 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1197/test_compare_first_and_last_on0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1197/test_compare_first_and_last_on0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1197/test_compare_first_and_last_on0/qwen-per-layer-compare-20260824T142321.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:23 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1197/test_compare_fails_when_first_0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1197/test_compare_fails_when_first_0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=0.808317, max_abs_diff=1.0000e+01, passed=False.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1197/test_compare_fails_when_first_0/qwen-per-layer-compare-20260824T142321.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:23 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1197/test_main_returns_nonzero_when0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1197/test_main_returns_nonzero_when0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_1)**: cos_sim=0.917269, max_abs_diff=1.0000e+01, passed=False.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1197/test_main_returns_nonzero_when0/qwen-per-layer-compare-20260824T142321.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:34 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1198/test_compare_perfect_match0/golden.npz`, device `fm://python`, model `/tmp/pytest-of-zhengs/pytest-1198/test_compare_perfect_match0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1198/test_compare_perfect_match0/qwen-per-layer-compare-20260824T143414.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:34 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1198/test_compare_first_and_last_on0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1198/test_compare_first_and_last_on0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1198/test_compare_first_and_last_on0/qwen-per-layer-compare-20260824T143414.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:34 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1198/test_compare_fails_when_first_0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1198/test_compare_fails_when_first_0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=0.808317, max_abs_diff=1.0000e+01, passed=False.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1198/test_compare_fails_when_first_0/qwen-per-layer-compare-20260824T143414.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:34 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1198/test_main_returns_nonzero_when0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1198/test_main_returns_nonzero_when0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_1)**: cos_sim=0.917269, max_abs_diff=1.0000e+01, passed=False.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1198/test_main_returns_nonzero_when0/qwen-per-layer-compare-20260824T143414.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:43 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1199/test_compare_perfect_match0/golden.npz`, device `fm://python`, model `/tmp/pytest-of-zhengs/pytest-1199/test_compare_perfect_match0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1199/test_compare_perfect_match0/qwen-per-layer-compare-20260824T144341.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:43 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1199/test_compare_first_and_last_on0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1199/test_compare_first_and_last_on0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1199/test_compare_first_and_last_on0/qwen-per-layer-compare-20260824T144341.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:43 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1199/test_compare_fails_when_first_0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1199/test_compare_fails_when_first_0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=0.808317, max_abs_diff=1.0000e+01, passed=False.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1199/test_compare_fails_when_first_0/qwen-per-layer-compare-20260824T144341.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:43 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1199/test_main_returns_nonzero_when0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1199/test_main_returns_nonzero_when0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_1)**: cos_sim=0.917269, max_abs_diff=1.0000e+01, passed=False.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1199/test_main_returns_nonzero_when0/qwen-per-layer-compare-20260824T144341.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:50 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1201/test_compare_perfect_match0/golden.npz`, device `fm://python`, model `/tmp/pytest-of-zhengs/pytest-1201/test_compare_perfect_match0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1201/test_compare_perfect_match0/qwen-per-layer-compare-20260824T145003.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:50 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1201/test_compare_first_and_last_on0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1201/test_compare_first_and_last_on0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1201/test_compare_first_and_last_on0/qwen-per-layer-compare-20260824T145003.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:50 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1201/test_compare_fails_when_first_0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1201/test_compare_fails_when_first_0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=0.808317, max_abs_diff=1.0000e+01, passed=False.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1201/test_compare_fails_when_first_0/qwen-per-layer-compare-20260824T145003.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 14:50 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1201/test_main_returns_nonzero_when0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1201/test_main_returns_nonzero_when0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_1)**: cos_sim=0.917269, max_abs_diff=1.0000e+01, passed=False.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1201/test_main_returns_nonzero_when0/qwen-per-layer-compare-20260824T145003.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 15:10 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1202/test_compare_perfect_match0/golden.npz`, device `fm://python`, model `/tmp/pytest-of-zhengs/pytest-1202/test_compare_perfect_match0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1202/test_compare_perfect_match0/qwen-per-layer-compare-20260824T151013.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 15:10 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1202/test_compare_first_and_last_on0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1202/test_compare_first_and_last_on0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1202/test_compare_first_and_last_on0/qwen-per-layer-compare-20260824T151013.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 15:10 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1202/test_compare_fails_when_first_0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1202/test_compare_fails_when_first_0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=0.808317, max_abs_diff=1.0000e+01, passed=False.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1202/test_compare_fails_when_first_0/qwen-per-layer-compare-20260824T151013.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 15:10 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1202/test_main_returns_nonzero_when0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1202/test_main_returns_nonzero_when0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_1)**: cos_sim=0.917269, max_abs_diff=1.0000e+01, passed=False.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1202/test_main_returns_nonzero_when0/qwen-per-layer-compare-20260824T151013.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 15:32 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1203/test_compare_perfect_match0/golden.npz`, device `fm://python`, model `/tmp/pytest-of-zhengs/pytest-1203/test_compare_perfect_match0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1203/test_compare_perfect_match0/qwen-per-layer-compare-20260824T153240.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 15:32 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1203/test_compare_first_and_last_on0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1203/test_compare_first_and_last_on0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1203/test_compare_first_and_last_on0/qwen-per-layer-compare-20260824T153240.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 15:32 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1203/test_compare_fails_when_first_0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1203/test_compare_fails_when_first_0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=0.808317, max_abs_diff=1.0000e+01, passed=False.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1203/test_compare_fails_when_first_0/qwen-per-layer-compare-20260824T153240.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 15:32 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1203/test_main_returns_nonzero_when0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1203/test_main_returns_nonzero_when0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_1)**: cos_sim=0.917269, max_abs_diff=1.0000e+01, passed=False.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1203/test_main_returns_nonzero_when0/qwen-per-layer-compare-20260824T153240.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 15:55 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1204/test_compare_perfect_match0/golden.npz`, device `fm://python`, model `/tmp/pytest-of-zhengs/pytest-1204/test_compare_perfect_match0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1204/test_compare_perfect_match0/qwen-per-layer-compare-20260824T155537.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 15:55 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1204/test_compare_first_and_last_on0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1204/test_compare_first_and_last_on0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1204/test_compare_first_and_last_on0/qwen-per-layer-compare-20260824T155537.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 15:55 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1204/test_compare_fails_when_first_0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1204/test_compare_fails_when_first_0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=0.808317, max_abs_diff=1.0000e+01, passed=False.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1204/test_compare_fails_when_first_0/qwen-per-layer-compare-20260824T155537.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 15:55 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1204/test_main_returns_nonzero_when0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1204/test_main_returns_nonzero_when0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_1)**: cos_sim=0.917269, max_abs_diff=1.0000e+01, passed=False.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1204/test_main_returns_nonzero_when0/qwen-per-layer-compare-20260824T155537.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 16:17 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1205/test_compare_perfect_match0/golden.npz`, device `fm://python`, model `/tmp/pytest-of-zhengs/pytest-1205/test_compare_perfect_match0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1205/test_compare_perfect_match0/qwen-per-layer-compare-20260824T161731.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 16:17 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1205/test_compare_first_and_last_on0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1205/test_compare_first_and_last_on0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1205/test_compare_first_and_last_on0/qwen-per-layer-compare-20260824T161731.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 16:17 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1205/test_compare_fails_when_first_0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1205/test_compare_fails_when_first_0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=0.808317, max_abs_diff=1.0000e+01, passed=False.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1205/test_compare_fails_when_first_0/qwen-per-layer-compare-20260824T161731.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 16:17 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1205/test_main_returns_nonzero_when0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1205/test_main_returns_nonzero_when0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_1)**: cos_sim=0.917269, max_abs_diff=1.0000e+01, passed=False.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1205/test_main_returns_nonzero_when0/qwen-per-layer-compare-20260824T161731.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 16:42 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1206/test_compare_perfect_match0/golden.npz`, device `fm://python`, model `/tmp/pytest-of-zhengs/pytest-1206/test_compare_perfect_match0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1206/test_compare_perfect_match0/qwen-per-layer-compare-20260824T164232.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 16:42 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1206/test_compare_first_and_last_on0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1206/test_compare_first_and_last_on0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: True.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1206/test_compare_first_and_last_on0/qwen-per-layer-compare-20260824T164232.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 16:42 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1206/test_compare_fails_when_first_0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1206/test_compare_fails_when_first_0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=0.808317, max_abs_diff=1.0000e+01, passed=False.
+- **Last layer (l_out_2)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1206/test_compare_fails_when_first_0/qwen-per-layer-compare-20260824T164232.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+
+
+## 2026-08-24 16:42 A3 — per-layer hidden-state comparison
+
+### Completed
+
+- **Ran A3 per-layer compare**: golden `/tmp/pytest-of-zhengs/pytest-1206/test_main_returns_nonzero_when0/golden.npz`, device `mock://`, model `/tmp/pytest-of-zhengs/pytest-1206/test_main_returns_nonzero_when0/dummy.gguf`.
+- **Generated token text**: `Hi`.
+- **First layer (l_out_0)**: cos_sim=1.000000, max_abs_diff=0.0000e+00, passed=True.
+- **Last layer (l_out_1)**: cos_sim=0.917269, max_abs_diff=1.0000e+01, passed=False.
+- **Overall passed**: False.
+- **Evidence**: /tmp/pytest-of-zhengs/pytest-1206/test_main_returns_nonzero_when0/qwen-per-layer-compare-20260824T164232.json
+
+### Thresholds
+
+- First and last layers must satisfy cos_sim >= 0.99 and max_abs_diff <= 0.001.
+- Intermediate layers are recorded but do not affect the overall verdict.
+

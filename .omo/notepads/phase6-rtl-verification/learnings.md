@@ -654,3 +654,107 @@ PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q \
 - Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
 - Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
 - Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-08-24T12:05:15Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-08-24T12:05:16Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-08-24T12:10:45Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-08-24T12:20:55Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-08-24T14:19:49Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-08-24T14:30:42Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-08-24T14:39:55Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-08-24T14:46:27Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-08-24T15:06:37Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-08-24T15:29:06Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-08-24T15:51:59Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-08-24T16:13:58Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.
+
+## 2026-08-24T16:38:55Z FM-2 CV chain
+
+- Layer: MobileNetV3-Small features.0.0 (Conv2D 3->16, 3x3, stride=2)
+- Chain composition: im2col -> GEMM(MMUL) -> VRESID -> VCONV(auto) -> SiLU
+- Expanded ISA program: ['MMUL', 'VRESID', 'VCONV', 'SILU']
+- Dims: M=12544 K=27 N=16; per-op cos_sim all >= 0.99
+- Dtype-chain note: MMUL output is INT32; VRESID chained operand (sb) is INT32, so the auto-inserted VCONV appears between VRESID and SiLU (FP16 input). No manual dtype converters were required.

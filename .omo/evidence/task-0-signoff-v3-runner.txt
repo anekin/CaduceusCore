@@ -1,13 +1,13 @@
 case_id: task-0-v3-signoff-runner
-utc_start: 2026-08-21T19:19:39.441677+00:00
-utc_end: 2026-08-21T19:19:41.448663+00:00
-elapsed_s: 2.007
+utc_start: 2026-08-24T16:40:12.048164+00:00
+utc_end: 2026-08-24T16:40:15.167373+00:00
+elapsed_s: 3.119
 branch: main
-head: 1268eff26df90c5399d237387cd97709cb5628c2
-dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |   18 +-
- .omo/evidence/task-17-rerun.txt                    |    2 +-
- .omo/evidence/task-20-uncertainty-kpis.json        |  132 +-
- .omo/evidence/
+head: 0422d2469d1c047e0e7ee46a9c7e77dd86ca6a64
+dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |  18 +-
+ .omo/evidence/task-20-uncertainty-kpis.json        |  88 +--
+ .omo/evidence/task-23-perf-spec-ci.txt             |  51 +-
+ .omo/last_fm_gat
 argv: ["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_v3.py", "-q"]
 command_hash: 3c192012365a11c9
 exit_code: 0
@@ -31,6 +31,6 @@ SIGNOFF_METRIC {"case": "task-0-v3-signoff-runner", "key": "evidence.verdict", "
 
 --- STDOUT (first 8000 chars) ---
 .......................                                                  [100%]
-23 passed in 1.00s
+23 passed in 1.44s
 
 --- END ---
