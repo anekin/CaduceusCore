@@ -1,7 +1,7 @@
 # Func Model Signoff Checklist — v3 + Performance Closure ✅
 
-> **Date**: 2026-08-11 (last updated)
-> **Scope**: v2 op-level + v3 SoC integration + bug-fix cycle (FM-004/005/006/007) + bridge accumulation fix (FM-005 sub-issue) + INTC KeyError fix (FM-008). RTL-golden-readiness for full SoC RTL is deferred.
+> **Date**: 2026-08-24 (last updated)
+> **Scope**: v2 op-level + v3 SoC integration + bug-fix cycle (FM-004/005/006/007) + bridge accumulation fix (FM-005 sub-issue) + INTC KeyError fix (FM-008) + SoC data-path hardening closure (`fm-soc-datapath-hardening`, 2026-08-24, F-FM-SOC-01..13). RTL-golden-readiness for full SoC RTL is deferred.
 > **Performance signoff**: ✅ PASS — func-model-performance-infra-calibration-closure completed 2026-08-11, T1-T25 + F1-F4 all passed, performance_spec_verified=true.
 
 This document reconciles all signoff evidence gathered across tasks T0B–T5 and codifies
@@ -202,26 +202,57 @@ This section captures the additional signoff evidence produced after the v3 Func
 
 **Verification summary**: F1 Plan compliance audit `APPROVE` (14/14 evidence PASS), F2 Code quality `APPROVE` (0 residue, 0 new pytest failures), F4 Scope fidelity `APPROVE` (0 scope creep). F3 Real manual QA was blocked solely by the pre-existing Spike `mmul_smoke` failure (BUG-SOC-FM-005, `max_diff=7.64e+02`); all other F3 stages (firmware build, reverse-gate dry-run, W4-PERF p0/p1, FM-SOC-001/003/032) passed.
 
-## SoC Data-Path Gaps — NOT Blocking Current Signoff
+## SoC Data-Path Hardening Signoff (fm-soc-datapath-hardening)
 
-Six SoC-level data paths identified in `docs/soc-fm-gap-spec.md` have **no Python
-functional model coverage**. These are recognized gaps that do NOT block the current
-Func Model golden-reference signoff but represent work items for a future phase:
+> **Date**: 2026-08-24
+> **Scope**: SoC-level data path FM guards added to close 13 of the 14 gaps listed in `.omo/plans/soc-rtl-verification-vplan.md` (6 SoC interconnect, 3 firmware/CPU, 4 E2E). Only E2E-07 performance calibration remains ❌ (`calibration_state=uncalibrated`, out of scope here).
+
+This section captures the SoC-level data path FM guards added after the
+fm-hardening-phase10 signoff above. They close the six SoC data-path gaps from
+`docs/soc-fm-gap-spec.md` plus the firmware/CPU and E2E gaps from the SoC RTL
+verification vplan, giving every closed gap a runnable functional-model guard.
+
+| Signoff ID | Description | Status | Evidence |
+|---|---|---|---|
+| F-FM-SOC-01 | PCIe TLP complete chain (SOC-13) | ✅ PASS | `sim/tests/test_pcie_tlp_chain.py`; `build/evidence/task-1-fm-soc-datapath-hardening.txt` |
+| F-FM-SOC-02 | INTC ENABLE/THRESHOLD gating (SOC-17 / FW-10) | ✅ PASS | `sim/mmio_bridge.py` + `sim/tests/test_intc_gating.py`; `build/evidence/task-2-fm-soc-datapath-hardening.txt` |
+| F-FM-SOC-03 | AXI crossbar arbitration fairness (SOC-14) | ✅ PASS | `sim/tests/test_crossbar_arbitration.py`; `build/evidence/task-3-fm-soc-datapath-hardening.txt` |
+| F-FM-SOC-04 | APB register conformance replay (SOC-15) | ✅ PASS | `sim/tests/test_apb_register_conformance.py`; `build/evidence/task-4-fm-soc-datapath-hardening.txt` |
+| F-FM-SOC-05 | Ibex shared address space cross-engine (SOC-16) | ✅ PASS | `sim/tests/test_ibex_shared_address_space.py`; `build/evidence/task-5-fm-soc-datapath-hardening.txt` |
+| F-FM-SOC-06 | IRQ-driven firmware dispatch (FW-10) | ✅ PASS | `sim/tests/test_irq_driven_dispatch.py`; `build/evidence/task-6-fm-soc-datapath-hardening.txt` |
+| F-FM-SOC-07 | Firmware boot sequence (SOC-18) | ✅ PASS | `sim/tests/test_firmware_boot_sequence.py`; `build/evidence/task-7-fm-soc-datapath-hardening.txt` |
+| F-FM-SOC-08 | Spike↔Ibex ring management alignment (FW-08) | ✅ PASS | `sim/tests/test_spike_ibex_ring_alignment.py`; `build/evidence/task-8-fm-soc-datapath-hardening.txt` |
+| F-FM-SOC-09 | Firmware memory contract JSON generation & comparison (FW-09) | ✅ PASS | `scripts/gen_firmware_memory_contract.py` + `sim/tests/test_memory_contract.py`; `build/evidence/task-9-fm-soc-datapath-hardening.txt` |
+| F-FM-SOC-10 | 28-layer Qwen full-model FM gate (E2E-04) | ✅ PASS | `sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset`; `build/evidence/task-10-fm-soc-datapath-hardening.txt` + `build/evidence/task-11-fm-soc-datapath-hardening.txt` |
+| F-FM-SOC-11 | MobileNetV3 CV chain FM gate (E2E-05) | ✅ PASS | `sim/tests/test_mobilenetv3_fm_chain.py`; `build/evidence/task-12-fm-soc-datapath-hardening.txt` |
+| F-FM-SOC-12 | Spike forward pass tolerance regression gate (E2E-06) | ✅ PASS | `sim/tests/test_spike_forward_tolerance.py`; `build/evidence/task-13-fm-soc-datapath-hardening.txt` |
+| F-FM-SOC-13 | ABORT/MXU idle coverage (E2E-08) | ✅ PASS | `sim/tests/test_soc_fm.py::test_mmul_attn_weight_shape` + `test_mmul_attn_weight_shape_not_dispatched`; `build/evidence/task-14-fm-soc-datapath-hardening.txt` |
+
+**Final Wave**: F1 plan compliance audit APPROVED (14/14 evidence PASS), F2 code
+quality APPROVED (0 residue, 0 new pytest failures; baseline 20 failed / 2280 passed /
+15 errors), F3 manual QA APPROVED (--dry-run), F4 scope fidelity APPROVED (0 scope
+creep). Plan `fm-soc-datapath-hardening` completed 2026-08-24.
+
+## SoC Data-Path Gaps — Coverage After fm-soc-datapath-hardening
+
+Six SoC-level data paths identified in `docs/soc-fm-gap-spec.md` previously had **no
+Python functional model coverage**. All six now have FM guards from
+`fm-soc-datapath-hardening` (see "SoC Data-Path Hardening Signoff" above):
 
 | Gap # | Path | Current Status |
 |:---:|------|:---:|
-| 7 | PCIe TLP model | No TLP parser; `host_write_*` bypasses PCIe directly to DRAM |
-| 8 | AXI4 Crossbar + APB Decoder model | MMIOBridge bypasses crossbar, accesses SRAM/DRAM directly |
-| 1 | APB-MMIO Register Model | No unified register abstraction; per-engine `_handle_*` reimplementation |
-| 2 | IBEX-AXI Bridge | RISCVMini has independent `self.mem`, not shared with FuncModel SRAM/DRAM |
-| 9 | INTC/IRQ Chain | WFI is NOP; no interrupt delivery path from engine → CPU |
-| 11 | IBEX-Firmware | `NPUFirmware` bypasses RISCVMini; no boot sequence |
+| 7 | PCIe TLP model | ✅ Covered by fm-soc-datapath-hardening (F-FM-SOC-01, `sim/tests/test_pcie_tlp_chain.py`) |
+| 8 | AXI4 Crossbar + APB Decoder model | ✅ Covered by fm-soc-datapath-hardening (F-FM-SOC-03, `sim/tests/test_crossbar_arbitration.py`) |
+| 1 | APB-MMIO Register Model | ✅ Covered by fm-soc-datapath-hardening (F-FM-SOC-04, `sim/tests/test_apb_register_conformance.py`) |
+| 2 | IBEX-AXI Bridge | ✅ Covered by fm-soc-datapath-hardening (F-FM-SOC-05, `sim/tests/test_ibex_shared_address_space.py`) |
+| 9 | INTC/IRQ Chain | ✅ Covered by fm-soc-datapath-hardening (F-FM-SOC-02 + F-FM-SOC-06, `sim/tests/test_intc_gating.py` + `test_irq_driven_dispatch.py`) |
+| 11 | IBEX-Firmware | ✅ Covered by fm-soc-datapath-hardening (F-FM-SOC-07, `sim/tests/test_firmware_boot_sequence.py`) |
 
-These gaps are pre-specified with full API designs, testability plans, and a 3-wave
-build order in `docs/soc-fm-gap-spec.md`. V3 signoff covers the **functional behavior**
-of these SoC peripherals (PCIe/DMA/crossbar/doorbell/INTC/host-CPU) through standalone
-test harnesses, but the integrated data paths through a shared crossbar + Ibex CPU
-remain unimplemented.
+These gaps were pre-specified with full API designs, testability plans, and a 3-wave
+build order in `docs/soc-fm-gap-spec.md`. With `fm-soc-datapath-hardening` closed
+(2026-08-24), only **performance calibration (E2E-07, `calibration_state=uncalibrated`)**
+and the **pre-existing RTL bugs (BUG-RTL-SOC-002 / BUG-RTL-SOC-007, both still Open)**
+remain open / out of scope for this signoff. They are not claimed as fixed here.
 
 ---
 
