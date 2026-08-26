@@ -1,0 +1,24 @@
+F1 script patch evidence — fm_hardening_f1_audit.sh TODO_MAX override
+======================================================================
+
+Patch: scripts/fm_hardening_f1_audit.sh
+  - Added TODO_MAX="${TODO_MAX:-14}" (default 14)
+  - Loop now `for n in $(seq 1 ${TODO_MAX})`
+  - Summary line prints audited ${TODO_MAX}/${TODO_MAX}
+  - Header comment updated to "Checks per todo 1..${TODO_MAX} (default 14, override via TODO_MAX env)"
+
+Verification
+------------
+1. Syntax check: bash -n scripts/fm_hardening_f1_audit.sh -> SYNTAX OK
+
+2. Dry-run with TODO_MAX=17 (plan soc-rtl-verification-signoff):
+   - Attempts todos 01..17, all PENDING (expected, evidence missing) -> PASS
+   - Summary: "F1 summary: plan=soc-rtl-verification-signoff pass=0 fail=0 pending=17 (audited 17/17)"
+   - exit=0
+
+3. Default run (FM_PLAN_NAME=fm-hardening-phase10):
+   - Audits todos 01..14, all PASS -> PASS
+   - Summary: "F1 summary: plan=fm-hardening-phase10 pass=14 fail=0 pending=0 (audited 14/14)"
+   - exit=0
+
+Result: backward-compatible; default behaviour (14 todos) unchanged, TODO_MAX override extends to N todos.

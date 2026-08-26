@@ -3,7 +3,7 @@
 # fm_hardening_f1_audit.sh — F1: plan compliance audit
 # Plan selectable via FM_PLAN_NAME (default: fm-hardening-phase10):
 #   .omo/plans/${FM_PLAN_NAME}.md + build/evidence/task-{N}-${FM_PLAN_NAME}.txt
-# Checks per todo 1..14:
+# Checks per todo 1..${TODO_MAX} (default 14, override via TODO_MAX env):
 #   1. build/evidence/task-{N}-${FM_PLAN_NAME}.txt exists and its LAST
 #      PASS/FAIL marker ("Result: PASS" / "Status: PASS" / "Overall verdict:
 #      PASS" / standalone PASS) says PASS.
@@ -26,6 +26,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 FM_PLAN_NAME="${FM_PLAN_NAME:-fm-hardening-phase10}"
+TODO_MAX="${TODO_MAX:-14}"
 PLAN=".omo/plans/${FM_PLAN_NAME}.md"
 EVD="build/evidence"
 LOG="$(mktemp /tmp/fm_f1_cmd.XXXXXX)"
@@ -49,7 +50,7 @@ runnable() {  # classify one acceptance command
 }
 
 pass=0; fail=0; pend=0
-for n in $(seq 1 14); do
+for n in $(seq 1 ${TODO_MAX}); do
   ev="${EVD}/task-${n}-${FM_PLAN_NAME}.txt"
   checked="$(checked_todo "$n")"
   state="MISSING"; verdict="UNKNOWN"; detail=""; acc=""
@@ -93,5 +94,5 @@ for n in $(seq 1 14); do
     "$n" "$checked" "$state" "$acc" "$verdict" "${detail:+ ($detail)}"
 done
 rm -f "$LOG"
-echo "F1 summary: plan=${FM_PLAN_NAME} pass=${pass} fail=${fail} pending=${pend} (audited 14/14)"
+echo "F1 summary: plan=${FM_PLAN_NAME} pass=${pass} fail=${fail} pending=${pend} (audited ${TODO_MAX}/${TODO_MAX})"
 [ "$fail" -eq 0 ]
