@@ -75,7 +75,7 @@ T7 P1 全 7 cases 重跑，Spike plugin 加载成功，firmware 正常启动。
 
 ---
 
-### BUG-RTL-SOC-002 — DRAM 地址窗口越界
+### BUG-RTL-SOC-002 — DRAM 地址窗口越界（Waived）
 
 | 字段 | 内容 |
 |------|------|
@@ -84,7 +84,7 @@ T7 P1 全 7 cases 重跑，Spike plugin 加载成功，firmware 正常启动。
 | **Case** | FM-SOC-010 |
 | **Severity** | Major |
 | **Type** | Environment (DRAM model) |
-| **Status** | Open |
+| **Status** | Waived |
 
 #### Symptom
 
@@ -108,6 +108,8 @@ ValueError: Address 0x81FFFFC0 outside simulated DRAM window
 
 FM-SOC-010 DRAM preload 无越界错误。
 Phase 10 (8MB window constraint, todo 19): build/evidence/task-19-phase10-rtl-verification.txt
+
+2026-08-27: **Waived** — 正式 waiver `docs/waivers/WVR-SOC-RTL-002.md`（todo 2 of soc-rtl-verification-signoff）。约束：firmware `dram_range_ok()` 拒绝地址 >8MB（`firmware/npu_firmware.c:458,472-485`），33 个 FM-SOC cases 均在此窗口内 PASS。临时 waiver，FPGA 阶段扩 `dram_model.v` 后关闭。
 
 ---
 
@@ -321,7 +323,7 @@ no additional RTL bug work.
 
 ---
 
-### BUG-RTL-SOC-007 — attn_weight op dispatch failure (cycles=0) in 3-layer forward pass
+### BUG-RTL-SOC-007 — attn_weight op dispatch failure (cycles=0 in W1.3; PERF-13 Ibex RTL now shows cycles>0)
 
 | 字段 | 内容 |
 |------|------|
@@ -330,7 +332,7 @@ no additional RTL bug work.
 | **Case** | 3-layer forward pass (51 ops, Qwen2.5-3B blk.0/1/2) |
 | **Severity** | Critical / Major |
 | **Type** | RTL / Firmware / Runner — under investigation |
-| **Status** | Open |
+| **Status** | Open（chain-level RTL reproduction pending todo 15） |
 
 #### Symptom
 
@@ -358,27 +360,32 @@ Three working hypotheses, not yet resolved:
 
 **TBD** — depends on root cause. Expected: re-run W1.3 3-layer forward pass after fix, verify all 3 `attn_weight` ops report `cycles > 0` and outputs match Func Model golden.
 
+**Phase 10 PERF-13 evidence (2026-08-18, Ibex RTL):** `build/evidence/w4-perf-p3.txt` — attn_weight `M=32 K=32 N=64` `cycles=42311` `cos_sim=1.0` `passed=true`. The generic MMUL dispatch path executes `attn_weight` with `cycles>0` in the same per-layer attention shape class the 36-layer Ibex segment run uses（见 `scripts/p10_36layer_preflight.sh` CHECK 4，以及 `.omo/notepads/phase10-rtl-verification/issues.md`）。Ring-overflow hypothesis（32-entry ring）同时被排除：`RING_ENTRIES=1024`（`gen/npu_abi.h:299`）。
+
+**Status 说明:** chain-level RTL reproduction（完整 17-op blk.0 chain 中 op07/24/41 attn_weight cycles>0）仍待 todo 15（`_build_attn_weight_chain`，soc-rtl-verification-signoff）。若 todo 15 复现 cycles=0，本条目保持 Open；若 cycles>0，其 evidence 将回链到此处。本条目 **Open**。
+
 ---
 
-## Final Bug Statistics (2026-07-23)
+## Final Bug Statistics (2026-08-27)
 
-### Total: 9 bugs (BUG-RTL-SOC-001 through BUG-RTL-SOC-007 + 2 wrapper-level-verification bugs)
+### Total: 13 bugs (BUG-RTL-SOC-001 through BUG-RTL-SOC-008 + 2 wrapper-level-verification bugs + 3 phase-9 bugs)
 
-The wrapper-level-verification phase (2026-07-23) discovered two new RTL bugs (WV-001, WV-007) and definitively fixed BUG-RTL-SOC-005 (which was previously Re-opened). Two original bugs (002, 007) remain Open.
+Ledger update 2026-08-27 (todo 1, soc-rtl-verification-signoff): BUG-RTL-SOC-P9-00A、BUG-RTL-SOC-P9-00D、BUG-MXU-P9-00B closed **Fixed**（phase 9/10 evidence）；BUG-RTL-SOC-002 formally **Waived**（WVR-SOC-RTL-002，todo 2）；BUG-RTL-SOC-007 remains **Open** with phase 10 PERF-13 evidence（attn_weight cycles>0），chain-level reproduction pending todo 15。
 
 ### By Severity
 
 | Severity | Count | Bug IDs |
 |----------|:-----:|---------|
 | Critical | 3 | BUG-RTL-SOC-001 (GLIBC ABI — Spike plugin), BUG-RTL-SOC-003 (missing `cb_m_arvalid` — SoC integration), BUG-RTL-SOC-007 (attn_weight dispatch — op never executes) |
-| Major | 6 | BUG-RTL-SOC-002 (DRAM 8 MB window), BUG-RTL-SOC-004 (SFU prefetch dropped), BUG-RTL-SOC-005 (X-prop from DRAM padding), BUG-RTL-SOC-006 (SFU start_hold race), BUG-RTL-SOC-WV-001 (SFU status_done 1-cycle pulse), BUG-RTL-SOC-WV-007 (MXU consecutive dispatch DONE timeout) |
+| Major | 10 | BUG-RTL-SOC-002 (DRAM 8 MB window), BUG-RTL-SOC-004 (SFU prefetch dropped), BUG-RTL-SOC-005 (X-prop from DRAM padding), BUG-RTL-SOC-006 (SFU start_hold race), BUG-RTL-SOC-008 (DESC_BASE overlap), BUG-RTL-SOC-WV-001 (SFU status_done 1-cycle pulse), BUG-RTL-SOC-WV-007 (MXU consecutive dispatch DONE timeout), BUG-RTL-SOC-P9-00A (M=1 multi-tile divergence), BUG-RTL-SOC-P9-00D (PERF residual divergence), BUG-MXU-P9-00B (broadcast/multi-tile) |
 
 ### By Status
 
 | Status | Count | Bug IDs |
 |--------|:-----:|---------|
-| Fixed | 7 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-005, BUG-RTL-SOC-006, BUG-RTL-SOC-WV-001, BUG-RTL-SOC-WV-007 |
-| Open | 2 | BUG-RTL-SOC-002 (DRAM 8 MB window — current cases avoid the region), BUG-RTL-SOC-007 (attn_weight dispatch — under investigation) |
+| Fixed | 11 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-005, BUG-RTL-SOC-006, BUG-RTL-SOC-008, BUG-RTL-SOC-WV-001, BUG-RTL-SOC-WV-007, BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
+| Waived | 1 | BUG-RTL-SOC-002 (8 MB DRAM window constraint — WVR-SOC-RTL-002) |
+| Open | 1 | BUG-RTL-SOC-007 (attn_weight dispatch — PERF-13 Ibex RTL shows cycles>0; chain-level reproduction pending todo 15) |
 | Re-opened | 0 | — |
 
 ### By Module
@@ -391,20 +398,22 @@ The wrapper-level-verification phase (2026-07-23) discovered two new RTL bugs (W
 | RTL: SFU/Vector wrapper X-propagation | 1 | BUG-RTL-SOC-005 |
 | RTL: Vector wrapper / Firmware dispatch | 1 | BUG-RTL-SOC-007 |
 | RTL: MXU controller (`mxu/controller.v`) | 1 | BUG-RTL-SOC-WV-007 |
+| Integration (firmware command ring vs descriptor region) | 1 | BUG-RTL-SOC-008 |
+| RTL wrapper (MXU broadcast/store-out count) + Firmware K-tile dispatch / accumulate | 3 | BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
 
 ### Quality Metrics
 
 | Metric | Value |
 |--------|:-----:|
-| Total RTL bugs found and documented | 9 |
-| Bugs fixed in RTL source | 7 (77.8%) |
-| Bugs with firmware/environment workarounds | 1 (11.1%) — BUG-RTL-SOC-002 |
-| Open / under investigation | 1 (11.1%) — BUG-RTL-SOC-007 |
+| Total RTL bugs found and documented | 13 |
+| Bugs closed Fixed | 11 (84.6%) |
+| Bugs formally waived | 1 (7.7%) — BUG-RTL-SOC-002 (8 MB DRAM window, WVR-SOC-RTL-002) |
+| Open / under investigation | 1 (7.7%) — BUG-RTL-SOC-007 (chain-level reproduction pending todo 15) |
 | Ibex-specific bugs (full RTL CPU replacement) | 0 |
-| Regressions after fixes | 0 (491/491 module regression PASS; vector + MXU wrapper 10/10 baseline PASS) |
+| Regressions after fixes | 0 (491/491 module regression PASS; vector + MXU wrapper 10/10 baseline PASS; PERF-06 M=32 cos=1.000000; PERF-13 9/9 MMUL PASS) |
 | Re-opened bugs | 0 (BUG-RTL-SOC-005 closed in 2026-07-23 rtl-bug-fix-wv round) |
 
-### BUG-RTL-SOC-P9-00A
+### BUG-RTL-SOC-P9-00A — Fixed: M=1 multi-tile MMUL divergence (firmware K-tile loop + RTL accumulate mode)
 
 | 字段 | 内容 |
 |------|------|
@@ -412,7 +421,7 @@ The wrapper-level-verification phase (2026-07-23) discovered two new RTL bugs (W
 | **Block** | Phase 9 T3 |
 | **Severity** | Major |
 | **Type** | fw |
-| **Status** | open |
+| **Status** | Fixed |
 
 #### Symptom
 
@@ -424,13 +433,17 @@ T3 conclusion (A) invalid: RISC-V GCC -O2 already removes the redundant I/W/O_AD
 
 #### Fix
 
-Pending fix per Phase 9 plan.
+- `8dd5dbe` fix(rtl/wrapper): correct M=1 multi-tile broadcast/store-out count (P9 branch B)
+- `b545b1f` fix(mxu): per-K-block firmware MMUL + RTL accumulate mode for P9 doorbell divergence
+
+Fix 内容：firmware 改为 per-K-block dispatch（每 N tile 逐 64 元素 K block 调一次 `mxu_start()`，后续 block 置 `CTRL[2]=1` accumulate）；RTL `rtl/mxu/controller.v` 的 `mac_reset_acc` 仅当 `k_tile==0 && !ctrl_acc_mode` 时断言；SRAM/DRAM 布局改为动态分配，消除大 K/N 下的 buffer overlap。
 
 #### Verification
 
-Evidence: build/evidence/ph9-branch-A-insufficient.txt:51-100
+- `build/evidence/ph9-divergence-report.txt`：3 个 M=1 multi-tile cases（K=128/512/2048）firmware doorbell dispatch 全部 `cos_sim=1.000000` `passed=True`。
+- 该 evidence 将由 todo 16（soc-rtl-verification-signoff 全量 RTL 回归）复跑重新生成。
 
-### BUG-MXU-P9-00B-broadcast-multitile
+### BUG-MXU-P9-00B-broadcast-multitile — Fixed
 
 | 字段 | 内容 |
 |------|------|
@@ -438,7 +451,7 @@ Evidence: build/evidence/ph9-branch-A-insufficient.txt:51-100
 | **Block** | Phase 9 T3 |
 | **Severity** | Major |
 | **Type** | RTL Wrapper / Firmware Interaction |
-| **Status** | rtl-suspect |
+| **Status** | Fixed |
 
 #### Symptom
 
@@ -446,17 +459,18 @@ M=1 multi-tile MMUL cos_sim < 0.999 via firmware doorbell; direct wrapper preloa
 
 #### Root Cause
 
-See independent report /home/prj/zhengs/caduceuscore/CaduceusCore/docs/bugs/BUG-MXU-P9-00B-broadcast-multitile.md.
+See independent report /home/prj/zhengs/caduceuscore/CaduceusCore/docs/bugs/BUG-MXU-P9-00B-broadcast-multitile.md. Root cause verdict (D): firmware all-K-tiles-at-once dispatch + missing RTL accumulate mode + SRAM/DRAM buffer overlap.
 
 #### Fix
 
-Pending fix per Phase 9 plan.
+Same fix as BUG-RTL-SOC-P9-00A — commits `8dd5dbe` + `b545b1f`：firmware per-K-block dispatch + RTL `ctrl_acc_mode` accumulate mode + 动态 SRAM/DRAM 布局。
 
 #### Verification
 
-Evidence: build/evidence/ph9-divergence-report.txt, build/evidence/ph9-probe-*.jsonl
+- `docs/bugs/BUG-MXU-P9-00B-broadcast-multitile.md`：Status = **resolved** — M=1 K=128/512/2048 doorbell 全部 `cos_sim=1.000000`；`test_w4_perf_p9_causality` PASS。
+- `build/evidence/ph9-divergence-report.txt`、`build/evidence/ph9-probe-*.jsonl`。
 
-### BUG-RTL-SOC-P9-00D
+### BUG-RTL-SOC-P9-00D — Fixed: PERF residual divergence (firmware act_offset tile-major stride + DMA row interleave)
 
 | 字段 | 内容 |
 |------|------|
@@ -464,7 +478,7 @@ Evidence: build/evidence/ph9-divergence-report.txt, build/evidence/ph9-probe-*.j
 | **Block** | Phase 9 T3 |
 | **Severity** | Major |
 | **Type** | integ |
-| **Status** | open |
+| **Status** | Fixed |
 
 #### Symptom
 
@@ -476,12 +490,15 @@ Residual divergence after per-K-tile firmware loop + RTL accumulate mode fix; se
 
 #### Fix
 
-Pending fix per Phase 9 plan.
+- `7aec7a3` fix(firmware): use tile-major K-tile stride for activation offset in ring-buffer dispatch
+
+Fix 内容（firmware/npu_firmware.c dispatch_cmd，两处）：(1) `act_offset = act_sram + k_start * TILE_H`（原为 `k_start * desc.M`，row-major M-stride 对 tile-major activation 布局错误）；(2) output DMA 按 per-n_tile 互斥 SRAM 区域逐行 interleave 到 row-major DRAM。
 
 #### Verification
 
-Evidence: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/ph9-perf-residual.txt
-Phase 10 (PERF-06 M=32 fix, todo 8): build/evidence/task-8-phase10-rtl-verification.txt
+- `build/evidence/task-8-phase10-rtl-verification.txt`：PERF-06 `M=32 K=128 N=128` `cos_sim=1.000000`（修复前 0.019153）；PERF-05 对照 `cos_sim=1.000000`；PERF-06-M64 `cos_sim=1.000000`；`ROOT_CAUSE_FIXED=YES`。
+- 修复前基线：`build/evidence/ph9-perf-residual.txt`。
+- 该 evidence 将由 todo 16（soc-rtl-verification-signoff 全量 RTL 回归）复跑重新生成。
 
 ---
 
