@@ -53,6 +53,30 @@ Extended `test_e2e_intc_irq` in `sim/cocotb_bridge.py` (no RTL changes):
   log contains `THRESHOLD=2: PASS`, `THRESHOLD=5 DEASSERT: PASS`, `ENABLE=0: PASS`,
   `ACK_RETENTION: PASS`. Evidence: `build/evidence/task-4-soc-rtl-verification-signoff.txt`.
 
+## [2026-08-27] Todo 2 — Formal waiver WVR-SOC-RTL-002 (soc-rtl-verification-signoff)
+
+Submitted `docs/waivers/WVR-SOC-RTL-002.md` for BUG-RTL-SOC-002 (8MB DRAM window constraint):
+
+- **Bug ID**: BUG-RTL-SOC-002; **Constraint**: firmware `dram_range_ok()` rejects
+  addresses >8MB (`firmware/npu_firmware.c:458,472-485`; `DRAM_SIZE=0x00800000`
+  at `npu_firmware.c:19-20`).
+- **Impact**: models with weights >8MB must be split/pre-loaded in stages, or
+  `dram_model.v` expanded later (FPGA bring-up).
+- **Temporary** waiver; closure criteria = todo 16 regression (33 FM-SOC within
+  8MB) + DRAM window expansion at FPGA + user sign-off.
+- **Evidence**: formal ref todo 16 (`build/evidence/task-16-...txt`, pending);
+  transitional ref `.omo/notepads/phase10-rtl-verification/issues.md` (ISSUE-13A
+  bulk preload, bit-exact) + current `npu_firmware.c`.
+- Sign-off field left blank for the user.
+- No changes to `rtl/ip/dram_model.v` or `firmware/npu_firmware.c` (scope guard).
+- Ledger `docs/bugs/bugs-soc-rtl.md` BUG-RTL-SOC-002 already references this
+  file (todo 1). First entry under `docs/waivers/` (new directory).
+
+Lesson: no waiver precedent existed in the repo; adopted the bug-ledger table
+style (`docs/bugs/bugs-soc-rtl.md`) so the waiver reads as the ledger's natural
+extension. Sign-off section kept explicit and blank, with closure criteria tied
+to concrete artifacts (todo 16 evidence + FPGA expansion) rather than dates.
+
 ## 2026-08-27 — Todo 3: cocotb PCIe TLP chain (MPS-split + BAR routing)
 
 - **BAR enforcement lives in the cocotb host model, not the RTL.** `pcie_axi_master`

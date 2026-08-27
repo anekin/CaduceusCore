@@ -1,0 +1,37 @@
+# Todo 2 — Formal waiver WVR-SOC-RTL-002 (soc-rtl-verification-signoff)
+# Generated: 2026-08-27
+# Plan: .omo/plans/soc-rtl-verification-signoff.md todo 2
+
+## Deliverable
+
+- docs/waivers/WVR-SOC-RTL-002.md (new directory docs/waivers/)
+
+## Waiver content
+
+- Bug ID: BUG-RTL-SOC-002
+- Constraint: firmware dram_range_ok() rejects addresses >8MB
+  (firmware/npu_firmware.c:458,472-485; DRAM_SIZE=0x00800000 at :19-20)
+- Impact: models with weights >8MB must be split/pre-loaded in stages, or
+  dram_model.v expanded later (FPGA bring-up)
+- Temporary/permanent: temporary; closed when DRAM model expanded in FPGA
+  bring-up (closure criteria documented in waiver)
+- Evidence: todo 16 full RTL regression (33 FM-SOC cases PASS within 8MB,
+  build/evidence/task-16-soc-rtl-verification-signoff.txt, pending todo 16);
+  transitional evidence from .omo/notepads/phase10-rtl-verification/issues.md
+  (ISSUE-13A bulk preload bit-exact) and current firmware code
+- Sign-off field: left blank for the user
+
+## Scope guard
+
+- rtl/ip/dram_model.v: NOT modified
+- firmware/npu_firmware.c: NOT modified
+
+## Acceptance commands
+
+test -f docs/waivers/WVR-SOC-RTL-002.md && grep -c 'BUG-RTL-SOC-002' docs/waivers/WVR-SOC-RTL-002.md
+-> exit 0 (file exists)
+
+## Status
+
+PASS — waiver file created with bug ID + constraint + impact + temp/permanent
+classification + evidence references; sign-off blank. Notepad learning appended.
