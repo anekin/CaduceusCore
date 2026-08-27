@@ -99,6 +99,8 @@ try:
         DESC_STRIDE,
         SFU_OP_RMSNORM,
         SFU_OP_SOFTMAX,
+        SFU_OP_SILU,
+        SFU_OP_ROPE,
         VEC_OP_ADD,
     )
     from cocotb_bridge import (
@@ -2981,16 +2983,33 @@ class P4SpikeRunner(P2P3SpikeRunner):
                 model.dram[in_off:in_off + sfu_buf_size] = bytes(sfu_buf_size)
                 model.dram[in_off:in_off + elements * 2] = inp.astype(np.float16).tobytes()
 
+                # Use the ABI-correct SFU descriptor writer.  The firmware's
+                # generic SFU command (op==0x01) reads the actual sub-op from
+                # descriptor word 10, while the ROPE special command (op==0x05)
+                # reads dim/pos from words 8/9.  host_write_descriptor packed
+                # an MMUL layout here, so RMSNorm/SiLU descriptors were
+                # mis-interpreted and command 0x17 is not handled by firmware.
+                sfu_op_map = {
+                    "SOFTMAX": SFU_OP_SOFTMAX,
+                    "RMSNORM": SFU_OP_RMSNORM,
+                    "ROPE":    SFU_OP_ROPE,
+                    "SILU":    SFU_OP_SILU,
+                }
+                cmd_op_map = {
+                    "SOFTMAX": self._OP_SOFTMAX,
+                    "RMSNORM": self._OP_SOFTMAX,
+                    "ROPE":    self._OP_ROPE,
+                    "SILU":    self._OP_SOFTMAX,
+                }
                 dim_val = (head_dim << 16) | (elements & 0xFFFF) if opcode == "ROPE" else elements
-                model.host_write_descriptor(
-                    desc_addr,
+                pos = dims.get("position", 0) if opcode == "ROPE" else 0
+                write_sfu_descriptor(
+                    model, desc_addr, op=sfu_op_map[opcode],
                     input_addr=in_addr, output_addr=out_addr,
-                    input_size=dim_val, output_size=dim_val,
-                    M=1, K=dim_val, N=1,
+                    input_sram=0, output_sram=0, size=sfu_buf_size,
+                    dim=dim_val, pos=pos,
                 )
-                op_map = {"SOFTMAX": self._OP_SOFTMAX, "RMSNORM": self._OP_RMSNORM,
-                          "ROPE": self._OP_ROPE, "SILU": self._OP_SILU}
-                cmds.append((op_map[opcode], desc_addr))
+                cmds.append((cmd_op_map[opcode], desc_addr))
                 outputs[idx] = (out_addr, golden.astype(np.float16))
 
                 # DMA barrier: SFU STATUS.DONE may assert before the wrapper's

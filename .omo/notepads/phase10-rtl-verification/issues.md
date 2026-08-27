@@ -179,8 +179,10 @@ VRESID through the on-chip Ibex) reproduced the garbage on the old simv
 - simv rebuilt 0 errors, warning profile identical to the pre-fix build
   (27 pre-existing vendored-IP warnings).
 - FM-SOC regression (Ibex RTL): FM-SOC-001/003/007/009/010/024/026/027/
-  028/029 and FM-SOC-032 PASS.  FM-SOC-10X still fails at op00 RMSNorm
-  (pre-existing SFU issue, unrelated to MMUL).
+  028/029 and FM-SOC-032 PASS.  FM-SOC-10X op00 RMSNorm failure was a
+  chain-builder descriptor/opcode mismatch, fixed in todo 11
+  (`sim/rtl_soc_runner.py:_build_block`); see
+  `.omo/notepads/soc-rtl-verification-signoff/issues.md`.
 - Python pytest: no new failures vs HEAD baseline (test_soc_fm 46/46).
 
 ### Status

@@ -300,3 +300,34 @@ and memory words alike (deposits vanish on memories; deposits on nets poison
 the firmware bus). When the test needs a live firmware, all TB register setup
 must go through Force-based helpers — never through `_apb_write` on the
 wrapper's nets.
+
+## [2026-08-27] Todo 11 — SFU descriptor ABI mismatch in chain builder
+
+**What failed:** `FM-SOC-10X` op00 `RMSNORM` produced `max_abs=2.95e+00` because the
+output buffer was never written.
+
+**What the bug was:** `P4SpikeRunner._build_block()` reused
+`model.host_write_descriptor()` for SFU sub-ops.  That function packs the
+15-word MMUL descriptor layout; the SFU layout needs the sub-op in word 10.
+The firmware therefore either ran the wrong SFU sub-op or, for `RMSNORM`
+(`cmd_op=0x17`) and `SILU` (`cmd_op=0x06`), saw an unrecognized command opcode
+and skipped the operation entirely.
+
+**Why it was subtle:**
+- `FM-SOC-004` uses a dedicated `write_sfu_descriptor()` path, so it passed.
+- `SOFTMAX` accidentally worked because `cmd_op=0x01` is the generic SFU
+  command and `sfu_op = elements & 0xF` happened to be `0` (`SOFTMAX`).
+- `ROPE` happened to pass because `cmd_op=0x05` is handled specially and the
+  MMUL layout placed the packed `(head_dim,elements)` dim value in word 8.
+- The failure only showed up in the multi-op chain (`FM-SOC-10X`) where
+  `RMSNORM` is the first SFU op and the test actually checks its output.
+
+**Fix pattern:** always use the engine-specific descriptor writer that matches
+the command opcode the firmware dispatches on (`write_sfu_descriptor()` for
+engine command `0x01`, `write_vector_descriptor()` for vector ops, etc.).
+Mixing MMUL-style descriptors with engine-specific command opcodes creates
+silent ABI skew.
+
+**Verification gate:** `FM-SOC-004`, `FM-SOC-027`, `FM-SOC-10X` all PASS via
+`run_ibex_full_rtl.sh`; `scripts/run_batch_regression.py` reports
+`SFU: 319/319 passed, Vector: 63/63 passed`.
