@@ -375,3 +375,63 @@ cmd_entry_t = 32 B: [0]=opcode (9 = DMA_COPY), [1]=desc_addr, [2]=flags,
 pad×5. dma_copy_desc_t = 60 B: [0]=src, [2]=dst, [8]=size. Ring at
 0x8000_0000 (NPU_ABI_RING_BUFFER_ADDR); DMA copies poll engine STATUS, so
 drain needs no IRQ.
+
+## 2026-08-27 12:05 — Todo 9: Ibex runner boot sequence assertions (RTL)
+
+### Outcome
+`IbexRunner._check_boot_sequence()` added to `sim/rtl_soc_runner.py`, called
+at the top of `_run_spike`; `test_soc_rtl_runner_smoke` now routes FM-SOC-009
+through IbexRunner (alongside RING-WRAP-STRESS) so `run_fm_soc_case` exercises
+the on-chip firmware path. `make -C sim/regression run_fm_soc_case
+CASE_ID=FM-SOC-009` on sz0001: exit 0, twice (deterministic); log contains
+`BOOT_ASSERT: PC=0 PASS`, `SP_INIT: PASS`, `BOOT_ROM: PASS`,
+`TESTS=1 PASS=1 FAIL=0 SKIP=0`. Evidence:
+`build/evidence/task-9-soc-rtl-verification-signoff.txt`.
+
+### RTL probe reality — pc_id cannot verify "PC=0" (deviation from plan letter)
+The plan prescribed probing `pc_id`/exception_pc/exception_addr. RTL facts
+discovered while implementing:
+
+- **`pc_id` (IF→ID pipeline reg) has NO reset term**: `ResetAll = Lockstep = 0`
+  (`ibex_top.sv:189`), so `ibex_if_stage.sv` uses the `g_instr_rdata_nr` branch
+  — pc_id keeps its pre-reset value through reset. It can never read 0.
+- **`pc_if` (live IF fetch PC) also has no reset term**, and only moves AFTER
+  reset release, when the controller's RESET→BOOT_SET sequence latches the
+  PC_BOOT fetch address `{boot_addr[31:8], 8'h80}` = **0x0000_0080** (Ibex
+  never fetches the trap table at 0x00-0x7F; `_start` lives at 0x80). So
+  "PC at the 0x0000_0000 boot reset entry" is checked as pc_if entering
+  [0x80, 0x100) right after release.
+- **`crash_dump_o` is UNCONNECTED in ibex_wrapper** (`.crash_dump_o ()`), so
+  the plan's exception_pc/exception_addr paths are dead. Probed the CSRs
+  ibex_top's own asserts map onto them instead
+  (`u_ibex_core.cs_registers_i.mepc_q` / `.mtval_q`, ibex_top.sv:1375-1377);
+  both 0 after a clean reset.
+- **sp probe**: `u_ibex_top.gen_regfile_ff.register_file_i.rf_reg[2]` (32-bit,
+  RegFileDataWidth=32, no ECC). After main() (INTC `enable_reg`==0xFF, the
+  8-bit RTL capture of the firmware's 0x1FF write) + 200-cycle settle,
+  sp=0x13FD0 — inside DMEM [0x10000, 0x20000), NOT the provisional 0x20000.
+  Nothing hard-codes `_stack_top`; the FM guard's DMEM window is mirrored.
+
+### Reset mechanism gotchas (cocotb + VCS, empirically nailed down)
+- **Deposits on `tb_soc.rst_n` reach the DUT with an unpredictable multi-cycle
+  lag** (observed ~13 cycles). A read immediately after `bridge.reset()`
+  returns the pre-reset PC — the first implementation failed exactly this way.
+- **VPI `Force` on the reset net does NOT reach the core internals** (visible
+  at the port read, but the controller never restarts; a forced reset leaves
+  the core frozen). Only the plain deposit (`dut.rst_n.value = 0/1`) restarts
+  the core. This is the opposite of the doorbell registers, where Force is the
+  only reliable write — do not assume one mechanism for both.
+- Therefore the check is **verify-by-effect**: deposit 0, hold 20 cycles,
+  deposit 1, then poll for the post-release reboot (pc_if in the boot entry
+  region, 5000-cycle budget). Deterministic across repeated runs.
+- The re-boot re-runs firmware_main(), which writes 0xDEADBEEF to DRAM offset
+  0x8000 (completion ring) — harmless: no case compares that region (the
+  firmware's own completion writes already overwrite it every case). SRAM is
+  untouched by boot; SRAM/DRAM mem arrays have no reset clause, so preloads
+  survive the reset.
+
+### Note for todo 16 (full regression)
+Every Ibex case now runs the boot assertions (re-boot ≈ 500 cycles + 2 ROM
+snapshots of 16k VPI reads — negligible). If any future case fails with
+`BOOT_ASSERT`, first suspect the deposit lag or a re-boot side effect at DRAM
+offset 0x8000.

@@ -1065,9 +1065,10 @@ if COCOTB_AVAILABLE:
         (set by the Makefile/shell wrapper) and defaults to FM-SOC-001.
         Golden vectors are loaded from rtl/test_vectors/soc_e2e/<case_id>/
         when available; otherwise the built-in case definition is used.
-        RING-WRAP-STRESS is driven through IbexRunner instead (no golden
-        vectors — the workload is built in Python and the on-chip firmware
-        drains the ring on this same tb_soc top).
+        RING-WRAP-STRESS and FM-SOC-009 are driven through IbexRunner
+        instead (no golden vectors — the workload is built in Python and
+        the on-chip firmware drains the ring on this same tb_soc top;
+        FM-SOC-009 is the boot-sequence assertion case).
         """
         bridge = CocotbBridge(dut)
         await bridge.start_clock()
@@ -1075,7 +1076,7 @@ if COCOTB_AVAILABLE:
 
         case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-001")
 
-        if case_id == "RING-WRAP-STRESS":
+        if case_id in ("RING-WRAP-STRESS", "FM-SOC-009"):
             runner = IbexRunner(dut, bridge)
             await runner.setup()
             passed, msg = await runner.run_case(case_id)
@@ -3501,9 +3502,136 @@ class IbexRunner(P4SpikeRunner):
             f"the live APB master belongs to Ibex firmware"
         )
 
+    # ── Boot-sequence probe paths (todo 9, soc-rtl-verification-signoff) ──
+    # ibex_wrapper leaves crash_dump_o unconnected, so exception_pc /
+    # exception_addr are read from the CSRs that ibex_top's own asserts map
+    # onto that struct (ibex_top.sv:1375-1377):
+    #   crash_dump_o.exception_pc   == u_ibex_core.cs_registers_i.mepc_q
+    #   crash_dump_o.exception_addr == u_ibex_core.cs_registers_i.mtval_q
+    _PC_PATH = "u_dut.u_ibex_wrapper.u_ibex_top.u_ibex_core.pc_id"
+    # pc_id (the IF→ID pipeline register) has no reset term (ResetAll=0), so
+    # the reset-position check uses the live IF fetch PC instead: with the
+    # controller in RESET, pc_if settles at the PC_BOOT fetch address
+    # {boot_addr[31:8], 8'h80} = 0x80 (boot_addr_i = 0x0000_0000), where the
+    # boot ROM's _start lives — the trap table at 0x00-0x7F is never fetched.
+    _PC_IF_PATH = "u_dut.u_ibex_wrapper.u_ibex_top.u_ibex_core.pc_if"
+    _BOOT_FETCH_ADDR = 0x80
+    _MEPC_PATH = "u_dut.u_ibex_wrapper.u_ibex_top.u_ibex_core.cs_registers_i.mepc_q"
+    _MTVAL_PATH = "u_dut.u_ibex_wrapper.u_ibex_top.u_ibex_core.cs_registers_i.mtval_q"
+    _SP_PATH = ("u_dut.u_ibex_wrapper.u_ibex_top.gen_regfile_ff."
+                "register_file_i.rf_reg[2]")
+    _INTC_ENABLE_PATH = "u_dut.u_intc.enable_reg"
+
+    DMEM_BASE = 0x0001_0000
+    DMEM_SIZE = 0x0001_0000  # 64 KB
+    # firmware_main() programs INTC.ENABLE = 0x1FF; the RTL intc_top captures
+    # pwdata[7:0] into its 8-bit enable_reg, so main() is observable as 0xFF.
+    _INTC_ENABLE_MAIN = 0xFF
+
+    async def _check_boot_sequence(self, timeout_cycles: int = 500_000) -> bool:
+        """Assert the RISC-V boot control flow on the on-chip Ibex.
+
+        Mirrors the FM guard ``sim/tests/test_firmware_boot_sequence.py``:
+
+        1. After a fresh reset the Ibex fetch PC must sit at the boot ROM
+           reset entry (``boot_addr|0x80`` = 0x0000_0080, where ``_start``
+           lives) with no pending exception state (mepc/mtval are 0).
+        2. Once the firmware reaches ``firmware_main()`` (observable: INTC
+           ENABLE programmed), the stack pointer (x2) must live inside DMEM —
+           ``startup.S`` re-establishes sp from the linked ``_stack_top``
+           symbol, moving it off the provisional top-of-DMEM value.
+        3. The 64KB boot ROM image must be byte-identical before and after
+           firmware execution (backdoor snapshot compare).
+
+        The DRAM/SRAM preloads survive the reset (their mem arrays have no
+        reset clause); ``firmware_main()``'s only memory side effect is the
+        0xDEADBEEF completion-ring self-test at DRAM offset 0x8000, which no
+        case compares against.
+        """
+        rom_before = await self.bridge._boot_rom_snapshot()
+        if not any(rom_before):
+            logger.warning("BOOT_ASSERT: boot ROM snapshot is all-zero — "
+                           "firmware image not loaded — FAIL")
+            return False
+
+        logger.info("[BOOT] asserting reset and re-running the firmware boot")
+        # cocotb deposits on tb_soc.rst_n are applied with an unpredictable
+        # multi-cycle lag, and pc_if has no reset term (ResetAll=0), so the
+        # reset is verified by its post-release EFFECT: the controller's
+        # RESET→BOOT_SET sequence drives the fetch PC through the boot ROM
+        # reset entry (boot_addr|0x80 = 0x80, where _start lives).
+        self.dut.rst_n.value = 0
+        await self.bridge.wait_cycles(20)
+        self.dut.rst_n.value = 1
+
+        pc_if = 0xFFFFFFFF
+        for _ in range(5000):
+            await self.bridge.wait_cycles(1)
+            pc_if = self._try_read_signal(self._PC_IF_PATH)
+            if self._BOOT_FETCH_ADDR <= pc_if < 0x100:
+                break
+        mepc = self._try_read_signal(self._MEPC_PATH)
+        mtval = self._try_read_signal(self._MTVAL_PATH)
+        if not (self._BOOT_FETCH_ADDR <= pc_if < 0x100):
+            logger.warning(
+                f"BOOT_ASSERT: PC=0 FAIL (pc_if=0x{pc_if:08x} never entered "
+                f"the boot ROM entry region after reset)")
+            return False
+        if mepc != 0 or mtval != 0:
+            logger.warning(
+                f"BOOT_ASSERT: exception state nonzero at reset "
+                f"(mepc=0x{mepc:08x} mtval=0x{mtval:08x}) — FAIL")
+            return False
+        logger.warning(
+            f"BOOT_ASSERT: PC=0 PASS (post-reset pc_if=0x{pc_if:08x} in the "
+            f"0x0000_0000 boot ROM entry region; "
+            f"mepc=0x{mepc:08x} mtval=0x{mtval:08x})")
+
+        # Wait for firmware_main()'s INTC.ENABLE write, then let it finish
+        # the completion-ring self-test and enter the poll loop so the
+        # sampled sp is the steady-state stack frame.
+        for _ in range(timeout_cycles):
+            if self._try_read_signal(self._INTC_ENABLE_PATH) == self._INTC_ENABLE_MAIN:
+                break
+            await self.bridge.wait_cycles(1)
+        else:
+            logger.warning(
+                "SP_INIT: FAIL (firmware never reached main; "
+                "INTC.ENABLE not programmed)")
+            return False
+        await self.bridge.wait_cycles(200)
+
+        sp = self._try_read_signal(self._SP_PATH)
+        sp_lo, sp_hi = self.DMEM_BASE, self.DMEM_BASE + self.DMEM_SIZE - 1024
+        if not (sp_lo <= sp < sp_hi):
+            logger.warning(
+                f"SP_INIT: FAIL (sp=0x{sp:08x} not in DMEM "
+                f"[0x{sp_lo:08x}, 0x{sp_hi:08x})); startup.S should have "
+                f"moved sp off the provisional 0x{self.DMEM_BASE + self.DMEM_SIZE:08x}")
+            return False
+        logger.warning(
+            f"SP_INIT: PASS (sp=0x{sp:08x} inside DMEM; startup.S moved sp "
+            f"off the provisional 0x{self.DMEM_BASE + self.DMEM_SIZE:08x} value)")
+
+        rom_after = await self.bridge._boot_rom_snapshot()
+        if rom_after != rom_before:
+            logger.warning("BOOT_ROM: FAIL (boot ROM modified by firmware "
+                           "execution)")
+            return False
+        logger.warning("BOOT_ROM: PASS (64KB boot ROM unchanged before/after "
+                       "firmware boot)")
+        return True
+
     async def _run_spike(self, model: FuncModel, num_cmds: int,
                          timeout_cycles: int = 500_000) -> bool:
-        """Trigger the Ibex firmware by writing HOST_TAIL, then poll NPU_HEAD."""
+        """Trigger the Ibex firmware by writing HOST_TAIL, then poll NPU_HEAD.
+
+        Starts with the boot-sequence assertions (reset vector PC, stack
+        pointer inside DMEM after ``firmware_main()``, boot ROM unchanged).
+        """
+        if not await self._check_boot_sequence(timeout_cycles):
+            return False
+
         host_tail_addr = Addr.DOORBELL + DOORBELL.HOST_TAIL
         npu_head_addr = Addr.DOORBELL + DOORBELL.NPU_HEAD
 

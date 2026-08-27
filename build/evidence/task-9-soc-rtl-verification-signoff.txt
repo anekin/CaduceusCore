@@ -1,0 +1,67 @@
+# Todo 9 — Ibex runner boot sequence assertions (PC/sp init + boot ROM isolation)
+# soc-rtl-verification-signoff
+# Generated: 2026-08-27 12:05 (Asia/Shanghai)
+# Plan: .omo/plans/soc-rtl-verification-signoff.md todo 9
+# Commit: test(soc): extend Ibex runner with boot sequence assertions
+
+## Status
+
+PASS
+
+## Exact acceptance command (run on sz0001, 192.168.0.11)
+
+  source /NAS/Tools/methodology/modules/init/bash
+  module load vcs/vcs_2023.12sp2
+  source sim/regression/run_env.sh
+  make -C sim/regression run_fm_soc_case CASE_ID=FM-SOC-009
+
+Makefile exit code: 0 (FM_SOC_FM-SOC-009: PASS).
+Simulator: VCS V-2023.12-SP2_Full64, cocotb 1.9.0, tb_soc (full RTL,
+on-chip Ibex + real firmware from firmware/build/npu_firmware.hex).
+simv_soc_cocotb reused (no RTL change -> no recompile). Ran twice,
+bit-identical PASS both times (deterministic).
+
+## Acceptance evidence (from sim/regression/fm_soc_FM-SOC-009.log)
+
+  BOOT_ASSERT: PC=0 PASS (post-reset pc_if=0x00000080 in the 0x0000_0000
+    boot ROM entry region; mepc=0x00000000 mtval=0x00000000)
+  SP_INIT: PASS (sp=0x00013fd0 inside DMEM; startup.S moved sp off the
+    provisional 0x00020000 value)
+  BOOT_ROM: PASS (64KB boot ROM unchanged before/after firmware boot)
+  IbexRunner FM-SOC-009: PASS — all comparisons match
+  TESTS=1 PASS=1 FAIL=0 SKIP=0
+
+## What was verified (sim/rtl_soc_runner.py: IbexRunner._check_boot_sequence)
+
+1. PC at the reset entry after a fresh SoC reset: pc_if (the live IF fetch
+   PC) passes through 0x0000_0080 after reset release — the PC_BOOT fetch
+   address {boot_addr[31:8], 8'h80} with boot_addr_i=0x0000_0000, i.e. the
+   boot ROM's _start (the trap table at 0x00-0x7F is never fetched by Ibex).
+   Exception state clean: mepc=0, mtval=0 (probed at
+   u_ibex_core.cs_registers_i.* — the wrapper leaves crash_dump_o
+   unconnected, so the CSR signals ibex_top's own asserts map onto
+   exception_pc/exception_addr are probed instead).
+2. After firmware_main() runs (observable: INTC enable_reg==0xFF, the 8-bit
+   RTL capture of the firmware's 0x1FF write), the stack pointer x2
+   (rf_reg[2] via u_ibex_top.gen_regfile_ff.register_file_i) = 0x13FD0,
+   inside DMEM [0x10000, 0x20000) and NOT the provisional 0x20000 top —
+   startup.S re-established sp from the linked _stack_top (not hard-coded).
+3. Boot ROM isolation: 64KB backdoor snapshot (bridge._boot_rom_snapshot,
+   X-normalized) taken before the reset and after firmware execution —
+   byte-identical.
+
+Dispatch: test_soc_rtl_runner_smoke now routes FM-SOC-009 through
+IbexRunner (alongside RING-WRAP-STRESS) so `run_fm_soc_case` exercises
+the on-chip firmware path and the boot assertions.
+
+## RTL probe reality (why pc_if, not pc_id)
+
+- pc_id (IF->ID pipeline register) has NO reset term in this config
+  (ResetAll=Lockstep=0 in ibex_top.sv:189) — it keeps its pre-reset value
+  through reset and can never satisfy "PC=0".
+- pc_if likewise has no reset term; it only moves AFTER release when the
+  controller's RESET->BOOT_SET sequence latches the PC_BOOT address.
+- cocotb deposits on tb_soc.rst_n reach the DUT with an unpredictable
+  multi-cycle lag; a VPI Force on the reset net does not reach the core
+  internals. The check therefore asserts the reset by its post-release
+  effect (poll for pc_if in the boot ROM entry region within 5000 cycles).
