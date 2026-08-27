@@ -1065,10 +1065,12 @@ if COCOTB_AVAILABLE:
         (set by the Makefile/shell wrapper) and defaults to FM-SOC-001.
         Golden vectors are loaded from rtl/test_vectors/soc_e2e/<case_id>/
         when available; otherwise the built-in case definition is used.
-        RING-WRAP-STRESS and FM-SOC-009 are driven through IbexRunner
-        instead (no golden vectors — the workload is built in Python and
-        the on-chip firmware drains the ring on this same tb_soc top;
-        FM-SOC-009 is the boot-sequence assertion case).
+        RING-WRAP-STRESS, FM-SOC-009, FM-SOC-032-CORRUPT and
+        ATTN-WEIGHT-CHAIN are driven through IbexRunner instead (no golden
+        vectors — the workload is built in Python and the on-chip firmware
+        drains the ring on this same tb_soc top; FM-SOC-009 is the
+        boot-sequence assertion case; ATTN-WEIGHT-CHAIN is the 17-op blk.0
+        chain-level reproduction of BUG-RTL-SOC-007).
         """
         bridge = CocotbBridge(dut)
         await bridge.start_clock()
@@ -1076,7 +1078,8 @@ if COCOTB_AVAILABLE:
 
         case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-001")
 
-        if case_id in ("RING-WRAP-STRESS", "FM-SOC-009", "FM-SOC-032-CORRUPT"):
+        if case_id in ("RING-WRAP-STRESS", "FM-SOC-009", "FM-SOC-032-CORRUPT",
+                       "ATTN-WEIGHT-CHAIN"):
             runner = IbexRunner(dut, bridge)
             await runner.setup()
             passed, msg = await runner.run_case(case_id)
@@ -3048,8 +3051,13 @@ class P4SpikeRunner(P2P3SpikeRunner):
                 else:
                     a = rng.randn(elements).astype(np.float32)
                     b = rng.randint(-500, 500, size=elements, dtype=np.int32)
+                    # RTL resid_add consumes two raw INT32 lane streams (the
+                    # vector wrapper does no fp16->int32 conversion), so the
+                    # residual is stored pre-converted (truncation — the same
+                    # conversion GoldenVector.residual_add applies internally).
+                    a_i32 = a.astype(np.int32)
                     golden = GoldenVector().residual_add(a, b)
-                    a_bytes = a.astype(np.float16).tobytes()
+                    a_bytes = a_i32.tobytes()
                     b_bytes = b.tobytes()
 
                 a_chunk = vector_chunk_size(elements, a_bytes[0] if a_bytes else 4)
@@ -3633,6 +3641,276 @@ class P4SpikeRunner(P2P3SpikeRunner):
         return True, "17-op blk.0 chain PASS via PCIe host readback"
 
 
+    # ── ATTN-WEIGHT-CHAIN (todo 15, soc-rtl-verification-signoff) ──────────
+    #
+    # Chain-level reproduction of BUG-RTL-SOC-007: the FULL 17-op blk.0
+    # sequence — including op07 attn_weight — dispatched through the
+    # firmware command ring.  The W1.3 3-layer forward pass saw every
+    # attn_weight op report cycles=0 (never executed); the single-op
+    # PERF-13 shape (M=32/K=32/N=64, sim/perf_tests.py:255 /
+    # sim/tests/test_soc_fm.py:1849-1918) passes, so this case runs the
+    # REAL blk.0 chain shape (manifest op07 = M=32/K=2/N=128, clipped to
+    # N=64 by _build_block) — the shape that actually failed in W1.3.
+
+    def _build_attn_weight_chain(self) -> Tuple[FuncModel, dict]:
+        """Build ATTN-WEIGHT-CHAIN: the full 17-op blk.0 chain via doorbell dispatch.
+
+        Reuses the todo-11-fixed ``_build_block`` (engine-specific descriptor
+        writers) with the real blk.0 weights and no corruption.  The command
+        entries are staged in model.dram so the RTL preload carries them into
+        the firmware ring; ``op_meta`` maps every op to its output buffer,
+        golden array and command index for the per-op cycle/cos_sim check.
+        """
+        manifest = self._load_blk0_manifest()
+        if len(manifest["ops"]) != 17:
+            raise RuntimeError(
+                f"blk0 manifest has {len(manifest['ops'])} ops, expected the 17-op blk.0 sequence"
+            )
+        attn_ops = [op for op in manifest["ops"] if "attn_weight" in op["name"]]
+        if len(attn_ops) != 1:
+            raise RuntimeError(
+                f"blk0 manifest has {len(attn_ops)} attn_weight ops, expected exactly one (op07)"
+            )
+        attn_op = attn_ops[0]
+        if attn_op["idx"] != 7:
+            raise RuntimeError(
+                f"blk0 manifest attn_weight is op{attn_op['idx']:02d}, expected op07"
+            )
+        attn_dims = attn_op["dimensions"]
+        logger.info(
+            f"[ATTN-WEIGHT-CHAIN] op07 attn_weight manifest dims "
+            f"M={attn_dims.get('M')} K={attn_dims.get('K')} N={attn_dims.get('N')} "
+            f"(clipped to M={self._clip_dim(attn_dims.get('M', 1))} "
+            f"K={self._clip_dim(attn_dims.get('K', 64))} "
+            f"N={self._clip_dim(attn_dims.get('N', 64))} by _build_block)"
+        )
+
+        baseline_weights = {
+            op["idx"]: self._blk0_read_hex(op["weight_hex"], 1)[:(
+                self._clip_dim(op["dimensions"].get("K", 64)) *
+                self._clip_dim(op["dimensions"].get("N", 64)) + 1) // 2]
+            for op in manifest["ops"] if op["opcode"] == "MMUL"
+        }
+
+        block_base = self._P4_BLOCK_BASE
+        model = self._make_model()
+        cmds, result_addr, outputs, vector_chunks = self._build_block(
+            model, 0, block_base, baseline_weights, manifest
+        )
+
+        desc_base = block_base + self._P4_DESC_BASE_REL
+        op_meta: Dict[int, dict] = {}
+        for op in manifest["ops"]:
+            idx = op["idx"]
+            out_addr, golden = outputs[idx]
+            desc_addr = desc_base + idx * 64
+            # The op's own command entry.  DMA-barrier (+0x0800/+0x0C00) and
+            # final-VCONV (+0x1000) descriptor addresses live in disjoint
+            # regions, so matching on desc_addr is unique.
+            cmd_offset = next(
+                k for k, (_, d) in enumerate(cmds) if d == desc_addr)
+            op_meta[idx] = {
+                "op": op,
+                "out_addr": out_addr,
+                "golden": golden,
+                "cmd_offset": cmd_offset,
+            }
+
+        # Stage the command entries in model.dram so the RTL preload carries
+        # them into the firmware ring (same pattern as _build_10X).
+        self._write_cmds_to_model(model, cmds)
+
+        expected = {
+            "num_cmds": len(cmds),
+            "cmds": cmds,
+            "manifest": manifest,
+            "op_meta": op_meta,
+            "attn_weight_idx": attn_op["idx"],
+            "vector_chunks": vector_chunks,
+            "timeout_cycles": 2_000_000,
+        }
+        return model, expected
+
+    async def _run_attn_weight_chain(self) -> Tuple[bool, str]:
+        """Dispatch the 17-op chain through the firmware ring and verify it.
+
+        Per-command cycle counts come from the firmware completion ring:
+        ``write_completion()`` stamps ``comp[0]=cmd_id`` in DRAM after each
+        command drains, strictly in order.  Every op must complete with
+        cycles>0 and its output must match golden (cos_sim >= 0.999 for
+        MMUL/SFU, bit-exact for INT32 vector ops).  A dropped attn_weight
+        command would leave its zeroed output buffer untouched —
+        reproducing BUG-RTL-SOC-007 and failing both the cycles and the
+        cos_sim gate.
+        """
+        model, expected = self._build_attn_weight_chain()
+
+        await self._preload_rtl(model)
+        for addr, size in expected.get("vector_chunks", []):
+            await self._dram_backdoor_write(addr - self.DRAM_BASE, b"\x00" * size)
+
+        # Ibex-only boot-sequence assertions (P4SpikeRunner has no
+        # _check_boot_sequence); the on-chip firmware path is the one that
+        # writes the completion ring this tracer consumes.
+        boot_check = getattr(self, "_check_boot_sequence", None)
+        if boot_check is not None and not await boot_check(expected["timeout_cycles"]):
+            return False, "boot-sequence assertions failed before ATTN-WEIGHT-CHAIN dispatch"
+
+        await self._apb_write(Addr.DOORBELL + DOORBELL.HOST_TAIL, expected["num_cmds"])
+        stamps = await self._trace_attn_chain_completions(
+            expected["num_cmds"], expected["timeout_cycles"])
+        if stamps is None:
+            return False, "completion-ring trace incomplete on ATTN-WEIGHT-CHAIN (firmware timeout/hang)"
+
+        return await self._verify_attn_weight_chain(expected, stamps)
+
+    async def _trace_attn_chain_completions(self, num_cmds: int,
+                                            timeout_cycles: int) -> Optional[List[int]]:
+        """Sample the firmware completion ring for per-command cycle stamps.
+
+        ``write_completion()`` (firmware/npu_firmware.c) writes
+        ``comp[0]=cmd_id`` at DRAM offset ``COMPLETION_RING_ADDR + cmd_id*32``
+        after each command drains; commands complete strictly in order, so
+        the sim-cycle delta between consecutive stamps is the per-command
+        wall time.  Only the cmd_id presence is observable: the DRAM model
+        writes whole 512-bit words per beat (``s_axi_wstrb`` is ignored) and
+        the firmware's narrow 32-bit stores land with their data replicated
+        across word lanes, so the companion ``comp[1]=status`` word is not
+        recoverable via backdoor read (execution correctness is gated by
+        the per-op output comparison instead).  The boot self-test leaves
+        0xDEADBEEF in cmd 0's cmd_id slot — the "not yet completed" marker
+        for the first command.  Returns the per-command completion cycle
+        stamps in command order, or None on timeout.
+        """
+        stamps: List[int] = []
+        comp_off = command_ring.COMPLETION_RING_ADDR - self.DRAM_BASE
+        elapsed = 0
+        for k in range(num_cmds):
+            found = False
+            while elapsed < timeout_cycles:
+                data = await self._dram_backdoor_read(comp_off + k * 32, 4)
+                cmd_id = struct.unpack("<I", data)[0]
+                if (k == 0 and cmd_id != 0xDEADBEEF) or (k > 0 and cmd_id == k):
+                    stamps.append(elapsed)
+                    logger.warning(
+                        f"[ATTN-WEIGHT-CHAIN] comp[{k}] cyc={elapsed} "
+                        f"cmd_id=0x{cmd_id:08x}")
+                    found = True
+                    break
+                await self.bridge.wait_cycles(1)
+                elapsed += 1
+            if not found:
+                logger.warning(
+                    f"[ATTN-WEIGHT-CHAIN] completion stamp {k}/{num_cmds} "
+                    f"never arrived (elapsed={elapsed})")
+                return None
+        return stamps
+
+    async def _verify_attn_weight_chain(self, expected: dict,
+                                        stamps: List[int]) -> Tuple[bool, str]:
+        """Verify per-op cycle counts and outputs for the 17-op chain.
+
+        Each completion stamp is the sim-cycle at which the firmware wrote
+        the command's completion entry; consecutive deltas are per-command
+        wall cycles (commands run strictly serially).  ``cycles <= 0`` for
+        an op means its command never executed — the BUG-RTL-SOC-007
+        signature.  Outputs are read back over the DRAM backdoor and
+        compared against the Func-Model golden: cos_sim >= 0.999 for the FP
+        MMUL/SFU ops, bit-exact for the INT32 vector ops.
+        """
+        manifest = expected["manifest"]
+        op_meta = expected["op_meta"]
+        num_cmds = expected["num_cmds"]
+        attn_idx = expected["attn_weight_idx"]
+
+        if len(stamps) != num_cmds:
+            return False, (
+                f"completion ring has {len(stamps)} stamps, expected {num_cmds} "
+                f"(chain commands were skipped)")
+
+        cmd_cycles = [stamps[0]] + [
+            stamps[i] - stamps[i - 1] for i in range(1, num_cmds)]
+
+        min_cos = 1.0
+        fp_ops = 0
+        vec_ops = 0
+        attn_cycles = 0
+        attn_cos = 0.0
+        for op in manifest["ops"]:
+            idx = op["idx"]
+            name = op["name"]
+            opcode = op["opcode"]
+            meta = op_meta[idx]
+            cyc = cmd_cycles[meta["cmd_offset"]]
+            golden = np.asarray(meta["golden"]).ravel()
+            out_bytes = await self._dram_backdoor_read(
+                meta["out_addr"] - self.DRAM_BASE, golden.nbytes)
+            if len(out_bytes) != golden.nbytes:
+                return False, (
+                    f"op{idx:02d} {name}: readback {len(out_bytes)}B != "
+                    f"expected {golden.nbytes}B")
+            if opcode == "MMUL":
+                out = np.frombuffer(out_bytes, dtype=np.float32)
+            elif opcode in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
+                out = np.frombuffer(out_bytes, dtype=np.float16).astype(np.float32)
+                golden = golden.astype(np.float32)
+            else:
+                out = np.frombuffer(out_bytes, dtype=np.int32)
+
+            if cyc <= 0:
+                if idx == attn_idx:
+                    logger.warning(
+                        f"attn_weight cycles>0 FAIL (op{idx:02d} {name}: "
+                        f"cycles={cyc} — BUG-RTL-SOC-007 reproduced)")
+                logger.warning(
+                    f"[ATTN-WEIGHT-CHAIN] op{idx:02d} {name}: cycles={cyc} <= 0 FAIL")
+                return False, (
+                    f"op{idx:02d} {name}: cycles={cyc} <= 0 — command never "
+                    f"executed (BUG-RTL-SOC-007 dispatch-failure signature)")
+
+            if opcode in ("VMUL", "VRESID"):
+                if not np.array_equal(out, golden):
+                    return False, (
+                        f"op{idx:02d} {name}: INT32 mismatch (bit-exact expected)")
+                vec_ops += 1
+                logger.warning(
+                    f"[ATTN-WEIGHT-CHAIN] op{idx:02d} {name}: cycles={cyc} "
+                    f"bit-exact PASS")
+            else:
+                if not np.any(golden):
+                    return False, (
+                        f"op{idx:02d} {name}: golden is all-zero (anti-vacuous)")
+                cos = float(
+                    np.dot(out, golden)
+                    / (np.linalg.norm(out) * np.linalg.norm(golden) + 1e-30))
+                fp_ops += 1
+                if cos < min_cos:
+                    min_cos = cos
+                if idx == attn_idx:
+                    attn_cycles = cyc
+                    attn_cos = cos
+                logger.warning(
+                    f"[ATTN-WEIGHT-CHAIN] op{idx:02d} {name}: cycles={cyc} "
+                    f"cos_sim={cos:.6f}")
+                if cos < 0.999:
+                    logger.warning(
+                        f"cos_sim>=0.999 FAIL (op{idx:02d} {name}: "
+                        f"cos_sim={cos:.6f} < 0.999)")
+                    return False, (
+                        f"op{idx:02d} {name}: cos_sim={cos:.6f} < 0.999 vs golden")
+
+        logger.warning(
+            f"attn_weight cycles>0 PASS (op{attn_idx:02d}, "
+            f"cycles={attn_cycles}, cos_sim={attn_cos:.6f})")
+        logger.warning(
+            f"cos_sim>=0.999 PASS (min_cos={min_cos:.6f} over {fp_ops} fp ops; "
+            f"{vec_ops} INT32 ops bit-exact; all {num_cmds} commands cycles>0)")
+        return True, (
+            f"17-op chain PASS: all {num_cmds} commands cycles>0, "
+            f"attn_weight cycles={attn_cycles} cos_sim={attn_cos:.6f}, "
+            f"min_cos={min_cos:.6f}")
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Ibex-RTL runner (Task 12)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3992,6 +4270,9 @@ class IbexRunner(P4SpikeRunner):
             if not ok:
                 return False, msg
             return await self._verify(expected, expect_mismatch)
+
+        if case_id == "ATTN-WEIGHT-CHAIN":
+            return await self._run_attn_weight_chain()
 
         if case_id in {"FM-SOC-014", "FM-SOC-015", "FM-SOC-016",
                          "FM-SOC-021", "FM-SOC-022", "FM-SOC-023"}:

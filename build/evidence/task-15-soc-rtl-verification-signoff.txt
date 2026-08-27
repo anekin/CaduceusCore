@@ -1,0 +1,110 @@
+# Todo 15 — RTL attn_weight full-chain dispatch test (ATTN-WEIGHT-CHAIN)
+# soc-rtl-verification-signoff
+# Generated: 2026-08-27 22:21 (Asia/Shanghai)
+# Plan: .omo/plans/soc-rtl-verification-signoff.md todo 15
+# Commit: test(soc): add attn_weight full-chain dispatch RTL test
+
+## Status
+
+PASS
+
+## Exact acceptance command (run on sz0001, 192.168.0.11)
+
+  source /NAS/Tools/methodology/modules/init/bash
+  module load vcs/vcs_2023.12sp2
+  source sim/regression/run_env.sh
+  make -C sim/regression run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN
+
+Makefile exit code: 0 (FM_SOC_ATTN-WEIGHT-CHAIN: PASS).
+Simulator: VCS V-2023.12-SP2_Full64, cocotb, tb_soc (full RTL, on-chip Ibex +
+real firmware from firmware/build/npu_firmware.hex).
+simv_soc_cocotb reused (Python-only change -> no recompile).
+Wall time: ~5 min (26-command 17-op blk.0 chain, sim time 994,538.5 ns).
+
+## Acceptance evidence (from sim/regression/fm_soc_ATTN-WEIGHT-CHAIN.log)
+
+  BOOT_ASSERT: PC=0 PASS (post-reset pc_if=0x00000080 in the 0x0000_0000 boot
+    ROM entry region; mepc=0x00000000 mtval=0x00000000)
+  SP_INIT: PASS (sp=0x00013fd0 inside DMEM; ...)
+  BOOT_ROM: PASS (64KB boot ROM unchanged before/after firmware boot)
+  [ATTN-WEIGHT-CHAIN] op00 RMSNORM pre-attn: cycles=1845 cos_sim=1.000000
+  [ATTN-WEIGHT-CHAIN] op01 Q_proj MMUL: cycles=23990 cos_sim=1.000000
+  [ATTN-WEIGHT-CHAIN] op02 K_proj MMUL: cycles=11190 cos_sim=1.000000
+  [ATTN-WEIGHT-CHAIN] op03 V_proj MMUL: cycles=11190 cos_sim=1.000000
+  [ATTN-WEIGHT-CHAIN] op04 ROPE: cycles=1867 cos_sim=1.000000
+  [ATTN-WEIGHT-CHAIN] op05 attn_score MMUL: cycles=30554 cos_sim=1.000000
+  [ATTN-WEIGHT-CHAIN] op06 attn_softmax SOFTMAX: cycles=2039 cos_sim=0.999984
+  [ATTN-WEIGHT-CHAIN] op07 attn_weight MMUL: cycles=30755 cos_sim=1.000000
+  [ATTN-WEIGHT-CHAIN] op08 O_proj MMUL: cycles=11190 cos_sim=1.000000
+  [ATTN-WEIGHT-CHAIN] op09 VRESID: cycles=2450 bit-exact PASS
+  [ATTN-WEIGHT-CHAIN] op10 RMSNORM post-attn: cycles=1967 cos_sim=1.000000
+  [ATTN-WEIGHT-CHAIN] op11 gate MMUL: cycles=23990 cos_sim=1.000000
+  [ATTN-WEIGHT-CHAIN] op12 up MMUL: cycles=11190 cos_sim=1.000000
+  [ATTN-WEIGHT-CHAIN] op13 SILU: cycles=1887 cos_sim=1.000000
+  [ATTN-WEIGHT-CHAIN] op14 VMUL gate*up: cycles=2450 bit-exact PASS
+  [ATTN-WEIGHT-CHAIN] op15 down MMUL: cycles=23990 cos_sim=1.000000
+  [ATTN-WEIGHT-CHAIN] op16 VRESID: cycles=2450 bit-exact PASS
+  attn_weight cycles>0 PASS (op07, cycles=30755, cos_sim=1.000000)
+  cos_sim>=0.999 PASS (min_cos=0.999984 over 14 fp ops; 3 INT32 ops bit-exact;
+    all 26 commands cycles>0)
+  IbexRunner ATTN-WEIGHT-CHAIN: PASS — 17-op chain PASS: all 26 commands
+    cycles>0, attn_weight cycles=30755 cos_sim=1.000000, min_cos=0.999984
+  ** TESTS=1 PASS=1 FAIL=0 SKIP=0 **
+
+The log also contains all 26 per-command completion-ring stamps
+(`[ATTN-WEIGHT-CHAIN] comp[k] cyc=... cmd_id=...`, k=0..25) — the per-command
+cycle source.
+
+## What was verified
+
+- New case ATTN-WEIGHT-CHAIN added to sim/rtl_soc_runner.py (no RTL/firmware
+  changes):
+  - `_build_attn_weight_chain()`: reuses the todo-11-fixed `_build_block` with
+    the real blk.0 weights and no corruption — the FULL 17-op blk.0 sequence
+    including op07 attn_weight (26 ring commands: 17 ops + DMA barriers +
+    final VCONV). Manifest op07 = attn_weight M=32/K=2/N=128, clipped to
+    M=32/K=2/N=64 by _build_block (the REAL blk.0 shape that failed in W1.3;
+    note: the plan's "M=32/K=32/N=64" parenthetical is the PERF-13 synthetic
+    single-op shape from sim/tests/test_soc_fm.py:1861, not the chain shape).
+  - `_run_attn_weight_chain()`: preload → vector-chunk zeroing → boot
+    assertions (Ibex) → HOST_TAIL ring → completion-ring trace → verify.
+  - `_trace_attn_chain_completions()`: per-command cycle stamps from the
+    firmware completion ring (write_completion stamps comp[0]=cmd_id in DRAM
+    after each command drains, strictly in order).
+  - `_verify_attn_weight_chain()`: asserts all 17 ops cycles>0 (attn_weight
+    explicitly logged as `attn_weight cycles>0 PASS`), MMUL/SFU cos_sim >=
+    0.999 vs Func-Model golden, VMUL/VRESID INT32 bit-exact, golden
+    anti-vacuous (nonzero).
+  - Dispatch wired in IbexRunner.run_case + test_soc_rtl_runner_smoke's
+    IbexRunner routing tuple. Makefile run_fm_soc_case already propagates
+    CASE_ID (FM_SOC_CASE_ID) — verified empirically, no Makefile edit.
+  - P4SpikeRunner is NOT wired: the per-command cycle trace reads the RTL
+    DRAM completion ring, which only the on-chip firmware writes (Spike
+    firmware writes completions to Spike's own memory). "if applicable" =
+    Ibex only.
+
+- BUG-RTL-SOC-007 chain-level verdict: attn_weight cycles=30755 > 0 with
+  cos_sim=1.000000 in the full 17-op chain dispatch — the cycles=0 dispatch
+  failure does NOT reproduce at chain level (consistent with the PERF-13
+  single-op evidence cycles=42311). Ledger stays Open with the todo-1
+  PERF-13 reference; todo 17 may add this chain-level evidence.
+
+## Root causes found and fixed during this task (sim/rtl_soc_runner.py only)
+
+1. Per-op cycle measurement is NOT available via NPU_HEAD polling: the
+   firmware drain loop only writes NPU_DB->NPU_HEAD once per batch
+   (npu_firmware.c:678), so the head register jumps 0 -> 26 in one step.
+   Switched to the DRAM completion ring (comp[0]=cmd_id per command).
+2. The DRAM completion status word is unrecoverable: dram_model.v writes the
+   whole 512-bit word per beat ignoring s_axi_wstrb, and the firmware's
+   narrow 32-bit stores land with data replicated across word lanes — the
+   comp[1]=status word is clobbered/relocated. Execution correctness is
+   therefore gated by the per-op output comparison (stronger: a dropped op
+   leaves its zeroed output buffer → cos_sim gate fails).
+3. `_build_block` VRESID golden bug (pre-existing, first golden-vs-RTL
+   exposure): the builder stored the residual `a` as FP16 while the RTL
+   resid_add consumes raw INT32 lanes (vector_top does no fp16→int32
+   conversion). Fixed: store the truncated INT32 residual — same conversion
+   GoldenVector.residual_add applies internally. FM-SOC-032/-032-CORRUPT are
+   fingerprint/hash based (format-independent) so their verdicts are
+   unaffected; todo 16 re-runs them.

@@ -471,3 +471,58 @@ offset 0x8000.
   op diverges"; assert confinement to the block + op14 ∈ mismatch set (anti-vacuous).
 - Todo-16 note: FM-SOC-032-CORRUPT runs the boot assertions twice (one per pass) like
   FM-SOC-032; two 50M-cycle poll budgets ≈ 46 min wall under load — schedule accordingly.
+## [2026-08-27 22:25] Todo 15 — ATTN-WEIGHT-CHAIN: 17-op blk.0 chain dispatch (RTL)
+
+### Outcome
+`make -C sim/regression run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN` exits 0 on
+sz0001 (tb_soc, on-chip Ibex). Log contains `attn_weight cycles>0 PASS
+(op07, cycles=30755, cos_sim=1.000000)` and `cos_sim>=0.999 PASS
+(min_cos=0.999984 ...)`; all 17 ops cycles>0, 14 FP ops cos≥0.999, 3 INT32 ops
+bit-exact, TESTS=1 PASS=1. Evidence:
+`build/evidence/task-15-soc-rtl-verification-signoff.txt`.
+
+**BUG-RTL-SOC-007 chain-level verdict: NOT reproduced.** attn_weight
+(cycles=30755, cos=1.0) executes in the full 17-op chain dispatch — consistent
+with the PERF-13 single-op evidence. Ledger stays Open (todo 1 wording); cite
+this chain run as the reproduction attempt.
+
+### Deviations from plan (documented, deliberate)
+- **Chain shape**: the plan's parenthetical "op07 attn_weight M=32/K=32/N=64"
+  is the PERF-13 synthetic single-op shape (test_soc_fm.py:1861). The REAL
+  blk.0 op07 is M=32/K=2/N=128 → clipped to M=32/K=2/N=64 by `_build_block` —
+  the shape that actually reported cycles=0 in W1.3. Used the real manifest
+  (stronger reproduction, preserves "full 17-op blk.0 sequence").
+- **P4SpikeRunner not wired** ("if applicable" = Ibex only): per-command
+  cycles come from the RTL DRAM completion ring, which only the on-chip
+  firmware writes; Spike firmware writes completions to Spike's own memory.
+
+### Key mechanics discovered (important for todo 16+ chain tests)
+- **NPU_HEAD is batch-updated**: the firmware drain loop writes
+  `NPU_DB->NPU_HEAD = npu_head` ONCE per batch (npu_firmware.c:678), so
+  per-command cycle timing CANNOT come from head polling (head jumps 0→26).
+  Use the DRAM completion ring instead: `write_completion()` stamps
+  `comp[0]=cmd_id` at `COMPLETION_RING_ADDR + cmd_id*32` per command, in
+  order — consecutive stamp deltas are per-command wall cycles.
+- **Completion status is unrecoverable at RTL**: dram_model.v writes the full
+  512-bit word per beat and IGNORES `s_axi_wstrb`; the firmware's narrow
+  32-bit stores land with data replicated across word lanes (observed raw
+  `0100000001000000` = cmd_id in both 4B lanes). The companion
+  `comp[1]=status` word is clobbered/relocated — do NOT read it. Gate
+  execution correctness on per-op output compare (dropped op → zeroed output
+  buffer → cos_sim≈0), which is strictly stronger anyway.
+- **`_build_block` VRESID golden bug fixed** (pre-existing; first
+  golden-vs-RTL exposure since FM-SOC-10X only verifies ops 0-1 and
+  FM-SOC-032 compares hashes): the builder stored the residual `a` as FP16,
+  but RTL `resid_add` consumes raw INT32 lanes (vector_top/vector_soc_wrapper
+  do NO fp16→int32 conversion). Fixed to store truncated INT32 (same
+  conversion `GoldenVector.residual_add` applies internally). FM-SOC-032 /
+  -032-CORRUPT are hash/fingerprint based → verdicts unaffected; todo 16
+  re-runs them.
+- **Parallel-agent hazard hit again**: the first two re-runs picked up a
+  transient `IndentationError` in cocotb_bridge.py while the todo-13 agent
+  was mid-edit on the shared tree — before launching a VCS run, verify
+  `python3 -m py_compile` on ALL imported sim modules on sz0001, not just the
+  file being changed.
+- Boot assertions run automatically (case routes through IbexRunner._run_spike
+  → `_check_boot_sequence`); the completion-ring tracer's cmd-0 "not done"
+  marker is the boot self-test's 0xDEADBEEF at comp[0].
