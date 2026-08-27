@@ -435,3 +435,39 @@ Every Ibex case now runs the boot assertions (re-boot ≈ 500 cycles + 2 ROM
 snapshots of 16k VPI reads — negligible). If any future case fails with
 `BOOT_ASSERT`, first suspect the deposit lag or a re-boot side effect at DRAM
 offset 0x8000.
+
+## [2026-08-27 14:08] Todo 12 — FM-SOC-032-CORRUPT corrupted-descriptor variant
+
+### Outcome
+- `make -C sim/regression run_fm_soc_case CASE_ID=FM-SOC-032-CORRUPT` PASS on sz0001
+  (~46 min wall: clean 728-cmd pass + corrupted 728-cmd pass, CPU 3109s).
+- Log: `CORRUPT: block5 mismatch, others PASS`; block 5 MISMATCH, 27/28 blocks bit-exact;
+  TESTS=1 PASS=1 FAIL=0. Evidence: `build/evidence/task-12-soc-rtl-verification-signoff.txt`.
+
+### Design
+- `_build_block(corrupt_desc_op=None)`: the vector op with the matching manifest idx gets
+  its ring command's descriptor address corrupted by +64B — same fault-injection shape as
+  FM guard `test_soc_fm_long_sequence.py:472-484`. Baseline call sites untouched.
+- `_build_032_corrupt_model()` mirrors `_build_032_perturbed_model()` (zero block 5 region,
+  rebuild with `corrupt_desc_op=14`); `_run_032_corrupt()` mirrors `_run_032`'s two-pass
+  clean→corrupt flow with per-block fingerprints + block-5 per-op hashes.
+- Dispatch: P4SpikeRunner.run_case + IbexRunner.run_case + `test_soc_rtl_runner_smoke`
+  Ibex tuple. Makefile `run_fm_soc_case` already propagates CASE_ID (FM_SOC_CASE_ID) —
+  verified, no Makefile edit.
+
+### RTL behavior discovered (deterministic, empirically verified — first prediction wrong)
+- The +64B slot holds op15's REAL MMUL descriptor (the builder pre-writes all slots; unlike
+  the FM guard, no decoy is planted). Corrupted VMUL reads it as a vector descriptor:
+  a/b/o = op15's act/wgt/out buffers, **dim = op15's input_size word = 4096** (M=1,K=64
+  tile-major act = 64×64 = 4096B).
+- The vector wrapper writes `vector_scratch_size(4096)` = **16KB starting at op15's 512B
+  output buffer** (op15 out = M*N*4 = 1×64×4 = 256 → hw_buf 512). Spill clobbers op15's
+  scale + op16's a/b/o input buffers → block-5 ops {14, 15, 16} diverge → block-5 final
+  VCONV fingerprint MISMATCHES. All divergence stays inside block 5 (data region, far
+  below desc_base 0x38000); firmware dram_range_ok passes → status=0, no abort, no hang.
+- **Lesson**: when corrupting a descriptor address by +64B, the WRONG descriptor's dim
+  field drives the write size — the spill radius depends on the NEXT op's descriptor
+  layout, not the corrupted op's own dimensions. Don't hard-assert "only the corrupted
+  op diverges"; assert confinement to the block + op14 ∈ mismatch set (anti-vacuous).
+- Todo-16 note: FM-SOC-032-CORRUPT runs the boot assertions twice (one per pass) like
+  FM-SOC-032; two 50M-cycle poll budgets ≈ 46 min wall under load — schedule accordingly.

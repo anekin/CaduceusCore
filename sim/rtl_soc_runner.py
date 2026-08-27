@@ -1076,7 +1076,7 @@ if COCOTB_AVAILABLE:
 
         case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-001")
 
-        if case_id in ("RING-WRAP-STRESS", "FM-SOC-009"):
+        if case_id in ("RING-WRAP-STRESS", "FM-SOC-009", "FM-SOC-032-CORRUPT"):
             runner = IbexRunner(dut, bridge)
             await runner.setup()
             passed, msg = await runner.run_case(case_id)
@@ -2781,6 +2781,8 @@ class P4SpikeRunner(P2P3SpikeRunner):
 
         if case_id == "FM-SOC-032":
             return await self._run_032()
+        if case_id == "FM-SOC-032-CORRUPT":
+            return await self._run_032_corrupt()
         if case_id == "FM-SOC-10X":
             return await self._run_10X()
 
@@ -2837,6 +2839,7 @@ class P4SpikeRunner(P2P3SpikeRunner):
         block_base: int,
         weights: dict,
         manifest: dict,
+        corrupt_desc_op: Optional[int] = None,
     ) -> Tuple[List[Tuple[int, int]], int, Dict[int, Tuple[int, np.ndarray]], List[Tuple[int, int]]]:
         """Build one blk.0 block in the model DRAM.
 
@@ -2846,7 +2849,15 @@ class P4SpikeRunner(P2P3SpikeRunner):
             outputs: dict mapping op idx -> (output_dram_addr, golden_array)
             vector_chunks: list of (addr, size) for Vector wrapper I/O chunks
                            that must be zeroed in RTL DRAM before the op runs.
+
+        corrupt_desc_op: when set, the vector op with this manifest idx gets
+            its command's descriptor address corrupted by +64B, so the
+            firmware reads the NEXT descriptor slot (a valid-but-wrong
+            descriptor for the following op).  Mirrors the FM guard
+            test_soc_fm_long_sequence.py:472-484.  Defaults to None: the
+            baseline build is bit-for-bit unchanged.
         """
+        corrupt_applied = False
         cmds: List[Tuple[int, int]] = []
         outputs: Dict[int, Tuple[int, np.ndarray]] = {}
         vector_chunks: List[Tuple[int, int]] = []
@@ -3064,7 +3075,20 @@ class P4SpikeRunner(P2P3SpikeRunner):
                     M=1, K=elements, N=1,
                 )
                 vec_op_map = {"VMUL": self._OP_VMUL, "VRESID": self._OP_VRESID}
-                cmds.append((vec_op_map[opcode], desc_addr))
+                eff_desc = desc_addr
+                if corrupt_desc_op is not None and idx == corrupt_desc_op:
+                    # FM-SOC-032-CORRUPT fault injection (FM guard semantics,
+                    # test_soc_fm_long_sequence.py:472-484): the command's
+                    # descriptor address is corrupted by +64B so the firmware
+                    # reads the NEXT descriptor slot — a valid-but-wrong
+                    # descriptor for the following op (op15 MMUL here).
+                    eff_desc = desc_addr + 64
+                    corrupt_applied = True
+                    logger.info(
+                        f"[P4-032-CORRUPT] block {block_idx} op{idx:02d} {opcode}: "
+                        f"descriptor addr corrupted 0x{desc_addr:08x} -> 0x{eff_desc:08x}"
+                    )
+                cmds.append((vec_op_map[opcode], eff_desc))
                 outputs[idx] = (o_addr, golden.astype(np.int32))
 
                 # DMA barrier: the Vector wrapper may assert STATUS.DONE before
@@ -3080,6 +3104,11 @@ class P4SpikeRunner(P2P3SpikeRunner):
 
             else:
                 raise ValueError(f"block {block_idx} op{idx:02d}: unsupported opcode {opcode}")
+
+        if corrupt_desc_op is not None and not corrupt_applied:
+            raise RuntimeError(
+                f"block {block_idx}: corrupt_desc_op={corrupt_desc_op} matched no vector op"
+            )
 
         # Final VCONV: convert the last op's INT32 output to FP16 result buffer
         result_addr = self._P4_RESULT_BASE + block_idx * self._P4_RESULT_STRIDE
@@ -3176,6 +3205,31 @@ class P4SpikeRunner(P2P3SpikeRunner):
         _, _, _, perturbed_chunks = self._build_block(model, 14, block_base_14, perturbed_weights, manifest)
         expected["vector_chunks"].extend(perturbed_chunks)
         return model
+
+    def _build_032_corrupt_model(self, baseline_model: FuncModel,
+                                 expected: dict) -> Tuple[FuncModel, List[Tuple[int, int]]]:
+        """Copy baseline_model; rebuild block 5 with the op-14 VMUL descriptor
+        address corrupted by +64B (FM guard test_soc_fm_long_sequence.py:472-484).
+
+        Returns (model, corrupt_cmds_5): corrupt_cmds_5 is the rebuilt block-5
+        command list — identical to the clean list except the op-14 VMUL
+        command references desc_addr + 64 (the next descriptor slot, which
+        holds op-15's valid-but-wrong MMUL descriptor).
+        """
+        manifest = self._load_blk0_manifest()
+        block_base_5 = self._P4_BLOCK_BASE + 5 * self._P4_BLOCK_STRIDE
+        block_weights = expected["block_weights"]
+
+        model = self._make_model()
+        model.dram[:] = baseline_model.dram
+        # Zero block 5 region and rebuild with the corrupted descriptor.
+        block_end = block_base_5 + self._P4_BLOCK_STRIDE
+        model.dram[block_base_5 - self.DRAM_BASE:block_end - self.DRAM_BASE] = bytes(self._P4_BLOCK_STRIDE)
+        corrupt_cmds_5, _, _, corrupt_chunks = self._build_block(
+            model, 5, block_base_5, block_weights[5], manifest, corrupt_desc_op=14
+        )
+        expected["vector_chunks"].extend(corrupt_chunks)
+        return model, corrupt_cmds_5
 
     def _write_cmds_to_model(self, model: FuncModel, cmds: List[Tuple[int, int]]) -> None:
         for cmd_offset, (opcode, desc_addr) in enumerate(cmds):
@@ -3310,6 +3364,128 @@ class P4SpikeRunner(P2P3SpikeRunner):
             return False, "all block fingerprints are identical"
 
         return True, f"28 blocks PASS; block-14 perturbation isolated (hashes {len(set(baseline_hashes))}/28 distinct, changed ops {len(changed_ops)})"
+
+    async def _run_032_corrupt(self) -> Tuple[bool, str]:
+        """FM-SOC-032-CORRUPT: block-5 op-14 descriptor-address corruption.
+
+        Mirrors the FM guard test_soc_fm_long_sequence.py:472-484: the op-14
+        VMUL command references the descriptor slot at +64B, which holds
+        op-15's valid-but-wrong MMUL descriptor.  Expected RTL behavior: no
+        hang, deterministic mismatch confined to block 5 (the corrupted op
+        inherits dim=4096 from the wrong descriptor, so its 16KB write spills
+        from op-15's 512B output buffer into op-15's scale and op-16's input
+        buffers — all inside block 5); blocks 0-4 and 6-27 stay bit-exact
+        versus the clean run.  The firmware must NOT abort — it executes the
+        corrupted command to completion and drains the rest of the ring.
+        """
+        import hashlib
+
+        model, expected = self._build_032_baseline()
+
+        # ── Pass 1: clean 28-block chain (golden reference) ──
+        clean_flat: List[Tuple[int, int]] = []
+        for cmds in expected["batches"]:
+            clean_flat.extend(cmds)
+        logger.info(f"[P4-032-CORRUPT] clean chain flattened {len(clean_flat)} commands")
+        self._write_cmds_to_model(model, clean_flat)
+        await self._preload_rtl(model)
+        for addr, size in expected.get("vector_chunks", []):
+            await self._dram_backdoor_write(addr - self.DRAM_BASE, b"\x00" * size)
+
+        ok = await self._run_spike(model, len(clean_flat), timeout_cycles=expected["timeout_cycles"])
+        if not ok:
+            return False, "firmware timeout on clean 28-block chain (corrupt variant precondition)"
+
+        clean_hashes = []
+        for b in range(len(expected["batches"])):
+            h = await self._verify_032_block(model, expected, b, label="clean")
+            if h is None:
+                return False, f"clean block {b} fingerprint verification failed"
+            clean_hashes.append(h)
+
+        async def read_op_hashes(model_, block_idx):
+            hashes = {}
+            for idx, (addr, arr) in expected["block_outputs"][block_idx].items():
+                data = await self._dram_backdoor_read(addr - self.DRAM_BASE, arr.nbytes)
+                hashes[idx] = hashlib.md5(data).hexdigest()
+            return hashes
+
+        clean_op_hashes = await read_op_hashes(model, 5)
+
+        # ── Pass 2: block-5 op-14 descriptor address corrupted by +64B ──
+        corrupt_model, corrupt_cmds_5 = self._build_032_corrupt_model(model, expected)
+        corrupt_batches = [list(c) for c in expected["batches"]]
+        corrupt_batches[5] = corrupt_cmds_5
+        corrupt_flat: List[Tuple[int, int]] = []
+        for cmds in corrupt_batches:
+            corrupt_flat.extend(cmds)
+        if len(corrupt_flat) != len(clean_flat):
+            return False, f"corrupt chain length {len(corrupt_flat)} != clean {len(clean_flat)}"
+
+        # Anti-vacuous (build level): exactly one block-5 command changed.
+        diffs = [k for k, (c1, c2) in enumerate(
+            zip(expected["batches"][5], corrupt_cmds_5)) if c1 != c2]
+        if len(diffs) != 1:
+            return False, f"corrupt builder changed {len(diffs)} block-5 commands (expected 1)"
+        logger.info(
+            f"[P4-032-CORRUPT] corrupt chain flattened {len(corrupt_flat)} commands "
+            f"(1 corrupted: block 5 op14 desc 0x{clean_flat[diffs[0]][1]:08x} "
+            f"-> 0x{corrupt_flat[diffs[0]][1]:08x})"
+        )
+
+        self._write_cmds_to_model(corrupt_model, corrupt_flat)
+
+        # Reset RTL to clear cached engine state before the corrupted pass.
+        await self.bridge.reset(5)
+        await self._preload_rtl(corrupt_model)
+        for addr, size in expected.get("vector_chunks", []):
+            await self._dram_backdoor_write(addr - self.DRAM_BASE, b"\x00" * size)
+
+        ok = await self._run_spike(corrupt_model, len(corrupt_flat), timeout_cycles=expected["timeout_cycles"])
+        if not ok:
+            return False, "firmware timeout/hang on corrupted 28-block chain"
+
+        corrupt_hashes = []
+        for b in range(len(corrupt_batches)):
+            h = await self._verify_032_block(corrupt_model, expected, b, label="corrupt")
+            if h is None:
+                return False, f"corrupt block {b} fingerprint verification failed"
+            corrupt_hashes.append(h)
+        corrupt_op_hashes = await read_op_hashes(corrupt_model, 5)
+
+        # ── Per-block verdicts ──
+        for b in range(len(clean_hashes)):
+            verdict = "PASS (bit-exact)" if clean_hashes[b] == corrupt_hashes[b] else "MISMATCH"
+            logger.warning(f"[P4-032-CORRUPT] block {b}: {verdict}")
+
+        # Isolation: every block except 5 must remain bit-exact.
+        for b in range(len(clean_hashes)):
+            if b != 5 and clean_hashes[b] != corrupt_hashes[b]:
+                return False, f"isolation broken: block {b} changed after block-5 corruption"
+
+        # The corrupted op-14 VMUL output must diverge from the clean run.
+        if clean_op_hashes[14] == corrupt_op_hashes.get(14):
+            return False, ("anti-vacuous fail: op14 descriptor corruption did not change "
+                           "the op14 output")
+        mismatched_ops = sorted(
+            idx for idx in clean_op_hashes
+            if clean_op_hashes[idx] != corrupt_op_hashes.get(idx)
+        )
+        # The corrupted VMUL inherits dim=4096 from op-15's input_size word,
+        # so the vector wrapper writes 16KB starting at op-15's 512B output
+        # buffer: the spill clobbers op-15's scale and op-16's input buffers.
+        # Every divergent op stays inside block 5 — proven by the
+        # block-fingerprint isolation check above — so a mismatch set of
+        # {14, 15, 16} is the expected deterministic RTL behavior, not a leak.
+        logger.warning(f"[P4-032-CORRUPT] block 5 mismatched op outputs: {mismatched_ops}")
+
+        # No hang: both passes drained the full ring; deterministic mismatch
+        # confined to block 5.
+        msg = (f"CORRUPT: block5 mismatch, others PASS — op14 desc+64B corruption "
+               f"isolated to block 5 (mismatched ops {mismatched_ops}; "
+               f"blocks 0-4/6-27 bit-exact, no hang)")
+        logger.warning(msg)
+        return True, msg
 
     # ── FM-SOC-10X: full host→PCIe→DRAM→doorbell→firmware→IRQ chain ─────────
 
@@ -3826,6 +4002,8 @@ class IbexRunner(P4SpikeRunner):
 
         if case_id == "FM-SOC-032":
             return await self._run_032()
+        if case_id == "FM-SOC-032-CORRUPT":
+            return await self._run_032_corrupt()
         if case_id == "FM-SOC-10X":
             return await self._run_10X()
 
