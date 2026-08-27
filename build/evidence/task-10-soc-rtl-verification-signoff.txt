@@ -1,0 +1,93 @@
+# Todo 10 — RTL ring-wrap stress case (>1024 command dispatch)
+# soc-rtl-verification-signoff
+# Generated: 2026-08-27 10:15 (Asia/Shanghai)
+# Plan: .omo/plans/soc-rtl-verification-signoff.md todo 10
+# Commit: test(soc): add ring-wrap stress case for >1024 command dispatch
+#         (hash: git log --grep 'ring-wrap stress' --format=%h)
+
+## Status
+
+PASS
+
+## Exact acceptance command (run on sz0001, 192.168.0.11)
+
+  source /NAS/Tools/methodology/modules/init/bash
+  module load vcs/vcs_2023.12sp2
+  source sim/regression/run_env.sh
+  make -C sim/regression run_fm_soc_case CASE_ID=RING-WRAP-STRESS
+
+Makefile exit code: 0 (FM_SOC_RING-WRAP-STRESS: PASS).
+Simulator: VCS V-2023.12-SP2_Full64, cocotb 1.9.0, tb_soc (full RTL,
+on-chip Ibex + real firmware from firmware/build/npu_firmware.hex).
+simv_soc_cocotb reused (no RTL change -> no recompile).
+
+## Acceptance evidence (from sim/regression/fm_soc_RING-WRAP-STRESS.log)
+
+  [RING-WRAP] 1100 cmds in 2 waves, timeout=60000000 cycles
+  [RING-WAVE] wave 0: cmds 0..549, HOST_TAIL=550
+  [RING-WRAP] wave 0 done: raw head=550 logical=550 wraps=0 cycles=1220000
+  [RING-WAVE] wave 1: wrote 550 entries (2 contiguous runs) into wrapped ring
+  [RING-WAVE] wave 1: cmds 550..1099, HOST_TAIL=76
+  [RING-WRAP] wave 1 done: raw head=76 logical=1100 wraps=1 cycles=1220000
+  RING-WRAP-STRESS: NPU_HEAD=1100 PASS (raw=76, wraps=1, all 1100 commands
+    completed within timeout_cycles=60000000)
+  IbexRunner RING-WRAP-STRESS: PASS — all comparisons match
+  TESTS=1 PASS=1 FAIL=0 SKIP=0 (sim time 2,508,844.5 ns, ~89 s real time)
+
+## What was verified
+
+- 1100 alternating SFU RMSNorm + Vector VADD commands dispatched — more than
+  the 1024-entry firmware command ring (sim/command_ring.py RING_ENTRIES=1024,
+  gen/npu_abi.h NPU_RING_ENTRIES=1024). The producer ring index wraps: command
+  1024 overwrites ring entry 0.
+- NPU_HEAD monotonically increases to 1100: the firmware advances NPU_HEAD
+  modulo 1024 (npu_firmware.c:672), so the RAW register wraps 1023 -> 0
+  (observed raw 550 -> 76 with wraps=1). The runner reconstructs the logical
+  head (raw + wraps*1024) and asserts it never decreases and reaches exactly
+  1100. Log contains `NPU_HEAD=1100 PASS`.
+- All commands complete within timeout_cycles (60,000,000): both waves
+  finished in ~1.22M cycles each (2.5M total).
+- Anti-vacuous execution proof (not just head movement): final VADD output
+  (dim=128, 3+4=7) compared bit-exact vs GoldenVector.add; final RMSNorm
+  output (64 FP16) compared vs GoldenSFU.rmsnorm_ref with fp16_tol=5.0.
+  Both matched — "all comparisons match".
+
+## Known behavior — COMPLETION_STATUS array (does NOT block PASS)
+
+- The ABI declares COMPLETION_STATUS[16] (gen/npu_abi.h:142) but the RTL
+  doorbell (rtl/soc/doorbell.v) implements ONLY the four head/tail registers.
+  The firmware writes COMPLETION_STATUS[i] for every dispatched index
+  i=0..1099 (npu_firmware.c:445):
+  - i <= 1018: writes land inside the doorbell APB window but at offsets the
+    doorbell ignores (addr_valid=0) — dropped.
+  - i >= 1019: offsets >= 0x1000 spill into the adjacent INTC APB window
+    (apb_decoder.v page decode): i=1019 -> INTC.PENDING (RO, ignored),
+    i=1020 -> INTC.ENABLE <- 0, i=1021 -> INTC.THRESHOLD <- 0,
+    i=1022 -> INTC.ACK <- 0, i=1023 -> unmapped. ENABLE/THRESHOLD are
+    therefore clobbered near the end of the wrapped wave. This is benign for
+    this case only because the firmware's npu_wait_done() polls engine STATUS
+    (not IRQs) and no further WFI wakeup is needed after the final wave.
+    Recorded as known behavior; a firmware/ABI hardening task should bound
+    COMPLETION_STATUS writes to the declared array.
+  - The DRAM completion ring (0x80008000 + i*32) is written for all i; the
+    wrapped indices 0..75 are overwritten by commands 1024..1099, so old
+    statuses for those indices are lost — expected ring-wrap behavior.
+
+## Design notes (why the driver looks like it does)
+
+- The firmware drain loop compares raw register values
+  (`while (npu_head != host_tail)` in firmware_main), so a single
+  HOST_TAIL=1100 write would never be reached by the wrapped head (head can
+  only take values 0..1023). Commands are therefore driven in two waves of
+  550 (each <= 1023), and each wave's ring entries are backdoor-written just
+  before ringing HOST_TAIL so the wrapped producer never overwrites
+  unconsumed entries.
+- SFU commands use the CURRENT firmware convention: engine opcode 0x01 with
+  the sub-op in descriptor word 10 (firmware post-71cac8a); RMSNorm sub-op=6.
+  Note: the ABI also defines NPU_ENGINE_OP_SFU_RMSNORM=0x17 but the current
+  firmware does not dispatch it — recorded, not fixed here (out of scope).
+- Modified files: sim/rtl_soc_runner.py (builder + wave driver + dispatch),
+  sim/regression/Makefile (run_fm_soc_case now honors the documented CASE_ID=
+  command-line form; previously only FM_SOC_CASE_ID was read, so
+  `CASE_ID=...` silently ran the default FM-SOC-001).
+- NOT modified: sim/command_ring.py, gen/npu_abi.h (per todo guardrails).

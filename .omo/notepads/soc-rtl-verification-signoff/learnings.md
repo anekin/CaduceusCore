@@ -195,3 +195,52 @@ on sz0001: exit 0, 168/168 checks, log contains
 - PCIe RTL register offsets (0x00..0x20, 9 regs) differ from the FM factory
   table (10 regs at 0x00..0x24 with BAR0_BASE at 0x18). The TB tests the FM
   table; the RTL register block is covered by run_pcie_test.
+
+## 2026-08-27 10:15 — Todo 10: RTL ring-wrap stress (RING-WRAP-STRESS)
+
+### Outcome
+`make -C sim/regression run_fm_soc_case CASE_ID=RING-WRAP-STRESS` exits 0 on
+sz0001 (V-2023.12-SP2, tb_soc full RTL + on-chip Ibex firmware). Log contains
+`NPU_HEAD=1100 PASS`; 1100 alternating SFU RMSNorm + Vector VADD commands
+drain in 2.5M cycles (~89 s real). Evidence:
+`build/evidence/task-10-soc-rtl-verification-signoff.txt`.
+
+### Key mechanics discovered
+- **Firmware head wraps modulo 1024** (`npu_firmware.c:672`), and the drain
+  loop compares raw registers (`while (npu_head != host_tail)`). A single
+  HOST_TAIL=1100 write can therefore NEVER be reached — the firmware would
+  re-dispatch ring entries forever. The driver splits the workload into two
+  550-command waves (each ≤1023) and writes each wave's ring entries via DRAM
+  backdoor just before ringing HOST_TAIL, so the wrapped producer never
+  overwrites unconsumed entries. Raw NPU_HEAD goes 550 → 76 at the end; the
+  runner reconstructs the logical head (raw + wraps*1024) and asserts
+  monotonic progression to 1100.
+- **COMPLETION_STATUS[16] is ABI fiction in RTL**: `rtl/soc/doorbell.v` has
+  only the 4 head/tail registers. Firmware writes COMPLETION_STATUS[i] for
+  i=0..1099; i≤1018 are dropped (doorbell addr_valid=0), i=1019..1023 spill
+  into the INTC APB window and CLOBBER INTC.ENABLE←0 / THRESHOLD←0 (apb_decoder
+  page decode). Benign here only because npu_wait_done() polls engine STATUS
+  and no WFI wakeup is needed after the final wave — a future wave crossing
+  head 1020 mid-sequence would deadlock. Needs a firmware/ABI hardening task.
+- **SFU opcode convention drifted from the ABI**: firmware post-71cac8a
+  dispatches SFU only via opcode 0x01 + sub-op in descriptor word 10; ABI
+  NPU_ENGINE_OP_SFU_RMSNORM=0x17 is NOT handled (would return status=1).
+  The stress case uses 0x01+sub6 so commands really execute; both
+  anti-vacuous compares (final VADD bit-exact, final RMSNorm fp16_tol=5.0)
+  matched.
+- **Makefile bug found and fixed**: `run_fm_soc_case` documented usage is
+  `CASE_ID=...` but only read `FM_SOC_CASE_ID`, so CASE_ID was silently
+  ignored and the default FM-SOC-001 ran. Added
+  `FM_SOC_CASE_ID ?= $(if $(CASE_ID),$(CASE_ID),FM-SOC-001)`. (This also
+  fixes run_fm_soc_case.sh, which always passed CASE_ID.)
+- **Logging gotcha**: the rtl_soc_runner logger only reaches the sim log at
+  WARNING+ (INFO is filtered); PASS lines must use logger.warning (same
+  convention as todo 4's cocotb_bridge).
+- Parallel-agent hazard observed: todo 6/7 edits (cocotb_bridge.py,
+  Makefile target run_e2e_ibex_shared_addr) were uncommitted in the shared
+  tree during this work — commit staging must be hunk-selective.
+
+### Note for todo 15/16
+If a future chain ever exceeds 1024 commands in one session, reuse the wave
+driver pattern; keep the INTC-clobbering heads (1019+) inside the FINAL wave
+or restore INTC.ENABLE afterwards.

@@ -58,7 +58,7 @@ except ImportError:
 
 try:
     import cocotb
-    from cocotb.triggers import ClockCycles, RisingEdge
+    from cocotb.triggers import ClockCycles, RisingEdge, Timer
     COCOTB_AVAILABLE = True
 except ImportError:
     COCOTB_AVAILABLE = False
@@ -1063,14 +1063,26 @@ if COCOTB_AVAILABLE:
         (set by the Makefile/shell wrapper) and defaults to FM-SOC-001.
         Golden vectors are loaded from rtl/test_vectors/soc_e2e/<case_id>/
         when available; otherwise the built-in case definition is used.
+        RING-WRAP-STRESS is driven through IbexRunner instead (no golden
+        vectors — the workload is built in Python and the on-chip firmware
+        drains the ring on this same tb_soc top).
         """
         bridge = CocotbBridge(dut)
         await bridge.start_clock()
         await bridge.reset(5)
 
-        runner = RTLSoCRunner(bridge)
-
         case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-001")
+
+        if case_id == "RING-WRAP-STRESS":
+            runner = IbexRunner(dut, bridge)
+            await runner.setup()
+            passed, msg = await runner.run_case(case_id)
+            logger.warning(
+                f"IbexRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
+            assert passed, f"{case_id} failed: {msg}"
+            return
+
+        runner = RTLSoCRunner(bridge)
 
         # Try to load golden vectors for the requested case.
         golden_cfg = load_golden_vectors(case_id)
@@ -1646,6 +1658,129 @@ class P0SpikeRunner:
         model.sram[0] ^= 0xFF
         model.sram[1] ^= 0xFF
         return model, expected, True
+
+    # ── RING-WRAP-STRESS (todo 10, soc-rtl-verification-signoff) ──────────
+    #
+    # 1100 alternating SFU RMSNorm + Vector VADD commands — more than the
+    # 1024-entry firmware command ring (command_ring.RING_ENTRIES /
+    # gen/npu_abi.h NPU_RING_ENTRIES), forcing a producer wrap.
+    #
+    # Command encoding follows the CURRENT firmware convention
+    # (firmware/npu_firmware.c post-71cac8a): SFU ops dispatch via engine
+    # opcode 0x01 with the sub-op in descriptor word 10; vector ops via 0x0F.
+    # (The ABI also defines NPU_ENGINE_OP_SFU_RMSNORM=0x17, but the current
+    # firmware does not handle it — recorded as a known behavior, not fixed
+    # here.)
+    #
+    # DRAM layout (all inside the 8 MB window):
+    #   [0x80000000, 0x80008000)  command ring (1024 x 32 B)
+    #   [0x80008000, 0x80010000)  firmware completion ring (writes only)
+    #   [0x80010000, ...)         1100 descriptors x 64 B stride
+    #   0x80040000..0x80040A00    SFU in/out + Vector a/b/o data buffers
+    #   0x80100000                ring-entry staging (all 1100 x 32 B)
+
+    RING_WRAP_CMD_COUNT = 1100
+    RING_WRAP_WAVE_SIZE = 550        # < RING_ENTRIES so each wave's tail is reachable
+    RING_WRAP_DESC_BASE = 0x80010000  # module DESC_BASE (spike_host), clear of rings
+    RING_WRAP_STAGE_BASE = 0x80100000
+    RING_WRAP_SFU_IN = 0x80040000
+    RING_WRAP_SFU_OUT = 0x80040200
+    RING_WRAP_VEC_A = 0x80040400
+    RING_WRAP_VEC_B = 0x80040600
+    RING_WRAP_VEC_O = 0x80040800
+
+    def _build_ring_wrap_stress(self):
+        """Build RING-WRAP-STRESS: 1100 cmds through a 1024-entry ring.
+
+        Returns (model, expected, expect_mismatch) like the other builders.
+        ``expected`` carries num_cmds, the wave split, the ring-entry staging
+        location, the preload span, and anti-vacuous output compares (final
+        VADD + final RMSNorm outputs must match golden, proving the commands
+        really executed rather than just advancing the head pointer).
+        """
+        model = self._make_model()
+        n = self.RING_WRAP_CMD_COUNT
+        rng = np.random.RandomState(20260827)
+
+        # Data buffers: values chosen so the final command's output is
+        # deterministic.  VADD operands are constant (3+4=7, no saturation);
+        # RMSNorm input is 64 uniform-random FP16 (in-window).
+        sfu_in_f32 = rng.rand(64).astype(np.float32) * 2.0 - 1.0
+        model.host_write_data(
+            self.RING_WRAP_SFU_IN,
+            np.frombuffer(sfu_in_f32.astype(np.float16).tobytes(),
+                          dtype=np.uint8))
+        vec_a = np.full(128, 3, dtype=np.int32)
+        vec_b = np.full(128, 4, dtype=np.int32)
+        model.host_write_data(self.RING_WRAP_VEC_A, vec_a.view(np.uint8))
+        model.host_write_data(self.RING_WRAP_VEC_B, vec_b.view(np.uint8))
+
+        # Split the workload into waves small enough that each wave's wrapped
+        # HOST_TAIL is reachable by the firmware head (see _run_ring_wrap_stress).
+        waves = []
+        start = 0
+        while start < n:
+            count = min(self.RING_WRAP_WAVE_SIZE, n - start)
+            waves.append((start, count))
+            start += count
+
+        # Stage every command entry at RING_WRAP_STAGE_BASE; mirror the first
+        # wave's entries into ring indices 0..<wave1_count> so the initial
+        # DRAM preload carries them.  Later waves' entries are written into
+        # the wrapped ring positions by the driver right before dispatch, so
+        # the wrapped producer never overwrites unconsumed entries.
+        stage_off = self.RING_WRAP_STAGE_BASE - self.DRAM_BASE
+        for i in range(n):
+            desc_addr = self.RING_WRAP_DESC_BASE + i * DESC_STRIDE
+            if i % 2 == 0:
+                # SFU RMSNorm: engine opcode 0x01, sub-op SFU_OP_RMSNORM=6.
+                write_sfu_descriptor(
+                    model, desc_addr, op=SFU_OP_RMSNORM,
+                    input_addr=self.RING_WRAP_SFU_IN,
+                    output_addr=self.RING_WRAP_SFU_OUT,
+                    input_sram=0, output_sram=0, size=128, dim=64, pos=0)
+                opcode = 0x01  # EngineOp.SFU (current firmware convention)
+            else:
+                # Vector VADD: engine opcode 0x0F.
+                write_vector_descriptor(
+                    model, desc_addr, op=VEC_OP_ADD,
+                    a_addr=self.RING_WRAP_VEC_A, b_addr=self.RING_WRAP_VEC_B,
+                    o_addr=self.RING_WRAP_VEC_O, dim=128,
+                    a_sram=0, b_sram=0, o_sram=0)
+                opcode = 0x0F  # EngineOp.VECTOR / VADD
+            entry = struct.pack('<8I', opcode, desc_addr, 0, 0, 0, 0, 0, 0)
+            model.dram[stage_off + i * 32:stage_off + i * 32 + 32] = entry
+            if i < waves[0][1]:
+                model.dram[i * 32:i * 32 + 32] = entry
+
+        golden_vadd = GoldenVector().add(vec_a, vec_b)
+        golden_rms = GoldenSFU.rmsnorm_ref(sfu_in_f32.astype(np.float64))
+        preload_span_end = max(
+            stage_off + n * 32,
+            (self.RING_WRAP_DESC_BASE + n * DESC_STRIDE) - self.DRAM_BASE,
+            self.RING_WRAP_VEC_O + 128 * 4 - self.DRAM_BASE,
+        )
+        expected = {
+            "num_cmds": n,
+            "timeout_cycles": 60_000_000,
+            "ring_waves": waves,
+            "stage_base": self.RING_WRAP_STAGE_BASE,
+            "preload_span_end": preload_span_end,
+            "compare": {
+                "vec_o_final": {
+                    "addr": self.RING_WRAP_VEC_O, "size": 128 * 4,
+                    "golden": golden_vadd.astype(np.int32).tobytes(),
+                    "region": "dram",
+                },
+                "sfu_out_final": {
+                    "addr": self.RING_WRAP_SFU_OUT, "size": 128,
+                    "golden": golden_rms.astype(np.float32)
+                    .astype(np.float16).tobytes(),
+                    "region": "dram", "fp16_tol": 5.0,
+                },
+            },
+        }
+        return model, expected, False
 
 
 class P1SpikeRunner(P0SpikeRunner):
@@ -3386,12 +3521,154 @@ class IbexRunner(P4SpikeRunner):
         except Exception:
             return 0xFFFFFFFF
 
+    async def _preload_ring_wrap(self, model: FuncModel, expected: dict):
+        """Backdoor-preload only the used DRAM span (faster than full 8 MB)."""
+        span = expected["preload_span_end"]
+        data = bytes(model.dram[:span])
+        logger.info(
+            f"[RING-WRAP] preloading DRAM [0x{self.DRAM_BASE:08X}, "
+            f"0x{self.DRAM_BASE + span:08X}) = {span} B"
+        )
+        await self._dram_backdoor_write(0, data)
+
+    async def _run_ring_wrap_stress(self, model: FuncModel,
+                                    expected: dict) -> Tuple[bool, str]:
+        """Drive the >1024-command workload in producer-safe waves.
+
+        The firmware head wraps modulo RING_ENTRIES and its drain loop
+        compares raw register values (``npu_head != host_tail``), so a single
+        HOST_TAIL write of num_cmds (1100) can never be reached by the wrapped
+        head.  Commands are therefore driven in waves whose wrapped tail the
+        firmware can reach (each wave <= 1023 commands); ring entries for wave
+        N are backdoor-written just before ringing HOST_TAIL so the wrapped
+        producer never overwrites unconsumed entries.
+
+        NPU_HEAD is sampled per wave; a raw decrease is exactly one ring wrap
+        (the firmware only ever increments the head), so the logical head is
+        reconstructed as raw + wraps * RING_ENTRIES and asserted monotonic.
+        """
+        from command_ring import RING_ENTRIES
+
+        num_cmds = expected["num_cmds"]
+        waves = expected["ring_waves"]
+        timeout_cycles = expected.get("timeout_cycles", 60_000_000)
+        stage_off = expected["stage_base"] - self.DRAM_BASE
+        poll_gap = 10_000
+
+        host_tail_addr = Addr.DOORBELL + DOORBELL.HOST_TAIL
+        npu_head_addr = Addr.DOORBELL + DOORBELL.NPU_HEAD
+
+        wraps = 0
+        prev_raw: Optional[int] = None
+        prev_logical = -1
+        monotonic = True
+
+        logger.warning(
+            f"[RING-WRAP] {num_cmds} cmds in {len(waves)} waves, "
+            f"timeout={timeout_cycles} cycles"
+        )
+
+        for wave_idx, (start, count) in enumerate(waves):
+            if wave_idx > 0:
+                runs = []
+                cur_idx = None
+                blob = bytearray()
+                for k in range(count):
+                    cmd_idx = start + k
+                    ring_idx = cmd_idx % RING_ENTRIES
+                    entry = bytes(
+                        model.dram[stage_off + cmd_idx * 32:
+                                   stage_off + cmd_idx * 32 + 32])
+                    if (cur_idx is not None
+                            and ring_idx != cur_idx + len(blob) // 32):
+                        runs.append((cur_idx, bytes(blob)))
+                        cur_idx, blob = ring_idx, bytearray()
+                    elif cur_idx is None:
+                        cur_idx = ring_idx
+                    blob.extend(entry)
+                runs.append((cur_idx, bytes(blob)))
+                for ring_idx, data in runs:
+                    await self._dram_backdoor_write(ring_idx * 32, data)
+                logger.warning(
+                    f"[RING-WAVE] wave {wave_idx}: wrote {count} entries "
+                    f"({len(runs)} contiguous runs) into wrapped ring"
+                )
+
+            target_raw = (start + count) % RING_ENTRIES
+            logger.warning(
+                f"[RING-WAVE] wave {wave_idx}: cmds {start}..{start + count - 1}, "
+                f"HOST_TAIL={target_raw}"
+            )
+            await self._apb_write(host_tail_addr, target_raw)
+
+            elapsed = 0
+            done = False
+            while elapsed < timeout_cycles:
+                raw = await self._apb_read(npu_head_addr)
+                if prev_raw is not None:
+                    if raw < prev_raw:
+                        wraps += 1
+                    logical = raw + wraps * RING_ENTRIES
+                    if logical < prev_logical:
+                        monotonic = False
+                        logger.error(
+                            f"[RING-WRAP] head regressed: logical {logical} < "
+                            f"previous {prev_logical}"
+                        )
+                    prev_logical = logical
+                else:
+                    prev_logical = raw
+                prev_raw = raw
+                if raw == target_raw:
+                    logger.warning(
+                        f"[RING-WRAP] wave {wave_idx} done: raw head={raw} "
+                        f"logical={prev_logical} wraps={wraps} cycles={elapsed}"
+                    )
+                    done = True
+                    break
+                await Timer(poll_gap, units="ns")
+                elapsed += poll_gap
+            if not done:
+                return False, (
+                    f"wave {wave_idx} timeout: head={prev_raw} "
+                    f"expected={target_raw} after {elapsed} cycles"
+                )
+
+        if not monotonic:
+            return False, f"NPU_HEAD not monotonic (wraps={wraps})"
+        if prev_logical != num_cmds:
+            return False, f"NPU_HEAD={prev_logical} != expected {num_cmds}"
+        logger.warning(
+            f"RING-WRAP-STRESS: NPU_HEAD={prev_logical} PASS "
+            f"(raw={prev_raw}, wraps={wraps}, all {num_cmds} commands completed "
+            f"within timeout_cycles={timeout_cycles})"
+        )
+        logger.warning(
+            "RING-WRAP-STRESS: KNOWN-BEHAVIOR — firmware writes "
+            "COMPLETION_STATUS[i] for i=0..1099; the RTL doorbell implements "
+            "none of that array (writes are dropped / land in adjacent INTC "
+            "registers for i>=1019) and the DRAM completion ring entries for "
+            "wrapped indices are overwritten. Recorded, not blocking."
+        )
+        return True, (
+            f"NPU_HEAD={prev_logical} PASS — {num_cmds} commands completed "
+            f"with {wraps} ring wrap(s)"
+        )
+
     async def run_case(self, case_id: str) -> Tuple[bool, str]:
         """Dispatch FM-SOC-* cases without requiring Spike RTL bridge."""
         if not FUNC_MODEL_AVAILABLE:
             return False, "FuncModel not available"
         if not GOLDEN_AVAILABLE:
             return False, "Golden executors not available"
+
+        if case_id == "RING-WRAP-STRESS":
+            model, expected, expect_mismatch = self._build_ring_wrap_stress()
+            await self._preload_ring_wrap(model, expected)
+            ok, msg = await self._run_ring_wrap_stress(model, expected)
+            if not ok:
+                return False, msg
+            return await self._verify(expected, expect_mismatch)
 
         if case_id in {"FM-SOC-014", "FM-SOC-015", "FM-SOC-016",
                          "FM-SOC-021", "FM-SOC-022", "FM-SOC-023"}:

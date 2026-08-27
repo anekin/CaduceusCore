@@ -901,7 +901,11 @@ run_pcie_dma_e2e: $(SOC_SIMV_COCOTB)
 # The CASE_ID variable selects which cocotb test to run inside rtl_soc_runner.
 # EXTRA_DEFINES is optional and passed to VCS compilation for mixed-mode.
 
-FM_SOC_CASE_ID     ?= FM-SOC-001
+# CASE_ID is the documented command-line form (see the run_fm_soc_case help
+# text and sim/regression/run_fm_soc_case.sh); FM_SOC_CASE_ID remains the
+# canonical internal variable.
+CASE_ID            ?=
+FM_SOC_CASE_ID     ?= $(if $(CASE_ID),$(CASE_ID),FM-SOC-001)
 FM_SOC_EXTRA_DEFINES ?=
 MIXED_TOP           = tb_mixed
 MIXED_SIMV_COCOTB   = simv_mixed_cocotb
