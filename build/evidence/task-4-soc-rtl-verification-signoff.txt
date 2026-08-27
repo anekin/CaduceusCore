@@ -1,0 +1,58 @@
+# Todo 4 — extend cocotb INTC test: THRESHOLD>1 popcount gating + ENABLE=0 negative
+# Generated: 2026-08-27 08:21 CST (run completed on sz0001)
+# Plan: .omo/plans/soc-rtl-verification-signoff.md todo 4
+# Commit: test(soc): extend INTC cocotb test with THRESHOLD>1 popcount gating
+
+## Changes applied to sim/cocotb_bridge.py (test_e2e_intc_irq)
+
+Extended test_e2e_intc_irq (previously only THRESHOLD=1 MXU path) with three
+new scenarios, all exercised against rtl/intc/intc_top.v:159 semantics
+(cpu_irq = |(PENDING&ENABLE) && popcount(PENDING&ENABLE) >= THRESHOLD):
+
+1. THRESHOLD>1 popcount gating: 4 interrupt sources driven — MXU completion
+   pulse (bit0), SFU completion pulse (bit1), Vector sticky status_done
+   (bit2), TB-driven Timer level (bit6) -> PENDING=0x47, popcount=4.
+   - THRESHOLD=5: cpu_irq stays 0 (4 < 5)
+   - THRESHOLD=2: cpu_irq asserts (4 >= 2)
+   - THRESHOLD=5 again: cpu_irq deasserts (1->0)
+2. ENABLE=0 negative: THRESHOLD=1 + ENABLE=0x00 -> cpu_irq stays 0 while
+   PENDING keeps 0x47 (mask gates cpu_irq, not PENDING).
+3. ACK retention: ACK bit6 with timer level still high -> PENDING[6] re-sets
+   next cycle (rtl/intc/intc_top.v:104 pending <= (pending & ~ack) | irq_src).
+
+DEVIATION NOTE (documented in code + learnings): the plan prescribed
+PENDING=0x55/ENABLE=0x55 (bits 0,2,4,6). Bit4 = pcie_irq, which is NOT
+drivable from tb_soc (pcie_ep_wrapper.v: pcie_irq = irq_enable && irq_pending,
+set only by an uncorrectable-error rising edge). The popcount-4 gate therefore
+uses the four drivable sources (0x47 = mxu+sfu+vector+timer). Gating semantics
+are identical to the prescribed 0x55 scenario and match the FM guard
+sim/tests/test_intc_gating.py:109-117.
+
+No RTL changes. rtl/intc/intc_top.v untouched. WFI wake-up NOT tested
+(existing THRESHOLD=1 path already covers it).
+
+## Acceptance command (executed on sz0001, 192.168.0.11)
+
+source /NAS/Tools/methodology/modules/init/bash
+module load vcs/vcs_2023.12sp2
+source sim/regression/run_env.sh
+make -C sim/regression run_e2e_intc_irq
+
+Result: exit 0 ("E2E_INTC_IRQ: PASS")
+
+## Log evidence (sim/regression/qwen_e2e_intc_irq.log)
+
+  4940.50ns WARNING  cocotb_bridge  [test_e2e_intc_irq] PENDING=0x47 popcount=4 (mxu+sfu+vec+timer)
+  4945.50ns WARNING  cocotb_bridge  [test_e2e_intc_irq] THRESHOLD=5: PASS (popcount 4 < 5, cpu_irq=0)
+  4949.50ns WARNING  cocotb_bridge  [test_e2e_intc_irq] THRESHOLD=2: PASS (popcount 4 >= 2, cpu_irq=1)
+  4953.50ns WARNING  cocotb_bridge  [test_e2e_intc_irq] THRESHOLD=5 DEASSERT: PASS (cpu_irq 1->0)
+  4961.50ns WARNING  cocotb_bridge  [test_e2e_intc_irq] ENABLE=0: PASS (cpu_irq=0, PENDING=0x47)
+  4972.50ns WARNING  cocotb_bridge  [test_e2e_intc_irq] ACK_RETENTION: PASS (PENDING[6] re-set by level source)
+  ** cocotb_bridge.test_e2e_intc_irq   PASS        4979.50           0.65  **
+  ** TESTS=1 PASS=1 FAIL=0 SKIP=0 **
+
+Required markers both present in log: "THRESHOLD=2.*PASS" and "ENABLE=0.*PASS".
+
+## Status
+
+Status: PASS

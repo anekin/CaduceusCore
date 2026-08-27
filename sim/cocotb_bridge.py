@@ -3811,7 +3811,16 @@ if COCOTB_AVAILABLE:
 
     @cocotb.test()
     async def test_e2e_intc_irq(dut):
-        """E2E-06: MXU completion IRQ reaches INTC, is ACKed, then SFU runs."""
+        """E2E-06: MXU completion IRQ reaches INTC, is ACKed, then SFU runs.
+
+        Extended (soc-rtl-verification-signoff todo 4):
+          - THRESHOLD>1 popcount gating: 4 pending sources (MXU/SFU/Vector/
+            Timer, PENDING=0x47, popcount=4) assert cpu_irq at THRESHOLD=2
+            and deassert at THRESHOLD=5 (rtl/intc/intc_top.v:159).
+          - ENABLE=0 negative: cpu_irq stays low while PENDING keeps 0x47.
+          - ACK retention: the level-high timer source re-sets PENDING[6]
+            after ACK, so cpu_irq stays asserted until the source drops.
+        """
         label = "test_e2e_intc_irq"
         bridge = await _setup_single_op_test(dut)
 
@@ -3854,6 +3863,119 @@ if COCOTB_AVAILABLE:
         await bridge.preload_sram(SRAM_BASE + 0x8000, sfu_input)
         sfu_passed, _ = await bridge.run_step(sfu_instr)
         assert sfu_passed, f"{label} SFU RMSNORM output mismatch"
+
+        # ══════════════════════════════════════════════════════════════════
+        # THRESHOLD>1 popcount gating + ENABLE=0 negative (SOC-17 / FW-10 RTL)
+        # ══════════════════════════════════════════════════════════════════
+        # 4 sources: MXU pulse (bit0), SFU pulse (bit1), Vector sticky
+        # status_done (bit2), TB-driven Timer level (bit6) → PENDING=0x47,
+        # popcount=4.  Bit4 (PCIe) is not drivable from this TB (needs
+        # uncorrectable-error injection), so the popcount-4 gate uses the
+        # four drivable sources; semantics match test_intc_gating.py:109-117
+        # and rtl/intc/intc_top.v:159 (cpu_irq = popcount(PENDING&ENABLE) >= T).
+        cpu_irq_net = bridge.dut.u_dut.u_intc.cpu_irq
+
+        async def cpu_irq_becomes(expected: int, timeout: int = 500) -> int:
+            val = int(cpu_irq_net.value)
+            for _ in range(timeout):
+                if val == expected:
+                    return val
+                await bridge.wait_cycles(1)
+                val = int(cpu_irq_net.value)
+            raise AssertionError(f"cpu_irq stuck at {val}, expected {expected}")
+
+        await bridge._apb_write(INTC_BASE + 0x04, 0x0000_0047)
+        await bridge._apb_write(INTC_BASE + 0x08, 0x0000_0005)
+        bridge.dut.timer_irq.value = 1
+
+        sfu_base, _, _, _ = bridge._get_module_regs("SFU_RMSNORM")
+        sfu_irq_instr, sfu_irq_input = _make_sfu_rmsnorm_instr(
+            64, SRAM_BASE + 0x10000, SRAM_BASE + 0x11000, f"{label}_sfu_irq"
+        )
+        await bridge.preload_sram(SRAM_BASE + 0x10000, sfu_irq_input)
+        await bridge._apb_write(sfu_base + 0x1C, 0x0000_0001)
+        sfu_ok, _ = await bridge.run_step(sfu_irq_instr)
+        assert sfu_ok, f"{label} SFU IRQ op failed"
+
+        mxu_base, _, mxu_cmd, _ = bridge._get_module_regs("MMUL")
+        mxu_irq_w = SRAM_BASE + 0x12000
+        mxu_irq_i = SRAM_BASE + 0x13000
+        mxu_irq_o = SRAM_BASE + 0x14000
+        mxu_irq_instr, mxu_irq_wt, mxu_irq_act = _make_mxu_small_instr(
+            m, k, n, mxu_irq_w, mxu_irq_i, mxu_irq_o, f"{label}_mxu_irq"
+        )
+        await bridge.preload_sram(mxu_irq_w, mxu_irq_wt)
+        await bridge.preload_sram(mxu_irq_i, mxu_irq_act)
+        await bridge._apb_write(mxu_base + 0x28, 0x0000_0001)
+        await bridge._configure_engine_regs(mxu_base, mxu_irq_instr)
+        await bridge._mxu_preload(mxu_base, mxu_irq_w, mxu_irq_i, mxu_irq_o, 1, n, f"{label}_mxu_irq")
+        await bridge._apb_write(mxu_base + mxu_cmd, 0x0000_0001)
+        await bridge._poll_done(mxu_base + 0x08)
+
+        vec_base, _, vec_cmd, _ = bridge._get_module_regs("VECTOR_ADD")
+        vec_irq_a = SRAM_BASE + 0x15000
+        vec_irq_b = SRAM_BASE + 0x16000
+        vec_irq_o = SRAM_BASE + 0x17000
+        vec_irq_instr, vec_irq_a_data, vec_irq_b_data = _make_vector_vadd_instr(
+            64, vec_irq_a, vec_irq_b, vec_irq_o, f"{label}_vadd_irq"
+        )
+        await bridge.preload_sram(vec_irq_a, vec_irq_a_data)
+        await bridge.preload_sram(vec_irq_b, vec_irq_b_data)
+        await bridge._apb_write(vec_base + 0x1C, 0x0000_0001)
+        await bridge._configure_engine_regs(vec_base, vec_irq_instr)
+        await bridge._vector_preload(vec_base, vec_irq_a, vec_irq_b, vec_irq_o, 64)
+        await bridge._apb_write(vec_base + vec_cmd, 0x0000_0001)
+        await bridge._poll_done(vec_base + 0x08)
+
+        pending = await bridge.poll_intc_pending(0x0000_0047, timeout=500)
+        assert (pending & 0x47) == 0x47, f"Expected PENDING=0x47, got 0x{pending:02X}"
+        logger.warning(f"[{label}] PENDING=0x{pending:02X} popcount=4 (mxu+sfu+vec+timer)")
+
+        cpu_irq = await cpu_irq_becomes(0)
+        await bridge.wait_cycles(5)
+        cpu_irq = int(cpu_irq_net.value)
+        assert cpu_irq == 0, f"THRESHOLD=5 popcount=4 must keep cpu_irq low, got {cpu_irq}"
+        logger.warning(f"[{label}] THRESHOLD=5: PASS (popcount 4 < 5, cpu_irq=0)")
+
+        await bridge._apb_write(INTC_BASE + 0x08, 0x0000_0002)
+        cpu_irq = await cpu_irq_becomes(1)
+        assert cpu_irq == 1, f"THRESHOLD=2 popcount=4 must assert cpu_irq, got {cpu_irq}"
+        logger.warning(f"[{label}] THRESHOLD=2: PASS (popcount 4 >= 2, cpu_irq=1)")
+
+        await bridge._apb_write(INTC_BASE + 0x08, 0x0000_0005)
+        cpu_irq = await cpu_irq_becomes(0)
+        assert cpu_irq == 0, f"THRESHOLD=5 popcount=4 must deassert cpu_irq, got {cpu_irq}"
+        logger.warning(f"[{label}] THRESHOLD=5 DEASSERT: PASS (cpu_irq 1→0)")
+
+        await bridge._apb_write(INTC_BASE + 0x08, 0x0000_0001)
+        await bridge._apb_write(INTC_BASE + 0x04, 0x0000_0000)
+        cpu_irq = await cpu_irq_becomes(0)
+        assert cpu_irq == 0, f"ENABLE=0 must keep cpu_irq low, got {cpu_irq}"
+        pending = await bridge._apb_read(INTC_BASE + 0x00)
+        assert (pending & 0x47) == 0x47, (
+            f"ENABLE=0 must not clear PENDING, got 0x{pending:02X}"
+        )
+        logger.warning(f"[{label}] ENABLE=0: PASS (cpu_irq=0, PENDING=0x{pending:02X})")
+
+        # The level-high timer source re-sets PENDING[6] after ACK
+        # (rtl/intc/intc_top.v:104 pending <= (pending & ~ack) | irq_src),
+        # so cpu_irq stays asserted until the source drops or ENABLE clears.
+        await bridge._apb_write(INTC_BASE + 0x04, 0x0000_0047)
+        await bridge._apb_write(INTC_BASE + 0x08, 0x0000_0002)
+        cpu_irq = await cpu_irq_becomes(1)
+        assert cpu_irq == 1, f"cpu_irq must re-assert after ENABLE restore, got {cpu_irq}"
+        await bridge.ack_intc(0x0000_0040)
+        await bridge.wait_cycles(3)
+        pending = await bridge._apb_read(INTC_BASE + 0x00)
+        assert (pending & 0x40) == 0x40, (
+            f"level-high timer must re-set PENDING[6] after ACK, got 0x{pending:02X}"
+        )
+        logger.warning(f"[{label}] ACK_RETENTION: PASS (PENDING[6] re-set by level source)")
+
+        bridge.dut.timer_irq.value = 0
+        await bridge._apb_write(vec_base + 0x1C, 0x0000_0000)
+        await bridge.ack_intc(0x0000_0047)
+        await bridge.wait_cycles(3)
 
         logger.warning(f"[{label}] PASS")
 

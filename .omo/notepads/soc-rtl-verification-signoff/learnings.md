@@ -25,3 +25,30 @@ Lesson: both phase9/10 evidence files already exist under `build/evidence/`, so 
 "transitional notepad reference" fallback was NOT needed. For BUG-007, the 42311-cycle
 attn_weight record lives in `scripts/p10_36layer_preflight.sh` (CHECK 4) rather than the
 phase10 issues.md — worth citing both when the chain-level todo 15 lands.
+
+## [2026-08-27] Todo 4 — INTC THRESHOLD>1 popcount gating cocotb test (soc-rtl-verification-signoff)
+
+Extended `test_e2e_intc_irq` in `sim/cocotb_bridge.py` (no RTL changes):
+
+- **THRESHOLD>1 popcount gate verified on RTL**: 4 sources (MXU pulse bit0, SFU pulse bit1,
+  Vector sticky status_done bit2, TB-driven timer level bit6) → PENDING=0x47 popcount=4.
+  THRESHOLD=5 keeps cpu_irq low, THRESHOLD=2 asserts it, back to 5 deasserts — matches
+  `rtl/intc/intc_top.v:159` exactly.
+- **ENABLE=0 negative**: cpu_irq stays low while PENDING keeps 0x47 (mask gates cpu_irq,
+  not PENDING) — matches FM guard `sim/tests/test_intc_gating.py:109-117` failure-injection.
+- **ACK retention**: ACK with a level-high source re-sets PENDING next cycle
+  (`intc_top.v:104` `pending <= (pending & ~ack) | irq_src`); cpu_irq stays asserted until
+  the source drops or ENABLE clears. This is why firmware must clear the SOURCE (or ENABLE),
+  not just ACK, for level IRQs.
+- **Deviation from plan**: the plan prescribed PENDING=0x55/ENABLE=0x55, but bit4 (pcie_irq)
+  is NOT drivable from tb_soc — `pcie_ep_wrapper.v` sets pcie_irq only via an
+  uncorrectable-error rising edge. Used the four drivable sources (0x47) instead; popcount
+  and gating semantics are identical to the prescribed 0x55 scenario.
+- **cpu_irq is a registered output** (`cpu_irq_reg <= comb`), so tests must poll ≥2 cycles
+  after an INTC register write before sampling it. Polled via hierarchical VPI read
+  `dut.u_dut.u_intc.cpu_irq` (works under cocotb with `-debug_access+all` + pli.tab).
+- Engine IRQ_EN offsets: MXU 0x28, SFU 0x1C, Vector 0x1C; Vector/SFU wrappers pass APB
+  offset straight through to the core MMIO (apb_to_mmio).
+- Acceptance: `make -C sim/regression run_e2e_intc_irq` exit 0 on sz0001;
+  log contains `THRESHOLD=2: PASS`, `THRESHOLD=5 DEASSERT: PASS`, `ENABLE=0: PASS`,
+  `ACK_RETENTION: PASS`. Evidence: `build/evidence/task-4-soc-rtl-verification-signoff.txt`.
