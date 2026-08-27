@@ -52,3 +52,31 @@ Extended `test_e2e_intc_irq` in `sim/cocotb_bridge.py` (no RTL changes):
 - Acceptance: `make -C sim/regression run_e2e_intc_irq` exit 0 on sz0001;
   log contains `THRESHOLD=2: PASS`, `THRESHOLD=5 DEASSERT: PASS`, `ENABLE=0: PASS`,
   `ACK_RETENTION: PASS`. Evidence: `build/evidence/task-4-soc-rtl-verification-signoff.txt`.
+
+## 2026-08-27 — Todo 3: cocotb PCIe TLP chain (MPS-split + BAR routing)
+
+- **BAR enforcement lives in the cocotb host model, not the RTL.** `pcie_axi_master`
+  translates TLP addresses straight to AXI (per `pcie_ep_wrapper.v:13-20`), so the
+  test implements `_pcie_bar_of()` in Python: BAR0=SRAM 4MB, BAR1=DRAM 8MB sim window.
+  Out-of-BAR reads return UR (status=1) from the host model without driving the DUT;
+  out-of-BAR writes raise ValueError. Do NOT expect the RTL to reject them.
+- **MPS=256B split is a host-model responsibility.** 4KB → 16 × 256B MWr/MRd TLPs with
+  3-DW headers (Fmt=010/000, Type=00000, Length=64 DW, DW2=addr[31:2]), mirroring
+  `sim/tests/test_pcie_tlp_chain.py:62-95`. The RTL itself splits read completions by
+  its own `max_payload_size` register (PCIE_CTRL[2:0], 128B default, set to 256B in
+  the test) — the CplD collector reassembles any split.
+- **Header field extraction gotcha:** the 128-bit TLP header int packs DW0 at
+  bits [127:96], so Length is `(hdr >> 96) & 0x3FF`, NOT `hdr & 0x3FF`; CplD status is
+  `(hdr >> 77) & 0x7` (hdr[79:77]). Initial run failed on this; fixed and re-ran PASS.
+- **TLP RX handshake:** drive 64B beats (512-bit data path) with sop/eop, wait for
+  `pcie_rx_req_tlp_ready` per beat (registered signal — the per-beat loop pattern from
+  `rtl_soc_runner._send_pcie_tlp_raw` is race-safe). Posted MWr writes need a drain wait
+  (~2000 cyc SRAM / ~5000 cyc DRAM) before readback so reads don't overtake writes.
+- **Completion beats:** CplD arrives on `pcie_tx_cpl_tlp_*` with sop on the first beat
+  (header+data on same beat), eop on the last; payload bytes per CplD come from the
+  header Length field, trimmed to `nbytes`. `pcie_tx_cpl_tlp_ready` is tied high in
+  tb_soc.v.
+- Acceptance: `make -C sim/regression run_e2e_pcie_tlp_chain` exit 0 on sz0001
+  (V-2023.12-SP2, matching the prebuilt simv_soc_cocotb); log contains
+  `test_e2e_pcie_tlp_chain.*PASS`. Evidence:
+  `build/evidence/task-3-soc-rtl-verification-signoff.txt`.

@@ -206,6 +206,28 @@ $(XBAR_SIMV): $(XBAR_SRC)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# run_crossbar_fairness — AXI4 Crossbar Round-Robin Fairness (7 masters)
+# ═══════════════════════════════════════════════════════════════════════════
+# Single-beat reads+writes; asserts per-master grant counts within +/-1 over
+# a >=100-cycle window, strict alternation, and DECERR without grant credit.
+
+XBAR_FAIR_SRC := $(SOC_DIR)/axi_crossbar.v $(TB_DIR)/axi_crossbar_fairness_tb.sv
+XBAR_FAIR_SIMV := simv_axi_crossbar_fairness_tb
+
+.PHONY: run_crossbar_fairness
+run_crossbar_fairness: $(XBAR_FAIR_SIMV)
+	@echo "$(YELLOW)[CROSSBAR_FAIRNESS] Running...$(NC)"
+	@./$(XBAR_FAIR_SIMV) 2>&1 | tee crossbar_fairness.log
+	@grep -q "FAIRNESS: PASS" crossbar_fairness.log && \
+		echo "$(GREEN)CROSSBAR_FAIRNESS: PASS$(NC)" || \
+		(echo "$(RED)CROSSBAR_FAIRNESS: FAIL$(NC)" && exit 1)
+
+$(XBAR_FAIR_SIMV): $(XBAR_FAIR_SRC)
+	@echo "$(YELLOW)[CROSSBAR_FAIRNESS] Compiling...$(NC)"
+	$(VCS) $(VCS_COMMON) -top axi_crossbar_fairness_tb $(XBAR_FAIR_SRC) -o $(XBAR_FAIR_SIMV)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # run_pcie_test — PCIe EP Wrapper (TLP → AXI → readback)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -371,6 +393,7 @@ run_w17_intermediate_compare: $(SOC_SIMV_COCOTB)
         run_e2e_vresid run_e2e_vmul run_e2e_sfu_rmsnorm_post \
         run_e2e_intc_irq run_e2e_status_prop run_e2e_abort run_e2e_multi_irq \
         run_e2e_dma_load run_e2e_dma_concurrent run_e2e_crossbar_stress \
+        run_e2e_pcie_tlp_chain \
         run_vector_vconv_f16_i32 run_w17_intermediate_compare
 
 run_e2e_rmsnorm: $(SOC_SIMV_COCOTB)
@@ -741,6 +764,25 @@ run_e2e_crossbar_stress: $(SOC_SIMV_COCOTB)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# run_e2e_pcie_tlp_chain — Cocotb PCIe TLP chain (MPS=256 split + BAR routing)
+# ═══════════════════════════════════════════════════════════════════════════
+
+run_e2e_pcie_tlp_chain: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_PCIE_TLP_CHAIN] Running cocotb test test_e2e_pcie_tlp_chain...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_pcie_tlp_chain \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_pcie_tlp_chain_results.xml \
+		./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_pcie_tlp_chain.log
+	@grep -q "test_e2e_pcie_tlp_chain.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_pcie_tlp_chain.log && \
+		echo "$(GREEN)E2E_PCIE_TLP_CHAIN: PASS$(NC)" || \
+		(echo "$(RED)E2E_PCIE_TLP_CHAIN: FAIL$(NC)" && exit 1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Module-level Vector target for VCONV_F16_I32
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -991,6 +1033,7 @@ help:
 	@echo "  run_e2e_dma_load    — Cocotb E2E-10 DMA load->compute->store"
 	@echo "  run_e2e_dma_concurrent — Cocotb E2E-11 DMA+MXU concurrent"
 	@echo "  run_e2e_crossbar_stress — Cocotb E2E-12 6-master crossbar stress"
+	@echo "  run_e2e_pcie_tlp_chain — Cocotb PCIe TLP chain (MPS=256 split + BAR routing)"
 	@echo "  run_vector_vconv_f16_i32 — Module-level Vector FP16→INT32 smoke test"
 	@echo "  run_pcie_dma_e2e     — Cocotb PCIe DMA E2E (6 tests: read/write/concurrent/error/UR/IRQ)"
 	@echo "  run_fm_soc_case CASE_ID=<id> — Run one FM-SOC-NNN case (default: FM-SOC-001)"

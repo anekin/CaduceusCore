@@ -871,6 +871,193 @@ class CocotbBridge:
                     return bytes(data_chunks)
             await RisingEdge(self.dut.clk)
 
+    # ── Host PCIe TLP model (MPS split + BAR routing, T3) ─────────────────
+    # BAR enforcement lives in the cocotb host model, NOT in the RTL
+    # (rtl/ip/pcie_ep_wrapper.v:13-20).  The model below:
+    #   • splits 4KB host payloads into MPS=256B MWr/MRd TLPs
+    #   • builds 3-DW headers (same layout as
+    #     rtl_soc_runner.RTLSoCRunner._build_tlp_header)
+    #   • resolves BAR0 (SRAM 0x2000_0000) / BAR1 (DRAM 0x8000_0000)
+    #   • returns UR (Unsupported Request) for out-of-BAR reads and
+    #     refuses out-of-BAR writes — without driving the RTL DUT.
+
+    @staticmethod
+    def _pcie_tlp_header(fmt: int, tlp_type: int, length_dw: int,
+                         addr: int, tag: int = 0) -> int:
+        """Build a 128-bit 3-DW TLP header integer (DW0 in bits [127:96])."""
+        dw0 = ((fmt & 0x7) << 29) | ((tlp_type & 0x1F) << 24) | (length_dw & 0x3FF)
+        dw1 = ((tag & 0xFF) << 8) | 0xF          # first_be = 0xF
+        if length_dw > 1:
+            dw1 |= (0xF << 4)                    # last_be = 0xF
+        dw2 = (addr & 0xFFFFFFFC)
+        return (dw0 << 96) | (dw1 << 64) | (dw2 << 32)
+
+    @staticmethod
+    def _pcie_bar_of(addr: int) -> Tuple[str, int]:
+        """Host-model BAR resolution.
+
+        Returns ``(region, offset)`` where region is ``"sram"`` (BAR0) or
+        ``"dram"`` (BAR1).  Raises :class:`ValueError` for addresses outside
+        both BAR windows (the RTL does no BAR checking — the host model does).
+        """
+        if SRAM_BASE <= addr < SRAM_BASE + SRAM_SIZE:
+            return "sram", addr - SRAM_BASE
+        # Simulated DRAM window is 8 MB (dram_model.v cap).
+        if DRAM_BASE <= addr < DRAM_BASE + 8 * 1024 * 1024:
+            return "dram", addr - DRAM_BASE
+        raise ValueError(f"Address 0x{addr:08X} outside BAR0/BAR1")
+
+    async def _pcie_send_mwr(self, hdr: int, chunk: bytes,
+                             max_wait_cycles: int = 5000):
+        """Drive one MWr TLP on ``pcie_rx_req_tlp_*`` in 64-byte beats.
+
+        Same per-beat handshake as
+        ``rtl_soc_runner.RTLSoCRunner._send_pcie_tlp_raw``.
+        """
+        dut = self.dut
+        seg_bytes = 64  # 512-bit TLP data path
+        n_seg = max(1, (len(chunk) + seg_bytes - 1) // seg_bytes)
+
+        for seg_idx in range(n_seg):
+            start = seg_idx * seg_bytes
+            end = min(start + seg_bytes, len(chunk))
+            seg = chunk[start:end].ljust(seg_bytes, b"\x00")
+
+            if seg_idx == 0:
+                dut.pcie_rx_req_tlp_hdr.value = hdr
+            dut.pcie_rx_req_tlp_data.value = int.from_bytes(seg, "little")
+            dut.pcie_rx_req_tlp_sop.value = 1 if seg_idx == 0 else 0
+            dut.pcie_rx_req_tlp_eop.value = 1 if seg_idx == n_seg - 1 else 0
+            dut.pcie_rx_req_tlp_valid.value = 1
+
+            ready = 0
+            waited = 0
+            while not ready and waited < max_wait_cycles:
+                await RisingEdge(dut.clk)
+                waited += 1
+                try:
+                    ready = int(dut.pcie_rx_req_tlp_ready.value)
+                except Exception:
+                    ready = 0
+
+            dut.pcie_rx_req_tlp_valid.value = 0
+            dut.pcie_rx_req_tlp_sop.value = 0
+            dut.pcie_rx_req_tlp_eop.value = 0
+
+            if not ready:
+                raise TimeoutError(
+                    f"PCIe RX ready timeout on segment {seg_idx} after "
+                    f"{max_wait_cycles} cycles"
+                )
+
+    async def host_pcie_write(self, addr: int, data: bytes,
+                              mps: int = 256) -> List[Dict[str, int]]:
+        """Host-model Memory Write: BAR check + MPS split into MWr TLPs.
+
+        Returns a list of sent-TLP records ``{"hdr", "addr", "len"}`` so the
+        caller can verify MPS-split header contiguity (16 × 256B for 4KB).
+
+        Raises:
+            ValueError: address outside BAR0/BAR1 (host model rejects, RTL
+                        is never driven).
+        """
+        self._pcie_bar_of(addr)
+        sent: List[Dict[str, int]] = []
+        for i in range(0, len(data), mps):
+            chunk = data[i:i + mps]
+            chunk_addr = addr + i
+            length_dw = (len(chunk) + 3) // 4
+            hdr = self._pcie_tlp_header(0b010, 0b00000, length_dw, chunk_addr)
+            await self._pcie_send_mwr(hdr, chunk)
+            sent.append({"hdr": hdr, "addr": chunk_addr, "len": len(chunk)})
+            logger.debug(
+                f"host_pcie_write: MWr 0x{chunk_addr:08X} "
+                f"{len(chunk)} B hdr=0x{hdr:024X}"
+            )
+        return sent
+
+    async def _pcie_read_chunk(self, hdr: int, nbytes: int,
+                               timeout_cycles: int = 50000
+                               ) -> Tuple[int, bytes]:
+        """Send one MRd TLP and collect CplD beats until *nbytes* received.
+
+        Returns ``(completion_status, data)``.  Handles the RTL splitting a
+        read into multiple CplDs (DUT ``max_payload_size`` may be < chunk).
+        """
+        dut = self.dut
+
+        dut.pcie_rx_req_tlp_hdr.value = hdr
+        dut.pcie_rx_req_tlp_data.value = 0
+        dut.pcie_rx_req_tlp_valid.value = 1
+        dut.pcie_rx_req_tlp_sop.value = 1
+        dut.pcie_rx_req_tlp_eop.value = 1
+
+        await RisingEdge(dut.clk)
+        while int(dut.pcie_rx_req_tlp_ready.value) == 0:
+            await RisingEdge(dut.clk)
+
+        dut.pcie_rx_req_tlp_valid.value = 0
+        dut.pcie_rx_req_tlp_sop.value = 0
+        dut.pcie_rx_req_tlp_eop.value = 0
+
+        out = bytearray()
+        status = 0
+        cur_len = 0   # payload bytes in the current CplD
+        cur_off = 0
+        for _ in range(timeout_cycles):
+            if int(dut.pcie_tx_cpl_tlp_valid.value) == 1:
+                if int(dut.pcie_tx_cpl_tlp_sop.value) == 1:
+                    chdr = int(dut.pcie_tx_cpl_tlp_hdr.value)
+                    status = (chdr >> 77) & 0x7      # hdr[79:77]
+                    cur_len = ((chdr >> 96) & 0x3FF) * 4  # hdr[105:96] length DW
+                    cur_off = 0
+                if cur_len > 0 and cur_off < cur_len:
+                    beat = int(dut.pcie_tx_cpl_tlp_data.value)
+                    take = min(64, cur_len - cur_off)
+                    out.extend(beat.to_bytes(64, "little")[:take])
+                    cur_off += take
+                if int(dut.pcie_tx_cpl_tlp_eop.value) == 1:
+                    if status != 0:
+                        return status, b""
+                    if len(out) >= nbytes:
+                        return 0, bytes(out[:nbytes])
+                    cur_len = 0
+                    cur_off = 0
+            await RisingEdge(dut.clk)
+
+        raise TimeoutError(
+            f"PCIe CplD timeout for 0x{((hdr >> 32) & 0xFFFFFFFC):08X} "
+            f"({nbytes} B requested, {len(out)} B received)"
+        )
+
+    async def host_pcie_read(self, addr: int, length: int,
+                             mps: int = 256
+                             ) -> Tuple[int, bytes, List[Dict[str, int]]]:
+        """Host-model Memory Read: BAR check + MPS-split MRd + CplD reassembly.
+
+        Returns ``(status, data, rd_headers)``.  ``status`` is 0 (SC) for
+        in-BAR reads; out-of-BAR reads return ``status=1`` (UR) with empty
+        data — the host model answers UR itself, the RTL DUT is never driven.
+        """
+        try:
+            self._pcie_bar_of(addr)
+        except ValueError as e:
+            logger.info(f"host_pcie_read: out-of-BAR → UR ({e})")
+            return 1, b"", []
+
+        rd_headers: List[Dict[str, int]] = []
+        data = bytearray()
+        for chunk_addr in range(addr, addr + length, mps):
+            n = min(mps, addr + length - chunk_addr)
+            length_dw = (n + 3) // 4
+            hdr = self._pcie_tlp_header(0b000, 0b00000, length_dw, chunk_addr)
+            rd_headers.append({"hdr": hdr, "addr": chunk_addr, "len": n})
+            status, chunk = await self._pcie_read_chunk(hdr, n)
+            if status != 0:
+                return status, bytes(data), rd_headers
+            data.extend(chunk)
+        return 0, bytes(data[:length]), rd_headers
+
     # ── NPU-Initiated PCIe DMA TLP Receive / CplD Send (T5.1) ────────────
 
     async def receive_pcie_tlp(self, port: str, timeout_cycles: int = 10000) -> dict:
@@ -4469,6 +4656,123 @@ if COCOTB_AVAILABLE:
         assert bytes(dma_actual) == dma_payload, f"{label}: DMA data mismatch"
 
         logger.warning(f"[{label}] PASS ibex_reads={len(ibex_reads)}")
+
+    def _tlp_pattern(n: int, seed: int = 0) -> bytes:
+        """Deterministic pseudo-random bytes (mirrors sim/tests/test_pcie_tlp_chain.py)."""
+        return bytes(((i * 131) ^ (i >> 3) ^ (seed * 17)) & 0xFF for i in range(n))
+
+    def _check_tlp_headers(label: str, headers, base_addr: int,
+                           expect_fmt: int, mps: int) -> None:
+        """Verify MPS-split TLP headers: 3-DW fmt/type, length, contiguity."""
+        n = len(headers)
+        for i, h in enumerate(headers):
+            hdr = h["hdr"]
+            fmt = (hdr >> 125) & 0x7
+            typ = (hdr >> 120) & 0x1F
+            length_dw = (hdr >> 96) & 0x3FF
+            assert fmt == expect_fmt, (
+                f"{label}: TLP {i} fmt=0b{fmt:03b}, want 0b{expect_fmt:03b}"
+            )
+            assert typ == 0, f"{label}: TLP {i} type={typ}, want 0"
+            assert length_dw == mps // 4, (
+                f"{label}: TLP {i} length={length_dw} DW, want {mps // 4}"
+            )
+            assert h["addr"] == base_addr + i * mps, (
+                f"{label}: TLP {i} address 0x{h['addr']:08X} not contiguous "
+                f"(want 0x{base_addr + i * mps:08X})"
+            )
+        assert n == 4096 // mps, (
+            f"{label}: expected {4096 // mps} TLP headers, got {n}"
+        )
+
+    @cocotb.test()
+    async def test_e2e_pcie_tlp_chain(dut):
+        """E2E PCIe TLP chain: MPS=256B split + BAR0/BAR1 routing + isolation.
+
+        Covers FM guard sim/tests/test_pcie_tlp_chain.py at the RTL level:
+          1. 4KB TLP write to BAR0 (SRAM 0x2000_0000) → readback bit-exact
+          2. 4KB TLP write to BAR1 (DRAM 0x8000_0000) → readback bit-exact
+          3. MPS=256B split: 16 contiguous 3-DW MWr/MRd headers per 4KB
+          4. BAR routing isolation (BAR0 write does not corrupt BAR1, and
+             vice versa)
+          5. Out-of-BAR access returns UR from the host model (the RTL DUT
+             is NOT expected to reject it — pcie_ep_wrapper.v:13-20).
+
+        Does NOT test MSI-X.
+        """
+        label = "test_e2e_pcie_tlp_chain"
+        bridge = await _setup_single_op_test(dut)
+
+        MPS = 256
+        # Align the DUT completion MPS with the host model (PCIE_CTRL[2:0],
+        # PCIe spec encoding: 001b = 256B).  Soft check — the CplD collector
+        # reassembles any MPS the RTL uses.
+        await bridge._apb_write(PCIE_BASE + 0x00, 0x1)
+        mps_reg = await bridge._apb_read(PCIE_BASE + 0x00)
+        logger.info(f"[{label}] DUT max_payload_size reg=0x{mps_reg & 0x7:X}")
+
+        pat_bar0 = _tlp_pattern(4096, seed=1)
+        pat_bar1_sentinel = _tlp_pattern(4096, seed=2)
+        pat_bar1 = _tlp_pattern(4096, seed=3)
+
+        # ── Check 1+3: 4KB write to BAR0 (SRAM) → readback bit-exact ────────
+        # Seed BAR1 with a distinct sentinel BEFORE the BAR0 write.
+        await bridge._dram_backdoor_write(DRAM_BASE, pat_bar1_sentinel)
+
+        wr0 = await bridge.host_pcie_write(SRAM_BASE, pat_bar0, mps=MPS)
+        _check_tlp_headers(label, wr0, SRAM_BASE, expect_fmt=0b010, mps=MPS)
+        logger.info(f"[{label}] BAR0 write split into {len(wr0)} MWr TLPs")
+
+        await bridge.wait_cycles(2000)  # drain posted writes through crossbar
+
+        st0, rb0, rd0 = await bridge.host_pcie_read(SRAM_BASE, 4096, mps=MPS)
+        assert st0 == 0, f"{label}: BAR0 readback status={st0} (want SC)"
+        assert rb0 == pat_bar0, f"{label}: BAR0 4KB readback not bit-exact"
+        _check_tlp_headers(label, rd0, SRAM_BASE, expect_fmt=0b000, mps=MPS)
+        logger.info(f"[{label}] BAR0 4KB write→readback bit-exact")
+
+        # Check 4 (direction 1): BAR0 write must not corrupt BAR1.
+        dram_after = await bridge._dram_backdoor_read(DRAM_BASE, 4096)
+        assert bytes(dram_after) == pat_bar1_sentinel, (
+            f"{label}: BAR0 write leaked into BAR1 (DRAM) region"
+        )
+        logger.info(f"[{label}] BAR0 write did not corrupt BAR1")
+
+        # ── Check 2: 4KB write to BAR1 (DRAM) → readback bit-exact ──────────
+        wr1 = await bridge.host_pcie_write(DRAM_BASE, pat_bar1, mps=MPS)
+        _check_tlp_headers(label, wr1, DRAM_BASE, expect_fmt=0b010, mps=MPS)
+
+        await bridge.wait_cycles(5000)  # DRAM model latency ~48 cyc/access
+
+        st1, rb1, _rd1 = await bridge.host_pcie_read(DRAM_BASE, 4096, mps=MPS)
+        assert st1 == 0, f"{label}: BAR1 readback status={st1} (want SC)"
+        assert rb1 == pat_bar1, f"{label}: BAR1 4KB readback not bit-exact"
+        logger.info(f"[{label}] BAR1 4KB write→readback bit-exact")
+
+        # Check 4 (direction 2): BAR1 write must not corrupt BAR0.
+        sram_after = await bridge._sram_backdoor_read(SRAM_BASE, 4096)
+        assert bytes(sram_after) == pat_bar0, (
+            f"{label}: BAR1 write leaked into BAR0 (SRAM) region"
+        )
+        logger.info(f"[{label}] BAR1 write did not corrupt BAR0")
+
+        # ── Check 5: out-of-BAR access → UR from the cocotb host model ──────
+        oob_addr = 0x5000_0000  # hole between BAR0 and BAR1
+        st_oob, data_oob, _ = await bridge.host_pcie_read(oob_addr, 4)
+        assert st_oob == 1, (
+            f"{label}: out-of-BAR read status={st_oob}, want UR (=1)"
+        )
+        assert data_oob == b"", f"{label}: out-of-BAR read returned data"
+        try:
+            await bridge.host_pcie_write(oob_addr, b"oob!")
+            raise AssertionError(
+                f"{label}: out-of-BAR write should be rejected by host model"
+            )
+        except ValueError:
+            logger.info(f"[{label}] out-of-BAR write rejected (ValueError)")
+        logger.info(f"[{label}] out-of-BAR access → UR from host model")
+
+        logger.warning(f"[{label}] PASS")
 
     @cocotb.test()
     async def test_qwen25_3b_3layer(dut):

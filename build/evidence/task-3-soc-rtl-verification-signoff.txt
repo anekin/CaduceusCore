@@ -1,0 +1,43 @@
+================================================================================
+Task 3 — soc-rtl-verification-signoff: cocotb PCIe TLP chain test (MPS-split + BAR routing)
+================================================================================
+Timestamp : 2026-08-27 08:37 UTC+8 (run executed on sz0001 / 192.168.0.11)
+Commit    : 892c293 test(soc): add cocotb PCIe TLP chain MPS-split + BAR routing test
+Host      : sz0001 (EDA server)
+Status    : PASS
+Exit code : 0
+
+Command (acceptance):
+  ssh zhengs@192.168.0.11 \
+    "source /NAS/Tools/methodology/modules/init/bash && \
+     module load vcs/vcs_2023.12sp2 && \
+     cd /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression && \
+     make run_e2e_pcie_tlp_chain"
+
+Result:
+  cocotb_bridge.test_e2e_pcie_tlp_chain   PASS   SIM TIME 13538.50 ns
+  TESTS=1 PASS=1 FAIL=0 SKIP=0
+  E2E_PCIE_TLP_CHAIN: PASS
+  EXIT_CODE=0
+
+Covered checks (all enforced by asserts inside test_e2e_pcie_tlp_chain):
+  1. 4KB TLP write to BAR0 (SRAM base 0x2000_0000) -> TLP readback bit-exact  [PASS]
+  2. 4KB TLP write to BAR1 (DRAM base 0x8000_0000) -> TLP readback bit-exact  [PASS]
+  3. MPS=256B split: 4KB write/read produces 16 contiguous 3-DW TLP headers
+     (fmt=010/000, type=0, length=64 DW, addr contiguous +256B)              [PASS]
+  4. BAR routing isolation:
+     - BAR0 write does not corrupt BAR1 region (sentinel backdoor compare)   [PASS]
+     - BAR1 write does not corrupt BAR0 region (sentinel backdoor compare)   [PASS]
+  5. Out-of-BAR (0x5000_0000) access:
+     - read  -> UR status returned by cocotb host model, no DUT traffic     [PASS]
+     - write -> rejected by host model (ValueError), no DUT traffic         [PASS]
+  Not tested: MSI-X (per task scope).
+
+Files changed:
+  - sim/cocotb_bridge.py      (host PCIe TLP model methods + test_e2e_pcie_tlp_chain)
+  - sim/regression/Makefile   (new target run_e2e_pcie_tlp_chain)
+
+Log artifacts (sz0001):
+  sim/regression/qwen_e2e_pcie_tlp_chain.log
+  sim/regression/qwen_e2e_pcie_tlp_chain_results.xml
+================================================================================
