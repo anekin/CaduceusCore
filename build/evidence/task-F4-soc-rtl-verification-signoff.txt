@@ -1,0 +1,4 @@
+F4: classified 154 changed file(s) since b542cc5b36a80dd2a73ab0fd0fc1ffeb1d99447b
+F4: whitelist = sim/ firmware/ scripts/ docs/ spec/npu_abi.json gen/ build/evidence/ .omo/ rtl/tb/
+F4: frozen    = rtl/ (excl. rtl/tb/) arc_model design_space_explorer quantize ggml-npu/ requirements.txt
+F4: PASS — no scope creep

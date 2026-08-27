@@ -24,3 +24,5 @@ MOBILENETV3: PASS (convs 50/52 cos>=0.99, 2 degenerate bit-exact, ring_cmds=657,
 43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_Conv_544                                196   3000    120     8   1.000000
 43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_linear                                    1    576   1024     8   1.000000
 43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_linear_1                                  1   1024   1000     8   1.000000
+
+Status: PASS

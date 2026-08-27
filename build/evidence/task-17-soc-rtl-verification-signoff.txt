@@ -71,3 +71,5 @@ Summary
   vplan ✅ RTL rows             : 12  (>= 6 required)  PASS
   checklist SoC section task-  : 14  (>= 13 required) PASS
   RTL evidence refs in table   : 13 rows wired to build/evidence/task-{N}-soc-rtl-verification-signoff.txt
+
+Status: PASS

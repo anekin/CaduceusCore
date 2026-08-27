@@ -41,3 +41,5 @@ Log artifacts (sz0001):
   sim/regression/qwen_e2e_pcie_tlp_chain.log
   sim/regression/qwen_e2e_pcie_tlp_chain_results.xml
 ================================================================================
+
+Status: PASS

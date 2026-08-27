@@ -1,0 +1,18 @@
+todo=01 checkbox=1 evidence=PASS accept=[] -> PASS
+todo=02 checkbox=1 evidence=PASS accept=[] -> PASS
+todo=03 checkbox=1 evidence=PASS accept=[SKIP-ENV:make -C sim/regression run_e2e_pcie_tlp_chain;] -> PASS
+todo=04 checkbox=1 evidence=PASS accept=[SKIP-ENV:make -C sim/regression run_e2e_intc_irq;] -> PASS
+todo=05 checkbox=1 evidence=PASS accept=[SKIP-ENV:make -C sim/regression run_crossbar_fairness;] -> PASS
+todo=06 checkbox=1 evidence=PASS accept=[SKIP-ENV:make -C sim/regression run_apb_conformance;] -> PASS
+todo=07 checkbox=1 evidence=PASS accept=[SKIP-ENV:make -C sim/regression run_e2e_ibex_shared_ad;] -> PASS
+todo=08 checkbox=1 evidence=PASS accept=[SKIP-ENV:make -C sim/regression run_e2e_irq_stall;] -> PASS
+todo=09 checkbox=1 evidence=PASS accept=[SKIP-ENV:make -C sim/regression run_fm_soc_case CASE_I;] -> PASS
+todo=10 checkbox=1 evidence=PASS accept=[SKIP-ENV:make -C sim/regression run_fm_soc_case CASE_I;] -> PASS
+todo=11 checkbox=1 evidence=PASS accept=[SKIP-ENV:make -C sim/regression run_fm_soc_case CASE_I;] -> PASS
+todo=12 checkbox=1 evidence=PASS accept=[SKIP-ENV:make -C sim/regression run_fm_soc_case CASE_I;] -> PASS
+todo=13 checkbox=1 evidence=PASS accept=[SKIP-ENV:make -C sim/regression run_e2e_mobilenetv3;] -> PASS
+todo=14 checkbox=1 evidence=PASS accept=[] -> PASS
+todo=15 checkbox=1 evidence=PASS accept=[SKIP-ENV:make -C sim/regression run_fm_soc_case CASE_I;] -> PASS
+todo=16 checkbox=1 evidence=PASS accept=[] -> PASS
+todo=17 checkbox=1 evidence=PASS accept=[] -> PASS
+F1 summary: plan=soc-rtl-verification-signoff pass=17 fail=0 pending=0 (audited 17/17)

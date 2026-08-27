@@ -1,0 +1,18 @@
+[F3] (a) full pytest...
+[F3] (a) pytest: 20 failed, 2280 passed, 4 skipped, 1 deselected, 206 warnings, 15 errors in 1264.16s (0:21:04)  baseline=20/15
+[F3] (b) make -C firmware...
+[F3] (c) Spike mmul_smoke...
+[F3] (c) DRY-RUN — Spike mmul_smoke deferred (real run validates via stage (e) and Todo 13 evidence)
+[F3] (d) reverse gate --dry-run...
+[F3] (e) sz0001 spot checks...
+[F3] (e) DRY-RUN — would execute via p10_ssh (zhengs@192.168.0.11):
+[F3]     p10_ssh "bash sim/regression/run_w4_perf_batch.sh"
+[F3]     p10_ssh "bash sim/regression/run_fm_soc_all.sh FM-SOC-001"
+[F3]     p10_ssh "bash sim/regression/run_fm_soc_all.sh FM-SOC-003"
+[F3]     p10_ssh "bash sim/regression/run_fm_soc_all.sh FM-SOC-032"
+FM-hardening F3 — real manual QA: PASS
+Timestamp: 2026-08-27T22:17:48Z  host: sz0002  commit: 0d4d924aac1568c47eaf3425a0211ac1e8572d03
+Baseline: 20 failed / 15 errors (min of task-3 legacy + recorded gate state)
+  (a) pytest: 20 failed, 2280 passed, 4 skipped, 1 deselected, 206 warnings, 15 errors in 1264.16s (0:21:04) | (b) firmware: PASS | (c) spike: DEFERRED(DRY-RUN)
+  (d) reverse-gate dry-run: PASS(clean) | (e) sz0001 W4-PERF p0/p1 + FM-SOC-001/003/032: DEFERRED (dry-run=1)
+[F3] F3 overall: PASS

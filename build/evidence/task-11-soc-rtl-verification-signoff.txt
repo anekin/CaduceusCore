@@ -1,0 +1,24 @@
+Task 11 — FM-SOC-10X op00 RMSNorm fix (soc-rtl-verification-signoff)
+====================================================================
+Timestamp: 2026-08-27T21:10:36Z (generated during Final Wave F1-F4 audit on sz0002)
+Commit: 0d4d924
+
+Summary
+=======
+- Diagnostic run log: build/evidence/task-11-soc-rtl-verification-signoff.log
+  (sz0001, GIT 24d691f, 2026-08-27T09:45:33+0800). The first make invocation
+  in that log ran the Makefile default (FM-SOC-001) instead of FM-SOC-10X
+  because `run_fm_soc_case` read only FM_SOC_CASE_ID at that commit; the
+  CASE_ID propagation bug was fixed as part of this todo (see notepad
+  .omo/notepads/soc-rtl-verification-signoff/learnings.md, Todo 10 entry).
+- Companion logs: task-11-fm10x.log / task-11-fm10x-pre-fix.log (FM-SOC-10X
+  FAIL before the fix), task-11-fm004-pass.log (FM-SOC-004 PASS).
+- Fix: SFU chain descriptors now use the engine-specific writer
+  (write_sfu_descriptor) matching the dispatched command opcode instead of
+  the MMUL 15-word layout (sim/rtl_soc_runner.py `_build_block`); root cause
+  was silent ABI skew for SFU sub-ops in multi-op chains.
+- Post-fix verification: FM-SOC-004 / FM-SOC-027 / FM-SOC-10X PASS via
+  run_ibex_full_rtl.sh; full regression (todo 16) FM-SOC: 33/33 PASS
+  including FM-SOC-10X (build/evidence/task-16-soc-rtl-verification-signoff.txt).
+
+Status: PASS
