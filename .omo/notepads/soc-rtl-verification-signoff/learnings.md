@@ -331,3 +331,47 @@ silent ABI skew.
 **Verification gate:** `FM-SOC-004`, `FM-SOC-027`, `FM-SOC-10X` all PASS via
 `run_ibex_full_rtl.sh`; `scripts/run_batch_regression.py` reports
 `SFU: 319/319 passed, Vector: 63/63 passed`.
+## 2026-08-27 11:36 — Todo 8: IRQ-driven dispatch stall cocotb test
+
+### Outcome
+`test_e2e_irq_dispatch_stall` in `sim/cocotb_bridge.py` + Makefile target
+`run_e2e_irq_stall`. `make -C sim/regression run_e2e_irq_stall` on sz0001:
+EXIT_CODE=0, log contains `IRQ_MASK: PASS` **and** `IRQ_STALL: PASS`,
+cocotb `TESTS=1 PASS=1 FAIL=0 SKIP=0`. Evidence:
+`build/evidence/task-8-soc-rtl-verification-signoff.txt`.
+
+### The WFI stall IS constructable at RTL — no rename needed
+Firmware idles in WFI (`npu_firmware.c:664`) with mstatus.MIE=0, so it is a
+WFI-wake + polling design. With INTC ENABLE=0 forced (THRESHOLD=1, RTL reset
+default) and 3 DMA_COPY commands rung in via doorbell HOST_TAIL=3, the level
+doorbell host IRQ (bit5, `doorbell_irq = HOST_TAIL != NPU_HEAD`) latches
+PENDING=0x20 but cpu_irq stays 0 and NPU_HEAD stays 0 for the full 10000-cycle
+window. Restoring ENABLE wakes the firmware (WFI wake needs only irq_i
+assertion, not MIE) and all 3 commands drain — the positive control proves the
+stall is mask-caused, mirroring the FM guard's suppressed-IRQ stall via the
+real ENABLE gate instead of a monkeypatched notify.
+
+### Gotchas fixed / found
+- **`_doorbell_backdoor_write`/`_read` had a latent NameError**: they
+  referenced `Addr.DOORBELL + DOORBELL.*` from the optional regmap import,
+  which is silently unbound under the Makefile cocotb env (cwd =
+  `$(REPO_ROOT)/..`, so regmap's `import gen.npu_abi` fails). Todo 7 never
+  exercised these helpers. Fixed to use module constants
+  `DOORBELL_BASE + 0x00/0x04/0x08/0x0C` (identical values) — same pattern as
+  todo 4's `INTC_BASE + offset` usage.
+- **`_intc_reg_force("enable", 0x1FF)` → OverflowError**: `enable_reg` is
+  8 bits; cocotb Force range-checks. Firmware writes ENABLE=0x1FF but the APB
+  path latches `pwdata[7:0]`, so the register holds 0xFF — restore with 0xFF.
+- **tb_soc.v ties off `db_bkdoor_*`** (`.db_bkdoor_we(1'b0)` etc.), so
+  `segment_kick`/`segment_read_head` (tb doorbell-backdoor port helpers) do
+  NOT work on tb_soc. Use `_doorbell_backdoor_write/read` (register Force /
+  hierarchical read) — the todo-7 doorbell-backdoor pattern.
+- PENDING is read hierarchically (`u_dut.u_intc.pending_reg`) with X→0
+  normalization; asserting PENDING[5]=1 BEFORE checking cpu_irq keeps the
+  mask check non-vacuous (source fired, gate held it).
+
+### Command entry format (for future doorbell tests)
+cmd_entry_t = 32 B: [0]=opcode (9 = DMA_COPY), [1]=desc_addr, [2]=flags,
+pad×5. dma_copy_desc_t = 60 B: [0]=src, [2]=dst, [8]=size. Ring at
+0x8000_0000 (NPU_ABI_RING_BUFFER_ADDR); DMA copies poll engine STATUS, so
+drain needs no IRQ.

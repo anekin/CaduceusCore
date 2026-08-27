@@ -2702,7 +2702,7 @@ class CocotbBridge:
         firmware sees a clean next-cycle update.
 
         Args:
-            addr: Full APB address (e.g. ``Addr.DOORBELL + DOORBELL.HOST_TAIL``).
+            addr: Full APB address (e.g. ``DOORBELL_BASE + 0x00`` for HOST_TAIL).
             data: 32-bit data to write.
 
         Raises:
@@ -2710,10 +2710,10 @@ class CocotbBridge:
             RuntimeError: If called when cocotb is not running.
         """
         reg_map = {
-            Addr.DOORBELL + DOORBELL.HOST_TAIL: "host_tail_reg",
-            Addr.DOORBELL + DOORBELL.NPU_HEAD: "npu_head_reg",
-            Addr.DOORBELL + DOORBELL.HOST_HEAD: "host_head_reg",
-            Addr.DOORBELL + DOORBELL.NPU_TAIL: "npu_tail_reg",
+            DOORBELL_BASE + 0x00: "host_tail_reg",
+            DOORBELL_BASE + 0x04: "npu_head_reg",
+            DOORBELL_BASE + 0x08: "host_head_reg",
+            DOORBELL_BASE + 0x0C: "npu_tail_reg",
         }
         reg_name = reg_map.get(addr)
         if reg_name is None:
@@ -2751,10 +2751,10 @@ class CocotbBridge:
             The current 32-bit register value.
         """
         reg_map = {
-            Addr.DOORBELL + DOORBELL.HOST_TAIL: "host_tail_reg",
-            Addr.DOORBELL + DOORBELL.NPU_HEAD: "npu_head_reg",
-            Addr.DOORBELL + DOORBELL.HOST_HEAD: "host_head_reg",
-            Addr.DOORBELL + DOORBELL.NPU_TAIL: "npu_tail_reg",
+            DOORBELL_BASE + 0x00: "host_tail_reg",
+            DOORBELL_BASE + 0x04: "npu_head_reg",
+            DOORBELL_BASE + 0x08: "host_head_reg",
+            DOORBELL_BASE + 0x0C: "npu_tail_reg",
         }
         reg_name = reg_map.get(addr)
         if reg_name is None:
@@ -5112,6 +5112,145 @@ if COCOTB_AVAILABLE:
         logger.warning("[SHARED_ADDR] BOOT_ROM_ISOLATION: PASS")
 
         logger.warning("SHARED_ADDR: PASS")
+
+    @cocotb.test()
+    async def test_e2e_irq_dispatch_stall(dut):
+        """E2E IRQ-driven dispatch stall (SOC-17 RTL).
+
+        Covers FM guard sim/tests/test_irq_driven_dispatch.py:377-420 at the
+        RTL level, using the REAL INTC ENABLE gate instead of a monkeypatched
+        notify callback:
+
+          1. IRQ mask: THRESHOLD=1, INTC.ENABLE=0, 3 DMA commands queued via
+             the DRAM ring + doorbell HOST_TAIL.  The doorbell host IRQ is a
+             level signal (doorbell.v: doorbell_irq = HOST_TAIL != NPU_HEAD,
+             INTC source bit5), so PENDING[5] sets while the firmware is
+             still asleep — yet cpu_irq stays low.
+          2. WFI-path stall: firmware idles in WFI
+             (firmware/npu_firmware.c:664) with mstatus.MIE=0, so it is a
+             WFI-wake + polling design.  With cpu_irq masked the core never
+             wakes and NPU_HEAD does not advance for >= 10000 cycles while
+             HOST_TAIL=3 — the FM guard's suppressed-IRQ stall.
+          3. Positive control (non-vacuous): restoring ENABLE=0x1FF asserts
+             cpu_irq, wakes the firmware, and all 3 commands drain
+             (NPU_HEAD -> 3; DMA copies verified bit-exact).
+
+        Firmware is NOT modified.  INTC registers are written with
+        _intc_reg_force (register Force, not APB nets) so the live
+        firmware's APB traffic is never corrupted; the doorbell is rung
+        with _doorbell_backdoor_write (register Force), the same
+        doorbell-backdoor pattern todo 7 established.
+        """
+        label = "test_e2e_irq_dispatch_stall"
+        bridge = await _setup_single_op_test(dut)
+
+        n_cmds = 3
+        chunk = 256
+        ring_base = DRAM_BASE            # NPU_ABI_RING_BUFFER_ADDR
+        desc_base = DRAM_BASE + 0x0000_0100
+        src_base = DRAM_BASE + 0x0000_1000
+        dst_base = DRAM_BASE + 0x0000_2000
+
+        # ── Mask cpu_irq at the INTC (register Force, firmware-safe) ─────
+        await bridge._intc_reg_force("threshold", 0x0000_0001)
+        await bridge._intc_reg_force("enable", 0x0000_0000)
+        await bridge.wait_cycles(100)
+        cpu_irq_net = bridge.dut.u_dut.u_intc.cpu_irq
+        assert int(cpu_irq_net.value) == 0, (
+            f"{label}: cpu_irq asserted before any command was submitted"
+        )
+
+        # ── Queue 3 DMA_COPY commands via DRAM ring + doorbell ───────────
+        # cmd_entry_t (32 B): [0]=opcode, [1]=desc_addr, [2]=flags, pad×5.
+        # dma_copy_desc_t (60 B): [0]=src, [2]=dst, [8]=size.
+        # opcode 9 = NPU_ENGINE_OP_DMA_COPY (firmware dispatcher op==9).
+        patterns = []
+        for i in range(n_cmds):
+            src = src_base + i * 0x100
+            dst = dst_base + i * 0x100
+            desc_addr = desc_base + i * 0x80
+            pattern = bytes(
+                ((j * 131 + i * 37) ^ (j >> 3)) & 0xFF for j in range(chunk)
+            )
+            patterns.append(pattern)
+            await bridge._dram_backdoor_write(src, pattern)
+            await bridge._dram_backdoor_write(desc_addr, struct.pack(
+                "<15I", src, 0, dst, 0, 0, 0, 0, 0, chunk, 0, 0, 0, 0, 0, 0))
+            await bridge._dram_backdoor_write(ring_base + i * 32, struct.pack(
+                "<8I", 9, desc_addr, 0, 0, 0, 0, 0, 0))
+
+        # Ring the doorbell (HOST_TAIL=3).  The level host IRQ latches into
+        # INTC PENDING[5] while the firmware sleeps in WFI.
+        await bridge._doorbell_backdoor_write(DOORBELL_BASE + 0x00, n_cmds)
+        await bridge.wait_cycles(20)
+
+        # ── IRQ mask verification ─────────────────────────────────────────
+        pending_str = str(bridge.dut.u_dut.u_intc.pending_reg.value)
+        pending_str = pending_str.replace("x", "0").replace("X", "0")
+        pending = int(pending_str, 2)
+        assert (pending & 0x20) == 0x20, (
+            f"{label}: host doorbell IRQ bit5 not pending after submit "
+            f"(PENDING=0x{pending:02X})"
+        )
+        cpu_irq = int(cpu_irq_net.value)
+        assert cpu_irq == 0, (
+            f"{label}: ENABLE=0 must keep cpu_irq low, got {cpu_irq} "
+            f"(PENDING=0x{pending:02X})"
+        )
+        logger.warning(
+            f"[{label}] IRQ_MASK: PASS (PENDING=0x{pending:02X}, "
+            f"ENABLE=0, THRESHOLD=1, cpu_irq=0)"
+        )
+
+        # ── WFI-path stall: NPU_HEAD must not advance for >=10000 cycles ─
+        head0 = await bridge._doorbell_backdoor_read(DOORBELL_BASE + 0x04)
+        assert head0 == 0, f"{label}: expected NPU_HEAD=0 before stall, got {head0}"
+        stall_cycles = 10000
+        sample = 1000
+        for k in range(stall_cycles // sample):
+            await bridge.wait_cycles(sample)
+            cpu_irq = int(cpu_irq_net.value)
+            assert cpu_irq == 0, (
+                f"{label}: cpu_irq asserted ~{(k + 1) * sample} cycles "
+                f"into the masked stall window"
+            )
+        head1 = await bridge._doorbell_backdoor_read(DOORBELL_BASE + 0x04)
+        assert head1 == head0, (
+            f"{label}: NPU_HEAD advanced {head0}->{head1} during masked stall "
+            f"(WFI path did not stall)"
+        )
+        logger.warning(
+            f"[{label}] IRQ_STALL: PASS (NPU_HEAD={head1} for "
+            f"{stall_cycles} cycles with HOST_TAIL={n_cmds})"
+        )
+
+        # ── Positive control: restore ENABLE → cpu_irq → wake → drain ────
+        # The firmware's own boot value (firmware_main writes ENABLE=0x1FF;
+        # the APB path latches pwdata[7:0], so the 8-bit register holds 0xFF).
+        await bridge._intc_reg_force("enable", 0x0000_00FF)
+        head = -1
+        timeout_cycles = 200000
+        poll_step = 2000
+        for _ in range(timeout_cycles // poll_step):
+            head = await bridge._doorbell_backdoor_read(DOORBELL_BASE + 0x04)
+            if head == n_cmds:
+                break
+            await bridge.wait_cycles(poll_step)
+        assert head == n_cmds, (
+            f"{label}: firmware did not drain after ENABLE restore "
+            f"(NPU_HEAD={head}, want {n_cmds})"
+        )
+        logger.warning(
+            f"[{label}] IRQ_DRAIN: PASS (NPU_HEAD={head} after ENABLE restore)"
+        )
+
+        # The 3 commands really executed: DMA src patterns land at dst.
+        for i in range(n_cmds):
+            got = bytes(await bridge._dram_backdoor_read(dst_base + i * 0x100, chunk))
+            assert got == patterns[i], f"{label}: DMA copy {i} dst mismatch"
+        logger.warning(f"[{label}] DMA_DATA: PASS ({n_cmds} copies bit-exact)")
+
+        logger.warning(f"[{label}] PASS")
 
     @cocotb.test()
     async def test_qwen25_3b_3layer(dut):
