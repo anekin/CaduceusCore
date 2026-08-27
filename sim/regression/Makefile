@@ -143,6 +143,30 @@ $(APB_SIMV): $(APB_SRC)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# run_apb_conformance — APB Register Conformance (7 peripherals, skip PCIE_DMA)
+# ═══════════════════════════════════════════════════════════════════════════
+# Verifies write→readback register access semantics (rw/r/w/w1c) for the 7
+# engine/peripheral APB slaves through the real apb_decoder RTL, with the
+# expected table generated from sim/regmap.py + Func Model access semantics.
+# PCIE_DMA (slave 7) is explicitly excluded.
+
+APB_CONF_SRC := $(SOC_DIR)/apb_decoder.v $(TB_DIR)/apb_register_conformance_tb.sv
+APB_CONF_SIMV := simv_apb_register_conformance_tb
+
+.PHONY: run_apb_conformance
+run_apb_conformance: $(APB_CONF_SIMV)
+	@echo "$(YELLOW)[APB_CONFORMANCE] Running...$(NC)"
+	@./$(APB_CONF_SIMV) 2>&1 | tee apb_conformance.log
+	@grep -q "APB_CONFORMANCE: PASS" apb_conformance.log && \
+		echo "$(GREEN)APB_CONFORMANCE: PASS$(NC)" || \
+		(echo "$(RED)APB_CONFORMANCE: FAIL$(NC)" && exit 1)
+
+$(APB_CONF_SIMV): $(APB_CONF_SRC)
+	@echo "$(YELLOW)[APB_CONFORMANCE] Compiling...$(NC)"
+	$(VCS) $(VCS_COMMON) -top apb_register_conformance_tb $(APB_CONF_SRC) -o $(APB_CONF_SIMV)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # run_intc_test — INTC 7-source Interrupt Controller
 # ═══════════════════════════════════════════════════════════════════════════
 

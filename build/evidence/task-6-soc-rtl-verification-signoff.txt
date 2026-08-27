@@ -1,0 +1,54 @@
+# Todo 6 — RTL APB register conformance testbench (soc-rtl-verification-signoff)
+# Generated: 2026-08-27 10:05 (CST / Asia/Shanghai)
+# Plan: .omo/plans/soc-rtl-verification-signoff.md todo 6
+# Status: PASS
+# Commit: "test(soc): add APB register conformance testbench for 7 peripherals"
+#         (this very commit; resolve hash via git log --oneline -1)
+
+## Acceptance command (run on sz0001 / 192.168.0.11)
+
+source /NAS/Tools/methodology/modules/init/bash
+module load vcs/vcs_vW-2024.09-SP2_P
+make -C sim/regression run_apb_conformance
+# → exit code 0
+
+## Result
+
+APB_CONFORMANCE: PASS (7/7 peripheral slaves tested)
+Total: 168 checks — Passed: 168, Failed: 0
+
+## Deliverables
+
+- rtl/tb/apb_register_conformance_tb.sv — NEW
+  Instantiates the real rtl/soc/apb_decoder.v RTL and 7 conformance register
+  banks (one per tested APB slave: MXU/SFU/VECTOR/DMA/PCIe/DOORBELL/INTC).
+  PCIE_DMA (slave 7) prdata tied off + live guard asserting psel_o[7] is
+  never asserted during the whole simulation.
+  Register table generated from sim/regmap.py offsets + Func Model access
+  semantics (sim/models/apb_peripheral.py factories, pinned by
+  sim/tests/test_apb_register_conformance.py:137-241):
+  - Phase 1: reset-value conformance for every rw/r/w1c register
+  - Phase 2: per-register access conformance:
+      rw  — write 0x3 then 0x6, readback must be 0x6 (overwrite, not OR)
+      r   — hostile write 0xFFFF_FFFF must leave the register unchanged
+      w   — write 0x42 stored (Func Model write-only semantics)
+      w1c — INTC.ACK seeded 0xFFFF, write 0x00F0 → 0xFF0F (bits 4..7 clear)
+  - Phase 3: out-of-range 0x4000_8000 → pslverr=1 (decoder error path)
+  - Phase 4: psel_o[7] (PCIE_DMA) never asserted — skip guard
+- sim/regression/Makefile — MODIFIED: new target run_apb_conformance
+  (VCS compile → simulate → grep "APB_CONFORMANCE: PASS").
+
+## Simulation excerpt (sim/regression/apb_conformance.log)
+
+=====================================================
+ apb_register_conformance_tb — Final Report
+=====================================================
+  Total : 168
+  Passed: 168
+  Failed: 0
+=====================================================
+APB_CONFORMANCE: PASS (7/7 peripheral slaves tested)
+=====================================================
+
+$finish at simulation time 8426000 ps
+CPU Time:      0.560 seconds

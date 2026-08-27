@@ -157,3 +157,41 @@ in-flight master's transaction untouched.
 - Grant counting via hierarchical probes: edge-detect ar_busy/aw_busy
   0→1 with a one-cycle-delayed shadow reg, then index the per-master counter
   with u_dut.ar_granted[0]/aw_granted[0] sampled in that same cycle.
+## 2026-08-27 10:05 — todo 6: APB register conformance testbench (RTL)
+
+### Outcome
+`rtl/tb/apb_register_conformance_tb.sv` + `sim/regression/Makefile` target
+`run_apb_conformance` created. `make -C sim/regression run_apb_conformance`
+on sz0001: exit 0, 168/168 checks, log contains
+`APB_CONFORMANCE: PASS (7/7 peripheral slaves tested)`. Evidence:
+`build/evidence/task-6-soc-rtl-verification-signoff.txt`.
+
+### Design decisions
+- DUT is the real `apb_decoder.v` RTL; the 7 register banks are conformance
+  models in the TB (a generic `apb_conformance_slave` parameterized by
+  SLAVE_ID). Reason: the full engine wrappers (mxu/sfu/vector_soc_wrapper,
+  dma_wrapper, pcie_ep_wrapper) instantiate heavy internals (mac_array,
+  axi_cdma, pcie_axi_master) and are covered by their own module-level TBs;
+  the conformance gate's job is decoder routing + access semantics against
+  the spec table, so the spec table (regmap.py offsets + FM factory access
+  codes) is the reference.
+- Expected table = sim/regmap.py offsets + access semantics from
+  sim/models/apb_peripheral.py factories (pinned by
+  sim/tests/test_apb_register_conformance.py): rw overwrite (0x3→0x6 must
+  read 0x6, never OR-accumulate), r hostile-write-unchanged, w store (FM
+  semantics — real RTL CMD registers read back 0 or auto-clear, noted as a
+  divergence), w1c seed 0xFFFF + write 0x00F0 → 0xFF0F.
+- PCIE_DMA (slave 7): prdata tied to 0 in the decoder instantiation plus a
+  live `psel_o[7]`-never-asserted counter — explicit skip, not just absence.
+- w1c pre-conditioning via a shared backdoor bus gated by
+  `bk_we && (SLAVE_ID == 6)` so seeding INTC.ACK cannot corrupt other
+  slaves' regs[3].
+
+### Divergences recorded (spec vs real RTL — NOT changed here)
+- Real doorbell.v implements all four pointer registers as RW, while the FM
+  factory declares HOST_TAIL=w / HOST_HEAD=r / NPU_TAIL=r.
+- Real engine wrappers' CMD registers are write-only with auto-clear (MXU
+  mmio_if reads 0x04 back as 0); the FM factory models 'w' as storable.
+- PCIe RTL register offsets (0x00..0x20, 9 regs) differ from the FM factory
+  table (10 regs at 0x00..0x24 with BAR0_BASE at 0x18). The TB tests the FM
+  table; the RTL register block is covered by run_pcie_test.
