@@ -637,3 +637,55 @@ evidence/npz paths.
   would clobber the verified PASS evidence. Resume reconstruction was validated
   numerically instead (bit-exact vs prior evidence; all restored results re-pass the
   ladder).
+## [2026-08-28 04:47] Todo 16 — Full SoC RTL regression on sz0001 (Wave 4 gate)
+
+### Outcome
+All three regression pillars PASS. Evidence:
+`build/evidence/task-16-soc-rtl-verification-signoff.txt`.
+
+- **Full FM-SOC regression** (`bash sim/regression/run_ibex_full_rtl.sh`):
+  **FM-SOC: 33/33 PASS (0 FAIL, 0 SKIP)**, FULL_RC=0, ~51 min wall
+  (03:07:33 → 03:58:53 CST). FM-SOC-10X passes post todo-11 fix.
+- **11 new acceptance targets**: 11/11 PASS, DRIVER_RC=0
+  (03:09:14 → 04:42:09 CST). Every acceptance marker verified in the
+  per-target log (not just make exit code).
+- **Expanded checkpoints**: NOT re-run — todo 14 evidence referenced
+  (8/8 PASS, LADDER=PASS).
+- Zero failures → nothing to triage.
+
+### Per-case dispatch reality (worth recording for the signoff claim)
+The 33-case "PASS" breaks down by runner dispatch (pre-existing convention):
+- 25 cases fully executed on the Ibex RTL path with boot assertions.
+- 6 cases (FM-SOC-014/015/016/021/022/023) pass as "superseded by
+  FM-SOC-027/032/10X" (fast early return, no boot assert).
+- 2 cases (FM-SOC-017/019) pass as not-applicable in Ibex RTL mode
+  (`IbexRunner.DIRECT_CASES`, direct APB/AXI host cases).
+The run script counts all three classes as PASS (the superseded/na messages
+are logged at INFO, filtered from the VCS log, so the script's SKIP grep
+never matches). Evidence file documents the breakdown explicitly.
+
+### Mechanics
+- Reused the prebuilt simv binaries (`build/ibex_full_rtl/simv_soc_ibex`,
+  `sim/regression/simv_soc_cocotb`, both compiled Aug 27); no RTL changed
+  since, so only the cocotb Python (loaded at runtime) was fresh.
+- Both runs launched concurrently under tmux on sz0001 (t16_full +
+  t16_indiv). MobileNetV3 segment 1 was CPU-starved by the full regression
+  until the latter finished, then caught up (~1h total).
+- Target wall times (individual): T01-T08 15-100s each; T09
+  FM-SOC-032-CORRUPT ~23 min; T10 MobileNetV3 ~64 min (single 100M-cycle
+  segment suffices — chain ends at 43.85M cycles); T11 ATTN-WEIGHT-CHAIN
+  86s. Both the long cases ran concurrently with the full regression
+  without any cross-run interference (distinct simv binaries + log paths).
+- tmux gotcha: `tmux new-session -d ... "bash script.sh > dir/file.log"`
+  dies instantly when the redirect target directory doesn't exist — mkdir
+  before redirect in the wrapper, and `bash -x` via capture-pane is the
+  quickest way to see the error.
+- ATTENTION: T11 reproduces todo 15 exactly (op07 cycles=30755,
+  min_cos=0.999984) and T10 confirms todo 13's N-padding fix endures in a
+  clean re-run — both acceptance markers bit-identical to their todo
+  evidence.
+
+### Note for todo 17
+The doc-sync todo can cite `FM-SOC: 33/33` + 11/11 new targets + 8/8
+checkpoints directly from the task-16 evidence file; the checkpoint
+coverage statement ("8-checkpoint subset signoff") is now backed end-to-end.

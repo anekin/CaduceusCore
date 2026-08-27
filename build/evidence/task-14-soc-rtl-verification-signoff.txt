@@ -1,0 +1,62 @@
+Task 14 - SoC RTL Verification Signoff: Ibex 36-layer 8-checkpoint segment run
+======================================================================
+Timestamp start : 2026-08-27T18:52:32Z
+Commit          : c506f8ec4de6740f5371c23b840e22d39cf22b2c
+Command         : bash sim/regression/run_ibex_segment_run.sh
+Driver host     : sz0001 (Ibex SoC VCS + firmware)
+Model           : /home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf
+Dims            : {"hidden_size": 2048, "intermediate_size": 11008, "q_dim": 2048, "kv_dim": 256, "num_heads": 16, "num_kv_heads": 2, "heads": 16, "kv_heads": 2, "head_dim": 128, "num_hidden_layers": 36, "rope_theta": 1000000.0, "rms_eps": 1e-06}
+engine=ibex
+ibex_executed=L0,L4,L5,L9,L10,L14,L15,L19,L20,L24,L25,L29,L30,L34,L35
+checkpoints=L0,L5,L10,L15,L20,L25,L30,L35
+chain_restart=true
+chain_restart_state_source=ibex_dram
+segment_input_source=spike_npz
+commands_dispatched=510
+elapsed_s=47241.5
+
+Segment sessions (same VCS session, DRAM state passed between consecutive layers):
+L0: input=embedding (prompt token), checkpoint=L0
+L4->L5: segment input=L3 from spike npz, chain_restart_state_source=ibex_dram
+L9->L10: segment input=L8 from spike npz, chain_restart_state_source=ibex_dram
+L14->L15: segment input=L13 from spike npz, chain_restart_state_source=ibex_dram
+L19->L20: segment input=L18 from spike npz, chain_restart_state_source=ibex_dram
+L24->L25: segment input=L23 from spike npz, chain_restart_state_source=ibex_dram
+L29->L30: segment input=L28 from spike npz, chain_restart_state_source=ibex_dram
+L34->L35: segment input=L33 from spike npz, chain_restart_state_source=ibex_dram
+
+Per-checkpoint tolerance ladder (Ibex hidden state vs Func Model golden):
+  ladder: L0-19 >= 0.999, L20-29 >= 0.998, L30-35 >= 0.997
+layer=0 engine=ibex cos_sim=1.000000 threshold=0.999 status=PASS chain_restart_state_source=ibex_dram
+layer=5 engine=ibex cos_sim=0.999999 threshold=0.999 status=PASS chain_restart_state_source=ibex_dram
+layer=10 engine=ibex cos_sim=1.000000 threshold=0.999 status=PASS chain_restart_state_source=ibex_dram
+layer=15 engine=ibex cos_sim=1.000000 threshold=0.999 status=PASS chain_restart_state_source=ibex_dram
+layer=20 engine=ibex cos_sim=1.000000 threshold=0.998 status=PASS chain_restart_state_source=ibex_dram
+layer=25 engine=ibex cos_sim=1.000000 threshold=0.998 status=PASS chain_restart_state_source=ibex_dram
+layer=30 engine=ibex cos_sim=0.998220 threshold=0.997 status=PASS chain_restart_state_source=ibex_dram
+layer=35 engine=ibex cos_sim=0.999251 threshold=0.997 status=PASS chain_restart_state_source=ibex_dram
+
+Hardware l_out transparency (Ibex DRAM VRESID int32 vs golden, non-gating):
+layer=0 hw_l_out_cos_sim=0.997371 max_abs=1.4883e-01
+layer=5 hw_l_out_cos_sim=0.999999 max_abs=1.3506e+00
+layer=10 hw_l_out_cos_sim=1.000000 max_abs=1.5552e-01
+layer=15 hw_l_out_cos_sim=1.000000 max_abs=7.2021e-02
+layer=20 hw_l_out_cos_sim=1.000000 max_abs=1.0516e-01
+layer=25 hw_l_out_cos_sim=0.999999 max_abs=1.6824e+00
+layer=30 hw_l_out_cos_sim=0.991274 max_abs=5.4740e+01
+layer=35 hw_l_out_cos_sim=0.998528 max_abs=5.3716e+00
+
+Cross-check: Ibex pre-layer output vs Spike same-layer output (non-gating):
+layer=4 ibex_vs_spike_cos_sim=1.000000 threshold=0.999 status=PASS
+layer=9 ibex_vs_spike_cos_sim=1.000000 threshold=0.999 status=PASS
+layer=14 ibex_vs_spike_cos_sim=1.000000 threshold=0.999 status=PASS
+layer=19 ibex_vs_spike_cos_sim=1.000000 threshold=0.999 status=PASS
+layer=24 ibex_vs_spike_cos_sim=1.000000 threshold=0.998 status=PASS
+layer=29 ibex_vs_spike_cos_sim=1.000000 threshold=0.998 status=PASS
+layer=34 ibex_vs_spike_cos_sim=1.000000 threshold=0.997 status=PASS
+
+Summary:
+  checkpoints_passed=8/8
+  LADDER=PASS
+  Overall: PASS
+  Timestamp end: 2026-08-27T18:52:32Z
