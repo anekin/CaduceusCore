@@ -417,7 +417,7 @@ run_w17_intermediate_compare: $(SOC_SIMV_COCOTB)
         run_e2e_vresid run_e2e_vmul run_e2e_sfu_rmsnorm_post \
         run_e2e_intc_irq run_e2e_status_prop run_e2e_abort run_e2e_multi_irq \
         run_e2e_dma_load run_e2e_dma_concurrent run_e2e_crossbar_stress \
-        run_e2e_pcie_tlp_chain \
+        run_e2e_pcie_tlp_chain run_e2e_ibex_shared_addr \
         run_vector_vconv_f16_i32 run_w17_intermediate_compare
 
 run_e2e_rmsnorm: $(SOC_SIMV_COCOTB)
@@ -804,6 +804,27 @@ run_e2e_pcie_tlp_chain: $(SOC_SIMV_COCOTB)
 	@grep -q "test_e2e_pcie_tlp_chain.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_pcie_tlp_chain.log && \
 		echo "$(GREEN)E2E_PCIE_TLP_CHAIN: PASS$(NC)" || \
 		(echo "$(RED)E2E_PCIE_TLP_CHAIN: FAIL$(NC)" && exit 1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# run_e2e_ibex_shared_addr — Cocotb Ibex shared address space coherence
+# ═══════════════════════════════════════════════════════════════════════════
+
+IBEX_SHARED_ADDR_TESTCASE ?= test_e2e_ibex_shared_address_space
+
+run_e2e_ibex_shared_addr: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_IBEX_SHARED_ADDR] Running cocotb test $(IBEX_SHARED_ADDR_TESTCASE)...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=$(IBEX_SHARED_ADDR_TESTCASE) \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/ibex_shared_addr_results.xml \
+		./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/ibex_shared_addr.log
+	@grep -q "SHARED_ADDR: PASS" $(REPO_ROOT)/sim/regression/ibex_shared_addr.log && \
+		echo "$(GREEN)E2E_IBEX_SHARED_ADDR: PASS$(NC)" || \
+		(echo "$(RED)E2E_IBEX_SHARED_ADDR: FAIL$(NC)" && exit 1)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

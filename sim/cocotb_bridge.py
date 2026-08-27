@@ -801,6 +801,203 @@ class CocotbBridge:
 
         return bytes(out)
 
+    # ── Ibex AXI Master Port Helpers (forced VPI, crossbar master 0) ──────
+
+    async def _ibex_axi_write32(self, addr: int, data: int) -> int:
+        """Inject a single-beat 32-bit AXI4 write on the Ibex master port.
+
+        The wrapper's AXI channels are driven by an internal FSM that sits
+        in ST_IDLE while firmware sleeps in WFI, so the testbench can Force
+        the channel regs (``req_addr`` / ``axi_awvalid`` / ...) to inject a
+        transaction that travels Ibex → axi_adapter → crossbar master 0 →
+        SRAM/DRAM — exactly the path real Ibex loads/stores take.
+
+        Returns:
+            The write response ``bresp`` (0=OKAY, 2=SLVERR, 3=DECERR).
+        """
+        if self.dut is None:
+            raise RuntimeError("Ibex AXI write needs a DUT handle")
+        from cocotb.handle import Force, Release
+
+        ib = self.dut.u_dut.u_ibex_wrapper
+        forced = [ib.req_addr, ib.req_wdata, ib.req_be, ib.axi_awvalid,
+                  ib.axi_wvalid, ib.axi_bready]
+        try:
+            ib.req_addr.value = Force(addr)
+            ib.req_wdata.value = Force(data & 0xFFFFFFFF)
+            ib.req_be.value = Force(0xF)
+            ib.axi_awvalid.value = Force(1)
+            ib.axi_wvalid.value = Force(1)
+            ib.axi_bready.value = Force(1)
+
+            aw_done = False
+            w_done = False
+            bresp = None
+            for _ in range(20000):
+                await RisingEdge(self.dut.clk)
+                if not aw_done and int(ib.m_axi_awready.value):
+                    ib.axi_awvalid.value = Force(0)
+                    aw_done = True
+                if not w_done and int(ib.m_axi_wready.value):
+                    ib.axi_wvalid.value = Force(0)
+                    w_done = True
+                if bresp is None and int(ib.m_axi_bvalid.value):
+                    bresp = int(ib.m_axi_bresp.value)
+                if aw_done and w_done and bresp is not None:
+                    break
+            if not (aw_done and w_done and bresp is not None):
+                raise TimeoutError(
+                    f"Ibex AXI write 0x{addr:08X} stalled "
+                    f"(aw_done={aw_done}, w_done={w_done}, bresp={bresp})"
+                )
+            logger.debug(f"Ibex AXI WR 0x{addr:08X} <- 0x{data:08X} bresp={bresp}")
+            return bresp
+        finally:
+            for h in forced:
+                try:
+                    h.value = Release()
+                except Exception:
+                    pass
+
+    async def _ibex_axi_read32(self, addr: int) -> Tuple[int, int]:
+        """Inject a single-beat 32-bit AXI4 read on the Ibex master port.
+
+        Returns:
+            ``(rdata, rresp)``; rresp 0=OKAY, 2=SLVERR, 3=DECERR.
+        """
+        if self.dut is None:
+            raise RuntimeError("Ibex AXI read needs a DUT handle")
+        from cocotb.handle import Force, Release
+
+        ib = self.dut.u_dut.u_ibex_wrapper
+        forced = [ib.req_addr, ib.axi_arvalid, ib.axi_rready]
+        try:
+            ib.req_addr.value = Force(addr)
+            ib.axi_arvalid.value = Force(1)
+            ib.axi_rready.value = Force(1)
+
+            ar_done = False
+            rdata = None
+            rresp = None
+            for _ in range(20000):
+                await RisingEdge(self.dut.clk)
+                if not ar_done and int(ib.m_axi_arready.value):
+                    ib.axi_arvalid.value = Force(0)
+                    ar_done = True
+                if rdata is None and int(ib.m_axi_rvalid.value):
+                    rdata = int(ib.m_axi_rdata.value)
+                    rresp = int(ib.m_axi_rresp.value)
+                if ar_done and rdata is not None:
+                    break
+            if not (ar_done and rdata is not None):
+                raise TimeoutError(
+                    f"Ibex AXI read 0x{addr:08X} stalled "
+                    f"(ar_done={ar_done}, rdata={rdata})"
+                )
+            logger.debug(f"Ibex AXI RD 0x{addr:08X} -> 0x{rdata:08X} rresp={rresp}")
+            return rdata, rresp
+        finally:
+            for h in forced:
+                try:
+                    h.value = Release()
+                except Exception:
+                    pass
+
+    async def _ibex_axi_write(self, addr: int, data: bytes):
+        """Write bytes via repeated 32-bit single-beat writes on the Ibex port.
+
+        Raises:
+            RuntimeError: If any beat returns a non-OKAY write response.
+        """
+        if addr % 4 or len(data) % 4:
+            raise ValueError("Ibex AXI write requires 4-byte-aligned addr/len")
+        for off in range(0, len(data), 4):
+            word = int.from_bytes(data[off:off + 4], "little")
+            bresp = await self._ibex_axi_write32(addr + off, word)
+            if bresp != 0:
+                raise RuntimeError(
+                    f"Ibex AXI write 0x{addr + off:08X} got bresp={bresp} (want OKAY)"
+                )
+
+    # ── Ibex DMEM / Boot ROM Backdoor Helpers ──────────────────────────────
+
+    async def _intc_reg_force(self, reg: str, value: int):
+        """Force-write an INTC register directly, bypassing the APB bus.
+
+        The wrapper's ``apb_*`` nets must never be VPI-driven while the
+        firmware is live: VCS keeps the deposited value on the net and
+        corrupts the firmware's own APB transactions (phantom X reads →
+        phantom dispatch).  INTC setup therefore uses the same pattern as
+        :meth:`_doorbell_backdoor_write` and Forces the register file itself.
+        """
+        if self.dut is None:
+            raise RuntimeError("INTC force write needs a DUT handle")
+        reg_map = {"enable": "enable_reg", "threshold": "threshold_reg"}
+        reg_name = reg_map.get(reg)
+        if reg_name is None:
+            raise ValueError(f"unsupported INTC reg {reg!r}")
+        from cocotb.handle import Force, Release
+        handle = getattr(self.dut.u_dut.u_intc, reg_name)
+        handle.value = Release()
+        await self.wait_cycles(1)
+        handle.value = Force(value)
+        await self.wait_cycles(1)
+        logger.debug(f"INTC force WR: {reg_name} <- 0x{value:08X}")
+
+    async def _ibex_dmem_write32(self, addr: int, value: int) -> int:
+        """Force-write one word of Ibex's internal DMEM and verify persistence.
+
+        DMEM (0x0001_0000..0x0001_FFFF) lives inside ibex_wrapper and is not
+        reachable through the crossbar.  Plain VPI assignment does not persist
+        for VCS memory arrays, so the write is applied as a VPI Force and
+        persistence is verified by releasing the force and reading the cell
+        back (the cell is never rewritten by idle RTL).
+
+        Returns:
+            The cell readback value after releasing the force.
+        """
+        off = addr - 0x0001_0000
+        if off < 0 or off >= 0x10000 or off % 4:
+            raise ValueError(f"0x{addr:08X} not a word-aligned DMEM address")
+        if self.dut is None:
+            raise RuntimeError("DMEM backdoor write needs a DUT handle")
+        from cocotb.handle import Force, Release
+
+        word = self.dut.u_dut.u_ibex_wrapper.dmem[off >> 2]
+        word.value = Force(value)
+        await self.wait_cycles(2)
+        word.value = Release()
+        await self.wait_cycles(2)
+        word_str = str(word.value)
+        if 'x' in word_str.lower():
+            word_str = word_str.replace('x', '0').replace('X', '0')
+        readback = int(word_str, 2)
+        logger.debug(f"DMEM backdoor WR 0x{addr:08X} <- 0x{value:08X} "
+                     f"readback=0x{readback:08X}")
+        return readback
+
+    async def _boot_rom_snapshot(self) -> bytes:
+        """Backdoor snapshot of the whole 64KB boot ROM (X bits treated as 0).
+
+        Reads all 16384 words of ``u_ibex_wrapper.u_boot_rom.mem`` via VPI.
+        Words beyond the ``$readmemh`` image are uninitialized (X) and are
+        normalized to 0 so before/after comparisons are stable.
+        """
+        if self.dut is None:
+            raise RuntimeError("Boot ROM snapshot needs a DUT handle")
+        mem = self.dut.u_dut.u_ibex_wrapper.u_boot_rom.mem
+        out = bytearray()
+        x_words = 0
+        for i in range(16384):
+            word_str = str(mem[i].value)
+            if 'x' in word_str.lower():
+                word_str = word_str.replace('x', '0').replace('X', '0')
+                x_words += 1
+            out.extend(int(word_str, 2).to_bytes(4, "little"))
+        if x_words:
+            logger.debug(f"boot ROM snapshot: {x_words}/16384 words X (normalized to 0)")
+        return bytes(out)
+
     async def _send_pcie_tlp(self, tlp):
         """Send a PCIe TLP through the cocotbext-pcie host model."""
         # Connect to DUT's PCIe TLP RX/TX ports via VPI
@@ -4773,6 +4970,148 @@ if COCOTB_AVAILABLE:
         logger.info(f"[{label}] out-of-BAR access → UR from host model")
 
         logger.warning(f"[{label}] PASS")
+
+    @cocotb.test()
+    async def test_e2e_ibex_shared_address_space(dut):
+        """E2E Ibex↔MXU shared address space coherence (SOC-16 RTL).
+
+        Covers FM guard sim/tests/test_ibex_shared_address_space.py at the
+        RTL level:
+          1. Ibex (crossbar master 0) writes a pattern to SRAM 0x2000_1000;
+             the MXU engine reads the same address via the crossbar and the
+             computed result matches the golden derived from the pattern.
+          2. Reverse: MXU stores its output at SRAM 0x2000_1000; Ibex reads
+             the same address via the crossbar and sees the MXU-written data.
+          3. DMEM isolation: a write to DMEM 0x0001_0100 never appears in
+             SRAM/DRAM, and the DMEM region is not crossbar-routable
+             (non-OKAY response), matching the FM guard.
+          4. Boot ROM isolation: SRAM/DRAM writes leave the boot ROM image
+             byte-identical (backdoor snapshots before/after).
+        """
+        label = "test_e2e_ibex_shared_address_space"
+        bridge = await _setup_single_op_test(dut)
+
+        # ── Boot ROM snapshot (before any SRAM/DRAM writes) ─────────────
+        rom_before = await bridge._boot_rom_snapshot()
+        logger.warning(f"[{label}] boot ROM snapshot taken ({len(rom_before)} B)")
+
+        # Silence the firmware: INTC ENABLE=0 keeps cpu_irq low so Ibex
+        # sleeps in WFI and never contends for the APB/AXI buses while the
+        # testbench drives transactions onto them.  Forced on the register
+        # (not via _apb_write) so the firmware's own APB traffic — should it
+        # wake — is never corrupted by VPI-deposited net values.
+        await bridge._intc_reg_force("enable", 0x0000_0000)
+        await bridge.wait_cycles(100)
+
+        # ══════════════════════════════════════════════════════════════
+        # Check 1: Ibex writes SRAM 0x2000_1000 → MXU reads the same bytes
+        # ══════════════════════════════════════════════════════════════
+        M = K = N = 64
+        w_addr = SRAM_BASE + 0x0000
+        i_addr = SRAM_BASE + 0x1000          # 0x2000_1000
+        o_addr = SRAM_BASE + 0x6000
+
+        instr1, wt_packed, act_packed = _make_mxu_small_instr(
+            M, K, N, w_addr, i_addr, o_addr, f"{label}_mxu_read"
+        )
+        await bridge.preload_sram(w_addr, wt_packed)
+
+        # Ibex writes the activation pattern through crossbar master 0.
+        await bridge._ibex_axi_write(i_addr, act_packed)
+        got = await bridge._sram_backdoor_read(i_addr, len(act_packed))
+        assert bytes(got) == act_packed, (
+            f"{label}: Ibex AXI write to SRAM 0x{i_addr:08X} not bit-exact"
+        )
+        logger.warning(
+            f"[{label}] Ibex SRAM write landed bit-exact ({len(act_packed)} B)"
+        )
+
+        # MXU reads the same address through the crossbar and computes.
+        ok, cycles = await bridge.run_step(instr1)
+        assert ok, f"{label}: MXU read of 0x{i_addr:08X} produced wrong result"
+        logger.warning(f"[SHARED_ADDR] IBEX->MXU PASS ({cycles} cycles)")
+
+        # ══════════════════════════════════════════════════════════════
+        # Check 2: MXU writes SRAM 0x2000_1000 → Ibex reads the same bytes
+        # ══════════════════════════════════════════════════════════════
+        i_addr2 = SRAM_BASE + 0x8000
+        instr2, wt_packed2, act_packed2 = _make_mxu_small_instr(
+            M, K, N, w_addr, i_addr2, i_addr, f"{label}_mxu_write"
+        )
+        await bridge.preload_sram(w_addr, wt_packed2)
+        await bridge.preload_sram(i_addr2, act_packed2)
+
+        ok, cycles = await bridge.run_step(instr2)
+        assert ok, f"{label}: MXU write to 0x{i_addr:08X} golden mismatch"
+        logger.warning(f"[{label}] MXU store-out to SRAM 0x{i_addr:08X} verified")
+
+        golden_out = instr2.golden_output
+        for wi in range(4):
+            exp = int.from_bytes(golden_out[wi * 4:wi * 4 + 4], "little")
+            rdata, rresp = await bridge._ibex_axi_read32(i_addr + wi * 4)
+            assert rresp == 0, (
+                f"{label}: Ibex read of 0x{i_addr + wi * 4:08X} rresp={rresp}"
+            )
+            assert rdata == exp, (
+                f"{label}: Ibex read word {wi}: got 0x{rdata:08X}, want 0x{exp:08X}"
+            )
+        logger.warning(f"[SHARED_ADDR] MXU->IBEX PASS ({cycles} cycles)")
+
+        # ══════════════════════════════════════════════════════════════
+        # Check 3 (isolation part): DMEM write does not affect SRAM/DRAM
+        # ══════════════════════════════════════════════════════════════
+        sram_probe = SRAM_BASE + 0x0100
+        dram_probe = DRAM_BASE + 0x0100
+        await bridge._sram_backdoor_write(sram_probe, struct.pack("<I", 0x12345678))
+        await bridge._dram_backdoor_write(dram_probe, struct.pack("<I", 0x9ABCDEF0))
+
+        # Force a write into Ibex's internal DMEM at 0x0001_0100.
+        readback = await bridge._ibex_dmem_write32(0x0001_0100, 0xFEEDFACE)
+        assert readback == 0xFEEDFACE, (
+            f"{label}: DMEM backdoor write did not persist "
+            f"(readback 0x{readback:08X})"
+        )
+        sram_val = bytes(await bridge._sram_backdoor_read(sram_probe, 4))
+        dram_val = bytes(await bridge._dram_backdoor_read(dram_probe, 4))
+        assert sram_val == struct.pack("<I", 0x12345678), (
+            f"{label}: DMEM write corrupted SRAM (got {sram_val.hex()})"
+        )
+        assert dram_val == struct.pack("<I", 0x9ABCDEF0), (
+            f"{label}: DMEM write corrupted DRAM"
+        )
+        logger.warning(f"[{label}] DMEM 0x0001_0100 write did not leak into SRAM/DRAM")
+
+        # DMEM region is not crossbar-routable: a forced Ibex AXI read of
+        # 0x0001_0100 must return a non-OKAY response (crossbar DECERR),
+        # mirroring the FM guard's crossbar.read(MASTER_IBEX) ValueError.
+        _rdata, rresp = await bridge._ibex_axi_read32(0x0001_0100)
+        assert rresp != 0, (
+            f"{label}: crossbar routed a DMEM read (rresp={rresp}, want non-OKAY)"
+        )
+        logger.warning(f"[{label}] DMEM address not crossbar-visible (rresp={rresp})")
+        logger.warning("[SHARED_ADDR] DMEM_ISOLATION: PASS")
+
+        # ══════════════════════════════════════════════════════════════
+        # Check 4: boot ROM isolation
+        # ══════════════════════════════════════════════════════════════
+        # One more shared-memory write through the Ibex port (DRAM slave)
+        # so a DRAM write is also covered before the final ROM snapshot.
+        dram_probe2 = DRAM_BASE + 0x0200
+        bresp = await bridge._ibex_axi_write32(dram_probe2, 0x0BADF00D)
+        assert bresp == 0, f"{label}: Ibex DRAM write bresp={bresp} (want OKAY)"
+        dr = bytes(await bridge._dram_backdoor_read(dram_probe2, 4))
+        assert dr == struct.pack("<I", 0x0BADF00D), (
+            f"{label}: Ibex DRAM write did not land"
+        )
+        logger.warning(f"[{label}] Ibex DRAM write via crossbar verified")
+
+        rom_after = await bridge._boot_rom_snapshot()
+        assert rom_after == rom_before, (
+            f"{label}: boot ROM contents changed after SRAM/DRAM writes"
+        )
+        logger.warning("[SHARED_ADDR] BOOT_ROM_ISOLATION: PASS")
+
+        logger.warning("SHARED_ADDR: PASS")
 
     @cocotb.test()
     async def test_qwen25_3b_3layer(dut):
