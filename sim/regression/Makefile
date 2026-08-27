@@ -418,7 +418,7 @@ run_w17_intermediate_compare: $(SOC_SIMV_COCOTB)
         run_e2e_intc_irq run_e2e_status_prop run_e2e_abort run_e2e_multi_irq \
         run_e2e_dma_load run_e2e_dma_concurrent run_e2e_crossbar_stress \
         run_e2e_pcie_tlp_chain run_e2e_ibex_shared_addr \
-        run_e2e_irq_stall \
+        run_e2e_irq_stall run_e2e_mobilenetv3 \
         run_vector_vconv_f16_i32 run_w17_intermediate_compare
 
 run_e2e_rmsnorm: $(SOC_SIMV_COCOTB)
@@ -846,6 +846,43 @@ run_e2e_irq_stall: $(SOC_SIMV_COCOTB)
 	@grep -q "IRQ_MASK: PASS" $(REPO_ROOT)/sim/regression/irq_dispatch_stall.log && \
 		echo "$(GREEN)E2E_IRQ_STALL: PASS$(NC)" || \
 		(echo "$(RED)E2E_IRQ_STALL: FAIL$(NC)" && exit 1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# run_e2e_mobilenetv3 — Cocotb MobileNetV3-Small CV chain through the SoC
+# (per-layer cos_sim>=0.99 for >=50/52 convs; DRAM staging < 8 MB)
+# The chain exceeds tb_soc's 100M-cycle timeout, so the test runs in
+# checkpointed segments (MOBILENETV3_BUDGET_CYCLES per session) until the
+# final session logs MOBILENETV3: PASS.
+# ═══════════════════════════════════════════════════════════════════════════
+
+MOBILENETV3_TESTCASE ?= test_e2e_mobilenetv3_chain
+MOBILENETV3_CHECKPOINT := $(REPO_ROOT)/build/mobilenetv3_checkpoint.npz
+MOBILENETV3_SEGMENTS ?= 8
+
+run_e2e_mobilenetv3: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_MOBILENETV3] Running cocotb test $(MOBILENETV3_TESTCASE) (checkpointed segments)...$(NC)"
+	@rm -f $(MOBILENETV3_CHECKPOINT) $(REPO_ROOT)/sim/regression/mobilenetv3_chain.log
+	@ok=0; i=1; while [ $$i -le $(MOBILENETV3_SEGMENTS) ]; do \
+		echo "$(YELLOW)[E2E_MOBILENETV3] segment $$i/$(MOBILENETV3_SEGMENTS)$(NC)"; \
+		cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=$(MOBILENETV3_TESTCASE) \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/mobilenetv3_seg$$i_results.xml \
+		MOBILENETV3_CHECKPOINT=$(MOBILENETV3_CHECKPOINT) \
+		./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee -a $(REPO_ROOT)/sim/regression/mobilenetv3_chain.log; \
+		if grep -q "MOBILENETV3: PASS" $(REPO_ROOT)/sim/regression/mobilenetv3_chain.log; then ok=1; break; fi; \
+		if ! grep -q "MOBILENETV3: SEGMENT COMPLETE" $(REPO_ROOT)/sim/regression/mobilenetv3_chain.log; then break; fi; \
+		i=$$((i+1)); \
+	done; \
+	if [ "$$ok" = "1" ]; then \
+		echo "$(GREEN)E2E_MOBILENETV3: PASS$(NC)"; \
+	else \
+		echo "$(RED)E2E_MOBILENETV3: FAIL$(NC)"; exit 1; \
+	fi
 
 
 # ═══════════════════════════════════════════════════════════════════════════

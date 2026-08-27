@@ -92,6 +92,11 @@ except ImportError:
     GoldenMXU = None
     GoldenVector = None
 
+try:
+    from quantize import quantize_int4_per_block
+except ImportError:
+    quantize_int4_per_block = None
+
 logger = logging.getLogger("cocotb_bridge")
 
 
@@ -6152,9 +6157,634 @@ if COCOTB_AVAILABLE:
     async def test_op48_vmul_focused(dut):
         await _run_vmul_focused(dut, 48)
 
+
+    # ── MobileNetV3 CV chain (todo 13 of soc-rtl-verification-signoff) ─────
+
+    async def _mobilenetv3_rtl_dispatch_mmul(bridge, state, sub,
+                                             budget_check=None) -> tuple:
+        """Dispatch one chunked GEMM subproblem through the RTL doorbell ring.
+
+        Chunks M to <= 64 rows (broadcast activation layout) and reuses the
+        DRAM staging buffers per chunk.  The ring head must stay below 1019:
+        firmware write_completion() aliases doorbell COMPLETION_STATUS[1019..]
+        into the INTC APB window (todo 10 learning).
+
+        budget_check: optional async callable returning True when the session
+        sim-cycle budget is exhausted; raises _MobilenetV3SegmentEnd.
+        """
+        M, K, N = sub["M"], sub["K"], sub["N"]
+        act = sub["act_i8"]
+        w_packed = sub["w_packed"]
+        scales = sub["scales"]
+        out = np.zeros((M, N), dtype=np.float32)
+        scales64 = _mobilenetv3_expand_scales(scales, K)
+        ncmds = 0
+
+        for m0 in range(0, M, MOBILENETV3_M_CHUNK):
+            if budget_check is not None and await budget_check():
+                raise _MobilenetV3SegmentEnd()
+            m1 = min(m0 + MOBILENETV3_M_CHUNK, M)
+            m_chunk = m1 - m0
+            if state["head"] >= MOBILENETV3_MAX_CMDS:
+                raise RuntimeError(
+                    "ring head would reach the COMPLETION_STATUS spill range "
+                    "(>=1019); split into waves (not expected for MobileNetV3)")
+            packed_act = pack_int8_activation_tile_major(
+                act[m0:m1].tobytes(), m_chunk, K)
+            w_tiled = pack_int4_tile_major(w_packed.tobytes(), K, N)
+            s_tiled = _mobilenetv3_pack_scale_slots(scales64, N)
+
+            if m0 == 0:
+                await bridge._dram_backdoor_write(
+                    MOBILENETV3_WGT_ADDR, w_tiled)
+                await bridge._dram_backdoor_write(
+                    MOBILENETV3_SCALE_ADDR, s_tiled)
+            await bridge._dram_backdoor_write(MOBILENETV3_ACT_ADDR, packed_act)
+            desc = _mobilenetv3_mmul_descriptor(
+                MOBILENETV3_ACT_ADDR, MOBILENETV3_WGT_ADDR,
+                MOBILENETV3_OUT_ADDR, MOBILENETV3_SCALE_ADDR,
+                len(packed_act), len(w_tiled), m_chunk * N * 4, len(s_tiled),
+                m_chunk, K, N)
+            await bridge._dram_backdoor_write(MOBILENETV3_DESC_ADDR, desc)
+
+            head = state["head"]
+            slot = head % 1024
+            await bridge._dram_backdoor_write(
+                MOBILENETV3_RING_ADDR + slot * 32,
+                _mobilenetv3_ring_entry(MOBILENETV3_DESC_ADDR))
+            await bridge._doorbell_backdoor_write(
+                DOORBELL_BASE + 0x00, head + 1)
+
+            expected = head + 1
+            h = -1
+            # Per-command budget: the firmware drains MMUL output one row per
+            # dma_copy (npu_firmware.c:550-554), so a 64-row 2-tile chunk costs
+            # ~500k cycles; allow 2M with margin.
+            for _ in range(20000):
+                h = await bridge._doorbell_backdoor_read(
+                    DOORBELL_BASE + 0x04)
+                if h == expected:
+                    break
+                await bridge.wait_cycles(100)
+            if h != expected:
+                raise RuntimeError(
+                    f"MMUL head={head} stalled: NPU_HEAD={h}, want {expected}")
+
+            st_bytes = bytes(await bridge._dram_backdoor_read(
+                MOBILENETV3_COMPL_ADDR + slot * 32, 8))
+            _cmd_id, status = struct.unpack("<II", st_bytes)
+            if status != 0:
+                raise RuntimeError(
+                    f"MMUL head={head} firmware status={status}")
+
+            out[m0:m1] = np.frombuffer(
+                bytes(await bridge._dram_backdoor_read(
+                    MOBILENETV3_OUT_ADDR, m_chunk * N * 4)),
+                dtype=np.float32).reshape(m_chunk, N)
+            state["head"] = expected
+            ncmds += 1
+
+        return out, ncmds
+
+    @cocotb.test()
+    async def test_e2e_mobilenetv3_chain(dut):
+        """MobileNetV3-Small full CV chain through the RTL SoC doorbell ring.
+
+        Every Conv / depthwise_conv / Gemm layer runs as chunked MMUL commands
+        (M<=64, N<=128) through the on-chip Ibex firmware; all other operators
+        are replayed in numpy.  Per-layer output is compared against
+        ``GoldenMXU.matmul_int4_per_block`` (cos_sim >= 0.99 required for at
+        least 50 of the 52 conv layers).  DRAM staging stays < 8 MB
+        (BUG-RTL-SOC-002 / WVR-SOC-RTL-002).
+
+        The full chain needs more sim cycles than tb_soc's 100M-cycle timeout,
+        so the run is checkpointed: each session stops before
+        MOBILENETV3_BUDGET_CYCLES, saves the live tensors to
+        MOBILENETV3_CHECKPOINT and logs ``MOBILENETV3: SEGMENT COMPLETE``; the
+        Makefile re-invokes the test until the final session logs
+        ``MOBILENETV3: PASS``.
+        """
+        label = "test_e2e_mobilenetv3_chain"
+        if not NUMPY_AVAILABLE or GoldenMXU is None or quantize_int4_per_block is None:
+            raise RuntimeError(
+                f"[{label}] numpy/GoldenMXU/quantize unavailable in cocotb env")
+        npz_path = os.environ.get(
+            "MOBILENETV3_GOLDEN_NPZ", MOBILENETV3_GOLDEN_NPZ)
+        if not os.path.isfile(npz_path):
+            raise FileNotFoundError(
+                f"[{label}] golden npz missing: {npz_path} "
+                f"(run scripts/gen_mobilenetv3_rtl_golden.py)")
+        assert MOBILENETV3_STAGING_END <= DRAM_BASE + 8 * 1024 * 1024, (
+            "MobileNetV3 staging layout exceeds the 8 MB DRAM window")
+
+        checkpoint_path = os.environ.get(
+            "MOBILENETV3_CHECKPOINT",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "..", "build", "mobilenetv3_checkpoint.npz"))
+        budget = int(os.environ.get(
+            "MOBILENETV3_BUDGET_CYCLES", "85000000"))
+
+        node_start = 0
+        prev_records = []
+        if (os.environ.get("MOBILENETV3_RESTART", "0") == "0"
+                and os.path.isfile(checkpoint_path)):
+            tensors_ckpt, prev_records, node_start = (
+                _mobilenetv3_load_checkpoint(checkpoint_path))
+            logger.warning(
+                f"[{label}] resuming from checkpoint at node {node_start} "
+                f"({len(prev_records)} layers already recorded)")
+        else:
+            tensors_ckpt = None
+
+        bridge = await _setup_single_op_test(dut)
+        state = {"head": 0}
+
+        async def budget_check():
+            return int(bridge.dut.sim_cycle.value) >= budget
+
+        t0 = time.time()
+        records, meta = await _mobilenetv3_run_chain(
+            lambda sub: _mobilenetv3_rtl_dispatch_mmul(
+                bridge, state, sub, budget_check),
+            npz_path,
+            node_start=node_start,
+            checkpoint_path=checkpoint_path,
+            prev_records=prev_records,
+            tensors_init=tensors_ckpt)
+        elapsed = time.time() - t0
+
+        assert state["head"] == meta["total_cmds"], (
+            f"ring bookkeeping diverged: head={state['head']}, "
+            f"cmds={meta['total_cmds']}")
+        assert meta["total_cmds"] < MOBILENETV3_MAX_CMDS
+
+        if meta.get("resume_needed"):
+            logger.warning(
+                f"[{label}] MOBILENETV3: SEGMENT COMPLETE "
+                f"(session cmds={meta['total_cmds']}, "
+                f"layers recorded={len(records)}, "
+                f"resume node={meta['next_node']}, "
+                f"sim_cycle={int(bridge.dut.sim_cycle.value)}, "
+                f"wall={elapsed:.1f}s)")
+            return
+
+        conv_records = [r for r in records if r["op"] == "Conv"]
+        gemm_records = [r for r in records if r["op"] == "Gemm"]
+        assert len(conv_records) == 52, (
+            f"expected 52 conv layers, got {len(conv_records)}")
+        assert len(gemm_records) == 2, (
+            f"expected 2 classifier Gemms, got {len(gemm_records)}")
+
+        logger.warning(
+            f"[{label}] chain wall={elapsed:.1f}s "
+            f"ring_cmds={meta['total_cmds']} layers={len(records)} "
+            f"DRAM_staging_end=0x{MOBILENETV3_STAGING_END:08X}")
+        logger.warning(f"[{label}] {'layer':40s} {'M':>7s} {'K':>6s} "
+                       f"{'N':>6s} {'cmds':>5s} {'cos':>10s}")
+        for r in records:
+            logger.warning(
+                f"[{label}] {r['name']:40s} {r['M']:7d} {r['K']:6d} "
+                f"{r['N']:6d} {r['cmds']:5d} {r['cos']:10.6f}")
+        for r in gemm_records:
+            assert r["cos"] >= 0.99, (
+                f"classifier gemm {r['name']} cos={r['cos']:.6f} < 0.99")
+
+        strict = [r for r in conv_records if r["cos"] >= 0.99]
+        degenerate = []
+        mismatch = []
+        for r in conv_records:
+            if r["cos"] >= 0.99:
+                continue
+            if r["cos"] == 0.0 and np.array_equal(r["out"], r["golden_out"]):
+                degenerate.append(r)
+            else:
+                mismatch.append(r)
+        for r in mismatch:
+            logger.error(
+                f"[{label}] LAYER-MISS {r['name']}: cos={r['cos']:.6f}")
+        for r in degenerate:
+            logger.warning(
+                f"[{label}] degenerate zero-vs-zero layer {r['name']} "
+                f"(bit-exact, mirrors test_mobilenetv3_fm_chain.py)")
+        logger.warning(
+            f"[{label}] conv layers with cos>=0.99: {len(strict)}/52 "
+            f"(degenerate bit-exact: {len(degenerate)}, "
+            f"mismatch: {len(mismatch)})")
+        assert len(mismatch) == 0, (
+            f"{len(mismatch)} conv layers mismatch golden")
+        assert len(strict) >= 50, (
+            f"need >=50/52 conv layers with cos>=0.99, got {len(strict)}/52")
+
+        logits = records[-1]["out"].flatten()
+        assert np.std(logits) > 0.0 and np.all(np.isfinite(logits)), (
+            "final logits degenerate")
+        logger.warning(
+            f"[{label}] final logits std={np.std(logits):.4f} "
+            f"argmax={int(np.argmax(logits))}")
+        logger.warning(
+            f"[{label}] MOBILENETV3: PASS (convs {len(strict)}/52 cos>=0.99, "
+            f"{len(degenerate)} degenerate bit-exact, "
+            f"ring_cmds={meta['total_cmds']}, DRAM staging < 8MB)")
+
+
 else:
     # Non-cocotb: provide stubs that fail gracefully
     logger.info("cocotb not available - test functions are stubs")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MobileNetV3 CV chain E2E (todo 13 of soc-rtl-verification-signoff)
+# ═══════════════════════════════════════════════════════════════════════════
+# test_e2e_mobilenetv3_chain replays the MobileNetV3-Small graph in numpy and
+# sends every Conv / depthwise_conv / Gemm layer through the RTL SoC as MMUL
+# doorbell-ring commands.  The model topology and quantized weights come from
+# sim/cv/traces/mobilenetv3_rtl_golden.npz (scripts/gen_mobilenetv3_rtl_golden.py),
+# because the cocotb Python env on sz0001 has numpy but NOT onnx.
+#
+# Per chunk M <= 64 (broadcast activation layout) and N <= 128 (tile_mmul
+# M>1/N>128 output-stride clobber workaround, see
+# sim/tests/test_mobilenetv3_fm_chain.py:374-386).  The RTL firmware tiles in
+# 64x64 slots (npu_firmware.c:490-555), so weights are packed with
+# pack_int4_tile_major (2048B slots) and block scales into 256B slots indexed
+# (n_tile, k_block) — NOT the FuncModel's 128-wide slot layout.
+
+MOBILENETV3_GOLDEN_NPZ = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "cv", "traces", "mobilenetv3_rtl_golden.npz")
+
+MOBILENETV3_GROUP_SIZE = 128
+MOBILENETV3_M_CHUNK = 64
+MOBILENETV3_N_CHUNK = 128
+MOBILENETV3_DW_N_CHUNK = 64
+
+MOBILENETV3_RING_ADDR = DRAM_BASE
+MOBILENETV3_COMPL_ADDR = DRAM_BASE + 0x0000_8000
+MOBILENETV3_ACT_ADDR = DRAM_BASE + 0x0001_0000
+MOBILENETV3_WGT_ADDR = DRAM_BASE + 0x0009_0000
+MOBILENETV3_SCALE_ADDR = DRAM_BASE + 0x0019_0000
+MOBILENETV3_OUT_ADDR = DRAM_BASE + 0x001B_0000
+MOBILENETV3_DESC_ADDR = DRAM_BASE + 0x001D_0000
+MOBILENETV3_STAGING_END = MOBILENETV3_DESC_ADDR + 0x1000
+MOBILENETV3_MAX_CMDS = 1019
+
+
+def _mobilenetv3_cos_sim(a, b) -> float:
+    a_f = a.astype(np.float64).flatten()
+    b_f = b.astype(np.float64).flatten()
+    dot = float(np.dot(a_f, b_f))
+    na = float(np.linalg.norm(a_f))
+    nb = float(np.linalg.norm(b_f))
+    if na < 1e-12 or nb < 1e-12:
+        return 0.0
+    return dot / (na * nb)
+
+
+def _mobilenetv3_quantize_act_int8(x):
+    x_f32 = np.asarray(x, dtype=np.float32)
+    max_abs = float(np.max(np.abs(x_f32)))
+    if max_abs < 1e-12:
+        return x_f32.astype(np.int8), 1.0
+    scale = max_abs / 127.0
+    q = np.clip(np.round(x_f32 / scale), -128, 127).astype(np.int8)
+    return q, scale
+
+
+def _mobilenetv3_im2col(x, kH, kW, stride, pad_h, pad_w, c0, c1):
+    """im2col for channels [c0, c1) of x (1, C, H, W) -> (M, (c1-c0)*kH*kW)."""
+    _, _, H, W = x.shape
+    H_out = (H + 2 * pad_h - kH) // stride + 1
+    W_out = (W + 2 * pad_w - kW) // stride + 1
+    xp = np.pad(x, ((0, 0), (0, 0), (pad_h, pad_h), (pad_w, pad_w)),
+                mode="constant")
+    nc = c1 - c0
+    band = kH * kW
+    cols = np.zeros((H_out * W_out, nc * band), dtype=np.float32)
+    for c in range(c0, c1):
+        col0 = (c - c0) * band
+        for i in range(H_out):
+            for j in range(W_out):
+                patch = xp[0, c, i * stride:i * stride + kH,
+                          j * stride:j * stride + kW]
+                cols[i * W_out + j, col0:col0 + band] = patch.reshape(-1)
+    return cols
+
+
+def _mobilenetv3_expand_scales(scales, K):
+    """(G, N) group-128 block scales -> (ceil(K/64), N) per-64-block rows."""
+    num_blocks = (K + 63) // 64
+    G = scales.shape[0]
+    N = scales.shape[1]
+    out = np.empty((num_blocks, N), dtype=np.float32)
+    for kb in range(num_blocks):
+        out[kb] = scales[min(kb // 2, G - 1)]
+    return out
+
+
+def _mobilenetv3_pack_scale_slots(scales64, n_chunk) -> bytes:
+    """(ceil(K/64), N) scales -> 256B slots at (n_tile * num_blocks + k_block)."""
+    num_blocks = scales64.shape[0]
+    num_tiles = (n_chunk + 63) // 64
+    out = bytearray()
+    for nt in range(num_tiles):
+        for kb in range(num_blocks):
+            slot = bytearray(256)
+            w = min(64, n_chunk - nt * 64)
+            slot[:w * 4] = scales64[kb, nt * 64:nt * 64 + w].astype(
+                np.float32).tobytes()
+            out += slot
+    return bytes(out)
+
+
+def _mobilenetv3_mmul_descriptor(input_addr, weight_addr, output_addr,
+                                 scale_addr, input_size, weight_size,
+                                 output_size, scale_size, M, K, N) -> bytes:
+    return struct.pack("<15I",
+                       input_addr, weight_addr, output_addr, scale_addr,
+                       0, 0, 0, 0,
+                       input_size, weight_size, output_size, scale_size,
+                       M, K, N)
+
+
+def _mobilenetv3_ring_entry(desc_addr) -> bytes:
+    return struct.pack("<8I", 0, desc_addr, 0, 0, 0, 0, 0, 0)
+
+
+class _MobilenetV3SegmentEnd(Exception):
+    """Raised by the dispatch when the per-session sim-cycle budget is hit."""
+
+
+def _mobilenetv3_compact_records(records) -> list:
+    return [{"name": r["name"], "op": r["op"], "cmds": r["cmds"],
+             "M": r["M"], "K": r["K"], "N": r["N"], "cos": r["cos"]}
+            for r in records]
+
+
+def _mobilenetv3_save_checkpoint(path, tensors, records, next_node):
+    keys = np.empty(len(tensors), dtype=object)
+    vals = np.empty(len(tensors), dtype=object)
+    for i, (k, v) in enumerate(tensors.items()):
+        keys[i] = k
+        vals[i] = np.asarray(v)
+    np.savez(
+        path,
+        ck_keys=keys,
+        ck_vals=vals,
+        ck_records=np.array(
+            json.dumps(_mobilenetv3_compact_records(records)), dtype=object),
+        ck_next=np.asarray([int(next_node)], dtype=np.int64),
+        allow_pickle=True,
+    )
+
+
+def _mobilenetv3_load_checkpoint(path) -> tuple:
+    data = np.load(path, allow_pickle=True)
+    tensors = dict(zip(data["ck_keys"].tolist(), data["ck_vals"].tolist()))
+    records = json.loads(str(data["ck_records"]))
+    next_node = int(data["ck_next"][0])
+    return tensors, records, next_node
+
+
+async def _mobilenetv3_run_chain(mmul_dispatch, npz_path=None,
+                                 node_start=0, node_end=None,
+                                 checkpoint_path=None,
+                                 prev_records=None,
+                                 tensors_init=None) -> tuple:
+    """Replay the MobileNetV3-Small graph; GEMM layers go through mmul_dispatch.
+
+    Args:
+        mmul_dispatch: async callable(sub) -> (out_f32 (M,N), cmd_count) for one
+            chunked GEMM subproblem dict {act_i8, w_packed, scales, M, K, N}.
+            May raise ``_MobilenetV3SegmentEnd`` to stop the session at a clean
+            layer boundary.
+        npz_path: path to the golden NPZ (default: repo traces dir).
+        node_start: first graph-node index to execute (resume point).
+        node_end: exclusive end; None = run to graph end.
+        checkpoint_path: when set, checkpoint is saved on segment end.
+        prev_records: compact records from earlier sessions (merged in front).
+        tensors_init: live-tensor dict from a checkpoint (resume) or None.
+
+    Returns:
+        (records, meta): records has one entry per executed MMUL layer;
+        meta = {total_cmds, resume_needed, next_node}.
+    """
+    data = np.load(npz_path or MOBILENETV3_GOLDEN_NPZ, allow_pickle=True)
+    nodes = json.loads(str(data["graph"]))
+    node_to_mmul = {int(ni): mi for mi, ni in enumerate(data["mmul_index"])}
+    w_packed_arr = data["mmul_w_packed"]
+    w_scales_arr = data["mmul_w_scales"]
+    w_compact_arr = data["mmul_w_compact"]
+    bias_arr = data["mmul_bias"]
+    mmul_k = data["mmul_k"]
+    mmul_n = data["mmul_n"]
+    input_name = str(data["input_name"])
+    seed = int(data["seed"][0])
+    extra_init = json.loads(str(data["extra_init"])) if "extra_init" in data.files else {}
+
+    def _init_value(tname):
+        spec = extra_init[tname]
+        return np.asarray(spec["data"], dtype=np.dtype(spec["dtype"])).reshape(
+            tuple(spec["shape"]))
+
+    mxu = GoldenMXU()
+    rng = np.random.RandomState(seed)
+    tensors = (dict(tensors_init) if tensors_init is not None
+               else {input_name: rng.randn(1, 3, 224, 224).astype(np.float32)})
+    records = list(prev_records or [])
+    total_cmds = 0
+
+    stop_node = node_end if node_end is not None else len(nodes)
+    for idx in range(node_start, stop_node):
+        node = nodes[idx]
+        op = node["op"]
+        name = node["name"]
+        out_name = node["outputs"][0]
+        params = node.get("params", {})
+
+        if op in ("Conv", "Gemm"):
+            mi = node_to_mmul.get(idx)
+            if mi is None:
+                raise RuntimeError(f"MMUL data not found for node {name}")
+            w_packed = w_packed_arr[mi]
+            w_scales = w_scales_arr[mi]
+            w_compact = w_compact_arr[mi]
+            bias = bias_arr[mi]
+            K = int(mmul_k[mi])
+            N = int(mmul_n[mi])
+
+            is_dw = bool(params.get("is_dw"))
+
+            if op == "Gemm":
+                x = tensors[node["inputs"][0]]
+                a_in = x.reshape(1, -1)
+                H_out = W_out = 1
+            else:
+                x = tensors[node["inputs"][0]]
+                kH = params["kH"]
+                kW = params["kW"]
+                stride = params["stride"]
+                pad_h = params["pad_h"]
+                pad_w = params["pad_w"]
+                _, _, H, W = x.shape
+                H_out = (H + 2 * pad_h - kH) // stride + 1
+                W_out = (W + 2 * pad_w - kW) // stride + 1
+                a_in = None
+
+            out = np.zeros((H_out * W_out, N), dtype=np.float32)
+            golden_out = np.zeros((H_out * W_out, N), dtype=np.float32)
+            layer_cmds = 0
+
+            _chunk_size = MOBILENETV3_DW_N_CHUNK if is_dw else MOBILENETV3_N_CHUNK
+            for n0 in range(0, N, _chunk_size):
+                n1 = min(n0 + _chunk_size, N)
+                n_chunk = n1 - n0
+                # ── N-pad to a multiple of 16 ─────────────────────────────
+                # The mxu_soc_wrapper store-out W channel can only write rows
+                # whose byte offset is 64-aligned (row_bytes = N*4): for tile
+                # widths N ≡ 8 (mod 16) the odd rows lose the middle 32 bytes
+                # of every 64-byte beat, and the firmware's drain DMA to DRAM
+                # (desc.N*4 stride ≡ 32 mod 64 for odd rows) lands -32-byte
+                # shifted because dram_model ignores WSTRB.  Padding N to a
+                # multiple of 16 makes every store-out row and every DRAM
+                # destination 64-aligned; the padded columns are zero on both
+                # the RTL and the golden path, so the real columns compare
+                # unchanged.  (Empirically: N≡8 mod 16 fails, N≡0 mod 16 is
+                # bit-exact, see task-13 evidence.)
+                pad = (-n_chunk) % 16
+                n_chunk_pad = n_chunk + pad
+
+                if op == "Gemm":
+                    cols = a_in
+                    w_full = mxu.unpack_int4(np.frombuffer(
+                        w_packed.tobytes(), dtype=np.uint8)
+                    )[:K * N].reshape(K, N)[:, n0:n1]
+                    sub_scales = w_scales[:, n0:n1]
+                    sub_k = K
+                elif is_dw:
+                    cols = _mobilenetv3_im2col(
+                        x, kH, kW, stride, pad_h, pad_w, n0, n1)
+                    band = kH * kW
+                    nc_eff = n_chunk_pad
+                    w_diag = np.zeros(
+                        (band * nc_eff, nc_eff), dtype=np.float32)
+                    for c in range(n_chunk):
+                        w_diag[c * band:(c + 1) * band, c] = w_compact[n0 + c]
+                    sub_w, sub_scales = quantize_int4_per_block(
+                        w_diag, MOBILENETV3_GROUP_SIZE)[:2]
+                    sub_k = nc_eff * band
+                    w_full = None
+                    if pad:
+                        # the padded output channels have no activation data
+                        cols = np.concatenate(
+                            [cols, np.zeros((cols.shape[0], pad * band),
+                                            dtype=np.float32)], axis=1)
+                else:
+                    cols = _mobilenetv3_im2col(
+                        x, kH, kW, stride, pad_h, pad_w, 0, params["C_in"])
+                    w_full = mxu.unpack_int4(np.frombuffer(
+                        w_packed.tobytes(), dtype=np.uint8)
+                    )[:K * N].reshape(K, N)[:, n0:n1]
+                    sub_scales = w_scales[:, n0:n1]
+                    sub_k = K
+
+                if pad:
+                    if not is_dw:
+                        w_pad = np.zeros((sub_k, n_chunk_pad), dtype=np.int8)
+                        w_pad[:, :n_chunk] = w_full
+                        sub_w = mxu.pack_int4(
+                            w_pad.flatten().astype(np.int8))
+                        sub_scales = np.pad(
+                            sub_scales, ((0, 0), (0, pad))).astype(np.float32)
+                elif not is_dw:
+                    sub_w = mxu.pack_int4(w_full.flatten().astype(np.int8))
+                a_i8, a_s = _mobilenetv3_quantize_act_int8(cols)
+
+                sub = {
+                    "act_i8": a_i8, "w_packed": sub_w,
+                    "scales": (sub_scales * a_s).astype(np.float32),
+                    "M": H_out * W_out, "K": sub_k, "N": n_chunk_pad,
+                }
+                golden = mxu.matmul_int4_per_block(
+                    sub["act_i8"], sub["w_packed"], sub["scales"],
+                    sub["M"], sub["K"], sub["N"],
+                    group_size=MOBILENETV3_GROUP_SIZE)
+                try:
+                    rtl_chunk, cmds = await mmul_dispatch(sub)
+                except _MobilenetV3SegmentEnd:
+                    if checkpoint_path:
+                        _mobilenetv3_save_checkpoint(
+                            checkpoint_path, tensors, records, idx)
+                    return records, {
+                        "total_cmds": total_cmds,
+                        "resume_needed": True, "next_node": idx,
+                    }
+                out[:, n0:n1] = rtl_chunk[:, :n_chunk]
+                golden_out[:, n0:n1] = golden[:, :n_chunk]
+                layer_cmds += cmds
+
+            total_cmds += layer_cmds
+            cos = _mobilenetv3_cos_sim(out, golden_out)
+            records.append({
+                "name": name, "op": op, "cmds": layer_cmds,
+                "M": H_out * W_out,
+                "K": K * N if is_dw else K,
+                "N": N, "cos": cos, "out": out, "golden_out": golden_out,
+            })
+            if params.get("bias") and bias is not None:
+                out = out + bias.reshape(1, -1)
+            if op == "Gemm":
+                tensors[out_name] = out.reshape(1, -1)
+            else:
+                tensors[out_name] = out.reshape(
+                    1, H_out, W_out, N).transpose(0, 3, 1, 2)
+        elif op == "Relu":
+            tensors[out_name] = np.maximum(tensors[node["inputs"][0]], 0)
+        elif op == "HardSwish":
+            v = tensors[node["inputs"][0]]
+            tensors[out_name] = v * np.clip(v / 6.0 + 0.5, 0.0, 1.0)
+        elif op == "HardSigmoid":
+            v = tensors[node["inputs"][0]]
+            tensors[out_name] = np.clip(v / 6.0 + 0.5, 0.0, 1.0)
+        elif op == "Add":
+            tensors[out_name] = (tensors[node["inputs"][0]]
+                                 + tensors[node["inputs"][1]])
+        elif op == "Mul":
+            tensors[out_name] = (tensors[node["inputs"][0]]
+                                 * tensors[node["inputs"][1]])
+        elif op == "ReduceMean":
+            axes = tuple(params["axes"])
+            tensors[out_name] = np.mean(
+                tensors[node["inputs"][0]], axis=axes,
+                keepdims=params["keepdims"])
+        elif op == "Reshape":
+            v = tensors[node["inputs"][0]]
+            target = params["out_shape"]
+            dims = tuple(d if d > 0 else v.shape[i]
+                         for i, d in enumerate(target))
+            tensors[out_name] = v.reshape(dims)
+        elif op == "Squeeze":
+            v = tensors[node["inputs"][0]]
+            tensors[out_name] = v.reshape(
+                tuple(d for d in v.shape if d != 1))
+        elif op == "Shape":
+            shp = tensors[node["inputs"][0]].shape
+            tensors[out_name] = np.array(
+                shp[params["start"]:params["end"]], dtype=np.int64)
+        elif op == "Concat":
+            parts = [tensors[i] if i in tensors else _init_value(i)
+                     for i in node["inputs"]]
+            tensors[out_name] = np.concatenate(parts, axis=params["axis"])
+        else:
+            raise NotImplementedError(
+                f"operator '{op}' (node {name}) not handled by the chain")
+
+    meta = {"total_cmds": total_cmds, "resume_needed": False}
+    if node_end is not None and node_end < len(nodes):
+        if checkpoint_path:
+            _mobilenetv3_save_checkpoint(
+                checkpoint_path, tensors, records, node_end)
+        meta["resume_needed"] = True
+        meta["next_node"] = node_end
+    return records, meta
 
 
 # ═══════════════════════════════════════════════════════════════════════════
