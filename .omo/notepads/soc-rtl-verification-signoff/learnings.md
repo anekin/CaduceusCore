@@ -244,3 +244,59 @@ drain in 2.5M cycles (~89 s real). Evidence:
 If a future chain ever exceeds 1024 commands in one session, reuse the wave
 driver pattern; keep the INTC-clobbering heads (1019+) inside the FINAL wave
 or restore INTC.ENABLE afterwards.
+## 2026-08-27 10:48 — Todo 7: Ibex shared address space coherence cocotb test
+
+### Outcome
+`test_e2e_ibex_shared_address_space` in `sim/cocotb_bridge.py` + Makefile target
+`run_e2e_ibex_shared_addr` (commit `203a99d`). `make -C sim/regression
+run_e2e_ibex_shared_addr` on sz0001: exit 0, log contains `SHARED_ADDR: PASS`,
+0 Ibex assertion failures. Evidence:
+`build/evidence/task-7-soc-rtl-verification-signoff.txt`.
+
+### Design
+- **Ibex↔MXU coherence via real crossbar traffic, not memory aliasing.** The
+  Ibex port (crossbar master 0) is driven by VPI `Force` on the wrapper's
+  channel REGS (`req_addr`/`axi_awvalid`/`axi_wvalid`/`req_wdata`/`req_be`/
+  `axi_bready`, and `axi_arvalid`/`axi_rready` for reads) — the FSM sits in
+  ST_IDLE while firmware sleeps in WFI so the force is uncontended. MXU side
+  reuses `_make_mxu_small_instr`+`run_step` with i_addr/o_addr pinned to
+  0x2000_1000: preload reads and store-out writes ARE the MXU crossbar path.
+- **DMEM write** at the exact FM-guard address (0x0001_0100) via `Force` on
+  `u_ibex_wrapper.dmem[0x40]`, with release+readback persistence self-check
+  (plain VPI writes to VCS memory arrays do not persist — force does).
+- **DECERR negative**: forced Ibex AXI read of 0x0001_0100 returns rresp=3
+  through the axi_adapter (DMEM not crossbar-visible) — matches the FM guard's
+  `crossbar.read(MASTER_IBEX)` ValueError.
+- **Boot ROM snapshot**: all 16384 words of `u_boot_rom.mem` via VPI reads,
+  X→0 normalized; before/after byte-identical.
+
+### Key findings (pre-existing, NOT fixed — no RTL changes)
+1. **VPI deposits on `u_ibex_wrapper.apb_*` corrupt live-firmware APB traffic.**
+   VCS keeps the deposited value on the net; the firmware's own APB read of
+   DOORBELL.HOST_TAIL then returns garbage → phantom command dispatch → X reads
+   from the uninitialized DRAM ring (0x8000_0000) → Ibex assertion cascade
+   (IbexDataRPayloadX → IbexBranchDecisionValid → "Illegal instruction at
+   PC 0x92c"). Reproduced with a trap-only diag (29 assertions, no TB forces
+   at all on AXI/DMEM). Workaround: `_intc_reg_force()` writes INTC registers
+   via register Force (doorbell-backdoor pattern); the firmware must never
+   take APB after the TB has used `_apb_write`/`_apb_read`. IbexRunner already
+   knew this (`rtl_soc_runner.py:3331-3348`).
+2. **Firmware never takes traps: startup.S writes mstatus=0x880 → MPIE=1 but
+   MIE=0.** Ibex's external interrupt is never actually serviced; the firmware
+   is a WFI-wake + polling design (wake → re-read HOST_TAIL → poll). So a
+   "real trap-handler DMEM write" check is unconstructable at RTL — what v1 of
+   this test measured as "trap stack writes" was actually the phantom
+   dispatch's `read_cmd_entry` filling its stack struct. The DMEM check now
+   uses the direct Force write = exact RTL analog of the FM guard's
+   `emu._mem_write`.
+3. Sentinel collision pitfall: seeding SRAM/DRAM isolation sentinels at
+   SRAM_BASE+0x100 BEFORE engine setup lets `preload_sram(weights at
+   0x2000_0000..0x800)` clobber the SRAM sentinel. Seed sentinels after all
+   engine traffic.
+
+### Lesson
+Force is the only reliable VPI write in this VCS+cocotb environment for regs
+and memory words alike (deposits vanish on memories; deposits on nets poison
+the firmware bus). When the test needs a live firmware, all TB register setup
+must go through Force-based helpers — never through `_apb_write` on the
+wrapper's nets.

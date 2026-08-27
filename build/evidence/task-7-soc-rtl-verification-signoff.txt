@@ -1,0 +1,92 @@
+================================================================================
+Task 7 — soc-rtl-verification-signoff: Ibex shared address space coherence cocotb test
+================================================================================
+Timestamp : 2026-08-27 10:47 UTC+8 (run executed on sz0001 / 192.168.0.11)
+Commit    : 203a99d test(soc): add Ibex shared address space coherence cocotb test
+Host      : sz0001 (EDA server, VCS V-2023.12-SP2, prebuilt simv_soc_cocotb)
+Status    : PASS
+Exit code : 0
+
+Command (acceptance):
+  ssh zhengs@192.168.0.11 \
+    "source /NAS/Tools/methodology/modules/init/bash && \
+     module load vcs/vcs_2023.12sp2 && \
+     cd /home/prj/zhengs/caduceuscore/CaduceusCore && \
+     source sim/regression/run_env.sh && \
+     make -C sim/regression run_e2e_ibex_shared_addr; echo EXIT_CODE=$?"
+
+Result: EXIT_CODE=0; make prints "E2E_IBEX_SHARED_ADDR: PASS".
+Log: sim/regression/ibex_shared_addr.log — contains "SHARED_ADDR: PASS"
+     0 Ibex assertion failures ("ASSERT FAILED" count = 0).
+
+## Deliverables
+
+- sim/cocotb_bridge.py — MODIFIED: new test test_e2e_ibex_shared_address_space
+  plus helpers _ibex_axi_write32/_ibex_axi_read32/_ibex_axi_write (single-beat
+  32-bit AXI4 on the Ibex master port via VPI Force on the wrapper channel
+  regs, crossbar master 0), _ibex_dmem_write32 (Force-write + persistence
+  self-check of the internal DMEM array), _boot_rom_snapshot (64KB backdoor
+  snapshot, X-normalized), _intc_reg_force (register-level INTC write that
+  avoids VPI-depositing the wrapper's APB nets).
+- sim/regression/Makefile — MODIFIED: new target run_e2e_ibex_shared_addr
+  (TESTCASE overridable via IBEX_SHARED_ADDR_TESTCASE), greps "SHARED_ADDR: PASS".
+
+## What the test verifies (RTL, FM guard sim/tests/test_ibex_shared_address_space.py)
+
+1. Ibex writes 4KB activation pattern to SRAM 0x2000_1000 via crossbar master 0
+   (1024 forced single-beat AXI4 writes through axi_adapter → crossbar → sram_ctrl);
+   backdoor readback bit-exact; MXU engine then reads the same address through
+   the crossbar (mxu_soc_wrapper preload) and the MMUL golden compare passes.
+   Log: "[SHARED_ADDR] IBEX->MXU PASS (854 cycles)".
+2. Reverse: MXU stores its 64x64 INT32 output at SRAM 0x2000_1000 (store-out
+   via crossbar master 1); golden compare passes; Ibex reads 4 words of the same
+   address through crossbar master 0 (forced AXI4 reads) and sees the
+   MXU-written values bit-exact. Log: "[SHARED_ADDR] MXU->IBEX PASS (854 cycles)".
+3. DMEM isolation: Force-write of 0xFEEDFACE into ibex_wrapper's internal DMEM
+   at 0x0001_0100 (persistence verified by release+readback); SRAM sentinel at
+   0x2000_0100 (0x12345678) and DRAM sentinel at 0x8000_0100 (0x9ABCDEF0) remain
+   unchanged; a forced Ibex AXI read of 0x0001_0100 returns rresp=3 (crossbar
+   DECERR — DMEM is not crossbar-routable), mirroring the FM guard's
+   crossbar.read(MASTER_IBEX) ValueError.
+   Log: "[SHARED_ADDR] DMEM_ISOLATION: PASS".
+4. Boot ROM isolation: full 64KB backdoor snapshot of
+   u_ibex_wrapper.u_boot_rom.mem before and after all SRAM/DRAM writes
+   (Ibex AXI SRAM/DRAM writes, MXU store-out, host preloads) — byte-identical.
+   Log: "[SHARED_ADDR] BOOT_ROM_ISOLATION: PASS".
+
+## Root-cause findings (documented, NOT fixed — out of scope; no RTL changes)
+
+- VCS keeps VPI-deposited values on u_ibex_wrapper's apb_* nets; any
+  _apb_write/_apb_read while firmware is live corrupts the firmware's own
+  APB transactions (its HOST_TAIL read returns garbage → phantom command
+  dispatch → X reads from the uninitialized DRAM ring → Ibex assertion
+  cascade: IbexDataRPayloadX/IbexBranchDecisionValid/IbexIdInstrKnown,
+  "Illegal instruction at PC 0x92c"). Reproduced in isolation (29
+  assertions in a trap-only diag run with zero TB forces on AXI/DMEM).
+  The test therefore silences firmware via _intc_reg_force (register Force,
+  doorbell-backdoor pattern) and never lets firmware take APB after TB APB
+  activity. The IbexRunner (rtl_soc_runner.py:3331-3348) already documents
+  the same constraint.
+- firmware startup.S writes mstatus=0x880 → MPIE=1 but MIE=0, so Ibex never
+  actually takes external interrupts; the firmware is a WFI-wake + polling
+  design (wake → re-read HOST_TAIL → poll). A "real trap-handler DMEM write"
+  check is therefore not constructible at RTL; the DMEM write check uses the
+  Force-based direct DMEM write, which is the exact RTL analog of the FM
+  guard's emu._mem_write().
+
+## Log tail (acceptance run)
+
+  8378.50ns WARNING [test_e2e_ibex_shared_address_space] Ibex SRAM write landed bit-exact (4096 B)
+  9369.50ns WARNING [SHARED_ADDR] IBEX->MXU PASS (854 cycles)
+ 10744.50ns WARNING [test_e2e_ibex_shared_address_space] MXU store-out to SRAM 0x20001000 verified
+ 10764.50ns WARNING [SHARED_ADDR] MXU->IBEX PASS (854 cycles)
+ 10776.50ns WARNING [test_e2e_ibex_shared_address_space] DMEM 0x0001_0100 write did not leak into SRAM/DRAM
+ 10780.50ns WARNING [test_e2e_ibex_shared_address_space] DMEM address not crossbar-visible (rresp=3)
+ 10780.50ns WARNING [SHARED_ADDR] DMEM_ISOLATION: PASS
+ 10834.50ns WARNING [test_e2e_ibex_shared_address_space] Ibex DRAM write via crossbar verified
+ 10834.50ns WARNING [SHARED_ADDR] BOOT_ROM_ISOLATION: PASS
+ 10834.50ns WARNING SHARED_ADDR: PASS
+
+## Status
+
+Status: PASS — make exits 0 and the log contains SHARED_ADDR: PASS.
