@@ -35,3 +35,5 @@ test -f docs/waivers/WVR-SOC-RTL-002.md && grep -c 'BUG-RTL-SOC-002' docs/waiver
 
 PASS — waiver file created with bug ID + constraint + impact + temp/permanent
 classification + evidence references; sign-off blank. Notepad learning appended.
+
+Status: PASS

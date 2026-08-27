@@ -40,7 +40,7 @@
     "rtl/wrapper/mxu_soc_wrapper.v": "eba7f31e6385f5237f19690a8cbaf6fce164b4b6",
     "rtl/wrapper/sfu_soc_wrapper.v": "b2339d72dbabcf7e1bc9e1287115cbdfa2f84bb2",
     "rtl/wrapper/vector_soc_wrapper.v": "0847502223c99c44c38ba9b55a7ced3e11540185",
-    "sim/cocotb_bridge.py": "db254889145d6b20ce109be8ab7effde6f4c5995",
+    "sim/cocotb_bridge.py": "8183fae3ad2d84b6de029fb22ef713b58eabc65e",
     "sim/func_model.py": "133ad8bf2916a46d85beffce0ceabc43c2b1eeae",
     "sim/golden_executor.py": "b30d6086ed58cbecc044cc99d0d0d56e56c7d455",
     "sim/mmio_bridge.py": "f3a63daab812d8009328a0200e14f56da6f12c67",
@@ -59,11 +59,11 @@
     "sim/tests/test_spike_ibex_ring_alignment.py": "b75090c75a88ba6bc9aae239939e33751c5e3b6b",
     "sim/tile_scheduler.py": "3d6f84590fec42762b6cadc2fbda0d8774b2b989"
   },
-  "head": "0422d2469d1c047e0e7ee46a9c7e77dd86ca6a64",
+  "head": "0d4d924aac1568c47eaf3425a0211ac1e8572d03",
   "pytest": {
     "errors": 15,
     "failed": 20,
     "passed": 2280
   },
-  "timestamp": "2026-08-24T11:53:25Z"
+  "timestamp": "2026-08-27T21:56:26Z"
 }

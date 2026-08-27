@@ -40,3 +40,5 @@ grep -A5 'BUG-RTL-SOC-007'  docs/bugs/bugs-soc-rtl.md | grep -E 'PERF-13|cycles>
 ## Status
 
 PASS — all 5 acceptance criteria satisfied. No bug entry deleted. BUG-RTL-SOC-007 kept Open.
+
+Status: PASS

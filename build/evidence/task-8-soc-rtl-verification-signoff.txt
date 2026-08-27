@@ -1,0 +1,99 @@
+================================================================================
+Task 8 — soc-rtl-verification-signoff: IRQ-driven dispatch stall cocotb test
+================================================================================
+Timestamp : 2026-08-27 11:36 UTC+8 (run executed on sz0001 / 192.168.0.11)
+Commit    : (pending) test(soc): add IRQ-driven dispatch stall cocotb test
+Host      : sz0001 (EDA server, VCS V-2023.12-SP2, prebuilt simv_soc_cocotb)
+Status    : PASS
+Exit code : 0
+
+Command (acceptance):
+  ssh zhengs@192.168.0.11 \
+    "source /NAS/Tools/methodology/modules/init/bash && \
+     module load vcs/vcs_2023.12sp2 && \
+     cd /home/prj/zhengs/caduceuscore/CaduceusCore && \
+     source sim/regression/run_env.sh && \
+     make -C sim/regression run_e2e_irq_stall; echo EXIT_CODE=\$?"
+
+Result: EXIT_CODE=0; make prints "E2E_IRQ_STALL: PASS".
+Log: sim/regression/irq_dispatch_stall.log — contains "IRQ_MASK: PASS" AND
+     "IRQ_STALL: PASS" (WFI stall IS constructable at RTL, so the test keeps
+     the name test_e2e_irq_dispatch_stall and asserts both markers).
+     cocotb summary: TESTS=1 PASS=1 FAIL=0 SKIP=0.
+
+## Deliverables
+
+- sim/cocotb_bridge.py — MODIFIED: new test test_e2e_irq_dispatch_stall
+  (placed after test_e2e_ibex_shared_address_space). Reuses the todo 7/4
+  helper set: _setup_single_op_test, _intc_reg_force (register Force),
+  _doorbell_backdoor_write/_doorbell_backdoor_read (register Force /
+  hierarchical read), _dram_backdoor_write/_dram_backdoor_read, wait_cycles.
+- sim/regression/Makefile — MODIFIED: new target run_e2e_irq_stall
+  (+ .PHONY entry), greps "IRQ_MASK: PASS". Also fixed a latent bug in the
+  shared helpers _doorbell_backdoor_write/_doorbell_backdoor_read: they
+  referenced Addr.DOORBELL + DOORBELL.* symbols from the optional regmap
+  import, which is unbound under the Makefile's cocotb environment
+  (cwd = REPO_ROOT/.., so regmap's `import gen.npu_abi` fails silently) —
+  NameError on first use. The helpers now use the unconditionally defined
+  module constants DOORBELL_BASE + 0x00/0x04/0x08/0x0C (identical values).
+
+## What the test verifies (RTL, FM guard sim/tests/test_irq_driven_dispatch.py:377-420)
+
+Setup: firmware boots to WFI (HOST_TAIL == NPU_HEAD == 0); INTC registers are
+forced via _intc_reg_force so the live firmware's APB traffic is never
+corrupted. THRESHOLD=1 (RTL reset default), ENABLE=0.
+
+1. IRQ mask (FM guard failure injection via the REAL ENABLE gate, not a
+   monkeypatched notify): 3 DMA_COPY commands (opcode 9, 32 B cmd_entry_t at
+   ring 0x8000_0000, 60 B dma_copy_desc_t, 256 B per copy) are queued in DRAM
+   and the doorbell is rung (HOST_TAIL=3 via register Force). The doorbell
+   host IRQ is LEVEL (doorbell.v: doorbell_irq = HOST_TAIL != NPU_HEAD,
+   INTC source bit5), so PENDING latches 0x20 while the firmware still
+   sleeps in WFI — yet cpu_irq stays 0. Non-vacuous: PENDING[5]=1 is asserted
+   before checking cpu_irq.
+   Log: "[test_e2e_irq_dispatch_stall] IRQ_MASK: PASS (PENDING=0x20,
+   ENABLE=0, THRESHOLD=1, cpu_irq=0)".
+2. WFI-path stall: the firmware idles in WFI (npu_firmware.c:664) with
+   mstatus.MIE=0 (startup.S), so it is a WFI-wake + polling design; with
+   cpu_irq masked the core never wakes. NPU_HEAD is sampled over a full
+   10000-cycle window (10 x 1000 cycles, cpu_irq re-checked each sample)
+   and never advances from 0 while HOST_TAIL=3.
+   Log: "[test_e2e_irq_dispatch_stall] IRQ_STALL: PASS (NPU_HEAD=0 for
+   10000 cycles with HOST_TAIL=3)".
+3. Positive control (non-vacuous): restoring ENABLE=0xFF (the firmware's
+   boot value — firmware writes 0x1FF but the APB path latches pwdata[7:0],
+   so the 8-bit register holds 0xFF) asserts cpu_irq, wakes the firmware,
+   and all 3 commands drain: NPU_HEAD -> 3 within 200k cycles, and the DMA
+   src patterns read back bit-exact at dst.
+   Log: "IRQ_DRAIN: PASS (NPU_HEAD=3 after ENABLE restore)" and
+   "DMA_DATA: PASS (3 copies bit-exact)".
+
+## Findings / gotchas
+
+- WFI stall IS observable at RTL: ENABLE=0 holds NPU_HEAD for >=10000 cycles.
+  No rename to test_e2e_irq_mask_no_cpu_irq was needed; the acceptance marker
+  set is the full IRQ_MASK + IRQ_STALL pair.
+- The 8-bit ENABLE register truncates the firmware's 0x1FF boot write to
+  0xFF; restoring via _intc_reg_force with 0x1FF raises OverflowError
+  (Force range-check). Restore with 0xFF.
+- Latent bug fixed: _doorbell_backdoor_write/_read were unusable under the
+  cocotb Makefile env (regmap import silently fails; NameError on Addr).
+  Now use DOORBELL_BASE + offset module constants.
+- tb_soc.v ties off the doorbell's bkdoor_* ports, so segment_kick /
+  segment_read_head (db_bkdoor port helpers) do NOT work on tb_soc; the
+  register-Force helpers are the correct pattern here.
+
+## Log tail (acceptance run)
+
+  2202.50ns WARNING  cocotb_bridge  [test_e2e_irq_dispatch_stall] IRQ_MASK: PASS (PENDING=0x20, ENABLE=0, THRESHOLD=1, cpu_irq=0)
+ 12202.50ns WARNING  cocotb_bridge  [test_e2e_irq_dispatch_stall] IRQ_STALL: PASS (NPU_HEAD=0 for 10000 cycles with HOST_TAIL=3)
+ 16204.50ns WARNING  cocotb_bridge  [test_e2e_irq_dispatch_stall] IRQ_DRAIN: PASS (NPU_HEAD=3 after ENABLE restore)
+ 16204.50ns WARNING  cocotb_bridge  [test_e2e_irq_dispatch_stall] DMA_DATA: PASS (3 copies bit-exact)
+ 16204.50ns WARNING  cocotb_bridge  [test_e2e_irq_dispatch_stall] PASS
+                         ** cocotb_bridge.test_e2e_irq_dispatch_stall   PASS  16204.50  1.02  15858.41 **
+                         ** TESTS=1 PASS=1 FAIL=0 SKIP=0                       16204.50  1.15  14073.52 **
+
+## Status
+
+Status: PASS — make exits 0 (EXIT_CODE=0) and the log contains both
+IRQ_MASK: PASS and IRQ_STALL: PASS; cocotb TESTS=1 PASS=1 FAIL=0 SKIP=0.

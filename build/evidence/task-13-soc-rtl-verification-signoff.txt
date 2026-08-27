@@ -1,0 +1,28 @@
+=== task-13-soc-rtl-verification-signoff ===
+command: make -C sim/regression run_e2e_mobilenetv3 (sz0001, VCS W-2024.09-SP2, prebuilt simv_soc_cocotb)
+date: 2026-08-27 23:52:53
+
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] chain wall=3887.0s ring_cmds=657 layers=54 DRAM_staging_end=0x801D1000
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] degenerate zero-vs-zero layer node_conv2d_3 (bit-exact, mirrors test_mobilenetv3_fm_chain.py)
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] degenerate zero-vs-zero layer node_conv2d_14 (bit-exact, mirrors test_mobilenetv3_fm_chain.py)
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] conv layers with cos>=0.99: 50/52 (degenerate bit-exact: 2, mismatch: 0)
+MOBILENETV3: PASS (convs 50/52 cos>=0.99, 2 degenerate bit-exact, ring_cmds=657, DRAM staging < 8MB)
+
+                                                          ** TESTS=1 PASS=1 FAIL=0 SKIP=0                       43854386.50        3887.67      11280.38  **
+\033[0;32mE2E_MOBILENETV3: PASS\033[0m
+
+--- per-layer table (failing layers now bit-exact) ---
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_Conv_512                               3136     16     72    49   1.000000
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_Conv_514                                784    648     72    26   1.000000
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_Conv_516                                784     72     24    13   1.000000
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_Conv_518                                784     24     88    13   1.000000
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_Conv_520                                784    792     88    26   1.000000
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_Conv_528                                196     96     40     4   1.000000
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_Conv_534                                196    240     40     4   1.000000
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_Conv_540                                196    240     40     4   1.000000
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_Conv_542                                196     40    120     4   1.000000
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_Conv_544                                196   3000    120     8   1.000000
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_linear                                    1    576   1024     8   1.000000
+43854386.50ns WARNING  cocotb_bridge                      [test_e2e_mobilenetv3_chain] node_linear_1                                  1   1024   1000     8   1.000000
+
+Status: PASS

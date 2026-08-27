@@ -1,0 +1,106 @@
+Task 16 — soc-rtl-verification-signoff: full SoC RTL regression on sz0001
+======================================================================
+Timestamp     : 2026-08-28T03:06:39+08:00 .. 2026-08-28T04:42:09+08:00
+Commit        : e4b930b3594024bfc13e98233e0b86a0878240d6 (fix/fm-soc-10x-sfu-desc)
+Host          : sz0001 (192.168.0.11), VCS V-2023.12-SP2, prebuilt simv binaries
+Driver logs   : build/ibex_full_rtl/task16_full_run.log (full regression)
+                build/evidence/task16/individual_results.txt + per-target logs
+
+Commands run
+------------
+1) bash sim/regression/run_ibex_full_rtl.sh
+2) make -C sim/regression run_e2e_pcie_tlp_chain
+3) make -C sim/regression run_e2e_intc_irq
+4) make -C sim/regression run_crossbar_fairness
+5) make -C sim/regression run_apb_conformance
+6) make -C sim/regression run_e2e_ibex_shared_addr
+7) make -C sim/regression run_e2e_irq_stall
+8) make -C sim/regression run_fm_soc_case CASE_ID=FM-SOC-009
+9) make -C sim/regression run_fm_soc_case CASE_ID=RING-WRAP-STRESS
+10) make -C sim/regression run_fm_soc_case CASE_ID=FM-SOC-032-CORRUPT
+11) make -C sim/regression run_e2e_mobilenetv3
+12) make -C sim/regression run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN
+13) (todo 14, NOT re-run) bash sim/regression/run_ibex_segment_run.sh —
+    evidence referenced from build/evidence/task-14-soc-rtl-verification-signoff.txt
+
+Section 1 — Full FM-SOC regression (33 cases, tb_soc_ibex + on-chip Ibex)
+======================================================================
+Result: FM-SOC: 33/33 PASS  (FAIL: 0, SKIP: 0)
+Run window: FM-SOC-001 03:07:33 -> FM-SOC-10X 03:58:53 (~51 min wall)
+
+Every per-case log carries TESTS=1 PASS=1 FAIL=0 SKIP=0. Classification by
+runner dispatch (pre-existing convention, same as earlier full runs):
+  - 25 cases fully executed on the on-chip Ibex RTL path with boot
+    assertions (BOOT_ASSERT: PC=0 / SP_INIT / BOOT_ROM).
+  - 6 cases pass as superseded: FM-SOC-014/015/016/021/022/023
+    (coverage folded into FM-SOC-027/032/10X chain cases).
+  - 2 cases pass as not-applicable in Ibex RTL mode: FM-SOC-017/019
+    (direct APB/AXI host-side cases; IbexRunner.DIRECT_CASES).
+
+  FM-SOC-001 PASS    FM-SOC-012 PASS    FM-SOC-023 PASS
+  FM-SOC-002 PASS    FM-SOC-013 PASS    FM-SOC-024 PASS
+  FM-SOC-003 PASS    FM-SOC-014 PASS    FM-SOC-025 PASS
+  FM-SOC-004 PASS    FM-SOC-015 PASS    FM-SOC-026 PASS
+  FM-SOC-005 PASS    FM-SOC-016 PASS    FM-SOC-027 PASS
+  FM-SOC-006 PASS    FM-SOC-017 PASS    FM-SOC-028 PASS
+  FM-SOC-007 PASS    FM-SOC-018 PASS    FM-SOC-029 PASS
+  FM-SOC-008 PASS    FM-SOC-019 PASS    FM-SOC-030 PASS
+  FM-SOC-009 PASS    FM-SOC-020 PASS    FM-SOC-031 PASS
+  FM-SOC-010 PASS    FM-SOC-021 PASS    FM-SOC-032 PASS
+  FM-SOC-011 PASS    FM-SOC-022 PASS    FM-SOC-10X PASS
+
+FM-SOC-10X (todo 11 SFU descriptor ABI fix): PASS — op00 RMSNorm chain
+output matches golden (case passes the full 17-op chain compare).
+
+Section 2 — New acceptance targets (todos 3-10, 12, 13, 15)
+======================================================================
+  #  Target (make -C sim/regression ...)              Exit   Marker verified                  Status
+  -- -------------------------------------------------- ------ --------------------------------- -----
+  T01 run_e2e_pcie_tlp_chain                           0      test_e2e_pcie_tlp_chain.*PASS     PASS
+  T02 run_e2e_intc_irq                                 0      THRESHOLD=2/5 DEASSERT,            PASS
+                                                              ENABLE=0, ACK_RETENTION all PASS
+  T03 run_crossbar_fairness                            0      FAIRNESS: PASS                    PASS
+  T04 run_apb_conformance                              0      APB_CONFORMANCE: PASS             PASS
+  T05 run_e2e_ibex_shared_addr                         0      SHARED_ADDR: PASS                 PASS
+  T06 run_e2e_irq_stall                                0      IRQ_MASK: PASS + IRQ_STALL: PASS  PASS
+  T07 run_fm_soc_case CASE_ID=FM-SOC-009               0      BOOT_ASSERT: PC=0 PASS,           PASS
+                                                              SP_INIT: PASS, BOOT_ROM: PASS
+  T08 run_fm_soc_case CASE_ID=RING-WRAP-STRESS         0      NPU_HEAD=1100 PASS                PASS
+  T09 run_fm_soc_case CASE_ID=FM-SOC-032-CORRUPT       0      CORRUPT: block5 mismatch,         PASS
+                                                              others PASS
+  T10 run_e2e_mobilenetv3                             0      MOBILENETV3: PASS                 PASS
+  T11 run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN        0      attn_weight cycles>0 PASS,        PASS
+                                                              cos_sim>=0.999 PASS
+  All 11/11 PASS. Driver exit code DRIVER_RC=0.
+
+Detail highlights
+-----------------
+- T10 MobileNetV3: MOBILENETV3: PASS (convs 50/52 cos>=0.99, 2 degenerate
+  bit-exact, ring_cmds=657, DRAM staging < 8MB). N-padded-to-multiple-of-16
+  fix (todo 13) holds; all 9 previously-failing layers cos=1.000000.
+- T11 ATTN-WEIGHT-CHAIN: attn_weight cycles>0 PASS (op07, cycles=30755,
+  cos_sim=1.000000); cos_sim>=0.999 PASS (min_cos=0.999984 over 14 fp ops,
+  3 INT32 ops bit-exact, all 26 commands cycles>0). BUG-RTL-SOC-007 NOT
+  reproduced at chain level (consistent with todo 15).
+- T09 FM-SOC-032-CORRUPT: corruption isolated to block 5 (mismatched ops
+  [14,15,16]); blocks 0-4/6-27 bit-exact, no hang.
+- T08 RING-WRAP-STRESS: 1100 commands drained (raw head=76, wraps=1),
+  NPU_HEAD=1100 PASS within timeout_cycles.
+- T06 IRQ stall: IRQ_MASK: PASS (PENDING=0x20, ENABLE=0, cpu_irq=0) and
+  IRQ_STALL: PASS (NPU_HEAD=0 for 10000 cycles with HOST_TAIL=3).
+
+Section 3 — Ibex 36-layer expanded checkpoint (todo 14, referenced)
+======================================================================
+NOT re-run (already completed 8/8 PASS per todo 14; evidence file:
+build/evidence/task-14-soc-rtl-verification-signoff.txt).
+  checkpoints_passed=8/8 (L0/L5/L10/L15/L20/L25/L30/L35), LADDER=PASS,
+  Overall PASS, elapsed 47241.5s, 510 commands, TESTS=1 PASS=1 FAIL=0 SKIP=0.
+
+Summary
+=======
+  Full FM-SOC regression : 33/33 PASS (0 FAIL, 0 SKIP)
+  New acceptance targets : 11/11 PASS (0 FAIL)
+  Expanded checkpoints   : 8/8 PASS (todo 14 evidence, referenced)
+  Triaged failures       : none — nothing to triage this run.
+
+Status: PASS

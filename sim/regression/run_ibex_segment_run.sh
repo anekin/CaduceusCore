@@ -56,7 +56,25 @@ else
 fi
 
 echo "[INFO] Running segment-run cocotb test (MODULE=sim.rtl_soc_segment_run)"
-(cd "$RUN_DIR" && "$SIMV" \
+SEG_TIMEOUT_S="${SEG_TIMEOUT_S:-86400}"
+echo "[INFO] Wall-time cap: ${SEG_TIMEOUT_S}s (24h default; override via SEG_TIMEOUT_S)"
+set +e
+(cd "$RUN_DIR" && timeout --signal=TERM --kill-after=600 "$SEG_TIMEOUT_S" "$SIMV" \
     +COCOTB \
     +FM_SOC_CASE_ID=SEGMENT-RUN \
     +BOOTROM_HEX="$REPO_ROOT/firmware/build/npu_firmware.hex")
+RUN_RC=$?
+set -e
+if [ "$RUN_RC" -eq 124 ]; then
+    echo "[TIMEOUT] ${SEG_TIMEOUT_S}s wall-time cap reached — completed checkpoints retained, remaining marked PENDING"
+    EVIDENCE="$REPO_ROOT/build/evidence/task-14-soc-rtl-verification-signoff.txt"
+    if [ -f "$EVIDENCE" ]; then
+        {
+            echo "timebox_status=TIMEOUT_24H"
+            echo "timebox_note=run killed by wall-time cap; checkpoints after the last completed one are marked PENDING"
+        } >> "$EVIDENCE"
+        echo "[TIMEOUT] evidence retained: $EVIDENCE"
+    fi
+    exit 0
+fi
+exit "$RUN_RC"

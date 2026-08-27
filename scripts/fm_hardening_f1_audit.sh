@@ -13,7 +13,10 @@
 #      FM-SOC, Spike-binary-dependent guard tests like
 #      test_spike_forward_tolerance / test_spike_ibex_ring_alignment) are
 #      SKIP-ENV and static greps SKIP-STATIC — reported, never
-#      silently waived.  Self-invocation of this script is skipped (recursion).
+#      silently waived.  `make -C sim/regression run_*` targets (run_e2e_*,
+#      run_crossbar_*, run_apb_*, run_fm_soc_case, ...) need Synopsys VCS, so
+#      they are SKIP-ENV when `vcs` is not on PATH of the audit host and
+#      re-run otherwise.  Self-invocation of this script is skipped (recursion).
 #      A rerun that collects 0 items because cocotb is absent on this host
 #      (pytest rc 5 + "collected 0 items", e.g. sim/test_dram_bulk.py) is
 #      SKIP-ENV: the todo-10 evidence recorded this same environment behaviour.
@@ -40,9 +43,12 @@ acceptance_cmds() {  # backtick-quoted commands of todo $1's acceptance line
     found && /Acceptance criteria/ {print; exit}
   ' "$PLAN" | grep -oE '`[^`]+`' | sed 's/^`//; s/`$//'
 }
+HAS_VCS=0; if command -v vcs >/dev/null 2>&1; then HAS_VCS=1; fi
 runnable() {  # classify one acceptance command
   case "$1" in
     *fm_hardening_f1_audit*) echo skip-self ;;
+    make\ -C\ sim/regression\ run_*)
+      if [ "$HAS_VCS" = "1" ]; then echo run; else echo skip-env; fi ;;
     *--model*|*run_w4_perf*|*run_fm_soc*|*p10_ssh*|*test_spike_ibex_ring_alignment*|*test_spike_forward_tolerance*) echo skip-env ;;
     PYTHONPATH=*|python3\ *|python\ *|make\ -C\ firmware*|bash\ -n\ *|ls\ scripts/*|./scripts/fm_reverse_dependency_gate.sh*) echo run ;;
     *) echo skip-static ;;

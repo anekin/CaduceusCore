@@ -2,9 +2,9 @@
 """
 rtl_soc_segment_run.py — Ibex 36-layer checkpoint-subset segment run (todo 13).
 
-Runs the 9-layer Ibex subset in one VCS session:
+Runs the 15-layer Ibex subset in one VCS session:
 
-    L0 | L9->L10 | L19->L20 | L29->L30 | L34->L35
+    L0 | L4->L5 | L9->L10 | L14->L15 | L19->L20 | L24->L25 | L29->L30 | L34->L35
 
 For each segment the pre-layer and checkpoint layer are dispatched back-to-back
 through the on-chip Ibex firmware (command ring + doorbell).  The pre-layer's
@@ -72,8 +72,8 @@ from command_ring import RING_ENTRIES as RING_SIZE
 WAVE_TIMEOUT_CYCLES = 100_000_000
 POLL_INTERVAL = 20_000
 
-EVIDENCE_PATH = _REPO / "build" / "evidence" / "task-13-phase10-rtl-verification.txt"
-PROGRESS_PATH = _REPO / "build" / "evidence" / "task-13-phase10-progress.log"
+EVIDENCE_PATH = _REPO / "build" / "evidence" / "task-14-soc-rtl-verification-signoff.txt"
+PROGRESS_PATH = _REPO / "build" / "evidence" / "task-14-soc-rtl-verification-signoff-progress.log"
 
 # ── Progress visibility ────────────────────────────────────────────────
 # The segment run's stdout travels through ssh|tee pipes where both Python
@@ -105,19 +105,22 @@ def _close_progress() -> None:
         except Exception:
             pass
         _progress_fp = None
-NPZ_PATH = _REPO / "build" / "evidence" / "ph10-36layer-ibex-checkpoints.npz"
+NPZ_PATH = _REPO / "build" / "evidence" / "task-14-soc-rtl-verification-checkpoints.npz"
 SPIKE_NPZ = _REPO / "build" / "evidence" / "ph10-36layer-spike.npz"
 GOLDEN_DIR = _REPO / "rtl" / "test_vectors" / "soc_e2e" / "qwen25-3b-36layer"
 
 SEGMENTS = [
     (None, 0, None),   # L0 standalone, input = embedding
+    (4, 5, 3),         # L4->L5, input = spike L3
     (9, 10, 8),        # L9->L10, input = spike L8
+    (14, 15, 13),      # L14->L15, input = spike L13
     (19, 20, 18),      # L19->L20, input = spike L18
+    (24, 25, 23),      # L24->L25, input = spike L23
     (29, 30, 28),      # L29->L30, input = spike L28
     (34, 35, 33),      # L34->L35, input = spike L33
 ]
-CHECKPOINTS = [0, 10, 20, 30, 35]
-EXECUTED_LAYERS = [0, 9, 10, 19, 20, 29, 30, 34, 35]
+CHECKPOINTS = [0, 5, 10, 15, 20, 25, 30, 35]
+EXECUTED_LAYERS = [0, 4, 5, 9, 10, 14, 15, 19, 20, 24, 25, 29, 30, 34, 35]
 
 
 def _chain_threshold(layer):
@@ -317,6 +320,77 @@ async def ibex_execute_layer(bridge, model, hidden, weights, layer, dims,
     return hw_l_out, consumed
 
 
+def _resume_from_npz(spike_layers):
+    """Load completed-segment state from NPZ_PATH (todo 14 resume).
+
+    The checkpoint npz is saved incrementally after every checkpoint, so a
+    timebox-killed run leaves the state of every layer it finished.  This
+    helper reconstructs the pre-kill bookkeeping:
+
+      completed_checkpoints — CHECKPOINTS entries present in the npz,
+      fp32_states / hw_states — per-layer Func Model and hardware outputs,
+      cross_checks — pre-layer cross-checks recomputed from the saved hw
+                     states (deterministic; identical to the values the
+                     prior run reported),
+      segment_records — completed segments' descriptions, regenerated from
+                        SEGMENTS (the strings are fully deterministic),
+      ring_offset / total_consumed — prior run's command counts restored
+                        from the evidence file (bookkeeping only: the resumed
+                        VCS session reboots the firmware, so the command ring
+                        is re-walked from slot 0).
+
+    Returns None when there is nothing to resume (npz missing or empty).
+    """
+    if not NPZ_PATH.exists():
+        return None
+    with np.load(NPZ_PATH, allow_pickle=True) as d:
+        files = set(d.files)
+        fp32_states = {}
+        hw_states = {}
+        for L in EXECUTED_LAYERS:
+            k, hk = f"layer_{L}_output", f"hw_layer_{L}_output"
+            if k in files and hk in files:
+                fp32_states[L] = d[k].astype(np.float32)
+                hw_states[L] = d[hk].astype(np.int32)
+    if not fp32_states:
+        return None
+    completed_checkpoints = [L for L in CHECKPOINTS if L in fp32_states]
+    cross_checks = []
+    for (pre, _chk, _seg_in) in SEGMENTS:
+        if pre is None or pre not in fp32_states or pre not in spike_layers:
+            continue
+        hw_f32 = hw_states[pre].astype(np.float32) / P10_RESID_SCALE
+        spike_hw = spike_layers[pre]["hw"].astype(np.float32) / P10_RESID_SCALE
+        cc = _cos(hw_f32, spike_hw)
+        thr = _chain_threshold(pre)
+        cross_checks.append({
+            "layer": pre, "cos_sim": float(cc), "threshold": thr,
+            "status": "PASS" if cc >= thr else "FAIL", "ok": cc >= thr,
+        })
+    segment_records = []
+    for (pre, chk, seg_in) in SEGMENTS:
+        if chk not in fp32_states:
+            break
+        if pre is None:
+            segment_records.append("L0: input=embedding (prompt token), checkpoint=L0")
+        else:
+            segment_records.append(
+                f"L{pre}->L{chk}: segment input=L{seg_in} from spike npz, "
+                f"chain_restart_state_source=ibex_dram")
+    ring_offset = 0
+    total_consumed = 0
+    if EVIDENCE_PATH.exists():
+        try:
+            for line in EVIDENCE_PATH.read_text(encoding="utf-8").splitlines():
+                if line.startswith("commands_dispatched="):
+                    total_consumed = int(line.split("=", 1)[1])
+                    ring_offset = total_consumed % RING_SIZE
+        except Exception:
+            pass
+    return (completed_checkpoints, fp32_states, hw_states, cross_checks,
+            segment_records, ring_offset, total_consumed)
+
+
 def _partial_meta(model_path, commit, command, dims, elapsed):
     """Meta for an incremental checkpoint npz save (final save uses full meta)."""
     return {
@@ -347,13 +421,17 @@ def _load_spike_npz():
     return emb, layers
 
 
-def _write_evidence(results, meta):
+def _write_evidence(results, meta, final=False):
     EVIDENCE_PATH.parent.mkdir(parents=True, exist_ok=True)
     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     executed = ",".join(f"L{L}" for L in EXECUTED_LAYERS)
     ckpts = ",".join(f"L{L}" for L in CHECKPOINTS)
+    completed = {r["layer"] for r in results["checkpoints"]}
+    pending = [L for L in CHECKPOINTS if L not in completed]
+    ladder = ("PASS" if all(r["ok"] for r in results["checkpoints"]) else "FAIL") \
+        if final else "IN_PROGRESS"
     with open(EVIDENCE_PATH, "w", encoding="utf-8") as f:
-        f.write("Task 13 - Phase 10 RTL Verification: Ibex 36-layer checkpoint-subset segment run\n")
+        f.write("Task 14 - SoC RTL Verification Signoff: Ibex 36-layer 8-checkpoint segment run\n")
         f.write("=" * 70 + "\n")
         f.write(f"Timestamp start : {ts}\n")
         f.write(f"Commit          : {meta['commit']}\n")
@@ -378,6 +456,9 @@ def _write_evidence(results, meta):
             f.write(f"layer={r['layer']} engine=ibex cos_sim={r['cos_sim']:.6f} "
                     f"threshold={r['threshold']} status={r['status']} "
                     f"chain_restart_state_source=ibex_dram\n")
+        for L in pending:
+            f.write(f"layer={L} engine=ibex cos_sim=N/A threshold={_chain_threshold(L)} "
+                    f"status=PENDING chain_restart_state_source=ibex_dram\n")
         f.write("\nHardware l_out transparency (Ibex DRAM VRESID int32 vs golden, non-gating):\n")
         for r in results["checkpoints"]:
             f.write(f"layer={r['layer']} hw_l_out_cos_sim={r['hw_cos']:.6f} "
@@ -389,9 +470,9 @@ def _write_evidence(results, meta):
                     f"threshold={r['threshold']} status={r['status']}{flag}\n")
         f.write("\nSummary:\n")
         f.write(f"  checkpoints_passed={sum(1 for r in results['checkpoints'] if r['ok'])}/"
-                f"{len(results['checkpoints'])}\n")
-        f.write(f"  LADDER={'PASS' if results['ladder_pass'] else 'FAIL'}\n")
-        f.write(f"  Overall: {'PASS' if results['ladder_pass'] else 'FAIL'}\n")
+                f"{len(CHECKPOINTS)}\n")
+        f.write(f"  LADDER={ladder}\n")
+        f.write(f"  Overall: {'PASS' if ladder == 'PASS' else ladder}\n")
         f.write(f"  Timestamp end: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}\n")
 
 
@@ -430,7 +511,7 @@ async def test_soc_ibex_segment_run(dut):
     model_path = os.environ.get("QWEN3B_GGUF",
                                 str(Path.home() / "models" / "qwen2.5-3b-instruct-q4_k_m.gguf"))
     commit = os.environ.get("IBEX_COMMIT", "unknown")
-    command = "scripts/p10_36layer_ibex.sh"
+    command = "bash sim/regression/run_ibex_segment_run.sh"
 
     try:
         hostname = os.uname().nodename
@@ -480,15 +561,72 @@ async def test_soc_ibex_segment_run(dut):
     ring_offset = 0
     total_consumed = 0
 
+    # ── Todo 14 resume: restore completed-segment state from the checkpoint
+    # npz so a timebox-killed run continues from the first unfinished segment
+    # instead of re-executing completed layers.  Restored cos values are
+    # recomputed deterministically — identical to the prior run's reports.
+    resume = _resume_from_npz(spike_layers)
+    completed_checkpoints = []
+    if resume is not None:
+        (completed_checkpoints, fp32_states, hw_states, cross_checks,
+         segment_records, prev_ring_offset, total_consumed) = resume
+        for L in completed_checkpoints:
+            golden = sh._load_golden_layer(str(GOLDEN_DIR), L)
+            cos = _cos(fp32_states[L], golden)
+            thr = _chain_threshold(L)
+            hw_f32 = hw_states[L].astype(np.float32) / P10_RESID_SCALE
+            checkpoint_results.append({
+                "layer": L, "cos_sim": float(cos), "threshold": thr,
+                "status": "PASS" if cos >= thr else "FAIL", "ok": cos >= thr,
+                "hw_cos": float(_cos(hw_f32, golden)),
+                "hw_max": float(np.max(np.abs(
+                    hw_f32 - golden.astype(np.float32)))),
+            })
+        _progress(f"[SEGMENT] resume: restored {len(completed_checkpoints)}/"
+                  f"{len(CHECKPOINTS)} checkpoints from {NPZ_PATH.name} "
+                  f"(layers={sorted(fp32_states)}, prev_ring_offset="
+                  f"{prev_ring_offset}, prev_consumed={total_consumed})")
+
+    def make_meta():
+        return {
+            "commit": commit, "command": command, "hostname": hostname,
+            "model": model_path, "dims": dims,
+            "total_consumed": total_consumed, "elapsed_s": time.time() - t0,
+            "segment_records": list(segment_records),
+        }
+
     t0 = time.time()
+    if resume is not None:
+        # Re-write the evidence with the restored results up front so the
+        # resumed run's evidence is self-consistent from its first second
+        # (completed checkpoints PASS, the rest PENDING).
+        _write_evidence(
+            {"checkpoints": list(checkpoint_results),
+             "cross_checks": list(cross_checks),
+             "ladder_pass": False},
+            make_meta(), final=False)
     for (pre, chk, seg_in) in SEGMENTS:
+        if chk in completed_checkpoints:
+            # Prior run already executed this segment; its outputs are
+            # restored from the checkpoint npz (todo 14 resume).
+            continue
         if pre is None:
             hidden = emb.astype(np.float32).copy()
             seg_desc = f"L0: input=embedding (prompt token), checkpoint=L0"
+            seg_layers = [chk]
+        elif pre in fp32_states and pre in hw_states:
+            # Mid-segment resume: the prior run finished the pre-layer but was
+            # killed before its checkpoint.  Chain from the saved hardware
+            # output instead of re-executing the pre-layer.
+            hidden = hw_states[pre].astype(np.float32).copy() / P10_RESID_SCALE
+            seg_desc = (f"L{pre}->L{chk}: segment resumed from saved hw L{pre}, "
+                        f"chain_restart_state_source=ibex_dram")
+            seg_layers = [chk]
         else:
             hidden = spike_layers[seg_in]["fp32"].astype(np.float32).copy()
             seg_desc = (f"L{pre}->L{chk}: segment input=L{seg_in} from spike npz, "
                         f"chain_restart_state_source=ibex_dram")
+            seg_layers = [pre, chk]
         _progress(f"[SEGMENT] start {seg_desc} "
                   f"(elapsed={time.time() - t0:.0f}s)")
 
@@ -506,7 +644,7 @@ async def test_soc_ibex_segment_run(dut):
         _progress(f"[SEGMENT] boundary full preload + SRAM clear done "
                   f"(elapsed={time.time() - t0:.0f}s)")
 
-        for L in ([chk] if pre is None else [pre, chk]):
+        for L in seg_layers:
             _progress(f"[SEGMENT] dispatching L{L} (elapsed={time.time() - t0:.0f}s)")
             fp32_out = sh._forward_layer(hidden, weights, L, n_heads=heads,
                                          n_kv_heads=kv_heads, head_dim=head_dim)
@@ -535,6 +673,14 @@ async def test_soc_ibex_segment_run(dut):
                 _save_npz(fp32_states, hw_states, emb, dims,
                           _partial_meta(model_path, commit, command, dims,
                                         time.time() - t0))
+                # Incremental evidence: if the run is killed by the 24h wall
+                # timebox, the last checkpoint's evidence (with the remaining
+                # checkpoints marked PENDING) survives.
+                _write_evidence(
+                    {"checkpoints": list(checkpoint_results),
+                     "cross_checks": list(cross_checks),
+                     "ladder_pass": False},
+                    make_meta(), final=False)
                 _progress(f"  [CHECKPOINT] saved L{L} "
                           f"(npz layers={sorted(fp32_states.keys())})")
             if pre is not None and L == pre:
@@ -553,23 +699,22 @@ async def test_soc_ibex_segment_run(dut):
         segment_records.append(seg_desc)
 
     elapsed = time.time() - t0
-    ladder_pass = all(r["ok"] for r in checkpoint_results)
+    # Full success requires every configured checkpoint to have run and passed
+    # its ladder threshold.  A timeboxed (partial) run reports the completed
+    # subset; unreached checkpoints carry status=PENDING in the evidence.
+    ladder_pass = (len(checkpoint_results) == len(CHECKPOINTS)
+                   and all(r["ok"] for r in checkpoint_results))
 
-    meta = {
-        "commit": commit, "command": command, "hostname": hostname,
-        "model": model_path, "dims": dims,
-        "total_consumed": total_consumed, "elapsed_s": elapsed,
-        "segment_records": segment_records,
-    }
+    meta = make_meta()
     results = {
         "checkpoints": checkpoint_results,
         "cross_checks": cross_checks,
         "ladder_pass": ladder_pass,
     }
-    _write_evidence(results, meta)
+    _write_evidence(results, meta, final=True)
     _save_npz(fp32_states, hw_states, emb, dims, meta)
 
-    _progress(f"[SEGMENT] done: 9 layers, 5 checkpoints, "
+    _progress(f"[SEGMENT] done: {len(EXECUTED_LAYERS)} layers, {len(CHECKPOINTS)} checkpoints, "
               f"ladder={'PASS' if ladder_pass else 'FAIL'}, elapsed={elapsed:.1f}s")
     _close_progress()
     assert ladder_pass, f"checkpoint ladder failed: {checkpoint_results}"

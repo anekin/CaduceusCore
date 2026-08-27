@@ -1,0 +1,70 @@
+# Todo 12 — corrupted-descriptor variant for FM-SOC-032 (FM-SOC-032-CORRUPT)
+# soc-rtl-verification-signoff
+# Generated: 2026-08-27 14:08 (Asia/Shanghai)
+# Plan: .omo/plans/soc-rtl-verification-signoff.md todo 12
+# Commit: test(soc): add corrupted-descriptor variant to FM-SOC-032
+#         (hash: git log --grep 'corrupted-descriptor variant to FM-SOC-032' --format=%h)
+
+## Status
+
+PASS
+
+## Exact acceptance command (run on sz0001, 192.168.0.11)
+
+  source /NAS/Tools/methodology/modules/init/bash
+  module load vcs/vcs_2023.12sp2
+  source sim/regression/run_env.sh
+  make -C sim/regression run_fm_soc_case CASE_ID=FM-SOC-032-CORRUPT
+
+Makefile exit code: 0 (FM_SOC_FM-SOC-032-CORRUPT: PASS).
+Simulator: VCS V-2023.12-SP2_Full64, cocotb, tb_soc (full RTL, on-chip Ibex +
+real firmware from firmware/build/npu_firmware.hex).
+simv_soc_cocotb reused (no RTL change -> no recompile).
+Wall time: ~46 min (two 728-command 28-block passes, CPU 3109.44 s).
+
+## Acceptance evidence (from sim/regression/fm_soc_FM-SOC-032-CORRUPT.log)
+
+  [P4-032-CORRUPT] block 0: PASS (bit-exact)
+  ... (blocks 1-4 PASS bit-exact)
+  [P4-032-CORRUPT] block 5: MISMATCH
+  ... (blocks 6-27 PASS bit-exact — 27/28 blocks bit-exact)
+  [P4-032-CORRUPT] block 5 mismatched op outputs: [14, 15, 16]
+  CORRUPT: block5 mismatch, others PASS — op14 desc+64B corruption isolated
+    to block 5 (mismatched ops [14, 15, 16]; blocks 0-4/6-27 bit-exact, no hang)
+  IbexRunner FM-SOC-032-CORRUPT: PASS — CORRUPT: block5 mismatch, others PASS ...
+  TESTS=1 PASS=1 FAIL=0 SKIP=0 (sim time 25,549,122.5 ns, ~46 min real time)
+
+## What was verified
+
+- New case FM-SOC-032-CORRUPT added to sim/rtl_soc_runner.py:
+  - `_build_block(corrupt_desc_op=None)` parameter — the vector op with the
+    matching manifest idx gets its ring command's descriptor address corrupted
+    by +64B. Baseline call sites are untouched (FM-SOC-032 behavior unchanged).
+  - `_build_032_corrupt_model()` (mirrors `_build_032_perturbed_model`) rebuilds
+    block 5 with `corrupt_desc_op=14` (VMUL gate*up).
+  - `_run_032_corrupt()` (mirrors `_run_032` two-pass flow): pass 1 runs the
+    clean 28-block chain as the golden reference; pass 2 runs the chain with
+    block-5 op-14 corruption; per-block fingerprints + block-5 per-op hashes
+    are compared and logged per block.
+  - Dispatch wired in P4SpikeRunner.run_case, IbexRunner.run_case, and
+    test_soc_rtl_runner_smoke's IbexRunner routing tuple. The Makefile
+    run_fm_soc_case target already propagates CASE_ID (FM_SOC_CASE_ID) —
+    verified, no Makefile edit required.
+
+- Corruption semantics mirror the FM guard test_soc_fm_long_sequence.py:472-484:
+  the op-14 command references the descriptor slot at +64B, which holds op-15's
+  valid-but-wrong MMUL descriptor.
+
+- Expected RTL behavior satisfied:
+  - NO hang: firmware drained all 728 commands in both passes (no abort, no
+    timeout — the corrupted descriptor passes the firmware dram_range_ok gate).
+  - Deterministic mismatch ONLY in block 5: blocks 0-4 and 6-27 bit-exact.
+  - Block 5 output mismatches golden: block fingerprint MISMATCH; per-op hashes
+    diverge at ops {14, 15, 16}. Root cause: the corrupted VMUL inherits
+    dim=4096 from op-15's input_size word, so the vector wrapper's 16KB write
+    starts at op-15's 512B output buffer and spills into op-15's scale and
+    op-16's input buffers — all inside block 5, then the final VCONV propagates
+    the divergence into the block fingerprint.
+
+- Not modified: baseline FM-SOC-032 logic, RTL, firmware, Makefile, no new
+  dependencies.

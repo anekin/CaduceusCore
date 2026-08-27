@@ -13,13 +13,13 @@
 | 类别 | Feature 总数 | 已覆盖 | 未覆盖/部分 | 覆盖率 |
 |------|:-----------:|:------:|:-----------:|:------:|
 | 计算引擎（MXU/SFU/Vector） | 22 | 22 | 0 | 100% |
-| SoC 互联与数据通路 | 18 | 12 | 6 | 67% |
-| 固件与 CPU 集成 | 10 | 7 | 3 | 70% |
-| 端到端与真实模型 | 8 | 3 | 5 | 38% |
+| SoC 互联与数据通路 | 18 | 18 | 0 | 100% |
+| 固件与 CPU 集成 | 10 | 9 | 1 | 90% |
+| 端到端与真实模型 | 8 | 7 | 1 | 88% |
 | 契约/守卫/门禁（fm-hardening-phase10） | 8 | 8 | 0 | 100% |
-| **合计** | **66** | **52** | **14** | **79%** |
+| **合计** | **66** | **64** | **2** | **97%** |
 
-> **结论**: 当前 SoC RTL 验证 feature coverage **未到 100%**，不满足 full SoC RTL signoff。计算引擎和契约守卫已 100% 覆盖；SoC 集成数据通路、E2E 多层模型、MobileNetV3、性能 calibration 仍有缺口。
+> **结论**: SoC RTL 验证 feature coverage 达 **97%（64/66）**。SoC 互联与数据通路的 6 条 gap（SOC-13/14/15/16/17/18）和固件/CPU 的 2 条 gap（FW-08/10）已由 RTL 测试闭环（`soc-rtl-verification-signoff` todos 3-10，全量回归 11/11 新目标 PASS）；E2E 除性能 calibration 外全部具备 RTL 证据（todos 13-15，含 36 层 8-checkpoint 与 MobileNetV3 RTL 首跑）。剩余缺口：**E2E-07 性能 calibration**（`calibration_state=uncalibrated`，deferred 到流片/FPGA 实测）与 **FW-09 memory contract JSON**（静态 artifact 检查，不涉及 RTL 仿真，N/A）。**BUG-RTL-SOC-007 仍 Open**（todo 15/16 链级未复现 cycles=0，不 claim Fixed）。因性能 calibration 阻塞，full SoC RTL signoff 仍未到 100%。
 
 ---
 
@@ -44,7 +44,7 @@
 |---------|-------------|:----:|------|
 | Softmax 8-stage | `tb_sfu` + FM-SOC-004 | ✅ | 319/319 batch PASS |
 | LayerNorm 6-stage | `tb_sfu` | ✅ | PASS |
-| RMSNorm two-pass | `tb_sfu` + FM-SOC-004 | ✅ | PASS |
+| RMSNorm two-pass | `tb_sfu` + FM-SOC-004/010 | ✅ | PASS + FM-SOC-10X 17-op chain（todo 11 SFU descriptor ABI 修复，33/33 全量回归 PASS，证据 `build/evidence/task-16-soc-rtl-verification-signoff.txt`） |
 | RoPE 16-stage CORDIC | `tb_sfu` + FM-SOC-004 | ✅ | PASS |
 | GELU 4-segment | `tb_sfu` | ✅ | PASS |
 | SiLU Newton-Raphson | `tb_sfu` | ✅ | PASS |
@@ -64,7 +64,7 @@
 
 ---
 
-## 3. SoC 互联与数据通路 Feature Coverage（67%）
+## 3. SoC 互联与数据通路 Feature Coverage（100%）
 
 ### 3.1 已覆盖
 
@@ -83,20 +83,20 @@
 | Boot ROM $readmemh 加载 | Ibex boot smoke | ✅ | PASS |
 | SFU wrapper 宽度转换 + DONE | BUG-RTL-SOC-WV-001 fix | ✅ | Fixed + 回归 |
 
-### 3.2 未覆盖 / 部分（6 项）
+### 3.2 已闭环 — 原未覆盖 / 部分（6 项，soc-rtl-verification-signoff todos 3-9）
 
-| Feature | Gap # | 状态 | 说明 | 阻塞影响 |
-|---------|:-----:|:----:|------|----------|
-| PCIe TLP 功能模型（TLP 解析/BAR 路由/MSI-X）SOC-13 | #7 | ✅ FM 守卫 | TLP→BAR 路由→crossbar→SRAM/DRAM 完整链 + MPS=256B 分裂 + 载荷篡改注入由 `test_pcie_tlp_chain.py` 覆盖（fm-soc-datapath-hardening todo 1） | host↔NPU 真实 PCIe 数据通路 FM golden 已就位 |
-| AXI Crossbar 仲裁行为模型 SOC-14 | #8 | ✅ FM 守卫 | round-robin 交替公平 / DECERR 拒绝 / AXI ID 路由由 `test_crossbar_arbitration.py` grant 历史断言覆盖（todo 3） | 仲裁公平性有 FM 预测 |
-| APB-MMIO 统一寄存器模型 SOC-15 | #1 | ✅ FM 守卫 | 8 个 peripheral write→readback 语义（rw/r/w/w1c）与 `regmap.py` conformance replay gate（`test_apb_register_conformance.py`，todo 4） | 寄存器语义一致性有单一事实源比对 |
-| Ibex→AXI 共享地址空间 SOC-16 | #2 | ✅ FM 守卫 | RISCVMini 经 crossbar 与 FuncModel SRAM/DRAM 共享访存双向一致性 + DMEM/boot ROM 隔离（`test_ibex_shared_address_space.py`，todo 5） | CPU 数据访问路径有 FM 对齐 |
-| IRQ 链路（engine→INTC→CPU WFI 唤醒）SOC-17 | #9 | ✅ FM 守卫 | ENABLE/THRESHOLD 门控 + ACK 清除 + WFI 唤醒 + 多源并发（`test_intc_gating.py`，todo 2） | 中断唤醒链有 FM 验证 |
-| Ibex 固件 boot→DMEM→MMIO→poll IRQ 序列 SOC-18 | #11 | ✅ FM 守卫 | 真实 firmware hex 从 reset vector 执行进 main→doorbell poll→首命令完成（`test_firmware_boot_sequence.py`，todo 7） | 固件控制流与 FM 对齐 |
+| Feature | Gap # | 状态 | 说明 | 证据 |
+|---------|:-----:|:----:|------|------|
+| PCIe TLP 功能模型（TLP 解析/BAR 路由/MSI-X）SOC-13 | #7 | ✅ RTL | FM 守卫 `test_pcie_tlp_chain.py`（fm-soc-datapath-hardening todo 1）之上，RTL cocotb `run_e2e_pcie_tlp_chain`（todo 3）验证 4KB MPS-split write→readback bit-exact + BAR 路由隔离 + out-of-BAR UR（host model 侧） | `build/evidence/task-3-soc-rtl-verification-signoff.txt` |
+| AXI Crossbar 仲裁行为模型 SOC-14 | #8 | ✅ RTL | FM 守卫 `test_crossbar_arbitration.py`（todo 3）之上，RTL TB `run_crossbar_fairness`（todo 5）严格 round-robin 交替公平断言 + DECERR 不消耗数据 phase（FAIRNESS: PASS，19/19 checks） | `build/evidence/task-5-soc-rtl-verification-signoff.txt` |
+| APB-MMIO 统一寄存器模型 SOC-15 | #1 | ✅ RTL | FM 守卫 `test_apb_register_conformance.py`（todo 4）之上，RTL TB `run_apb_conformance`（todo 6）7 个 peripheral slave 逐偏移 write→readback，rw/r/w1c/w 语义 168/168 检查 PASS | `build/evidence/task-6-soc-rtl-verification-signoff.txt` |
+| Ibex→AXI 共享地址空间 SOC-16 | #2 | ✅ RTL | FM 守卫 `test_ibex_shared_address_space.py`（todo 5）之上，RTL cocotb `run_e2e_ibex_shared_addr`（todo 7）真实 crossbar 流量双向一致性 + DMEM/boot ROM 隔离 + DECERR 负面（SHARED_ADDR: PASS） | `build/evidence/task-7-soc-rtl-verification-signoff.txt` |
+| IRQ 链路（engine→INTC→CPU WFI 唤醒）SOC-17 | #9 | ✅ RTL | FM 守卫 `test_intc_gating.py`（todo 2）之上，RTL cocotb `run_e2e_intc_irq`（todo 4，THRESHOLD>1 popcount 门控 + ENABLE=0）与 `run_e2e_irq_stall`（todo 8，ENABLE=0 → NPU_HEAD 10000-cycle stall + WFI wake 正控） | `build/evidence/task-4-soc-rtl-verification-signoff.txt` + `build/evidence/task-8-soc-rtl-verification-signoff.txt` |
+| Ibex 固件 boot→DMEM→MMIO→poll IRQ 序列 SOC-18 | #11 | ✅ RTL | FM 守卫 `test_firmware_boot_sequence.py`（todo 7）之上，IbexRunner 启动断言（todo 9）验证复位后 PC 进入 boot 入口、sp 落在 DMEM、boot ROM 快照不变（BOOT_ASSERT/SP_INIT/BOOT_ROM PASS，FM-SOC-009 路由 Ibex 路径） | `build/evidence/task-9-soc-rtl-verification-signoff.txt` |
 
 ---
 
-## 4. 固件与 CPU 集成 Feature Coverage（70%）
+## 4. 固件与 CPU 集成 Feature Coverage（90%）
 
 ### 4.1 已覆盖
 
@@ -110,17 +110,17 @@
 | Doorbell HOST_TAIL/NPU_HEAD 轮询 | FM-SOC-001..032 + Ibex | ✅ | 33 cases |
 | 地址空间/环布局契约 | `test_address_space.py` + `test_command_ring.py` | ✅ | fm-hardening todo 1/2/3 |
 
-### 4.2 未覆盖 / 部分（3 项）
+### 4.2 已闭环 — 原未覆盖 / 部分（3 项，todos 8/10；FW-09 为静态检查 N/A）
 
 | Feature | 状态 | 说明 |
 |---------|:----:|------|
-| Spike 固件与 Ibex 固件行为对齐 FW-08 | ✅ FM 守卫 | 208 命令两路径 NPU_HEAD/HOST_HEAD/COMPLETION_STATUS 交叉比对 + ring_size=16 wrap 分歧注入（`test_spike_ibex_ring_alignment.py`，todo 8） |
-| `firmware_memory_contract.json` 双向比对 FW-09 | ✅ FM 守卫 | `scripts/gen_firmware_memory_contract.py --check` + `test_memory_contract.py` 三源比对（address_space/command_ring/spec/npu_abi.json），篡改 RING_ENTRIES 注入（todo 9） |
-| 中断驱动 firmware 调度（WFI 唤醒）FW-10 | ✅ FM 守卫 | IRQ 驱动（非 STATUS 轮询）调度 + 抑制 IRQ / ENABLE=0 stall 注入（`test_irq_driven_dispatch.py`，todo 6） |
+| Spike 固件与 Ibex 固件行为对齐 FW-08 | ✅ RTL | FM 守卫 `test_spike_ibex_ring_alignment.py`（todo 8）之上，RTL `run_fm_soc_case CASE_ID=RING-WRAP-STRESS`（todo 10）真实 on-chip Ibex 固件交替分发 1100 条 SFU/Vector 命令，NPU_HEAD 单调推进到 1100 PASS（`build/evidence/task-10-soc-rtl-verification-signoff.txt`） |
+| `firmware_memory_contract.json` 双向比对 FW-09 | ✅ FM 守卫（N/A RTL） | `scripts/gen_firmware_memory_contract.py --check` + `test_memory_contract.py` 三源比对（address_space/command_ring/spec/npu_abi.json），篡改 RING_ENTRIES 注入（todo 9）。**静态 artifact 检查，不涉及 RTL 仿真（plan scope N/A）** |
+| 中断驱动 firmware 调度（WFI 唤醒）FW-10 | ✅ RTL | FM 守卫 `test_irq_driven_dispatch.py`（todo 6）之上，RTL cocotb `run_e2e_irq_stall`（todo 8）真实 ENABLE 门控下 IRQ_MASK + IRQ_STALL 双 PASS（`build/evidence/task-8-soc-rtl-verification-signoff.txt`） |
 
 ---
 
-## 5. 端到端与真实模型 Feature Coverage（38%）
+## 5. 端到端与真实模型 Feature Coverage（88%）
 
 ### 5.1 已覆盖
 
@@ -130,15 +130,15 @@
 | Qwen2.5-3B blk.0 17-op 全链 | `run_e2e_blk0` | ✅ | 17/17 PASS |
 | 3-layer 17-op RTL forward pass | `run_qwen25_3b_3layer` | ✅ | W1.3 PASS |
 
-### 5.2 未覆盖 / 部分（5 项）
+### 5.2 已闭环 — 原未覆盖 / 部分（5 项，todos 13-15；E2E-07 保持 ❌）
 
 | Feature | 状态 | 说明 |
 |---------|:----:|------|
-| 多层（≥9 层）full-model forward pass E2E-04 | ✅ FM 守卫 | 28 层 531 命令持久偏移 FM gate（`test_soc_fm_long_sequence.py`，todo 10/11），末层 cos ≥ 0.999；RTL 段跑扩到 28 层仍待执行 |
-| MobileNetV3 全推理 E2E-05 | ✅ FM 守卫 | 全图 doorbell ring 调度 + golden 逐层比对（`test_mobilenetv3_fm_chain.py`，todo 12），50/52 conv cos=1.0；SoC 级 RTL 段跑仍待执行 |
-| Spike E2E forward pass tolerance E2E-06 | ✅ FM 守卫 | 阈值回归基线钉死（`test_spike_forward_tolerance.py`，todo 13）：2 层 max_abs < 1e-1、36 层 cos_sim 逐层 ≥ P10_LADDER；数值 gap 属量化精度本质 |
-| 性能 calibration | ❌ 未覆盖 | `calibration_state=uncalibrated`；`soc-perf-report.md` 数字是 simulation proxy，非 silicon calibrated |
-| attn_weight RTL dispatch E2E-08 | ✅ FM 守卫 | FM 侧 ABORT/MXU idle 覆盖已就位（`test_mmul_attn_weight_shape(_not_dispatched)` + `test_bug007_consecutive_dispatch`）；BUG-RTL-SOC-007 RTL dispatch 根因仍 Open（RTL 侧排除） |
+| 多层（≥9 层）full-model forward pass E2E-04 | ✅ RTL | FM 守卫 28 层 531 命令持久偏移 gate（`test_soc_fm_long_sequence.py`，todo 10/11）之上，RTL 36 层 Ibex segment run 扩到 **8 个 checkpoint**（L0/L5/L10/L15/L20/L25/L30/L35，todo 14）：`checkpoints_passed=8/8`，LADDER=PASS（510 commands，~13.1h）。全量 36 层连续仿真仍 deferred 到 FPGA。证据 `build/evidence/task-14-soc-rtl-verification-signoff.txt` |
+| MobileNetV3 全推理 E2E-05 | ✅ RTL | FM 守卫 `test_mobilenetv3_fm_chain.py`（todo 12）之上，RTL cocotb `run_e2e_mobilenetv3`（todo 13）：52 conv 层经 MXU wrapper 全链首跑，50/52 cos≥0.99 + 2 退化层 bit-exact，ring_cmds=657、DRAM staging < 8MB。证据 `build/evidence/task-13-soc-rtl-verification-signoff.txt` |
+| Spike E2E forward pass tolerance E2E-06 | ✅ RTL | FM 守卫 `test_spike_forward_tolerance.py`（todo 13）钉死的容差阶梯在 RTL 36 层 8-checkpoint 上逐层复核（todo 14）：L0-19 cos≥0.999、L20-29 ≥0.998、L30-35 ≥0.997，最近达标 L30=0.998220/L35=0.999251 均 PASS。证据 `build/evidence/task-14-soc-rtl-verification-signoff.txt` |
+| 性能 calibration | ❌ 未覆盖 | `calibration_state=uncalibrated`；`soc-perf-report.md` 数字是 simulation proxy，非 silicon calibrated。**保持 deferred，不 claim 完成** |
+| attn_weight RTL dispatch E2E-08 | ✅ RTL | FM 侧 ABORT/MXU idle 覆盖之上，RTL `run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN`（todo 15）：完整 17-op blk.0 chain，全部 26 命令 cycles>0（op07 attn_weight cycles=30755, cos=1.0），14 FP op cos≥0.999 + 3 INT32 bit-exact。**BUG-RTL-SOC-007 链级未复现，保持 Open**。证据 `build/evidence/task-15-soc-rtl-verification-signoff.txt` |
 
 ---
 
@@ -157,26 +157,31 @@
 
 ---
 
-## 7. 已知 Open Bug（阻塞 signoff）
+## 7. 已知 Bug 台账（soc-rtl-verification-signoff todo 1 更新后）
 
 | Bug ID | Severity | Status | 影响 |
 |--------|:--------:|:------:|------|
-| BUG-RTL-SOC-002 | Major | Open | DRAM 8MB 窗口越界，firmware 数据地址 >8MB 时报错 |
-| BUG-RTL-SOC-007 | Critical/Major | Open | attn_weight op dispatch failure（cycles=0），3-layer forward pass 受影响 |
-| BUG-RTL-SOC-P9-00A | Major | Open | Phase 9 遗留 |
-| BUG-RTL-SOC-P9-00D | Major | Open | Phase 9 遗留 |
+| BUG-RTL-SOC-002 | Major | **Waived** | DRAM 8MB 窗口越界，firmware 数据地址 >8MB 时报错。正式 waiver `docs/waivers/WVR-SOC-RTL-002.md`（todo 2），临时约束，FPGA 阶段扩 DRAM 模型后关闭 |
+| BUG-RTL-SOC-007 | Critical/Major | **Open** | attn_weight op dispatch failure（cycles=0），3-layer forward pass 受影响。todo 15/16 ATTN-WEIGHT-CHAIN 链级未复现（op07 cycles=30755），**不 claim Fixed**，保持 Open 待后续追踪 |
+| BUG-RTL-SOC-P9-00A | Major | **Fixed** | Phase 9 遗留，fix `8dd5dbe`+`b545b1f`（todo 1） |
+| BUG-RTL-SOC-P9-00D | Major | **Fixed** | Phase 9 遗留，fix `7aec7a3`（todo 1） |
+| BUG-MXU-P9-00B | Major | **Fixed** | broadcast/multitile 遗留，报告 `docs/bugs/BUG-MXU-P9-00B-broadcast-multitile.md` Status=resolved（todo 1） |
+
+> 台账统计（todo 1）：Total 13，Fixed 11，Waived 1，Open 1（BUG-RTL-SOC-007）。
 
 ---
 
 ## 8. Signoff 差距总结
 
-当前已 signoff 的是 **v3 Func Model 功能正确性**（带显式 deferred），不是 **full SoC RTL 验证覆盖完成**。距离 SoC RTL signoff 还需：
+当前已 signoff 的是 **v3 Func Model 功能正确性** + **SoC RTL 回归闭环**（soc-rtl-verification-signoff todos 3-15；全量回归 FM-SOC 33/33、新目标 11/11、checkpoint 8/8）。原 5 项差距更新如下：
 
-1. **补齐 6 条 SoC 数据通路 FM 模型**（`docs/soc-fm-gap-spec.md` Gap #1/2/7/8/9/11）
-2. **E2E 多层/full-model RTL 回归**（从 blk.0 smoke 扩到 28 层 + MobileNetV3）
-3. **清零 4 个 Open RTL bug**（至少 002/007）
-4. **性能 calibration**（uncalibrated → calibrated）
-5. **补齐 fm-hardening deferred 项**（T1/T2 `firmware_memory_contract.json`、AL1 FM↔C ring 对齐）
+1. ~~**补齐 6 条 SoC 数据通路 FM 模型**~~（`docs/soc-fm-gap-spec.md` Gap #1/2/7/8/9/11）——已闭环：RTL 测试就位（todos 3-9，证据 `build/evidence/task-{3..9}-soc-rtl-verification-signoff.txt`）
+2. ~~**E2E 多层/full-model RTL 回归**~~（从 blk.0 smoke 扩到 28 层 + MobileNetV3）——已闭环：36 层 8-checkpoint subset（todo 14，`checkpoints_passed=8/8`）+ MobileNetV3 RTL 首跑（todo 13，`MOBILENETV3: PASS`）；**全量 36 层连续仿真仍 deferred 到 FPGA**
+3. **清零 Open RTL bug**（部分）——BUG-RTL-SOC-002 → Waived（WVR-SOC-RTL-002）、P9-00A/P9-00D/MXU-P9-00B → Fixed（todo 1）；**BUG-RTL-SOC-007 仍 Open**（todo 15/16 链级未复现，不 claim Fixed）
+4. **性能 calibration**（uncalibrated → calibrated）——**保持 ❌，deferred 到流片/FPGA 实测**
+5. ~~**补齐 fm-hardening deferred 项**~~（T1/T2 `firmware_memory_contract.json`、AL1 FM↔C ring 对齐）——已闭环（fm-soc-datapath-hardening 完成，FW-09 由 FM guard 静态检查覆盖）
+
+剩余 blocker：**性能 calibration（E2E-07，deferred）** + **BUG-RTL-SOC-007（Open，未复现）** + **FW-09（静态 artifact 检查，N/A RTL）**。
 
 ---
 

@@ -1,6 +1,6 @@
 # Func Model Signoff Checklist — v3 + Performance Closure ✅
 
-> **Date**: 2026-08-24 (last updated)
+> **Date**: 2026-08-28 (last updated)
 > **Scope**: v2 op-level + v3 SoC integration + bug-fix cycle (FM-004/005/006/007) + bridge accumulation fix (FM-005 sub-issue) + INTC KeyError fix (FM-008) + SoC data-path hardening closure (`fm-soc-datapath-hardening`, 2026-08-24, F-FM-SOC-01..13). RTL-golden-readiness for full SoC RTL is deferred.
 > **Performance signoff**: ✅ PASS — func-model-performance-infra-calibration-closure completed 2026-08-11, T1-T25 + F1-F4 all passed, performance_spec_verified=true.
 
@@ -214,19 +214,25 @@ verification vplan, giving every closed gap a runnable functional-model guard.
 
 | Signoff ID | Description | Status | Evidence |
 |---|---|---|---|
-| F-FM-SOC-01 | PCIe TLP complete chain (SOC-13) | ✅ PASS | `sim/tests/test_pcie_tlp_chain.py`; `build/evidence/task-1-fm-soc-datapath-hardening.txt` |
-| F-FM-SOC-02 | INTC ENABLE/THRESHOLD gating (SOC-17 / FW-10) | ✅ PASS | `sim/mmio_bridge.py` + `sim/tests/test_intc_gating.py`; `build/evidence/task-2-fm-soc-datapath-hardening.txt` |
-| F-FM-SOC-03 | AXI crossbar arbitration fairness (SOC-14) | ✅ PASS | `sim/tests/test_crossbar_arbitration.py`; `build/evidence/task-3-fm-soc-datapath-hardening.txt` |
-| F-FM-SOC-04 | APB register conformance replay (SOC-15) | ✅ PASS | `sim/tests/test_apb_register_conformance.py`; `build/evidence/task-4-fm-soc-datapath-hardening.txt` |
-| F-FM-SOC-05 | Ibex shared address space cross-engine (SOC-16) | ✅ PASS | `sim/tests/test_ibex_shared_address_space.py`; `build/evidence/task-5-fm-soc-datapath-hardening.txt` |
-| F-FM-SOC-06 | IRQ-driven firmware dispatch (FW-10) | ✅ PASS | `sim/tests/test_irq_driven_dispatch.py`; `build/evidence/task-6-fm-soc-datapath-hardening.txt` |
-| F-FM-SOC-07 | Firmware boot sequence (SOC-18) | ✅ PASS | `sim/tests/test_firmware_boot_sequence.py`; `build/evidence/task-7-fm-soc-datapath-hardening.txt` |
-| F-FM-SOC-08 | Spike↔Ibex ring management alignment (FW-08) | ✅ PASS | `sim/tests/test_spike_ibex_ring_alignment.py`; `build/evidence/task-8-fm-soc-datapath-hardening.txt` |
-| F-FM-SOC-09 | Firmware memory contract JSON generation & comparison (FW-09) | ✅ PASS | `scripts/gen_firmware_memory_contract.py` + `sim/tests/test_memory_contract.py`; `build/evidence/task-9-fm-soc-datapath-hardening.txt` |
-| F-FM-SOC-10 | 28-layer Qwen full-model FM gate (E2E-04) | ✅ PASS | `sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset`; `build/evidence/task-10-fm-soc-datapath-hardening.txt` + `build/evidence/task-11-fm-soc-datapath-hardening.txt` |
-| F-FM-SOC-11 | MobileNetV3 CV chain FM gate (E2E-05) | ✅ PASS | `sim/tests/test_mobilenetv3_fm_chain.py`; `build/evidence/task-12-fm-soc-datapath-hardening.txt` |
-| F-FM-SOC-12 | Spike forward pass tolerance regression gate (E2E-06) | ✅ PASS | `sim/tests/test_spike_forward_tolerance.py`; `build/evidence/task-13-fm-soc-datapath-hardening.txt` |
-| F-FM-SOC-13 | ABORT/MXU idle coverage (E2E-08) | ✅ PASS | `sim/tests/test_soc_fm.py::test_mmul_attn_weight_shape` + `test_mmul_attn_weight_shape_not_dispatched`; `build/evidence/task-14-fm-soc-datapath-hardening.txt` |
+| F-FM-SOC-01 | PCIe TLP complete chain (SOC-13) | ✅ PASS | FM: `sim/tests/test_pcie_tlp_chain.py`; `build/evidence/task-1-fm-soc-datapath-hardening.txt`. RTL: `run_e2e_pcie_tlp_chain` — `build/evidence/task-3-soc-rtl-verification-signoff.txt` |
+| F-FM-SOC-02 | INTC ENABLE/THRESHOLD gating (SOC-17 / FW-10) | ✅ PASS | FM: `sim/mmio_bridge.py` + `sim/tests/test_intc_gating.py`; `build/evidence/task-2-fm-soc-datapath-hardening.txt`. RTL: `run_e2e_intc_irq` THRESHOLD>1/ENABLE=0 — `build/evidence/task-4-soc-rtl-verification-signoff.txt` |
+| F-FM-SOC-03 | AXI crossbar arbitration fairness (SOC-14) | ✅ PASS | FM: `sim/tests/test_crossbar_arbitration.py`; `build/evidence/task-3-fm-soc-datapath-hardening.txt`. RTL: `run_crossbar_fairness` FAIRNESS: PASS — `build/evidence/task-5-soc-rtl-verification-signoff.txt` |
+| F-FM-SOC-04 | APB register conformance replay (SOC-15) | ✅ PASS | FM: `sim/tests/test_apb_register_conformance.py`; `build/evidence/task-4-fm-soc-datapath-hardening.txt`. RTL: `run_apb_conformance` 168/168 — `build/evidence/task-6-soc-rtl-verification-signoff.txt` |
+| F-FM-SOC-05 | Ibex shared address space cross-engine (SOC-16) | ✅ PASS | FM: `sim/tests/test_ibex_shared_address_space.py`; `build/evidence/task-5-fm-soc-datapath-hardening.txt`. RTL: `run_e2e_ibex_shared_addr` SHARED_ADDR: PASS — `build/evidence/task-7-soc-rtl-verification-signoff.txt` |
+| F-FM-SOC-06 | IRQ-driven firmware dispatch (FW-10) | ✅ PASS | FM: `sim/tests/test_irq_driven_dispatch.py`; `build/evidence/task-6-fm-soc-datapath-hardening.txt`. RTL: `run_e2e_irq_stall` IRQ_MASK + IRQ_STALL — `build/evidence/task-8-soc-rtl-verification-signoff.txt` |
+| F-FM-SOC-07 | Firmware boot sequence (SOC-18) | ✅ PASS | FM: `sim/tests/test_firmware_boot_sequence.py`; `build/evidence/task-7-fm-soc-datapath-hardening.txt`. RTL: `run_fm_soc_case CASE_ID=FM-SOC-009` BOOT_ASSERT/SP_INIT/BOOT_ROM — `build/evidence/task-9-soc-rtl-verification-signoff.txt` |
+| F-FM-SOC-08 | Spike↔Ibex ring management alignment (FW-08) | ✅ PASS | FM: `sim/tests/test_spike_ibex_ring_alignment.py`; `build/evidence/task-8-fm-soc-datapath-hardening.txt`. RTL: `run_fm_soc_case CASE_ID=RING-WRAP-STRESS` NPU_HEAD=1100 — `build/evidence/task-10-soc-rtl-verification-signoff.txt` |
+| F-FM-SOC-09 | Firmware memory contract JSON generation & comparison (FW-09) | ✅ PASS | FM: `scripts/gen_firmware_memory_contract.py` + `sim/tests/test_memory_contract.py`; `build/evidence/task-9-fm-soc-datapath-hardening.txt`. RTL: N/A（静态 artifact 检查，不涉及 RTL 仿真，plan scope） |
+| F-FM-SOC-10 | 28-layer Qwen full-model FM gate (E2E-04) | ✅ PASS | FM: `sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset`; `build/evidence/task-10-fm-soc-datapath-hardening.txt` + `build/evidence/task-11-fm-soc-datapath-hardening.txt`. RTL: 36 层 8-checkpoint（L0/L5/L10/L15/L20/L25/L30/L35, `checkpoints_passed=8/8`）— `build/evidence/task-14-soc-rtl-verification-signoff.txt`；FM-SOC-10X chain fix（todo 11）— `build/evidence/task-11-soc-rtl-verification-signoff.log`，PASS 由 33/33 全量回归确认 `build/evidence/task-16-soc-rtl-verification-signoff.txt` |
+| F-FM-SOC-11 | MobileNetV3 CV chain FM gate (E2E-05) | ✅ PASS | FM: `sim/tests/test_mobilenetv3_fm_chain.py`; `build/evidence/task-12-fm-soc-datapath-hardening.txt`. RTL: `run_e2e_mobilenetv3` MOBILENETV3: PASS（50/52 convs cos≥0.99）— `build/evidence/task-13-soc-rtl-verification-signoff.txt` |
+| F-FM-SOC-12 | Spike forward pass tolerance regression gate (E2E-06) | ✅ PASS | FM: `sim/tests/test_spike_forward_tolerance.py`; `build/evidence/task-13-fm-soc-datapath-hardening.txt`. RTL: 36 层 8-checkpoint LADDER=PASS（L0-19≥0.999 / L20-29≥0.998 / L30-35≥0.997）— `build/evidence/task-14-soc-rtl-verification-signoff.txt` |
+| F-FM-SOC-13 | ABORT/MXU idle coverage (E2E-08) | ✅ PASS | FM: `sim/tests/test_soc_fm.py::test_mmul_attn_weight_shape` + `test_mmul_attn_weight_shape_not_dispatched`; `build/evidence/task-14-fm-soc-datapath-hardening.txt`. RTL: `run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN` attn_weight cycles>0（op07 cycles=30755, cos=1.0）；BUG-RTL-SOC-007 链级未复现，保持 Open — `build/evidence/task-15-soc-rtl-verification-signoff.txt` |
+
+**RTL regression closure (soc-rtl-verification-signoff, 2026-08-28)**: full SoC RTL
+regression on sz0001 — `FM-SOC: 33/33 PASS`（含 todo 11 修复后的 FM-SOC-10X）、
+11/11 new acceptance targets PASS、36 层 8-checkpoint `checkpoints_passed=8/8`
+（todo 14 evidence referenced）。汇总证据 `build/evidence/task-16-soc-rtl-verification-signoff.txt`。
+Performance calibration（E2E-07）与 BUG-RTL-SOC-007 不在本 closure 内 claim。
 
 **Final Wave**: F1 plan compliance audit APPROVED (14/14 evidence PASS), F2 code
 quality APPROVED (0 residue, 0 new pytest failures; baseline 20 failed / 2280 passed /
@@ -250,9 +256,13 @@ Python functional model coverage**. All six now have FM guards from
 
 These gaps were pre-specified with full API designs, testability plans, and a 3-wave
 build order in `docs/soc-fm-gap-spec.md`. With `fm-soc-datapath-hardening` closed
-(2026-08-24), only **performance calibration (E2E-07, `calibration_state=uncalibrated`)**
-and the **pre-existing RTL bugs (BUG-RTL-SOC-002 / BUG-RTL-SOC-007, both still Open)**
-remain open / out of scope for this signoff. They are not claimed as fixed here.
+(2026-08-24), the six data-path gaps were then closed at RTL level by
+`soc-rtl-verification-signoff` (todos 3-9; full regression `FM-SOC: 33/33` + 11/11
+new acceptance targets, see `build/evidence/task-16-soc-rtl-verification-signoff.txt`).
+Remaining out of scope for this signoff: **performance calibration (E2E-07,
+`calibration_state=uncalibrated`)** and **BUG-RTL-SOC-007 (still Open; the todo 15/16
+chain-level run did not reproduce cycles=0)**. BUG-RTL-SOC-002 is Waived
+(`docs/waivers/WVR-SOC-RTL-002.md`), not claimed as fixed.
 
 ---
 
@@ -261,8 +271,11 @@ remain open / out of scope for this signoff. They are not claimed as fixed here.
 - **RTL-golden-readiness for full SoC RTL is deferred**. This signoff covers the
   Func Model's functional correctness as a golden reference, not the RTL's
   readiness for production tape-out.
-- **Multi-layer / full-model signoff is NOT claimed**. Only blk.0 (single transformer
-  layer) is covered by this evidence chain.
+- **8-checkpoint subset signoff (L0/L5/L10/L15/L20/L25/L30/L35) claimed**. Backed by
+  the RTL 36-layer segment run (`build/evidence/task-14-soc-rtl-verification-signoff.txt`,
+  `checkpoints_passed=8/8`, LADDER=PASS). Multi-layer / full-model signoff beyond the
+  8-checkpoint subset is NOT claimed; the full 36-layer continuous simulation is
+  deferred to FPGA.
 - **Performance signoff remains FAIL/PARTIAL** and is tracked in a separate
   document. Do NOT infer performance from functional correctness.
 - **The Func Model implements the v1 Block/bootstrap architecture link**. It does
