@@ -1,0 +1,73 @@
+# Todo 5 — RTL AXI crossbar fairness testbench (soc-rtl-verification-signoff)
+# Generated: 2026-08-27 09:35 (Asia/Shanghai)
+# Plan: .omo/plans/soc-rtl-verification-signoff.md todo 5
+# Commit: 491f8a6 test(soc): add AXI crossbar fairness testbench with strict
+#         round-robin assertion
+#         (Makefile target was carried in parallel todo-3 commit 9fbcd85)
+
+## Deliverables
+
+- rtl/tb/axi_crossbar_fairness_tb.sv — NEW
+  Sequential-rotation fairness testbench for axi_crossbar (M=7, S=2):
+  - P1: 5 rotations x 7 masters x (single-beat read + single-beat write),
+    350-cycle window (>=100 required). Asserts per-master AR/AW grant counts
+    within +/-1, strict alternation (no back-to-back same master), and all
+    70 transactions completing OKAY.
+  - P2: DECERR read — master 3's unmapped read injected while ar_busy is
+    occupied by master 1's in-flight read. RRESP=DECERR(2'b11), RLAST=1,
+    no AR grant credit consumed, master 1 unaffected, next mapped read OKAY.
+  - P3: DECERR write — master 4's unmapped write injected while aw_busy is
+    occupied by master 2's in-flight write. BRESP=DECERR(2'b11), no AW grant
+    credit consumed, master 2 unaffected, next mapped write OKAY.
+  - Hierarchical probes: u_dut.ar_granted[0]/aw_granted[0],
+    u_dut.ar_busy[0]/aw_busy[0], u_dut.m_rvalid_o[3], u_dut.m_bvalid_o[4].
+- sim/regression/Makefile — MODIFIED: new target run_crossbar_fairness
+  (VCS compile -> simulate -> grep "FAIRNESS: PASS").
+
+## RTL finding (documented, NOT fixed — out of scope)
+
+The crossbar accepts ANY master's AR/AW whenever the target slave is free
+(m_arready_o = !m_ar_active && (!m_ar_hit || !ar_busy)). If two masters
+assert ARVALID/AWVALID in the same slave-free cycle, both are accepted
+(m_ar_active/m_aw_active set) but only one is granted; the ungranted master
+never receives a response and the arbiter scan (!m_ar_active) permanently
+excludes it — phantom-accept deadlock. Reproduced empirically with a
+constant-assert stimulus (38 grants, all to master 1; others stuck active).
+The TB therefore drives masters one at a time in round-robin order so no two
+masters overlap assertion during a slave-free cycle. The crossbar does NOT
+claim true concurrent multi-master support. See learnings notepad.
+
+## Acceptance command (sz0001, VCS V-2023.12-SP2)
+
+  make -C sim/regression run_crossbar_fairness
+
+Executed via:
+  ssh zhengs@192.168.0.11 "source /NAS/Tools/methodology/modules/init/bash &&
+  module load vcs/vcs_2023.12sp2 && cd /home/prj/zhengs/caduceuscore/CaduceusCore &&
+  source sim/regression/run_env.sh && make -C sim/regression run_crossbar_fairness"
+
+Result: exit 0. Log (sim/regression/crossbar_fairness.log) tail:
+
+  [TB]   Window: 350 cycles
+  [TB]   AR grants per master: 5 5 5 5 5 5 5 (total 35)
+  [TB]   CHECK AR fairness max-min=0 <= 1: PASS
+  [TB]   CHECK AR strict alternation (no back-to-back same master): PASS
+  [TB]   AW grants per master: 5 5 5 5 5 5 5 (total 35)
+  [TB]   CHECK AW fairness max-min=0 <= 1: PASS
+  [TB]   CHECK AW strict alternation (no back-to-back same master): PASS
+  [TB]   CHECK all 70 reads+writes completed OKAY: PASS
+  [TB]   CHECK RRESP=DECERR(2'b11) RLAST=1: PASS
+  [TB]   CHECK in-flight master 1 read completed OKAY: PASS
+  [TB]   CHECK post-DECERR mapped read completes OKAY: PASS
+  [TB]   CHECK BRESP=DECERR(2'b11): PASS
+  [TB]   CHECK in-flight master 2 write completed OKAY: PASS
+  [TB]   CHECK post-DECERR mapped write completes OKAY: PASS
+  [TB]   CHECK DECERR read consumed no AR grant credit: PASS
+  [TB]   CHECK DECERR write consumed no AW grant credit: PASS
+  [TB] Summary: 19 passed, 0 failed
+  FAIRNESS: PASS
+  CROSSBAR_FAIRNESS: PASS
+
+## Status
+
+Status: PASS — make exits 0 and the log contains FAIRNESS: PASS.

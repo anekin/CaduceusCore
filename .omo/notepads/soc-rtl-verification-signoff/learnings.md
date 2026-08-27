@@ -104,3 +104,56 @@ to concrete artifacts (todo 16 evidence + FPGA expansion) rather than dates.
   (V-2023.12-SP2, matching the prebuilt simv_soc_cocotb); log contains
   `test_e2e_pcie_tlp_chain.*PASS`. Evidence:
   `build/evidence/task-3-soc-rtl-verification-signoff.txt`.
+## 2026-08-27 09:35 — todo 5: AXI crossbar fairness testbench (RTL)
+
+### Outcome
+`rtl/tb/axi_crossbar_fairness_tb.sv` + `sim/regression/Makefile` target
+`run_crossbar_fairness` created. `make -C sim/regression run_crossbar_fairness`
+on sz0001: exit 0, log contains `FAIRNESS: PASS` (19/19 checks). Evidence:
+`build/evidence/task-5-soc-rtl-verification-signoff.txt`.
+
+### Key finding — phantom-accept deadlock in axi_crossbar.v (NOT fixed, out of scope)
+The crossbar's ready logic is `m_arready_o = !m_ar_active && (!m_ar_hit ||
+!ar_busy)`: ANY master's AR/AW is accepted whenever the target slave is free,
+independently of the round-robin grant. If two masters assert ARVALID/AWVALID
+in the same slave-free cycle, both set m_ar_active/m_aw_active, but only one
+is granted (`aw_granted`/`ar_granted`). The ungranted master waits for a
+response that only the granted master can receive (B/R routing matches
+aw_granted/ar_granted), and the arbiter scan requires `!m_ar_active`, so it
+never grants the stuck master — permanent deadlock. Empirically reproduced:
+constant-assert stimulus gave 38 grants ALL to master 1 while masters 0/2-6
+stayed stuck-active; AW channel stuck after first grant when the slave model
+held WREADY low (testbench bug, not RTL).
+
+Implication: the RTL crossbar does NOT support true concurrent multi-master
+requests on the same slave; the SoC passes E2E because firmware serializes
+traffic. Do not claim concurrent multi-master support anywhere. A future
+hardening plan should consider coupling accept to grant (accept only the
+granted master) — requires a separate RTL-change task.
+
+### Testbench design (workaround)
+Sequential rotation: masters 0→1→...→6→0 each do one single-beat read then
+one single-beat write, deasserting VALID after every handshake so no two
+masters ever overlap assertion during a slave-free cycle. Grant sequence is
+then strictly alternating by construction; fairness assertion (counts within
+±1 over a 350-cycle window) is meaningful for the arbitration the RTL can
+actually perform. DECERR read (master 3) and DECERR write (master 4) are
+injected while the slave grant credit is occupied (ar_busy/aw_busy=1) and
+asserted to be accepted immediately, return RESP=2'b11, consume no grant
+(monitored via grant events vs. master-address mapped-ness), and leave the
+in-flight master's transaction untouched.
+
+### Verilog TB pitfalls hit (reminders)
+- Never deassert a VALID at the same posedge that samples it for accept:
+  the initial block's blocking assign races the DUT's always block. Deassert
+  at the following negedge (after the handshake posedge).
+- The crossbar's DECERR B (b_dec) is consumed one cycle after the absorbed W
+  handshake; present the DECERR write's W immediately after its AW accept so
+  its B lands in the same cycle as the slave's OKAY B and both can be
+  captured at one posedge (a late-presented W's B arrives after the other
+  master's B and gets missed by a sequential wait).
+- Slave model: WREADY must be driven high (always-ready single-beat slave);
+  holding it low stalls W forever, leaving aw_busy latched.
+- Grant counting via hierarchical probes: edge-detect ar_busy/aw_busy
+  0→1 with a one-cycle-delayed shadow reg, then index the per-master counter
+  with u_dut.ar_granted[0]/aw_granted[0] sampled in that same cycle.
