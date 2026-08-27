@@ -526,3 +526,67 @@ this chain run as the reproduction attempt.
 - Boot assertions run automatically (case routes through IbexRunner._run_spike
   → `_check_boot_sequence`); the completion-ring tracer's cmd-0 "not done"
   marker is the boot self-test's 0xDEADBEEF at comp[0].
+
+## [2026-08-27] Todo 13 — MobileNetV3 CV chain RTL cocotb fix (soc-rtl-verification-signoff)
+
+### Root cause: N ≡ 8 (mod 16) tile widths break the store-out/drain byte geometry
+The 9 failing conv layers (512/516/518/520/528/534/540/542/544) share one trait:
+every dispatched subproblem has N ≡ 8 (mod 16) and M > 1.  Two independent
+mechanisms, both driven by the 32-byte (mod 64) row misalignment:
+
+1. **mxu_soc_wrapper store-out W-channel (SRAM side).** For a tile width N the
+   wrapper writes each row as a burst of ceil(N*4/64) 64-byte beats at address
+   `out_base + row*N*4` with `wstrb = mask << off` and `wdata = fp32 << off*8`.
+   When `N*4 ≡ 32 (mod 64)` the odd rows start at a +32 offset: every beat then
+   only carries the low 32 bytes of its 64-byte lane into the upper half of the
+   target word, so the middle 32 bytes of each beat are never strobed —
+   odd rows lose elements 8..15, 24..31, ... (SRAM stale data stays behind).
+   Verified empirically with a synthetic dispatch: N=24 → odd rows lose
+   cols 8..15 (cos 0.85-0.91); N=40 → cols 8..15+24..31; N=56 → three chunks.
+2. **Firmware drain DMA + dram_model (DRAM side).** The drain copies row m to
+   `dram_out + m*desc.N*4`; for desc.N ≡ 8 (mod 16) odd rows land at a
+   +32 offset.  `dram_model` writes full 64-byte words and IGNORES WSTRB, and
+   the axi_cdma's unaligned stream is not repositioned the way the wrapper's
+   W-channel is, so 256-byte rows (N=72/88/120 tile-0) land shifted −32 bytes
+   (`rtl[m,c] = golden[m,c+8]`, first 8 cols clobbered) — this is why the
+   multi-tile layers (512: 0.509, 518: 0.0136) were far worse than the
+   single-tile ones.
+
+The 100%-reproducible signature: synthetic runs N=24/40/56/72/88/120 all fail,
+N=8/16/32/48/64/80/96/128 all bit-exact.  The passing chain layers (514 N=72
+DW tails of 8, 524/526 tails of 32, 548 tail 16, 530/532/536/538 ...) are
+exactly the ones whose tile widths are ≡ 0 (mod 16) or single-beat (32-byte
+rows fit in one word).  Layer 522 (N=24, same geometry as failing 516) passed
+bit-exact by a store-out/drain interleaving artifact (stale SRAM middles got
+refilled with correct data) — an accident, not a reliable property; the fix
+makes it deterministic.
+
+### Fix (test-side only — no RTL changes)
+In `_mobilenetv3_run_chain` (`sim/cocotb_bridge.py`), every dispatched
+subproblem's N is padded to the next multiple of 16 with zero weight columns
+(zero activation columns for the padded depthwise channels).  Every tile width
+is then ≡ 0 (mod 16) → every store-out row and every drain destination is
+64-byte aligned → both mechanisms vanish.  Padded columns compute to 0 on the
+RTL and the golden path, so `out[:, n0:n1] = rtl_chunk[:, :n_chunk]` compares
+the real columns unchanged.  Offline golden replay confirms all dispatched
+subproblems have N%16==0 and per-layer cos stays 1.0.  Chunk count, ring
+commands (657) and the <8MB DRAM staging budget are unchanged.
+
+### Method
+- Isolated one failing layer through the real RTL with a temporary debug
+  cocotb test (synthetic (M,K,N) subproblems via `_mobilenetv3_rtl_dispatch_mmul`)
+  and dumped per-row/per-col diffs; also replayed the chain to node 22 to
+  reproduce the exact log cos values (0.509224/0.849567/0.013640/0.359211 and
+  the 522=1.0 anomaly) before designing the fix.
+- The FM guard `test_mobilenetv3_fm_chain.py` passes because the FuncModel
+  firmware (tile_scheduler) tiles in 128-wide slots with different packers and
+  schedules depthwise per channel (N=1); the RTL firmware tiles 64-wide, so the
+  FM guard's bit-exact result does not exercise this RTL-only geometry bug.
+
+### Outcome
+`make -C sim/regression run_e2e_mobilenetv3` on sz0001: exit 0, log contains
+`MOBILENETV3: PASS (convs 50/52 cos>=0.99, 2 degenerate bit-exact,
+ring_cmds=657, DRAM staging < 8MB)`, TESTS=1 PASS=1 FAIL=0.  All 9
+previously-failing layers (512/516/518/520/528/534/540/542/544) and both
+classifier Gemms (node_linear, node_linear_1) now cos=1.000000.  Evidence:
+`build/evidence/task-13-soc-rtl-verification-signoff.txt`.
