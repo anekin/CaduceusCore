@@ -590,3 +590,50 @@ ring_cmds=657, DRAM staging < 8MB)`, TESTS=1 PASS=1 FAIL=0.  All 9
 previously-failing layers (512/516/518/520/528/534/540/542/544) and both
 classifier Gemms (node_linear, node_linear_1) now cos=1.000000.  Evidence:
 `build/evidence/task-13-soc-rtl-verification-signoff.txt`.
+
+## [2026-08-28] Todo 14 — Ibex 36-layer 8-checkpoint run: resume logic + final PASS
+
+### Outcome
+Evidence `build/evidence/task-14-soc-rtl-verification-signoff.txt`: **checkpoints_passed=8/8,
+LADDER=PASS, Overall PASS** (finalized 02:52:32 CST Aug 28, elapsed 47241.5s ≈ 13.1h,
+510 commands, well inside the 24h cap). Cocotb summary `TESTS=1 PASS=1 FAIL=0 SKIP=0`,
+`LAUNCHER_EXIT=0`. All 7 pre-layer cross-checks 1.000000. Closest ladder calls:
+L30 cos=0.998220 (thr 0.997), L35 cos=0.999251 (thr 0.997) — both PASS.
+
+### Resume logic added (commit `762f512`)
+`_resume_from_npz(spike_layers)` in `sim/rtl_soc_segment_run.py` returns
+`(completed_checkpoints, fp32_states, hw_states, cross_checks, segment_records,
+ring_offset, total_consumed)`; the test body restores checkpoint_results from the
+npz (recomputed cos values are bit-identical to the prior run's), re-writes evidence
+up-front (completed=PASS, rest=PENDING), skips completed segments, and supports
+mid-segment resume (pre-layer saved but checkpoint missing → chain from saved
+`hw_layer_{pre}_output` / P10_RESID_SCALE). Ladder thresholds untouched.
+
+### Key discovery: the run was never killed
+The "4/8 PENDING" evidence snapshot was a MID-RUN incremental write (the runner
+rewrites evidence after every checkpoint). The original 24h-timeboxed run (started
+13:43 CST Aug 27) was still executing on sz0001 when this todo picked up — it had
+already dispatched L19 and went on to finish 8/8 on its own. Do NOT assume a
+PENDING-marked evidence file means the run died; check `pgrep -f simv_soc_ibex_seg`
+first. Launching a second run would have raced the in-flight one on the shared
+evidence/npz paths.
+
+### Resume semantics worth recording
+- The npz saves after each checkpoint (segment granularity), so the resume boundary
+  is a segment boundary; intermediate pre-layers are also saved, enabling the
+  mid-segment path.
+- A resumed VCS session reboots the firmware → NPU_HEAD=0 → the command ring MUST
+  restart at slot 0; the prior run's ring_offset/total_consumed are bookkeeping-only
+  (used for the cumulative `commands_dispatched` evidence line), never for ring
+  placement.
+- Restored `max_abs` values match the evidence only at %.4e display precision
+  (full-precision recompute differs ~2e-6); cos values match to 6 decimals.
+
+### Decision log
+- Did NOT kill the healthy in-flight run to "resume" — would have thrown away ~8h of
+  executed layers for no gain; the resume code is insurance for genuine timebox kills.
+- Did NOT re-run the script post-completion to exercise the resume path: the resume
+  run's up-front evidence write would first mark LADDER=IN_PROGRESS, and any failure
+  would clobber the verified PASS evidence. Resume reconstruction was validated
+  numerically instead (bit-exact vs prior evidence; all restored results re-pass the
+  ladder).
