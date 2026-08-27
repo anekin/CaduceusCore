@@ -689,3 +689,35 @@ never matches). Evidence file documents the breakdown explicitly.
 The doc-sync todo can cite `FM-SOC: 33/33` + 11/11 new targets + 8/8
 checkpoints directly from the task-16 evidence file; the checkpoint
 coverage statement ("8-checkpoint subset signoff") is now backed end-to-end.
+
+## [2026-08-28] Todo 17 — vplan + signoff checklist doc sync (soc-rtl-verification-signoff)
+
+### Outcome
+Doc-sync todo: vplan coverage tables and signoff checklist updated with the RTL
+regression evidence from todos 3-16. Acceptance: `grep -c '✅ RTL'` vplan = 12 (≥6),
+SoC-section `grep -c 'task-'` = 14 (≥13). Evidence:
+`build/evidence/task-17-soc-rtl-verification-signoff.txt`.
+
+### What changed
+- vplan §1: SoC 互联 67→**100%**（18/18），固件/CPU 70→**90%**（9/10，FW-09 N/A），
+  E2E 38→**88%**（7/8），合计 79→**97%**（64/66）。
+- 12 条 gap 行标 **✅ RTL**（6 SoC 互联 + FW-08/10 + E2E-04/05/06/08）；E2E-07 性能
+  calibration 保持 ❌（deferred）；FW-09 保持 FM guard-only（静态检查，N/A RTL）。
+- §7 bug 台账同步 todo 1：002=Waived、P9-00A/P9-00D/MXU-P9-00B=Fixed、007=Open（链级未复现）。
+- §8 差距总结：item 1/2/5 划掉（已闭环），item 3 部分闭环（仅 007 剩 Open），item 4 保持。
+- checklist F-FM-SOC-01..13 每行追加 RTL evidence 引用（F-FM-SOC-09 标 N/A）；
+  Scope Limitations "Multi-layer / full-model signoff is NOT claimed" 改为
+  "8-checkpoint subset signoff (L0/L5/L10/L15/L20/L25/L30/L35) claimed"。
+- 顺手修正 checklist 里过期的 "BUG-RTL-SOC-002 / 007 both still Open" 表述（002 已 Waived）。
+
+### Lessons
+1. **task-11 没有 `.txt` evidence 文件**（只有 `task-11-soc-rtl-verification-signoff.log`
+   和附属 pre-fix logs）。FM-SOC-10X 修复的权威证据是 todo 16 的 33/33 全量回归，所以
+   checklist F-FM-SOC-10 行引用 `.log` + `task-16` 汇总。
+2. **FW-09（memory contract JSON）是静态 artifact 检查，plan scope 明确 N/A for RTL**——
+   不能标 ✅ RTL。固件/CPU 覆盖率因此是 9/10=90% 而非 100%。保持诚实计数，不凑数。
+3. **`grep -c` 数的是含匹配的行数，不是匹配总数**。checklist SoC 段 13 行 F-FM-SOC +
+   closure note = 14 行含 `task-`；单行多个引用（F-FM-SOC-10 有 3 个 RTL ref）只算 1。
+4. **覆盖率口径**：vplan 只把「有 RTL 级测试」算 covered，FM guard 不算（原表 52/66
+   就是这个口径）。新增 12 条 RTL 覆盖后 64/66=97%。full signoff 仍被性能 calibration
+   （E2E-07，deferred）阻塞——文档中明确标注，不 claim 100%。

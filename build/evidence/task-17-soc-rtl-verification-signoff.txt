@@ -1,0 +1,73 @@
+Task 17 — soc-rtl-verification-signoff: update vplan + signoff checklist with RTL regression evidence
+=======================================================================================================
+Timestamp     : 2026-08-28T04:55:33+08:00
+Commit        : c5c49bad494abf323ca6eb0c395979f52853a560 (HEAD before doc-sync commit; this
+                evidence file is committed together with the doc-sync commit)
+Host          : local (documentation sync; no VCS run — todo 16 regression evidence referenced)
+
+Scope
+-----
+Doc-sync todo: rewrite .omo/plans/soc-rtl-verification-vplan.md coverage tables and
+docs/func-model-signoff-checklist.md signoff rows with the RTL regression evidence
+produced by todos 3-16. No RTL / firmware / test code modified.
+
+Modified files
+--------------
+1) .omo/plans/soc-rtl-verification-vplan.md
+   - Section 1 summary table recomputed:
+       计算引擎     22/22 = 100% (unchanged)
+       SoC 互联     18/18 = 100%  (was 67%; 6 gap rows now have RTL tests, todos 3-9)
+       固件/CPU      9/10 =  90%  (was 70%; FW-08/10 RTL-closed, FW-09 N/A static check)
+       E2E           7/8  =  88%  (was 38%; todos 13-15, E2E-07 perf calibration stays ❌)
+       契约/守卫     8/8  = 100% (unchanged)
+       合计         64/66 =  97%  (was 79%)
+   - Section 3.2/4.2/5.2 gap rows marked closed: 12 rows now ✅ RTL with evidence refs
+     (6 SoC interconnect + FW-08 + FW-10 + E2E-04/05/06/08); E2E-07 stays ❌ (deferred);
+     FW-09 stays FM-guard only (static artifact check, N/A for RTL).
+   - Section 7 bug ledger synced with todo 1: 002=Waived, P9-00A/P9-00D/MXU-P9-00B=Fixed,
+     BUG-RTL-SOC-007=Open (NOT claimed fixed; todo 15/16 chain-level run did not reproduce).
+   - Section 8 gap summary: closed items struck through (items 1,2,5); item 3 partially
+     closed (only BUG-007 remains Open); item 4 (perf calibration) kept ❌.
+2) docs/func-model-signoff-checklist.md
+   - SoC Data-Path Hardening table (F-FM-SOC-01..13): each row now carries the RTL
+     evidence ref build/evidence/task-{N}-soc-rtl-verification-signoff.txt
+     (F-FM-SOC-09 = RTL N/A; F-FM-SOC-10 references task-14 + task-11 log + task-16).
+   - Added "RTL regression closure" note after the table citing task-16 (33/33 + 11/11 + 8/8).
+   - Scope Limitations: "Multi-layer / full-model signoff is NOT claimed" replaced with
+     "8-checkpoint subset signoff (L0/L5/L10/L15/L20/L25/L30/L35) claimed" (todo 14 run
+     passed 8/8, LADDER=PASS); full 36-layer continuous simulation still deferred to FPGA.
+   - Fixed stale "BUG-RTL-SOC-002 / BUG-RTL-SOC-007 both still Open" wording:
+     002 is now Waived (WVR-SOC-RTL-002); 007 still Open (not reproduced at chain level).
+   - Header date bumped to 2026-08-28.
+   - NOT changed: performance calibration status (still ❌/uncalibrated); BUG-RTL-SOC-007
+     NOT claimed Fixed.
+
+Acceptance commands
+-------------------
+1) grep -c '✅ RTL' .omo/plans/soc-rtl-verification-vplan.md
+   Output: 12
+   Expect: >= 6  ->  PASS
+
+2) sed -n '/## SoC Data-Path Hardening Signoff/,/^## /p' \
+        docs/func-model-signoff-checklist.md | grep -c 'task-'
+   Output: 14
+   Expect: >= 13 (in the SoC Data-Path Hardening section)  ->  PASS
+
+3) sanity: count of RTL evidence file refs in the SoC Data-Path Hardening section
+   sed -n '/## SoC Data-Path Hardening Signoff/,/^## /p' \
+        docs/func-model-signoff-checklist.md | grep -c 'soc-rtl-verification-signoff.txt'
+   Output: 13  (one per F-FM-SOC-01..08,10..13 row + closure note; F-FM-SOC-09 N/A)
+
+Constraints honored
+-------------------
+- Performance calibration (E2E-07) NOT claimed complete — status remains ❌ / deferred.
+- BUG-RTL-SOC-007 NOT marked Fixed — remains Open (todo 15/16 ATTN-WEIGHT-CHAIN
+  reproduced op07 cycles=30755, cos=1.0, so the chain-level cycles=0 was NOT reproduced).
+- No RTL, firmware, or test code modified (docs + plan + evidence only).
+- DRAM 8MB window waiver (WVR-SOC-RTL-002) referenced, not re-opened.
+
+Summary
+=======
+  vplan ✅ RTL rows             : 12  (>= 6 required)  PASS
+  checklist SoC section task-  : 14  (>= 13 required) PASS
+  RTL evidence refs in table   : 13 rows wired to build/evidence/task-{N}-soc-rtl-verification-signoff.txt
