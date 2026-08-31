@@ -790,3 +790,49 @@ rather than silently assumed.
   DMA CMD WOS DOC-DIV checks pass against the real-RTL oracle with the
   BUG-RTL-SOC-011 tag (log: sim/regression/apb_conformance_real.log).
 - Evidence: `.omo/evidence/task-12-soc-rtl-review-remediation.txt`.
+
+---
+
+### BUG-RTL-SOC-012 — blk0 E2E op05 attn_score MMUL drains only first row (words 2-63 zero)
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-08-31 |
+| **Block** | T14 (blk0 E2E investigation, soc-rtl-review-remediation) |
+| **Case** | run_e2e_blk0 (op05 attn_score MMUL) |
+| **Severity** | Major |
+| **Type** | RTL (MXU controller / accumulator drain) |
+| **Status** | Open |
+
+#### Symptom
+
+run_e2e_blk0 FAILs at op05 attn_score MMUL with 62/64 INT32 mismatches; first
+mismatch @ byte[8] (actual=0x00, golden=0xD0); identical failure with BOTH
+post-fix and pre-fix (c478ae5~1) crossbar — attribution RESOLVED PRE-EXISTING.
+Geometry: M=32, N=2, K=128, tiles=2 → 64-word output; only words 0-1 correct.
+
+Affects SoC E2E blk0 attn_score; NOT caused by crossbar fix c478ae5 —
+attribution verified pre-existing.
+
+#### Root Cause
+
+Candidate root cause: multi-tile M-loop accumulator drain/writeback writes
+only row 0. Golden vectors dated 2026-07-07 — stale-golden hypothesis still
+open.
+
+Distinct from BUG-RTL-SOC-007 (op07 attn_weight cycles=0) — same attention
+chain, different signature.
+
+#### Fix
+
+TBD — root cause not yet identified.
+
+#### Verification
+
+2026-08-31 investigation — byte-identical failure in repro and baseline
+(except 4 environmental lines); determinism confirmed.
+
+Evidence:
+- `.omo/evidence/task-14-blk0-investigation.txt` (verdict + comparison table)
+- `.omo/evidence/task-14-blk0-repro.log`
+- `.omo/evidence/task-14-blk0-baseline.log`
