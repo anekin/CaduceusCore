@@ -267,8 +267,9 @@ build order in `docs/soc-fm-gap-spec.md`. With `fm-soc-datapath-hardening` close
 new acceptance targets, see `build/evidence/task-16-soc-rtl-verification-signoff.txt`).
 Remaining out of scope for this signoff: **performance calibration (E2E-07,
 `calibration_state=uncalibrated`)** and **BUG-RTL-SOC-007 (still Open; the todo 15/16
-chain-level run did not reproduce cycles=0)**. BUG-RTL-SOC-002 is Waived
-(`docs/waivers/WVR-SOC-RTL-002.md`), not claimed as fixed.
+chain-level run did not reproduce cycles=0)**. BUG-RTL-SOC-002 has a submitted
+waiver pending user sign-off (`docs/waivers/WVR-SOC-RTL-002.md`, Status =
+pending sign-off, 签字栏留空), not claimed as fixed.
 
 ---
 

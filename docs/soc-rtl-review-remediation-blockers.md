@@ -58,7 +58,7 @@ todos 0-16 执行；P2/P3 项不在此计划执行，全部在此登记为 block
 
 | 字段 | 内容 |
 |------|------|
-| **现状证据路径** | `docs/waivers/WVR-SOC-RTL-002.md:11-12`（Status = **提交待签 pending sign-off**，Sign-off 栏留空）、`:53-61`（关闭条件 #3 = 用户签署本 waiver，签署前不生效）；`docs/bugs/bugs-soc-rtl.md:373,387`（台账曾写 formally Waived——状态漂移，由本计划 todo 19 改回 Pending）；`reports/CaduceusCore-review-report-2026-08-28.md:222-228`（§4.6） |
+| **现状证据路径** | `docs/waivers/WVR-SOC-RTL-002.md:11-12`（Status = **提交待签 pending sign-off**，Sign-off 栏留空）、`:53-61`（关闭条件 #3 = 用户签署本 waiver，签署前不生效）；`docs/bugs/bugs-soc-rtl.md:373,387`（台账曾误标为已签 Waived——状态漂移，已由本计划 todo 19 改回 Pending）；`reports/CaduceusCore-review-report-2026-08-28.md:222-228`（§4.6） |
 | **阻塞原因** | 8MB DRAM 窗口约束 waiver 的明确生效/关闭条件是**用户签署**；签字栏为空，不能作为正式 closure 依据。签署是不可代理的用户动作。 |
 | **解除条件** | 用户亲笔签署本 waiver（Signature/日期落款）；签署后 bug 台账 BUG-RTL-SOC-002 从 Pending 同步为正式 Waived。 |
 | **建议 owner** | **用户**（签署动作，agent 不得代签） |

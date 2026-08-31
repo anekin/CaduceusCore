@@ -75,7 +75,7 @@ T7 P1 全 7 cases 重跑，Spike plugin 加载成功，firmware 正常启动。
 
 ---
 
-### BUG-RTL-SOC-002 — DRAM 地址窗口越界（Waived）
+### BUG-RTL-SOC-002 — DRAM 地址窗口越界（Pending — waiver 待用户签署）
 
 | 字段 | 内容 |
 |------|------|
@@ -84,7 +84,7 @@ T7 P1 全 7 cases 重跑，Spike plugin 加载成功，firmware 正常启动。
 | **Case** | FM-SOC-010 |
 | **Severity** | Major |
 | **Type** | Environment (DRAM model) |
-| **Status** | Waived |
+| **Status** | Pending (waiver 待用户签署) |
 
 #### Symptom
 
@@ -110,6 +110,8 @@ FM-SOC-010 DRAM preload 无越界错误。
 Phase 10 (8MB window constraint, todo 19): build/evidence/task-19-phase10-rtl-verification.txt
 
 2026-08-27: **Waived** — 正式 waiver `docs/waivers/WVR-SOC-RTL-002.md`（todo 2 of soc-rtl-verification-signoff）。约束：firmware `dram_range_ok()` 拒绝地址 >8MB（`firmware/npu_firmware.c:458,472-485`），33 个 FM-SOC cases 均在此窗口内 PASS。临时 waiver，FPGA 阶段扩 `dram_model.v` 后关闭。
+
+2026-08-31: **Pending（waiver 待用户签署）** — todo 19 soc-rtl-review-remediation 将本条目改回 Pending（此前台账误标为已 Waived，属状态漂移）：`docs/waivers/WVR-SOC-RTL-002.md` Status 为 pending sign-off、签字栏留空，用户签署是明确的生效/关闭条件，签署前不得视为已 Waived。约束本身不变（上述 2026-08-27 描述仍有效）。
 
 ---
 
@@ -368,24 +370,27 @@ Three working hypotheses, not yet resolved:
 
 ## Final Bug Statistics (2026-08-27)
 
-### Total: 13 bugs (BUG-RTL-SOC-001 through BUG-RTL-SOC-008 + 2 wrapper-level-verification bugs + 3 phase-9 bugs)
+### Total: 14 bugs (BUG-RTL-SOC-001 through BUG-RTL-SOC-008 + BUG-RTL-SOC-012 + 2 wrapper-level-verification bugs + 3 phase-9 bugs)
 
-Ledger update 2026-08-27 (todo 1, soc-rtl-verification-signoff): BUG-RTL-SOC-P9-00A、BUG-RTL-SOC-P9-00D、BUG-MXU-P9-00B closed **Fixed**（phase 9/10 evidence）；BUG-RTL-SOC-002 formally **Waived**（WVR-SOC-RTL-002，todo 2）；BUG-RTL-SOC-007 remains **Open** with phase 10 PERF-13 evidence（attn_weight cycles>0）；todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27），26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，保持 Open 待 FPGA/更早日志追踪。
+Ledger update 2026-08-27 (todo 1, soc-rtl-verification-signoff): BUG-RTL-SOC-P9-00A、BUG-RTL-SOC-P9-00D、BUG-MXU-P9-00B closed **Fixed**（phase 9/10 evidence）；BUG-RTL-SOC-007 remains **Open** with phase 10 PERF-13 evidence（attn_weight cycles>0）；todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27），26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，保持 Open 待 FPGA/更早日志追踪。
+
+Ledger update 2026-08-31 (todo 19, soc-rtl-review-remediation): BUG-RTL-SOC-002 从原已 Waived 标记改回 **Pending（waiver 待用户签署）**（WVR-SOC-RTL-002，todo 2 提交、签署前不生效）；BUG-RTL-SOC-012 新增 **Open**（blk0 E2E op05 attn_score drain，todo 14 blk0 investigation 判 PRE-EXISTING，2026-08-31）。
 
 ### By Severity
 
 | Severity | Count | Bug IDs |
 |----------|:-----:|---------|
 | Critical | 3 | BUG-RTL-SOC-001 (GLIBC ABI — Spike plugin), BUG-RTL-SOC-003 (missing `cb_m_arvalid` — SoC integration), BUG-RTL-SOC-007 (attn_weight dispatch — op never executes) |
-| Major | 10 | BUG-RTL-SOC-002 (DRAM 8 MB window), BUG-RTL-SOC-004 (SFU prefetch dropped), BUG-RTL-SOC-005 (X-prop from DRAM padding), BUG-RTL-SOC-006 (SFU start_hold race), BUG-RTL-SOC-008 (DESC_BASE overlap), BUG-RTL-SOC-WV-001 (SFU status_done 1-cycle pulse), BUG-RTL-SOC-WV-007 (MXU consecutive dispatch DONE timeout), BUG-RTL-SOC-P9-00A (M=1 multi-tile divergence), BUG-RTL-SOC-P9-00D (PERF residual divergence), BUG-MXU-P9-00B (broadcast/multi-tile) |
+| Major | 11 | BUG-RTL-SOC-002 (DRAM 8 MB window), BUG-RTL-SOC-004 (SFU prefetch dropped), BUG-RTL-SOC-005 (X-prop from DRAM padding), BUG-RTL-SOC-006 (SFU start_hold race), BUG-RTL-SOC-008 (DESC_BASE overlap), BUG-RTL-SOC-012 (blk0 op05 attn_score drain), BUG-RTL-SOC-WV-001 (SFU status_done 1-cycle pulse), BUG-RTL-SOC-WV-007 (MXU consecutive dispatch DONE timeout), BUG-RTL-SOC-P9-00A (M=1 multi-tile divergence), BUG-RTL-SOC-P9-00D (PERF residual divergence), BUG-MXU-P9-00B (broadcast/multi-tile) |
 
 ### By Status
 
 | Status | Count | Bug IDs |
 |--------|:-----:|---------|
 | Fixed | 11 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-005, BUG-RTL-SOC-006, BUG-RTL-SOC-008, BUG-RTL-SOC-WV-001, BUG-RTL-SOC-WV-007, BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
-| Waived | 1 | BUG-RTL-SOC-002 (8 MB DRAM window constraint — WVR-SOC-RTL-002) |
-| Open | 1 | BUG-RTL-SOC-007 (attn_weight dispatch — PERF-13 Ibex RTL shows cycles>0; todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，链级未复现，根因仍未知) |
+| Waived | 0 | — |
+| Pending (waiver 待用户签署) | 1 | BUG-RTL-SOC-002 (8 MB DRAM window constraint — WVR-SOC-RTL-002, pending sign-off 待用户签署) |
+| Open | 2 | BUG-RTL-SOC-007 (attn_weight dispatch — PERF-13 Ibex RTL shows cycles>0; todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，链级未复现，根因仍未知), BUG-RTL-SOC-012 (blk0 E2E op05 attn_score MMUL drain — todo 14 blk0 investigation 判 PRE-EXISTING) |
 | Re-opened | 0 | — |
 
 ### By Module
@@ -397,7 +402,7 @@ Ledger update 2026-08-27 (todo 1, soc-rtl-verification-signoff): BUG-RTL-SOC-P9-
 | RTL: SFU wrapper (`sfu_soc_wrapper.v`) | 3 | BUG-RTL-SOC-004, BUG-RTL-SOC-006, BUG-RTL-SOC-WV-001 |
 | RTL: SFU/Vector wrapper X-propagation | 1 | BUG-RTL-SOC-005 |
 | RTL: Vector wrapper / Firmware dispatch | 1 | BUG-RTL-SOC-007 |
-| RTL: MXU controller (`mxu/controller.v`) | 1 | BUG-RTL-SOC-WV-007 |
+| RTL: MXU controller (`mxu/controller.v`) / accumulator drain | 2 | BUG-RTL-SOC-WV-007, BUG-RTL-SOC-012 |
 | Integration (firmware command ring vs descriptor region) | 1 | BUG-RTL-SOC-008 |
 | RTL wrapper (MXU broadcast/store-out count) + Firmware K-tile dispatch / accumulate | 3 | BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
 
@@ -405,10 +410,10 @@ Ledger update 2026-08-27 (todo 1, soc-rtl-verification-signoff): BUG-RTL-SOC-P9-
 
 | Metric | Value |
 |--------|:-----:|
-| Total RTL bugs found and documented | 13 |
-| Bugs closed Fixed | 11 (84.6%) |
-| Bugs formally waived | 1 (7.7%) — BUG-RTL-SOC-002 (8 MB DRAM window, WVR-SOC-RTL-002) |
-| Open / under investigation | 1 (7.7%) — BUG-RTL-SOC-007 (todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，链级未复现；根因仍未知) |
+| Total RTL bugs found and documented | 14 |
+| Bugs closed Fixed | 11 (78.6%) |
+| Bugs pending waiver sign-off | 1 (7.1%) — BUG-RTL-SOC-002 (8 MB DRAM window, WVR-SOC-RTL-002, pending sign-off 待用户签署) |
+| Open / under investigation | 2 (14.3%) — BUG-RTL-SOC-007 (todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，链级未复现；根因仍未知), BUG-RTL-SOC-012 (blk0 op05 attn_score drain, todo 14 判 PRE-EXISTING) |
 | Ibex-specific bugs (full RTL CPU replacement) | 0 |
 | Regressions after fixes | 0 (491/491 module regression PASS; vector + MXU wrapper 10/10 baseline PASS; PERF-06 M=32 cos=1.000000; PERF-13 9/9 MMUL PASS) |
 | Re-opened bugs | 0 (BUG-RTL-SOC-005 closed in 2026-07-23 rtl-bug-fix-wv round) |

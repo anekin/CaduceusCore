@@ -161,14 +161,14 @@
 
 | Bug ID | Severity | Status | 影响 |
 |--------|:--------:|:------:|------|
-| BUG-RTL-SOC-002 | Major | **Waived** | DRAM 8MB 窗口越界，firmware 数据地址 >8MB 时报错。正式 waiver `docs/waivers/WVR-SOC-RTL-002.md`（todo 2），临时约束，FPGA 阶段扩 DRAM 模型后关闭 |
+| BUG-RTL-SOC-002 | Major | **Pending（待用户签署）** | DRAM 8MB 窗口越界，firmware 数据地址 >8MB 时报错。waiver `docs/waivers/WVR-SOC-RTL-002.md` 已提交、pending sign-off（todo 2；todo 19 改回 Pending），签署前不生效；临时约束，FPGA 阶段扩 DRAM 模型后关闭 |
 | BUG-RTL-SOC-007 | Critical/Major | **Open** | attn_weight op dispatch failure（cycles=0），3-layer forward pass 受影响。todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27）：26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，**不 claim Fixed**，保持 Open 待 FPGA/更早日志追踪 |
 | BUG-RTL-SOC-012 | Major | **Open** | blk0 E2E op05 attn_score MMUL 仅 drain 第一行（words 2-63 zero，62/64 INT32 mismatch）。todo 14 blk0 investigation（2026-08-31）A/B 判 **PRE-EXISTING**（crossbar c478ae5 前后字节级一致，非 crossbar 修复引入）；与 BUG-RTL-SOC-007 同 attention 链、不同 signature（op 执行但部分/零输出）。证据 `.omo/evidence/task-14-blk0-investigation.txt` + `docs/bugs/bugs-soc-rtl.md` BUG-RTL-SOC-012 条目 |
 | BUG-RTL-SOC-P9-00A | Major | **Fixed** | Phase 9 遗留，fix `8dd5dbe`+`b545b1f`（todo 1） |
 | BUG-RTL-SOC-P9-00D | Major | **Fixed** | Phase 9 遗留，fix `7aec7a3`（todo 1） |
 | BUG-MXU-P9-00B | Major | **Fixed** | broadcast/multitile 遗留，报告 `docs/bugs/BUG-MXU-P9-00B-broadcast-multitile.md` Status=resolved（todo 1） |
 
-> 台账统计（todo 1 + todo 17）：Total 14，Fixed 11，Waived 1，Open 2（BUG-RTL-SOC-007、BUG-RTL-SOC-012）。
+> 台账统计（todo 1 + todo 17 + todo 19）：Total 14，Fixed 11，Waived 0，Pending 1（BUG-RTL-SOC-002，waiver 待用户签署），Open 2（BUG-RTL-SOC-007、BUG-RTL-SOC-012）。
 
 ---
 
@@ -178,7 +178,7 @@
 
 1. ~~**补齐 6 条 SoC 数据通路 FM 模型**~~（`docs/soc-fm-gap-spec.md` Gap #1/2/7/8/9/11）——已闭环：RTL 测试就位（todos 3-9，证据 `build/evidence/task-{3..9}-soc-rtl-verification-signoff.txt`）
 2. ~~**E2E 多层/full-model RTL 回归**~~（从 blk.0 smoke 扩到 28 层 + MobileNetV3）——已闭环：36 层 8-checkpoint subset（todo 14，`checkpoints_passed=8/8`）+ MobileNetV3 RTL 首跑（todo 13，`MOBILENETV3: PASS`）；**全量 36 层连续仿真仍 deferred 到 FPGA**
-3. **清零 Open RTL bug**（部分）——BUG-RTL-SOC-002 → Waived（WVR-SOC-RTL-002）、P9-00A/P9-00D/MXU-P9-00B → Fixed（todo 1）；**BUG-RTL-SOC-007 仍 Open**（todo 15/16 链级未复现，不 claim Fixed）；**BUG-RTL-SOC-012 新增 Open**（2026-08-31 todo 14 blk0 investigation，pre-existing attn_score drain，`.omo/evidence/task-14-blk0-investigation.txt`）
+3. **清零 Open RTL bug**（部分）——BUG-RTL-SOC-002 → Pending（waiver 待用户签署，WVR-SOC-RTL-002，todo 19 改回 Pending）、P9-00A/P9-00D/MXU-P9-00B → Fixed（todo 1）；**BUG-RTL-SOC-007 仍 Open**（todo 15/16 链级未复现，不 claim Fixed）；**BUG-RTL-SOC-012 新增 Open**（2026-08-31 todo 14 blk0 investigation，pre-existing attn_score drain，`.omo/evidence/task-14-blk0-investigation.txt`）
 4. **性能 calibration**（uncalibrated → calibrated）——**保持 ❌，deferred 到流片/FPGA 实测**
 5. ~~**补齐 fm-hardening deferred 项**~~（T1/T2 `firmware_memory_contract.json`、AL1 FM↔C ring 对齐）——已闭环（fm-soc-datapath-hardening 完成，FW-09 由 FM guard 静态检查覆盖）
 
