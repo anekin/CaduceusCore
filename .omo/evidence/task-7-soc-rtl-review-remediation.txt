@@ -1,0 +1,246 @@
+================================================================================
+TASK-7 EVIDENCE — soc-rtl-review-remediation / todo 7
+Crossbar accept/grant coupling fix (phantom-accept deadlock) — RED -> GREEN
+================================================================================
+Timestamp    : 2026-08-31T03:23:30Z (runs finished 2026-08-31 11:13-11:22 +08:00
+               server time, sz0001 / 192.168.0.11)
+Git HEAD     : d4a0399a74f3b8599daa1418ebf3bc86d6e77063 (branch soc-rtl-review-remediation)
+Files touched: rtl/soc/axi_crossbar.v        (the fix — plan-authorized)
+               rtl/tb/axi_crossbar_fairness_tb.sv (mutation hook)
+               sim/regression/Makefile       (run_crossbar_fairness_mutation target)
+               docs/waivers/REMEDIATION-RTL-EXCEPTION-2026-08-28.md (new, Must NOT #9)
+No commit (per task instruction). No vendored IP, no engine internals touched.
+
+--------------------------------------------------------------------------------
+RED -> GREEN NARRATIVE
+--------------------------------------------------------------------------------
+Todo 2 (W1, evidence .omo/evidence/task-2-soc-rtl-review-remediation.txt) ran the
+SAME P4 contention stimulus against the unmodified crossbar and reproduced the
+phantom-accept deadlock RED:
+
+    --- P4: all 7 masters contend for slave 0 for 11000 cycles ---
+    [TB]   slave state at P4 start: ar_busy=0 aw_busy=0
+    FAIRNESS: FAIL
+    [TB] WATCHDOG: master 0 AR accepted at cycle 385, R not complete within 10000
+         cycles (phantom-accept deadlock)
+    $finish at simulation time            103905000
+    ...
+    CROSSBAR_FAIRNESS: FAIL / [soc-run] RESULT: FAIL for run_crossbar_fairness
+
+Root cause (todo-2 evidence, confirmed by review report 3.1): the old accept
+equation `m_arready_o = !m_ar_active && (!m_ar_hit || !ar_busy)` accepted ALL
+mapped masters whenever the target slave was free, but the arbiter granted only
+one; the rest sat with active=1 waiting for a response that could never arrive.
+
+This task (todo 7) fixed the accept logic; the identical P4 stimulus now runs
+the full >=10,000-cycle contention window to completion with 0 deadlocks,
+grant-count difference 0 (<=1), every master completing 393 reads and 393/392
+writes, all responses OKAY — GREEN (log excerpts below).
+
+--------------------------------------------------------------------------------
+EXACT FIX DESCRIPTION (rtl/soc/axi_crossbar.v)
+--------------------------------------------------------------------------------
+Accept is now coupled to the arbitration winner, per the plan-mandated form:
+
+    m_awready_o[gmi] = !m_aw_active[gmi] &&
+        (!m_aw_hit[gmi] ||
+         (aw_grant_window[m_aw_slave[gmi]] &&
+          aw_would_win[m_aw_slave[gmi]][gmi]));
+
+and symmetrically for AR (ar_grant_window / ar_would_win).
+
+- would_win[slave][master] is a combinational replica of the sequential
+  arbitration search: for each slave it picks the first master in scan order
+  (round-robin from priority+1, or fixed priority from 0 when FIXED_PRIORITY=1)
+  satisfying the FULL qualifier set of the search: m_*valid_i && m_*_hit &&
+  (m_*_slave == slave) && !m_*_active. Implemented via a scan-order comparison
+  function is_scan_before() + per-slave qualifier vectors; the earlier-master
+  mask ANDed with qualifiers must be empty for a would-win.
+- Two preserved paths (Oracle R2 review requirements):
+  (i)  DECERR exemption — unmapped masters keep unconditional ready (!active
+       only): the `!m_aw_hit[gmi] ||` short-circuit means non-hit masters never
+       enter the arbitration-window/would-win terms and never hang on unmapped
+       addresses. P2/P3 checks all still PASS (log below).
+  (ii) Full grant-window gating — aw_grant_window[slave] replicates the EXACT
+       triple guard of the sequential search:
+       !aw_busy && !s_awvalid_latched && !aw_latch_clr (symmetric for AR).
+       Restricting to !busy alone would allow a ready assertion inside the
+       latch-clear window, resurrecting phantom-accept by another path.
+- Option (b) (DECERR-after-N-cycles for accepted-but-ungranted masters) was NOT
+  implemented — explicitly forbidden by the plan.
+- No combinational loop: would_win depends only on register state
+  (busy/priority/active/latched/valid-latched/latch-clr) + inputs
+  (valid/hit/slave/addr), never on the ready signals. The existing sequential
+  grant-latch condition `if (rr_found && m_awvalid_i[gnt_val] && m_awready_o[gnt_val])`
+  stays self-consistent: when the search runs, grant_window is 1 and gnt_val is
+  exactly the would-win master, so ready[gnt_val] evaluates to 1 (verified in
+  simulation: every grant accepted, 2,751 AW + 2,751 AR grants in P4).
+- Mutation hook: new parameter `FIXED_PRIORITY` (default 1'b0 = original
+  round-robin behavior; zero impact on all existing instantiations, which use
+  the default). When set to 1 the sequential search scans ak=0..NUM_M-1
+  (lowest index first) and the would-win replica scans from start=0, keeping
+  accept coupled to the fixed-priority grant in the mutation build too.
+
+--------------------------------------------------------------------------------
+MUTATION TEST MECHANISM (rtl/tb/axi_crossbar_fairness_tb.sv + Makefile)
+--------------------------------------------------------------------------------
+TB: `ifdef MUTATE_FIXED_PRIORITY → localparam MUTATE=1 (else 0)`, passed to the
+DUT as `.FIXED_PRIORITY(MUTATE)`. No other TB change; P1-P4 stimulus identical.
+Makefile: new target `run_crossbar_fairness_mutation` compiles the same sources
+with `+define+MUTATE_FIXED_PRIORITY` into simv_axi_crossbar_fairness_tb_mut and
+PASSES only when the mutation run is RED (log contains "FAIRNESS: FAIL").
+`run_crossbar_fairness` itself is untouched.
+
+--------------------------------------------------------------------------------
+WAIVER (Must NOT #9 — created BEFORE the RTL edit)
+--------------------------------------------------------------------------------
+docs/waivers/REMEDIATION-RTL-EXCEPTION-2026-08-28.md
+  - lists the two plan-authorized product files (rtl/soc/axi_crossbar.v,
+    firmware/npu_firmware.c)
+  - user approval record: plan approved 2026-08-31 after round-6 dual review
+  - reason: external review findings 3.1 / 3.7 / 3.9
+  - revocation: full-regression rollback gate (any previously-PASS FM-SOC case
+    turning FAIL auto-reverts), stress-regression gate, F1-F4 gate.
+
+--------------------------------------------------------------------------------
+EXACT RUN COMMANDS (all via EDA wrapper; VCS only on sz0001, never local)
+--------------------------------------------------------------------------------
+# pre-clean of stale todo-2 artifacts (old simv built from UNMODIFIED RTL):
+ssh zhengs@192.168.0.11 "cd <repo>/sim/regression && rm -rf \
+  simv_axi_crossbar_fairness_tb simv_axi_crossbar_fairness_tb.daidir \
+  simv_axi_crossbar_fairness_tb_mut simv_axi_crossbar_fairness_tb_mut.daidir \
+  crossbar_fairness.log crossbar_fairness_mutation.log crossbar_stress.log"
+# from repo root:
+bash sim/regression/soc-verification-run.sh run_crossbar_fairness
+bash sim/regression/soc-verification-run.sh run_crossbar_fairness_mutation
+bash sim/regression/soc-verification-run.sh run_crossbar_stress
+# (auto-SSH sz0002 -> sz0001; logs tee'd to sim/regression/*.log)
+
+--------------------------------------------------------------------------------
+RUN 1 — run_crossbar_fairness: GREEN (P4 completes, 0 deadlocks)
+--------------------------------------------------------------------------------
+P1-P3 preserved (all PASS on the fixed crossbar):
+    [TB]   AR grants per master: 5 5 5 5 5 5 5 (total 35)
+    [TB]   CHECK AR fairness max-min=0 <= 1: PASS
+    [TB]   CHECK AR strict alternation (no back-to-back same master): PASS
+    [TB]   AW grants per master: 5 5 5 5 5 5 5 (total 35)
+    [TB]   CHECK AW fairness max-min=0 <= 1: PASS
+    [TB]   CHECK all 70 reads+writes completed OKAY: PASS
+    [TB]   DECERR AR accepted in 1 cycle(s)            (P2 all 5 checks PASS)
+    [TB]   CHECK BRESP=DECERR(2'b11): PASS             (P3 all 5 checks PASS)
+    [TB]   CHECK DECERR read consumed no AR grant credit: PASS
+    [TB]   CHECK DECERR write consumed no AW grant credit: PASS
+P4 GREEN markers:
+    --- P4: all 7 masters contend for slave 0 for 11000 cycles ---
+    [TB]   slave state at P4 start: ar_busy=0 aw_busy=0
+    [TB]   P4 AR grants per master: 393 393 393 393 393 393 393 (total 2751)
+    [TB]   CHECK P4 AR grant fairness max-min=0 <= 1: PASS
+    [TB]   P4 AW grants per master: 393 393 393 393 393 393 393 (total 2751)
+    [TB]   CHECK P4 AW grant fairness max-min=0 <= 1: PASS
+    [TB]   P4 R completions per master: 393 393 393 393 393 393 393
+    [TB]   P4 B completions per master: 393 393 393 393 392 393 393
+    [TB]   CHECK P4 every master completed >= 20 reads+writes (no starvation): PASS
+    [TB]   CHECK P4 all responses OKAY (0 bad R, 0 bad B): PASS
+    [TB] Summary: 23 passed, 0 failed
+    FAIRNESS: PASS
+    $finish at simulation time            115915000
+    CROSSBAR_FAIRNESS: PASS
+    [soc-run] RESULT: PASS for run_crossbar_fairness
+(B completions 392 for one master = the last in-flight write at window close;
+grants are 393 per master on BOTH channels — perfectly fair. Watchdog stayed
+silent the whole run — see adversarial notes.)
+
+--------------------------------------------------------------------------------
+RUN 2 — run_crossbar_fairness_mutation: RED as expected (guard holds)
+--------------------------------------------------------------------------------
+Fixed-priority variant (FIXED_PRIORITY=1) under the SAME P4 stimulus:
+    [TB]   P4 AR grants per master: 2751 0 0 0 0 0 0 (total 2751)
+    [TB]   CHECK P4 AR grant fairness max-min=2751 > 1: FAIL
+    [TB]   P4 AW grants per master: 2751 0 0 0 0 0 0 (total 2751)
+    [TB]   CHECK P4 AW grant fairness max-min=2751 > 1: FAIL
+    [TB]   CHECK P4 completion floor: FAIL (some master completed < 20 reads or writes)
+    [TB]   CHECK P4 all responses OKAY (0 bad R, 0 bad B): PASS
+    [TB] Summary: 20 passed, 3 failed
+    FAIRNESS: FAIL
+    CROSSBAR_FAIRNESS_MUTATION: RED as expected (mutation guard holds)
+    [soc-run] RESULT: PASS for run_crossbar_fairness_mutation
+Target-level PASS is exactly the RED-guard semantics: fixed priority starves
+masters 1-6 (0 grants each), the fairness assertion (grant diff <=1) fails, and
+the target asserts that RED result. No watchdog fired (accept stays coupled to
+the fixed-priority grant, so nothing is accepted-and-hung) — the RED is the
+fairness assertion itself, which is what the mutation must demonstrate.
+
+--------------------------------------------------------------------------------
+RUN 3 — run_crossbar_stress: still PASS (no regression)
+--------------------------------------------------------------------------------
+    [TB] Reached 11455 cycles at iter=210, stopping
+    [TB] Concurrent stress completed: 210 iterations, 11455 cycles (≥10k)
+      TC4: PASS
+      PASS: All 7 masters completed write+read, round-robin exercised   (TC5)
+    [TB] Summary: 7 passed, 0 failed
+    CROSSBAR_STRESS: PASS
+    [soc-run] RESULT: PASS for run_crossbar_stress
+TC4 = 3 masters (MXU+DMA+PCIe) x (1 write + 1 read) per iteration x 210
+iterations = 1,260 transactions, every beat data-verified, 0 mismatches
+(0 "FAIL:" lines in the log). Rebuilt from the fixed axi_crossbar.v (source
+newer than the old simv -> forced recompile).
+
+--------------------------------------------------------------------------------
+ADVERSARIAL NOTES
+--------------------------------------------------------------------------------
+hung_long_command : the 10,000-cycle per-transaction watchdog STAYED SILENT in
+    the GREEN run — not skipped, genuinely idle because every accepted
+    transaction completed. `grep -c "FAIRNESS: FAIL" crossbar_fairness.log` = 0
+    and `grep -c "WATCHDOG" crossbar_fairness.log` = 0 (no watchdog lines at
+    all). Completion math: 2,751 AR accepts and 2,751 AW accepts inside the
+    11,000-cycle window, each completing in <100 cycles (11,000/393 ≈ 28
+    cycles per grant round); sim ended normally via the summary path at
+    115,915,000 ps (~11,591 cycles = P1 350 + P2/P3 + 11,000 P4 window +
+    drain), not via watchdog $finish (the todo-2 RED run died at 103,905,000 ps
+    via watchdog $finish — cycle-level contrast in the same TB).
+dirty_worktree    : `git status --porcelain` at evidence time (HEAD d4a0399a):
+      M rtl/soc/axi_crossbar.v                 <- THIS TASK (the fix)
+      M rtl/tb/axi_crossbar_fairness_tb.sv     <- THIS TASK (mutation hook)
+      M sim/regression/Makefile                <- this task's mutation target +
+                                                  parallel todo-9 agent's pipefail
+                                                  hunks (verified distinct hunks,
+                                                  mine at lines ~251-276)
+      M firmware/npu_firmware.c                <- parallel todo-8 agent
+      M sim/regression/run_ibex_full_rtl.sh    <- parallel todo-9 agent
+      M sim/regression/run_ibex_segment_run.sh <- parallel todo-9 agent
+      ?? docs/waivers/REMEDIATION-RTL-EXCEPTION-2026-08-28.md <- THIS TASK
+      ?? .omo/evidence/task-0-soc-rtl-review-remediation.txt (pre-existing)
+      ?? .omo/evidence/task-9-soc-rtl-review-remediation.txt (parallel agent)
+      ?? .omo/notepads/soc-rtl-review-remediation/ (pre-existing)
+      ?? scripts/audit_fm_soc_statistics.py (parallel todo-9 agent)
+    Own-change check: my RTL edits are confined to the plan-authorized
+    rtl/soc/axi_crossbar.v; no vendored IP, no engine internals, no other rtl/
+    product code touched. P1-P3 assertions in the TB untouched (only additive
+    define + one parameter port).
+misleading_success_output : real grep hits pasted, not inferred:
+    $ grep -n "FAIRNESS: PASS\|P4 AR grants\|P4 AW grants\|Summary" \
+        sim/regression/crossbar_fairness.log
+      43:[TB]   P4 AR grants per master: 393 393 393 393 393 393 393 (total 2751)
+      45:[TB]   P4 AW grants per master: 393 393 393 393 393 393 393 (total 2751)
+      53:[TB] Summary: 23 passed, 0 failed
+      55:FAIRNESS: PASS
+    $ grep -n "FAIRNESS: FAIL" sim/regression/crossbar_fairness_mutation.log
+      55:FAIRNESS: FAIL
+    $ grep -n "CROSSBAR_STRESS: PASS\|Summary" sim/regression/crossbar_stress.log
+      35:[TB] Summary: 7 passed, 0 failed
+      37:CROSSBAR_STRESS: PASS
+    All three log files re-read after the runs; the wrapper exit code and the
+    marker greps agree (fairness PASS/0, mutation RED-by-marker, stress PASS/0).
+no_commit         : nothing committed, per task instruction.
+rollback_gate     : the full 33-case FM-SOC regression gate (Metis m4) is todo
+    13's responsibility (clean-commit full re-run). This task verified the
+    crossbar-specific gates: fairness GREEN + mutation RED + stress PASS. If a
+    previously-PASS FM-SOC case regresses there, the gate requires auto-rollback
+    of this fix per the waiver revocation conditions.
+future            : firmware todo 8 and runner todo 9 remain open (parallel);
+    the Makefile mutation target coexists with todo-9 pipefail hunks (verified
+    compile+run above after both were in the tree).
+
+================================================================================
+TASK-7 RESULT: GREEN (expected)
+================================================================================

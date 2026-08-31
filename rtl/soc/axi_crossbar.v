@@ -24,6 +24,8 @@
 //   MSEL_WIDTH  = 3     (log2(NUM_M))
 //   NUM_M       = 7     (number of master ports)
 //   NUM_S       = 2     (number of slave ports)
+//   FIXED_PRIORITY = 0  (mutation-test hook: 1 = fixed-priority arbitration,
+//                        lowest-index-first, never rotates)
 //
 // References: AMBA AXI4 spec, CaduceusCore/rtl/soc/sram_ctrl.v
 //=============================================================================
@@ -35,6 +37,11 @@ module axi_crossbar #(
     parameter int unsigned MSEL_WIDTH  = 3,
     parameter int unsigned NUM_M       = 7,
     parameter int unsigned NUM_S       = 2,
+    parameter bit          FIXED_PRIORITY = 1'b0,  // mutation-test hook (todo 7):
+                                                    // 1 = fixed-priority arbitration
+                                                    // (lowest-index-first, never
+                                                    // rotates). Default 0 preserves
+                                                    // round-robin behavior.
     parameter int unsigned S_ID_WIDTH  = M_ID_WIDTH + MSEL_WIDTH  // derived
 ) (
     input  wire                                 clk,
@@ -112,6 +119,27 @@ module axi_crossbar #(
 );
 
     // =========================================================================
+    // Combinational winner-replica support (accept/grant coupling, todo 7)
+    // =========================================================================
+    // Scan-order comparison: returns 1'b1 if `cand` is reached by the
+    // arbitration scan strictly before `tgt` when scanning from `start`
+    // (incrementing, wrapping mod NUM_M). For round-robin start = priority+1
+    // (start may equal NUM_M, i.e. priority==NUM_M-1 wraps to index 0 — the
+    // +NUM_M arithmetic folds it back); for fixed priority start = 0.
+    function automatic logic is_scan_before(
+        input [MSEL_WIDTH-1:0] cand,
+        input [MSEL_WIDTH-1:0] tgt,
+        input [MSEL_WIDTH-1:0] start
+    );
+        integer cpos, tpos;
+        begin
+            cpos = (cand >= start) ? (cand - start) : (cand + NUM_M - start);
+            tpos = (tgt  >= start) ? (tgt  - start) : (tgt  + NUM_M - start);
+            is_scan_before = (cpos < tpos);
+        end
+    endfunction
+
+    // =========================================================================
     // Address decode
     // =========================================================================
     // Returns {1'b1, zeros} for DECERR; {1'b0, slave_idx} for hit.
@@ -140,6 +168,7 @@ module axi_crossbar #(
 
     genvar gmi;
     genvar gsi;
+    genvar gk;
     generate
         for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_decode
             assign m_aw_dec[gmi]   = decode_slave(m_awaddr_i[gmi]);
@@ -198,13 +227,87 @@ module axi_crossbar #(
     reg [NUM_S-1:0]                     ar_latch_clr;     // 2-cycle clear pending
 
     // =========================================================================
+    // Grant window + combinational arbitration-winner replica (todo 7)
+    // =========================================================================
+    // grant_window[slave] replicates the EXACT triple condition guarding the
+    // sequential arbitration search (!busy && !valid_latched && !latch_clr).
+    // would_win[slave][master] is 1'b1 iff the sequential search (round-robin
+    // from priority+1, or fixed priority from 0 when FIXED_PRIORITY=1) would
+    // pick this master for this slave in the current cycle. Both replicate
+    // the full qualifier set of the search: valid && hit && slave-match &&
+    // !active. They depend only on register state + inputs — never on the
+    // ready signals — so no combinational loop is formed.
+    wire [NUM_S-1:0]                 aw_grant_window;
+    wire [NUM_S-1:0]                 ar_grant_window;
+    wire [NUM_S-1:0][MSEL_WIDTH-1:0] aw_scan_start;
+    wire [NUM_S-1:0][MSEL_WIDTH-1:0] ar_scan_start;
+    wire [NUM_S-1:0][NUM_M-1:0]      aw_would_win;
+    wire [NUM_S-1:0][NUM_M-1:0]      ar_would_win;
+    wire [NUM_S-1:0][NUM_M-1:0]      aw_qual_slv;
+    wire [NUM_S-1:0][NUM_M-1:0]      ar_qual_slv;
+
+    generate
+        for (gsi = 0; gsi < NUM_S; gsi = gsi + 1) begin : gen_grant_win
+            assign aw_grant_window[gsi] = !aw_busy[gsi] &&
+                                          !s_awvalid_latched[gsi] &&
+                                          !aw_latch_clr[gsi];
+            assign ar_grant_window[gsi] = !ar_busy[gsi] &&
+                                          !s_arvalid_latched[gsi] &&
+                                          !ar_latch_clr[gsi];
+            assign aw_scan_start[gsi] = FIXED_PRIORITY ? {MSEL_WIDTH{1'b0}} :
+                                        (aw_priority[gsi] + 1'b1);
+            assign ar_scan_start[gsi] = FIXED_PRIORITY ? {MSEL_WIDTH{1'b0}} :
+                                        (ar_priority[gsi] + 1'b1);
+
+            for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_qual
+                assign aw_qual_slv[gsi][gmi] = m_awvalid_i[gmi] && m_aw_hit[gmi] &&
+                    (m_aw_slave[gmi] == gsi[MSEL_WIDTH-1:0]) &&
+                    !m_aw_active[gmi];
+                assign ar_qual_slv[gsi][gmi] = m_arvalid_i[gmi] && m_ar_hit[gmi] &&
+                    (m_ar_slave[gmi] == gsi[MSEL_WIDTH-1:0]) &&
+                    !m_ar_active[gmi];
+            end
+
+            for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_aw_win
+                wire [NUM_M-1:0] aw_earlier;
+                for (gk = 0; gk < NUM_M; gk = gk + 1) begin : gen_aw_win_bit
+                    assign aw_earlier[gk] = is_scan_before(
+                        gk[MSEL_WIDTH-1:0], gmi[MSEL_WIDTH-1:0],
+                        aw_scan_start[gsi]);
+                end
+                assign aw_would_win[gsi][gmi] =
+                    aw_qual_slv[gsi][gmi] && !(|(aw_earlier & aw_qual_slv[gsi]));
+            end
+
+            for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_ar_win
+                wire [NUM_M-1:0] ar_earlier;
+                for (gk = 0; gk < NUM_M; gk = gk + 1) begin : gen_ar_win_bit
+                    assign ar_earlier[gk] = is_scan_before(
+                        gk[MSEL_WIDTH-1:0], gmi[MSEL_WIDTH-1:0],
+                        ar_scan_start[gsi]);
+                end
+                assign ar_would_win[gsi][gmi] =
+                    ar_qual_slv[gsi][gmi] && !(|(ar_earlier & ar_qual_slv[gsi]));
+            end
+        end
+    endgenerate
+
+    // =========================================================================
     // AW channel — master ready
     // =========================================================================
-    // AWREADY: accept if master not active AND (DECERR OR target slave free)
+    // AWREADY (todo 7 accept/grant coupling): accept only if the master is not
+    // active AND (a) DECERR path — an unmapped master keeps unconditional
+    // ready (it must never hang on unmapped addresses; preserves P2/P3 DECERR
+    // semantics), or (b) the slave's grant window is open AND this master is
+    // the combinational arbitration winner for that slave. At most one master
+    // per slave is accepted, and it is exactly the master the sequential
+    // arbiter will grant — this eliminates the phantom-accept deadlock.
     generate
         for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_aw_ready
             assign m_awready_o[gmi] = !m_aw_active[gmi] &&
-                (!m_aw_hit[gmi] || !aw_busy[m_aw_slave[gmi]]);
+                (!m_aw_hit[gmi] ||
+                 (aw_grant_window[m_aw_slave[gmi]] &&
+                  aw_would_win[m_aw_slave[gmi]][gmi]));
         end
     endgenerate
 
@@ -306,10 +409,15 @@ module axi_crossbar #(
     // =========================================================================
     // AR channel — master ready + slave mux
     // =========================================================================
+    // ARREADY (todo 7 accept/grant coupling): symmetric to AWREADY — DECERR
+    // exemption for unmapped masters, grant-window + winner coupling for
+    // mapped ones.
     generate
         for (gmi = 0; gmi < NUM_M; gmi = gmi + 1) begin : gen_ar_ready
             assign m_arready_o[gmi] = !m_ar_active[gmi] &&
-                (!m_ar_hit[gmi] || !ar_busy[m_ar_slave[gmi]]);
+                (!m_ar_hit[gmi] ||
+                 (ar_grant_window[m_ar_slave[gmi]] &&
+                  ar_would_win[m_ar_slave[gmi]][gmi]));
         end
     endgenerate
 
@@ -502,7 +610,10 @@ module axi_crossbar #(
                     rr_found = 1'b0;
 
                     for (ak_s = 0; ak_s < NUM_M && !rr_found; ak_s = ak_s + 1) begin
-                        gnt_val = (aw_priority[si_s] + 1 + ak_s) % NUM_M;
+                        if (FIXED_PRIORITY)
+                            gnt_val = ak_s[MSEL_WIDTH-1:0];  // lowest index first
+                        else
+                            gnt_val = (aw_priority[si_s] + 1 + ak_s) % NUM_M;
                         if (m_awvalid_i[gnt_val] && m_aw_hit[gnt_val] &&
                             (m_aw_slave[gnt_val] == si_s[MSEL_WIDTH-1:0]) &&
                             !m_aw_active[gnt_val]) begin
@@ -552,7 +663,10 @@ module axi_crossbar #(
                     rr_found = 1'b0;
 
                     for (rk_s = 0; rk_s < NUM_M && !rr_found; rk_s = rk_s + 1) begin
-                        gnt_val = (ar_priority[si_s] + 1 + rk_s) % NUM_M;
+                        if (FIXED_PRIORITY)
+                            gnt_val = rk_s[MSEL_WIDTH-1:0];  // lowest index first
+                        else
+                            gnt_val = (ar_priority[si_s] + 1 + rk_s) % NUM_M;
                         if (m_arvalid_i[gnt_val] && m_ar_hit[gnt_val] &&
                             (m_ar_slave[gnt_val] == si_s[MSEL_WIDTH-1:0]) &&
                             !m_ar_active[gnt_val]) begin

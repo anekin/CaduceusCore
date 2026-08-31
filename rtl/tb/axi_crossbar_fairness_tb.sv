@@ -64,6 +64,8 @@
 //
 // Usage (via sim/regression/Makefile):
 //   make -C sim/regression run_crossbar_fairness
+//   make -C sim/regression run_crossbar_fairness_mutation   (fixed-priority
+//       mutation; expects the fairness assertion to FAIL — RED guard)
 // Acceptance: log contains "FAIRNESS: PASS" (fixed crossbar, todo 7). On the
 // unmodified crossbar P4 reproduces the phantom-accept deadlock and the log
 // shows the watchdog marker "FAIRNESS: FAIL" — expected RED for todo 2.
@@ -84,6 +86,19 @@ module axi_crossbar_fairness_tb;
     localparam int unsigned NUM_S       = 2;
     localparam int unsigned S_ID_WIDTH  = M_ID_WIDTH + MSEL_WIDTH;  // 9
     localparam CLK_HALF = 5;  // 100 MHz, 10ns period
+
+    // ── Mutation hook (todo 7 regression guard) ──────────────────────────────
+    // Compiling with +define+MUTATE_FIXED_PRIORITY builds a fixed-priority DUT
+    // variant (FIXED_PRIORITY=1: grants the lowest master index first and
+    // never rotates). The SAME P4 contention stimulus MUST then fail the
+    // fairness assertion (grant-count difference <=1) — that RED result is
+    // the mutation guard proving this fairness test genuinely discriminates
+    // fixed-priority starvation from round-robin fairness.
+`ifdef MUTATE_FIXED_PRIORITY
+    localparam int unsigned MUTATE = 1;
+`else
+    localparam int unsigned MUTATE = 0;
+`endif
 
     localparam [ADDR_WIDTH-1:0] SRAM_BASE   = 32'h2000_0000;
     localparam [ADDR_WIDTH-1:0] UNMAPPED_R  = 32'h1000_0000;  // DECERR read
@@ -192,7 +207,8 @@ module axi_crossbar_fairness_tb;
         .M_ID_WIDTH (M_ID_WIDTH),
         .MSEL_WIDTH (MSEL_WIDTH),
         .NUM_M      (NUM_M),
-        .NUM_S      (NUM_S)
+        .NUM_S      (NUM_S),
+        .FIXED_PRIORITY (MUTATE)
     ) u_dut (
         .clk           (clk),
         .rst_n         (rst_n),
