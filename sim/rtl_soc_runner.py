@@ -3607,38 +3607,79 @@ class P4SpikeRunner(P2P3SpikeRunner):
     async def _verify_10X(self, expected: dict) -> Tuple[bool, str]:
         fp16_tol = expected["fp16_tol"]
         corrupt_op_idx = expected["corrupt_op_idx"]
+        op_meta = expected["op_meta"]
 
-        for idx, meta in expected["op_meta"].items():
-            if idx > corrupt_op_idx:
-                continue
+        # Honesty guard: the "17-op chain PASS" verdict is only claimable when
+        # every one of the 17 manifest ops was actually verified below.
+        num_ops = len(op_meta)
+        if num_ops != 17:
+            return False, (
+                f"FM-SOC-10X op_meta covers {num_ops} ops, expected 17 - "
+                "refusing to claim 17-op chain PASS"
+            )
+
+        async def read_chunked(addr: int, nbytes: int) -> bytes:
+            # PCIe TLP length is a 10-bit DW field (max 4096 B) and the DUT
+            # pcie_ep_wrapper runs max_payload_size=0 (128 B); a single
+            # oversized MRd is malformed and never completed.  op07
+            # attn_weight outputs 8192 B, so split the host readback into
+            # 256 B MRds (the largest size proven to complete on this path).
+            chunk = 256
+            parts = []
+            for off in range(0, nbytes, chunk):
+                parts.append(await self._pcie_tlp_read(
+                    addr + off, min(chunk, nbytes - off)))
+            return b"".join(parts)
+
+        # Every op is verified against its own golden.  For ops before the
+        # corrupt op that golden equals the baseline; for the corrupt op and
+        # every downstream op the golden comes from the corrupt-weight build
+        # (_build_10X), so comparing them proves the corruption propagated
+        # causally through the chain instead of silently truncating the check.
+        for idx, meta in op_meta.items():
             op = meta["op"]
             opcode = op["opcode"]
             golden = np.asarray(meta["golden"]).ravel()
             out_addr = meta["out_addr"]
             label = f"op{idx:02d} {op['name']}"
+            corrupt_expected = idx == corrupt_op_idx
 
             if opcode == "MMUL":
-                out_bytes = await self._pcie_tlp_read(out_addr, golden.nbytes)
+                out_bytes = await read_chunked(out_addr, golden.nbytes)
                 out_arr = np.frombuffer(out_bytes, dtype=np.float32)
-                if idx == corrupt_op_idx:
+                if corrupt_expected:
                     original = np.asarray(meta["original_golden"]).ravel()
                     if np.array_equal(out_arr, original):
                         return False, f"anti-vacuous fail: corrupted {label} still matches original golden"
                 if not np.array_equal(out_arr, golden):
                     return False, f"{label}: MMUL mismatch via PCIe readback"
             elif opcode in ("RMSNORM", "SOFTMAX", "ROPE", "SILU"):
-                out_bytes = await self._pcie_tlp_read(out_addr, golden.nbytes)
+                out_bytes = await read_chunked(out_addr, golden.nbytes)
                 out_arr = np.frombuffer(out_bytes, dtype=np.float16).astype(np.float32)
                 cmp = GoldenSFU.compare_hw_vs_ref(out_arr, golden, **fp16_tol)
                 if not cmp["within_tolerance"]:
                     return False, f"{label}: SFU mismatch max_abs={cmp['max_abs_err']:.2e}"
             elif opcode in ("VMUL", "VRESID"):
-                out_bytes = await self._pcie_tlp_read(out_addr, golden.nbytes)
+                out_bytes = await read_chunked(out_addr, golden.nbytes)
                 out_arr = np.frombuffer(out_bytes, dtype=np.int32)
                 if not np.array_equal(out_arr, golden):
                     return False, f"{label}: Vector mismatch"
 
-        return True, "17-op blk.0 chain PASS via PCIe host readback"
+            # logger.warning (not .info): python logging INFO never reaches
+            # the cocotb sim log in this harness; per-op lines must be
+            # grep-able there to prove all 17 ops were actually verified.
+            if corrupt_expected:
+                logger.warning(f"[10X-VERIFY] {label}: PASS (corrupt-expected - "
+                               f"differs from original golden, matches corrupted golden)")
+            else:
+                logger.warning(f"[10X-VERIFY] {label}: PASS")
+
+        final_msg = (
+            "17-op blk.0 chain PASS via PCIe host readback "
+            f"(17/17 ops verified, op{corrupt_op_idx:02d} corrupt-expected)"
+        )
+        logger.warning(f"FM-SOC-10X: {final_msg}")
+        return True, final_msg
 
 
     # ── ATTN-WEIGHT-CHAIN (todo 15, soc-rtl-verification-signoff) ──────────
