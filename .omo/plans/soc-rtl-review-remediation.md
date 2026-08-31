@@ -211,7 +211,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — 干净 commit 全量回归四类统计正确且新目标全 PASS；failure — 出现 TIMEOUT/FAIL 未如实记录、或 SKIP 被计 PASS、或 evidence 无 provenance。Evidence `build/evidence/task-13-soc-rtl-review-remediation.txt`
   Commit: Y | test(regression): full 33-case regression re-run on clean commit with honest accounting
 
-- [ ] 14. 真实执行 F1-F4（禁止 DRY-RUN/DEFERRED 计 PASS）
+- [x] 14. 真实执行 F1-F4（禁止 DRY-RUN/DEFERRED 计 PASS）
   What to do / Must NOT do: 重新执行 final wave：(a) F1 plan compliance——本计划 20 todo 的证据逐条核对；**禁止 SKIP-ENV 自动计 PASS**（评审 6.6 项：EDA 依赖的 acceptance 若因环境跳过，标记 BLOCKED 而非 PASS）；(b) F2 code quality——新改的 crossbar/firmware/runner/TB 代码审查；(c) F3 real manual QA——真实执行 `PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q`（失败数如实记录，不得用 baseline 豁免）、真实 Spike mmul_smoke、真实 sz0001 spot checks（`bash sim/regression/soc-verification-run.sh run_e2e_blk0` 等）；(d) F4 scope fidelity——核对本计划 Must NOT 清单。EDA 可用性约束（Metis C2）：F3 中依赖 sz0001 的项（Spike smoke 与 sz0001 spot checks，即上述 (c) 项内的后两部分），若 sz0001 不可用如实标记 BLOCKED 而非 PASS。Spike 处置按 todo 16 的结果引用（修复 PASS 或正式 bug 条目），不得静默。任何无法执行项标记 INCONCLUSIVE/BLOCKED，绝不自动转 PASS。Must NOT 沿用旧 F3 evidence 的 "DRY-RUN → PASS" 模式。
   Parallelization: Wave 3 | Blocked by: 13 | Blocks: 16 | Can parallelize with: 15
   References: `build/evidence/task-F3-soc-rtl-verification-signoff.txt`（旧 F3 的 DRY-RUN 模式，反例）；`build/evidence/task-F3-spike-smoke.log`（Spike L0 Q_proj FAIL 记录）；`scripts/fm_hardening_f1_audit.sh`、`fm_hardening_f2_code_quality.sh`、`fm_hardening_f3_manual_qa.sh`、`fm_hardening_f4_scope_gate.sh`（F 波脚本入口，实际文件名带后缀——round-6 Momus 修正）；评审报告 :108-128（3.5 节）
@@ -219,7 +219,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — F1-F4 全部真实执行、FAIL 如实记录、结论可信；failure — 任一 F 波出现 DRY-RUN/DEFERRED 计 PASS。Evidence `.omo/evidence/task-14-soc-rtl-review-remediation.txt`
   Commit: Y | test(signoff): real-execution F1-F4 wave with honest INCONCLUSIVE/FAIL accounting
 
-- [ ] 15. 红转绿汇总表
+- [x] 15. 红转绿汇总表
   What to do / Must NOT do: 汇总 todo 1-6 的 6 组负向测试：输出 `docs/soc-rtl-review-remediation-rg-table.md`，每行含 负测名称 / 修复前 RED 证据路径 / 修复后 GREEN 证据路径 / 对应修复 todo / mutation 保持 RED 确认。Must NOT 声称"全部转绿"除非每条都有两条证据。
   Parallelization: Wave 3 | Blocked by: 13 | Blocks: 16 | Can parallelize with: 14
   References: `.omo/evidence/task-{1..12}-soc-rtl-review-remediation.txt`；`docs/agentic-ic-verification-plan-v0.2.md`（红绿证据方法论）
