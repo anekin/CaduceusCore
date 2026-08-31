@@ -167,6 +167,46 @@ $(APB_CONF_SIMV): $(APB_CONF_SRC)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# run_apb_conformance_real — APB conformance vs REAL peripheral RTL (7/7)
+# ═══════════════════════════════════════════════════════════════════════════
+# Instantiates the real apb_decoder plus the 7 REAL peripheral RTL modules
+# (mxu_soc_wrapper / sfu_soc_wrapper / vector_soc_wrapper / dma_wrapper /
+# pcie_ep_wrapper / doorbell / intc_top), wired per rtl/soc/caduceus_soc_top.v
+# address map, and checks their REAL reset/RW/RO/W1C register semantics
+# against an oracle built from gen/npu_abi_firmware.h NPU_ABI_* constants plus
+# each peripheral's documented MMIO header table. pcie_dma_wrapper (AXI master
+# M6) is out of APB-conformance scope and guarded (psel_o[7] must stay 0).
+# The verdict rests on the fail-closed marker "APB_CONFORMANCE_REAL: GREEN"
+# printed only when the TB's own counters prove 0 unexpected fails, 0 APB
+# timeouts, and >= 5 peripherals covered. Run via:
+#   bash sim/regression/soc-verification-run.sh run_apb_conformance_real
+
+APB_REAL_SRC := $(TB_DIR)/apb_conformance_real_tb.sv
+APB_REAL_SIMV := simv_apb_conformance_real
+
+.PHONY: run_apb_conformance_real
+run_apb_conformance_real: $(APB_REAL_SIMV)
+	@echo "$(YELLOW)[APB_CONFORMANCE_REAL] Running...$(NC)"
+	@cd $(REPO_ROOT) && ./sim/regression/$(APB_REAL_SIMV) 2>&1 | \
+		tee sim/regression/apb_conformance_real.log
+	@grep -q "APB_CONFORMANCE_REAL: GREEN" apb_conformance_real.log && \
+		echo "$(GREEN)APB_CONFORMANCE_REAL: PASS$(NC)" || \
+		(echo "$(RED)APB_CONFORMANCE_REAL: FAIL$(NC)" && exit 1)
+
+$(APB_REAL_SIMV): $(APB_REAL_SRC) $(SOC_FLIST) $(IBEX_FLIST) $(AXI_FLIST) $(PCIE_FLIST)
+	@echo "$(YELLOW)[APB_CONFORMANCE_REAL] Compiling (real peripherals, 4 flists)...$(NC)"
+	cd $(REPO_ROOT) && $(VCS) $(VCS_COMMON) \
+		-f rtl/cpu/ibex.flist \
+		-f rtl/ip/verilog-axi.flist \
+		-f rtl/ip/verilog-pcie.flist \
+		-f rtl/soc/soc.flist \
+		rtl/tb/apb_conformance_real_tb.sv \
+		-top apb_conformance_real_tb \
+		-o sim/regression/$(APB_REAL_SIMV) \
+		-l sim/regression/compile_apb_real.log
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # run_intc_test — INTC 7-source Interrupt Controller
 # ═══════════════════════════════════════════════════════════════════════════
 

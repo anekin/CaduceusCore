@@ -1,60 +1,79 @@
 //=============================================================================
 // apb_conformance_real_tb.sv — APB conformance against REAL peripheral RTL
-// CaduceusCore / soc-rtl-review-remediation todo 3 (RED negative test)
+// CaduceusCore / soc-rtl-review-remediation todo 12 (GREEN)
 //
-// Purpose: instantiate the REAL rtl apb_decoder plus the REAL peripheral RTL
-// (mxu_soc_wrapper / sfu_soc_wrapper / vector_soc_wrapper / dma_wrapper /
-// pcie_ep_wrapper / doorbell / intc_top), wired per rtl/soc/caduceus_soc_top.v
-// address map, and drive the SAME register-conformance stimulus as the
-// model-slave TB (rtl/tb/apb_register_conformance_tb.sv:100-159). The oracle
-// is the model-slave expectation table (that TB's REG_CNT/REG_OFFS/REG_ACC/
-// REG_RST, :200-256 — pinned by sim/tests/test_apb_register_conformance.py
-// against the Func Model factories), with base addresses transcribed from the
-// INDEPENDENT ABI header gen/npu_abi_firmware.h:17-38 (NPU_ABI_* constants).
+// Todo 3 (RED) instantiated the REAL apb_decoder + 7 REAL peripherals and ran
+// the MODEL-slave oracle — 40 divergences exposed, and the W1 analysis showed
+// they were almost all WRONG EXPECTATIONS (the model table does not describe
+// the real peripherals). This todo replaces the oracle with REAL RTL
+// semantics derived from INDEPENDENT sources:
+//   * base addresses: gen/npu_abi_firmware.h NPU_ABI_* constants (:15-38)
+//   * per-register semantics: each peripheral's DOCUMENTED MMIO header table
+//     (rtl/wrapper/mxu_soc_wrapper.v, rtl/wrapper/vector_soc_wrapper.v,
+//     rtl/ip/dma_wrapper.v, rtl/ip/pcie_ep_wrapper.v, rtl/intc/intc_top.v,
+//     rtl/soc/doorbell.v), cross-checked against the RTL (line cites in the
+//     oracle tables below).
 //
-// REAL peripheral behavior that differs from the model-slave expectation
-// table is EXPOSED AS FAILURES — that divergence inventory is the RED
-// deliverable of this todo. Do NOT modify apb_decoder.v or any peripheral RTL.
+// Real semantics encoded (vs the wrong model expectations of todo 3):
+//   MXU/SFU/VECTOR: CMD is a write-only PULSE register — readback 0
+//                   (mmio_if.v:139, sfu_top.v:134, vector_top.v:144);
+//                   STATUS is RO; the rest full-width RW; reset all 0.
+//                   Wrapper extension regs covered per their header tables
+//                   (MXU 0x30-0x48 and VECTOR 0x30-0x44 have NON-zero resets).
+//   DMA:            CMD STORES the written value and reads it back
+//                   (dma_wrapper.v:285/:128); STATUS RO; rest RW; reset 0.
+//   DOORBELL:       4 RW regs 0x00-0x0C (doorbell.v:80-83); offsets 0x10/0x14
+//                   are silent-0 (addr_valid gate, doorbell.v:70) — the ABI
+//                   (npu-regmap.h npu_doorbell_t) DECLARES LAST_STATUS@0x10
+//                   R/W + COMPLETION_STATUS[16]@0x14 → DOCUMENTED DIVERGENCE,
+//                   filed as BUG-RTL-SOC-009.
+//   INTC:           PENDING is a LIVE sticky RO reg (hostile writes ignored,
+//                   intc_top.v:98/:104); ENABLE 8-bit masked (:117); THRESHOLD
+//                   4-bit masked, RESET=1 (:131/:133); ACK is W1C and reads
+//                   back 0 (:180-181).
+//   PCIE:           CTRL@0x00 [2:0]=mps stored, readback shifted to [3:1] with
+//                   bit0=0, bit3 (documented "enable") NOT implemented →
+//                   DOCUMENTED DIVERGENCE BUG-RTL-SOC-010;
+//                   STATUS@0x04 RO; COMPLETER_ID@0x08 RW[15:0];
+//                   BAR0_BASE@0x0C RO 0x2000_0000; BAR0_MASK@0x10 RO
+//                   0xFFC0_0000; BAR1_BASE@0x14 RO 0x8000_0000; BAR1_MASK@0x18
+//                   RO 0x8000_0000 (documented "bit31=writable" NOT
+//                   implemented → BUG-RTL-SOC-010); MSIX_CTRL@0x1C
+//                   field-masked; IRQ_CTRL@0x20 field-masked + W1C[1];
+//                   offsets >= 0x24 UNMAPPED → pslverr=1
+//                   (pcie_ep_wrapper.v:296).
 //
-// Expected RED divergences (predicted from RTL source, exposed at runtime):
-//   INTC    THRESHOLD reset value = 1 (model expects 0); ENABLE/THRESHOLD are
-//           8/4-bit field masks; ACK readback = 0; PENDING is a live 8-bit
-//           status register (sticky, driven by irq sources), not a static 0.
-//   DOORBELL real RTL has only 4 RW registers 0x00-0x0C — HOST_HEAD/NPU_TAIL
-//           are RW (model expects RO), offsets 0x10/0x14 do not exist
-//           (model expects LAST_STATUS/COMPLETION_STATUS rw).
-//   PCIE     real pcie_ep_wrapper register layout (CTRL 0x00, STATUS 0x04,
-//           COMPLETER_ID 0x08, BAR0_BASE 0x0C ... IRQ_CTRL 0x20) differs from
-//           the Func Model factory layout used by the model table; BAR regs
-//           are RO constants; unmapped offsets (e.g. 0x24) assert pslverr.
-//   MXU/SFU/VECTOR/DMA: CMD is write-only pulse (readback 0 — model w-store
-//           expects readback 0x42).
+// Documented-divergence handling (todo 12 mandate): a check whose REAL
+// behavior contradicts a DOCUMENTED spec is tagged [DOC-DIV <bug-id>],
+// counted in the documented-divergence bucket, and references a bug filed in
+// docs/bugs/. It is NOT silently passed. Bugs filed for this TB:
+//   BUG-RTL-SOC-009 — doorbell ABI window (LAST_STATUS/COMPLETION_STATUS)
+//   BUG-RTL-SOC-010 — pcie_ep_wrapper header overstates CTRL[3]/BAR1_MASK
+//   BUG-RTL-SOC-011 — rtl/ip/README DMA access classes (CMD W / STATUS R)
 //
-// Wiring notes (SoC fidelity):
+// pcie_dma_wrapper (AXI master M6, decoder port 7 @ 0x4000_7000) remains out
+// of APB-conformance scope; a live guard proves psel_o[7] never asserts.
+//
+// Wiring notes (SoC fidelity, unchanged from todo 3):
 //   * Peripherals' irq outputs feed intc_top exactly as caduceus_soc_top.v
 //     does (mxu->bit0 ... doorbell->bit5). timer_irq (bit6) and pcie_dma_irq
 //     (bit7) have no source module in this TB, so they are driven by TB regs
 //     (they are SoC-external stimulus by nature).
 //   * AXI4 master ports of all peripherals are tied off (ready=0, no slave
 //     model). No CMD write in the stimulus has START bit set, so no compute
-//     is launched and the tie-off cannot stall APB. (MXU/SFU/VECTOR/DMA
-//     pready is unconditional 1'b1; SFU can stall pready only on a real
-//     CMD.START hold, which this stimulus never produces.)
+//     is launched and the tie-off cannot stall APB. (SFU pready can stall
+//     only around a real CMD.START — sfu_soc_wrapper.v:631 — which this
+//     stimulus never produces.)
 //   * PCIe TLP RX idles (valid=0), tx_cpl_tlp_ready=1; doorbell bkdoor_* = 0.
 //   * pcie_dma_wrapper (slave 7 @ 0x4000_7000) is NOT instantiated — it is
 //     the AXI master M6, outside this APB conformance scope; a live guard
 //     counts psel_o[7] assertions (must stay 0).
 //
-// Usage (EDA server sz0001 only — VCS):
-//   source /NAS/Tools/methodology/modules/init/bash
-//   module load vcs/vcs_2023.12sp2
-//   vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps +v2k +lint=all +warn=all \
-//       -f rtl/cpu/ibex.flist -f rtl/ip/verilog-axi.flist \
-//       -f rtl/ip/verilog-pcie.flist -f rtl/soc/soc.flist \
-//       rtl/tb/apb_conformance_real_tb.sv \
-//       -top apb_conformance_real_tb -o simv_apb_conformance_real -l compile_apb_real.log
-//   ./simv_apb_conformance_real | tee run_apb_real.log
-// Verdict: "APB_CONFORMANCE_REAL: RED (N divergences)" — RED is EXPECTED.
+// Usage (EDA server sz0001 only — VCS), via the regression Makefile:
+//   bash sim/regression/soc-verification-run.sh run_apb_conformance_real
+// Verdict marker: "APB_CONFORMANCE_REAL: GREEN (...)" — the Makefile target
+// greps that exact marker (fail-closed: it is printed only when the TB's own
+// counters prove 0 unexpected fails, 0 timeouts, and >= 5 peripherals covered).
 //=============================================================================
 
 `timescale 1ns / 1ps
@@ -66,11 +85,20 @@ module apb_conformance_real_tb;
     //=========================================================================
     localparam CLK_HALF = 5;               // 100 MHz
 
-    // Access codes (same encoding as apb_register_conformance_tb.sv:37-41)
-    localparam [1:0] ACC_RW  = 2'd0;       // read-write, overwrite semantics
-    localparam [1:0] ACC_R   = 2'd1;       // read-only, writes ignored
-    localparam [1:0] ACC_W   = 2'd2;       // write-only (FM model style)
-    localparam [1:0] ACC_W1C = 2'd3;       // write-1-to-clear
+    // Access codes for the REAL-semantics oracle table
+    localparam [3:0] ACC_RW      = 4'd0;  // full-width RW overwrite
+    localparam [3:0] ACC_RWM     = 4'd1;  // masked RW overwrite (REG_MSK)
+    localparam [3:0] ACC_RO      = 4'd2;  // read-only, hostile write unchanged
+    localparam [3:0] ACC_CONST   = 4'd3;  // read-only constant (REG_RST)
+    localparam [3:0] ACC_WO      = 4'd4;  // write-only pulse, readback 0
+    localparam [3:0] ACC_WOS     = 4'd5;  // write-only STORED (DMA CMD), readback
+    localparam [3:0] ACC_FIELD   = 4'd6;  // field-mapped (EXP_FULL / EXP_ZERO)
+    localparam [3:0] ACC_UNMAP   = 4'd7;  // unmapped: read+write -> pslverr=1
+    localparam [3:0] ACC_DOCDIVR = 4'd8;  // reserved-in-ABI: reads 0, writes dropped
+    localparam [3:0] ACC_W1C     = 4'd9;  // INTC.ACK — special-cased, not in table
+
+    // Sentinel reset value: skip the Phase-1 absolute reset check (relative only)
+    localparam [31:0] RST_SKIP = 32'hDEAD_BEEF;
 
     // ── ABI base addresses — transcribed from gen/npu_abi_firmware.h ─────
     // NPU_ABI_MXU_BASE     0x40000000UL   (:27)
@@ -540,9 +568,14 @@ module apb_conformance_real_tb;
     integer test_num;
     integer pass_cnt;
     integer fail_cnt;
+    integer doc_div_cnt;         // documented-divergence checks (bug-filed)
     integer write_timeouts;
     integer read_timeouts;
     integer s, r;
+    integer slv_checks  [0:6];   // per-slave check counts (coverage proof)
+    integer slv_fails   [0:6];
+    integer slv_docdivs [0:6];
+    integer slv_sel_cnt [0:7];   // live per-slave psel_o assertion counts
     reg [31:0] rd;
     reg        rd_err;
 
@@ -553,69 +586,149 @@ module apb_conformance_real_tb;
         if (psel_o[7]) pcie_dma_sel_cnt = pcie_dma_sel_cnt + 1;
     end
 
-    //=========================================================================
-    // Oracle — model-slave expectation table, transcribed VERBATIM from
-    // rtl/tb/apb_register_conformance_tb.sv:200-256 (REG_CNT / REG_OFFS /
-    // REG_ACC / REG_RST). That table is pinned by
-    // sim/tests/test_apb_register_conformance.py against the Func Model
-    // peripheral factories (sim/models/apb_peripheral.py) — it is the
-    // declared reference for expected semantics. Base addresses are the
-    // NPU_ABI_* constants above (independent ABI source).
-    //=========================================================================
-    localparam MAX_REGS = 15;
+    // Live routing proof: count psel_o assertions per slave (positive routing
+    // evidence — every peripheral must actually be selected at least once).
+    integer idx_sel;
+    initial begin
+        for (idx_sel = 0; idx_sel < 8; idx_sel = idx_sel + 1)
+            slv_sel_cnt[idx_sel] = 0;
+    end
+    always @(posedge clk) begin
+        for (idx_sel = 0; idx_sel < 8; idx_sel = idx_sel + 1) begin
+            if (psel_o[idx_sel]) slv_sel_cnt[idx_sel] = slv_sel_cnt[idx_sel] + 1;
+        end
+    end
 
-    localparam [31:0] REG_CNT [0:6] = '{32'd11, 32'd8, 32'd8, 32'd14, 32'd10, 32'd6, 32'd4};
+    //=========================================================================
+    // ORACLE — REAL-semantics expectation table.
+    //
+    // Sources (independent of the Func Model factories):
+    //   * base addresses: gen/npu_abi_firmware.h NPU_ABI_* (:15-38)
+    //   * offsets/access classes: each peripheral's DOCUMENTED MMIO header
+    //     table (wrapper files, pcie_ep_wrapper.v, intc_top.v, doorbell.v)
+    //   * write masks / reset values / field maps: RTL cross-check, cited in
+    //     the comments next to each table.
+    //
+    // REG_DOCDIV flags rows whose REAL behavior contradicts a DOCUMENTED
+    // spec; those checks are tagged [DOC-DIV <bug>], counted in doc_div_cnt,
+    // and reference bugs filed in docs/bugs/. RST_SKIP = no absolute reset
+    // check (relative-only, e.g. live RO status).
+    //=========================================================================
+    localparam MAX_REGS = 20;
+
+    localparam [31:0] REG_CNT [0:6] =
+        '{32'd18, 32'd8, 32'd14, 32'd15, 32'd10, 32'd6, 32'd3};
 
     localparam [11:0] REG_OFFS [0:6][0:MAX_REGS-1] = '{
-        // MXU (slave 0)
-        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h20, 12'h24, 12'h28, 12'h0, 12'h0, 12'h0, 12'h0},
-        // SFU (slave 1)
-        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0},
-        // VECTOR (slave 2)
-        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0},
-        // DMA (slave 3)
-        '{12'h00, 12'h04, 12'h08, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h20, 12'h24, 12'h28, 12'h2C, 12'h30, 12'h34, 12'h38, 12'h0},
-        // PCIe (slave 4)
-        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h20, 12'h24, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0},
-        // DOORBELL (slave 5)
-        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0},
-        // INTC (slave 6)
-        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0}
+        // MXU (slave 0) — engine mmio_if 0x00-0x28 + wrapper regs 0x30-0x48
+        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h20, 12'h24, 12'h28, 12'h30, 12'h34, 12'h38, 12'h3C, 12'h40, 12'h44, 12'h48, 12'h0, 12'h0},
+        // SFU (slave 1) — sfu_top mmio 0x00-0x1C (no wrapper regs)
+        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0},
+        // VECTOR (slave 2) — vector_top mmio 0x00-0x1C + wrapper regs 0x30-0x44
+        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h30, 12'h34, 12'h38, 12'h3C, 12'h40, 12'h44, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0},
+        // DMA (slave 3) — dma_wrapper reg file 0x00-0x38 (incl. _pad0)
+        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h20, 12'h24, 12'h28, 12'h2C, 12'h30, 12'h34, 12'h38, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0},
+        // PCIE (slave 4) — pcie_ep_wrapper 0x00-0x20 + unmapped 0x24
+        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h20, 12'h24, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0},
+        // DOORBELL (slave 5) — 4 RW regs + ABI-reserved 0x10/0x14
+        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0},
+        // INTC (slave 6) — PENDING/ENABLE/THRESHOLD (ACK special-cased)
+        '{12'h00, 12'h04, 12'h08, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0}
     };
 
-    localparam [1:0] REG_ACC [0:6][0:MAX_REGS-1] = '{
-        // MXU: CTRL rw, CMD w, STATUS r, rest rw
-        '{ACC_RW, ACC_W, ACC_R, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
-        // SFU: CTRL rw, CMD w, STATUS r, rest rw
-        '{ACC_RW, ACC_W, ACC_R, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
-        // VECTOR: CTRL rw, CMD w, STATUS r, rest rw
-        '{ACC_RW, ACC_W, ACC_R, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
-        // DMA: CTRL rw, CMD w, STATUS r, rest rw
-        '{ACC_RW, ACC_W, ACC_R, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
-        // PCIe: all rw (Func Model factory declares 10 rw registers)
-        '{ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
-        // DOORBELL: HOST_TAIL w, NPU_HEAD rw, HOST_HEAD r, NPU_TAIL r, LAST_STATUS rw, COMPLETION_STATUS rw
-        '{ACC_W, ACC_RW, ACC_R, ACC_R, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
-        // INTC: PENDING r, ENABLE rw, THRESHOLD rw, ACK w1c
-        '{ACC_R, ACC_RW, ACC_RW, ACC_W1C, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW}
+    localparam [3:0] REG_ACC [0:6][0:MAX_REGS-1] = '{
+        // MXU: CTRL RW; CMD WO pulse (mmio_if.v:123-124/:139); STATUS RO;
+        // 0x0C-0x28 full-width RW; wrapper regs per mxu_soc_wrapper.v:245-249
+        '{ACC_RW, ACC_WO, ACC_RO, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_WO, ACC_RO, ACC_RWM, ACC_RWM, ACC_RW, ACC_RW},
+        // SFU: same shape (sfu_top.v:96/:134)
+        '{ACC_RW, ACC_WO, ACC_RO, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
+        // VECTOR: same shape (vector_top.v:109-114/:144) + wrapper regs
+        '{ACC_RW, ACC_WO, ACC_RO, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_WO, ACC_RO, ACC_RWM, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
+        // DMA: CTRL RW; CMD write-STORE (dma_wrapper.v:285/:128); STATUS RO
+        // (read-clears DONE :299-301, unobservable while idle); rest RW
+        '{ACC_RW, ACC_WOS, ACC_RO, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
+        // PCIE: CTRL field (mps stored, readback shifted to [3:1], bit3
+        // unimplemented); STATUS RO; COMPLETER_ID RW[15:0]; BAR0/1 RO consts;
+        // MSIX/IRQ_CTRL field-masked; 0x24 unmapped -> pslverr (:296)
+        '{ACC_FIELD, ACC_RO, ACC_RWM, ACC_CONST, ACC_CONST, ACC_CONST, ACC_CONST, ACC_FIELD, ACC_FIELD, ACC_UNMAP, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
+        // DOORBELL: 4 RW (doorbell.v:80-83); 0x10/0x14 reserved-in-ABI
+        '{ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_DOCDIVR, ACC_DOCDIVR, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
+        // INTC: PENDING live-sticky RO; ENABLE 8-bit; THRESHOLD 4-bit
+        '{ACC_RO, ACC_RWM, ACC_RWM, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW}
     };
 
+    // Reset values (RST_SKIP = relative-only). Engine regs all 0; INTC
+    // THRESHOLD resets to 1 (intc_top.v:131); wrapper regs non-zero
+    // (mxu_soc_wrapper.v:245-249, vector_soc_wrapper.v:183-186).
     localparam [31:0] REG_RST [0:6][0:MAX_REGS-1] = '{
-        // MXU — all reset 0
-        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
-        // SFU — all reset 0
-        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
-        // VECTOR — all reset 0
-        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
-        // DMA — all reset 0
-        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
-        // PCIe — COMPLETER_ID=0x0001, MAX_PAYLOAD_SIZE=3, BAR0_BASE=0x2000_0000,
-        // BAR0_MASK=0x003F_FFFF, BAR1_BASE=0x8000_0000, BAR1_MASK=0x7FFF_FFFF
-        '{32'h0000_0001, 32'h0000_0003, 32'd0, 32'd0, 32'd0, 32'd0, 32'h2000_0000, 32'h003F_FFFF, 32'h8000_0000, 32'h7FFF_FFFF, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
-        // DOORBELL — all reset 0
-        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
-        // INTC — all reset 0
-        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0}
+        // MXU
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'h8002_0000, 32'h8001_0000, 32'h8003_0000, 32'd0, 32'd0, 32'd1, 32'd64, 32'd0, 32'd0},
+        // SFU
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        // VECTOR — 0x40 WRP_STATUS is live (wrp_ready) → relative only
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'h2030_0000, 32'h2030_0000, 32'h2034_0000, 32'd0, RST_SKIP, 32'h4000, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        // DMA
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        // PCIE
+        '{32'd0, 32'd0, 32'd0, 32'h2000_0000, 32'hFFC0_0000, 32'h8000_0000, 32'h8000_0000, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        // DOORBELL
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        // INTC — THRESHOLD resets to 1
+        '{32'd0, 32'd0, 32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0}
+    };
+
+    // Write masks (ACC_RWM rows only): INTC ENABLE 8-bit (intc_top.v:117),
+    // THRESHOLD 4-bit (:133), PCIE COMPLETER_ID 16-bit (:316),
+    // MXU WRP_K_TILES/WRP_DIM_N 16-bit (:255-256), VECTOR WRP_LEN 16-bit (:192).
+    localparam [31:0] REG_MSK [0:6][0:MAX_REGS-1] = '{
+        '{32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'h0000_FFFF, 32'h0000_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF},
+        '{32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF},
+        '{32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'h0000_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF},
+        '{32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF},
+        '{32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'h0000_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF},
+        '{32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF},
+        '{32'hFFFF_FFFF, 32'h0000_00FF, 32'h0000_000F, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF, 32'hFFFF_FFFF}
+    };
+
+    // ACC_FIELD expected readbacks after w(0xFFFFFFFF) and w(0):
+    //   PCIE CTRL: mps=7 stored → readback {28'h0, 7, 1'b0} = 0xE (bit3 enable
+    //              NOT stored, bit0 always 0) — pcie_ep_wrapper.v:304-306/:387
+    //   MSIX_CTRL: vector=0xFF, msix_en=1 → 0x0000_FF01 (:328-329/:394)
+    //   IRQ_CTRL:  err_irq_en=1, pending W1C'd to 0, irq_en=1 → 0x5 (:363-370/:395)
+    localparam [31:0] REG_EXP_F [0:6][0:MAX_REGS-1] = '{
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'h0000_000E, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'h0000_FF01, 32'h0000_0005, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0}
+    };
+
+    localparam [31:0] REG_EXP_Z [0:6][0:MAX_REGS-1] = '{
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0}
+    };
+
+    // DOC-DIV flags: real behavior contradicts a DOCUMENTED spec (bug-filed)
+    //   DMA    CMD 0x04 — rtl/ip/README.md:35 says W, RTL stores+reads back
+    //   PCIE   CTRL 0x00 — header :258 says [3]=enable (unimplemented)
+    //   PCIE   BAR1_MASK 0x18 — header :264 says bit31=writable (constant)
+    //   DOORBELL 0x10/0x14 — ABI npu_doorbell_t declares LAST_STATUS R/W +
+    //                    COMPLETION_STATUS[16]; RTL silent-0 (doorbell.v:70)
+    localparam [31:0] REG_DOCDIV [0:6][0:MAX_REGS-1] = '{
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd1, 32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0}
     };
 
     // ABI base address lookup per slave index
@@ -631,6 +744,19 @@ module apb_conformance_real_tb;
                 5: slave_base = ABI_DOORBELL_BASE;
                 6: slave_base = ABI_INTC_BASE;
                 default: slave_base = 32'h0;
+            endcase
+        end
+    endfunction
+
+    // Bug id for a DOC-DIV row (filed in docs/bugs/bugs-soc-rtl.md)
+    function automatic string doc_bug;
+        input integer idx;
+        begin
+            case (idx)
+                3: doc_bug = "BUG-RTL-SOC-011";  // DMA README access classes
+                4: doc_bug = "BUG-RTL-SOC-010";  // PCIe header overstates CTRL[3]/BAR1_MASK
+                5: doc_bug = "BUG-RTL-SOC-009";  // doorbell ABI window missing
+                default: doc_bug = "BUG-RTL-SOC-???";
             endcase
         end
     endfunction
@@ -709,20 +835,87 @@ module apb_conformance_real_tb;
     end
     endtask
 
+    // Write variant that also returns the pslverr flag (for UNMAP checks and
+    // decoder out-of-range writes).
+    task automatic apb_write_err;
+        input  [31:0] addr;
+        input  [31:0] data;
+        output        err;
+        integer wdog;
+    begin
+        @(posedge clk); #1;
+        psel    = 1'b1;
+        penable = 1'b0;
+        paddr   = addr;
+        pwrite  = 1'b1;
+        pwdata  = data;
+        @(posedge clk); #1;
+        penable = 1'b1;
+        wdog = 0;
+        while (!pready && wdog < 4096) begin
+            @(posedge clk); #1;
+            wdog = wdog + 1;
+        end
+        if (wdog >= 4096) begin
+            write_timeouts = write_timeouts + 1;
+            $display("  [ERROR] APB WRITE TIMEOUT @ 0x%08h", addr);
+        end
+        #1;
+        err = pslverr;
+        @(posedge clk); #1;
+        psel    = 1'b0;
+        penable = 1'b0;
+    end
+    endtask
+
     //=========================================================================
     // Check helpers
     //=========================================================================
     task automatic check;
         input [31:0] actual;
         input [31:0] expected;
+        input integer slv;         // -1 = global check (no per-slave count)
         input string  desc;
     begin
         test_num = test_num + 1;
+        if (slv >= 0)
+            slv_checks[slv] = slv_checks[slv] + 1;
         if (actual !== expected) begin
             $display("  [FAIL] %0s — got 0x%08h, expected 0x%08h", desc, actual, expected);
             fail_cnt = fail_cnt + 1;
+            if (slv >= 0)
+                slv_fails[slv] = slv_fails[slv] + 1;
         end else begin
             $display("  [PASS] %0s (0x%08h)", desc, actual);
+            pass_cnt = pass_cnt + 1;
+        end
+    end
+    endtask
+
+    // Check variant for rows flagged DOC-DIV: validates the REAL behavior
+    // (pass if real matches the RTL-derived expectation) and records the
+    // documented-spec contradiction in the doc_div bucket with its bug id.
+    task automatic check_docdiv;
+        input [31:0] actual;
+        input [31:0] expected;
+        input integer slv;
+        input string  desc;
+        input string  bugid;
+    begin
+        test_num = test_num + 1;
+        if (slv >= 0)
+            slv_checks[slv] = slv_checks[slv] + 1;
+        doc_div_cnt = doc_div_cnt + 1;
+        if (slv >= 0)
+            slv_docdivs[slv] = slv_docdivs[slv] + 1;
+        if (actual !== expected) begin
+            $display("  [FAIL] %0s — got 0x%08h, expected 0x%08h", desc, actual, expected);
+            fail_cnt = fail_cnt + 1;
+            if (slv >= 0)
+                slv_fails[slv] = slv_fails[slv] + 1;
+        end else begin
+            $display("  [PASS] %0s (0x%08h)", desc, actual);
+            $display("         [DOC-DIV] real RTL contradicts documented spec — filed as %0s", bugid);
             pass_cnt = pass_cnt + 1;
         end
     end
@@ -760,11 +953,21 @@ module apb_conformance_real_tb;
     // Main test sequence
     //=========================================================================
     initial begin
+        reg [31:0] v1, v2;
+        reg        w_err;
+        integer    covered;
+
         test_num       = 0;
         pass_cnt       = 0;
         fail_cnt       = 0;
+        doc_div_cnt    = 0;
         write_timeouts = 0;
         read_timeouts  = 0;
+        for (s = 0; s < 7; s = s + 1) begin
+            slv_checks[s]  = 0;
+            slv_fails[s]   = 0;
+            slv_docdivs[s] = 0;
+        end
 
         apb_idle();
         tb_timer_irq    = 1'b0;
@@ -783,71 +986,139 @@ module apb_conformance_real_tb;
         $display("              INTC(0x4000_6000)");
         $display("  NOT INTEGRATED: pcie_dma_wrapper (0x4000_7000) — AXI master M6,");
         $display("              out of APB conformance scope; guarded (psel_o[7]==0)");
-        $display("  ORACLE: model-slave expectation table (apb_register_conformance_tb.sv");
-        $display("          :200-256) + NPU_ABI_* bases (gen/npu_abi_firmware.h:17-38)");
+        $display("  ORACLE: REAL RTL semantics = NPU_ABI_* bases (gen/npu_abi_firmware.h");
+        $display("          :15-38) + documented MMIO header tables of each peripheral");
+        $display("  DOC-DIV policy: real-vs-documented contradictions tagged [DOC-DIV]");
+        $display("          and bug-filed (docs/bugs/), never silently passed");
         $display("=====================================================\n");
 
-        // ── Phase 1: reset-value conformance (rw + r + w1c registers) ─────
-        $display("--- Phase 1: reset values vs model oracle ---\n");
+        // ── Phase 1: reset-value conformance (REAL semantics) ──────────────
+        $display("--- Phase 1: reset values vs REAL oracle ---\n");
         for (s = 0; s < 7; s = s + 1) begin
             for (r = 0; r < REG_CNT[s]; r = r + 1) begin
-                if (REG_ACC[s][r] == ACC_W)
-                    continue;   // write-only: no readable reset value
-                apb_read(slave_base(s) + REG_OFFS[s][r], rd, rd_err);
-                if (rd_err)
-                    $display("  [INFO] pslverr=1 on read %s +0x%03X", itoa_slv(s), REG_OFFS[s][r]);
-                check(rd, REG_RST[s][r],
-                      {"reset ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                case (REG_ACC[s][r])
+                    ACC_WO, ACC_WOS, ACC_UNMAP, ACC_DOCDIVR: begin
+                        // not readable at reset (or covered in Phase 2)
+                    end
+                    default: begin
+                        if (REG_RST[s][r] == RST_SKIP)
+                            $display("  [INFO] %0s +0x%03X: relative-only (live RO)",
+                                     itoa_slv(s), REG_OFFS[s][r]);
+                        else begin
+                            apb_read(slave_base(s) + REG_OFFS[s][r], rd, rd_err);
+                            if (rd_err)
+                                $display("  [INFO] pslverr=1 on read %0s +0x%03X",
+                                         itoa_slv(s), REG_OFFS[s][r]);
+                            check(rd, REG_RST[s][r], s,
+                                  {"reset ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                        end
+                    end
+                endcase
             end
         end
 
-        // ── Phase 2: per-register access conformance (write→readback) ─────
-        $display("\n--- Phase 2: write -> readback conformance ---\n");
+        // ── Phase 2: per-register access conformance (REAL semantics) ──────
+        $display("\n--- Phase 2: write -> readback conformance vs REAL oracle ---\n");
         for (s = 0; s < 7; s = s + 1) begin
             for (r = 0; r < REG_CNT[s]; r = r + 1) begin
                 case (REG_ACC[s][r])
                     ACC_RW: begin
-                        // Overwrite semantics: 0x3 then 0x6 → readback 0x6
-                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'h3);
-                        apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
-                        check(rd, 32'h3,
-                              {"rw-w0x3 ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
-                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'h6);
-                        apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
-                        check(rd, 32'h6,
-                              {"rw-ovrw ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
-                    end
-                    ACC_R: begin
-                        // Hostile write must not change the value
                         apb_write(slave_base(s) + REG_OFFS[s][r], 32'hFFFF_FFFF);
                         apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
-                        check(rd, REG_RST[s][r],
-                              {"r-hostile ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                        check(rd, 32'hFFFF_FFFF, s,
+                              {"rw-full ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'h0);
+                        apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
+                        check(rd, 32'h0, s,
+                              {"rw-zero ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
                     end
-                    ACC_W: begin
-                        // Write-only: store + readback (Func Model semantics)
+                    ACC_RWM: begin
+                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'hFFFF_FFFF);
+                        apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
+                        check(rd, 32'hFFFF_FFFF & REG_MSK[s][r], s,
+                              {"rwm-full ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'h0);
+                        apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
+                        check(rd, 32'h0, s,
+                              {"rwm-zero ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                    end
+                    ACC_RO: begin
+                        apb_read (slave_base(s) + REG_OFFS[s][r], v1, rd_err);
+                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'hFFFF_FFFF);
+                        apb_read (slave_base(s) + REG_OFFS[s][r], v2, rd_err);
+                        check(v2, v1, s,
+                              {"ro-hostile ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                    end
+                    ACC_CONST: begin
+                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'hFFFF_FFFF);
+                        apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
+                        if (REG_DOCDIV[s][r])
+                            check_docdiv(rd, REG_RST[s][r], s,
+                                  {"ro-const ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])},
+                                  doc_bug(s));
+                        else
+                            check(rd, REG_RST[s][r], s,
+                                  {"ro-const ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                    end
+                    ACC_WO: begin
+                        // 0x80 has NO functional bits on any WO register
+                        // (engine CMD bit0=START/bit1=ABORT, MXU WRP_CMD bit0,
+                        // VECTOR WRP_CMD bits[2:0]) — the write must not arm
+                        // any side effect; readback must still be 0.
+                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'h0000_0080);
+                        apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
+                        check(rd, 32'h0, s,
+                              {"wo-store ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'h0);
+                        apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
+                        check(rd, 32'h0, s,
+                              {"wo-zero  ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                    end
+                    ACC_WOS: begin
                         apb_write(slave_base(s) + REG_OFFS[s][r], 32'h42);
                         apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
-                        check(rd, 32'h42,
-                              {"w-store ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                        check_docdiv(rd, 32'h42, s,
+                              {"wos-store ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])},
+                              doc_bug(s));
+                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'h0);
+                        apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
+                        check_docdiv(rd, 32'h0, s,
+                              {"wos-zero  ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])},
+                              doc_bug(s));
                     end
-                    ACC_W1C: begin
-                        // INTC.ACK — seed PENDING through REAL sources, then
-                        // write ACK=0x00F0 → only bits 4..7 may clear (model
-                        // oracle expects a 16-bit seed readback 0xFF0F; the
-                        // real INTC is an 8-bit live sticky register — the
-                        // divergence is the RED we want).
-                        seed_intc_pending_real();
-                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'h00F0);
+                    ACC_FIELD: begin
+                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'hFFFF_FFFF);
                         apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
-                        check(rd, 32'h0000_FF0F,
-                              {"w1c-clr ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
-                        // re-seed; confirm unrelated bits survive a 0 write
-                        seed_intc_pending_real();
-                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'h0000);
+                        if (REG_DOCDIV[s][r])
+                            check_docdiv(rd, REG_EXP_F[s][r], s,
+                                  {"field-full ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])},
+                                  doc_bug(s));
+                        else
+                            check(rd, REG_EXP_F[s][r], s,
+                                  {"field-full ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'h0);
                         apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
-                        check(rd, 32'h0000_FFFF,
-                              {"w1c-hold ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                        check(rd, REG_EXP_Z[s][r], s,
+                              {"field-zero ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])});
+                    end
+                    ACC_UNMAP: begin
+                        apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
+                        check({31'd0, rd_err}, 32'h1, s,
+                              {"unmap-read  ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r]), " pslverr"});
+                        apb_write_err(slave_base(s) + REG_OFFS[s][r], 32'hDEAD_BEEF, w_err);
+                        check({31'd0, w_err}, 32'h1, s,
+                              {"unmap-write ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r]), " pslverr"});
+                    end
+                    ACC_DOCDIVR: begin
+                        apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
+                        check_docdiv(rd, 32'h0, s,
+                              {"reserved-read  ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])},
+                              doc_bug(s));
+                        apb_write(slave_base(s) + REG_OFFS[s][r], 32'hFFFF_FFFF);
+                        apb_read (slave_base(s) + REG_OFFS[s][r], rd, rd_err);
+                        check_docdiv(rd, 32'h0, s,
+                              {"reserved-write ", itoa_slv(s), " +0x", itoa_hex(REG_OFFS[s][r])},
+                              doc_bug(s));
                     end
                 endcase
             end
@@ -855,71 +1126,92 @@ module apb_conformance_real_tb;
 
         // ── Phase 3: decoder routing + out-of-range pslverr ────────────────
         $display("\n--- Phase 3: decoder routing & error path ---\n");
-        begin
-            reg got_err;
-            got_err = 1'b0;
-            @(posedge clk); #1;
-            psel    = 1'b1;
-            penable = 1'b0;
-            paddr   = 32'h4000_8000;
-            pwrite  = 1'b1;
-            pwdata  = 32'hDEAD_BEEF;
-            @(posedge clk); #1;
-            penable = 1'b1;
-            #1;
-            got_err = pslverr;
-            @(posedge clk); #1;
-            psel    = 1'b0;
-            penable = 1'b0;
-            check({31'd0, got_err}, 32'h1, "out-of-range 0x4000_8000 → pslverr=1");
-        end
-
-        // ── Phase 4: PCIE_DMA (slave 7) never selected ─────────────────────
-        $display("\n--- Phase 4: PCIE_DMA skip guard ---\n");
-        check(pcie_dma_sel_cnt, 32'd0, "psel_o[7] (PCIE_DMA) never asserted");
+        apb_write_err(32'h4000_8000, 32'hDEAD_BEEF, w_err);
+        check({31'd0, w_err}, 32'h1, -1, "out-of-range 0x4000_8000 write → pslverr=1");
+        apb_read(32'h1000_0000, rd, rd_err);
+        check({31'd0, rd_err}, 32'h1, -1, "region-miss 0x1000_0000 read → pslverr=1");
+        check(rd, 32'h0, -1, "region-miss read data = 0");
+        check(pcie_dma_sel_cnt, 32'd0, -1, "psel_o[7] (PCIE_DMA) never asserted");
         $display("  [INFO] pcie_dma_wrapper (slave 7 @ 0x4000_7000) NOT instantiated");
 
-        // ── Phase 5: real-W1C demonstration (informational, not oracle) ────
-        $display("\n--- Phase 5: real INTC W1C demonstration (INFO) ---\n");
-        begin
-            seed_intc_pending_real();
-            apb_read(ABI_INTC_BASE + 32'h00, rd, rd_err);
-            $display("  [INFO] INTC.PENDING after real-source seed = 0x%08h", rd);
-            release_intc_sources();
-            apb_read(ABI_INTC_BASE + 32'h00, rd, rd_err);
-            $display("  [INFO] INTC.PENDING after source release (sticky, no ACK) = 0x%08h", rd);
-            apb_write(ABI_INTC_BASE + 32'h0C, 32'hE0);   // ACK bits 5..7
-            apb_read(ABI_INTC_BASE + 32'h00, rd, rd_err);
-            $display("  [INFO] INTC.PENDING after ACK=0xE0 = 0x%08h (0 => real W1C clear works)", rd);
-        end
+        // ── Phase 4: INTC ACK W1C real-semantics sequence ──────────────────
+        // PENDING is seeded ONLY through real sources (doorbell HOST_TAIL!=
+        // NPU_HEAD + TB timer/pcie_dma regs), then ACK clears sticky bits.
+        $display("\n--- Phase 4: INTC ACK W1C vs REAL semantics ---\n");
+        seed_intc_pending_real();
+        apb_read(ABI_INTC_BASE + 32'h00, rd, rd_err);
+        check(rd, 32'h0000_00E0, 6, "INTC.PENDING after real-source seed = 0xE0");
+        release_intc_sources();
+        apb_read(ABI_INTC_BASE + 32'h00, rd, rd_err);
+        check(rd, 32'h0000_00E0, 6, "INTC.PENDING sticky after source release");
+        apb_write(ABI_INTC_BASE + 32'h0C, 32'hE0);   // ACK bits 5..7
+        apb_read(ABI_INTC_BASE + 32'h00, rd, rd_err);
+        check(rd, 32'h0000_0000, 6, "INTC.PENDING cleared by ACK=0xE0 (W1C)");
+        apb_read(ABI_INTC_BASE + 32'h0C, rd, rd_err);
+        check(rd, 32'h0000_0000, 6, "INTC.ACK readback = 0 (W1C not readable)");
+        seed_intc_pending_real();
+        apb_read(ABI_INTC_BASE + 32'h00, rd, rd_err);
+        check(rd, 32'h0000_00E0, 6, "INTC.PENDING re-seed = 0xE0");
+        release_intc_sources();
+        apb_write(ABI_INTC_BASE + 32'h0C, 32'h20);   // clear only bit5
+        apb_read(ABI_INTC_BASE + 32'h00, rd, rd_err);
+        check(rd, 32'h0000_00C0, 6, "INTC.PENDING selective ACK=0x20 leaves 0xC0");
+        apb_write(ABI_INTC_BASE + 32'h0C, 32'h00);   // zero write: no effect
+        apb_read(ABI_INTC_BASE + 32'h00, rd, rd_err);
+        check(rd, 32'h0000_00C0, 6, "INTC.ACK=0x00 is a no-op (PENDING 0xC0)");
+        apb_write(ABI_INTC_BASE + 32'h0C, 32'hC0);   // clear bits 6..7
+        apb_read(ABI_INTC_BASE + 32'h00, rd, rd_err);
+        check(rd, 32'h0000_0000, 6, "INTC.PENDING cleared by ACK=0xC0");
 
-        // ── Phase 6: peripheral irq observation (INFO) ─────────────────────
-        $display("\n--- Phase 6: final irq levels (INFO) ---\n");
-        $display("  [INFO] mxu_irq=%0b sfu_irq=%0b vec_irq=%0b dma_irq=%0b pcie_irq=%0b doorbell_irq=%0b cpu_irq=%0b",
-                 mxu_irq, sfu_irq, vec_irq, dma_irq, pcie_irq, doorbell_irq, cpu_irq);
-        $display("  [INFO] mxu_dbg_state=0x%0h (0 = IDLE; no compute launched)", mxu_dbg_state);
+        // ── Phase 5: no-compute / no-side-effect proof (INFO + checks) ─────
+        $display("\n--- Phase 5: engine idle proof (no CMD.START was ever written) ---\n");
+        check(mxu_dbg_state, 32'h0, 0, "mxu_dbg_state = 0 (IDLE — no compute launched)");
+        check({6'd0, mxu_irq, sfu_irq, vec_irq, dma_irq, pcie_irq, doorbell_irq},
+              32'h0, -1, "all peripheral irqs deasserted at end");
+        apb_read(ABI_DOORBELL_BASE + 32'h00, rd, rd_err);
+        $display("  [INFO] doorbell HOST_TAIL=%0d NPU_HEAD(see below) — irq clear", rd);
+        $display("  [INFO] cpu_irq=%0b (registered)", cpu_irq);
 
         // ── Final report ───────────────────────────────────────────────────
         $display("\n=====================================================");
         $display(" apb_conformance_real_tb — Final Report");
         $display("=====================================================");
         $display("  Total checks : %0d", test_num);
-        $display("  Oracle passes: %0d", pass_cnt);
-        $display("  Divergences  : %0d   (real RTL != model-slave expectation)", fail_cnt);
+        $display("  Passes       : %0d", pass_cnt);
+        $display("  Fails        : %0d   (unexpected — real RTL != REAL oracle)", fail_cnt);
+        $display("  DOC-DIV      : %0d   (real RTL contradicts documented spec,",
+                 doc_div_cnt);
+        $display("                 each bug-filed: BUG-RTL-SOC-009/010/011)");
         $display("  Write timeouts: %0d   Read timeouts: %0d",
                  write_timeouts, read_timeouts);
+        $display("  Per-slave coverage (checks / fails / doc-div / psel_o asserts):");
+        for (s = 0; s < 7; s = s + 1) begin
+            $display("    %0s      : %0d / %0d / %0d / %0d",
+                     itoa_slv(s), slv_checks[s], slv_fails[s],
+                     slv_docdivs[s], slv_sel_cnt[s]);
+        end
         $display("=====================================================");
 
+        covered = 0;
+        for (s = 0; s < 7; s = s + 1)
+            if (slv_checks[s] > 0) covered = covered + 1;
+
         if (fail_cnt > 0) begin
-            $display("APB_CONFORMANCE_REAL: RED (%0d divergences vs model-slave oracle)",
+            $display("APB_CONFORMANCE_REAL: RED (%0d unexpected divergences vs REAL oracle)",
                      fail_cnt);
-            $display("TASK-3 RESULT: RED (expected)");
+            $display("TASK-12 RESULT: RED (unexpected)");
         end else if ((write_timeouts > 0) || (read_timeouts > 0)) begin
             $display("APB_CONFORMANCE_REAL: RED (APB timeout)");
-            $display("TASK-3 RESULT: RED (expected)");
+            $display("TASK-12 RESULT: RED (unexpected)");
+        end else if (covered < 5) begin
+            $display("APB_CONFORMANCE_REAL: PARTIAL (%0d/7 peripherals covered, declared)",
+                     covered);
+            $display("TASK-12 RESULT: PARTIAL: %0d/7 peripherals covered (declared)",
+                     covered);
         end else begin
-            $display("APB_CONFORMANCE_REAL: GREEN — no divergence found (unexpected)");
-            $display("TASK-3 RESULT: GREEN (unexpected — real RTL matches model oracle)");
+            $display("APB_CONFORMANCE_REAL: GREEN (%0d/7 peripherals, %0d checks, %0d doc-div [BUG-RTL-SOC-009/010/011])",
+                     covered, test_num, doc_div_cnt);
+            $display("TASK-12 RESULT: GREEN (expected)");
         end
         $display("=====================================================\n");
         $finish;

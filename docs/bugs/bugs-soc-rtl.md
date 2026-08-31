@@ -641,3 +641,152 @@ Commit: `fa4ffec fix(sim): move DESC_BASE out of command ring to prevent descrip
 - Probe reproduction (pre-fix, commit b51fae7): `build/evidence/l0l19-probe-evidence.txt`, `build/evidence/l0l19-probe.json` — L19 wave-1 corruption captured.
 - Python-only change, simv not rebuilt; next segment run (with 6091ec9 + new DESC_BASE) should clear the L19 corruption.
 
+---
+
+### BUG-RTL-SOC-009 — Doorbell ABI window (LAST_STATUS/COMPLETION_STATUS) declared by npu-regmap.h but not implemented in doorbell.v
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-08-31 |
+| **Block** | T12 (APB conformance vs real peripherals, soc-rtl-review-remediation) |
+| **Case** | run_apb_conformance_real (APB_CONFORMANCE_REAL TB, doorbell DOC-DIV checks) |
+| **Severity** | Major |
+| **Type** | Integration (ABI schema vs RTL register window) |
+| **Status** | Open |
+
+#### Symptom
+
+The ABI schema `npu_doorbell_t` (firmware/npu-regmap.h:179-187) declares six
+registers: HOST_TAIL@0x00 (W), NPU_HEAD@0x04 (R/W), HOST_HEAD@0x08 (R),
+NPU_TAIL@0x0C (R), LAST_STATUS@0x10 (R/W), COMPLETION_STATUS[16]@0x14 — pinned
+by _Static_assert at :308-310. The real RTL doorbell.v implements only the four
+0x00-0x0C registers (all RW); offsets 0x10/0x14 are outside `addr_valid`
+(doorbell.v:70), so reads return 0 and writes are silently dropped (no
+pslverr). Firmware mirror writes of COMPLETION_STATUS[cmd_id] therefore land
+in a dead window; the DRAM completion ring remains the only lossless status
+path (see also todo 8's mirror-index clamp).
+
+Secondary annotation drift: the ABI marks HOST_TAIL "W" and HOST_HEAD/NPU_TAIL
+"R", but the RTL implements all four as RW (a superset, functionally benign
+but inconsistent with the schema).
+
+Note: the "Known Discrepancy" comment at firmware/npu-regmap.h:317-322 itself
+overstates the RTL ("implements only LAST_STATUS at 0x10") — the RTL implements
+neither 0x10 nor 0x14. gen/npu_abi_firmware.h:164-168 flags the same gap.
+
+#### Root Cause
+
+Doorbell RTL predates the ABI completion-window extension; the ABI schema grew
+LAST_STATUS/COMPLETION_STATUS without a matching RTL change. No cross-layer
+register-window conformance gate existed until this TB (todo 12).
+
+#### Fix
+
+TBD (future ABI/RTL revision per the header's own note). The APB conformance
+TB tags these offsets [DOC-DIV BUG-RTL-SOC-009] and asserts the REAL behavior
+(read 0 / write dropped) rather than silently passing the ABI-declared
+semantics.
+
+#### Verification
+
+- `bash sim/regression/soc-verification-run.sh run_apb_conformance_real` →
+  doorbell DOC-DIV checks pass against the real-RTL oracle with the
+  BUG-RTL-SOC-009 tag (log: sim/regression/apb_conformance_real.log).
+- Evidence: `.omo/evidence/task-12-soc-rtl-review-remediation.txt`.
+
+---
+
+### BUG-RTL-SOC-010 — pcie_ep_wrapper header overstates implemented fields (CTRL[3]=enable, BAR1_MASK bit31=writable)
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-08-31 |
+| **Block** | T12 (APB conformance vs real peripherals, soc-rtl-review-remediation) |
+| **Case** | run_apb_conformance_real (PCIE DOC-DIV checks @0x00/@0x18) |
+| **Severity** | Minor |
+| **Type** | Wrapper (documentation vs RTL) |
+| **Status** | Open |
+
+#### Symptom
+
+rtl/ip/pcie_ep_wrapper.v header table (:258-268) documents:
+- PCIE_CTRL@0x00 "[2:0]=max_payload_size, [3]=enable" — RTL stores only
+  pwdata[2:0] (max_payload_size_reg, :304-306) and reads back
+  {28'h0, mps, 1'b0} (:387): bit3 is never stored (reads 0), and the
+  pcie_axi_master `enable` input is left unconnected in the instantiation
+  (:174-250). Writing CTRL[3]=1 has no effect.
+- PCIE_BAR1_MASK@0x18 "0x8000_0000 (2 GB, bit31=writable)" — RTL returns the
+  constant 32'h8000_0000 and ignores writes entirely (:393). bit31 is not
+  writable.
+
+Conformance impact: a host writing CTRL[3] to enable the endpoint, or probing
+BAR1_MASK writability, silently gets no-op behavior.
+
+#### Root Cause
+
+Header comment written for the intended config-space semantics; the RTL only
+implements the subset the current firmware/software stack uses (mps, RO BAR
+constants). No register-window conformance gate existed until this TB.
+
+#### Fix
+
+TBD: implement the enable bit (wire to the IP `enable` input) and either
+implement writable BAR1_MASK bit31 or correct the header comment. The APB
+conformance TB tags both offsets [DOC-DIV BUG-RTL-SOC-010] and asserts the
+REAL behavior (CTRL full-write readback 0xE; BAR1_MASK hostile-write stays
+0x8000_0000).
+
+#### Verification
+
+- `bash sim/regression/soc-verification-run.sh run_apb_conformance_real` →
+  PCIE DOC-DIV checks pass against the real-RTL oracle with the
+  BUG-RTL-SOC-010 tag (log: sim/regression/apb_conformance_real.log).
+- Evidence: `.omo/evidence/task-12-soc-rtl-review-remediation.txt`.
+
+---
+
+### BUG-RTL-SOC-011 — rtl/ip/README DMA access classes wrong: CMD documented W but RTL stores+reads back; STATUS documented R but read-clears DONE
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-08-31 |
+| **Block** | T12 (APB conformance vs real peripherals, soc-rtl-review-remediation) |
+| **Case** | run_apb_conformance_real (DMA CMD WOS DOC-DIV check @0x04) |
+| **Severity** | Minor |
+| **Type** | Wrapper (documentation vs RTL) |
+| **Status** | Open |
+
+#### Symptom
+
+rtl/ip/README.md:35-36 documents DMA CMD@0x04 as "W" and STATUS@0x08 as "R".
+The RTL (rtl/ip/dma_wrapper.v) implements:
+- CMD@0x04 as a STORED register: writes latch pwdata (dma_reg[1] <= pwdata,
+  :283-286) and reads return the stored value (:128/:310) — writing 0x42 reads
+  back 0x42. Only bit0 (START) is auto-cleared after the rising edge is
+  consumed (:209). This is the ONLY CMD in the design that is readable
+  (MXU/SFU/Vector CMDs are pulse write-only, readback 0).
+- STATUS@0x08 with a READ side effect: reading it clears DONE bit1
+  (:299-301). A polling loop that reads STATUS twice after completion sees
+  DONE=1 on the first read and DONE=0 on the second — an observable behavior
+  not documented anywhere.
+
+#### Root Cause
+
+README access-class column was written from the axi_cdma convention, not from
+the wrapper's actual reg-file implementation.
+
+#### Fix
+
+TBD: correct the README column (CMD: RW-store with START auto-clear; STATUS:
+RO with DONE read-clear) or change the RTL. The APB conformance TB tags the
+CMD rows [DOC-DIV BUG-RTL-SOC-011] and asserts the REAL store/readback
+behavior; the STATUS read-clear side effect is unobservable while idle (no
+transfer is launched in the conformance TB) and is recorded in the bug entry
+rather than silently assumed.
+
+#### Verification
+
+- `bash sim/regression/soc-verification-run.sh run_apb_conformance_real` →
+  DMA CMD WOS DOC-DIV checks pass against the real-RTL oracle with the
+  BUG-RTL-SOC-011 tag (log: sim/regression/apb_conformance_real.log).
+- Evidence: `.omo/evidence/task-12-soc-rtl-review-remediation.txt`.
