@@ -1,0 +1,195 @@
+TASK-8 EVIDENCE — soc-rtl-review-remediation (todo 8: firmware address allowlist + actual-size validation + completion-bounds fix)
+================================================================================
+Timestamp : 2026-08-31T03:44:55Z (evidence written 2026-08-31T03:45Z)
+Commit    : d4a0399 (branch soc-rtl-review-remediation, HEAD at run time; NOT committed — this todo leaves the worktree dirty per plan)
+Host      : sz0002 (local, not the EDA server); riscv64-unknown-elf-gcc 10.2.0 at /usr/bin — firmware built locally, no SSH needed
+Files     : firmware/npu_firmware.c, sim/spike_firmware.py,
+            sim/tests/test_spike_ibex_ring_alignment.py,
+            sim/rtl_soc_runner.py (RING-WRAP-STRESS KNOWN-BEHAVIOR log),
+            sim/tests/test_firmware_boot_sequence.py (out-of-window fixture address)
+
+--------------------------------------------------------------------------------
+RED → GREEN
+--------------------------------------------------------------------------------
+RED  (todo 5 evidence, .omo/evidence/task-5-soc-rtl-review-remediation.txt,
+      commit 9d80c96): PYTHONPATH=sim python -m pytest sim/tests/test_firmware_addr_allowlist.py -q
+      → 6 FAILED + 1 PASSED (pytest exit 1). Failures: (a) ROM/hole/MMIO
+      accepted, (b) undersized MMUL executed (2 shapes), (c) mirror spill
+      clobbered INTC.PENDING (=0x1 at cmd_id 1015).
+
+GREEN (this todo, d4a0399 + uncommitted fixes):
+      PYTHONPATH=sim python -m pytest sim/tests/test_firmware_addr_allowlist.py -q
+      → 7 passed in 1.26s (all six previously-RED now GREEN; the near-end
+      source-pin control still passes).
+
+--------------------------------------------------------------------------------
+PER-FIX DESCRIPTION
+--------------------------------------------------------------------------------
+(a) dram_range_ok() whitelist semantics (npu_firmware.c ~:468)
+    Legal = SRAM window [0x20000000, 0x20400000) + DRAM 8MB window
+    [0x80000000, 0x80800000) (WVR-SOC-RTL-002 / BUG-RTL-SOC-002 unrelaxed:
+    DRAM_SIZE stays 0x00800000UL). Boot ROM/DMEM, address holes, 0x4000_xxxx
+    MMIO → return 0 → status=1. uint32 wraparound (addr+size < addr) rejected.
+    The todo-5 CONTROL source pins ("addr >= DRAM_END", "size > DRAM_SIZE",
+    "#define DRAM_SIZE  0x00800000UL") all preserved verbatim.
+
+(b) Derived-size validation (MMUL) with checked arithmetic
+    Reject when M/K/N imply more bytes than declared input_size/weight_size/
+    output_size: derived_input = M*K (INT8), derived_weight = K*N/2 (INT4
+    packed), derived_output = M*N*4 (INT32). Dims are bounded to ≤0xFFFF
+    first (hardware masks DIM0/DIM1 to 16 bits, so larger dims are corrupted
+    descriptors). Overflow-safe: dims ≤ 0xFFFF → M*K, K*N, M*N ≤ 0xFFFE0001
+    (fits uint32); M*N*4 guarded by an explicit m_x_n > 0x3FFFFFFF check.
+    SFU/Vector/DMA: scratch sizes now computed through checked wrappers
+    (sfu_scratch_size_checked / vector_scratch_size_checked — overflow →
+    status=1); DMA_COPY/PCIe_DMA rely on the range check which now includes
+    the addr+size wraparound guard.
+    CHECKED-ARITHMETIC NOTE: all dispatch-decision arithmetic is shift/add
+    form (umul16 shift-add multiply, explicit if/return branches, volatile
+    local for the accept return) — NOT compiler `mul`/`sltu`.  RISCVMini
+    (the FM harness executing this hex) decodes RV32M mul as sub and does
+    not decode sltu/sltiu, and GCC -O2 folds `if (cond) return 0; return 1;`
+    into a bare sltu; both were verified by objdump to appear 0 times in
+    dram_range_ok / write_completion / umul16 / checked-scratch helpers and
+    in the dispatch derived-check region. This makes the FM runtime behave
+    exactly like real RV32IM for these decisions.
+
+(c) Completion mirror clamp (write_completion, npu_firmware.c ~:440)
+    MMIO mirror index clamped to min(cmd_id, 15) — COMPLETION_STATUS is a
+    16-entry array (npu-regmap.h doorbell offset 0x14); an unclamped
+    cmd_id=1019 would land at 0x4000_6000+ (INTC APB window). The DRAM
+    completion ring (COMPLETION_RING_ADDR + cmd_id*32) keeps the FULL 1024
+    records keyed by cmd_id, unclamped. NOT clamped to 1019 (that would
+    still let indices 16..1018 escape the declared [16] array).
+    Compiles to bltu+li (objdump-verified, no sltu).
+
+IRQ/WFI preservation: the drain-loop doorbell IRQ ACK (INTC.ACK = 1<<8) is
+now issued BEFORE the NPU_HEAD/HOST_HEAD mirrors instead of after. This is
+semantically neutral for the ABI (the ACK's job is quiescing the wakeup IRQ
+before the next WFI) and makes the todo-5 (c) INTC.PENDING==0 assertion
+deterministic: the FM harness sets INTC.PENDING bit 8 on every
+host_write_command (doorbell IRQ model), and the firmware previously ACKed
+it only after HOST_HEAD — the test's sample point (HOST_HEAD==1020) raced
+the epilogue. ENABLE gating + WFI wakeup logic is otherwise untouched.
+
+--------------------------------------------------------------------------------
+COMPATIBILITY AUDIT (Metis M5)
+--------------------------------------------------------------------------------
+- All 33 FM-SOC case builders (sim/rtl_soc_runner.py) use descriptor/data
+  addresses inside [0x80000000, 0x81000000) ∩ window — DESC_BASE 0x80001000,
+  RING_WRAP stage/desc/data 0x8001xxxx-0x8004xxxx, all in-window. No
+  legitimate low (SRAM/DRAM-external) descriptor addresses found; the
+  whitelist therefore needs no extra allowlist entries.
+- Boot flow: firmware reads the command ring at RING_BUF_ADDR=0x80000000
+  (DRAM) and writes the completion ring at 0x80008000 (DRAM) directly —
+  unaffected. INTC.ENABLE / LAST_STATUS are MMIO writes, not routed through
+  dram_range_ok.
+- Firmware-internal scratch (SFU_SCRATCH 0x20080000, VEC_SCRATCH
+  0x20300000-0x20320000) is inside the SRAM window (not descriptor-routed).
+- Findings recorded, NOT fixed here (out of todo-8 scope, flag for todo 14/F3):
+  sim/spike_host.py run_one_op uses out_addr=0x81000000 (+16MB, out of the
+  8MB window) — the firmware now correctly rejects it with status=1, so
+  mmul_smoke's output compare will FAIL loudly until the host migrates to an
+  in-window address. func_model.host_write_descriptor default output_addr
+  (0x81000000) is likewise out-of-window for the real-firmware path only.
+  All currently-green success-path descriptors (boot test, spike runtime
+  tests, RTL builders) declare in-window addresses or honest sizes.
+- Cross-layer test fixture reconciliation: sim/tests/test_firmware_boot_sequence.py
+  used out_addr=0x81000000; the OLD firmware accepted it in the FM only
+  because RISCVMini mis-decodes `bgez` as an unsigned always-true branch
+  (documented FM infidelity), so the old accept-all behaviour hid the
+  out-of-window address. The fixture address is moved to 0x80050000
+  (in-window) with a comment pinning the WVR-SOC-RTL-002 constraint.
+
+--------------------------------------------------------------------------------
+CROSS-LAYER CHANGES (all required by the plan)
+--------------------------------------------------------------------------------
+(i)  sim/spike_firmware.py — SpikeFirmware._read_completion_status():
+     status reads no longer default missing mirror keys to 0. Reads the
+     CLAMPED mirror index min(ring_idx,15) and reports a missing key as
+     error (1), never silent success.
+     PLAN-DEVIATION NOTE (recorded honestly): the plan's recommended
+     "lossless main path" (read the DRAM completion ring from model.dram)
+     is IMPOSSIBLE on the spike path — the spike MMIO plugin traps only
+     [0x20000000, 0x40011FFF] (npu_mmio_plugin.cc NPU_END); firmware DRAM
+     writes stay in spike's native memory and never round-trip to
+     model.dram (verified empirically: entry 1 read back as stale (0,0)).
+     The plan's explicitly sanctioned alternative (clamped mirror read)
+     was therefore implemented. The DRAM ring's cmd_id/status content is
+     pinned by the FM real-firmware test instead — see (c) below.
+(ii) sim/tests/test_spike_ibex_ring_alignment.py — docstring + fixture +
+     test_completion_status_and_host_head_mirror_alignment updated to the
+     clamped semantics: mirror indices 0..15 hold the clamped success
+     writes (== 0), indices 16..207 are absent (None). The fixture no
+     longer reads the (unreadable) DRAM ring; the DRAM-ring cmd_id/status
+     assertion is covered by test_firmware_addr_allowlist.py (c), which
+     asserts ring entry 1019 == (1019, 1) on the FM real-firmware path.
+(iii) sim/rtl_soc_runner.py:4247-4255 — RING-WRAP-STRESS KNOWN-BEHAVIOR log
+     text updated: mirror writes clamp to min(cmd_id,15), no INTC spill;
+     DRAM completion ring keeps full 1024 records, wrapped indices
+     overwrite earlier records.
+
+--------------------------------------------------------------------------------
+VERIFICATION OUTPUTS (all real, captured this session on sz0002)
+--------------------------------------------------------------------------------
+1) PYTHONPATH=sim python -m pytest sim/tests/test_firmware_addr_allowlist.py -q
+   → 7 passed in 1.26s        [RED→GREEN: 6 fixes + 1 control]
+2) PYTHONPATH=sim python -m pytest sim/tests/test_firmware.py sim/tests/test_firmware_boot_sequence.py -q
+   → 9 passed               [no regression on normal dispatch]
+3) make -C firmware clean && make -C firmware
+   → 0 errors / 0 warnings; _Static_assert ABI pins all pass (a static-assert
+     failure would be a compile error). text=5196 data=262272 (npu_firmware.elf).
+     Built ON sz0002 (local host, toolchain present — no EDA-server SSH
+     needed), riscv64-unknown-elf-gcc 10.2.0.
+4) PYTHONPATH=sim python -m pytest sim/tests/test_spike_ibex_ring_alignment.py -q
+   → 3 passed in 3.66s — EXECUTED with the real Spike binary + plugin +
+     npu_firmware_spike.elf (NOT skipped).
+5) PYTHONPATH=sim python -m pytest sim/tests/test_runtime_real_firmware.py -q -k "not missing_prereq"
+   → 12 passed, 2 deselected in 25.03s (real Spike execution).
+     Excluded test_missing_prereq_fails_flag_is_set: PRE-EXISTING failure
+     (requires --require-spike CLI flag), reproduced identically on the
+     clean baseline (git stash of all todo-8 changes).
+6) PYTHONPATH=sim python -m pytest sim/tests/test_func_model_signoff_v3_doorbell.py
+     sim/tests/test_func_model_signoff_v3_integration.py sim/tests/test_command_ring_stress.py -q
+   → 15 passed
+7) PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py -q → 52 passed
+8) PYTHONPATH=sim python -m pytest sim/tests/test_func_model_dut_adapter.py -q -k "not missing_artifacts"
+   → 17 passed, 1 deselected. Excluded test_real_spike_missing_artifacts_fails:
+     PRE-EXISTING failure (monkeypatch targets sim.spike_firmware._is_spike_available
+     but the adapter imports it differently), reproduced on the clean baseline.
+9) objdump audit: 0 sltu/sltiu/mul/mulh instructions in dram_range_ok,
+   write_completion, umul16, sfu_scratch_size_checked,
+   vector_scratch_size_checked; the MMUL derived-check region compiles to
+   bltu/bgeu branches only.
+
+--------------------------------------------------------------------------------
+ADVERSARIAL NOTES
+--------------------------------------------------------------------------------
+dirty_worktree          : `git status --porcelain` shows, besides this todo's
+  intended files (firmware/npu_firmware.c, firmware/build/npu_firmware.{elf,
+  hex,map,o} + npu_firmware_spike.{elf,map} [expected build artifacts — the
+  plan's todo 13 commits them as chore(firmware)], sim/spike_firmware.py,
+  sim/tests/test_spike_ibex_ring_alignment.py,
+  sim/tests/test_firmware_boot_sequence.py, sim/rtl_soc_runner.py), the
+  PARALLEL-AGENT files of todos 7/9 (rtl/soc/axi_crossbar.v,
+  rtl/tb/axi_crossbar_fairness_tb.sv, sim/regression/{Makefile,
+  run_ibex_full_rtl.sh, run_ibex_segment_run.sh}) and their evidence +
+  todo-0 untracked files — none of which this todo touched. Verified my
+  rtl_soc_runner.py diff contains ONLY the KNOWN-BEHAVIOR log change.
+misleading_success_output: all outputs above are the raw pytest/make
+  transcript tail from this session; the spike suites ran the real binary
+  (test duration 3.66s/25.03s, not instant skips).
+stale_state             : the ring_size=1024 anti-vacuity still holds in
+  GREEN — the (c) test asserts npu_head == 1020 (no wrap) and DRAM
+  completion-ring entry 1019 == (1019, 1) before the mirror assertions,
+  so head 1019 is genuinely exercised; mirror max key ≤ 0x40005050 and
+  INTC.PENDING == 0 confirm the clamp.
+FM-harness fidelity      : documented in-code (firmware comments) and here:
+  all new decision arithmetic is FM-decodable by construction + objdump
+  audit; the near-end upper-bound path remains FM-untestable by design
+  (todo-5 docstring) and is re-verified on the Spike path via the
+  out-of-window rejection semantics of (a).
+
+NOT COMMITTED — per the task instruction, no git commit was created.
+
+TASK-8 RESULT: GREEN (expected)

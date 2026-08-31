@@ -179,7 +179,10 @@ def test_boot_doorbell_first_command_completes():
 
     act_addr = 0x80010000
     wgt_addr = 0x80020000
-    out_addr = 0x81000000
+    # Inside the 8 MB DRAM window [0x80000000, 0x80800000) enforced by
+    # dram_range_ok() (WVR-SOC-RTL-002): the firmware rejects out-of-window
+    # output buffers with status=1.
+    out_addr = 0x80050000
     scale_addr = 0x80110000
     desc_addr = 0x80000080
 

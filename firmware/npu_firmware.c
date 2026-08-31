@@ -442,25 +442,91 @@ static void write_completion(uint32_t cmd_id, uint32_t status) {
         (volatile uint32_t *)(uintptr_t)(COMPLETION_RING_ADDR + cmd_id * 32);
     comp[0] = cmd_id;
     comp[1] = status;
-    NPU_DB->COMPLETION_STATUS[cmd_id] = status;
+    /* MMIO mirror: COMPLETION_STATUS is a 16-entry array (npu-regmap.h,
+     * doorbell offset 0x14). Clamp the mirror index to [0,15] so mirror
+     * writes stay inside the doorbell APB page — an unclamped cmd_id=1019
+     * would land at 0x4000_6000+ (the INTC window). The DRAM completion
+     * ring above keeps the full 1024 records keyed by cmd_id (unclamped). */
+    uint32_t mir = cmd_id;
+    if (mir > 15)
+        mir = 15;
+    NPU_DB->COMPLETION_STATUS[mir] = status;
 }
 
-/* ── DRAM 8 MB 窗口约束 (BUG-RTL-SOC-002) ─────────────────────────────
+/* ── 描述符地址白名单 (BUG-RTL-SOC-002 + WVR-SOC-RTL-002) ─────────────
  *
  * RTL 行为级 dram_model 只实现了一个小的稀疏窗口（SoC 回归里为 8 MB，
  * cocotb backdoor preload/readback 也以 DRAM_BASE+8MB 为上限）。越界的
- * 描述符会产生越窗 AXI 事务 (DECERR) 或 backdoor 报错；而把地址 wrap
- * 回窗口会静默地把两个不同的 buffer 别名到同一片物理存储，更危险。
+ * 描述符会产生越窗 AXI 事务 (DECERR) 或 backdoor 报错。
  *
- * 策略：REJECT —— 任何落在 DRAM 区但超出 [DRAM_BASE, DRAM_END) 的
- * 访问区间，命令直接置错误状态（status=1），不发起事务。低于 DRAM_BASE
- * 的地址（SRAM/MMIO/ROM）不属于 DRAM，不在本约束范围内。 */
+ * 白名单语义：合法区域仅 SRAM 窗口（0x2000_0000 起 4 MB）与 DRAM 窗口
+ * （0x8000_0000 起 8 MB，WVR-SOC-RTL-002 未解除）。Boot ROM/DMEM、地址
+ * 空洞、0x4000_xxxx MMIO 一律拒绝（返回 0 → status=1），不发起事务。
+ *
+ * 实现说明：所有判定写成显式 if/return 分支，避免编译为 sltu/sltiu
+ * 返回值形式 —— RISCVMini（执行本固件 hex 的 FM harness）不解码
+ * sltu/sltiu，返回值形式的比较在 FM 里会静默给出错误结果。accept 分支
+ * 通过 volatile 局部变量返回常量 1，阻止编译器把
+ * `if (cond) return 0; return 1;` 折叠成 sltu（-O2 会做这种折叠）。 */
 static int dram_range_ok(uint32_t addr, uint32_t size) {
-    if (addr < DRAM_BASE)
-        return 1;                       /* SRAM / 其他非 DRAM 区 */
+    volatile uint32_t ok = 1;
+
+    /* 越出 DRAM 8 MB 窗口的上界拒绝（含 size 超限）。 */
     if (addr >= DRAM_END || size > DRAM_SIZE)
-        return 0;                       /* 越出 8 MB 窗口 */
-    return (addr - DRAM_BASE) <= (DRAM_SIZE - size);
+        return 0;
+
+    /* SRAM 窗口：0x2000_0000 起 4 MB。 */
+    if (addr >= SRAM_BASE && addr < SRAM_BASE + SRAM_SIZE) {
+        if (addr + size < addr)
+            return 0;   /* uint32 回绕 */
+        if (addr + size > SRAM_BASE + SRAM_SIZE)
+            return 0;
+        return ok;
+    }
+
+    /* DRAM 8 MB 窗口：0x8000_0000 起。 */
+    if (addr >= DRAM_BASE && addr < DRAM_END) {
+        if (addr + size < addr)
+            return 0;   /* uint32 回绕 */
+        if (addr + size > DRAM_END)
+            return 0;
+        return ok;
+    }
+
+    /* Boot ROM / DMEM / 地址空洞 / MMIO：拒绝。 */
+    return 0;
+}
+
+/* ── Checked size derivation (uint32, overflow → reject) ────────────
+ *
+ * RISCVMini —— 执行本固件 hex 的 FM harness —— 把 RV32M `mul` 解码成
+ * `sub`，且不解码 `sltu`/`sltiu`（miniv.py 支持的指令列表）。编译成这些
+ * 指令的尺寸运算在 FM 里会得到垃圾值，从而误拒/误放行 dispatch。因此
+ * 所有参与 dispatch 判定的算术都写成 shift/add 形式 + 显式分支，在真实
+ * RV32IM 上精确、在 RISCVMini 下也忠实执行。 */
+static uint32_t umul16(uint32_t a, uint32_t b) {
+    uint32_t p = 0;
+    while (b) {
+        if (b & 1)
+            p += a;
+        b >>= 1;
+        a <<= 1;
+    }
+    return p;
+}
+
+static int sfu_scratch_size_checked(uint32_t elements, uint32_t *out) {
+    if (elements > 0x7FFFFF00UL)
+        return 0;   /* elements*2 + 511 overflows uint32 */
+    *out = sfu_scratch_size(elements);
+    return 1;
+}
+
+static int vector_scratch_size_checked(uint32_t elements, uint32_t *out) {
+    if (elements > 0xFFFFFFFFUL - 127UL)
+        return 0;   /* elements + 127 overflows uint32 */
+    *out = vector_scratch_size(elements);
+    return 1;
 }
 
 static int dispatch_cmd(cmd_entry_t *cmd) {
@@ -476,92 +542,117 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
         mmul_desc_t desc;
         read_mmul_desc(cmd->desc_addr, &desc);
 
-        if (desc.M == 0 || desc.K == 0 || desc.N == 0)
-            status = 1;  /* corrupted descriptor */
-        else if (!dram_range_ok(desc.input_addr,  desc.input_size)  ||
-                 !dram_range_ok(desc.weight_addr, desc.weight_size) ||
-                 !dram_range_ok(desc.output_addr, desc.output_size) ||
-                 (desc.scale_size > 0 &&
-                  !dram_range_ok(desc.scale_addr, desc.scale_size))) {
+        if (desc.M == 0 || desc.K == 0 || desc.N == 0 ||
+            desc.M > 0xFFFF || desc.K > 0xFFFF || desc.N > 0xFFFF) {
+            status = 1;  /* corrupted descriptor (hardware masks dims to 16 bits) */
+        } else if (!dram_range_ok(desc.input_addr,  desc.input_size)  ||
+                   !dram_range_ok(desc.weight_addr, desc.weight_size) ||
+                   !dram_range_ok(desc.output_addr, desc.output_size) ||
+                   (desc.scale_size > 0 &&
+                    !dram_range_ok(desc.scale_addr, desc.scale_size))) {
             /* BUG-RTL-SOC-002: DRAM 数据地址越出 8 MB 窗口，拒绝执行。 */
             NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
             status = 1;
         } else {
-            const uint32_t TILE_H = 64;
-            const uint32_t TILE_W = 64;
-            const uint32_t TILE_WEIGHT_BYTES = TILE_H * TILE_W / 2;
-            const uint32_t TILE_SCALE_BYTES  = NPU_ABI_TILE_SCALE_BYTES;
-            const uint32_t SRAM_ALIGN = 64;
+            /* 由 M/K/N 推导的实际字节数必须不超过 descriptor 声明的
+             * input_size/weight_size/output_size，否则主机可以低报 size
+             * 让 DRAM 窗口检查放行、而 tile 循环实际读写越界。checked
+             * arithmetic：dims ≤ 0xFFFF 保证乘积 ≤ 0xFFFE0001 不溢出；
+             * M*N*4 单独守卫（可超 uint32）。 */
+            uint32_t m_x_k = umul16(desc.M, desc.K);
+            uint32_t k_x_n = umul16(desc.K, desc.N);
+            uint32_t m_x_n = umul16(desc.M, desc.N);
 
-            // Place activation first, then double-buffered weights/scales and
-            // output scratch, so large K does not clobber the scratch buffers.
-            uint32_t act_sram  = 0x00000000;
-            uint32_t act_sram_abs = NPU_SRAM_BASE + act_sram;
+            if (m_x_n > 0x3FFFFFFFUL) {
+                NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
+                status = 1;  /* M*N*4 overflows uint32 */
+            } else if (m_x_k > desc.input_size) {
+                NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
+                status = 1;  /* under-declared activation bytes */
+            } else if ((k_x_n >> 1) > desc.weight_size) {
+                NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
+                status = 1;  /* under-declared packed weight bytes */
+            } else if ((m_x_n << 2) > desc.output_size) {
+                NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
+                status = 1;  /* under-declared output bytes */
+            } else {
+                const uint32_t TILE_H = 64;
+                const uint32_t TILE_W = 64;
+                const uint32_t TILE_WEIGHT_BYTES = TILE_H * TILE_W / 2;
+                const uint32_t TILE_SCALE_BYTES  = NPU_ABI_TILE_SCALE_BYTES;
+                const uint32_t SRAM_ALIGN = 64;
 
-            dma_copy(desc.input_addr, act_sram_abs, desc.input_size, 0);
+                // Place activation first, then double-buffered weights/scales and
+                // output scratch, so large K does not clobber the scratch buffers.
+                uint32_t act_sram  = 0x00000000;
+                uint32_t act_sram_abs = NPU_SRAM_BASE + act_sram;
 
-            uint32_t act_end = (act_sram + desc.input_size + SRAM_ALIGN - 1)
-                               & ~(SRAM_ALIGN - 1);
-            uint32_t wbuf[2]   = {act_end, act_end + TILE_WEIGHT_BYTES};
-            uint32_t wbuf_end  = wbuf[1] + TILE_WEIGHT_BYTES;
-            uint32_t sbuf[2]   = {(wbuf_end + SRAM_ALIGN - 1) & ~(SRAM_ALIGN - 1),
-                                  ((wbuf_end + SRAM_ALIGN - 1) & ~(SRAM_ALIGN - 1))
-                                  + TILE_SCALE_BYTES};
-            uint32_t sbuf_end  = sbuf[1] + TILE_SCALE_BYTES;
-            uint32_t out_sram  = (sbuf_end + SRAM_ALIGN - 1) & ~(SRAM_ALIGN - 1);
+                dma_copy(desc.input_addr, act_sram_abs, desc.input_size, 0);
 
-            uint32_t num_blocks = (desc.K + TILE_H - 1) / TILE_H;
-            uint32_t num_tiles  = (desc.N + TILE_W - 1) / TILE_W;
+                uint32_t act_end = (act_sram + desc.input_size + SRAM_ALIGN - 1)
+                                   & ~(SRAM_ALIGN - 1);
+                uint32_t wbuf[2]   = {act_end, act_end + TILE_WEIGHT_BYTES};
+                uint32_t wbuf_end  = wbuf[1] + TILE_WEIGHT_BYTES;
+                uint32_t sbuf[2]   = {(wbuf_end + SRAM_ALIGN - 1) & ~(SRAM_ALIGN - 1),
+                                      ((wbuf_end + SRAM_ALIGN - 1) & ~(SRAM_ALIGN - 1))
+                                      + TILE_SCALE_BYTES};
+                uint32_t sbuf_end  = sbuf[1] + TILE_SCALE_BYTES;
+                uint32_t out_sram  = (sbuf_end + SRAM_ALIGN - 1) & ~(SRAM_ALIGN - 1);
 
-            for (uint32_t n_tile = 0; n_tile < num_tiles; n_tile++) {
-                uint32_t n_start = n_tile * TILE_W;
-                uint32_t n_end   = (n_start + TILE_W < desc.N) ? (n_start + TILE_W) : desc.N;
-                uint32_t tile_width = n_end - n_start;
-                uint32_t out_offset = out_sram + n_tile * desc.M * TILE_W * 4;
+                uint32_t num_blocks = (desc.K + TILE_H - 1) / TILE_H;
+                uint32_t num_tiles  = (desc.N + TILE_W - 1) / TILE_W;
 
-                for (uint32_t k_block = 0; k_block < num_blocks; k_block++) {
-                    uint32_t k_start = k_block * TILE_H;
-                    uint32_t k_end   = (k_start + TILE_H < desc.K) ? (k_start + TILE_H) : desc.K;
-                    uint32_t block_height = k_end - k_start;
+                for (uint32_t n_tile = 0; n_tile < num_tiles; n_tile++) {
+                    uint32_t n_start = n_tile * TILE_W;
+                    uint32_t n_end   = (n_start + TILE_W < desc.N) ? (n_start + TILE_W) : desc.N;
+                    uint32_t tile_width = n_end - n_start;
+                    uint32_t out_offset = out_sram + n_tile * desc.M * TILE_W * 4;
 
-                    uint32_t buf_idx = k_block % 2;
-                    uint32_t w_addr  = wbuf[buf_idx];
-                    uint32_t s_addr  = sbuf[buf_idx];
-                    uint32_t w_addr_abs = NPU_SRAM_BASE + w_addr;
-                    uint32_t s_addr_abs = (desc.scale_size > 0) ? (NPU_SRAM_BASE + s_addr) : 0;
+                    for (uint32_t k_block = 0; k_block < num_blocks; k_block++) {
+                        uint32_t k_start = k_block * TILE_H;
+                        uint32_t k_end   = (k_start + TILE_H < desc.K) ? (k_start + TILE_H) : desc.K;
+                        uint32_t block_height = k_end - k_start;
 
-                    uint32_t wgt_offset = (n_tile * num_blocks + k_block) * TILE_WEIGHT_BYTES;
-                    dma_copy(desc.weight_addr + wgt_offset, w_addr_abs, TILE_WEIGHT_BYTES, 0);
+                        uint32_t buf_idx = k_block % 2;
+                        uint32_t w_addr  = wbuf[buf_idx];
+                        uint32_t s_addr  = sbuf[buf_idx];
+                        uint32_t w_addr_abs = NPU_SRAM_BASE + w_addr;
+                        uint32_t s_addr_abs = (desc.scale_size > 0) ? (NPU_SRAM_BASE + s_addr) : 0;
 
-                    if (desc.scale_size > 0) {
-                        uint32_t scale_offset = (n_tile * num_blocks + k_block) * TILE_SCALE_BYTES;
-                        dma_copy(desc.scale_addr + scale_offset, s_addr_abs, TILE_SCALE_BYTES, 0);
+                        uint32_t wgt_offset = (n_tile * num_blocks + k_block) * TILE_WEIGHT_BYTES;
+                        dma_copy(desc.weight_addr + wgt_offset, w_addr_abs, TILE_WEIGHT_BYTES, 0);
+
+                        if (desc.scale_size > 0) {
+                            uint32_t scale_offset = (n_tile * num_blocks + k_block) * TILE_SCALE_BYTES;
+                            dma_copy(desc.scale_addr + scale_offset, s_addr_abs, TILE_SCALE_BYTES, 0);
+                        }
+
+                        uint32_t act_offset     = act_sram + k_start * TILE_H;
+                        uint32_t act_offset_abs = NPU_SRAM_BASE + act_offset;
+                        uint32_t out_offset_abs = NPU_SRAM_BASE + out_offset;
+                        uint32_t accumulate_ctrl = (k_block > 0) ? 4 : 0;
+
+                        mxu_start(act_offset_abs, w_addr_abs, out_offset_abs,
+                                  s_addr_abs, desc.M, block_height, tile_width, accumulate_ctrl);
                     }
 
-                    uint32_t act_offset     = act_sram + k_start * TILE_H;
-                    uint32_t act_offset_abs = NPU_SRAM_BASE + act_offset;
-                    uint32_t out_offset_abs = NPU_SRAM_BASE + out_offset;
-                    uint32_t accumulate_ctrl = (k_block > 0) ? 4 : 0;
-
-                    mxu_start(act_offset_abs, w_addr_abs, out_offset_abs,
-                              s_addr_abs, desc.M, block_height, tile_width, accumulate_ctrl);
+                    for (uint32_t m = 0; m < desc.M; m++) {
+                        dma_copy(NPU_SRAM_BASE + out_offset + m * tile_width * 4,
+                                 desc.output_addr + (m * desc.N + n_start) * 4,
+                                 tile_width * 4, 1);
+                    }
                 }
-
-                for (uint32_t m = 0; m < desc.M; m++) {
-                    dma_copy(NPU_SRAM_BASE + out_offset + m * tile_width * 4,
-                             desc.output_addr + (m * desc.N + n_start) * 4,
-                             tile_width * 4, 1);
-                }
+                status = 0;
             }
-            status = 0;
         }
     } else if (op == 0x01) {  /* SFU — sub-op in descriptor src[10] */
         sfu_desc_t desc;
         NPU_DB->LAST_STATUS = 0x00004000 | (op & 0xFF);
         read_sfu_desc(cmd->desc_addr, &desc);
 
-        uint32_t io_size = sfu_scratch_size(desc.dim);
-        if (!dram_range_ok(desc.input_addr, io_size) ||
+        uint32_t io_size;
+        if (!sfu_scratch_size_checked(desc.dim, &io_size) ||
+            !dram_range_ok(desc.input_addr, io_size) ||
             !dram_range_ok(desc.output_addr, io_size)) {
             NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
             status = 1;
@@ -576,8 +667,9 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
 
         uint32_t elements  = desc.dim & 0xFFFF;
         uint32_t head_dim  = (desc.dim >> 16) & 0xFFFF;
-        uint32_t io_size   = sfu_scratch_size(elements);
-        if (!dram_range_ok(desc.input_addr, io_size) ||
+        uint32_t io_size;
+        if (!sfu_scratch_size_checked(elements, &io_size) ||
+            !dram_range_ok(desc.input_addr, io_size) ||
             !dram_range_ok(desc.output_addr, io_size)) {
             NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
             status = 1;
@@ -591,8 +683,9 @@ static int dispatch_cmd(cmd_entry_t *cmd) {
         read_vector_desc(cmd->desc_addr, &desc);
 
         uint32_t hw_op = op - 0x0F;  /* 0x0F..0x14 -> 0..5 */
-        uint32_t io_size = vector_scratch_size(desc.dim);
-        if (!dram_range_ok(desc.a_addr, io_size) ||
+        uint32_t io_size;
+        if (!vector_scratch_size_checked(desc.dim, &io_size) ||
+            !dram_range_ok(desc.a_addr, io_size) ||
             !dram_range_ok(desc.b_addr, io_size) ||
             !dram_range_ok(desc.o_addr, io_size)) {
             NPU_DB->LAST_STATUS = 0x00007000 | (op & 0xFF);
@@ -674,8 +767,11 @@ void firmware_main(void) {
         }
 
         NPU_DB->NPU_HEAD = npu_head;
-        NPU_DB->HOST_HEAD = npu_head;
+        /* Clear the doorbell IRQ (bit 8) before mirroring HOST_HEAD: the
+         * host submits with IRQ=8, and observers of the completion state
+         * (HOST_HEAD advanced) must see INTC.PENDING already quiesced. */
         NPU_INTC->ACK = (1 << 8);
+        NPU_DB->HOST_HEAD = npu_head;
     }
 }
 

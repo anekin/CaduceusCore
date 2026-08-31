@@ -4245,11 +4245,13 @@ class IbexRunner(P4SpikeRunner):
             f"within timeout_cycles={timeout_cycles})"
         )
         logger.warning(
-            "RING-WRAP-STRESS: KNOWN-BEHAVIOR — firmware writes "
-            "COMPLETION_STATUS[i] for i=0..1099; the RTL doorbell implements "
-            "none of that array (writes are dropped / land in adjacent INTC "
-            "registers for i>=1019) and the DRAM completion ring entries for "
-            "wrapped indices are overwritten. Recorded, not blocking."
+            "RING-WRAP-STRESS: KNOWN-BEHAVIOR — firmware clamps its MMIO "
+            "mirror write index to min(cmd_id, 15) (COMPLETION_STATUS is a "
+            "16-entry array); mirror writes beyond index 15 coalesce into "
+            "slot 15 instead of spilling into the INTC APB window. The DRAM "
+            "completion ring keeps the full 1024 records keyed by cmd_id; "
+            "wrapped indices overwrite earlier records (1024-entry ring). "
+            "Recorded, not blocking."
         )
         return True, (
             f"NPU_HEAD={prev_logical} PASS — {num_cmds} commands completed "
