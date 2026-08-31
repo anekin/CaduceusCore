@@ -203,7 +203,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
 
 ### Wave 3: 重新验证
 
-- [ ] 13. 干净 commit fresh build + 全量回归重跑（真实统计口径）
+- [x] 13. 干净 commit fresh build + 全量回归重跑（真实统计口径）
   What to do / Must NOT do: 在 P0 清理后的干净工作区（**当前目录**，分支 `soc-rtl-review-remediation`，HEAD 为 f982bef（== main）的直系后代——f982bef + P0 的 2 笔 housekeeping + todos 1-12 修复提交链；`git status --porcelain` 运行前为空——2026-08-30 用户指令就地执行，不再用 worktree/stash 隔离）：`make -C firmware clean all` 重建固件 → **重建后若 `firmware/build/` 下已跟踪文件变更（5 个 npu_* 产物），commit 为 `chore(firmware): rebuild npu_* binaries after clean all`**（repo 先例 3e91c5ea；Oracle round-5：repo 跟踪这些二进制，不提交则 porcelain 非空、"干净 commit"闸门失败）→ **显式删除全量回归 simv**（`rm -f build/ibex_full_rtl/simv_soc_ibex build/ibex_full_rtl/simv_soc_ibex.daidir` 等——注意 `soc-verification-run.sh clean=1` 只删 `simv_soc_cocotb`，不覆盖全量回归的 `simv_soc_ibex`；`run_ibex_full_rtl.sh:49-68` 只在缺失时编译，必须显式删旧 simv 才真重编译——Oracle 审查修正 Metis M3）→ `bash sim/regression/run_ibex_full_rtl.sh` 跑全 33 case → 用 `scripts/audit_fm_soc_statistics.py` 对照 `docs/fm_soc_case_manifest.csv` 校验四类统计（PASS=25 目标、SKIP=8、FAIL=0、TIMEOUT=0）。同时重跑 crossbar fairness/stress、APB conformance real、FM-SOC-10X。日历预算（Metis M8）：全量回归 5 个日历日内完成；单 segment 触 24h timeout 记 TIMEOUT 不再无限重试。Must NOT 复用旧 evidence（todo 11 provenance 保证）；Must NOT 在 dirty 状态上跑——evidence 必须绑定**运行时实际 HEAD**（f982bef + todos 1-12 提交链，运行前 porcelain 为空；provenance 由 todo 11 记录实际 hash，而非字面 f982bef——Oracle round-5 修正）。
   Parallelization: Wave 3 | Blocked by: 7, 8, 9, 10, 11, 12 | Blocks: 14, 15 | Can parallelize with: —
   References: `sim/regression/run_ibex_full_rtl.sh`（33-case 入口）；`sim/regression/soc-verification-run.sh:28-49`（clean=1 强制重编译）；`firmware/Makefile`；评审报告 :270-296（P0/P1 整改优先级）
