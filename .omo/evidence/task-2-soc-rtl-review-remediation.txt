@@ -1,0 +1,151 @@
+================================================================================
+TASK-2 EVIDENCE — soc-rtl-review-remediation / todo 2
+Crossbar real-contention fairness NEGATIVE test (P4) — RED on unmodified RTL
+================================================================================
+Timestamp    : 2026-08-31T02:33:59Z (run finished 2026-08-31T10:32:26 +08:00 server time)
+Git HEAD     : 9d80c9650c394de8c7fbe2d78a85b8f1f7e2de58 (task branch soc-rtl-review-remediation)
+Files touched: ONLY rtl/tb/axi_crossbar_fairness_tb.sv (this task) — NO other RTL/DUT change.
+               rtl/soc/axi_crossbar.v diff is EMPTY (verified: `git diff --stat rtl/soc/axi_crossbar.v` -> no output).
+
+--------------------------------------------------------------------------------
+TB DIFF SUMMARY (what P4 does)
+--------------------------------------------------------------------------------
+Modified rtl/tb/axi_crossbar_fairness_tb.sv only: +279 / -3 lines. P1-P3 phases,
+their assertions, and the hierarchical probes (u_dut.ar_granted[0], aw_granted[0],
+ar_busy[0], aw_busy[0], m_rvalid_o[3], m_bvalid_o[4]) are untouched — additive only.
+Master count: TB NUM_M=7 already matches the DUT (rtl/soc/axi_crossbar.v NUM_M=7);
+no extension needed.
+
+P4 (new phase, inserted between the sticky grant-credit checks and the Summary):
+  (a) Deadlock stimulus: after a 5-cycle settle, all 7 masters assert ARVALID,
+      AWVALID and WVALID in the SAME slave-free cycle (verified slave-free:
+      log prints "slave state at P4 start: ar_busy=0 aw_busy=0"), all targeting
+      slave 0 (SRAM, mapped addresses 0x2000_3000+i*64 / 0x2000_4000+i*64), and
+      KEEP CONTENDING for the whole window: P4_CONTEND_CYCLES = 11,000 cycles
+      (>= 10,000 per plan). On the UNMODIFIED crossbar this accepts all 7 masters
+      while ar_busy=0 but grants only ONE (round-robin); the ungranted masters'
+      m_ar_active/m_aw_active stay asserted forever and their R/B responses never
+      arrive — phantom-accept deadlock reproduced.
+  (b) Fairness assertions (evaluated only if the window completes, i.e. after the
+      todo-7 fix — GREEN path):
+        - per-master AR grant-count difference <= 1 across the window
+        - per-master AW grant-count difference <= 1 across the window
+        - every master completes >= P4_MIN_TXN (=20) reads and writes (no starvation)
+        - zero bad R/B responses (all transactions OKAY)
+      Expected RED now: on unmodified RTL the watchdog terminates the sim inside
+      the window, so these checks are never reached (RED by non-completion).
+  (c) MANDATORY per-transaction watchdog (new always block):
+        - arms when m_arvalid&&m_arready (or m_awvalid&&m_awready) handshake,
+          i.e. from the cycle a transaction's VALID is accepted;
+        - clears on R completion (m_rvalid&&m_rready&&m_rlast) / B completion
+          (m_bvalid&&m_bready); normally <100 cycles;
+        - WDT_LIMIT = 10,000 cycles from accept -> prints exactly "FAIRNESS: FAIL"
+          and calls $finish. PER-TRANSACTION ONLY — deliberately NOT a global
+          "N cycles with no completion" watchdog (that would conflict with the
+          >=10,000-cycle contention window).
+      Makefile detectability: sim/regression/Makefile run_crossbar_fairness greps
+      "FAIRNESS: PASS" (absence -> CROSSBAR_FAIRNESS: FAIL + exit 1). The watchdog
+      $finish exits 0 by itself, so the marker is what drives the target to FAIL.
+
+Cycle counts: P4 window 11,000; watchdog limit 10,000; accept seen at watchdog
+cycle 385 (see log below); fire at ~385+10,000 = cycle ~10,385; $finish at
+sim time 103,905,000 ps (103,905 ns ~ 10,390 cycles).
+
+--------------------------------------------------------------------------------
+EXACT RUN COMMAND
+--------------------------------------------------------------------------------
+# from repo root /home/prj/zhengs/caduceuscore/CaduceusCore
+bash sim/regression/soc-verification-run.sh run_crossbar_fairness
+# (auto-SSH sz0002 -> 192.168.0.11/sz0001; CLEAN=1 default; wrapper exit code: 1)
+# Prep (deterministic rebuild): removed stale NFS artifacts first:
+#   rm -rf sim/regression/simv_axi_crossbar_fairness_tb sim/regression/simv_axi_crossbar_fairness_tb.daidir sim/regression/crossbar_fairness.log
+# Fresh VCS compile on sz0001: Mon Aug 31 10:27:54 2026; sim run: 10:30-10:32.
+# Full wrapper stdout captured in /tmp/task2_run.log; simulator log tee'd by the
+# make target into sim/regression/crossbar_fairness.log (NFS).
+
+--------------------------------------------------------------------------------
+LOG EXCERPTS (marker / hang / errors)
+--------------------------------------------------------------------------------
+P1-P3 preserved and still PASS (excerpt, pre-P4):
+    --- P1: fairness window (5 rotations x 7 masters x rd+wr) ---
+    [TB]   Window: 350 cycles
+    [TB]   CHECK AR fairness max-min=0 <= 1: PASS
+    [TB]   CHECK AW fairness max-min=0 <= 1: PASS
+    [TB]   CHECK all 70 reads+writes completed OKAY: PASS
+    --- P2: DECERR read ... ---  (all 5 checks PASS)
+    --- P3: DECERR write ... --- (all 5 checks PASS + 2 grant-credit checks PASS)
+
+P4 RED (deadlock reproduced):
+    --- P4: all 7 masters contend for slave 0 for 11000 cycles ---
+    [TB]   slave state at P4 start: ar_busy=0 aw_busy=0
+    FAIRNESS: FAIL
+    [TB] WATCHDOG: master 0 AR accepted at cycle 385, R not complete within 10000 cycles (phantom-accept deadlock)
+    $finish called from file "../../rtl/tb/axi_crossbar_fairness_tb.sv", line 464.
+    $finish at simulation time            103905000
+    ...
+    CROSSBAR_FAIRNESS: FAIL
+    make: *** [run_crossbar_fairness] Error 1
+    [soc-run] RESULT: FAIL for run_crossbar_fairness
+
+Interpretation: the arbiter's first round-robin grant went to master 1 (priority
+starts at 0, search starts at priority+1); master 1 then completed and was
+re-granted continuously (its VALID stayed high) while masters 0,2,3,4,5,6 sat
+with m_ar_active=1 and no grant forever. Master 0 is the first hung master in
+the watchdog's check order, hence the report. This is the phantom-accept
+deadlock: accepted-but-never-granted transactions that never complete.
+
+--------------------------------------------------------------------------------
+RED MARKERS PER ASSERTION
+--------------------------------------------------------------------------------
+(a) "expose on CURRENT unmodified RTL the phantom-accept deadlock or txn timeout"
+      -> RED  : log marker "FAIRNESS: FAIL" + "WATCHDOG: master 0 AR accepted at
+                cycle 385, R not complete within 10000 cycles (phantom-accept
+                deadlock)"; sim terminated by watchdog $finish inside the window.
+(b) "grant-count difference <=1 AND all transactions complete OKAY"
+      -> RED  : never reached — the deadlock terminated the sim at ~10,385 cycles
+                into P4, before the window/drain/checks could run. (These checks
+                are in place for the todo-7 GREEN run.)
+(c) watchdog requirement
+      -> FIRED: per-transaction watchdog armed at VALID-accept (cycle 385) and
+                fired at +10,000 cycles, printing exactly "FAIRNESS: FAIL" and
+                $finish — the anti-hang probe did its job.
+Target-level: make target exited 1 (CROSSBAR_FAIRNESS: FAIL); wrapper exit 1.
+Both RED detectors agree (marker in log AND nonzero exit).
+
+--------------------------------------------------------------------------------
+ADVERSARIAL NOTES
+--------------------------------------------------------------------------------
+hung_long_command : the 10,000-cycle per-transaction watchdog IS the anti-hang
+    probe, and it FIRED — sim ended in 0.610 s CPU (103,905 ns sim time), no
+    24h-runner dependency. Recorded as fired, not skipped. A global no-completion
+    watchdog was deliberately NOT implemented (would conflict with the >=10,000
+    cycle contention window); per-transaction semantics implemented instead.
+dirty_worktree    : `git status --porcelain` at end (HEAD 9d80c96):
+      M .omo/plans/soc-rtl-review-remediation.md
+      M rtl/tb/axi_crossbar_fairness_tb.sv        <-- THIS TASK
+      ?? .omo/evidence/task-0-soc-rtl-review-remediation.txt
+      ?? .omo/evidence/task-1-soc-rtl-review-remediation.txt
+      ?? .omo/evidence/task-4-soc-rtl-review-remediation.txt
+      ?? .omo/notepads/soc-rtl-review-remediation/
+      ?? docs/fm_soc_case_manifest.csv
+      ?? probe_fw_tmp.py
+      ?? rtl/tb/apb_conformance_real_tb.sv
+      ?? sim/regression/test_regression_stats.sh
+      ?? sim/regression/test_timeout_behavior.sh
+      ?? sim/tests/test_firmware_addr_allowlist.py
+    (+ this evidence file, created after that snapshot.)
+    Own-change check: my only RTL/product-code change is the TB file; all other
+    entries pre-existed this task (parallel Wave-1 agents: todos 1/3/4/5 and the
+    P0 plan file) or are this task's evidence file. rtl/soc/axi_crossbar.v and
+    all other rtl/ files: git diff EMPTY.
+no_commit         : nothing committed, per task instruction.
+lint              : compile clean (VCS V-2023.12-SP2); only pre-existing-style
+    Lint-[NS] null-statement warnings, two Lint-[ULCO] width notes from the new
+    watchdog comparison (cosmetic), and pre-existing DUT WMIA notes — no errors.
+future_green      : after todo 7's accept/grant coupling, the same run must pass
+    P4 checks 1-4 and print "FAIRNESS: PASS" (target-level PASS). This evidence
+    is the RED half of the red->green pair.
+
+================================================================================
+TASK-2 RESULT: RED (expected)
+================================================================================
