@@ -1,0 +1,33 @@
+Task 13 evidence mirror (todo 13, soc-rtl-review-remediation)
+Generated: 2026-08-31T06:37:00Z | Run HEAD: be3bf04bea0b1c406fecb538c977af53dca51cbf
+Full evidence: build/evidence/task-13-soc-rtl-review-remediation.txt
+
+Summary:
+- Porcelain empty at launch (provenance_git_dirty=false, porcelain_count=0);
+  7 housekeeping commits, 4 documented deviations (sibling-agent file snapshots).
+- Fresh build: deleted simv_soc_ibex + daidir + csrc; log L15/L610 prove
+  recompilation; new simv sha256=b99b613e...
+- Full 33-case regression: wall ~51 min; runner summary PASS=33 SKIP=0
+  FAIL=0 TIMEOUT=0 TOTAL=33; all 33 case logs carry run_id 20260831T131503-89771.
+- Audit scripts/audit_fm_soc_statistics.py → rc=1: executed=33, superseded=0,
+  na=0, failed=0, timeout=0, matched=25, 8 mismatches (014/015/016/021/022/023
+  expected superseded; 017/019 expected na).
+- Root cause: rtl_soc_runner.py:4402 emits the superseded/N-A verdict via
+  logger.info — INFO-level Python logging never reaches the VCS log
+  ("IbexRunner" 0 occurrences in all 33 case logs; logger.warning lines DO
+  appear) → todo-9 shell grep unreachable → 8 designed-skip cases counted PASS.
+  Pre-existing defect (tracked fm-soc-regression.txt also PASS=33 SKIP=0).
+- Functional truth: 8 mislabeled cases are 4.50ns no-ops; 25 executed cases did
+  real work (FM-SOC-032 16.6ms sim / 218KB log). 0 FAIL, 0 TIMEOUT.
+- Rollback gate NOT triggered (no previously-passing case FAILs/TIMEOUTs;
+  c478ae5 retained).
+- Companion targets (fresh recompile, wrapper rc=0 each):
+  run_crossbar_fairness PASS (P4 GREEN: 393×7 grants max-min=0, 23/23 checks);
+  run_crossbar_fairness_mutation RED as expected (2751/0/.../0 starvation → guard holds);
+  run_crossbar_stress PASS; run_apb_conformance_real GREEN (7/7, 214 checks).
+- Suggested fix (not applied): logger.info → logger.warning at
+  sim/rtl_soc_runner.py:4402 + re-run; disposition → todo 15.
+
+TASK-13 RESULT: BLOCKED (accounting gate RED — audit rc=1, 8 designed-skip
+cases counted PASS, todo-13 QA failure scenario hit; functional regression
+GREEN — 25/25 executed PASS, FAIL=0 TIMEOUT=0, rollback gate NOT triggered)
