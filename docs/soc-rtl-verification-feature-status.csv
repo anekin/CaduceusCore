@@ -1,0 +1,67 @@
+Category,Feature_ID,Feature,Testcase,Status,Evidence,Command
+计算引擎-MXU,MXU-01,单 tile INT4×INT8→INT32 bit-exact,tb_mxu single_tile,✅ PASS,4096/4096 逐比特匹配,python3 scripts/gen_mxu_vectors.py --scenario single_tile && vcs -full64 -sverilog -top tb_mxu rtl/tb/tb_mxu.v rtl/mxu/*.v -o simv_mxu && ./simv_mxu +testdir=rtl/test_vectors/mxu/single_tile +scenario=single_tile
+计算引擎-MXU,MXU-02,多 tile K 拆分,tb_mxu multi_tile_K,✅ PASS,9 场景 PASS,python3 scripts/gen_mxu_vectors.py --scenario multi_tile_K && ./simv_mxu +testdir=rtl/test_vectors/mxu/multi_tile_K +scenario=multi_tile_K
+计算引擎-MXU,MXU-03,多 tile N 拆分,tb_mxu multi_tile_N,✅ PASS,9 场景 PASS,python3 scripts/gen_mxu_vectors.py --scenario multi_tile_N && ./simv_mxu +testdir=rtl/test_vectors/mxu/multi_tile_N +scenario=multi_tile_N
+计算引擎-MXU,MXU-04,多 tile M 拆分,tb_mxu multi_tile_M,✅ PASS,9 场景 PASS,python3 scripts/gen_mxu_vectors.py --scenario multi_tile_M && ./simv_mxu +testdir=rtl/test_vectors/mxu/multi_tile_M +scenario=multi_tile_M
+计算引擎-MXU,MXU-05,溢出饱和,tb_mxu overflow,✅ PASS,PASS,python3 scripts/gen_mxu_vectors.py --scenario overflow && ./simv_mxu +testdir=rtl/test_vectors/mxu/overflow +scenario=overflow
+计算引擎-MXU,MXU-06,零维/部分 tile,tb_mxu zero_dim/partial,✅ PASS,PASS,python3 scripts/gen_mxu_vectors.py --scenario all && ./simv_mxu +testdir=rtl/test_vectors/mxu/zero_dim +scenario=zero_dim
+计算引擎-MXU,MXU-07,随机 100 组合,tb_mxu random,✅ PASS,100/100 PASS,python3 scripts/gen_mxu_vectors.py --scenario random && ./simv_mxu +testdir=rtl/test_vectors/mxu/random +scenario=random
+计算引擎-MXU,MXU-08,ACCUMULATE 模式（CTRL[2]）,FM-SOC-003 + test_mmul_accumulate,✅ PASS,SoC 路径 + FM golden 加固,bash sim/regression/run_fm_soc_case.sh FM-SOC-003
+计算引擎-SFU,SFU-01,Softmax 8-stage,tb_sfu + FM-SOC-004,✅ PASS,319/319 batch PASS,python3 scripts/gen_sfu_vectors.py --scenario softmax && python3 scripts/run_batch_regression.py
+计算引擎-SFU,SFU-02,LayerNorm 6-stage,tb_sfu,✅ PASS,PASS,python3 scripts/gen_sfu_vectors.py --scenario layernorm && python3 scripts/run_batch_regression.py
+计算引擎-SFU,SFU-03,RMSNorm two-pass,tb_sfu + FM-SOC-004/010,✅ PASS,FM-SOC-10X 17-op chain 33/33 PASS (task-16),python3 scripts/gen_sfu_vectors.py --scenario rmsnorm && python3 scripts/run_batch_regression.py
+计算引擎-SFU,SFU-04,RoPE 16-stage CORDIC,tb_sfu + FM-SOC-004,✅ PASS,PASS,python3 scripts/gen_sfu_vectors.py --scenario rope && python3 scripts/run_batch_regression.py
+计算引擎-SFU,SFU-05,GELU 4-segment,tb_sfu,✅ PASS,PASS,python3 scripts/gen_sfu_vectors.py --scenario gelu && python3 scripts/run_batch_regression.py
+计算引擎-SFU,SFU-06,SiLU Newton-Raphson,tb_sfu,✅ PASS,PASS,python3 scripts/gen_sfu_vectors.py --scenario silu && python3 scripts/run_batch_regression.py
+计算引擎-SFU,SFU-07,exp LUT,tb_sfu + exp_lut_tb,✅ PASS,256-entry 校准,python3 scripts/gen_sfu_luts.py && vcs -full64 -sverilog -top tb_exp_lut rtl/tb/tb_exp_lut.sv rtl/sfu/exp_lut.v -o simv_exp_lut && ./simv_exp_lut
+计算引擎-Vector,VEC-01,ADD 128-wide SIMD,tb_vector + FM-SOC-005,✅ PASS,63/63 batch PASS,python3 scripts/gen_vector_vectors.py --scenario add && python3 scripts/run_batch_regression.py
+计算引擎-Vector,VEC-02,MUL 128-wide SIMD,tb_vector + FM-SOC-005,✅ PASS,PASS,python3 scripts/gen_vector_vectors.py --scenario mul && python3 scripts/run_batch_regression.py
+计算引擎-Vector,VEC-03,MAX 逐元素,tb_vector,✅ PASS,PASS,python3 scripts/gen_vector_vectors.py --scenario max && python3 scripts/run_batch_regression.py
+计算引擎-Vector,VEC-04,MAX_REDUCE 128→1,tb_vector,✅ PASS,PASS,python3 scripts/gen_vector_vectors.py --scenario max_reduce && python3 scripts/run_batch_regression.py
+计算引擎-Vector,VEC-05,SUM_REDUCE 128→1,tb_vector,✅ PASS,PASS,python3 scripts/gen_vector_vectors.py --scenario sum_reduce && python3 scripts/run_batch_regression.py
+计算引擎-Vector,VEC-06,INT32→FP16 CONV,tb_vector + FM-SOC-005,✅ PASS,131073/131073 逐比特,python3 scripts/gen_vector_vectors.py --scenario vconv_f16_i32_smoke && make -C sim/regression run_vector_vconv_f16_i32
+计算引擎-Vector,VEC-07,RESID_ADD 饱和,tb_vector + FM-SOC-005,✅ PASS,PASS,python3 scripts/gen_vector_vectors.py --scenario resid_add && python3 scripts/run_batch_regression.py
+SoC互联,IPC-01,AXI4 Crossbar M=6/S=2 并发压力,run_crossbar_stress,✅ PASS,11455 cycles 1260 txns 0 errors,make -C sim/regression run_crossbar_stress
+SoC互联,IPC-02,APB Decoder 8-slave 选择 + pslverr,run_apb_smoke,✅ PASS,PASS,make -C sim/regression run_apb_smoke
+SoC互联,IPC-03,DMA wrapper（axi_cdma）传输,run_dma_test,✅ PASS,5 cases PASS,make -C sim/regression run_dma_test
+SoC互联,IPC-04,PCIe EP wrapper TLP→AXI→readback,run_pcie_test,✅ PASS,PASS,make -C sim/regression run_pcie_test
+SoC互联,IPC-05,DRAM behavioral model 100 随机事务,run_dram_test,✅ PASS,PASS,make -C sim/regression run_dram_test
+SoC互联,IPC-06,Doorbell ring buffer 协议,FM-SOC-006 + Ibex full,✅ PASS,PASS,bash sim/regression/run_fm_soc_case.sh FM-SOC-006
+SoC互联,IPC-07,INTC 7-source 中断控制器,run_intc_test + FM-SOC-006,✅ PASS,13/13 PASS,make -C sim/regression run_intc_test
+SoC互联,IPC-08,SoC elaboration 47 模块,run_soc_elab,✅ PASS,0 errors,make -C sim/regression run_soc_elab
+SoC互联,IPC-09,Cocotb Qwen blk.0 17-op chain,run_e2e_blk0,✅ PASS,17/17 PASS,make -C sim/regression run_e2e_blk0
+SoC互联,IPC-10,SRAM 控制器 4MB 512-bit burst,SoC elaboration + Cocotb,✅ PASS,集成验证,make -C sim/regression run_soc_elab
+SoC互联,IPC-11,Boot ROM $readmemh 加载,Ibex boot smoke,✅ PASS,PASS,make -C sim/regression run_qwen_e2e
+SoC互联,IPC-12,SFU wrapper 宽度转换 + DONE,BUG-RTL-SOC-WV-001 fix,✅ PASS,Fixed + 回归,bash sim/regression/run_fm_soc_case.sh FM-SOC-004
+SoC互联,SOC-13,PCIe TLP 功能模型（TLP 解析/BAR 路由/MSI-X）,run_e2e_pcie_tlp_chain,✅ PASS,task-3-soc-rtl-verification-signoff.txt,make -C sim/regression run_e2e_pcie_tlp_chain
+SoC互联,SOC-14,AXI Crossbar 仲裁行为模型,run_crossbar_fairness,✅ PASS,task-5 (19/19 checks),make -C sim/regression run_crossbar_fairness
+SoC互联,SOC-15,APB-MMIO 统一寄存器模型,run_apb_conformance,✅ PASS,task-6 (168/168 checks),make -C sim/regression run_apb_conformance
+SoC互联,SOC-16,Ibex→AXI 共享地址空间,run_e2e_ibex_shared_addr,✅ PASS,task-7-soc-rtl-verification-signoff.txt,make -C sim/regression run_e2e_ibex_shared_addr
+SoC互联,SOC-17,IRQ 链路（engine→INTC→CPU WFI 唤醒）,run_e2e_intc_irq + run_e2e_irq_stall,✅ PASS,task-4 + task-8,make -C sim/regression run_e2e_intc_irq && make -C sim/regression run_e2e_irq_stall
+SoC互联,SOC-18,Ibex 固件 boot→DMEM→MMIO→poll IRQ 序列,IbexRunner boot assertions,✅ PASS,task-9-soc-rtl-verification-signoff.txt,bash sim/regression/soc-verification-run.sh run_e2e_rmsnorm
+固件与CPU,FW-01,固件全 opcode 分发（MMUL/SFU/Vector/DMA）,test_firmware.py + FM-SOC-006,✅ PASS,4/4 PASS,PYTHONPATH=sim python -m pytest sim/tests/test_firmware.py -q
+固件与CPU,FW-02,Tile 级双缓冲调度,tile_scheduler.py + FM-SOC-006,✅ PASS,PASS,PYTHONPATH=sim python -m pytest sim/tests/test_tile_scheduler.py -q
+固件与CPU,FW-03,MMIO 寄存器映射一致（C/Python）,check_mmio_map.py,✅ PASS,49 registers match,python3 sim/check_mmio_map.py
+固件与CPU,FW-04,ABI 常量单一来源（schema→C→Python）,test_npu_abi_constants.py,✅ PASS,fm-hardening todo 9,PYTHONPATH=sim python -m pytest sim/tests/test_npu_abi_constants.py -q
+固件与CPU,FW-05,Ibex boot ROM 加载固件,Ibex boot smoke,✅ PASS,PASS,make -C sim/regression run_qwen_e2e
+固件与CPU,FW-06,Doorbell HOST_TAIL/NPU_HEAD 轮询,FM-SOC-001..032 + Ibex,✅ PASS,33 cases,bash sim/regression/run_fm_soc_all.sh
+固件与CPU,FW-07,地址空间/环布局契约,test_address_space.py + test_command_ring.py,✅ PASS,fm-hardening todo 1/2/3,PYTHONPATH=sim python -m pytest sim/tests/test_address_space.py sim/tests/test_command_ring.py -q
+固件与CPU,FW-08,Spike 固件与 Ibex 固件行为对齐,run_fm_soc_case CASE_ID=RING-WRAP-STRESS,✅ PASS,task-10 (1100 commands),make -C sim/regression run_fm_soc_case CASE_ID=RING-WRAP-STRESS
+固件与CPU,FW-09,firmware_memory_contract.json 双向比对,gen_firmware_memory_contract.py --check + test_memory_contract.py,N/A,静态检查 不涉及 RTL 仿真,python3 scripts/gen_firmware_memory_contract.py --check && PYTHONPATH=sim python -m pytest sim/tests/test_memory_contract.py -q
+固件与CPU,FW-10,中断驱动 firmware 调度（WFI 唤醒）,run_e2e_irq_stall,✅ PASS,task-8 (IRQ_MASK + IRQ_STALL 双 PASS),make -C sim/regression run_e2e_irq_stall
+端到端,E2E-01,Qwen2.5-3B blk.0 4-instr smoke,run_qwen_e2e,✅ PASS,Cocotb PASS,make -C sim/regression run_qwen_e2e
+端到端,E2E-02,Qwen2.5-3B blk.0 17-op 全链,run_e2e_blk0,✅ PASS,17/17 PASS,make -C sim/regression run_e2e_blk0
+端到端,E2E-03,3-layer 17-op RTL forward pass,run_qwen25_3b_3layer,✅ PASS,W1.3 PASS,make -C sim/regression run_qwen25_3b_3layer
+端到端,E2E-04,多层（≥9 层）full-model forward pass,Ibex segment run 8-checkpoint,✅ PASS,task-14 (8/8 LADDER=PASS),bash sim/regression/run_ibex_segment_run.sh
+端到端,E2E-05,MobileNetV3 全推理,run_e2e_mobilenetv3,✅ PASS,task-13 (50/52 cos≥0.99),make -C sim/regression run_e2e_mobilenetv3
+端到端,E2E-06,Spike E2E forward pass tolerance,36-layer checkpoint review,✅ PASS,task-14 (L30=0.998 L35=0.999),bash sim/regression/run_ibex_segment_run.sh
+端到端,E2E-07,性能 calibration,—,❌ 未覆盖,calibration_state=uncalibrated deferred 到 FPGA,—
+端到端,E2E-08,attn_weight RTL dispatch,run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN,✅ PASS,task-15 (op07 cycles=30755 cos=1.0),make -C sim/regression run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN
+契约门禁,GUARD-01,地址空间重叠/窗口契约,address_space.contract_check(),✅ PASS,todo 1/2,PYTHONPATH=sim python -m pytest sim/tests/test_address_space.py -q
+契约门禁,GUARD-02,命令环语义统一 + 回绕 stress,command_ring + test_command_ring_stress.py,✅ PASS,todo 3/4,PYTHONPATH=sim python -m pytest sim/tests/test_command_ring.py sim/tests/test_command_ring_stress.py -q
+契约门禁,GUARD-03,长序列持久偏移 FM gate,test_soc_fm_long_sequence.py,✅ PASS,todo 5,PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm_long_sequence.py -q
+契约门禁,GUARD-04,scale/accumulate golden 加固,test_soc_fm.py::test_mmul_scale_nonzero/accumulate,✅ PASS,todo 6/7,PYTHONPATH=sim python -m pytest sim/tests/test_soc_fm.py::test_mmul_scale_nonzero sim/tests/test_soc_fm.py::test_mmul_accumulate -q
+契约门禁,GUARD-05,双 packer 等价,test_packer_equivalence.py,✅ PASS,todo 8,PYTHONPATH=sim python -m pytest sim/tests/test_packer_equivalence.py -q
+契约门禁,GUARD-06,段边界 SRAM 清零协议,test_segment_boundary.py,✅ PASS,todo 10,PYTHONPATH=sim python -m pytest sim/tests/test_segment_boundary.py -q
+契约门禁,GUARD-07,反向依赖门禁,fm_reverse_dependency_gate.sh,✅ PASS,todo 11,bash scripts/fm_reverse_dependency_gate.sh
+契约门禁,GUARD-08,F 波门禁脚本,fm_hardening_f{1..4}.sh,✅ PASS,todo 13,bash scripts/fm_hardening_f1.sh && bash scripts/fm_hardening_f2.sh && bash scripts/fm_hardening_f3.sh && bash scripts/fm_hardening_f4.sh
