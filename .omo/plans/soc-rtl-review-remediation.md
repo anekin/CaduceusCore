@@ -237,7 +237,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
 
 ### Wave 4: 文档与状态
 
-- [ ] 17. 状态口径统一（checklist/vplan/evidence）
+- [x] 17. 状态口径统一（checklist/vplan/evidence）
   What to do / Must NOT do: (a) `docs/func-model-signoff-checklist.md` 顶部 Performance 状态与正文统一（明确 `calibration_state=uncalibrated`，Performance 相关行按实际证据写 PASS/FAIL/PARTIAL，消除自相矛盾）；(b) `.omo/plans/soc-rtl-verification-vplan.md` 的 33/33 口径改为 25 执行 + 6 superseded + 2 N/A，E2E-03 标 Spike FAIL 状态；(c) `docs/soc-rtl-verification-feature-status.csv` 纳入 git 跟踪并同步最新口径；(d) 交叉核对三处文档无矛盾。Must NOT 改 frozen perf spec；Must NOT claim 100% signoff。
   Parallelization: Wave 4 | Blocked by: 16 | Blocks: 19 | Can parallelize with: 18
   References: `docs/func-model-signoff-checklist.md`（状态矛盾处）；`.omo/plans/soc-rtl-verification-vplan.md:13-22,174-184`（覆盖率与 blocker）；`docs/soc-rtl-verification-feature-status.csv`（untracked 现状）；评审报告 :261-268（§6 文档一致性）
