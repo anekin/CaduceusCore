@@ -1,0 +1,149 @@
+================================================================================
+TASK-4 SOC-RTL-REVIEW-REMEDIATION — negative test: 33-case regression statistics
+================================================================================
+timestamp:       2026-08-31T02:27:22Z
+plan:            .omo/plans/soc-rtl-review-remediation.md (todo 4, Wave 1)
+branch:          soc-rtl-review-remediation @ 9d80c96
+commit:          (no commit — negative test run on dirty worktree, per task)
+scope:           LOCAL ONLY (no EDA / no VCS / no network)
+
+Deliverables created (this task):
+  1. docs/fm_soc_case_manifest.csv
+  2. sim/regression/test_regression_stats.sh
+Not modified:   sim/regression/run_ibex_full_rtl.sh (forbidden until todo 9)
+
+--------------------------------------------------------------------------------
+CSV ROW SUMMARY (docs/fm_soc_case_manifest.csv)
+--------------------------------------------------------------------------------
+Columns: case_id,expected_status,justification
+  total rows:    33
+  EXECUTED:      25   (FM-SOC-001..013, 018, 020, 024..032, 10X)
+  SUPERSEDED:    6    (FM-SOC-014, 015, 016, 021, 022, 023 — counts 25/6/2 split
+                       per sim/rtl_soc_runner.py:4279 "superseded by
+                       FM-SOC-027/032/10X")
+  N/A:           2    (FM-SOC-017, 019 — DIRECT_CASES per
+                       sim/rtl_soc_runner.py:2174; message per :4282
+                       "skipped: direct APB/AXI case not applicable to Ibex RTL mode")
+Justification cites: rtl_soc_runner.py:2174/:4279/:4282 and
+                     run_ibex_full_rtl.sh:77-97.
+
+--------------------------------------------------------------------------------
+TEST DESIGN (sim/regression/test_regression_stats.sh)
+--------------------------------------------------------------------------------
+- Extracts the CURRENT classification loop body from run_ibex_full_rtl.sh at
+  run time (anchors: 'for CASE in $CASES; do' .. first bare 'done'), so it
+  re-validates whatever version of the runner is checked out. A verbatim copy
+  of the PRE-FIX :85-96 logic (including `|| true` at :85 and the
+  'superseded by FM-SOC-032/10X' grep at :86) is embedded in the header as
+  reference.
+- Fake simulator stub ($SIMV) replays pre-made sample logs and exits with a
+  scripted code — no EDA involved.
+- 33 samples built from real logs under build/ibex_full_rtl/evidence/ (all 33
+  exist and contain the cocotb 'TESTS=1 PASS=1 FAIL=0 SKIP=0' summary, no skip
+  messages — verified): 25 EXECUTED samples use the real log verbatim; the 6
+  SUPERSEDED and 2 N/A samples prepend the runner messages from
+  rtl_soc_runner.py:4279/:4282 (as test_soc_ibex_full logs them at :4359).
+- Probe case FM-SOC-PROBE-124: stub exits 124 (GNU timeout kill), log truncated
+  before any summary.
+- Assertions:
+  A1 superseded logs classified SKIP, NOT PASS  (currently RED)
+  A2 N/A logs classified SKIP                    (currently GREEN)
+  A3 summary emits four classes PASS/SKIP/FAIL/TIMEOUT, sum == 33
+                                                 (currently GREEN)
+  A4 simulator non-zero exit code NOT swallowed by `|| true` (:85)
+                                                 (currently RED)
+  A0 manifest integrity 33 rows / 25-6-2         (currently GREEN)
+- Post-todo-9 GREEN contract assumed (per plan todo 9 acceptance): loop keeps
+  variable names PASS/SKIP/FAIL/TIMEOUT, exit 124 -> TIMEOUT, exit 0 + cocotb
+  summary -> PASS, other non-zero -> FAIL, SKIP greps match :4279/:4282.
+
+--------------------------------------------------------------------------------
+RUN OUTPUT (command: bash sim/regression/test_regression_stats.sh)
+--------------------------------------------------------------------------------
+[TEST] runner: /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/run_ibex_full_rtl.sh
+[TEST] extracted loop state: pre-fix (line with '|| true' present in live script)
+[TEST] extracted superseded grep: pre-fix superseded grep ('FM-SOC-032/10X' - does not match rtl_soc_runner.py:4279 message 'FM-SOC-027/032/10X')
+[TEST] manifest: /home/prj/zhengs/caduceuscore/CaduceusCore/docs/fm_soc_case_manifest.csv
+[TEST] real log source: /home/prj/zhengs/caduceuscore/CaduceusCore/build/ibex_full_rtl/evidence
+[TEST] running extracted loop over all 33 cases (stub exit code 0) ...
+ASSERT 1: FAIL - superseded cases misclassified (must be SKIP, not PASS): FM-SOC-014->PASS FM-SOC-015->PASS FM-SOC-016->PASS FM-SOC-021->PASS FM-SOC-022->PASS FM-SOC-023->PASS - the :86 grep 'superseded by FM-SOC-032/10X' does not match the :4279 message 'superseded by FM-SOC-027/032/10X'
+  A2 FM-SOC-017: SKIP (ok)
+  A2 FM-SOC-019: SKIP (ok)
+ASSERT 2: PASS - N/A cases (FM-SOC-017/019) classified SKIP
+[SUMMARY] simulated 33-case summary (four-class contract PASS/SKIP/FAIL/TIMEOUT)
+  PASS:    31
+  SKIP:    2
+  FAIL:    0
+  TIMEOUT: 0
+  TOTAL:   33
+ASSERT 3: PASS - summary emits four classes PASS/SKIP/FAIL/TIMEOUT and their sum == 33
+[TEST] running probe FM-SOC-PROBE-124 with stub exit code 124 (timeout kill) ...
+  probe classification: FAIL
+  probe STATS:          STATS PASS=0 SKIP=0 FAIL=1 TIMEOUT=0
+ASSERT 4: FAIL - fake simulator exited 124 but exit code was swallowed by || true: classified 'FAIL', TIMEOUT=0 (expected TIMEOUT)
+[MANIFEST] rows=33 EXECUTED=25 SUPERSEDED=6 N/A=2
+ASSERT 0: PASS - manifest OK: 33 rows, 25 EXECUTED / 6 SUPERSEDED / 2 N/A
+
+OVERALL: RED - 2 assertion(s) failed (expected pre-todo-9)
+RUN_EXIT_CODE=1
+
+--------------------------------------------------------------------------------
+RED MARKERS (expected, pre-fix)
+--------------------------------------------------------------------------------
+RED-1: ASSERT 1 FAIL — all 6 superseded cases (014/015/016/021/022/023)
+       classified PASS by the live :86-92 logic; expected SKIP.
+       Root cause: :86 grep 'superseded by FM-SOC-032/10X' does not match the
+       runner message 'superseded by FM-SOC-027/032/10X'
+       (sim/rtl_soc_runner.py:4279), so the cocotb PASS summary at :90 wins.
+       Post-fix (todo 9) this assertion turns GREEN.
+RED-2: ASSERT 4 FAIL — fake simulator exit 124 swallowed by `|| true` (:85);
+       loop never observes the exit code, probe classified FAIL with
+       TIMEOUT=0. Expected: TIMEOUT. Post-fix (todo 9) turns GREEN.
+GREEN (control): ASSERT 0 (manifest 33/25/6/2), ASSERT 2 (N/A -> SKIP),
+       ASSERT 3 (four-class sum == 33) — pass both pre- and post-fix.
+RUN_EXIT_CODE=1 (non-zero) — the test itself fails closed, as required.
+
+--------------------------------------------------------------------------------
+ADVERSARIAL NOTES
+--------------------------------------------------------------------------------
+dirty_worktree:
+  `git status --porcelain` after this task:
+      M  .omo/plans/soc-rtl-review-remediation.md        (P0/planner, pre-existing)
+      M  rtl/tb/axi_crossbar_fairness_tb.sv              (todo 2, parallel wave)
+     ??  .omo/evidence/task-0-soc-rtl-review-remediation.txt   (P0, pre-existing)
+     ??  .omo/evidence/task-4-soc-rtl-review-remediation.txt   (THIS TASK)
+     ??  .omo/notepads/soc-rtl-review-remediation/       (P0, pre-existing)
+     ??  docs/fm_soc_case_manifest.csv                   (THIS TASK)
+     ??  sim/regression/test_regression_stats.sh         (THIS TASK)
+     ??  sim/regression/test_timeout_behavior.sh         (todo 1, parallel wave)
+  THIS TASK's footprint is exactly: docs/fm_soc_case_manifest.csv,
+  sim/regression/test_regression_stats.sh, and this evidence file. The
+  remaining entries belong to P0 (planner) and the parallel Wave-1 todos 1/2.
+  run_ibex_full_rtl.sh and sim/rtl_soc_runner.py are untouched (verified:
+  `git diff --stat` on both is empty; no edit issued against them).
+misleading_success_output:
+  The test does NOT hardcode expected classification numbers. It re-extracts
+  the classification loop from the LIVE run_ibex_full_rtl.sh on every run and
+  evaluates it against real sample logs, so the PASS=31 SKIP=2 result is
+  produced by the actual buggy logic, not by an asserted fixture. Assertions
+  A1/A4 pin the CORRECT semantics (SKIP for superseded, TIMEOUT for exit 124)
+  and therefore fail against the current logic; they will only pass once the
+  runner logic itself is fixed (todo 9).
+sample_fidelity:
+  Real logs for all 33 cases exist under build/ibex_full_rtl/evidence/ and all
+  contain 'TESTS=1 PASS=1 FAIL=0 SKIP=0' with no skip messages (stale run).
+  For superseded/N/A samples the :4279/:4282 messages are injected at line 1,
+  matching how test_soc_ibex_full logs them (rtl_soc_runner.py:4359
+  "IbexRunner <case>: PASS - <msg>"). Probe uses a log truncated before any
+  summary to model a real timeout kill.
+post_fix_green_contract:
+  GREEN after todo 9 requires the fixed loop to keep variable names
+  PASS/SKIP/FAIL/TIMEOUT, map exit 124 -> TIMEOUT, exit 0 + cocotb summary ->
+  PASS, other non-zero -> FAIL, and SKIP greps matching :4279/:4282 messages
+  (plan todo 9 acceptance: summary `PASS=<n> SKIP=8 FAIL=0 TIMEOUT=0`).
+no_eda: test ran fully locally; no VCS/module loads/SSH involved.
+
+--------------------------------------------------------------------------------
+FINAL
+--------------------------------------------------------------------------------
+TASK-4 RESULT: RED (expected)
