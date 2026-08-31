@@ -245,7 +245,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — 三处文档口径一致且无 untracked 正式交付物；failure — 任一文档仍自相矛盾或 CSV 仍 untracked。Evidence `.omo/evidence/task-17-soc-rtl-review-remediation.txt`
   Commit: Y | docs(signoff): unify checklist/vplan/CSV status accounting
 
-- [ ] 18. BUG-RTL-SOC-007 ledger 文本更新
+- [x] 18. BUG-RTL-SOC-007 ledger 文本更新
   What to do / Must NOT do: 更新 `docs/bugs/bugs-soc-rtl.md` 的 BUG-RTL-SOC-007 条目：把 "chain-level reproduction pending todo 15" 改为 "todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-2x），26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，保持 Open 待 FPGA/更早日志追踪"。同步 vplan 台账表。Must NOT 改 Status=Open 结论。
   Parallelization: Wave 4 | Blocked by: 0 | Blocks: 19 | Can parallelize with: 17
   References: `docs/bugs/bugs-soc-rtl.md:326-370`（007 条目现文本）；`build/evidence/task-15-soc-rtl-verification-signoff.txt`（ATTN-WEIGHT-CHAIN 证据）；`.omo/plans/soc-rtl-verification-vplan.md:165`（台账行）；评审报告 :218-220（4.5 节）
@@ -261,7 +261,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — 三处状态统一 Pending；failure — 任一处仍写 formally Waived 或已关闭。Evidence `.omo/evidence/task-19-soc-rtl-review-remediation.txt`
   Commit: Y | docs(waiver): revert BUG-RTL-SOC-002 ledger status to Pending until user signature
 
-- [ ] 20. P2/P3 blocker 跟踪清单
+- [x] 20. P2/P3 blocker 跟踪清单
   What to do / Must NOT do: 新建 `docs/soc-rtl-review-remediation-blockers.md`：列出 P2/P3 未闭环项——(1) Perf CI RSS 17.4GB 超限（`.omo/evidence/task-23-perf-spec-ci.txt`；注明 gating 关系：该失败阻塞项目级 signoff 而非 SoC RTL 功能 signoff——Metis M10）；(2) E2E-07 性能校准（引用 `.omo/plans/rtl-perf-decomposition-calibration.md`，标注待执行）；(3) FPGA L5 NO-GO + ggml lifecycle BLOCKED（外部依赖）；(4) 36 层连续仿真 deferred 到 FPGA；(5) WVR-SOC-RTL-002 待用户签署；(6) BUG-RTL-SOC-007 根因追查；(7) P3.1 遗留工作区状态清理：stash@{0}（WIP on main: c244935，14 个 evidence 文件）处置 + `fix/fm-soc-10x-sfu-desc` 分支自身的收尾/合并 + 已 gitignore 的 87M build 产物磁盘清理（P0 已分类提交其余 dirty，本项仅跟踪剩余项）；(8) P3.4 可重放 signoff manifest + 最终用户签收记录（Oracle R4 审查：评审报告 §7 P3 的 4 项需全数可追溯）。每项含：现状证据路径、阻塞原因、解除条件、建议 owner。Must NOT 在本计划内执行这些项。
   Parallelization: Wave 4 | Blocked by: 0 | Blocks: — | Can parallelize with: 19
   References: `.omo/evidence/task-23-perf-spec-ci.txt`（RSS 超限证据）；`.omo/plans/rtl-perf-decomposition-calibration.md`（E2E-07 计划）；`docs/func-model-signoff-checklist.md:339`（FPGA/ggml BLOCKED 行）；评审报告 :186-228（§4 项目级事项）
