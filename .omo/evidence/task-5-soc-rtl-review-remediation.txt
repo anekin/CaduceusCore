@@ -1,0 +1,181 @@
+TASK-5 EVIDENCE — soc-rtl-review-remediation (todo 5: firmware address allowlist / size validation / completion-bounds negative tests)
+================================================================================
+Timestamp : 2026-08-31T02:35:39Z
+Commit    : 9d80c96 (branch soc-rtl-review-remediation, main checkout)
+Command   : PYTHONPATH=sim python -m pytest sim/tests/test_firmware_addr_allowlist.py -q
+Result    : 6 FAILED (RED, expected) + 1 PASSED (near-end source-pin control). pytest exit code = 1.
+Location  : sim/tests/test_firmware_addr_allowlist.py (NEW file — plan todo 5 prefers a new file)
+
+--------------------------------------------------------------------------------
+TEST CONTENT SUMMARY
+--------------------------------------------------------------------------------
+Harness: the REAL compiled C firmware (firmware/build/npu_firmware.hex, built
+2026-08-28 06:17 — newer than npu_firmware.c 2026-08-23) executed inside
+RISCVMini + MMIOBridge, same harness as sim/tests/test_firmware_boot_sequence.py
+(FuncModel → boot → _step_until). Boot sanity is proven before each test via
+firmware_main()'s own observables (INTC.ENABLE==0x1FF, LAST_STATUS==0xAA,
+0xDEADBEEF completion-ring marker), so the tests cannot silently run against a
+broken/unloaded image.
+
+(a) test_dispatch_must_reject_addresses_below_dram_base
+    [boot ROM-0 / address hole-268435456 / MMIO-1073741824]
+    SFU opcode 0x01, dim=64 (io_size = sfu_scratch_size(64) = 512 B > 0, so the
+    address check carries a non-trivial size). Asserts completion status == 1
+    (rejected). Current dram_range_ok() (npu_firmware.c:459-460) returns 1 for
+    ANY addr < DRAM_BASE → accepted → executed.
+
+(b) test_dispatch_must_reject_mmul_when_tile_math_exceeds_declared_sizes
+    [undersized buffer-4-8-8 / maximum dimensions-64-64-64]
+    MMUL opcode 0, declared input/weight/output sizes = 4/4/4 B while the tile
+    math (npu_firmware.c:492-494, 513-514, 533-534) derives input =
+    ceil(K/64)*4096, weight = num_tiles*num_blocks*2048, output = M*N*4 bytes.
+    Anti-vacuous preconditions assert derived > declared for both shapes.
+    Asserts completion status == 1 (rejected). No derived-vs-declared check
+    exists in dispatch_cmd() → accepted → executed.
+
+(c) test_completion_status_mirror_must_stay_within_16_entry_array
+    FuncModel(sram_kb=4096, ring_size=1024); 1020 unknown-opcode (0xEE)
+    commands driven to head 1019. Asserts (1) INTC.PENDING at 0x40006000
+    stays 0 — no mirror write into the INTC APB window; (2) no mirror write
+    beyond the last [16] slot (0x40005014 + 15*4 = 0x40005050).
+    write_completion() (npu_firmware.c:440-446) indexes
+    NPU_DB->COMPLETION_STATUS[cmd_id] (declared [16], npu-regmap.h:186) with
+    the raw ring head: cmd_id=1019 → 0x40005014 + 4*1019 = 0x40006000.
+
+CONTROL test_control_near_end_dram_window_upper_bound_pinned
+    Source-level pin of the existing 8 MB DRAM-window upper-bound rejection
+    (npu_firmware.c:461-463) so the todo-8 allowlist rewrite cannot drop it.
+    Expected PASS today AND after the fix. Runtime near-end is NOT exercisable
+    in this harness: RISCVMini does not decode sltu/sltiu (miniv.py:4 supported
+    list omits them), so the firmware's unsigned window comparisons execute as
+    no-ops in the FM (probed empirically: dst=0x80800000 and size=0x800000
+    DMA_COPY both "accepted" — a harness artifact, not firmware behaviour).
+
+--------------------------------------------------------------------------------
+PYTEST OUTPUT (exact, -q; exit code 1)
+--------------------------------------------------------------------------------
+=========================== short test summary info ============================
+FAILED sim/tests/test_firmware_addr_allowlist.py::test_dispatch_must_reject_addresses_below_dram_base[boot ROM-0]
+FAILED sim/tests/test_firmware_addr_allowlist.py::test_dispatch_must_reject_addresses_below_dram_base[address hole-268435456]
+FAILED sim/tests/test_firmware_addr_allowlist.py::test_dispatch_must_reject_addresses_below_dram_base[MMIO-1073741824]
+FAILED sim/tests/test_firmware_addr_allowlist.py::test_dispatch_must_reject_mmul_when_tile_math_exceeds_declared_sizes[undersized buffer-4-8-8]
+FAILED sim/tests/test_firmware_addr_allowlist.py::test_dispatch_must_reject_mmul_when_tile_math_exceeds_declared_sizes[maximum dimensions-64-64-64]
+FAILED sim/tests/test_firmware_addr_allowlist.py::test_completion_status_mirror_must_stay_within_16_entry_array
+6 failed, 1 passed in 1.34s
+
+Per-test failure messages (verbatim AssertionError lines):
+
+RED (a) boot ROM:
+  E  AssertionError: boot ROM address 0x00000000 is below DRAM_BASE
+  E  (0x80000000) and MUST be rejected with status=1, but the firmware
+  E  accepted the descriptor and executed it (status=0)
+  sim/tests/test_firmware_addr_allowlist.py:208: AssertionError
+
+RED (a) address hole:
+  E  AssertionError: address hole address 0x10000000 is below DRAM_BASE
+  E  (0x80000000) and MUST be rejected with status=1, but the firmware
+  E  accepted the descriptor and issued a transaction the FM crossbar cannot
+  E  route (DECERR) instead of rejecting
+  sim/tests/test_firmware_addr_allowlist.py:208: AssertionError
+
+RED (a) MMIO:
+  E  AssertionError: MMIO address 0x40000000 is below DRAM_BASE (0x80000000)
+  E  and MUST be rejected with status=1, but the firmware accepted the
+  E  descriptor and issued a transaction the FM crossbar cannot route (DECERR)
+  E  instead of rejecting
+  sim/tests/test_firmware_addr_allowlist.py:208: AssertionError
+
+RED (b) undersized buffer:
+  E  AssertionError: MMUL (undersized buffer) M=4 K=8 N=8 derives input=4096B,
+  E  weight=2048B, output=128B from the tile math, but the descriptor declares
+  E  4/4/4B. Dispatch MUST reject with status=1; observed 0 (accepted and
+  E  executed against current firmware semantics)
+  sim/tests/test_firmware_addr_allowlist.py:262: AssertionError
+
+RED (b) maximum dimensions:
+  E  AssertionError: MMUL (maximum dimensions) M=64 K=64 N=64 derives
+  E  input=4096B, weight=2048B, output=16384B from the tile math, but the
+  E  descriptor declares 4/4/4B. Dispatch MUST reject with status=1; observed
+  E  0 (accepted and executed against current firmware semantics)
+  sim/tests/test_firmware_addr_allowlist.py:262: AssertionError
+
+RED (c) completion bounds:
+  E  AssertionError: COMPLETION_STATUS[cmd_id=1019] spilled out of the
+  E  [16]-entry mirror and clobbered INTC.PENDING at 0x40006000 (=0x1) — the
+  E  completion mirror wrote into the INTC APB window at 0x4000_6000
+  E  assert 1 == 0
+  sim/tests/test_firmware_addr_allowlist.py:332: AssertionError
+
+Pre-existing tests re-run (no breakage):
+  PYTHONPATH=sim python -m pytest sim/tests/test_firmware.py \
+      sim/tests/test_firmware_boot_sequence.py -q
+  → 9 passed, 4 warnings in 0.56s
+
+--------------------------------------------------------------------------------
+PER-TEST RED MARKERS
+--------------------------------------------------------------------------------
+(a) test_dispatch_must_reject_addresses_below_dram_base[boot ROM-0] ............ RED
+(a) test_dispatch_must_reject_addresses_below_dram_base[address hole-268435456] RED
+(a) test_dispatch_must_reject_addresses_below_dram_base[MMIO-1073741824] ....... RED
+(b) test_dispatch_must_reject_mmul_when_tile_math_exceeds_declared_sizes
+    [undersized buffer-4-8-8] ................................................ RED
+(b) test_dispatch_must_reject_mmul_when_tile_math_exceeds_declared_sizes
+    [maximum dimensions-64-64-64] ............................................ RED
+(c) test_completion_status_mirror_must_stay_within_16_entry_array ............. RED
+    test_control_near_end_dram_window_upper_bound_pinned ........... PASS (control)
+
+--------------------------------------------------------------------------------
+ADVERSARIAL NOTES
+--------------------------------------------------------------------------------
+dirty_worktree:
+  `git status --porcelain` shows for THIS todo only the new test file
+  (`?? sim/tests/test_firmware_addr_allowlist.py`) plus this evidence file.
+  Pre-existing unrelated modifications from other todos of the same plan are
+  present (`.omo/plans/soc-rtl-review-remediation.md`, `rtl/tb/axi_crossbar_fairness_tb.sv`,
+  other task-N evidence files, `rtl/tb/apb_conformance_real_tb.sv`, etc.) —
+  none touched by this task. firmware/npu_firmware.c is UNMODIFIED (Must NOT
+  per plan todo 5). No git commit made.
+
+misleading_success_output:
+  The pytest output above is the real, verbatim output of the command
+  (captured at /tmp/opencode_fw_red_full.txt, 324 lines). Exit code = 1,
+  summary "6 failed, 1 passed in 1.34s". NOT a doctored or hand-summarized
+  "expected to fail" claim: every AssertionError message is the pytest-raised
+  text including file:line.
+
+stale_state (does the ring_size=1024 construction really reach head ≥1019?):
+  YES — proven by assertions inside the test, not by claim:
+    * `assert model.firmware.doorbell["host_tail"] == num_cmds` (1020) — the
+      host actually queued 1020 entries; host_write_command raises "ring full"
+      at 16 entries on the default ring, so this also proves ring_size=1024
+      took effect.
+    * `assert npu_head == num_cmds == 1020` — NPU_HEAD MMIO readback is 1020,
+      i.e. no wrap at 16 occurred.
+    * `assert (cmd_id_1019, status_1019) == (1019, 1)` — the DRAM completion
+      ring entry 1019 holds cmd_id=1019, proving the firmware dispatched and
+      completed head 1019 exactly.
+    * `INTC.PENDING == 0x1` — the value clobbered at 0x40006000 equals the
+      unknown-opcode status (1), i.e. it is the completion mirror write, not
+      a stray value.
+  Independent probe (not committed): NPU_HEAD=1020, INTC.PENDING=0x1,
+  completion[1019]=(1019,1), 117405 instructions, 0.82 s — matches the test.
+
+  Also verified: firmware/build/npu_firmware.hex (2026-08-28 06:17) is newer
+  than firmware/npu_firmware.c (2026-08-23) — the tested image contains the
+  current dram_range_ok()/dispatch_cmd()/write_completion() semantics;
+  NPU_ABI_RING_ENTRIES=1024 and NPU_ABI_COMPLETION_RING_ADDR=0x80008000
+  confirmed in gen/npu_abi_firmware.h:130,132.
+
+harness_fidelity:
+  RISCVMini does not decode sltu/sltiu (miniv.py:4 supported list) and decodes
+  RV32M mul as sub; therefore (i) the near-end upper-bound path is pinned at
+  source level (control test) rather than run at runtime, and (ii) numeric
+  golden output is never asserted — only dispatch/completion status. The three
+  RED claims rest on source semantics: (a) unconditional `addr < DRAM_BASE →
+  return 1` (npu_firmware.c:459-460); (b) absence of any derived-size check in
+  dispatch_cmd(); (c) raw-head indexing of COMPLETION_STATUS in
+  write_completion() (npu_firmware.c:445) against the [16] declaration
+  (npu-regmap.h:186).
+
+--------------------------------------------------------------------------------
+TASK-5 RESULT: RED (expected)
