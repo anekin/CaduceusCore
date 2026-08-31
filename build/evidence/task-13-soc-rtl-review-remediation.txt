@@ -223,3 +223,79 @@ TASK-13 RESULT: BLOCKED (accounting gate RED; functional regression
 GREEN; root cause logger.info invisibility defeats todo-9 SKIP grep;
 one-line fix identified; rollback gate NOT triggered)
 ======================================================================
+
+======================================================================
+FOLLOW-UP (todo-13 closure) — 2026-08-31, applied on HEAD 4eac85d
+======================================================================
+The BLOCKED verdict above is kept verbatim as history. This follow-up
+applied the one-line fix (plus one sibling line), re-ran the 8 affected
+cases on the EDA server, and re-audited.
+
+FIX (STEP 1) — sim/rtl_soc_runner.py, classification verdict emissions only:
+  :4402  test_soc_ibex_full (TESTCASE used by run_ibex_full_rtl.sh)
+         before: logger.info( f"IbexRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
+         after : logger.warning(f"IbexRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
+  :4386  test_soc_spike_p4 (sibling classification verdict line, same pattern)
+         before: logger.info( f"P4SpikeRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
+         after : logger.warning(f"P4SpikeRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
+  Only these 2 lines changed (git diff: 2 insertions, 2 deletions). Return
+  sites :4322 ("superseded by FM-SOC-027/032/10X") and :4325 ("skipped: direct
+  APB/AXI case not applicable to Ibex RTL mode") unchanged. Runner greps
+  (run_ibex_full_rtl.sh:126-129) and audit strings
+  (scripts/audit_fm_soc_statistics.py:31-32) NOT touched — already match.
+
+LOCAL VERIFICATION (STEP 2):
+  python3 -m py_compile sim/rtl_soc_runner.py                 → OK
+  PYTHONPATH=sim python3 -c "import sim.rtl_soc_runner"        → IMPORT_OK
+  bash -n run_fm_soc_all.sh / run_ibex_full_rtl.sh             → OK
+  bash sim/regression/test_regression_stats.sh                 → OVERALL GREEN, rc=0
+  bash sim/regression/test_timeout_behavior.sh                 → 8/8 assertions, GREEN, rc=0
+
+EDA RE-RUN — 8 affected cases only (STEP 3; run_id 20260831T144307-112272):
+  Runner subset syntax reads only $1 (run_ibex_full_rtl.sh:34-35), so the 8
+  cases were passed as ONE quoted argument (adaptation of the planned command):
+    ssh zhengs@192.168.0.11 'cd .../CaduceusCore && nohup bash
+    sim/regression/run_fm_soc_all.sh "FM-SOC-014 FM-SOC-015 FM-SOC-016
+    FM-SOC-017 FM-SOC-019 FM-SOC-021 FM-SOC-022 FM-SOC-023"
+    > /tmp/fm_soc_fix13.log 2>&1 &'
+  Reused the todo-13 simv_soc_ibex (Python driver is loaded at sim time, so
+  the Python-only fix needs no recompile). Result (verbatim summary):
+    [SUMMARY] PASS=0 SKIP=8 FAIL=0 TIMEOUT=0 TOTAL=8
+  Runner exit 0 (no [ERROR]; TOTAL==N_CASES).
+  Per-log verification (build/ibex_full_rtl/evidence/*.log):
+    FM-SOC-014/015/016/021/022/023: 1× "superseded by FM-SOC-027/032/10X"
+    FM-SOC-017/019:                 1× "skipped: direct APB/AXI case not
+                                          applicable to Ibex RTL mode"
+    All 8 logs: runner_classification=SKIP appended by the runner.
+  Example emitted lines now present in the VCS log:
+    FM-SOC-014.log:54 Message: 'IbexRunner FM-SOC-014: PASS — superseded by
+      FM-SOC-027/032/10X'
+    FM-SOC-017.log:54 Message: 'IbexRunner FM-SOC-017: PASS — skipped: direct
+      APB/AXI case not applicable to Ibex RTL mode'
+  The 25 executed case logs from the todo-13 run were NOT re-run (still
+  valid: real cocotb PASS summaries; audit classifies them executed via the
+  summary grep).
+
+RE-AUDIT (STEP 4):
+  python3 scripts/audit_fm_soc_statistics.py; echo rc=$?
+  → rc=0
+  {"executed": 25, "failed": 0, "matched": 33, "mismatches": [],
+   "na": 2, "superseded": 6, "timeout": 0, "total_cases": 33}
+  [audit] RESULT: PASS — all 33 cases match the manifest
+  (25 executed / 6 superseded / 2 na / 0 failed / 0 timeout)
+
+DEVIATIONS (beyond the plan's 23 commits):
+  - 2 follow-up commits (fix + evidence) — see git log after 4eac85d.
+  - EDA server git HEAD at re-run time was 311b046 ("chore(omo): mark todos
+    18 and 20 complete"; descends from local HEAD 4eac85d, .omo-only diff).
+    The new case logs' provenance records git_commit=311b046 and
+    git_dirty=true (porcelain_count=2: the uncommitted sim fix + a sibling
+    agent's .omo/notepads/soc-rtl-review-remediation/learnings.md edit,
+    which this todo left unstaged). Local commits landed on top of 311b046
+    (which descends from 4eac85d; the branch advanced mid-session via that
+    sibling chore(omo) commit).
+  - The subset command was adapted (single quoted arg) because the runner
+    reads only $1.
+
+TASK-13 RESULT: GREEN (expected)
+======================================================================
