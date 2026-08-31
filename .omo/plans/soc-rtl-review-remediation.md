@@ -227,7 +227,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — 6/6 组 RED→GREEN 有双证据；failure — 缺任一证据或 mutation 变 GREEN。Evidence `docs/soc-rtl-review-remediation-rg-table.md`
   Commit: Y | docs(remediation): red-green summary table with paired evidence paths
 
-- [ ] 16. Spike FAIL 处置
+- [x] 16. Spike FAIL 处置
   What to do / Must NOT do: 调查 F3 中 Spike L0 Q_proj FAIL（max_diff=7.64e+02，`build/evidence/task-F3-spike-smoke.log:5-13`）：(a) 若能快速定位根因（时间盒 1 工作日）——修复并重跑转 PASS；(b) 否则如实记录：bug 条目 `docs/bugs/bugs-soc-func-model.md`（或新 BUG-* 条目）写明场景、数值、影响面（3-layer forward pass 受影响），vplan E2E-03 标注 Spike FAIL 状态。Must NOT 静默标记 PASS；Must NOT 以 "baseline" 名义豁免。修复范围仅限 Spike bridge/host 侧（`sim/spike_host.py`、`sim/spike_rtl_bridge.py`），不碰 RTL。
   Parallelization: Wave 3 | Blocked by: 13 | Blocks: 17 | Can parallelize with: —
   References: `build/evidence/task-F3-spike-smoke.log:5-13`（FAIL 细节）；`sim/spike_host.py`（Spike host）；`docs/bugs/bugs-soc-func-model.md`（Func Model bug ledger）；`.omo/plans/soc-rtl-verification-vplan.md`（E2E-03 条目）；评审报告 :119-127
