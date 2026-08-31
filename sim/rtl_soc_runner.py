@@ -4383,7 +4383,7 @@ if COCOTB_AVAILABLE and SPIKE_RTL_BRIDGE_AVAILABLE and FUNC_MODEL_AVAILABLE:
 
         case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-032")
         passed, msg = await runner.run_case(case_id)
-        logger.info(f"P4SpikeRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
+        logger.warning(f"P4SpikeRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
         assert passed, f"{case_id} failed: {msg}"
 
 
@@ -4399,7 +4399,7 @@ if COCOTB_AVAILABLE and FUNC_MODEL_AVAILABLE:
 
         case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-001")
         passed, msg = await runner.run_case(case_id)
-        logger.info(f"IbexRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
+        logger.warning(f"IbexRunner {case_id}: {'PASS' if passed else 'FAIL'} — {msg}")
         assert passed, f"{case_id} failed: {msg}"
 
 
