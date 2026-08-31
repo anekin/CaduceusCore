@@ -44,7 +44,7 @@
 |---------|-------------|:----:|------|
 | Softmax 8-stage | `tb_sfu` + FM-SOC-004 | ✅ | 319/319 batch PASS |
 | LayerNorm 6-stage | `tb_sfu` | ✅ | PASS |
-| RMSNorm two-pass | `tb_sfu` + FM-SOC-004/010 | ✅ | PASS + FM-SOC-10X 17-op chain（todo 11 SFU descriptor ABI 修复，33/33 全量回归 PASS，证据 `build/evidence/task-16-soc-rtl-verification-signoff.txt`） |
+| RMSNorm two-pass | `tb_sfu` + FM-SOC-004/010 | ✅ | PASS + FM-SOC-10X 17-op chain（todo 11 SFU descriptor ABI 修复，全量回归 todo 13 复审计 **25 executed + 6 superseded + 2 N/A** 全 PASS — `.omo/evidence/task-13-soc-rtl-review-remediation.txt`；原 2026-08-28 "33/33 全量回归 PASS" 口径已纠正） |
 | RoPE 16-stage CORDIC | `tb_sfu` + FM-SOC-004 | ✅ | PASS |
 | GELU 4-segment | `tb_sfu` | ✅ | PASS |
 | SiLU Newton-Raphson | `tb_sfu` | ✅ | PASS |
@@ -107,14 +107,14 @@
 | MMIO 寄存器映射一致（C/Python） | `check_mmio_map.py` | ✅ | 49 registers match |
 | ABI 常量单一来源（schema→C header→Python） | `test_npu_abi_constants.py` | ✅ | fm-hardening todo 9 |
 | Ibex boot ROM 加载固件 | Ibex boot smoke | ✅ | PASS |
-| Doorbell HOST_TAIL/NPU_HEAD 轮询 | FM-SOC-001..032 + Ibex | ✅ | 33 cases |
+| Doorbell HOST_TAIL/NPU_HEAD 轮询 | FM-SOC-001..032 + Ibex | ✅ | 33 cases（todo 13 复审计口径：25 executed + 6 superseded + 2 N/A） |
 | 地址空间/环布局契约 | `test_address_space.py` + `test_command_ring.py` | ✅ | fm-hardening todo 1/2/3 |
 
 ### 4.2 已闭环 — 原未覆盖 / 部分（3 项，todos 8/10；FW-09 为静态检查 N/A）
 
 | Feature | 状态 | 说明 |
 |---------|:----:|------|
-| Spike 固件与 Ibex 固件行为对齐 FW-08 | ✅ RTL | FM 守卫 `test_spike_ibex_ring_alignment.py`（todo 8）之上，RTL `run_fm_soc_case CASE_ID=RING-WRAP-STRESS`（todo 10）真实 on-chip Ibex 固件交替分发 1100 条 SFU/Vector 命令，NPU_HEAD 单调推进到 1100 PASS（`build/evidence/task-10-soc-rtl-verification-signoff.txt`） |
+| Spike 固件与 Ibex 固件行为对齐 FW-08 | ✅ RTL | FM 守卫 `test_spike_ibex_ring_alignment.py`（todo 8）之上，RTL `run_fm_soc_case CASE_ID=RING-WRAP-STRESS`（todo 10）真实 on-chip Ibex 固件交替分发 1100 条 SFU/Vector 命令，NPU_HEAD 单调推进到 1100 PASS（`build/evidence/task-10-soc-rtl-verification-signoff.txt`）。**Spike host mmul_smoke L0 Q_proj FAIL（max_diff=7.64e+02，F3/task-14 记录）已 FIXED（todo 16，2026-08-31）**：根因 `sim/spike_host.py` run_one_op host 侧地址/布局契约漂移（out_addr 越 8MB allowlist → firmware 静默拒绝 → 伪 all-zero diff；行主序 vs broadcast tile-major；缺失 `return ok`），修复后 L0 Q_proj / 1-layer Q/K/V / 2-layer 回归全 PASS — `.omo/evidence/task-16-soc-rtl-review-remediation.txt` |
 | `firmware_memory_contract.json` 双向比对 FW-09 | ✅ FM 守卫（N/A RTL） | `scripts/gen_firmware_memory_contract.py --check` + `test_memory_contract.py` 三源比对（address_space/command_ring/spec/npu_abi.json），篡改 RING_ENTRIES 注入（todo 9）。**静态 artifact 检查，不涉及 RTL 仿真（plan scope N/A）** |
 | 中断驱动 firmware 调度（WFI 唤醒）FW-10 | ✅ RTL | FM 守卫 `test_irq_driven_dispatch.py`（todo 6）之上，RTL cocotb `run_e2e_irq_stall`（todo 8）真实 ENABLE 门控下 IRQ_MASK + IRQ_STALL 双 PASS（`build/evidence/task-8-soc-rtl-verification-signoff.txt`） |
 
@@ -136,7 +136,7 @@
 |---------|:----:|------|
 | 多层（≥9 层）full-model forward pass E2E-04 | ✅ RTL | FM 守卫 28 层 531 命令持久偏移 gate（`test_soc_fm_long_sequence.py`，todo 10/11）之上，RTL 36 层 Ibex segment run 扩到 **8 个 checkpoint**（L0/L5/L10/L15/L20/L25/L30/L35，todo 14）：`checkpoints_passed=8/8`，LADDER=PASS（510 commands，~13.1h）。全量 36 层连续仿真仍 deferred 到 FPGA。证据 `build/evidence/task-14-soc-rtl-verification-signoff.txt` |
 | MobileNetV3 全推理 E2E-05 | ✅ RTL | FM 守卫 `test_mobilenetv3_fm_chain.py`（todo 12）之上，RTL cocotb `run_e2e_mobilenetv3`（todo 13）：52 conv 层经 MXU wrapper 全链首跑，50/52 cos≥0.99 + 2 退化层 bit-exact，ring_cmds=657、DRAM staging < 8MB。证据 `build/evidence/task-13-soc-rtl-verification-signoff.txt` |
-| Spike E2E forward pass tolerance E2E-06 | ✅ RTL | FM 守卫 `test_spike_forward_tolerance.py`（todo 13）钉死的容差阶梯在 RTL 36 层 8-checkpoint 上逐层复核（todo 14）：L0-19 cos≥0.999、L20-29 ≥0.998、L30-35 ≥0.997，最近达标 L30=0.998220/L35=0.999251 均 PASS。证据 `build/evidence/task-14-soc-rtl-verification-signoff.txt` |
+| Spike E2E forward pass tolerance E2E-06 | ✅ RTL | FM 守卫 `test_spike_forward_tolerance.py`（todo 13）钉死的容差阶梯在 RTL 36 层 8-checkpoint 上逐层复核（todo 14）：L0-19 cos≥0.999、L20-29 ≥0.998、L30-35 ≥0.997，最近达标 L30=0.998220/L35=0.999251 均 PASS。证据 `build/evidence/task-14-soc-rtl-verification-signoff.txt`。**Spike host 侧 mmul_smoke L0 Q_proj FAIL（max_diff=7.64e+02）已 FIXED（todo 16，2026-08-31）**：根因 `sim/spike_host.py`（out_addr 越 8MB allowlist → 伪 all-zero diff；行主序 vs tile-major 布局契约；缺失 `return ok`），修复后重跑 PASS，未动 RTL — `.omo/evidence/task-16-soc-rtl-review-remediation.txt` |
 | 性能 calibration | ❌ 未覆盖 | `calibration_state=uncalibrated`；`soc-perf-report.md` 数字是 simulation proxy，非 silicon calibrated。**保持 deferred，不 claim 完成** |
 | attn_weight RTL dispatch E2E-08 | ✅ RTL | FM 侧 ABORT/MXU idle 覆盖之上，RTL `run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN`（todo 15）：完整 17-op blk.0 chain，全部 26 命令 cycles>0（op07 attn_weight cycles=30755, cos=1.0），14 FP op cos≥0.999 + 3 INT32 bit-exact。**BUG-RTL-SOC-007 链级未复现，保持 Open**。证据 `build/evidence/task-15-soc-rtl-verification-signoff.txt` |
 
@@ -163,25 +163,26 @@
 |--------|:--------:|:------:|------|
 | BUG-RTL-SOC-002 | Major | **Waived** | DRAM 8MB 窗口越界，firmware 数据地址 >8MB 时报错。正式 waiver `docs/waivers/WVR-SOC-RTL-002.md`（todo 2），临时约束，FPGA 阶段扩 DRAM 模型后关闭 |
 | BUG-RTL-SOC-007 | Critical/Major | **Open** | attn_weight op dispatch failure（cycles=0），3-layer forward pass 受影响。todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27）：26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，**不 claim Fixed**，保持 Open 待 FPGA/更早日志追踪 |
+| BUG-RTL-SOC-012 | Major | **Open** | blk0 E2E op05 attn_score MMUL 仅 drain 第一行（words 2-63 zero，62/64 INT32 mismatch）。todo 14 blk0 investigation（2026-08-31）A/B 判 **PRE-EXISTING**（crossbar c478ae5 前后字节级一致，非 crossbar 修复引入）；与 BUG-RTL-SOC-007 同 attention 链、不同 signature（op 执行但部分/零输出）。证据 `.omo/evidence/task-14-blk0-investigation.txt` + `docs/bugs/bugs-soc-rtl.md` BUG-RTL-SOC-012 条目 |
 | BUG-RTL-SOC-P9-00A | Major | **Fixed** | Phase 9 遗留，fix `8dd5dbe`+`b545b1f`（todo 1） |
 | BUG-RTL-SOC-P9-00D | Major | **Fixed** | Phase 9 遗留，fix `7aec7a3`（todo 1） |
 | BUG-MXU-P9-00B | Major | **Fixed** | broadcast/multitile 遗留，报告 `docs/bugs/BUG-MXU-P9-00B-broadcast-multitile.md` Status=resolved（todo 1） |
 
-> 台账统计（todo 1）：Total 13，Fixed 11，Waived 1，Open 1（BUG-RTL-SOC-007）。
+> 台账统计（todo 1 + todo 17）：Total 14，Fixed 11，Waived 1，Open 2（BUG-RTL-SOC-007、BUG-RTL-SOC-012）。
 
 ---
 
 ## 8. Signoff 差距总结
 
-当前已 signoff 的是 **v3 Func Model 功能正确性** + **SoC RTL 回归闭环**（soc-rtl-verification-signoff todos 3-15；全量回归 FM-SOC 33/33、新目标 11/11、checkpoint 8/8）。原 5 项差距更新如下：
+当前已 signoff 的是 **v3 Func Model 功能正确性** + **SoC RTL 回归闭环**（soc-rtl-verification-signoff todos 3-15；全量回归复审计口径 **25 executed + 6 superseded + 2 N/A**（todo 13 — 原 "FM-SOC 33/33" 统计口径已纠正，见 `.omo/evidence/task-13-soc-rtl-review-remediation.txt`）、新目标 11/11、checkpoint 8/8）。原 5 项差距更新如下：
 
 1. ~~**补齐 6 条 SoC 数据通路 FM 模型**~~（`docs/soc-fm-gap-spec.md` Gap #1/2/7/8/9/11）——已闭环：RTL 测试就位（todos 3-9，证据 `build/evidence/task-{3..9}-soc-rtl-verification-signoff.txt`）
 2. ~~**E2E 多层/full-model RTL 回归**~~（从 blk.0 smoke 扩到 28 层 + MobileNetV3）——已闭环：36 层 8-checkpoint subset（todo 14，`checkpoints_passed=8/8`）+ MobileNetV3 RTL 首跑（todo 13，`MOBILENETV3: PASS`）；**全量 36 层连续仿真仍 deferred 到 FPGA**
-3. **清零 Open RTL bug**（部分）——BUG-RTL-SOC-002 → Waived（WVR-SOC-RTL-002）、P9-00A/P9-00D/MXU-P9-00B → Fixed（todo 1）；**BUG-RTL-SOC-007 仍 Open**（todo 15/16 链级未复现，不 claim Fixed）
+3. **清零 Open RTL bug**（部分）——BUG-RTL-SOC-002 → Waived（WVR-SOC-RTL-002）、P9-00A/P9-00D/MXU-P9-00B → Fixed（todo 1）；**BUG-RTL-SOC-007 仍 Open**（todo 15/16 链级未复现，不 claim Fixed）；**BUG-RTL-SOC-012 新增 Open**（2026-08-31 todo 14 blk0 investigation，pre-existing attn_score drain，`.omo/evidence/task-14-blk0-investigation.txt`）
 4. **性能 calibration**（uncalibrated → calibrated）——**保持 ❌，deferred 到流片/FPGA 实测**
 5. ~~**补齐 fm-hardening deferred 项**~~（T1/T2 `firmware_memory_contract.json`、AL1 FM↔C ring 对齐）——已闭环（fm-soc-datapath-hardening 完成，FW-09 由 FM guard 静态检查覆盖）
 
-剩余 blocker：**性能 calibration（E2E-07，deferred）** + **BUG-RTL-SOC-007（Open，未复现）** + **FW-09（静态 artifact 检查，N/A RTL）**。
+剩余 blocker：**性能 calibration（E2E-07，deferred）** + **BUG-RTL-SOC-007（Open，未复现）** + **BUG-RTL-SOC-012（Open，pre-existing blk0 attn_score）** + **FW-09（静态 artifact 检查，N/A RTL）**。
 
 ---
 
@@ -193,7 +194,7 @@
 | SFU 模块级 | `python3 scripts/gen_sfu_vectors.py --scenario all` + VCS | 7 |
 | Vector 模块级 | `python3 scripts/gen_vector_vectors.py --scenario all` + VCS | 7 |
 | SoC 模块级 Makefile | `make -C sim/regression all` | 8 |
-| SoC FM 回归（33 用例） | `bash sim/regression/run_fm_soc_all.sh` | 26 |
+| SoC FM 回归（33 用例 = 25 executed + 6 superseded + 2 N/A） | `bash sim/regression/run_fm_soc_all.sh` | 26 |
 | W4-PERF 性能批次 | `bash sim/regression/run_w4_perf_batch.sh` | 6 |
 | FM 契约守卫 | `PYTHONPATH=sim python -m pytest sim/tests/test_address_space.py ...` | 8 |
 | 反向依赖门禁 | `./scripts/fm_reverse_dependency_gate.sh` | 1 |

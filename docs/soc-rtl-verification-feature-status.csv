@@ -9,7 +9,7 @@ Category,Feature_ID,Feature,Testcase,Status,Evidence,Command
 计算引擎-MXU,MXU-08,ACCUMULATE 模式（CTRL[2]）,FM-SOC-003 + test_mmul_accumulate,✅ PASS,SoC 路径 + FM golden 加固,bash sim/regression/run_fm_soc_case.sh FM-SOC-003
 计算引擎-SFU,SFU-01,Softmax 8-stage,tb_sfu + FM-SOC-004,✅ PASS,319/319 batch PASS,python3 scripts/gen_sfu_vectors.py --scenario softmax && python3 scripts/run_batch_regression.py
 计算引擎-SFU,SFU-02,LayerNorm 6-stage,tb_sfu,✅ PASS,PASS,python3 scripts/gen_sfu_vectors.py --scenario layernorm && python3 scripts/run_batch_regression.py
-计算引擎-SFU,SFU-03,RMSNorm two-pass,tb_sfu + FM-SOC-004/010,✅ PASS,FM-SOC-10X 17-op chain 33/33 PASS (task-16),python3 scripts/gen_sfu_vectors.py --scenario rmsnorm && python3 scripts/run_batch_regression.py
+计算引擎-SFU,SFU-03,RMSNorm two-pass,tb_sfu + FM-SOC-004/010,✅ PASS,FM-SOC-10X 17-op chain PASS（全量回归 todo 13 复审计 25 executed + 6 superseded + 2 N/A）,python3 scripts/gen_sfu_vectors.py --scenario rmsnorm && python3 scripts/run_batch_regression.py
 计算引擎-SFU,SFU-04,RoPE 16-stage CORDIC,tb_sfu + FM-SOC-004,✅ PASS,PASS,python3 scripts/gen_sfu_vectors.py --scenario rope && python3 scripts/run_batch_regression.py
 计算引擎-SFU,SFU-05,GELU 4-segment,tb_sfu,✅ PASS,PASS,python3 scripts/gen_sfu_vectors.py --scenario gelu && python3 scripts/run_batch_regression.py
 计算引擎-SFU,SFU-06,SiLU Newton-Raphson,tb_sfu,✅ PASS,PASS,python3 scripts/gen_sfu_vectors.py --scenario silu && python3 scripts/run_batch_regression.py
@@ -44,9 +44,9 @@ SoC互联,SOC-18,Ibex 固件 boot→DMEM→MMIO→poll IRQ 序列,IbexRunner boo
 固件与CPU,FW-03,MMIO 寄存器映射一致（C/Python）,check_mmio_map.py,✅ PASS,49 registers match,python3 sim/check_mmio_map.py
 固件与CPU,FW-04,ABI 常量单一来源（schema→C→Python）,test_npu_abi_constants.py,✅ PASS,fm-hardening todo 9,PYTHONPATH=sim python -m pytest sim/tests/test_npu_abi_constants.py -q
 固件与CPU,FW-05,Ibex boot ROM 加载固件,Ibex boot smoke,✅ PASS,PASS,make -C sim/regression run_qwen_e2e
-固件与CPU,FW-06,Doorbell HOST_TAIL/NPU_HEAD 轮询,FM-SOC-001..032 + Ibex,✅ PASS,33 cases,bash sim/regression/run_fm_soc_all.sh
+固件与CPU,FW-06,Doorbell HOST_TAIL/NPU_HEAD 轮询,FM-SOC-001..032 + Ibex,✅ PASS,33 cases（todo 13 复审计 25 executed + 6 superseded + 2 N/A）,bash sim/regression/run_fm_soc_all.sh
 固件与CPU,FW-07,地址空间/环布局契约,test_address_space.py + test_command_ring.py,✅ PASS,fm-hardening todo 1/2/3,PYTHONPATH=sim python -m pytest sim/tests/test_address_space.py sim/tests/test_command_ring.py -q
-固件与CPU,FW-08,Spike 固件与 Ibex 固件行为对齐,run_fm_soc_case CASE_ID=RING-WRAP-STRESS,✅ PASS,task-10 (1100 commands),make -C sim/regression run_fm_soc_case CASE_ID=RING-WRAP-STRESS
+固件与CPU,FW-08,Spike 固件与 Ibex 固件行为对齐,run_fm_soc_case CASE_ID=RING-WRAP-STRESS,✅ PASS,task-10 (1100 commands) + Spike host Q_proj FAIL FIXED (todo 16),make -C sim/regression run_fm_soc_case CASE_ID=RING-WRAP-STRESS
 固件与CPU,FW-09,firmware_memory_contract.json 双向比对,gen_firmware_memory_contract.py --check + test_memory_contract.py,N/A,静态检查 不涉及 RTL 仿真,python3 scripts/gen_firmware_memory_contract.py --check && PYTHONPATH=sim python -m pytest sim/tests/test_memory_contract.py -q
 固件与CPU,FW-10,中断驱动 firmware 调度（WFI 唤醒）,run_e2e_irq_stall,✅ PASS,task-8 (IRQ_MASK + IRQ_STALL 双 PASS),make -C sim/regression run_e2e_irq_stall
 端到端,E2E-01,Qwen2.5-3B blk.0 4-instr smoke,run_qwen_e2e,✅ PASS,Cocotb PASS,make -C sim/regression run_qwen_e2e
@@ -54,7 +54,7 @@ SoC互联,SOC-18,Ibex 固件 boot→DMEM→MMIO→poll IRQ 序列,IbexRunner boo
 端到端,E2E-03,3-layer 17-op RTL forward pass,run_qwen25_3b_3layer,✅ PASS,W1.3 PASS,make -C sim/regression run_qwen25_3b_3layer
 端到端,E2E-04,多层（≥9 层）full-model forward pass,Ibex segment run 8-checkpoint,✅ PASS,task-14 (8/8 LADDER=PASS),bash sim/regression/run_ibex_segment_run.sh
 端到端,E2E-05,MobileNetV3 全推理,run_e2e_mobilenetv3,✅ PASS,task-13 (50/52 cos≥0.99),make -C sim/regression run_e2e_mobilenetv3
-端到端,E2E-06,Spike E2E forward pass tolerance,36-layer checkpoint review,✅ PASS,task-14 (L30=0.998 L35=0.999),bash sim/regression/run_ibex_segment_run.sh
+端到端,E2E-06,Spike E2E forward pass tolerance,36-layer checkpoint review,✅ PASS,task-14 (L30=0.998 L35=0.999) + Spike L0 Q_proj FIXED (todo 16),bash sim/regression/run_ibex_segment_run.sh
 端到端,E2E-07,性能 calibration,—,❌ 未覆盖,calibration_state=uncalibrated deferred 到 FPGA,—
 端到端,E2E-08,attn_weight RTL dispatch,run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN,✅ PASS,task-15 (op07 cycles=30755 cos=1.0),make -C sim/regression run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN
 契约门禁,GUARD-01,地址空间重叠/窗口契约,address_space.contract_check(),✅ PASS,todo 1/2,PYTHONPATH=sim python -m pytest sim/tests/test_address_space.py -q

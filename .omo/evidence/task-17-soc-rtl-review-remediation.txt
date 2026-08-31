@@ -1,0 +1,139 @@
+================================================================================
+TASK 17 — 状态口径统一（checklist/vplan/CSV）(soc-rtl-review-remediation)
+================================================================================
+Timestamp (UTC): 2026-08-31T09:05:00Z
+Branch: soc-rtl-review-remediation
+HEAD at run time: 672a09e (chore(omo): mark todo 16 complete (Spike Q_proj fixed))
+                    — includes ba15df6 Spike fix; dirty files pre-existing, not touched.
+Backing evidence: todo 13 accounting (.omo/evidence/task-13-soc-rtl-review-remediation.txt,
+                  lines 80-83: {"executed": 25, "superseded": 6, "na": 2, "failed": 0,
+                  "timeout": 0, "matched": 33, "mismatches": []}),
+                  todo 16 FIXED (.omo/evidence/task-16-soc-rtl-review-remediation.txt,
+                  TASK-16 RESULT: GREEN — Spike L0 Q_proj root-caused in
+                  sim/spike_host.py, re-run PASS),
+                  todo 14 blk0 investigation (.omo/evidence/task-14-blk0-investigation.txt,
+                  VERDICT: PRE-EXISTING — BUG-RTL-SOC-012).
+
+--------------------------------------------------------------------------------
+STEP 1(a) — docs/func-model-signoff-checklist.md — Performance 状态统一
+--------------------------------------------------------------------------------
+BEFORE (top vs body contradiction):
+  - Title:    "# ... — v3 + Performance Closure ✅"
+  - Line 5:   "**Performance signoff**: ✅ PASS — ... performance_spec_verified=true."
+  - Body :166 "Performance remains FAIL/PARTIAL." (also :279, :356-357)
+AFTER (unified to PARTIAL + calibration_state=uncalibrated):
+  - Title:    "# ... — v3 + Performance ⚠️ PARTIAL (calibration_state=uncalibrated)"
+  - Line 5:   "**Performance signoff**: ⚠️ **PARTIAL** — ... `performance_spec_verified=true`
+               — but `calibration_state=uncalibrated`（spec 门禁 PASS ≠ 性能已校准 ...）"
+  - Body :166/:279/:356-357 rewritten to "⚠️ PARTIAL: spec-infrastructure gates PASS
+    (`performance_spec_verified=true`) but `calibration_state=uncalibrated`".
+  - Performance Signoff Status section header (:469) now reads
+    "...closure ✅ (spec 基础设施；calibration_state=uncalibrated)" with an explicit
+    clause that the table's PASSes are spec-gate/audit-level, NOT calibration.
+  - :203 F3 note appended: Spike mmul_smoke FAIL (BUG-SOC-FM-005, max_diff=7.64e+02)
+    FIXED 2026-08-31 by todo 16 (cite .omo/evidence/task-16-soc-rtl-review-remediation.txt).
+  - Frozen perf spec NOT touched (no edit to config/func_model_perf_*.json or
+    sim/timing/providers.py — out of scope by design).
+
+STEP 1(a)+1(d) — checklist regression 33/33 → 25+6+2 (3 sites)
+--------------------------------------------------------------------------------
+BEFORE: :226 "PASS 由 33/33 全量回归确认", :232 "`FM-SOC: 33/33 PASS`", :260
+        "full regression `FM-SOC: 33/33`"
+AFTER : all three rewritten to **25 executed + 6 superseded + 2 N/A**（todo 13
+        复审计 2026-08-30，0 FAIL 0 TIMEOUT）with the original "33/33 PASS" retained
+        ONLY as a dated historical reference ("原 2026-08-28 ... 口径已纠正").
+
+--------------------------------------------------------------------------------
+STEP 1(b) — .omo/plans/soc-rtl-verification-vplan.md
+--------------------------------------------------------------------------------
+BEFORE → AFTER:
+  - :47  RMSNorm row "33/33 全量回归 PASS" → "todo 13 复审计 25 executed +
+        6 superseded + 2 N/A 全 PASS（原 2026-08-28 口径已纠正）".
+  - :110 Doorbell row "33 cases" → "33 cases（todo 13 复审计口径：25 executed +
+        6 superseded + 2 N/A）".
+  - :177 (sec. 8) "全量回归 FM-SOC 33/33" → "全量回归复审计口径 25 executed +
+        6 superseded + 2 N/A（todo 13 ... 已纠正）".
+  - :197 (sec. 9) "SoC FM 回归（33 用例）" → "（33 用例 = 25 executed +
+        6 superseded + 2 N/A）".
+  - Spike rows (todo-16 worker found NO literal "E2E-03" row; Spike rows are
+    E2E-06 / FW-08 — adapted to reality):
+      FW-08 (:117): appended "Spike host mmul_smoke L0 Q_proj FAIL (max_diff=7.64e+02)
+                    已 FIXED（todo 16，2026-08-31）... 重跑 PASS — cite
+                    .omo/evidence/task-16-soc-rtl-review-remediation.txt".
+      E2E-06 (:139): appended same FIXED note (root cause host-side, no RTL change).
+  - BUG-RTL-SOC-007 row (:165): already consistent with todo 18 (todo 15 executed,
+    not reproduced, stays Open) — NO "pending todo 15" text found; left as-is.
+  - Ledger table: added BUG-RTL-SOC-012 row (Major, Open, pre-existing blk0 op05
+    attn_score drain; todo 14 A/B verdict; cite .omo/evidence/task-14-blk0-investigation.txt).
+  - Ledger stats (:171) "Total 13 ... Open 1" → "Total 14，Fixed 11，Waived 1，
+    Open 2（BUG-RTL-SOC-007、BUG-RTL-SOC-012）".
+  - Sec. 8 item 3 + blocker list: BUG-RTL-SOC-012 added as new Open item.
+
+--------------------------------------------------------------------------------
+STEP 1(c) — docs/soc-rtl-verification-feature-status.csv
+--------------------------------------------------------------------------------
+- git-tracked BEFORE this task (added by 7f14690; git ls-files returns the path).
+  No git add needed for tracking — only content sync.
+- SFU-03 evidence cell: "FM-SOC-10X 17-op chain 33/33 PASS (task-16)" →
+  "...PASS（全量回归 todo 13 复审计 25 executed + 6 superseded + 2 N/A）".
+- FW-06 evidence cell: "33 cases" → "33 cases（todo 13 复审计 25 executed +
+  6 superseded + 2 N/A）".
+- FW-08 evidence cell: "+ Spike host Q_proj FAIL FIXED (todo 16)".
+- E2E-06 evidence cell: "+ Spike L0 Q_proj FIXED (todo 16)".
+
+--------------------------------------------------------------------------------
+STEP 1(d) — cross-check + WVR-SOC-RTL-002 status note (NOT changed here)
+--------------------------------------------------------------------------------
+grep "33/33" over the three files → remaining hits are ONLY dated historical
+references to the original 2026-08-28 misreport, each immediately followed by
+the correction wording ("口径已纠正"/"修正为"). No live 33/33 PASS claim remains.
+grep "calibration_state" in checklist → 12 hits, all consistent:
+  top (title/:5) PARTIAL+uncalibrated == body (:168/:269/:286/:365) PARTIAL+uncalibrated
+  == PERF section (:469/:472/:498/:507) spec-infra PASS + calibration_state=uncalibrated.
+grep "FAIL/PARTIAL" in checklist → 0 hits (contradiction eliminated).
+grep "25 executed + 6 superseded + 2 N/A" → vplan 4 hits, CSV 2 hits, checklist 3 hits.
+grep "E2E-03" in vplan → 0 hits (consistent with todo-16 worker finding).
+grep "pending todo 15" in vplan → 0 hits (todo-18 consistent).
+
+WVR-SOC-RTL-002 Waived vs Pending inventory (for TODO 19 — intentionally NOT changed):
+  - docs/waivers/WVR-SOC-RTL-002.md:11 "Status: 提交待签（pending sign-off）" (truth)
+  - docs/waivers/WVR-SOC-RTL-002.md:50 cites ledger "Status Waived"
+  - docs/bugs/bugs-soc-rtl.md:78 "BUG-RTL-SOC-002 — DRAM 地址窗口越界（Waived）",
+    :373 "formally **Waived**", :387/:410 "Waived"
+  - docs/func-model-signoff-checklist.md:270 "BUG-RTL-SOC-002 is Waived"
+  - .omo/plans/soc-rtl-verification-vplan.md:164 "**Waived**", :171 "Waived 1",
+    :181 "→ Waived"
+  → todo 19 must revert ledger/checklist/vplan wording to Pending; waiver file
+    itself already says pending sign-off.
+
+--------------------------------------------------------------------------------
+VERIFICATION COMMANDS (exact, run this session)
+--------------------------------------------------------------------------------
+grep -rn "33/33" docs/func-model-signoff-checklist.md .omo/plans/soc-rtl-verification-vplan.md docs/soc-rtl-verification-feature-status.csv
+  → 5 lines, all corrective/historical (see above); rc=0 but no live claim.
+grep -n "calibration_state" docs/func-model-signoff-checklist.md
+  → 12 hits, top==body==PERF section (uncalibrated everywhere).
+git ls-files docs/soc-rtl-verification-feature-status.csv
+  → docs/soc-rtl-verification-feature-status.csv  (tracked, rc=0)
+grep -n "FAIL/PARTIAL" docs/func-model-signoff-checklist.md → rc=1 (none)
+grep -c "25 executed + 6 superseded + 2 N/A" <vplan|CSV|checklist> → 4 / 2 / 3
+
+--------------------------------------------------------------------------------
+ADVERSARIAL NOTES
+--------------------------------------------------------------------------------
+- No live "33/33" claim survives: every retained occurrence is a dated quote of
+  the original misreport inside a correction sentence — verified by reading each
+  matching line, not just grep counts.
+- Frozen perf spec untouched (config/func_model_perf_*.json,
+  func_model_perf_matrix_v1.json, sim/timing/providers.py — zero edits).
+- No waiver Status change: WVR-SOC-RTL-002 Waived vs Pending discrepancy only
+  INVENTORIED above and left for todo 19.
+- Pre-existing dirty files (task-0/20/23 evidence, notepads, build/evidence/*)
+  were present before this task and were NOT staged in either commit.
+- Observation: docs/bugs/bugs-soc-rtl.md stats tables still say "Total 13 /
+  Open 1" while its new BUG-RTL-SOC-012 entry (Status Open) raises the real
+  count to 14/2 — that file is committed as-is per task scope (todo-14 worker's
+  entry); the vplan ledger stats were updated to Total 14 / Open 2 here, so a
+  follow-up doc pass may align the bugs ledger stats tables.
+
+TASK-17 RESULT: GREEN (expected)

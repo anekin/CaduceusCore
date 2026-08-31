@@ -1,8 +1,8 @@
-# Func Model Signoff Checklist — v3 + Performance Closure ✅
+# Func Model Signoff Checklist — v3 + Performance ⚠️ PARTIAL (calibration_state=uncalibrated)
 
 > **Date**: 2026-08-28 (last updated)
 > **Scope**: v2 op-level + v3 SoC integration + bug-fix cycle (FM-004/005/006/007) + bridge accumulation fix (FM-005 sub-issue) + INTC KeyError fix (FM-008) + SoC data-path hardening closure (`fm-soc-datapath-hardening`, 2026-08-24, F-FM-SOC-01..13). RTL-golden-readiness for full SoC RTL is deferred.
-> **Performance signoff**: ✅ PASS — func-model-performance-infra-calibration-closure completed 2026-08-11, T1-T25 + F1-F4 all passed, performance_spec_verified=true.
+> **Performance signoff**: ⚠️ **PARTIAL** — func-model-performance-infra-calibration-closure completed 2026-08-11, T1-T25 + F1-F4 all passed, `performance_spec_verified=true` — but `calibration_state=uncalibrated`（spec 门禁 PASS ≠ 性能已校准；RTL/硅片校准 deferred 到 FPGA，E2E-07）. 详见下方 "Performance Signoff Status" 一节。
 
 This document reconciles all signoff evidence gathered across tasks T0B–T5 and codifies
 the evidence chain, provenance rules, and classification boundaries that the semantic
@@ -162,8 +162,11 @@ The semantic checker (`scripts/check_func_model_signoff_docs.py`) enforces:
 2. **Provenance labels**: Synthetic data must be labeled synthetic. Real GGUF data
    must be labeled with the pinned SHA-256.
 
-3. **Performance signoff**: Tracked separately. This checklist covers functional
-   signoff only. Performance remains FAIL/PARTIAL.
+3. **Performance signoff**: Tracked separately (see "Performance Signoff Status"
+   below). This checklist covers functional signoff only. Performance is
+   ⚠️ PARTIAL: spec-infrastructure gates all PASS
+   (`performance_spec_verified=true`) but `calibration_state=uncalibrated`
+   (E2E-07 deferred).
 
 ---
 
@@ -201,6 +204,7 @@ This section captures the additional signoff evidence produced after the v3 Func
 | F-FM-H08 | RTL/firmware reverse-dependency gate + F-wave scripts | ✅ PASS | `scripts/fm_reverse_dependency_gate.sh`, `scripts/fm_hardening_f{1..4}.sh` |
 
 **Verification summary**: F1 Plan compliance audit `APPROVE` (14/14 evidence PASS), F2 Code quality `APPROVE` (0 residue, 0 new pytest failures), F4 Scope fidelity `APPROVE` (0 scope creep). F3 Real manual QA was blocked solely by the pre-existing Spike `mmul_smoke` failure (BUG-SOC-FM-005, `max_diff=7.64e+02`); all other F3 stages (firmware build, reverse-gate dry-run, W4-PERF p0/p1, FM-SOC-001/003/032) passed.
+**2026-08-31 update**: 该 Spike `mmul_smoke` 失败（BUG-SOC-FM-005, `max_diff=7.64e+02`）已由 soc-rtl-review-remediation todo 16 根因定位（`sim/spike_host.py` host 侧地址/布局契约漂移 + 缺失 `return ok`，未动 RTL）并 FIXED — 重跑 L0 Q_proj / 1-layer Q/K/V / 2-layer 回归全 PASS（`.omo/evidence/task-16-soc-rtl-review-remediation.txt`）。
 
 ## SoC Data-Path Hardening Signoff (fm-soc-datapath-hardening)
 
@@ -223,16 +227,18 @@ verification vplan, giving every closed gap a runnable functional-model guard.
 | F-FM-SOC-07 | Firmware boot sequence (SOC-18) | ✅ PASS | FM: `sim/tests/test_firmware_boot_sequence.py`; `build/evidence/task-7-fm-soc-datapath-hardening.txt`. RTL: `run_fm_soc_case CASE_ID=FM-SOC-009` BOOT_ASSERT/SP_INIT/BOOT_ROM — `build/evidence/task-9-soc-rtl-verification-signoff.txt` |
 | F-FM-SOC-08 | Spike↔Ibex ring management alignment (FW-08) | ✅ PASS | FM: `sim/tests/test_spike_ibex_ring_alignment.py`; `build/evidence/task-8-fm-soc-datapath-hardening.txt`. RTL: `run_fm_soc_case CASE_ID=RING-WRAP-STRESS` NPU_HEAD=1100 — `build/evidence/task-10-soc-rtl-verification-signoff.txt` |
 | F-FM-SOC-09 | Firmware memory contract JSON generation & comparison (FW-09) | ✅ PASS | FM: `scripts/gen_firmware_memory_contract.py` + `sim/tests/test_memory_contract.py`; `build/evidence/task-9-fm-soc-datapath-hardening.txt`. RTL: N/A（静态 artifact 检查，不涉及 RTL 仿真，plan scope） |
-| F-FM-SOC-10 | 28-layer Qwen full-model FM gate (E2E-04) | ✅ PASS | FM: `sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset`; `build/evidence/task-10-fm-soc-datapath-hardening.txt` + `build/evidence/task-11-fm-soc-datapath-hardening.txt`. RTL: 36 层 8-checkpoint（L0/L5/L10/L15/L20/L25/L30/L35, `checkpoints_passed=8/8`）— `build/evidence/task-14-soc-rtl-verification-signoff.txt`；FM-SOC-10X chain fix（todo 11）— `build/evidence/task-11-soc-rtl-verification-signoff.log`，PASS 由 33/33 全量回归确认 `build/evidence/task-16-soc-rtl-verification-signoff.txt` |
+| F-FM-SOC-10 | 28-layer Qwen full-model FM gate (E2E-04) | ✅ PASS | FM: `sim/tests/test_soc_fm_long_sequence.py::test_multi_layer_persistent_offset`; `build/evidence/task-10-fm-soc-datapath-hardening.txt` + `build/evidence/task-11-fm-soc-datapath-hardening.txt`. RTL: 36 层 8-checkpoint（L0/L5/L10/L15/L20/L25/L30/L35, `checkpoints_passed=8/8`）— `build/evidence/task-14-soc-rtl-verification-signoff.txt`；FM-SOC-10X chain fix（todo 11）— `build/evidence/task-11-soc-rtl-verification-signoff.log`，PASS 由全量回归复审计确认（2026-08-30 todo 13：**25 executed + 6 superseded + 2 N/A**，0 FAIL 0 TIMEOUT — `.omo/evidence/task-13-soc-rtl-review-remediation.txt`；原 2026-08-28 "33/33 PASS" 统计口径含 8 个未执行 SKIP case，已纠正）— `build/evidence/task-16-soc-rtl-verification-signoff.txt` |
 | F-FM-SOC-11 | MobileNetV3 CV chain FM gate (E2E-05) | ✅ PASS | FM: `sim/tests/test_mobilenetv3_fm_chain.py`; `build/evidence/task-12-fm-soc-datapath-hardening.txt`. RTL: `run_e2e_mobilenetv3` MOBILENETV3: PASS（50/52 convs cos≥0.99）— `build/evidence/task-13-soc-rtl-verification-signoff.txt` |
 | F-FM-SOC-12 | Spike forward pass tolerance regression gate (E2E-06) | ✅ PASS | FM: `sim/tests/test_spike_forward_tolerance.py`; `build/evidence/task-13-fm-soc-datapath-hardening.txt`. RTL: 36 层 8-checkpoint LADDER=PASS（L0-19≥0.999 / L20-29≥0.998 / L30-35≥0.997）— `build/evidence/task-14-soc-rtl-verification-signoff.txt` |
 | F-FM-SOC-13 | ABORT/MXU idle coverage (E2E-08) | ✅ PASS | FM: `sim/tests/test_soc_fm.py::test_mmul_attn_weight_shape` + `test_mmul_attn_weight_shape_not_dispatched`; `build/evidence/task-14-fm-soc-datapath-hardening.txt`. RTL: `run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN` attn_weight cycles>0（op07 cycles=30755, cos=1.0）；BUG-RTL-SOC-007 链级未复现，保持 Open — `build/evidence/task-15-soc-rtl-verification-signoff.txt` |
 
-**RTL regression closure (soc-rtl-verification-signoff, 2026-08-28)**: full SoC RTL
-regression on sz0001 — `FM-SOC: 33/33 PASS`（含 todo 11 修复后的 FM-SOC-10X）、
+**RTL regression closure (soc-rtl-verification-signoff, 2026-08-28; 统计口径复审计 2026-08-30 todo 13)**: full SoC RTL
+regression on sz0001 — 原报告 `FM-SOC: 33/33 PASS` 经 todo 13 复审计修正为
+**25 executed + 6 superseded + 2 N/A**（0 FAIL / 0 TIMEOUT；25 个 executed 全 PASS，
+含 todo 11 修复后的 FM-SOC-10X — `.omo/evidence/task-13-soc-rtl-review-remediation.txt`）、
 11/11 new acceptance targets PASS、36 层 8-checkpoint `checkpoints_passed=8/8`
 （todo 14 evidence referenced）。汇总证据 `build/evidence/task-16-soc-rtl-verification-signoff.txt`。
-Performance calibration（E2E-07）与 BUG-RTL-SOC-007 不在本 closure 内 claim。
+Performance calibration（E2E-07，`calibration_state=uncalibrated`）与 BUG-RTL-SOC-007 不在本 closure 内 claim。
 
 **Final Wave**: F1 plan compliance audit APPROVED (14/14 evidence PASS), F2 code
 quality APPROVED (0 residue, 0 new pytest failures; baseline 20 failed / 2280 passed /
@@ -257,7 +263,7 @@ Python functional model coverage**. All six now have FM guards from
 These gaps were pre-specified with full API designs, testability plans, and a 3-wave
 build order in `docs/soc-fm-gap-spec.md`. With `fm-soc-datapath-hardening` closed
 (2026-08-24), the six data-path gaps were then closed at RTL level by
-`soc-rtl-verification-signoff` (todos 3-9; full regression `FM-SOC: 33/33` + 11/11
+`soc-rtl-verification-signoff` (todos 3-9; full regression **25 executed + 6 superseded + 2 N/A**（todo 13 复审计）+ 11/11
 new acceptance targets, see `build/evidence/task-16-soc-rtl-verification-signoff.txt`).
 Remaining out of scope for this signoff: **performance calibration (E2E-07,
 `calibration_state=uncalibrated`)** and **BUG-RTL-SOC-007 (still Open; the todo 15/16
@@ -276,8 +282,10 @@ chain-level run did not reproduce cycles=0)**. BUG-RTL-SOC-002 is Waived
   `checkpoints_passed=8/8`, LADDER=PASS). Multi-layer / full-model signoff beyond the
   8-checkpoint subset is NOT claimed; the full 36-layer continuous simulation is
   deferred to FPGA.
-- **Performance signoff remains FAIL/PARTIAL** and is tracked in a separate
-  document. Do NOT infer performance from functional correctness.
+- **Performance signoff remains ⚠️ PARTIAL**: spec-infrastructure gates PASS
+  (`performance_spec_verified=true`), `calibration_state=uncalibrated`
+  (E2E-07 deferred to FPGA), and is tracked in a separate document.
+  Do NOT infer calibrated performance from functional correctness.
 - **The Func Model implements the v1 Block/bootstrap architecture link**. It does
   not directly verify the v2+ FSA recommendation from Arc Model DSE. See
   `docs/arc_vs_func.md` for the architecture pipeline.
@@ -353,8 +361,9 @@ a deterministic JSON signoff report.
 - **Full RTL replay PASS** — The RTL adapter (L4) proves the adapter interface
   contract through FakeDUT scenarios, but does not replay the FM-SOC vector
   suite through a live VCS/cocotb simulation in CI.
-- **Performance signoff** — Performance remains FAIL/PARTIAL as stated in the
-  v3 signoff scope. The software aggregator does not include performance metrics.
+- **Performance signoff** — Performance remains ⚠️ PARTIAL
+  (`calibration_state=uncalibrated`; E2E-07 deferred). The software aggregator
+  does not include performance metrics.
 - **ABI v2+ or FSA architecture** — The aggregator validates the v1 Block/
   bootstrap ABI. Future ABI versions require a new schema generation cycle.
 
@@ -457,9 +466,12 @@ expected and not an error.
 
 ---
 
-## Performance Signoff Status — func-model-performance-infra-calibration-closure ✅
+## Performance Signoff Status — func-model-performance-infra-calibration-closure ✅ (spec 基础设施；calibration_state=uncalibrated)
 
-Completed 2026-08-11. All T1-T25 implementation tasks + Final Wave F1-F4 passed.
+Completed 2026-08-11. All T1-T25 implementation tasks + Final Wave F1-F4 passed —
+**spec 基础设施门禁全部 PASS，但不构成性能校准**：`calibration_state=uncalibrated`，
+RTL/硅片校准（E2E-07）deferred 到 FPGA。本表格的 PASS 均为 spec-gate/口径/审计级
+PASS，不表示任何 cycle 数已经 RTL 或硅片校准。
 
 | Signoff ID | Description | Status |
 |---|---|---|
