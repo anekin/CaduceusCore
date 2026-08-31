@@ -1,13 +1,13 @@
 case_id: task-0-v3-signoff-runner
-utc_start: 2026-08-24T16:40:12.048164+00:00
-utc_end: 2026-08-24T16:40:15.167373+00:00
-elapsed_s: 3.119
-branch: main
-head: 0422d2469d1c047e0e7ee46a9c7e77dd86ca6a64
+utc_start: 2026-08-31T04:44:45.733636+00:00
+utc_end: 2026-08-31T04:44:48.839151+00:00
+elapsed_s: 3.106
+branch: soc-rtl-review-remediation
+head: 886ccb410b9e39c256f55ff344fefaed7390b52f
 dirty_worktree: dirty:.omo/evidence/task-0-signoff-v3-runner.txt         |  18 +-
- .omo/evidence/task-20-uncertainty-kpis.json        |  88 +--
+ .omo/evidence/task-20-uncertainty-kpis.json        |  70 +-
  .omo/evidence/task-23-perf-spec-ci.txt             |  51 +-
- .omo/last_fm_gat
+ .../fm-e2e-qwen-c
 argv: ["python3", "-m", "pytest", "sim/tests/test_func_model_signoff_v3.py", "-q"]
 command_hash: 3c192012365a11c9
 exit_code: 0
@@ -31,6 +31,6 @@ SIGNOFF_METRIC {"case": "task-0-v3-signoff-runner", "key": "evidence.verdict", "
 
 --- STDOUT (first 8000 chars) ---
 .......................                                                  [100%]
-23 passed in 1.44s
+23 passed in 1.45s
 
 --- END ---

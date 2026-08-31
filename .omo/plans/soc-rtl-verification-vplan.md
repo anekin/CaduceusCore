@@ -162,7 +162,7 @@
 | Bug ID | Severity | Status | 影响 |
 |--------|:--------:|:------:|------|
 | BUG-RTL-SOC-002 | Major | **Waived** | DRAM 8MB 窗口越界，firmware 数据地址 >8MB 时报错。正式 waiver `docs/waivers/WVR-SOC-RTL-002.md`（todo 2），临时约束，FPGA 阶段扩 DRAM 模型后关闭 |
-| BUG-RTL-SOC-007 | Critical/Major | **Open** | attn_weight op dispatch failure（cycles=0），3-layer forward pass 受影响。todo 15/16 ATTN-WEIGHT-CHAIN 链级未复现（op07 cycles=30755），**不 claim Fixed**，保持 Open 待后续追踪 |
+| BUG-RTL-SOC-007 | Critical/Major | **Open** | attn_weight op dispatch failure（cycles=0），3-layer forward pass 受影响。todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27）：26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，**不 claim Fixed**，保持 Open 待 FPGA/更早日志追踪 |
 | BUG-RTL-SOC-P9-00A | Major | **Fixed** | Phase 9 遗留，fix `8dd5dbe`+`b545b1f`（todo 1） |
 | BUG-RTL-SOC-P9-00D | Major | **Fixed** | Phase 9 遗留，fix `7aec7a3`（todo 1） |
 | BUG-MXU-P9-00B | Major | **Fixed** | broadcast/multitile 遗留，报告 `docs/bugs/BUG-MXU-P9-00B-broadcast-multitile.md` Status=resolved（todo 1） |
