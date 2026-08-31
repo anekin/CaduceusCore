@@ -71,6 +71,28 @@ fi
 EVIDENCE_DIR="$BUILD_DIR/evidence"
 mkdir -p "$EVIDENCE_DIR"
 
+# ── Provenance binding (todo 11) ─────────────────────────────────────────
+# Snapshot timing contract: captured AFTER the firmware is rebuilt and the
+# simv is compiled above, but BEFORE the case loop starts — every case log
+# below inherits the same hash-bound header (simv/flist/driver/firmware/
+# golden/checkpoint sha256 + tool versions + git commit + dirty state).
+RUN_ID="${RUN_ID:-$(date +%Y%m%dT%H%M%S)-$$}"
+export IBEX_RUN_ID="$RUN_ID"
+export IBEX_SIMV="$SIMV"
+PROVENANCE_FILE="$EVIDENCE_DIR/provenance-$RUN_ID.txt"
+python3 "$REPO_ROOT/scripts/gen_evidence_provenance.py" \
+    --run-id "$RUN_ID" \
+    --simv "$SIMV" \
+    --flist "$REPO_ROOT/rtl/soc/soc.flist" \
+    --driver "$REPO_ROOT/sim/rtl_soc_runner.py" \
+    --firmware "$REPO_ROOT/firmware/build/npu_firmware.hex" \
+    --golden "$REPO_ROOT/rtl/test_vectors/soc_e2e" \
+    --checkpoint "$REPO_ROOT/build/evidence/task-14-soc-rtl-verification-checkpoints.npz" \
+    --out "$PROVENANCE_FILE" \
+    || echo "[WARN] provenance generation failed (case logs will lack hash binding)"
+echo "[INFO] Provenance (hash-bound evidence header, todo 11):"
+sed -e 's/^/    | /' "$PROVENANCE_FILE" 2>/dev/null || true
+
 PASS=0
 FAIL=0
 SKIP=0
@@ -82,9 +104,15 @@ for CASE in $CASES; do
     echo "============================================================"
     export FM_SOC_CASE_ID="$CASE"
     CASE_LOG="$EVIDENCE_DIR/${CASE}.log"
+    PROV_HEADER="${PROVENANCE_FILE:-$EVIDENCE_DIR/provenance-${RUN_ID:-run}.txt}"
+    if [ -f "$PROV_HEADER" ]; then
+        sed -e 's/^/provenance| /' "$PROV_HEADER" > "$CASE_LOG"
+    else
+        : > "$CASE_LOG"
+    fi
     set +e
     (cd "$RUN_DIR" && "$SIMV" +COCOTB +FM_SOC_CASE_ID="$CASE" \
-        +BOOTROM_HEX="$REPO_ROOT/firmware/build/npu_firmware.hex") > "$CASE_LOG" 2>&1
+        +BOOTROM_HEX="$REPO_ROOT/firmware/build/npu_firmware.hex") >> "$CASE_LOG" 2>&1
     RUN_RC=$?
     set -e
     if [ "$RUN_RC" -eq 124 ] || [ "$RUN_RC" -eq 137 ]; then

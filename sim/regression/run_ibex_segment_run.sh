@@ -75,6 +75,31 @@ else
     echo "[INFO] Reusing existing simv: $SIMV"
 fi
 
+# ── Provenance binding (todo 11) ─────────────────────────────────────────
+# Snapshot timing contract: this block runs AFTER the firmware is rebuilt
+# (make -C firmware clean all, todo 13 flow) and after the simv compile above,
+# but BEFORE the simulator starts — the recorded firmware/simv/flist/driver/
+# golden/checkpoint sha256 values therefore bind the evidence to exactly the
+# build this run exercises.  The same block is prepended to any evidence this
+# run writes (including the timeout evidence below).
+RUN_ID="${RUN_ID:-$(date +%Y%m%dT%H%M%S)-$$}"
+export IBEX_RUN_ID="$RUN_ID"
+export IBEX_SIMV="$SIMV"
+PROVENANCE_FILE="$REPO_ROOT/build/evidence/provenance-$RUN_ID.txt"
+mkdir -p "$REPO_ROOT/build/evidence"
+python3 "$REPO_ROOT/scripts/gen_evidence_provenance.py" \
+    --run-id "$RUN_ID" \
+    --simv "$SIMV" \
+    --flist "$REPO_ROOT/rtl/soc/soc.flist" \
+    --driver "$REPO_ROOT/sim/rtl_soc_segment_run.py" \
+    --firmware "$REPO_ROOT/firmware/build/npu_firmware.hex" \
+    --golden "$REPO_ROOT/rtl/test_vectors/soc_e2e/qwen25-3b-36layer" \
+    --checkpoint "$REPO_ROOT/build/evidence/task-14-soc-rtl-verification-checkpoints.npz" \
+    --out "$PROVENANCE_FILE" \
+    || echo "[WARN] provenance generation failed (evidence will lack hash binding)"
+echo "[INFO] Provenance (hash-bound evidence header, todo 11):"
+sed -e 's/^/    | /' "$PROVENANCE_FILE" 2>/dev/null || true
+
 echo "[INFO] Running segment-run cocotb test (MODULE=sim.rtl_soc_segment_run)"
 set +e
 (cd "$RUN_DIR" && timeout --signal=TERM --kill-after=600 "$SEG_TIMEOUT_S" "$SIMV" \
@@ -100,8 +125,12 @@ if [ -n "${TIMEOUT_LABEL:-}" ]; then
     RUN_ID="${RUN_ID:-$(date +%Y%m%dT%H%M%S)-$$}"
     EVIDENCE_DIR="$REPO_ROOT/build/evidence"
     mkdir -p "$EVIDENCE_DIR"
-    EVIDENCE="$EVIDENCE_DIR/task-14-soc-rtl-verification-signoff-${RUN_ID}.txt"
+    EVIDENCE="$EVIDENCE_DIR/task-14-soc-rtl-verification-signoff-$RUN_ID.txt"
     {
+        if [ -f "${PROVENANCE_FILE:-}" ]; then
+            echo "provenance_source=$PROVENANCE_FILE"
+            cat "$PROVENANCE_FILE"
+        fi
         echo "timebox_status=$TIMEOUT_LABEL"
         echo "timebox_note=$TIMEOUT_NOTE"
         echo "runner_exit=$RUN_RC"

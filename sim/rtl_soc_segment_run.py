@@ -320,8 +320,26 @@ async def ibex_execute_layer(bridge, model, hidden, weights, layer, dims,
     return hw_l_out, consumed
 
 
+def _git_head_commit():
+    """Current git HEAD — the commit evidence and checkpoints must bind to."""
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(_REPO), "rev-parse", "HEAD"],
+            stderr=subprocess.DEVNULL).decode().strip()
+        return out
+    except Exception:
+        return os.environ.get("IBEX_COMMIT", "unknown")
+
+
 def _resume_from_npz(spike_layers):
     """Load completed-segment state from NPZ_PATH (todo 14 resume).
+
+    Pickle-safe (todo 11): the checkpoint npz is loaded with
+    allow_pickle=False, so a forged local file containing a pickle payload is
+    rejected by numpy instead of executing code.  The load is wrapped in a
+    try/except guard (corrupted NPZ -> fresh run), and the checkpoint's
+    metadata commit must equal the current git HEAD before any state is
+    restored (wrong-commit checkpoints are refused).
 
     The checkpoint npz is saved incrementally after every checkpoint, so a
     timebox-killed run leaves the state of every layer it finished.  This
@@ -339,19 +357,43 @@ def _resume_from_npz(spike_layers):
                         VCS session reboots the firmware, so the command ring
                         is re-walked from slot 0).
 
-    Returns None when there is nothing to resume (npz missing or empty).
+    Returns None when there is nothing to resume (npz missing, empty,
+    corrupted, unverifiable, or bound to a different commit).
     """
     if not NPZ_PATH.exists():
         return None
-    with np.load(NPZ_PATH, allow_pickle=True) as d:
-        files = set(d.files)
-        fp32_states = {}
-        hw_states = {}
-        for L in EXECUTED_LAYERS:
-            k, hk = f"layer_{L}_output", f"hw_layer_{L}_output"
-            if k in files and hk in files:
-                fp32_states[L] = d[k].astype(np.float32)
-                hw_states[L] = d[hk].astype(np.int32)
+    try:
+        with np.load(NPZ_PATH, allow_pickle=False) as d:
+            files = set(d.files)
+            fp32_states = {}
+            hw_states = {}
+            for L in EXECUTED_LAYERS:
+                k, hk = f"layer_{L}_output", f"hw_layer_{L}_output"
+                if k in files and hk in files:
+                    fp32_states[L] = d[k].astype(np.float32)
+                    hw_states[L] = d[hk].astype(np.int32)
+            metadata = None
+            if "metadata" in files:
+                try:
+                    raw = d["metadata"]
+                    metadata = json.loads(str(raw.ravel()[0]))
+                except Exception:
+                    metadata = None
+    except Exception as exc:
+        _progress(f"[SEGMENT] resume rejected: corrupted/unsafe checkpoint NPZ "
+                  f"({type(exc).__name__}: {exc}) — starting fresh run")
+        return None
+    head = _git_head_commit()
+    if metadata is None:
+        _progress("[SEGMENT] resume rejected: checkpoint metadata commit "
+                  "missing/unreadable — starting fresh run")
+        return None
+    meta_commit = str(metadata.get("commit", ""))
+    if head != "unknown" and meta_commit != head:
+        _progress(f"[SEGMENT] resume rejected: checkpoint commit "
+                  f"{meta_commit[:12]} != current HEAD {head[:12]} — "
+                  f"starting fresh run")
+        return None
     if not fp32_states:
         return None
     completed_checkpoints = [L for L in CHECKPOINTS if L in fp32_states]
@@ -409,16 +451,51 @@ def _partial_meta(model_path, commit, command, dims, elapsed):
 
 
 def _load_spike_npz():
-    with np.load(SPIKE_NPZ, allow_pickle=True) as d:
-        emb = d["input_embedding"].astype(np.float32)
-        layers = {}
-        for L in list(range(36)):
-            if f"layer_{L}_output" in d.files:
-                layers[L] = {
-                    "fp32": d[f"layer_{L}_output"].astype(np.float32),
-                    "hw": d[f"hw_layer_{L}_output"].astype(np.int32),
-                }
+    try:
+        with np.load(SPIKE_NPZ, allow_pickle=False) as d:
+            emb = d["input_embedding"].astype(np.float32)
+            layers = {}
+            for L in list(range(36)):
+                if f"layer_{L}_output" in d.files:
+                    layers[L] = {
+                        "fp32": d[f"layer_{L}_output"].astype(np.float32),
+                        "hw": d[f"hw_layer_{L}_output"].astype(np.int32),
+                    }
+    except Exception as exc:
+        raise RuntimeError(
+            f"spike npz {SPIKE_NPZ.name} missing/corrupted/unsafe "
+            f"({type(exc).__name__}: {exc})") from exc
     return emb, layers
+
+
+PROVENANCE_GEN = _REPO / "scripts" / "gen_evidence_provenance.py"
+
+
+def _provenance_block():
+    """Hash-bound provenance header for THIS run (todo 11).
+
+    Invokes scripts/gen_evidence_provenance.py at evidence-write time so the
+    evidence file binds the build artifacts actually exercised: run id, git
+    commit + dirty state, simv/flist/driver/firmware/golden/checkpoint
+    sha256, tool versions, timestamp.  Provenance generation problems never
+    kill the run, but their absence is visible in the evidence.
+    """
+    try:
+        out = subprocess.run(
+            [sys.executable, str(PROVENANCE_GEN),
+             "--run-id", os.environ.get("IBEX_RUN_ID", "unknown"),
+             "--simv", os.environ.get("IBEX_SIMV", ""),
+             "--flist", str(_REPO / "rtl" / "soc" / "soc.flist"),
+             "--driver", str(Path(__file__).resolve()),
+             "--firmware", str(_REPO / "firmware" / "build" / "npu_firmware.hex"),
+             "--golden", str(GOLDEN_DIR),
+             "--checkpoint", str(NPZ_PATH)],
+            capture_output=True, text=True, timeout=120)
+        if out.returncode == 0 and out.stdout.strip():
+            return out.stdout.rstrip() + "\n"
+    except Exception:
+        pass
+    return ""
 
 
 def _write_evidence(results, meta, final=False):
@@ -431,6 +508,10 @@ def _write_evidence(results, meta, final=False):
     ladder = ("PASS" if all(r["ok"] for r in results["checkpoints"]) else "FAIL") \
         if final else "IN_PROGRESS"
     with open(EVIDENCE_PATH, "w", encoding="utf-8") as f:
+        prov = _provenance_block()
+        if prov:
+            f.write(prov)
+            f.write("\n")
         f.write("Task 14 - SoC RTL Verification Signoff: Ibex 36-layer 8-checkpoint segment run\n")
         f.write("=" * 70 + "\n")
         f.write(f"Timestamp start : {ts}\n")

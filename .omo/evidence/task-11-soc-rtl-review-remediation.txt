@@ -1,0 +1,186 @@
+================================================================================
+TASK-11 EVIDENCE — soc-rtl-review-remediation (plan todo 11, W2 fix phase)
+Evidence provenance hash binding + safe checkpoint resume
+================================================================================
+Timestamp        : 2026-08-31T12:09Z (local host, no EDA required for all verification)
+Branch           : soc-rtl-review-remediation
+HEAD             : 886ccb410b9e39c256f55ff344fefaed7390b52f
+Task             : Execute plan todo 11 — (a) scripts/gen_evidence_provenance.py,
+                   (b) runner integration, (c) scripts/check_evidence_provenance.py,
+                   (d) pickle-safe checkpoint resume in sim/rtl_soc_segment_run.py.
+                   Turn W1 todo-6 RED test sim/regression/test_evidence_provenance.sh
+                   GREEN.  NO git commit made (per task instruction).
+
+RED -> GREEN
+--------------------------------------------------------------------------------
+RED baseline (task-6 evidence, W1, HEAD 9d80c96):
+    bash sim/regression/test_evidence_provenance.sh
+    === summary ===
+    assertions passed: 2
+    assertions failed: 17
+    TEST RESULT: RED — 17 assertion(s) failed (expected before todo 9/11 fixes; ...)
+    TASK-6 RESULT: RED (expected)
+
+Intermediate state at todo-11 start (todo 9 already committed 6230e21 fixed the
+stale-append + run-keyed-timeout half of assertion (a)):
+    assertions passed: 6 / failed: 13 (exit 1)
+
+GREEN now:
+    bash sim/regression/test_evidence_provenance.sh
+    === summary ===
+    assertions passed: 17
+    assertions failed: 0
+    TEST RESULT: GREEN — all assertions passed   (exit 0)
+    Breakdown: a1/a2/a2b/a3 (stale-evidence + run-keyed path) PASS,
+    8 provenance field groups + simv-hash + timestamp PASS,
+    b0 sample-key check SKIPPED (stale canonical evidence retired, see below),
+    c1 (no allow_pickle=True) / c2 (guarded load) / c3 (commit validation) PASS.
+
+Contract tests re-run after the runner edits (no regression):
+    bash sim/regression/test_timeout_behavior.sh  -> exit 0 (8/8 PASS, GREEN)
+    bash sim/regression/test_regression_stats.sh  -> exit 0 (GREEN)
+    Both were GREEN before the edit and remain GREEN after.
+
+NEW SCRIPT APIs
+--------------------------------------------------------------------------------
+scripts/gen_evidence_provenance.py  (SHA-256 provenance block generator)
+    Usage: python3 scripts/gen_evidence_provenance.py --run-id ID --simv P
+           --flist P --driver P --firmware P --golden P --checkpoint P [--out F]
+    Emits a stable-key header block (provenance_begin .. provenance_end) with:
+      provenance_run_id / provenance_timestamp
+      provenance_git_commit + provenance_git_dirty (git status --porcelain count
+        + up to 50 porcelain lines)
+      provenance_simv_path + provenance_simv_sha256
+      provenance_flist_path + provenance_flist_sha256
+      provenance_driver_path + provenance_driver_sha256
+      provenance_firmware_path + provenance_firmware_sha256
+      provenance_golden_path + provenance_golden_sha256   (dir -> deterministic
+        aggregate over sorted (relpath, file-sha256) pairs)
+      provenance_checkpoint_path + provenance_checkpoint_sha256
+      provenance_tool_versions (vcs -ID, cocotb, python, riscv64-unknown-elf-gcc,
+        GNU timeout, spike; each best-effort -> 'unavailable')
+    Missing artifacts record '<key>=missing' honestly; block is always emitted.
+    All digests are SHA-256. --help works. pyflakes clean.
+
+scripts/check_evidence_provenance.py  (Metis C3 executable definition)
+    Usage: python3 scripts/check_evidence_provenance.py [--strict] [--skip CLASS] EVIDENCE
+    Verifies: (1) complete provenance_begin..provenance_end header present,
+    (2) every recorded artifact hash recomputed and matched against the file
+    currently on disk, (3) recorded git commit == current HEAD.
+    Exit codes: 0 VERIFIED / 1 REJECTED (missing header, truncated, commit
+    mismatch, hash mismatch) / 2 USAGE.
+    Verification matrix executed:
+      fresh evidence (mock build)          -> exit 0  VERIFIED
+      forged (simv tampered after write)   -> exit 1  REJECTED (sha mismatch)
+      truncated (provenance_end removed)   -> exit 1  REJECTED
+      no header at all                     -> exit 1  REJECTED
+      tamper reverted                      -> exit 0  VERIFIED again
+      real-repo evidence (real simv/flist/driver/firmware/golden/ckpt) -> exit 0
+
+INTEGRATION POINTS
+--------------------------------------------------------------------------------
+sim/regression/run_ibex_segment_run.sh
+  - After the simv compile block and BEFORE the simulator launch (snapshot
+    timing contract): defines RUN_ID (date+pid, env-overridable), exports
+    IBEX_RUN_ID/IBEX_SIMV, runs gen_evidence_provenance.py for
+    simv/flist/driver=firmware build artifacts, golden dir
+    rtl/test_vectors/soc_e2e/qwen25-3b-36layer, checkpoint npz; writes
+    build/evidence/provenance-$RUN_ID.txt and echoes it into the run log.
+  - Timeout evidence file is now ALSO provenance-prefixed (cat of the
+    provenance file) and the EVIDENCE= assignment uses unbraced $RUN_ID so the
+    W1 a2b extraction contract (EVIDENCE=.*\$RUN_ID) matches.
+  - Kept intact: SEG_TIMEOUT_S strict-validation exit 2 region (first mention
+    unchanged), the 'if [ "$RUN_RC" -eq 124 ]' anchor, non-zero timeout exit.
+
+sim/regression/run_ibex_full_rtl.sh
+  - After compile, before the case loop: same provenance generation into
+    build/ibex_full_rtl/evidence/provenance-$RUN_ID.txt.
+  - Loop contract preserved: 'for CASE in $CASES; do' ... bare 'done',
+    PASS/SKIP/FAIL/TIMEOUT counters, classification greps, summary, and the
+    loop now prefixes every case log with 'provenance| ' lines (sim output
+    appended via >>).  test_regression_stats.sh's verbatim loop extraction
+    still evals cleanly in its sandbox (provenance header is guarded by
+    'if [ -f ]' and defaults under set -u).
+
+sim/rtl_soc_segment_run.py
+  - _write_evidence prepends a provenance block generated at evidence-write
+    time (_provenance_block() -> subprocess to scripts/gen_evidence_provenance.py),
+    so every evidence file (resume re-write, per-checkpoint, final) is bound to
+    run id + commit + dirty state + build hashes + tool versions.
+
+PICKLE SAFETY FIX (sim/rtl_soc_segment_run.py)
+--------------------------------------------------------------------------------
+  - _resume_from_npz: np.load(NPZ_PATH, allow_pickle=True) -> allow_pickle=False,
+    wrapped in try/except (corrupted NPZ -> logged 'resume rejected' -> fresh
+    run, no BadZipFile traceback).  The checkpoint's metadata commit (read as a
+    JSON unicode array from the npz, never pickled) is validated against the
+    current git HEAD (_git_head_commit()) before any state is restored.
+    Save format unchanged: metadata is stored as np.array([json.dumps(m)])
+    (unicode dtype, loadable with allow_pickle=False) — backward compatible.
+  - _load_spike_npz: allow_pickle=True -> allow_pickle=False + guarded raise
+    with a clear RuntimeError on missing/corrupted/unsafe file.
+  - grep -c 'allow_pickle=True' sim/rtl_soc_segment_run.py -> 0.
+  - Behavioral proofs (numpy only, local):
+      * legacy checkpoint npz (task-14-...-checkpoints.npz, commit c506f8ec)
+        -> RESUME DECISION: REJECT (commit != HEAD 886ccb41) — no blind restore.
+      * corrupt npz (b"PK\x03\x04garbage") -> BadZipFile raised inside the
+        guarded region (caught by the try/except in the real code).
+      * both real npz files load cleanly with allow_pickle=False (spike npz is
+        fully numeric; checkpoint npz metadata is a U714 string array).
+
+STALE-EVIDENCE RETIREMENT
+--------------------------------------------------------------------------------
+  build/evidence/task-14-soc-rtl-verification-signoff.txt carried commit
+  c506f8ec... != HEAD and no provenance keys.  Per fail-closed evidence policy
+  it must not sit at the canonical path where a stale PASS could be mistaken
+  for current results.  Archived to:
+    build/evidence/archive/task-14-soc-rtl-verification-signoff-c506f8ec-stale.txt
+  (the file was git-force-added historically, so the working tree now shows an
+  intended ' D' deletion for todo 13's clean-commit wave to include).  The W1
+  b0 check skips when the canonical sample is absent; the next real segment
+  run (todo 13) regenerates it WITH the provenance block and current commit,
+  at which point b0 verifies actively.
+
+VERIFICATION COMMANDS + OUTPUTS (this turn)
+--------------------------------------------------------------------------------
+  bash sim/regression/test_evidence_provenance.sh   -> exit 0 (17 PASS / 0 FAIL)
+  bash sim/regression/test_timeout_behavior.sh      -> exit 0 (8 PASS / 0 FAIL)
+  bash sim/regression/test_regression_stats.sh      -> exit 0 (GREEN)
+  bash -n on both runners                           -> syntax OK
+  python3 -m py_compile on all 3 python files       -> OK
+  pyflakes gen/check scripts                        -> clean
+  python3 scripts/gen_evidence_provenance.py --help -> OK
+  python3 scripts/check_evidence_provenance.py --help -> OK
+  Mock-build demo (/tmp/prov-mock): all 8 hash classes present
+    (run_id / git_commit+dirty / simv / flist / driver / firmware / golden /
+    checkpoint / tool_versions / timestamp), 0 -> 'missing' degradation for
+    absent artifacts.
+  Real-repo demo: provenance block over real build/ibex_segment_rtl/simv_soc_ibex_seg,
+    rtl/soc/soc.flist, sim/rtl_soc_segment_run.py, firmware/build/npu_firmware.hex,
+    rtl/test_vectors/soc_e2e/qwen25-3b-36layer, checkpoint npz -> check exit 0.
+
+ADVERSARIAL NOTES
+--------------------------------------------------------------------------------
+  dirty_worktree: 'git status --porcelain' shows only intended files —
+    * this todo: 2 runner scripts + sim/rtl_soc_segment_run.py (M),
+      scripts/gen_evidence_provenance.py + scripts/check_evidence_provenance.py (??),
+      ' D build/evidence/task-14-soc-rtl-verification-signoff.txt' (intended
+      retirement of stale evidence),
+    * pre-existing from todo 9/P0: 5 firmware/build npu_* rebuild artifacts (M),
+    * parallel agent (todo 10, plan allows parallelizing 9/10/11):
+      sim/rtl_soc_runner.py (M) — NOT touched by this todo.
+  stale_state: provenance snapshot timing note — the gen call sits AFTER the
+    firmware rebuild (make -C firmware clean all, todo 13 flow) and AFTER the
+    simv compile, but BEFORE the simulator launch in both runners, so the
+    recorded firmware/simv/flist/driver/golden/checkpoint sha256 values bind
+    the evidence to exactly the binaries the run exercises.  The same ordering
+    comment is embedded in both runners.
+  Tool-version probes degrade to 'unavailable' on non-EDA hosts (vcs/cocotb/
+    spike absent locally); they fill in on sz0001.
+  checkpoint hash drift: the checkpoint npz is rewritten incrementally during
+    a run, so a post-run check may see a changed checkpoint hash; the checker
+    treats that as REJECTED (evidence no longer matches the artifact) — the
+    authoritative verification is at snapshot time.
+
+TASK-11 RESULT: GREEN (expected)
+================================================================================
