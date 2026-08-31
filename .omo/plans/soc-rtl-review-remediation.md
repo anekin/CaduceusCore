@@ -253,7 +253,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — 文本更新且 Status 不变；failure — 仍写 pending 或误改为 Fixed。Evidence `.omo/evidence/task-18-soc-rtl-review-remediation.txt`
   Commit: Y | docs(bugs): update BUG-RTL-SOC-007 entry with todo-15 executed outcome
 
-- [ ] 19. WVR-SOC-RTL-002 保持 Pending
+- [x] 19. WVR-SOC-RTL-002 保持 Pending
   What to do / Must NOT do: `docs/waivers/WVR-SOC-RTL-002.md` 保持 `pending sign-off`；`docs/bugs/bugs-soc-rtl.md` 台账把 BUG-RTL-SOC-002 从 "formally Waived" 改回 "Pending（waiver 待用户签署）"；`docs/func-model-signoff-checklist.md` 中 "not claimed as fixed" 表述同步。本 todo 不代用户签署。Must NOT 删除 waiver 文件或提前关闭。
   Parallelization: Wave 4 | Blocked by: 17, 18 | Blocks: — | Can parallelize with: 20
   References: `docs/waivers/WVR-SOC-RTL-002.md:11-12,53-57`（pending sign-off 与 closure 条件）；`docs/bugs/bugs-soc-rtl.md:164`（formally Waived 行）；评审报告 :222-228（4.6 节）
