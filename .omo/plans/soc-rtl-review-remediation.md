@@ -177,7 +177,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — 红测试全 GREEN + summary 四类统计正确；failure — 任一负向测试仍 RED 或 PASS 计数包含 superseded。Evidence `.omo/evidence/task-9-soc-rtl-review-remediation.txt`
   Commit: Y | fix(regression): make runners fail-closed with structured PASS/SKIP/FAIL/TIMEOUT accounting
 
-- [ ] 10. FM-SOC-10X 补齐 17-op 全验证
+- [x] 10. FM-SOC-10X 补齐 17-op 全验证
   What to do / Must NOT do: 修改 `sim/rtl_soc_runner.py` `_verify_10X`（:3607-3641）：移除 `if idx > corrupt_op_idx: continue` 截断，验证全部 17 个 op（corrupt op 之后的 op 用其对应 golden 正常比对，corrupt op 本身保持 anti-vacuous 检查）；或按评审建议显式降级——若全验证不可行（超时/数据缺失），把返回消息改为 "前 N op + 因果回归 PASS（其余 op 未验证）"，不得再返回 "17-op blk.0 chain PASS"。必须选择显式方案并在 evidence 记录。Must NOT 改 _build_10X 的构造逻辑（corruption 注入机制保留）。
   Parallelization: Wave 2 | Blocked by: 0 | Blocks: 13 | Can parallelize with: 9, 11
   References: `sim/rtl_soc_runner.py:3607-3641`（_verify_10X 截断与返回消息）；`sim/rtl_soc_runner.py:3590-3605`（_run_10X）；`build/evidence/task-16-soc-rtl-verification-signoff.txt`（当前 10X 证据）；评审报告 :147-153（3.8 节）
@@ -185,7 +185,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — 17 op 全验证 PASS 或显式降级声明；failure — 仍返回 "17-op chain PASS" 但存在 `idx > corrupt_op_idx` 跳过。Evidence `.omo/evidence/task-10-soc-rtl-review-remediation.txt`
   Commit: Y | fix(sim): verify all 17 ops in FM-SOC-10X or declare scope honestly
 
-- [ ] 11. Evidence provenance hash 绑定 + checkpoint pickle 安全
+- [x] 11. Evidence provenance hash 绑定 + checkpoint pickle 安全
   What to do / Must NOT do: (a) 新建 `scripts/gen_evidence_provenance.py`：为一次 RTL 运行生成 provenance block（git HEAD + `git status --porcelain` dirty state、simv 路径 + sha256、RTL flist 内容 sha256、Python driver 文件 sha256、firmware ELF/HEX sha256、golden/checkpoint 文件 sha256、工具版本——VCS `vcs -ID`、cocotb、Python、riscv64-unknown-elf-gcc、GNU timeout、Spike——Metis m3、时间戳），SHA-256 算法，写入 evidence 文件头部；(b) `run_ibex_segment_run.sh` 与 `run_ibex_full_rtl.sh` 调用它并把 provenance 写入每个 case log/evidence；(c) 新建 `scripts/check_evidence_provenance.py`：验证 evidence 头存在且 hash 与当前构建一致，缺失/不一致即失败（Metis C3 可执行定义）；(d) `sim/rtl_soc_segment_run.py` 的 checkpoint resume 移除 `allow_pickle=True` 直接加载——改为 `.npy`/`np.load(..., allow_pickle=False)` 或 pickle 内容结构白名单校验（先校验 magic/字段类型再 load）。Must NOT 把 evidence 目录纳入常规 git（仍用 `git add -f` 提需留存的证据）。
   Parallelization: Wave 2 | Blocked by: 6 | Blocks: 13 | Can parallelize with: 9, 10
   References: `sim/regression/run_ibex_segment_run.sh:70-77`（evidence 追加）；`build/evidence/task-14-soc-rtl-verification-signoff.txt:1-5`（现有 evidence 头格式）；`sim/rtl_soc_segment_run.py`（checkpoint resume 代码）；`docs/agentic-ic-verification-research-report-2026-07-17.md`（hash 绑定方法论参考）；评审报告 :169-184（3.10 节）
@@ -193,7 +193,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — provenance block 完整 + pickle 负例被拒；failure — evidence 仍可来自旧运行或 pickle 任意加载。Evidence `.omo/evidence/task-11-soc-rtl-review-remediation.txt`
   Commit: Y | feat(scripts): add evidence provenance hash binding and safe checkpoint resume
 
-- [ ] 12. APB conformance 连接真实外设（承接 todo 3 红测试）
+- [x] 12. APB conformance 连接真实外设（承接 todo 3 红测试）
   What to do / Must NOT do: 完善 `rtl/tb/apb_conformance_real_tb.sv`（todo 3 建的骨架）：分两步（Metis C4 修正）——第一步 prototype：先只接一个真实外设（INTC 优先，寄存器语义最独立），对照独立 oracle 验证 reset/RW/RO；第二步扩展接入 mxu_soc_wrapper/sfu_soc_wrapper/vector_soc_wrapper/dma_wrapper/doorbell（pcie_ep_wrapper 若接入受阻则显式声明未覆盖），用 `gen/npu_abi_firmware.h` 常量作为独立 oracle 检查 reset/RW/RO/W1C；在 Makefile 加 `run_apb_conformance_real` target（走 soc-verification-run.sh）。回滚门（Metis C4）：若真实外设接入需要改外设 RTL 或导致现有 168/168 模型版 conformance 失效，降级为 "decoder routing + N/7 peripheral semantics"（N=实际接入数），vplan 同步更新。Must NOT 改外设 RTL 本身；发现的真实外设语义 bug 记录到 `docs/bugs/`。
   Parallelization: Wave 2 | Blocked by: 3 | Blocks: 13 | Can parallelize with: 7, 8
   References: `rtl/tb/apb_register_conformance_tb.sv:124-159`（模型 slave 现状）；`rtl/soc/caduceus_soc_top.v`（地址映射与外设例化）；`rtl/wrapper/*_soc_wrapper.v`（各外设寄存器表）；`gen/npu_abi_firmware.h`；`sim/regression/Makefile:156-166`；评审报告 :57-70

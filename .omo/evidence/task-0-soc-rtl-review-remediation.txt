@@ -1,0 +1,223 @@
+task-0-soc-rtl-review-remediation.txt
+Plan: .omo/plans/soc-rtl-review-remediation.md
+Todo: 0. P0 工作区准备
+Executor: Sisyphus (git-operations worker)
+Timestamp: 2026-08-31T10:06+08:00
+Directory: /home/prj/zhengs/caduceuscore/CaduceusCore (main checkout, NO worktree)
+
+USER-ACTION NOTE:
+  The worktree directory /home/prj/zhengs/caduceuscore/CaduceusCore-wt-soc-rtl-review-remediation
+  was deleted MANUALLY by the user on 2026-08-31 (before this task ran). No agent-made diff backup
+  exists (user action). Adapted step (c): `git worktree prune` executed instead of
+  `git worktree remove --force`; worktree registration was 'prunable' and was pruned.
+  Recorded verbatim: "worktree deleted by user manually on 2026-08-31; pruned; no agent backup made (user action)".
+
+================================================================================
+BEFORE-STATE (2026-08-31T10:03+08:00)
+================================================================================
+git rev-parse HEAD      = e678f3024abe5a248e469896acf1368da84b80a3
+git rev-parse main      = f982bef7633c6ed4ef1815abed8ef31640d04eff
+git rev-parse f982bef   = f982bef7633c6ed4ef1815abed8ef31640d04eff  (main == f982bef)
+
+git status --porcelain:
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/task-F3-spike-smoke.log
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+ M firmware/build/npu_firmware.elf
+ M firmware/build/npu_firmware.map
+ M firmware/build/npu_firmware.o
+ M firmware/build/npu_firmware_spike.elf
+ M firmware/build/npu_firmware_spike.map
+?? .omo/notepads/soc-rtl-verification-signoff/decisions.md
+?? .omo/notepads/soc-rtl-verification-signoff/problems.md
+?? .omo/plans/rtl-perf-decomposition-calibration.md
+?? .omo/plans/soc-rtl-review-remediation.md
+?? AGENTS.md
+?? build/fw_dis.txt
+?? build/hex_head.txt
+?? build/hex_old.txt
+?? build/ibex_segment_rtl/
+?? docs/soc-rtl-verification-feature-status.csv
+?? reports/CaduceusCore-review-report-2026-08-28.md
+?? rtl/AGENTS.md
+?? scripts/AGENTS.md
+?? sim/AGENTS.md
+?? sim/regression/verdi_config_file
+?? software/AGENTS.md
+
+git branch -a --no-color:
+  backup-pre-f1-rewrite
+  backup-pre-rtl-p0-split
+  feat/fsa-arc-eval
+  feat_arc_model
+  feat_pcie
+* fix/fm-soc-10x-sfu-desc
++ fix/soc-rtl-review-remediation
+  main
+  remotes/origin/... (unchanged, not listed here)
+
+git worktree list (before prune):
+  /home/prj/zhengs/caduceuscore/CaduceusCore                                e678f30 [fix/fm-soc-10x-sfu-desc]
+  /home/prj/zhengs/caduceuscore/CaduceusCore-wt-soc-rtl-review-remediation  f982bef [fix/soc-rtl-review-remediation] prunable
+
+git stash list:
+  stash@{0}: WIP on main: c244935 feat(signoff): auto-detect NPU/CPU op split in Qwen blk.0 evidence
+
+Sizes: build/ibex_segment_rtl = 87M (the "87M simv tree", untracked); build/evidence = 109M (gitignored).
+.gitignore checks: .omo/evidence/*.txt NOT ignored; .omo/notepads/fm-e2e-qwen-cv-software-stack/ IS ignored (needs -f).
+
+================================================================================
+PER-STEP RESULTS
+================================================================================
+STEP (a) commit evidence/notepad texts to fix/fm-soc-10x-sfu-desc .......... PASS
+  Enumeration (plan command): exactly 8 files, all ' M' (no untracked in those dirs).
+  git add: 4 plain + 4 with -f (fm-e2e-qwen-cv-software-stack/learnings.md + 3 build/evidence/).
+  Commit: a87997be6fb5de8fcb5aea00a92183462efbbd6c
+    message: chore(evidence): commit pending evidence and notepad updates
+  git show --stat HEAD:
+    .omo/evidence/task-0-signoff-v3-runner.txt         | 20 +-
+    .omo/evidence/task-20-uncertainty-kpis.json        | 66 ++--
+    .omo/evidence/task-23-perf-spec-ci.txt             | 42 +--
+    .../fm-e2e-qwen-cv-software-stack/learnings.md     | 340 +++++++++++++++++++++
+    .omo/notepads/phase6-rtl-verification/learnings.md | 40 +++
+    build/evidence/fm-cv-chain.txt                     | 2 +-
+    build/evidence/task-F3-spike-smoke.log             | 4 +-
+    build/evidence/w3-4-mobilenetv3-fm.txt             | 2 +-
+    8 files changed, 464 insertions(+), 52 deletions(-)
+
+STEP (b) restore firmware/build tracked products ......................... PASS
+  git checkout -- firmware/build/
+  git status --porcelain firmware/build/  -> empty (clean)
+
+STEP (c) worktree prune (ADAPTED: dir deleted by user) .................... PASS
+  git worktree prune
+  git worktree list -> single entry:
+    /home/prj/zhengs/caduceuscore/CaduceusCore  a87997b [fix/fm-soc-10x-sfu-desc]
+  git branch -a | grep review-remediation -> "  fix/soc-rtl-review-remediation" (branch intact)
+  NOTE: worktree deleted by user manually on 2026-08-31; pruned; no agent backup made (user action).
+
+STEP (d) branch rename with guard ....................................... PASS
+  Guard: git show-ref --verify --quiet refs/heads/soc-rtl-review-remediation -> FREE
+  git branch -m fix/soc-rtl-review-remediation soc-rtl-review-remediation
+  Result: soc-rtl-review-remediation -> f982bef7633c6ed4ef1815abed8ef31640d04eff
+
+STEP (e) checkout soc-rtl-review-remediation ............................. PASS
+  HEAD = f982bef7633c6ed4ef1815abed8ef31640d04eff ; git rev-parse HEAD == f982bef: MATCH
+  git branch --show-current = soc-rtl-review-remediation
+
+STEP (g1) 4 pre-commit checks ............................................ ALL PASS
+  g1-1 HEAD == f982bef ........................ PASS
+  g1-2 current branch == soc-rtl-review-remediation . PASS
+  g1-3 worktree list only main ................. PASS
+      /home/prj/zhengs/caduceuscore/CaduceusCore  f982bef [soc-rtl-review-remediation]
+  g1-4 stash unchanged ........................ PASS
+      stash@{0}: WIP on main: c244935 feat(signoff): auto-detect NPU/CPU op split in Qwen blk.0 evidence
+
+STEP (f) two commits on soc-rtl-review-remediation ....................... PASS
+  Commit 1: 7f146905986305031330c08d3f2503c7b963e335
+    message: docs(remediation): track plan, review report, CSV and AGENTS knowledge base
+    11 files: .omo/notepads/soc-rtl-verification-signoff/{decisions,problems}.md (both 0-byte),
+    .omo/plans/{soc-rtl-review-remediation,rtl-perf-decomposition-calibration}.md,
+    AGENTS.md, rtl/AGENTS.md, scripts/AGENTS.md, sim/AGENTS.md, software/AGENTS.md,
+    docs/soc-rtl-verification-feature-status.csv,
+    reports/CaduceusCore-review-report-2026-08-28.md
+    (plan line 97 tail file list matched exactly; note: plan says .omo/notepads/soc-rtl-verification-signoff/
+    not soc-rtl-review-remediation/ — reality agrees with plan text)
+  Commit 2: 9d80c9650c394de8c7fbe2d78a85b8f1f7e2de58
+    message: chore(gitignore): ignore VCS build artifacts
+    .gitignore | 5 +++++ (build/ibex_segment_rtl/, build/fw_dis.txt, build/hex_head.txt,
+    build/hex_old.txt, sim/regression/verdi_config_file)
+
+STEP (g2) 4 post-commit checks ........................................... ALL PASS
+  g2-1 git status --porcelain empty ............ PASS (empty)
+  g2-2 merge-base --is-ancestor f982bef HEAD ... PASS (ANCESTOR-OK)
+  g2-3 no 87M simv/build tree in status ........ PASS (none; build/ibex_segment_rtl/ now ignored)
+  g2-4 firmware/build 5 files == f982bef version PASS
+      npu_firmware.elf       17d16fc3b2c0b44e3baec7b12c9af41f386cd5cf  (both)
+      npu_firmware.map       fe358dd0f58c0d2d1e0ec42d04c69c53c3f77cbe  (both)
+      npu_firmware.o         20f504bab54f9e1a156247b6044e4b0d2603fe60  (both)
+      npu_firmware_spike.elf 1cbb7dddf6ec7b29b8c84e003b2d34302526162e  (both)
+      npu_firmware_spike.map c09d008a375dabad1fd7a9c1132d9b51b57134b6  (both)
+
+================================================================================
+AFTER-STATE (2026-08-31T10:06+08:00)
+================================================================================
+Current branch: soc-rtl-review-remediation
+HEAD: 9d80c9650c394de8c7fbe2d78a85b8f1f7e2de58
+git status --porcelain: (empty)
+git worktree list:
+  /home/prj/zhengs/caduceuscore/CaduceusCore  9d80c96 [soc-rtl-review-remediation]
+git stash list:
+  stash@{0}: WIP on main: c244935 feat(signoff): auto-detect NPU/CPU op split in Qwen blk.0 evidence
+git branch -a --no-color | grep review-remediation:
+* soc-rtl-review-remediation
+
+git log --oneline -5 (task branch):
+  9d80c96 chore(gitignore): ignore VCS build artifacts
+  7f14690 docs(remediation): track plan, review report, CSV and AGENTS knowledge base
+  f982bef Merge branch 'main' of github.com:anekin/CaduceusCore
+  d469343 Merge branch 'fix/fm-soc-10x-sfu-desc' into main
+  e678f30 feat(sim): add 24h wall-time timeout and evidence retention to Ibex segment run script
+
+git log --oneline -2 fix/fm-soc-10x-sfu-desc:
+  a87997b chore(evidence): commit pending evidence and notepad updates
+  e678f30 feat(sim): add 24h wall-time timeout and evidence retention to Ibex segment run script
+
+git diff --name-status f982bef HEAD (full task-branch delta vs main tip):
+  M	.gitignore
+  A	.omo/notepads/soc-rtl-verification-signoff/decisions.md
+  A	.omo/notepads/soc-rtl-verification-signoff/problems.md
+  A	.omo/plans/rtl-perf-decomposition-calibration.md
+  A	.omo/plans/soc-rtl-review-remediation.md
+  A	AGENTS.md
+  A	docs/soc-rtl-verification-feature-status.csv
+  A	reports/CaduceusCore-review-report-2026-08-28.md
+  A	rtl/AGENTS.md
+  A	scripts/AGENTS.md
+  A	sim/AGENTS.md
+  A	software/AGENTS.md
+  => exactly the 12 intended paths; zero unexpected changes; zero content loss.
+
+3 housekeeping commits total (per plan distribution):
+  a87997b on fix/fm-soc-10x-sfu-desc  (evidence, 8 files)
+  7f14690 on soc-rtl-review-remediation (docs, 11 files)
+  9d80c96 on soc-rtl-review-remediation (gitignore, 5 rules)
+
+================================================================================
+ADVERSARIAL QA
+================================================================================
+dirty_worktree:
+  - Every file committed in (a) enumerated via git show --stat a87997b: 8/8 files, all ' M' from
+    before-state, none lost (fm-e2e learnings.md +340 lines included).
+  - Every file committed in (f): git show --stat 7f14690 = 11 files; git show --stat 9d80c96 = .gitignore only.
+  - git diff --name-status f982bef HEAD reviewed: only the intended 12 entries. No other file was
+    modified between before-state and after-state.
+misleading_success_output:
+  - Commit contents verified via git show --stat (not exit codes): a87997b (8 files, 464+/52-),
+    7f14690 (11 files, 1280+), 9d80c96 (.gitignore, 5+).
+  - git log --oneline -5 verified: HEAD = 9d80c96, exactly 2 commits above f982bef.
+repeated_interruptions:
+  - No step failed; no forced retries; no force-reset; no force-push. N/A.
+stash: never touched (stash@{0} identical before and after).
+main: never committed to (no commit on main; task branch = f982bef + 2).
+87M simv tree: build/ibex_segment_rtl/ (87M) was never staged; now gitignored; untracked & invisible.
+
+================================================================================
+DEVIATIONS FROM PLAN
+================================================================================
+1. (c) worktree removal: adapted per user context — user deleted the worktree directory manually
+   on 2026-08-31; `git worktree prune` used instead of `git worktree remove --force`; no
+   agent-made backup of worktree-local files (user action, acknowledged in this evidence).
+2. This evidence file itself (.omo/evidence/task-0-soc-rtl-review-remediation.txt) was written
+   AFTER the g2 checks and final verify, so it is the single untracked file at task end (P0
+   deliverable; expected to be committed by the next housekeeping wave, matching how the
+   previous session's evidence files were handled in step (a)). All g2/verify porcelain checks
+   were executed and recorded BEFORE this file was written.
+3. No other deviations.
+
+P0 RESULT: PASS
