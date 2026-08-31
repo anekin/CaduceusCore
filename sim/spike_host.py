@@ -223,14 +223,39 @@ def run_one_op(gguf_path: str, layer: int, op: str, M: int = 1) -> bool:
     # Quantize to row-major INT4 + per-block scales
     wgt_packed, wgt_scales, _ = quantize_int4_per_block(W_f32, 128)
 
-    # Golden reference (computed BEFORE reordering — uses row-major weights/scales)
-    mxu = GoldenMXU()
-    golden = mxu.matmul_int4_per_block(act, wgt_packed, wgt_scales, M, K, N, group_size=128)
-
     # Reorder for firmware's tiled DRAM layout (TILE_H=64, TILE_W=64)
     wgt_packed, wgt_scales = _reorder_weights_to_firmware_tiles(wgt_packed, wgt_scales, K, N)
     wgt_bytes = wgt_packed.tobytes()
     scale_bytes = wgt_scales.tobytes()
+
+    # Golden reference — computed in the firmware's execution order (ISSUE-16A):
+    # the bridge executes one 64-row K-tile per MXU command, scaling each
+    # K-tile by its 128-group scale and FP32-accumulating across K-tiles
+    # (cf6736b semantics).  A full-K block-order reference differs only by
+    # FP32 summation rounding (~1e-4 rel, the known quant-path tolerance),
+    # while this tiled-order reference is bit-exact to what the bridge
+    # computes — so a PASS proves the Spike firmware end-to-end path
+    # (DMA/descriptor/tiles/scales) exactly.
+    mxu = GoldenMXU()
+    num_blocks = (K + 63) // 64
+    num_n_tiles = (N + 63) // 64
+    if num_blocks > 1 or num_n_tiles > 1:
+        wgt_tiles = wgt_packed.reshape(num_n_tiles, num_blocks, 64 * 64 // 2)
+        scale_tiles = wgt_scales.reshape(num_n_tiles, num_blocks, 64)
+        golden = np.zeros((M, N), dtype=np.float32)
+        for n_tile in range(num_n_tiles):
+            n0 = n_tile * 64
+            n1 = min(n0 + 64, N)
+            for k_block in range(num_blocks):
+                k0 = k_block * 64
+                k1 = min(k0 + 64, K)
+                golden[:, n0:n1] += mxu.matmul_int4_per_block(
+                    act[:, k0:k1].astype(np.int8), wgt_tiles[n_tile, k_block],
+                    scale_tiles[n_tile, k_block].reshape(1, 64),
+                    M, k1 - k0, 64, group_size=128)
+    else:
+        golden = mxu.matmul_int4_per_block(act, wgt_packed, wgt_scales,
+                                           M, K, N, group_size=128)
 
     # Pack weights and scales back-to-back for contiguous DMA
     combined_weight_blob = wgt_bytes + scale_bytes
@@ -241,8 +266,14 @@ def run_one_op(gguf_path: str, layer: int, op: str, M: int = 1) -> bool:
 
     wgt_addr = 0x80200000
     act_addr = 0x80010000
-    out_addr = 0x81000000
     desc_addr = 0x80001000
+    # Output must stay inside the firmware's 8 MB DRAM allowlist window
+    # (BUG-RTL-SOC-002 / WVR-SOC-RTL-002).  The old constant 0x81000000
+    # (16 MB) is rejected by dram_range_ok(), so the firmware silently
+    # skipped the MMUL (status=1), the doorbell still completed, and the
+    # host read an all-zero output — the phantom 7.64e+02 max_diff was just
+    # max|golden|.  ISSUE-16A.
+    out_addr = (wgt_addr + len(combined_weight_blob) + 0xFFF) & ~0xFFF
 
     # SRAM layout (must fit in 4 MB and avoid overlap)
     input_sram = 0x00000000
@@ -250,21 +281,29 @@ def run_one_op(gguf_path: str, layer: int, op: str, M: int = 1) -> bool:
     output_sram = 0x00300000
     scale_sram = weight_sram + len(wgt_bytes)
 
+    # Pack activation into the firmware broadcast tile-major layout
+    # (ISSUE-13B cf6736b): each 4096-byte K-tile holds 64 columns; 64-byte
+    # word c of a K-tile holds column k (byte r = act[r, k]).  The firmware
+    # walks activations at k_block*4096 stride.
+    act_packed = _pack_act_tile_major_contig(act, M, K)
+
     model.host_write_data(wgt_addr, np.frombuffer(combined_weight_blob, dtype=np.uint8))
-    model.host_write_data(act_addr, act)
+    model.host_write_data(act_addr, act_packed)
 
     write_mmul_descriptor(model, desc_addr,
                           input_addr=act_addr, weight_addr=wgt_addr, output_addr=out_addr,
                           scale_addr=wgt_addr + len(wgt_bytes),
                           input_sram=input_sram, weight_sram=weight_sram, output_sram=output_sram,
                           scale_sram=scale_sram,
-                          input_size=act.nbytes, weight_size=len(wgt_bytes),
+                          input_size=act_packed.nbytes, weight_size=len(wgt_bytes),
                           output_size=M * N * 4, scale_size=len(scale_bytes),
                           M=M, K=K, N=N)
     model.host_write_command(0, desc_addr)
 
-    # Pre-set MXU SCALE_ADDR so the bridge uses per-block dequantization.
-    # The C firmware does not write SCALE_ADDR, so this persists through CMD.
+    # Pre-set MXU SCALE_ADDR so the bridge uses per-block dequantization even
+    # if the firmware does not rewrite it before the first MXU CMD (the
+    # firmware's mxu_start() writes SCALE_ADDR per tile, so this only covers
+    # the first-tile window and is harmless otherwise).
     model.bridge.handle('write', MXU.BASE + MXU.SCALE_ADDR, scale_sram)
 
     # Set doorbell HOST_TAIL = 1 via the bridge (MMIO, not DRAM)
@@ -287,6 +326,7 @@ def run_one_op(gguf_path: str, layer: int, op: str, M: int = 1) -> bool:
     print(f"  [{'PASS' if ok else 'FAIL'}] L{layer} {op:12s} ({K}x{N})")
     if not ok:
         print(f"    max_diff={np.max(np.abs(out_fw - golden)):.2e}")
+    return ok
 
 
 SFU_OP_SOFTMAX = 0
