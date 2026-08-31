@@ -74,37 +74,60 @@ mkdir -p "$EVIDENCE_DIR"
 PASS=0
 FAIL=0
 SKIP=0
+TIMEOUT=0
 for CASE in $CASES; do
     echo ""
     echo "============================================================"
     echo "[RUN] $CASE"
     echo "============================================================"
     export FM_SOC_CASE_ID="$CASE"
-    export TESTCASE=test_soc_ibex_full
     CASE_LOG="$EVIDENCE_DIR/${CASE}.log"
-    (cd "$RUN_DIR" && "$SIMV" +COCOTB +FM_SOC_CASE_ID="$CASE" +BOOTROM_HEX="$REPO_ROOT/firmware/build/npu_firmware.hex") > "$CASE_LOG" 2>&1 || true
-    if grep -qE 'superseded by FM-SOC-032/10X' "$CASE_LOG" || \
-       grep -qE 'skipped: direct APB/AXI case not applicable to Ibex RTL mode' "$CASE_LOG"; then
+    set +e
+    (cd "$RUN_DIR" && "$SIMV" +COCOTB +FM_SOC_CASE_ID="$CASE" \
+        +BOOTROM_HEX="$REPO_ROOT/firmware/build/npu_firmware.hex") > "$CASE_LOG" 2>&1
+    RUN_RC=$?
+    set -e
+    if [ "$RUN_RC" -eq 124 ] || [ "$RUN_RC" -eq 137 ]; then
+        echo "[TIMEOUT] $CASE (simulator exit $RUN_RC; log: $CASE_LOG)"
+        printf 'runner_classification=TIMEOUT exit_code=%s\n' "$RUN_RC" >> "$CASE_LOG"
+        TIMEOUT=$((TIMEOUT + 1))
+    elif [ "$RUN_RC" -ne 0 ]; then
+        echo "[FAIL] $CASE (simulator exit $RUN_RC; log: $CASE_LOG)"
+        printf 'runner_classification=FAIL exit_code=%s\n' "$RUN_RC" >> "$CASE_LOG"
+        FAIL=$((FAIL + 1))
+    elif grep -qE 'superseded by FM-SOC-027/032/10X' "$CASE_LOG" || \
+         grep -qE 'skipped: direct APB/AXI case not applicable to Ibex RTL mode' "$CASE_LOG"; then
         echo "[SKIP] $CASE"
+        printf 'runner_classification=SKIP\n' >> "$CASE_LOG"
         SKIP=$((SKIP + 1))
     elif grep -qE 'TESTS=1 PASS=1 FAIL=0 SKIP=0' "$CASE_LOG"; then
         echo "[PASS] $CASE"
+        printf 'runner_classification=PASS\n' >> "$CASE_LOG"
         PASS=$((PASS + 1))
     else
-        echo "[FAIL] $CASE (log: $CASE_LOG)"
+        echo "[FAIL] $CASE (no cocotb PASS summary; log: $CASE_LOG)"
+        printf 'runner_classification=FAIL reason=no_summary\n' >> "$CASE_LOG"
         FAIL=$((FAIL + 1))
     fi
 done
 
+TOTAL=$((PASS + SKIP + FAIL + TIMEOUT))
+N_CASES=$(echo "$CASES" | wc -w)
+
 echo ""
 echo "============================================================"
-echo "[SUMMARY] Full RTL + Ibex (33-case FM-SOC regression)"
-echo "  PASS: $PASS"
-echo "  FAIL: $FAIL"
-echo "  SKIP: $SKIP"
-echo "  TOTAL: $((PASS + FAIL + SKIP))"
+echo "[SUMMARY] Full RTL + Ibex (FM-SOC regression)"
+echo "  PASS:    $PASS"
+echo "  SKIP:    $SKIP"
+echo "  FAIL:    $FAIL"
+echo "  TIMEOUT: $TIMEOUT"
+echo "[SUMMARY] PASS=$PASS SKIP=$SKIP FAIL=$FAIL TIMEOUT=$TIMEOUT TOTAL=$TOTAL"
 echo "============================================================"
 
-if [ $FAIL -ne 0 ]; then
+if [ "$TOTAL" -ne "$N_CASES" ]; then
+    echo "[ERROR] case accounting mismatch: classified $TOTAL of $N_CASES cases"
+    exit 1
+fi
+if [ "$FAIL" -ne 0 ] || [ "$TIMEOUT" -ne 0 ]; then
     exit 1
 fi
