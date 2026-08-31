@@ -1,0 +1,45 @@
+case_id: task-20
+plan_todo: "20. P2/P3 blocker 跟踪清单" (.omo/plans/soc-rtl-review-remediation.md Wave 4)
+utc_timestamp: 2026-08-31T05:09:00Z
+branch: soc-rtl-review-remediation
+deliverable: docs/soc-rtl-review-remediation-blockers.md
+commit: NONE (todo 20 explicitly "Do NOT git commit" per task instruction)
+
+## ITEM LIST (8 blockers written)
+1. Perf CI RSS 17.4GB 超限           — gating: 阻塞项目级 signoff，非 SoC RTL 功能 signoff（Metis M10）
+2. E2E-07 性能校准                    — 引用 .omo/plans/rtl-perf-decomposition-calibration.md（待执行，未修改该计划）
+3. FPGA L5 NO-GO + ggml lifecycle BLOCKED — 外部依赖
+4. 36 层连续仿真 deferred 到 FPGA
+5. WVR-SOC-RTL-002 待用户签署 (pending sign-off)
+6. BUG-RTL-SOC-007 根因追查 (Open, FPGA/earlier-log tracing)
+7. P3.1 遗留工作区状态清理: stash@{0}(WIP on main: c244935, 14 evidence files) + fix/fm-soc-10x-sfu-desc 分支收尾/合并 + 87M gitignore build 产物磁盘清理
+8. P3.4 可重放 signoff manifest + 最终用户签收记录
+
+## VERIFY (STEP 2)
+- [PASS] docs/soc-rtl-review-remediation-blockers.md exists (git-untracked new file)
+- [PASS] Blocker section count = 8 (grep "^## Blocker " = 8)
+- [PASS] Field counts per item: 现状证据路径=9 (8 items + header legend), 阻塞原因=9, 解除条件=10 (8 items + header + 维护说明), 建议 owner=9 — every item has all 4 fields
+- [PASS] Mapping table: §7 P0/P1 rows = 9/9; §7 P2/P3 rows = 10/10 (P2 x6 + P3 x4 全部可追溯; P3.2/P3.3 交叉覆盖至 #7/#8 + 本计划 todo 17/18/19, 备注注明分工)
+- [PASS] porcelain delta vs baseline (/tmp/porcelain-baseline-20.txt, 14 entries pre-change): 仅新增 2 个 untracked 文件 — docs/soc-rtl-review-remediation-blockers.md + .omo/evidence/task-20-soc-rtl-review-remediation.txt; 预存 dirty 13 M + 1 ?? 保持不变
+
+## EVIDENCE-PATH CHECKS (cited paths in the doc)
+EXISTS   .omo/evidence/task-23-perf-spec-ci.txt
+EXISTS   .omo/plans/rtl-perf-decomposition-calibration.md
+EXISTS   docs/func-model-signoff-checklist.md  (line 339-341 BLOCKED rows confirmed)
+EXISTS   reports/CaduceusCore-review-report-2026-08-28.md  (§4.1:187-198, §4.4:212-216, §7:270-312)
+EXISTS   docs/waivers/WVR-SOC-RTL-002.md  (Status=提交待签 pending sign-off, Sign-off 留空)
+EXISTS   docs/bugs/bugs-soc-rtl.md  (BUG-007:326-366 Open; BUG-002 ledger:373,387)
+EXISTS   .omo/plans/soc-rtl-verification-vplan.md  (E2E-07 ❌ at :22,133,184)
+EXISTS   build/evidence/task-15-soc-rtl-verification-signoff.txt
+MISSING  build/evidence/task-14-soc-rtl-verification-signoff.txt — archived by commit 4d8dab8 ("archive stale task-14 signoff evidence", todo 9 evidence rewrite); doc updated to annotate 已归档 with archive commit and cross-ref to calibration-plan W4. No other missing paths.
+
+## ADVERSARIAL NOTES
+1. task-23 RSS: HEAD-committed evidence = 2026-08-24 run (head 0422d2469) exit_code=1 verdict=fail peak_rss_mb=17399.88 reason=rss_limit_breach (>4096MB) — matches review report 17.4GB. Dirty working-copy version = 2026-08-31 run (head 886ccb4) verdict=pass peak_rss_mb=124.87 with 27 dirty paths. Blocker kept OPEN: dirty-tree run cannot serve as unblock evidence; unblock requires clean-commit rerun. Doc records this in an explicit 对抗性注记 under Blocker 1.
+2. Waiver/ledger drift: bugs-soc-rtl.md:373 still says "formally Waived" while waiver file says pending sign-off; blocker #5 cites the waiver file as authoritative and notes the drift is being fixed by plan todo 19 (in flight).
+3. BUG-007 ledger text: file already contains the 2026-08-28 "todo 18" status note (todo 15 executed, not reproduced, root cause unknown) — blocker #6 cites current text; consistent whether or not todo 18 was marked complete.
+4. stash@{0} verified live: `git stash show --stat stash@{0}` = 14 files changed (all .omo/evidence/*), message "WIP on main: c244935" — matches plan todo 20 description.
+5. 87M artifact verified live: `du -sh build/ibex_segment_rtl` = 87M; .gitignore:50 = "build/ibex_segment_rtl/". Build tree total 2.0G (other gitignored dirs: ibex_full_rtl 336M, p0 135M, p2p3 100M, p1 97M) — blocker #7 tracks the 87M item per plan wording; other sizes noted here for completeness.
+6. Working tree was in motion during execution (parallel todos 17/18/19): baseline porcelain captured immediately before file writes (13 M + 1 ??) and diffed afterward — delta is exactly my 2 new files. build/evidence/* entries present in the very first observation disappeared before baseline capture (committed by the parallel agent), so they are not attributable to this todo.
+7. No commit made, per instruction. Evidence of doc existence relies on working-tree file + this evidence file.
+
+TASK-20 RESULT: GREEN (expected)
