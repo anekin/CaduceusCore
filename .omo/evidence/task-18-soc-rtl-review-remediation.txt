@@ -1,0 +1,70 @@
+# Todo 18 — BUG-RTL-SOC-007 ledger 文本更新 (soc-rtl-review-remediation)
+#
+# Generated: 2026-08-31 13:06 CST (Asia/Shanghai)
+# Branch: soc-rtl-review-remediation (LOCAL ONLY, no commit)
+#
+# Scope: docs/bugs/bugs-soc-rtl.md (007 entry) + .omo/plans/soc-rtl-verification-vplan.md
+#        (ledger row :165). Status=Open NOT changed anywhere.
+
+## Cross-check of referenced evidence (STEP 1)
+build/evidence/task-15-soc-rtl-verification-signoff.txt EXISTS (6215 bytes, 2026-08-28 07:26).
+Cited lines:
+  L3:  # Generated: 2026-08-27 22:21 (Asia/Shanghai)   -> todo 15 executed 2026-08-27
+  L37: [ATTN-WEIGHT-CHAIN] op07 attn_weight MMUL: cycles=30755 cos_sim=1.000000
+  L47: attn_weight cycles>0 PASS (op07, cycles=30755, cos_sim=1.000000)
+  L49: all 26 commands cycles>0)
+  L51: IbexRunner ATTN-WEIGHT-CHAIN: PASS — 17-op chain PASS: all 26 commands
+  L86: BUG-RTL-SOC-007 chain-level verdict: attn_weight cycles=30755 > 0
+Numbers used in the ledger text (26 commands cycles>0, op07 cycles=30755 cos=1.0) match this
+evidence exactly. No discrepancy; nothing invented.
+
+## Before/after diff
+--- a/docs/bugs/bugs-soc-rtl.md
++++ b/docs/bugs/bugs-soc-rtl.md
+@@ -335 (Status row)
+-| **Status** | Open（chain-level RTL reproduction pending todo 15） |
++| **Status** | Open（todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，待 FPGA/更早日志追踪） |
+@@ -365 (Status 说明)
+-**Status 说明:** chain-level RTL reproduction（完整 17-op blk.0 chain 中 op07/24/41 attn_weight cycles>0）仍待 todo 15（`_build_attn_weight_chain`，soc-rtl-verification-signoff）。若 todo 15 复现 cycles=0，本条目保持 Open；若 cycles>0，其 evidence 将回链到此处。本条目 **Open**。
++**Status 说明 (2026-08-31, todo 18 soc-rtl-review-remediation):** todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27，证据 `build/evidence/task-15-soc-rtl-verification-signoff.txt`）：完整 17-op blk.0 chain（含 op07 attn_weight）全部 26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0（14 FP op cos≥0.999 + 3 INT32 bit-exact），链级未复现 cycles=0。根因仍未知，保持 Open 待 FPGA/更早日志追踪。本条目 **Open**。
+@@ -373 (Final Bug Statistics ledger)
+-...BUG-RTL-SOC-007 remains **Open** with phase 10 PERF-13 evidence（attn_weight cycles>0），chain-level reproduction pending todo 15。
++...BUG-RTL-SOC-007 remains **Open** with phase 10 PERF-13 evidence（attn_weight cycles>0）；todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27），26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，保持 Open 待 FPGA/更早日志追踪。
+@@ -388 (By Status table)
+-| Open | 1 | BUG-RTL-SOC-007 (attn_weight dispatch — PERF-13 Ibex RTL shows cycles>0; chain-level reproduction pending todo 15) |
++| Open | 1 | BUG-RTL-SOC-007 (attn_weight dispatch — PERF-13 Ibex RTL shows cycles>0; todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，链级未复现，根因仍未知) |
+@@ -411 (Quality Metrics)
+-| Open / under investigation | 1 (7.7%) — BUG-RTL-SOC-007 (chain-level reproduction pending todo 15) |
++| Open / under investigation | 1 (7.7%) — BUG-RTL-SOC-007 (todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，链级未复现；根因仍未知) |
+
+--- a/.omo/plans/soc-rtl-verification-vplan.md
++++ b/.omo/plans/soc-rtl-verification-vplan.md
+@@ -165 (ledger row)
+-| BUG-RTL-SOC-007 | Critical/Major | **Open** | attn_weight op dispatch failure（cycles=0），3-layer forward pass 受影响。todo 15/16 ATTN-WEIGHT-CHAIN 链级未复现（op07 cycles=30755），**不 claim Fixed**，保持 Open 待后续追踪 |
++| BUG-RTL-SOC-007 | Critical/Major | **Open** | attn_weight op dispatch failure（cycles=0），3-layer forward pass 受影响。todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27）：26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，**不 claim Fixed**，保持 Open 待 FPGA/更早日志追踪 |
+
+## Verification (STEP 3)
+Command: grep -n "pending todo 15" docs/bugs/bugs-soc-rtl.md
+Result: 0 hits (exit code 1). Also 0 hits in .omo/plans/soc-rtl-verification-vplan.md. PASS
+
+Command: grep -n "已执行\|未复现\|根因仍未知" docs/bugs/bugs-soc-rtl.md
+Result (near 007 entry): L335 Status row, L365 Status 说明, L373 ledger, L388 Open row, L411 quality metrics — all present. PASS
+
+Command: grep -n "Status.*Open" docs/bugs/bugs-soc-rtl.md
+Result: L335 `| **Status** | Open（…） |` — value still Open; L365 ends 本条目 **Open**; L373 "remains **Open**". Status=Open UNCHANGED. PASS
+
+vplan line :165 Status column still **Open**. PASS
+
+## Adversarial notes
+- dirty_worktree: pre-existing dirt unrelated to this todo (task-0/task-20/task-23 evidence,
+  notepads, firmware/build artifacts, deleted build/evidence/task-14-*.txt). Files changed by THIS
+  todo: docs/bugs/bugs-soc-rtl.md + .omo/plans/soc-rtl-verification-vplan.md + this new evidence file only.
+- Numbers were NOT invented: all taken verbatim from build/evidence/task-15-soc-rtl-verification-signoff.txt
+  L3/L37/L47/L49/L51 (cited above). Date 2026-08-27 = evidence generation date.
+- Scope discipline: only "pending todo 15" wording replaced. Severity table L379 description
+  ("op never executes" = original W1.3 symptom) and vplan L22/L141/L180/L184 (already state
+  未复现 + Open, consistent) left untouched.
+- Status=Open NOT changed in any location. No Fixed/Closed claim introduced.
+- No git commit performed (task instruction: do not commit).
+
+TASK-18 RESULT: GREEN (expected)
