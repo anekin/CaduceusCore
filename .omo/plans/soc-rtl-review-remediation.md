@@ -93,7 +93,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
 
 ### Wave 0: 工作区准备（就地执行前置）
 
-- [ ] 0. P0 工作区准备：分类提交脏状态 + 按项目分支规则建立任务分支（2026-08-30 用户指令修订）
+- [x] 0. P0 工作区准备：分类提交脏状态 + 按项目分支规则建立任务分支（2026-08-30 用户指令修订）
   What to do / Must NOT do: 在**当前目录**（主 checkout，不开新 worktree）按顺序执行——项目分支规则（用户 2026-08-30 定）：新任务从干净工作区开始；**分支名 = plan 名**；plan 完成后 merge 到 main。(a) 8 个 evidence/notepad 文本（5 个 `.omo/evidence`+notepads：task-0-signoff-v3-runner.txt、task-20-uncertainty-kpis.json、task-23-perf-spec-ci.txt、fm-e2e-qwen-cv-software-stack/learnings.md、phase6-rtl-verification/learnings.md + 3 个 `build/evidence`：fm-cv-chain.txt、task-F3-spike-smoke.log、w3-4-mobilenetv3-fm.txt——执行时以 `git status --porcelain` 实况为准，枚举命令：`git status --porcelain | awk '/^ M/ && ($2 ~ /^\.omo\/(evidence|notepads)/ || $2 ~ /^build\/evidence\//) {print $2}'`）commit 到当前分支 `fix/fm-soc-10x-sfu-desc`（消息 `chore(evidence): commit pending evidence and notepad updates`）；(b) 5 个已跟踪 `firmware/build/npu_*` 构建产物（npu_firmware.elf/.map/.o + npu_firmware_spike.elf/.map）**不进入 (a) 的 commit**，`git checkout -- firmware/build/` 还原 HEAD——注意这只是防止混入 (a) 的安全门，(e) 切分支后它们会再次变为 f982bef 版本（正常）；(c) 拆除已建 worktree——**先验证再强制**（Oracle 审查实测：worktree 内 `.omo/plans/soc-rtl-review-remediation.md` 是 284 行旧版、`.omo/notepads/soc-rtl-review-remediation/` 4 个 0 字节 stub 为 worktree 独有，`--force` 会静默删除，不得依赖"字节相同"假设）：先 `git -C /home/prj/zhengs/caduceuscore/CaduceusCore-wt-soc-rtl-review-remediation status --porcelain` 与 `diff -r` 对照主目录，把差异化文件备份到 `.omo/drafts/worktree-backup-2026-08-30/`（gitignored），在 evidence 记录差异清单，然后 `git worktree remove --force <该路径>`；(d) `git branch -m fix/soc-rtl-review-remediation soc-rtl-review-remediation`——分支名改为 plan 名（== f982bef == main tip，满足"从干净 main 开始"）；rename 前加 guard：`git show-ref --verify --quiet refs/heads/soc-rtl-review-remediation && { echo "目标分支已存在，停止询问用户"; exit 1; }`（注：先拆除 worktree 再 rename 更稳妥；git 2.34 实测 rename 会同步更新 worktree HEAD，两者顺序可互换，非"必须"）；(e) `git checkout soc-rtl-review-remediation` 就地切换（16 个未跟踪路径在 main 中均未被跟踪，实测零碰撞，随工作区带过来）；(g1) 提交前验证：`git rev-parse HEAD` == f982bef、`git branch --show-current` == soc-rtl-review-remediation、`git worktree list` 仅主目录、stash@{0} 原样保留；(f) 在任务分支上 commit 两笔：docs 入库（`docs/soc-rtl-verification-feature-status.csv`、`.omo/plans/soc-rtl-review-remediation.md`、`.omo/plans/rtl-perf-decomposition-calibration.md`、`reports/CaduceusCore-review-report-2026-08-28.md`、AGENTS.md × 5、`.omo/notepads/soc-rtl-verification-signoff/{decisions,problems}.md` 两个 0 字节 stub）→ `docs(remediation): track plan, review report, CSV and AGENTS knowledge base`；.gitignore 更新（`build/ibex_segment_rtl/`、`build/fw_dis.txt`、`build/hex_head.txt`、`build/hex_old.txt`、`sim/regression/verdi_config_file`）→ `chore(gitignore): ignore VCS build artifacts`（放任务分支而非 fix 分支，保证执行期 `git status` 干净）；(g2) 提交后验证：`git status --porcelain` 输出为空、`git merge-base --is-ancestor f982bef HEAD` 为真、87M build 产物未被 git 跟踪、firmware/build 5 个文件与 f982bef 版本一致（未改动）。Must NOT：丢弃任何 evidence/notepad 内容（全部经 commit 保留）；把 87M simv 树提交入库；pop/drop stash@{0}；force-push；改写 f982bef 父历史；把本计划 todos 的改动直接 commit 到 main。
   Parallelization: Wave 0 | Blocked by: — | Blocks: 1-13 | Can parallelize with: —
   References: explore 侦查 ses_face2ac5affe6Rw0agbtjF0iox（porcelain 列表、diff stat、worktree list、branch -a、main == f982bef）；round-5 Oracle 实测（worktree 旧版 plan 284 行、5 个 firmware 文件、main 未跟踪 16 路径零碰撞、rename 顺序可互换）；本计划 Must NOT #8 与 Commit strategy（2026-08-30 修订版）
@@ -103,7 +103,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
 
 ### Wave 1: 负向测试先行（红）
 
-- [ ] 1. Timeout 行为负向测试（红）：timeout 必须非零退出 + SEG_TIMEOUT_S 参数校验
+- [x] 1. Timeout 行为负向测试（红）：timeout 必须非零退出 + SEG_TIMEOUT_S 参数校验
   What to do / Must NOT do: 新建 `sim/regression/test_timeout_behavior.sh`，模拟 `run_ibex_segment_run.sh` 的 timeout 路径：(a) 用 `timeout --signal=TERM --kill-after=1 1 sleep 5` 复现 exit 124，断言脚本逻辑必须非零退出（当前 `run_ibex_segment_run.sh:68-79` exit 0 是红）；(b) `SEG_TIMEOUT_S=--help` / `abc` / `-5` 必须被拒绝（当前 :59 无校验）。Must NOT 修改 run_ibex_segment_run.sh 本体（W2 todo 9 才修）；只写测试并记录红结果。
   Parallelization: Wave 1 | Blocked by: 0 | Blocks: 9 | Can parallelize with: 2, 3, 4, 5, 6
   References: `sim/regression/run_ibex_segment_run.sh:59-79`（SEG_TIMEOUT_S 无校验 :59；RUN_RC=124 时 exit 0 :68-79）；评审报告 `reports/CaduceusCore-review-report-2026-08-28.md:72-84`（3.3 节）；GNU timeout 行为（124=TERM, 137=KILL, --help 退出 0 不执行命令）
@@ -111,7 +111,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — 测试脚本存在且修复前跑出 RED、修复后跑出 GREEN；failure — 测试脚本在修复前跑出 GREEN（说明测试没抓到 bug，测试无效）。Evidence `.omo/evidence/task-1-soc-rtl-review-remediation.txt`
   Commit: Y | test(regression): add negative test for timeout exit-code and SEG_TIMEOUT_S validation (RED)
 
-- [ ] 2. Crossbar 真实并发 fairness 负向测试（红）
+- [x] 2. Crossbar 真实并发 fairness 负向测试（红）
   What to do / Must NOT do: 修改 `rtl/tb/axi_crossbar_fairness_tb.sv` 增加 P4 竞争 phase（Metis C1 修正：固定优先级 mutation 测试不能靠现有 sequential stimulus 触发——必须先加竞争 stimulus 本身）。P4 设计：(a) 7 个 master 在同一 slave-free cycle 同时断言 ARVALID/AWVALID 持续竞争同一 slave，断言修复前的未修改 RTL 出现 phantom-accept deadlock 或事务超时（RED）；(b) 竞争 phase 还应断言 grant 计数差 ≤1、全部事务 OKAY（此断言在修复前预期 RED、修复后 GREEN）。**P4 必须带事务 watchdog**（Oracle R3 审查）：phantom-accept 死锁表现为 hang，TB 需在 N cycle 内未完成即 FAIL（否则 RED 变成仿真挂起，只能靠 24h runner timeout 兜底、浪费 EDA 时间；建议 watchdog=10,000 cycle 与 todo 7 acceptance 的 ≥10,000 cycle 竞争窗口对齐）。watchdog 语义为**逐事务**（从该事务 VALID 被 accept 起算到 R/B 完成，正常 <100 cycle，10k 是 2-3 个数量级裕量；不得实现为"全局 N cycle 无完成"否则与 ≥10,000 cycle 竞争窗口冲突——Oracle R4 澄清）；watchdog 触发路径必须打印 "FAIRNESS: FAIL" 并 `$finish`（`run_crossbar_fairness` target 以 grep 该 marker 判定，`$finish` 退出码恒 0 无意义——Oracle R4 确认）。固定优先级仲裁器 mutation 测试移到 W2 todo 7（修复后作为回归守卫），不在本 todo。Must NOT 修改 `rtl/soc/axi_crossbar.v`（W2 todo 7 才修）；此 todo 只改 TB 并记录 RED（deadlock 复现）。
   Parallelization: Wave 1 | Blocked by: 0 | Blocks: 7 | Can parallelize with: 1, 3, 4, 5, 6
   References: `rtl/tb/axi_crossbar_fairness_tb.sv:10-24`（STIMULUS MODEL 注释：sequential rotation、phantom-accept deadlock 已知 out of scope）；`rtl/soc/axi_crossbar.v`（accept/grant 逻辑：m_arready_o = !m_ar_active && (!m_ar_hit || !ar_busy)）；`sim/regression/Makefile:242-251`（run_crossbar_fairness target）；评审报告 :41-55（3.1 节）
@@ -119,7 +119,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — P4 竞争 phase 修复前 RED（复现死锁）、修复后 GREEN；failure — P4 在修复前 GREEN（说明竞争 phase 没真正制造竞争）。Evidence `.omo/evidence/task-2-soc-rtl-review-remediation.txt`
   Commit: Y | test(rtl): add real-contention fairness phase exposing phantom-accept deadlock (RED)
 
-- [ ] 3. APB conformance 真实外设负向测试（红）
+- [x] 3. APB conformance 真实外设负向测试（红）
   What to do / Must NOT do: 新建 `rtl/tb/apb_conformance_real_tb.sv`：实例化真实 `apb_decoder` + 真实 7 个外设 RTL（mxu_soc_wrapper / sfu_soc_wrapper / vector_soc_wrapper / dma_wrapper / **pcie_ep_wrapper**（APB slave，注意不是 pcie_dma_wrapper——后者是 AXI master M6，`caduceus_soc_top.v:1258`）/ doorbell / intc_top，按 `caduceus_soc_top.v` 的 0x4000_0000 起的地址映射连接），用独立 regmap oracle（`gen/npu_abi_firmware.h` 的 NPU_ABI_* 常量）逐偏移验证 reset/RW/RO/W1C/hostile-write。当前 `apb_register_conformance_tb.sv:126-159` 用 7 个 `apb_conformance_slave` 模型（slv7 PCIE_DMA 还 SKIPPED）——记为该模型的 RED 限制。Must NOT 改 `apb_decoder.v`；只新增 TB。
   Parallelization: Wave 1 | Blocked by: 0 | Blocks: 12 | Can parallelize with: 1, 2, 4, 5, 6
   References: `rtl/tb/apb_register_conformance_tb.sv:100-159`（真实 decoder + 模型 slave）；`rtl/soc/caduceus_soc_top.v:41+`（外设实例化与地址映射参考）；`firmware/npu-regmap.h` / `gen/npu_abi_firmware.h`（寄存器语义 oracle）；`sim/regression/Makefile:156-166`（run_apb_conformance target）；评审报告 :57-70（3.2 节）
@@ -127,7 +127,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — 新 TB 编译运行，至少 5/7 外设接入并产生真实语义检查；failure — 新 TB 无法编译或全部 SKIP。Evidence `.omo/evidence/task-3-soc-rtl-review-remediation.txt`
   Commit: Y | test(rtl): add APB conformance TB against real peripheral RTL (RED)
 
-- [ ] 4. 全量回归统计口径负向测试（红）
+- [x] 4. 全量回归统计口径负向测试（红）
   What to do / Must NOT do: 新建 `sim/regression/test_regression_stats.sh`：模拟 33-case 循环的判定逻辑，输入三种 case log（真实执行 PASS summary、superseded 消息、N/A 消息），断言：(a) `superseded by FM-SOC-027/032/10X`（`rtl_soc_runner.py:4279`）必须计 SKIP——当前 `run_ibex_full_rtl.sh:86` 的 grep 模式 `superseded by FM-SOC-032/10X` 匹配不到它（RED）；(b) `skipped: direct APB/AXI case not applicable to Ibex RTL mode`（:4282）必须计 SKIP；(c) 最终 summary 必须输出四类 PASS/SKIP/FAIL/TIMEOUT 且总和=33；(d) simulator 非零退出码不得被 `|| true` 吞掉（:85）。同时新建 case 状态清单 `docs/fm_soc_case_manifest.csv`（Metis M2）：33 行，列 = case_id / expected_status（EXECUTED|SUPERSEDED|N/A）/ justification。明确枚举：superseded = FM-SOC-014/015/016/021/022/023（6 个）；N/A = FM-SOC-017/019（DIRECT_CASES，`rtl_soc_runner.py:2174`）；其余 25 个 EXECUTED。Must NOT 改 run_ibex_full_rtl.sh（W2 todo 9 才修）。
   Parallelization: Wave 1 | Blocked by: 0 | Blocks: 9 | Can parallelize with: 1, 2, 3, 5, 6
   References: `sim/regression/run_ibex_full_rtl.sh:77-97`（`\|\| true` :85；SKIP grep :86-89；PASS grep :90-92）；`sim/rtl_soc_runner.py:4277-4282`（superseded 消息 :4279 "FM-SOC-027/032/10X" 与 N/A 消息 :4282）；`sim/rtl_soc_runner.py:2174`（DIRECT_CASES = {FM-SOC-017, FM-SOC-019}）；`sim/rtl_soc_runner.py:2781-2783`（P4Spike 的 superseded 消息 "FM-SOC-032/10X" 能匹配 :86，但 014/015/016 走 :4279 不能匹配）；评审报告 :86-107（3.4 节）
@@ -135,7 +135,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — 修复前 RED、修复后 GREEN，四类统计总和恒等于 33；failure — 修复前 GREEN（测试未抓到 grep 不匹配 bug）。Evidence `.omo/evidence/task-4-soc-rtl-review-remediation.txt`
   Commit: Y | test(regression): add negative test for superseded/N/A case classification (RED)
 
-- [ ] 5. 固件地址 allowlist 负例测试（红）
+- [x] 5. 固件地址 allowlist 负例测试（红）
   What to do / Must NOT do: 新建 `sim/tests/test_firmware_addr_allowlist.py`（或扩展 `sim/tests/test_firmware.py`），用 RISCVMini/NPUFirmware 单测验证当前 `dram_range_ok()` 的缺陷：(a) 低于 DRAM_BASE 的地址（ROM 0x0000_0000、空洞 0x1000_0000、MMIO 0x4000_xxxx）当前全部返回 True（RED——应为拒绝）；(b) 构造 MMUL descriptor：声明 size 很小但 M/K/N 很大，实际访问量超 descriptor size（RED——应拒绝）；(c) completion-status 写入越界：**必须用 `ring_size=1024`（或 ≥1019）构造 NPUFirmware**（默认 `ring_size=16` 时 head 只绕 0..15，永远到不了 cmd_id≥16/1019，负例不会触发缺陷——Oracle R2 审查），驱动 head 到 ≥1019，断言镜像索引越出 [16] 数组写 INTC（RED）。Must NOT 改 firmware/npu_firmware.c（W2 todo 8 才修）。
   Parallelization: Wave 1 | Blocked by: 0 | Blocks: 8 | Can parallelize with: 1, 2, 3, 4, 6
   References: `firmware/npu_firmware.c:458`（dram_range_ok 只查 upper-bound）；`firmware/npu_firmware.c:668`（completion 写入）；`firmware/npu-regmap.h`（completion ABI 区域定义）；`sim/tests/test_firmware.py`、`sim/tests/test_firmware_boot_sequence.py`（现有 firmware 单测模式）；评审报告 :155-168（3.9 节）、:137-146（3.7 节）
@@ -143,7 +143,7 @@ Your next move: approve to start execution, or request a high-accuracy review fi
   QA scenarios: happy — 修复前 RED、修复后 GREEN，负例清单全覆盖；failure — 修复前 GREEN（负例未真正触发缺陷路径）。Evidence `.omo/evidence/task-5-soc-rtl-review-remediation.txt`
   Commit: Y | test(firmware): add negative tests for address allowlist, size validation, completion bounds (RED)
 
-- [ ] 6. Evidence provenance 负向测试（红）
+- [x] 6. Evidence provenance 负向测试（红）
   What to do / Must NOT do: 新建 `sim/regression/test_evidence_provenance.sh`：(a) 对 `run_ibex_segment_run.sh` 的 evidence 追加路径——预置一个含旧 "PASS" 的 `task-14-*.txt`，模拟 timeout 场景，断言 runner 不得把旧 evidence 当作本轮结果（RED：当前 :71-77 直接向已存在文件追加且 exit 0）；(b) 断言新证据文件必须包含本轮 commit + run ID + simv hash；(c) 对 checkpoint NPZ resume 路径（`sim/rtl_soc_segment_run.py`）断言不允许 `allow_pickle=True` 直接加载不受信本地文件。Must NOT 改脚本（W2 todo 11 才修）。
   Parallelization: Wave 1 | Blocked by: 0 | Blocks: 11 | Can parallelize with: 1, 2, 3, 4, 5
   References: `sim/regression/run_ibex_segment_run.sh:70-77`（旧 evidence 追加 + exit 0）；`build/evidence/task-14-soc-rtl-verification-signoff.txt`（现有 evidence 格式；其头部 commit 以文件实况为准，不引用历史 hash——round-6 Momus 修正）；`sim/rtl_soc_segment_run.py`（checkpoint resume、allow_pickle 用法）；评审报告 :169-184（3.10 节）
