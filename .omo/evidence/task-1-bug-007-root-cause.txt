@@ -1,0 +1,284 @@
+task-1-bug-007-root-cause
+=========================
+W1.3 mode archaeology + dual-mode HEAD re-run (reproduction verdict)
+Todo 1 of .omo/plans/bug-007-root-cause.md
+Date: 2026-09-01 (runs) / 2026-09-02 (evidence assembly)
+Branch: bug-007-root-cause
+
+PROVENANCE (runs)
+-----------------
+git HEAD (runs): cab9e584819918c87322ceb7cd3c44c61eae7be5 ("chore(bug007): mark todo 0 complete")
+  branch bug-007-root-cause = c85c87e (todo 0 baseline) + cab9e584 (todo 0 completion marker);
+  git diff 6f6a8d52(main)..HEAD touches ONLY the 3 plan artifacts (no firmware/vector/RTL changes) —
+  todo 0 provenance (hex sha, manifest pre/post hash) therefore remains valid for these runs.
+firmware hex sha256: 6f261c6e35e65a190c887ba0dc50d604e2601e39b6aa99524ea5284a35165ec0
+  (todo 0 baseline, firmware/build/npu_firmware.hex, unchanged in HEAD since todo 0)
+manifest sha256: f4f6941c72da54533a99d6e448029fa64caa58d0e66292858e7436fbba640240
+  (rtl/test_vectors/soc_e2e/qwen25-3b-3layer-rtl/manifest.json; todo 0 confirmed == committed state)
+manifest op07/24/41 dimensions: M=16 K=16 N=128 tiles=2 (all three layers)
+simv: sim/regression/simv_soc_cocotb
+  sha256: f8a311604f1cd8aa2f0118136ef3ccf1cdac4a3ed154b8fee66f2d84b5046d25
+  mtime: 2026-09-01 23:31:20 (built at start of MODE-A run; reused by MODE-B)
+VCS: V-2023.12-SP2_Full64 (compile banner Tue Sep 1 23:30:27 2026, qwen_blk0_elab.log)
+Host: sz0001 (192.168.0.11); cocotb v1.9.0 (/NAS/Tools/anaconda3/envs/py3.11)
+Runner: /tmp/bug007-todo1-run.sh on sz0001 (nohup), log /tmp/bug007-todo1-run.log
+Env init per run: source sim/regression/run_env.sh (module load vcs/vcs_2023.12sp2 + py3.11 env)
+
+COMMANDS EXECUTED (exact)
+-------------------------
+MODE-A (sz0001, direct make, no wrapper):
+  source sim/regression/run_env.sh
+  make -C sim/regression run_qwen25_3b_3layer
+  -> simv +define+COCOTB_SIM=1 +COCOTB -no_save +BOOTROM_HEX=firmware/build/npu_firmware.hex
+  -> log: sim/regression/qwen25_3b_3layer.log ; results xml: sim/regression/qwen25_3b_3layer_results.xml
+MODE-B (sz0001, direct make with CASE_ID — soc-verification-run.sh NOT used, per plan guardrail #7):
+  make -C sim/regression run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN
+  -> log: sim/regression/fm_soc_ATTN-WEIGHT-CHAIN.log ; results xml: fm_soc_ATTN-WEIGHT-CHAIN_results.xml
+Timestamps (Asia/Shanghai, from /tmp/bug007-todo1-run.log):
+  RUNNER START 2026-09-01T23:30:25+0800
+  MODE-A START 23:30:25 / VCS compile 23:30:27-23:31:20 / MODE-A END 2026-09-02T01:25:27 / MODE-A_EXIT=0
+  MODE-B START 01:25:27 / MODE-B END 01:26:58 / MODE-B_EXIT=0 / RUNNER END 01:26:58
+  make verdict lines: "W1.3: PASS" (MODE-A), "FM_SOC_ATTN-WEIGHT-CHAIN: PASS" (MODE-B)
+  cocotb summaries: both logs "TESTS=1 PASS=1 FAIL=0 SKIP=0";
+  MODE-A sim_time=35739096.50ns real=6836.38s; MODE-B sim_time=998668.50ns real=79.73s
+  No [TMO]/TIMEOUT in either log; no ERROR lines in either log.
+
+═══════════════════════════════════════════════════════════════════════════
+1. MODE-ORIG ARCHAEOLOGY
+═══════════════════════════════════════════════════════════════════════════
+
+MODE-ORIG: per-op-preload
+
+Evidence chain (git citations):
+(a) Plan-level mode definition — .omo/plans/soc-verification-gaps-phase5.md:186-190 (todo 3 of the
+    W1.3-era plan): "SoC testbench: 3-layer forward pass on sz0001 (per-op regression mode)" /
+    "Uses per-op hex preload for each op (true op-to-op data flow blocked by ISA gap FP16→INT32)" /
+    "Per-op regression mode validates each op independently from pre-generated hex vectors. True
+    op-to-op full-chain E2E forward pass ... is deferred to Phase 6".
+(b) First committed 3-layer testcase = 79654175 (2026-07-08 07:38:28, "[Sim] Cocotb bridge:
+    enhanced F16/I32 dtype support and signal tracing"). Code at 79654175:sim/cocotb_bridge.py:
+    - test_qwen25_3b_3layer loads firmware (bridge.load_firmware) then wait_cycles(2000) — firmware
+      RESIDENT but not dispatching;
+    - MMUL ops: bridge.preload_sram(...) + bridge._run_streamed_mmul(instr, ...) — Python streams the
+      op via direct MMIO/APB writes (APB master overridden by Python VPI, lines ~1810-1821);
+    - SFU/Vector ops: bridge.preload_sram(...) + bridge.run_step(instr) — Python MMIO direct drive;
+    - zero occurrences of doorbell/ring/descriptor dispatch inside the test body (grep on test region
+      of 79654175:sim/cocotb_bridge.py for doorbell|ring|desc_base|descriptor -> 0 hits).
+(c) Current HEAD test (sim/cocotb_bridge.py:5261-5283 docstring + body through :5480) is structurally
+    identical: load_firmware + wait_cycles(2000) + per-op Python drive; 0 doorbell/ring hits.
+(d) Failure date vs environment: the 45-PASS/6-FAIL W1.3 failure was recorded 2026-07-07
+    (docs commit 293cc4a8, 2026-07-07 14:51:03). The 07-07 testcase itself was NEVER committed
+    (first commit = 79654175, next morning) — see RECONSTRUCTION-UNCERTAINTY.
+(e) The ledger text "firmware 写 CMD.START 后 STATUS.BUSY 从未拉高" and "firmware ring buffer ...
+    32-entry ring" (docs/bugs/bugs-soc-rtl.md BUG-007 hypotheses 1) are the 07-07 author's
+    HYPOTHESES, not mode evidence. Hypothesis 1 is independently refuted twice over:
+    RING_ENTRIES=1024 in firmware (plan todo 3 note), and per-op mode has NO firmware ring dispatch
+    (Python drives MMIO directly; firmware resident/idle).
+(f) CPU context: 09f753e2 (2026-07-06 08:20:06) replaced Spike with Ibex RTL ("feat(rtl): replace
+    Spike with Ibex RTL — 33 cases regression PASS"), one day BEFORE the 07-07 failure. The 07-07
+    run therefore executed on the Ibex-RTL SoC with Python APB-master override (per 79654175 code),
+    NOT on a Spike CPU model.
+
+Key commit dates (recorded):
+  09f753e2  feat(rtl): replace Spike with Ibex RTL — 33 cases regression PASS       2026-07-06 08:20:06 +0800
+  293cc4a8  [Docs] Record W1.3 3-layer bugs: BUG-RTL-SOC-005 re-opened, BUG-RTL-SOC-007 open  2026-07-07 14:51:03 +0800
+  79654175  [Sim] Cocotb bridge: enhanced F16/I32 dtype support and signal tracing   2026-07-08 07:38:28 +0800
+  b6b0a89  [Scripts] Qwen2.5-3B: add RTL vector gen, verification, and drift diagnose  2026-07-08 07:38:43 +0800
+
+ORIGINAL FAILURE EVIDENCE STATUS (archaeology finding):
+- build/wave1/w1-3-rtl-op-summary.json SURVIVED in the working tree (untracked; never committed —
+  git log --all -- build/wave1/* touches only w1-3-first-failure-report.md via 6f0dd88f).
+- Snapshot taken BEFORE the MODE-A re-run overwrote it (working-tree copy mtime 2026-07-08 07:39:59):
+    totals: 51 ops, passed=51, failed=0, total_cycles=274134
+    op_07_attn_weight:  {"passed": true, "cycles": 0}
+    op_24_attn_weight:  {"passed": true, "cycles": 0}
+    op_41_attn_weight:  {"passed": true, "cycles": 0}
+  Snapshot copies (sha256) preserved at /tmp/bug007-todo1-snap/:
+    w1-3-rtl-op-summary.json    95c625b1faa0433ce123e434ebb795b7ed840ee95f12eca9bde0aeff1a7caea2
+    w1-3-first-failure-report.md 5bc8072e91e3a02a96f2ff631f929c348f5a1b032c908fecebbf9d18db6a44f7
+    w1-3-rtl-layer-outputs.npz  0a6b1bdd9d143da54fb719a14897f5063c31c4037badeb8c71b865d41a4107ff
+- NOTE: the surviving 07-08 JSON shows attn_weight passed=TRUE with cycles=0 — direct evidence that
+  "cycles=0" in this test structure is a MEASUREMENT ARTIFACT, not a dispatch-failure signature:
+  the W1.3 test hardcodes `cycles = 0` for ALL MMUL ops (still true at HEAD,
+  sim/cocotb_bridge.py:5382-5383 `cycles = 0` right after _run_streamed_mmul; same at
+  79654175:sim/cocotb_bridge.py:3798-3800). attn_weight op07/24/41 are MMUL ops -> their summary
+  `cycles` is 0 BY CONSTRUCTION in per-op mode, regardless of execution. The ledger's symptom
+  wording ("op never executed ... STATUS.BUSY was never asserted", quoting "passed": false) is NOT
+  reproduced by any surviving artifact: the surviving JSON has passed=true, and no 07-07 JSON with
+  passed=false exists in git or in the tree.
+- The 07-08 07:39:59 JSON corresponds to the "51/51 op-level PASS but layer-compare FAIL" run
+  described in build/wave1/w1-3-first-failure-report.md (report file mtime 07-08 11:06; its quoted
+  per-op table shows op07 attn_weight cos_sim=0.999000, max_abs~0.003 — i.e., the op EXECUTED).
+- Execution signal for attn_weight in per-op mode (visible at WARNING level in the log):
+  [mmul_probe opNN_attn_weight] ... compute_en_cycles=N lines (dbg_compute_en asserted N cycles) +
+  [W1.3] op N attn_weight: cos_sim=..., max_abs=..., ok=True. compute_en_cycles>0 proves MXU dispatch.
+
+Verdict methodology note (applied below): because MMUL `cycles` is hardcoded 0 in MODE-A by test
+structure (since the ORIGINAL 79654175 testcase), the plan criterion "cycle value of 0 = REPRO-FAIL"
+is refined for MODE-A as follows: REPRO-FAIL ⇔ any of op07/24/41 shows ok=False (cos_sim<0.999 or
+max_abs≥10 — the ledger's 45/6 signature) OR compute_en_cycles==0 (dispatch absent). REPRO-CLEAR ⇔
+all three show ok=True AND compute_en_cycles>0. MODE-B reports real per-op cycles (rtl_soc_runner),
+so the raw cycles criterion applies there unchanged.
+
+═══════════════════════════════════════════════════════════════════════════
+2. GENERATOR PROVENANCE ARCHAEOLOGY
+═══════════════════════════════════════════════════════════════════════════
+git log --oneline --since=2026-07-01 -- scripts/gen_qwen25_3b_rtl_vectors.py
+  b6b0a89 [Scripts] Qwen2.5-3B: add RTL vector gen, verification, and drift diagnose
+b6b0a89 = 2026-07-08 07:38:43 +0800 — the ONLY commit touching the generator since 2026-07-01,
+and the LAST commit ever (verified via git log). Uncommitted modifications before 07-08 are
+unverifiable by definition (git records commits only) — recorded as such.
+
+═══════════════════════════════════════════════════════════════════════════
+3. MODE-A RE-RUN (per-op preload, 3-layer, 51 ops) — REPRO-CLEAR
+═══════════════════════════════════════════════════════════════════════════
+Result: 51/51 ops PASS (fresh summary JSON mtime 2026-09-02 01:25:27:
+  totals: 51 51 0, failed_ops=[], total_cycles=274149)
+cocotb: "** cocotb_bridge.test_qwen25_3b_3layer PASS 35739096.50 6836.38 **" /
+  "TESTS=1 PASS=1 FAIL=0 SKIP=0"; make "W1.3: PASS"; 0 ERROR lines; no TIMEOUT.
+
+attn_weight highlighted rows (the 07-07 failure signature — all EXECUTED and matched today):
+  op_07_attn_weight:  {"passed": true, "cycles": 0(hardcoded)}  log: cos_sim=1.000000 max_abs=0.0003 ok=True
+                      [mmul_probe op07_attn_weight] compute_en_cycles=19 (x2 N-tiles, k=0:16 n=0:64/64:128)
+  op_24_attn_weight:  {"passed": true, "cycles": 0(hardcoded)}  log: cos_sim=1.000000 max_abs=0.0003 ok=True
+                      [mmul_probe op24_attn_weight] compute_en_cycles=19 (x2)
+  op_41_attn_weight:  {"passed": true, "cycles": 0(hardcoded)}  log: cos_sim=1.000000 max_abs=0.0002 ok=True
+                      [mmul_probe op41_attn_weight] compute_en_cycles=19 (x2)
+
+Full per-op table (from fresh build/wave1/w1-3-rtl-op-summary.json op_results; MMUL cycles=0 are
+hardcoded by the test driver — see §1 — so the log cos/max_abs/ok are the execution evidence):
+  op_00_RMSNorm pre-attn    PASS cycles=8720
+  op_01_Q_proj              PASS cycles=0     cos=1.000000 ok
+  op_02_K_proj              PASS cycles=0     cos=1.000000 ok
+  op_03_V_proj              PASS cycles=0     cos=1.000000 ok
+  op_04_RoPE                PASS cycles=6283
+  op_05_attn_score          PASS cycles=0     cos=1.000000 ok
+  op_06_attn_softmax        PASS cycles=621
+> op_07_attn_weight         PASS cycles=0     cos=1.000000 ok  compute_en_cycles=19  <-- attn_weight
+  op_08_O_proj              PASS cycles=0     cos=0.999360 ok
+  op_09_VRESID pre-attn     PASS cycles=4844
+  op_10_RMSNorm post-attn   PASS cycles=8720
+  op_11_gate                PASS cycles=0     cos=1.000000 ok
+  op_12_up                  PASS cycles=0     cos=1.000000 ok
+  op_13_SiLU                PASS cycles=33537
+  op_14_VMUL gate*up        PASS cycles=23814
+  op_15_down                PASS cycles=0     cos=1.000000 ok
+  op_16_VRESID post-FFN     PASS cycles=4844
+  op_17_RMSNorm pre-attn    PASS cycles=8720
+  op_18_Q_proj              PASS cycles=0     cos=1.000000 ok
+  op_19_K_proj              PASS cycles=0     cos=1.000000 ok
+  op_20_V_proj              PASS cycles=0     cos=1.000000 ok
+  op_21_RoPE                PASS cycles=6283
+  op_22_attn_score          PASS cycles=0     cos=1.000000 ok
+  op_23_attn_softmax        PASS cycles=621
+> op_24_attn_weight         PASS cycles=0     cos=1.000000 ok  compute_en_cycles=19  <-- attn_weight
+  op_25_O_proj              PASS cycles=0     cos=0.999527 ok
+  op_26_VRESID pre-attn     PASS cycles=4844
+  op_27_RMSNorm post-attn   PASS cycles=8720
+  op_28_gate                PASS cycles=0     cos=1.000000 ok
+  op_29_up                  PASS cycles=0     cos=1.000000 ok
+  op_30_SiLU                PASS cycles=33537
+  op_31_VMUL gate*up        PASS cycles=23814
+  op_32_down                PASS cycles=0     cos=1.000000 ok
+  op_33_VRESID post-FFN     PASS cycles=4844
+  op_34_RMSNorm pre-attn    PASS cycles=8720
+  op_35_Q_proj              PASS cycles=0     cos=1.000000 ok
+  op_36_K_proj              PASS cycles=0     cos=1.000000 ok
+  op_37_V_proj              PASS cycles=0     cos=1.000000 ok
+  op_38_RoPE                PASS cycles=6283
+  op_39_attn_score          PASS cycles=0     cos=1.000000 ok
+  op_40_attn_softmax        PASS cycles=621
+> op_41_attn_weight         PASS cycles=0     cos=1.000000 ok  compute_en_cycles=19  <-- attn_weight
+  op_42_O_proj              PASS cycles=0     cos=0.999174 ok
+  op_43_VRESID pre-attn     PASS cycles=4844
+  op_44_RMSNorm post-attn   PASS cycles=8720
+  op_45_gate                PASS cycles=0     cos=1.000000 ok
+  op_46_up                  PASS cycles=0     cos=1.000000 ok
+  op_47_SiLU                PASS cycles=33537
+  op_48_VMUL gate*up        PASS cycles=23814
+  op_49_down                PASS cycles=0     cos=1.000000 ok
+  op_50_VRESID post-FFN     PASS cycles=4844
+Note: op14/31/48 (VMUL gate*up, the OTHER 3 FAIL ops of 07-07) PASS with cycles=23814 — the exact
+same cycle count quoted in the 07-07 failure table (docs/vector-workaround-3layer-issue.md §2.1),
+corroborating that today's run reproduces the original dispatch path, minus the 07-07 failures.
+
+═══════════════════════════════════════════════════════════════════════════
+4. MODE-B RE-RUN (ATTN-WEIGHT-CHAIN, firmware ring chain, 17-op blk.0) — REPRO-CLEAR
+═══════════════════════════════════════════════════════════════════════════
+Result: full 17-op blk.0 chain, all 26 commands cycles>0; make "FM_SOC_ATTN-WEIGHT-CHAIN: PASS";
+cocotb "** rtl_soc_runner.test_soc_rtl_runner_smoke PASS 998668.50 79.73 **" / TESTS=1 PASS=1 FAIL=0.
+BOOT_ASSERT: PC=0 PASS; SP_INIT: PASS.
+Final line: "IbexRunner ATTN-WEIGHT-CHAIN: PASS — 17-op chain PASS: all 26 commands cycles>0,
+attn_weight cycles=31046 cos_sim=1.000000, min_cos=0.999984"
+
+Per-op table (from fm_soc_ATTN-WEIGHT-CHAIN.log):
+  op00 RMSNORM pre-attn    cycles=1918   cos_sim=1.000000
+  op01 Q_proj MMUL         cycles=24326  cos_sim=1.000000
+  op02 K_proj MMUL         cycles=11526  cos_sim=1.000000
+  op03 V_proj MMUL         cycles=11526  cos_sim=1.000000
+  op04 ROPE                cycles=1950   cos_sim=1.000000
+  op05 attn_score MMUL     cycles=30801  cos_sim=1.000000
+  op06 attn_softmax SOFTMAX cycles=2116  cos_sim=0.999984
+> op07 attn_weight MMUL    cycles=31046  cos_sim=1.000000   <-- attn_weight (REAL measured cycles)
+  op08 O_proj MMUL         cycles=11526  cos_sim=1.000000
+  op09 VRESID              cycles=2551   bit-exact PASS
+  op10 RMSNORM post-attn   cycles=2044   cos_sim=1.000000
+  op11 gate MMUL           cycles=24326  cos_sim=1.000000
+  op12 up MMUL             cycles=11527  cos_sim=1.000000
+  op13 SILU                cycles=1965   cos_sim=1.000000
+  op14 VMUL gate*up        cycles=2552   bit-exact PASS
+  op15 down MMUL           cycles=24327  cos_sim=1.000000
+  op16 VRESID              cycles=2552   bit-exact PASS
+
+═══════════════════════════════════════════════════════════════════════════
+5. VERDICTS
+═══════════════════════════════════════════════════════════════════════════
+MODE-ORIG: per-op-preload
+  (git evidence: .omo/plans/soc-verification-gaps-phase5.md:186-190 defines W1.3 as per-op
+  regression mode; 79654175:sim/cocotb_bridge.py first committed testcase = firmware resident +
+  Python MMIO per-op drive, 0 doorbell/ring hits; HEAD :5261-5480 structurally identical)
+
+PRIMARY-VERDICT: REPRO-CLEAR
+  (MODE-ORIG is known -> primary verdict = corresponding-mode verdict. MODE-ORIG=per-op-preload ->
+  corresponding mode = MODE-A -> MODE-A is REPRO-CLEAR.)
+
+MODE-A(run_qwen25_3b_3layer): REPRO-CLEAR
+  op07/24/41 measured cycles: summary `cycles`=0 by hardcoded test-driver design (see §1 artifact
+  note); real execution evidence: compute_en_cycles=19 each (2 N-tiles), cos_sim=1.000000 each,
+  max_abs<=0.0003, ok=True. 51/51 ops passed. No 07-07 failure signature (neither the 45/6
+  distribution nor any attn_weight failure) reproduced.
+
+MODE-B(ATTN-WEIGHT-CHAIN): REPRO-CLEAR
+  op07 attn_weight measured cycles = 31046, cos_sim=1.000000; all 26 commands cycles>0.
+
+NEW-DEFECT-NON-CORRESPONDING-MODE: none
+  (MODE-ORIG known; non-corresponding mode MODE-B also REPRO-CLEAR -> no new defect in either mode.)
+
+RECONSTRUCTION-UNCERTAINTY: medium
+  Rationale: (1) the exact 07-07 testcase was never committed (first commit 79654175 on 07-08
+  07:38, ~17h after the 07-07 14:51 failure record) — the 07-07 run environment can only be
+  reconstructed, not reproduced exactly; (2) the original 45/6 evidence artifact is absent from git
+  and the surviving JSON is from a 07-08 re-run (passed=51, contradicting the ledger's quoted
+  "passed": false) — the 45/6 vs 51/51 discrepancy is unresolvable from surviving evidence;
+  (3) mode determination itself is robust (three independent sources converge on per-op-preload:
+  plan definition + first-committed testcase + HEAD structure), so uncertainty is about the 07-07
+  run's exact code/artifacts, not about the mode classification; (4) environment drift within the
+  failure window is bounded and documented (09f753e2 Spike->Ibex on 07-06 predates the failure, so
+  the 07-07 run was already on Ibex; generator b6b0a89 first committed 07-08 07:38).
+
+Wave-2 routing (per plan Execution strategy / Mixed-mode routing table):
+  MODE-ORIG=per-op-preload + primary verdict REPRO-CLEAR -> todo 7 (bounded flip-commit archaeology,
+  MODE-A as archaeology entry), NOT todo 3/4/5.
+
+ADVERSARIAL QA NOTES
+--------------------
+stale_state: vectors were todo-0 fresh (manifest hash == committed state, generator no-drift);
+  historical build/wave1 JSON was snapshotted (sha256 recorded) before the re-run overwrote it.
+misleading_success_output: make exit codes cross-checked against cocotb results XML (no <failure>
+  tags), per-op JSON, WARNING-level cos lines, and 0 ERROR/0 TIMEOUT greps; "cycles=0" in MODE-A
+  MMUL rows recognized as hardcoded artifact and NOT treated as a failure signature (documented in
+  §1 with both historical and HEAD code citations).
+dirty_worktree: only the 7 known parallel-session dirty files remain modified; none staged here
+  (see commit note). build/wave1/w1-3-rtl-op-summary.json is untracked/ignored — not committed.
+
+RESULT: PASS
