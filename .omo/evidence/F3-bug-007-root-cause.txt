@@ -1,0 +1,90 @@
+F3-bug-007-root-cause
+=====================
+F3 real manual QA re-run (MODE-A + MODE-B) on sz0001
+Final verification wave F3 of .omo/plans/bug-007-root-cause.md
+Date: 2026-09-02
+Branch: bug-007-root-cause
+
+PROVENANCE
+----------
+git HEAD: 6a223c9bdd3b52e4382a96931d9a309b82f25879
+branch: bug-007-root-cause
+firmware hex sha256: 6f261c6e35e65a190c887ba0dc50d604e2601e39b6aa99524ea5284a35165ec0
+  path: firmware/build/npu_firmware.hex
+  cross-check: matches task-0-bug-007-root-cause.txt and task-1-bug-007-root-cause.txt
+manifest sha256: f4f6941c72da54533a99d6e448029fa64caa58d0e66292858e7436fbba640240
+  path: rtl/test_vectors/soc_e2e/qwen25-3b-3layer-rtl/manifest.json
+  cross-check: matches task-0 and task-1 evidence (no generator drift)
+manifest op07/24/41 dimensions: M=16 K=16 N=128 tiles=2
+simv identifier: sim/regression/simv_soc_cocotb
+  sha256: f8a311604f1cd8aa2f0118136ef3ccf1cdac4a3ed154b8fee66f2d84b5046d25
+  mtime: 2026-09-01 23:31:20.664834663 +0800
+  note: simv was reused (up-to-date) for both MODE-A and MODE-B; no rebuild occurred
+VCS version: V-2023.12-SP2_Full64 (compile banner: Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64)
+Host: sz0001 (192.168.0.11)
+Runner: .omo/evidence/F3-bug-007-run.sh on sz0001 (setsid detached), log .omo/evidence/F3-run.log
+
+COMMANDS EXECUTED (exact)
+-------------------------
+MODE-A (sz0001, direct make, no wrapper):
+  source sim/regression/run_env.sh
+  make -C sim/regression run_qwen25_3b_3layer
+MODE-B (sz0001, direct make with CASE_ID; soc-verification-run.sh NOT used):
+  source sim/regression/run_env.sh
+  make -C sim/regression run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN
+
+TIMESTAMPS (Asia/Shanghai, from .omo/evidence/F3-run.log)
+  F3 runner start: 2026-09-02T05:53:54+0800
+  MODE-A start:    2026-09-02T05:53:54+0800
+  MODE-A end:      2026-09-02T07:44:39+0800 (MODE-A exit=0)
+  MODE-B start:    2026-09-02T07:44:39+0800
+  MODE-B end:      2026-09-02T07:46:02+0800 (MODE-B exit=0)
+  F3 runner end:   2026-09-02T07:46:02+0800
+
+MODE-A VERDICT: REPRO-CLEAR (run_qwen25_3b_3layer)
+--------------------------------------------------
+cocotb summary: TESTS=1 PASS=1 FAIL=0 SKIP=0
+make verdict: W1.3: PASS
+simulation time: 35739096.50 ns; real time: ~6634 s
+per-op summary JSON: build/wave1/w1-3-rtl-op-summary.json
+  total_ops=51 passed=51 failed=0 failed_ops=[] total_cycles=274149
+attn_weight highlighted rows:
+  op_07_attn_weight: summary cycles=0 (hardcoded by per-op test driver)
+    log: "[W1.3] op 7 attn_weight: cos_sim=1.000000, max_abs=0.0003, ok=True"
+    log: "[mmul_probe op07_attn_weight] compute_en_cycles=19"
+  op_24_attn_weight: summary cycles=0 (hardcoded)
+    log: "[W1.3] op 24 attn_weight: cos_sim=1.000000, max_abs=0.0003, ok=True"
+    log: "[mmul_probe op24_attn_weight] compute_en_cycles=19"
+  op_41_attn_weight: summary cycles=0 (hardcoded)
+    log: "[W1.3] op 41 attn_weight: cos_sim=1.000000, max_abs=0.0002, ok=True"
+    log: "[mmul_probe op41_attn_weight] compute_en_cycles=19"
+No ERROR lines; no TIMEOUT; no failed ops.
+
+MODE-B VERDICT: REPRO-CLEAR (ATTN-WEIGHT-CHAIN)
+-----------------------------------------------
+cocotb summary: TESTS=1 PASS=1 FAIL=0 SKIP=0
+make verdict: FM_SOC_ATTN-WEIGHT-CHAIN: PASS
+simulation time: 998668.50 ns; real time: ~72 s
+final chain verdict (from sim/regression/fm_soc_ATTN-WEIGHT-CHAIN.log):
+  "IbexRunner ATTN-WEIGHT-CHAIN: PASS — 17-op chain PASS: all 26 commands cycles>0, attn_weight cycles=31046 cos_sim=1.000000, min_cos=0.999984"
+op07 attn_weight:
+  cycles=31046
+  cos_sim=1.000000
+No ERROR lines; no TIMEOUT.
+
+CROSS-CHECK AGAINST TODO 1 EVIDENCE
+-----------------------------------
+Reference: .omo/evidence/task-1-bug-007-root-cause.txt
+- git HEAD difference: task-1 ran at cab9e584 (todo 0 completion); F3 ran at 6a223c9 (todo 9 completion). No RTL/firmware/vector changes occurred between those commits; only plan/docs/bug007 replay instrumentation was added (sim/rtl_soc_runner.py and sim/verification/bug007_fm_replay.py). The simv binary was not rebuilt (sha256 unchanged).
+- Firmware hex sha256 matches: 6f261c6e...5165ec0 (task-0 / task-1 / F3)
+- Manifest sha256 matches: f4f6941c...ba640240 (task-0 / task-1 / F3)
+- simv sha256 matches: f8a31160...5046d25 (task-1 / F3)
+- VCS version matches: V-2023.12-SP2_Full64
+- MODE-A totals match: 51/51 PASS, total_cycles=274149 (same as task-1)
+- MODE-A op07/24/41 execution evidence matches: compute_en_cycles=19 each, cos_sim=1.000000, ok=True (same as task-1)
+- MODE-B op07 cycles/cos match: cycles=31046, cos_sim=1.000000 (same as task-1)
+- MODE-B TESTS=1 PASS=1 FAIL=0 matches task-1
+Discrepancies: none.
+
+F3-VERDICT: APPROVE
+Reason: Both MODE-A and MODE-B completed with PASS, all provenance hashes match the fresh firmware/vectors from task 0 and the prior task-1 evidence, and the log verdict lines are consistent with the committed evidence. The real manual QA re-run confirms the REPRO-CLEAR conclusion.
