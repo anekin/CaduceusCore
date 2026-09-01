@@ -271,10 +271,10 @@ Your next move: approve to start execution, or request a high-accuracy review fi
 
 ## Final verification wave
 > Runs in parallel after ALL todos. ALL must APPROVE. Surface results and wait for the user's explicit okay before declaring complete.
-- [ ] F1. Plan compliance audit — 21 todos 逐条核对：evidence 存在、acceptance 满足、commit 已做；特别核对红测试均有 RED+GREEN 双证据（todo 15 汇总表）与 P0 的干净验证 + 分支名 == plan 名。
-- [ ] F2. Code quality review — 审查 crossbar 修复（无新死锁/饥饿路径）、固件 allowlist（无过严误拒）、runner fail-closed（无破坏 SSH 透传）、provenance 脚本（hash 计算正确）。
-- [ ] F3. Real manual QA — 真实执行 pytest 全量、Spike smoke、sz0001 spot checks；任何 FAIL/DRY-RUN 如实记录，绝不自动转 PASS。
-- [ ] F4. Scope fidelity — 核对 Must NOT 清单：未碰 frozen spec / vendored IP / 引擎 internals；未执行 P2/P3 项（只写了 blocker 清单）；未改 rtl-perf-decomposition-calibration 计划；未覆盖用户 dirty worktree 修改（P0 已分类提交保留）；无本计划改动直接 commit 到 main。
+- [x] F1. Plan compliance audit — 21 todos 逐条核对：evidence 存在、acceptance 满足、commit 已做；特别核对红测试均有 RED+GREEN 双证据（todo 15 汇总表）与 P0 的干净验证 + 分支名 == plan 名。
+- [x] F2. Code quality review — 审查 crossbar 修复（无新死锁/饥饿路径）、固件 allowlist（无过严误拒）、runner fail-closed（无破坏 SSH 透传）、provenance 脚本（hash 计算正确）。
+- [x] F3. Real manual QA — 真实执行 pytest 全量、Spike smoke、sz0001 spot checks；任何 FAIL/DRY-RUN 如实记录，绝不自动转 PASS。
+- [x] F4. Scope fidelity — 核对 Must NOT 清单：未碰 frozen spec / vendored IP / 引擎 internals；未执行 P2/P3 项（只写了 blocker 清单）；未改 rtl-perf-decomposition-calibration 计划；未覆盖用户 dirty worktree 修改（P0 已分类提交保留）；无本计划改动直接 commit 到 main。
 
 > 全部 F 波 APPROVE 且用户 explicit okay 后：执行 merge 到 main（`--no-ff`；前置 fetch/冲突处置见 Commit strategy 与 Success criteria #12）。
 

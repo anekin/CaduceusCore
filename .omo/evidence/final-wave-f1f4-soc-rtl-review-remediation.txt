@@ -1,0 +1,307 @@
+================================================================================
+FINAL VERIFICATION WAVE F1-F4 — soc-rtl-review-remediation (closing independent gate)
+================================================================================
+Timestamp : 2026-09-01T02:52:30Z (UTC; evidence written 2026-09-01)
+Repo      : /home/prj/zhengs/caduceuscore/CaduceusCore
+Branch    : soc-rtl-review-remediation  (== plan name; HEAD descends from f982bef)
+HEAD      : c3e81b19e5c63a72307c8858850583ece239f410
+Base      : main = f982bef7633c6ed4ef1815abed8ef31640d04eff
+Range     : f982bef..HEAD = 39 commits (25 substantive + 9 chore(omo) markers
+            + 5 chore(omo)/chore(evidence)/chore(firmware) session-sync commits)
+Executor  : Sisyphus-Junior (independent closing gate; re-verified from
+            artifacts + real executions; no claim taken on trust)
+No git commit made by this wave.
+
+--------------------------------------------------------------------------------
+F1 — PLAN COMPLIANCE (21 todos, 0-20)
+--------------------------------------------------------------------------------
+Method: (i) evidence file exists AND final content line is the verdict marker;
+(ii) expected commit exists in `git log --oneline f982bef..HEAD` (39 commits,
+verified against actual log line numbers); (iii) spot-grep acceptance markers;
+(iv) red tests have RED+GREEN paired evidence (rg-table); (v) P0: branch == plan
+name, HEAD descendant of f982bef, plan checkboxes 0-20 all [x] (21/21 checked;
+F1-F4 checkboxes are the final wave itself, unchecked by design).
+
+| #  | evidence file (final content line)                                   | commit(s) in range        | verdict |
+|----|-----------------------------------------------------------------------|---------------------------|---------|
+| 0  | task-0-soc-rtl-review-remediation.txt  -> "P0 RESULT: PASS"          | 7f14690 ✓ 9d80c96 ✓       | PASS    |
+| 1  | task-1-soc-rtl-review-remediation.txt  -> "TASK-1 RESULT: RED (expected)" | 4a55494 ✓             | PASS    |
+| 2  | task-2-soc-rtl-review-remediation.txt  -> "TASK-2 RESULT: RED (expected)" | cfccc0e ✓             | PASS    |
+| 3  | task-3-soc-rtl-review-remediation.txt  -> "TASK-3 RESULT: RED (expected)" | d2487be ✓             | PASS    |
+| 4  | task-4-soc-rtl-review-remediation.txt  -> "TASK-4 RESULT: RED (expected)" | b04ff2a ✓             | PASS    |
+| 5  | task-5-soc-rtl-review-remediation.txt  -> "TASK-5 RESULT: RED (expected)" | 1827aa4 ✓             | PASS    |
+| 6  | task-6-soc-rtl-review-remediation.txt  -> "TASK-6 RESULT: RED (expected)" | 013dfeb ✓             | PASS    |
+| 7  | task-7-soc-rtl-review-remediation.txt  -> "TASK-7 RESULT: GREEN (expected)" | c478ae5 ✓            | PASS    |
+| 8  | task-8-soc-rtl-review-remediation.txt  -> "TASK-8 RESULT: GREEN (expected)" | cee6697 ✓            | PASS    |
+| 9  | task-9-soc-rtl-review-remediation.txt  -> "TASK-9 RESULT: GREEN (expected)" | 6230e21 ✓            | PASS    |
+| 10 | task-10-soc-rtl-review-remediation.txt -> "TASK-10 RESULT: GREEN (expected)" | f38ae1c ✓           | PASS    |
+| 11 | task-11-soc-rtl-review-remediation.txt -> "TASK-11 RESULT: GREEN (expected)" | 18c8a4a ✓           | PASS    |
+| 12 | task-12-soc-rtl-review-remediation.txt -> "TASK-12 RESULT: GREEN (expected)" | 80f6516 ✓           | PASS    |
+| 13 | task-13-soc-rtl-review-remediation.txt -> "TASK-13 RESULT: GREEN (expected)" | 4eac85d ✓ 95c306d ✓ a1f6ff0 ✓ | PASS |
+| 14 | task-14-soc-rtl-review-remediation.txt -> "TASK-14 RESULT: APPROVE-WITH-CONCERNS ... no fabricated PASS, no git commit made." | 9d2ce8c ✓ | PASS |
+| 15 | task-15-soc-rtl-review-remediation.txt -> "TASK-15 RESULT: GREEN (expected)" | 01d9aae ✓           | PASS    |
+| 16 | task-16-soc-rtl-review-remediation.txt -> "TASK-16 RESULT: GREEN (expected)" | ba15df6 ✓           | PASS    |
+| 17 | task-17-soc-rtl-review-remediation.txt -> "TASK-17 RESULT: GREEN (expected)" | 6f2e5cf ✓ 9eea3ae ✓ | PASS    |
+| 18 | task-18-soc-rtl-review-remediation.txt -> "TASK-18 RESULT: GREEN (expected)" | 8957ff8 ✓           | PASS    |
+| 19 | task-19-soc-rtl-review-remediation.txt -> "TASK-19 RESULT: GREEN (expected)" | 9cf6f91 ✓           | PASS    |
+| 20 | task-20-soc-rtl-review-remediation.txt -> "TASK-20 RESULT: GREEN (expected)" | be3bf04 ✓           | PASS    |
+
+Notes:
+- Todos 1-3,7,9,11,12 evidence files end with a "====..." separator line; the
+  verdict marker is the final content line directly above it (consistent file
+  formatting convention across all 21 evidence files; verified via tail -3).
+- Todo 0 map expectation "a87997b/7f14690/9d80c96": 7f14690 + 9d80c96 are in
+  f982bef..HEAD. a87997b ("chore(evidence): commit pending evidence and
+  notepad updates") is NOT in the range — it lives on sibling branch
+  fix/fm-soc-10x-sfu-desc by design (P0 housekeeping distribution of dirty
+  worktree files to their owning branch), documented in task-0 evidence
+  lines 77-81/186-203 with `git show --stat` verification. Verified: a87997b
+  exists, NOT an ancestor of f982bef nor of HEAD; `git branch --all --contains`
+  = fix/fm-soc-10x-sfu-desc. Recorded as PASS-with-note (evidence self-consistent).
+- chore(omo) marker commits: d4a0399 ✓ 886ccb4 ✓ c71593f ✓ 311b046 ✓ 672a09e ✓
+  e73e28e ✓ ee095f2 ✓ b6fa2fb ✓ c3e81b1 ✓ — all present in range.
+- 5 additional bookkeeping commits in range beyond the declared map:
+  b5c2b2a, 9f8ff9e, 1338b64, 4d8dab8 (chore(omo)/chore(evidence) session
+  state/archive syncs) + dafa3cb (chore(firmware): rebuild npu_* after clean
+  all). Expected OMO-workflow sync pattern; not a violation.
+
+Spot-grep acceptance markers (iii):
+- todo 7:  P4 GREEN — evidence :136-139 "P4 AR grants per master: 393 393 393
+  393 393 393 393 (total 2751)", "CHECK P4 AR grant fairness max-min=0 <= 1:
+  PASS" (AW identical) — PASS.
+  Mutation RED — evidence :157-165 "P4 AR grants: 2751 0 0 0 0 0 0",
+  "max-min=2751 > 1: FAIL", "FAIRNESS: FAIL", "CROSSBAR_FAIRNESS_MUTATION:
+  RED as expected (mutation guard holds)" — PASS.
+- todo 13: RE-AUDIT evidence :80-83 -> {"executed": 25, "failed": 0,
+  "matched": 33, "mismatches": [], "na": 2, "superseded": 6, "timeout": 0}
+  "(25 executed / 6 superseded / 2 na / 0 failed / 0 timeout)", audit rc=0
+  → 25/6/2 with mismatches=[] — PASS.
+- todo 16: Spike — evidence :116 "Spike Host Summary: 1 PASS, 0 FAIL"
+  (pre-fix :35 shows "0 PASS, 1 FAIL" RED; post-fix GREEN) — PASS.
+- todo 19: `grep -rn "formally Waived\|is Waived" docs/ .omo/plans/
+  soc-rtl-verification-vplan.md` → 0 hits (re-executed live this wave).
+  WVR-SOC-RTL-002.md Status = "提交待签（pending sign-off）" — PASS.
+
+Red/green pairing (iv): docs/soc-rtl-review-remediation-rg-table.md EXISTS
+with 6 data rows (| # | 负测名称 | 修复前 RED 证据路径 | 修复后 GREEN 证据路径
+| 对应修复 todo | mutation 保持 RED 确认 |), each row carrying live-grep
+verified evidence paths (Appendix A contains the actual grep outputs).
+6/6 groups have paired RED+GREEN evidence; 3 groups with explicit mutation
+re-RED confirmation; groups 1/3/5 honestly labeled n/a-with-alternative.
+Spot-verified this wave: row-2 markers re-grep and match (393×7 max-min=0
+GREEN; 2751/0… max-min=2751 FAIL mutation RED).
+
+P0 (v): branch soc-rtl-review-remediation == plan name ✓; HEAD c3e81b1 is
+descendant of f982bef ✓ (git merge-base --is-ancestor f982bef HEAD); plan
+`.omo/plans/soc-rtl-review-remediation.md` checkboxes 0-20 = 21/21 [x]
+(grep -c '^\- \[x\]' = 21; unchecked = F1-F4 wave todos only) ✓.
+
+F1 VERDICT: APPROVE (21/21 todos PASS; one documented map deviation for
+a87997b resolved as self-consistent housekeeping distribution, non-blocking).
+
+--------------------------------------------------------------------------------
+F2 — CODE QUALITY REVIEW
+--------------------------------------------------------------------------------
+`git diff --stat f982bef..HEAD -- rtl/ firmware/ sim/ scripts/`:
+29 files changed, 4866 insertions(+), 564 deletions(-) — reviewed key diffs:
+
+(a) rtl/soc/axi_crossbar.v — accept/grant coupling (todo 7):
+- would_win generate block inputs: aw/ar_qual_slv (m_awvalid_i/arvalid_i
+  primary inputs, m_aw_hit/m_aw_slave combinational decode of address
+  inputs, m_aw_active reg), aw/ar_scan_start (aw/ar_priority reg +
+  FIXED_PRIORITY parameter). No dependency on ready/grant outputs →
+  NO combinational loop. Verified structurally from the diff. PASS.
+- DECERR exemption intact: m_awready_o = !active && (!hit || (window &&
+  would_win)) — `!m_aw_hit` short-circuit preserves unconditional ready
+  for unmapped masters. PASS.
+- grant_window triple-gating: !aw_busy && !s_awvalid_latched &&
+  !aw_latch_clr (replicates the sequential-search qualifiers exactly). PASS.
+- FIXED_PRIORITY parameter default = 1'b0 (round-robin preserved; 1 =
+  mutation-only fixed priority). Sequential arbiter and combinational
+  replica use identical scan-start semantics (start=priority+1; wrap for
+  priority==NUM_M-1 handled by +NUM_M arithmetic in is_scan_before). PASS.
+
+(b) firmware/npu_firmware.c — allowlist (todo 8):
+- Whitelist windows: SRAM 0x2000_0000 4MB + DRAM 0x8000_0000 8MB; Boot
+  ROM/DMEM/holes/MMIO rejected; explicit if/return branches (avoids sltu
+  folding that RISCVMini mis-decodes); wrap checks (addr+size < addr) and
+  upper-bound checks (addr+size > window end) on both windows. PASS.
+- Checked arithmetic: umul16 shift/add multiply (no RV32M mul dependency),
+  sfu/vector scratch size checked against overflow bounds. PASS.
+- Completion mirror clamp: mir = min(cmd_id,15) before COMPLETION_STATUS[]
+  write (16-entry MMIO array), with full 1024-record DRAM ring unclamped.
+  PASS.
+- KNOWN NON-BLOCKING GAP (tile padding): weight size validation derives
+  from logical K*N/2 while the weight DMA path copies padded
+  TILE_WEIGHT_BYTES (2048) per (n_tile,k_block) — actual access can exceed
+  the validated size for non-64-multiple dims. CONFIRMED RECORDED in
+  task-14 evidence lines 90-93 as a non-blocking concern (not fixed, per
+  plan disposition — this wave confirms the recording, does not fix). PASS.
+
+(c) Runners fail-closed (todo 9):
+- run_ibex_segment_run.sh: SEG_TIMEOUT_S strict positive-integer validation
+  (case pattern + -ge 1) exiting 2 BEFORE the EDA gate; RUN_RC=124 → fresh
+  run-keyed TIMEOUT evidence + `exit "$RUN_RC"` (non-zero); 137 handled
+  (TIMEOUT_KILLED). PASS.
+- run_ibex_full_rtl.sh: four-class accounting PASS/SKIP/FAIL/TIMEOUT with
+  per-case runner_classification lines and exit-124/137 → TIMEOUT. PASS.
+- sim/regression/Makefile: `set -o pipefail` in run_e2e_mobilenetv3 and
+  run_fm_soc_case targets; fail-closed abort paths. PASS.
+- sim/regression/soc-verification-run.sh: ZERO diff vs f982bef
+  (`git diff f982bef..HEAD -- sim/regression/soc-verification-run.sh` = 0
+  lines) — SSH passthrough preserved. PASS.
+
+(d) scripts/gen_evidence_provenance.py + check_evidence_provenance.py:
+- sha256 spot-verification (live this wave): recorded provenance_flist_sha256
+  in build/evidence/task-13-soc-rtl-review-remediation.txt
+  (=726270766511a04f3920f946d03738083183a1b54d0553f6d8a6353ad3659cb3) equals
+  `sha256sum rtl/soc/soc.flist` computed locally this wave — exact match.
+- provenance_driver_sha256 (=57a098d16d21dc3e18993731a483e82ce3c3323f25dcb83
+  f1bb0ab22aa171e1b) equals `git show 4eac85d:sim/rtl_soc_runner.py|sha256sum`
+  AND `git show 311b046:...` (the EDA run-time commits); local divergence
+  (22e8f990…) fully explained by follow-up commit 95c306d modifying the
+  driver after the run. Hash computation correct. PASS.
+- check_evidence_provenance.py recomputes and REJECTS (rc=1) on header
+  missing/truncated/commit-mismatch/hash-mismatch (verified logic + task-11
+  evidence forged/truncated REJECTED records). PASS.
+
+(e) sim/spike_host.py (todo 16):
+- out_addr = (wgt_addr + len(combined_weight_blob) + 0xFFF) & ~0xFFF —
+  page-aligned in-window arithmetic replacing the out-of-window constant
+  0x81000000 (16MB, rejected by the 8MB allowlist). PASS.
+- `_pack_act_tile_major_contig(act, M, K)` exists (spike_host.py:648) and
+  is used for both activation write and input_size. PASS.
+- `return ok` restored at end of run_one_op (was returning None). PASS.
+
+(f) rtl/tb/apb_conformance_real_tb.sv — doc-div honesty:
+- 8 documented divergences tagged [DOC-DIV <bug-id>] (BUG-RTL-SOC-009
+  doorbell ABI window, BUG-RTL-SOC-010 pcie_ep_wrapper header overstate,
+  BUG-RTL-SOC-011 rtl/ip/README DMA access classes), filed in
+  docs/bugs/bugs-soc-rtl.md:646/699/748, counted in doc_div_cnt — NOT
+  silently passed; oracle not silently rewritten to match RTL. PASS.
+
+Concerns: zero BLOCKING concerns found. Non-blocking notes (recorded, not
+requiring action): would_win replica area (~7×(7+7) compares/slave —
+trivial); tile-padding validation gap (already dispositioned in todo-14
+evidence).
+
+F2 VERDICT: APPROVE (zero blocking concerns).
+
+--------------------------------------------------------------------------------
+F3 — REAL MANUAL QA (all executed live this wave; outputs captured)
+--------------------------------------------------------------------------------
+(a) Behavior test scripts (local):
+    bash sim/regression/test_timeout_behavior.sh; echo EXIT=$?
+      → "TEST RESULT: GREEN — all assertions passed", "assertions passed: 8",
+        EXIT=0  ✓ (expected 0)
+    bash sim/regression/test_regression_stats.sh; echo EXIT=$?
+      → ASSERT 0-4 all PASS; "[SUMMARY] PASS: 25 SKIP: 8 FAIL: 0 TIMEOUT: 0
+        TOTAL: 33"; "OVERALL: GREEN"; EXIT=0  ✓ (expected 0, PASS=25 SKIP=8)
+    bash sim/regression/test_evidence_provenance.sh; echo EXIT=$?
+      → "assertions passed: 17 / failed: 0"; "TEST RESULT: GREEN"; EXIT=0 ✓
+
+(b) Firmware pytest (local):
+    PYTHONPATH=sim python -m pytest sim/tests/test_firmware_addr_allowlist.py
+      sim/tests/test_firmware.py sim/tests/test_firmware_boot_sequence.py -q
+      → "16 passed, 4 warnings in 1.60s" ✓
+
+(c) Spike smoke (todo-16 command from task-16 evidence :28-29; model
+    ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf exists, 1.1GB):
+    env PYTHONPATH=sim python3 sim/spike_host.py --mode mmul_smoke
+      --model ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf --layers 1
+      --ops Q_proj
+      → "[PASS] L0 Q_proj (1536x1536)";
+        "Spike Host Summary: 1 PASS, 0 FAIL"; EXIT=0  ✓ PASS
+
+(d) EDA spot check (sz0001 reachable):
+    bash sim/regression/soc-verification-run.sh run_crossbar_fairness
+      → "[TB] Summary: 23 passed, 0 failed", "FAIRNESS: PASS",
+        "CROSSBAR_FAIRNESS: PASS",
+        "[soc-run] RESULT: PASS for run_crossbar_fairness"; EXIT=0  ✓
+    (NOT blocked; EDA live and GREEN.)
+
+(e) Full pytest honesty (executed live):
+    timeout 300 env PYTHONPATH=sim python -m pytest sim/tests/
+      sim/timing/tests/ -q → "Interrupted: 9 errors during collection",
+      exit 2. Error cause verified: ModuleNotFoundError
+      'caduceus_device_protocol' (+ cocotb wrapper imports) — the KNOWN
+      local environment limitation (software-stack extension is CI-built;
+      never runs VCS/cocotb locally). Recorded honestly, not auto-failed.
+    Timing suite standalone (real run): env PYTHONPATH=sim python -m pytest
+      sim/timing/tests/ -q → "774 passed in 164.99s" ✓ (matches todo-14
+      evidence claim).
+    sim/tests per-file isolation (90 files, per-file timeout 180s, real
+      runs): 1430 passed; 6 files with failures, ALL classified:
+      - test_cv_device_server.py 7F — caduceus_device_protocol env limit
+        (verified: all 7 raise the same ModuleNotFoundError).
+      - test_engines.py 8F — PRE-EXISTING: identical 8 failed/5 passed at
+        f982bef (verified in a temp worktree at base commit).
+      - test_func_model_dut_adapter.py 1F — PRE-EXISTING: same failure at
+        f982bef (spike-present env: test expects missing-artifact error).
+      - test_runtime_real_firmware.py 1F — PRE-EXISTING: same failure at
+        f982bef.
+      - test_llama_dependency_lock.py 1F — host vendored-tree state
+        (third_party/llama.cpp → gitignored symlink to llama_ref; NPU patch
+        markers missing in local tree; plan commits did not touch vendored/
+        or the fetch script; base passes only via a vacuous skip path).
+      - test_spike_toolchain_manifest.py 1F — stale fixture pin 1412bbec3
+        vs advanced HEAD; fails whenever preflight actually runs (base
+        worktree passed only via PreflightError → fake-info fallback, since
+        dtc_src/dtc was absent there). Plan untouched. Environment/stale-pin.
+      - test_executorch_delegate.py 1E — No module named 'executorch'
+        (software-stack env).
+      - test_soc_rtl_e2e.py rc=5 — 0 tests collected (cocotb env).
+      - test_spike_forward_tolerance.py rc=124 at 180s — NOT a hang: long-
+        running spike forward gates (~4.5 min each). Verified live: single
+        test test_two_layer_phase10_ladder_meets_thresholds →
+        "1 passed in 268.87s (0:04:28)" rc=0 ✓. At f982bef all skip (spike
+        build absent in worktree).
+    → ZERO plan-caused regressions (every failure traced to pre-existing/
+      environment/host-state, with base-commit reproduction where applicable).
+
+F3 VERDICT: APPROVE (all required gates (a)-(d) passed with real outputs;
+(e) recorded honestly with complete classification; no blocked items).
+
+--------------------------------------------------------------------------------
+F4 — SCOPE FIDELITY
+--------------------------------------------------------------------------------
+`git diff --name-only f982bef..HEAD` = 79 files. Per-rule:
+
+| Rule (Must NOT touch)                                        | Result |
+|--------------------------------------------------------------|--------|
+| config/func_model_perf_spec_v1.json (frozen spec)            | NO DIFF ✓ |
+| config/func_model_perf_matrix_v1.json (frozen spec)          | NO DIFF ✓ |
+| rtl/cpu/ibex/ (vendored)                                     | NO DIFF ✓ |
+| rtl/ip/verilog-axi/ (vendored)                               | NO DIFF ✓ |
+| rtl/ip/verilog-pcie/ (vendored)                              | NO DIFF ✓ |
+| rtl/mxu/mxu_top.v (engine internal)                          | NO DIFF ✓ |
+| rtl/sfu/sfu_top.v (engine internal)                          | NO DIFF ✓ |
+| rtl/vector/vector_top.v (engine internal)                    | NO DIFF ✓ |
+| .omo/plans/rtl-perf-decomposition-calibration.md             | ADDED only in 7f14690 (P0 docs commit); 0 later modifications ✓ |
+| main purity: git rev-parse main == f982bef; f982bef..main    | f982bef ✓; 0 commits ✓ |
+| origin/main advanced?                                         | 3 "auto: daily sync" EXTERNAL bot commits (f69c35d/450603d/26cbdc6) — NOT a plan violation (per task rule) ✓ |
+| branch == soc-rtl-review-remediation                         | ✓ |
+| stash preserved                                              | stash@{0}: WIP on main: c244935 (feat(signoff): auto-detect NPU/CPU op split…) ✓ |
+| P2/P3 not executed                                           | only docs/soc-rtl-review-remediation-blockers.md written (tracking-only, "只跟踪、不执行"); no P2/P3 implementation artifacts in the 79-file list ✓ |
+
+Allowed-scope note: rtl changes are exactly rtl/AGENTS.md, rtl/soc/
+axi_crossbar.v (waiver-allowed), rtl/tb/apb_conformance_real_tb.sv +
+rtl/tb/axi_crossbar_fairness_tb.sv (testbenches, waiver-allowed per
+docs/waivers/REMEDIATION-RTL-EXCEPTION-2026-08-28.md) ✓.
+Non-plan files in range are parallel-session sync artifacts committed by
+chore(omo) sync commits (e.g. 1338b64/4d8dab8) — outside protected paths.
+
+F4 VERDICT: APPROVE.
+
+--------------------------------------------------------------------------------
+OVERALL
+--------------------------------------------------------------------------------
+F1 APPROVE · F2 APPROVE · F3 APPROVE · F4 APPROVE
+VERDICT: APPROVE — all 21 todos verified from artifacts (evidence + commit
+map + acceptance greps + red/green pairing), code-quality review found zero
+blocking concerns, all required live QA gates passed (3 behavior scripts,
+firmware pytest, Spike smoke, EDA crossbar fairness, timing suite 774),
+full-suite failures all traced to pre-existing/environment causes with
+base-commit reproduction, and scope fidelity is clean on every protected
+path.
+================================================================================
