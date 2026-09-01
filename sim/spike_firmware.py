@@ -143,15 +143,29 @@ class SpikeFirmware:
         results = []
         for i in range(count):
             ring_idx = (start_head + i) % self.ring_size
-            status_addr = DOORBELL.BASE + DOORBELL.COMPLETION_STATUS + ring_idx * 4
-            status = (
-                self.bridge._status.get(status_addr, 0)
-                if self.bridge is not None
-                else 0
-            )
+            status = self._read_completion_status(ring_idx)
             result_status = "done" if status == 0 else "error"
             results.append({"opcode": 0, "status": result_status})
         return results
+
+    def _read_completion_status(self, ring_idx: int) -> int:
+        """Read a command's completion status from the clamped MMIO mirror.
+
+        The firmware clamps its 16-slot MMIO mirror
+        (DOORBELL.COMPLETION_STATUS) writes to ``min(cmd_id, 15)`` (todo-8
+        completion-bounds fix), so mirror keys only ever exist for indices
+        0..15.  A missing key must be reported as an error — the previous
+        ``.get(status_addr, 0)`` silently defaulted absent slots (ring_idx
+        >= 16) to success.  The DRAM completion ring is NOT readable here:
+        the spike MMIO plugin traps only [0x20000000, 0x40011FFF]
+        (npu_mmio_plugin.cc NPU_END), so firmware DRAM writes stay in
+        spike's native memory and never reach ``model.dram``.
+        """
+        if self.bridge is None:
+            return 1
+        clamped = ring_idx if ring_idx < 16 else 15
+        status_addr = DOORBELL.BASE + DOORBELL.COMPLETION_STATUS + clamped * 4
+        return self.bridge._status.get(status_addr, 1)
 
     def cleanup(self) -> None:
         """Terminate Spike and shut down the bridge server."""

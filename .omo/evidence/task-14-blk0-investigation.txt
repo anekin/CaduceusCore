@@ -1,0 +1,142 @@
+================================================================================
+task-14-blk0-investigation — run_e2e_blk0 FAIL cause attribution
+(does the crossbar accept/grant fix c478ae5 cause the op05 FAIL?)
+================================================================================
+Timestamp  : 2026-08-31T16:30 CST
+Host       : sz0002 (control) -> sz0001 / 192.168.0.11 (EDA, NFS-shared tree)
+Repo       : /home/prj/zhengs/caduceuscore/CaduceusCore
+HEAD       : e73e28e1ada96100b0360e72704385c0e8473448 (branch soc-rtl-review-remediation)
+Investigtor: Sisyphus-Junior (deepseek-v4-pro)
+Question   : CROSSBAR-REGRESSION vs PRE-EXISTING (rollback gate for plan Metis m4)
+
+--------------------------------------------------------------------------------
+METHOD — single-variable A/B, /tmp builds, zero shared-tree compile writes
+--------------------------------------------------------------------------------
+Shared simv_soc_cocotb was ABSENT on sz0001 and parallel agents were active in
+sim/regression/, so instead of `soc-verification-run.sh run_e2e_blk0` (which
+would rm -rf + rebuild the shared simv), both builds were made in /tmp with the
+EXACT Makefile recipe (same VCS flags, same flists, same top, same cocotb env,
+run from repo parent /home/prj/zhengs/caduceuscore). Only difference between
+the two compiles: the crossbar source file.
+
+Compile recipe (identical for both, from Makefile run_e2e_blk0 / SOC_SIMV_COCOTB):
+  cd /home/prj/zhengs/caduceuscore/CaduceusCore
+  vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps +v2k +lint=all +warn=all \
+      +define+COCOTB_SIM=1 +vpi -P sim/regression/pli.tab \
+      -load /NAS/Tools/anaconda3/envs/py3.11/lib/python3.11/site-packages/cocotb/libs/libcocotbvpi_vcs.so \
+      -f rtl/cpu/ibex.flist -f rtl/ip/verilog-axi.flist -f rtl/ip/verilog-pcie.flist \
+      -top tb_soc rtl/tb/tb_soc.v \
+      -f <soc.flist | /tmp/blk0_baseline/soc_pre.flist> \
+      -Mdir=/tmp/blk0_<variant>/csrc -o /tmp/blk0_<variant>/simv_<variant> -l /tmp/blk0_<variant>/elab_<variant>.log
+
+Run recipe (identical for both, from Makefile):
+  cd /home/prj/zhengs/caduceuscore
+  LD_LIBRARY_PATH=<cocotb libs>:<py3.11 lib> PATH=<py3.11 bin>:$PATH \
+  PYTHONPATH=<repo>/sim MODULE=cocotb_bridge TESTCASE=test_qwen_blk0 \
+  TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog PYTHONIOENCODING=utf-8 \
+  BLK0_CYCLES_JSON=/tmp/blk0_<variant>/cycles.json COCOTB_RESULTS_FILE=/tmp/blk0_<variant>/results.xml \
+  /tmp/blk0_<variant>/simv_<variant> +define+COCOTB_SIM=1 +COCOTB -no_save \
+  +BOOTROM_HEX=<repo>/firmware/build/npu_firmware.hex
+
+Input snapshot (md5):
+  axi_crossbar.v (post-fix)     46a057110c526a9ba584aaaace7fb654
+  axi_crossbar.v (pre-fix,     2eba49ab8aff729cd91e88abd73d653c  <- git show c478ae5~1:rtl/soc/axi_crossbar.v
+      /tmp/axi_crossbar_pre.v)
+  caduceus_soc_top.v            45309d8bbc59da0d0f803494eb6b7a25
+  tb_soc.v                      e8b57368ea00f2a148c7ad75d23be442
+  npu_firmware.hex              a526460c8d9382c231e4ca1da6ffa858  (same hex in BOTH runs)
+  soc.flist                     d8f3aaf27a3791d3f89f0903a3faedbe
+  soc_pre.flist: only diff vs soc.flist = line 23 rtl/soc/axi_crossbar.v -> /tmp/axi_crossbar_pre.v
+
+--------------------------------------------------------------------------------
+STEP 1 — REPRODUCE (post-fix crossbar, HEAD e73e28e):  **FAIL — reproduces**
+--------------------------------------------------------------------------------
+Run : /tmp/blk0_repro/simv_soc_cocotb_post, 2026-08-31 16:21-16:23, rc=0 (FAIL via assert)
+Log : .omo/evidence/task-14-blk0-repro.log (227902 B)
+
+  39669.50ns ERROR cocotb_bridge   First mismatch @ byte[8]: actual=0x00, golden=0xD0
+  39669.50ns ERROR cocotb_bridge   Total INT32 mismatches: 62/64
+  39669.50ns ERROR cocotb_bridge   [BLK0] op 5 attn_score MMUL: FAIL in 634 cycles
+  208673.50ns ERROR cocotb_bridge  [BLK0] Failed ops: ['op5 attn_score MMUL']
+  cocotb_bridge.test_qwen_blk0  FAIL  208673.50ns   (TESTS=1 PASS=0 FAIL=1 SKIP=0)
+  AssertionError: BLK0: 1/17 ops failed: ['op5 attn_score MMUL']
+
+Signature identical to todo-14 F3 evidence (.omo/evidence/_tmp_task14_f3c_blk0.log):
+same first-mismatch byte, same 62/64, same 634 cycles, same sim end 208673.50ns.
+=> NOT flaky. Deterministic.
+
+op05 context: attn_score MMUL, dims M=32 K=128 N=2 tiles=2, weight 2048 B (fits,
+NO single-tile workaround), output 0x20020000 = 64 INT32 words. Actual bytes:
+words 0-1 correct (74f9ffff 4d0c0000), words 2-63 ZERO. MXU FSM: 2 compute
+bursts, done=1, error=1 at state 3 (transient, also seen in PASSING MMULs — not
+op05-specific). No DESC_BASE/desc_base lines, no X-propagation warnings in log
+(0 hits each).
+
+--------------------------------------------------------------------------------
+STEP 2 — BASELINE (pre-fix crossbar c478ae5~1):  **FAIL — identical**
+--------------------------------------------------------------------------------
+Run : /tmp/blk0_baseline/simv_soc_cocotb_pre, 2026-08-31 16:26-16:28, rc=0 (FAIL via assert)
+Log : .omo/evidence/task-14-blk0-baseline.log (227902 B)
+
+  39669.50ns ERROR cocotb_bridge   First mismatch @ byte[8]: actual=0x00, golden=0xD0
+  39669.50ns ERROR cocotb_bridge   Total INT32 mismatches: 62/64
+  39669.50ns ERROR cocotb_bridge   [BLK0] op 5 attn_score MMUL: FAIL in 634 cycles
+  208673.50ns ERROR cocotb_bridge  [BLK0] Failed ops: ['op5 attn_score MMUL']
+  cocotb_bridge.test_qwen_blk0  FAIL  208673.50ns   (TESTS=1 PASS=0 FAIL=1 SKIP=0)
+  AssertionError: BLK0: 1/17 ops failed: ['op5 attn_score MMUL']
+
+--------------------------------------------------------------------------------
+COMPARISON TABLE
+--------------------------------------------------------------------------------
+| metric                          | repro (post-fix)         | baseline (pre-fix)       |
+|---------------------------------|--------------------------|--------------------------|
+| verdict                         | FAIL                     | FAIL                     |
+| failed op                       | op5 attn_score MMUL      | op5 attn_score MMUL      |
+| INT32 mismatches                | 62/64                    | 62/64                    |
+| first mismatch                  | byte[8] 0x00 vs 0xD0     | byte[8] 0x00 vs 0xD0     |
+| op05 cycles                     | 634                      | 634                      |
+| sim end time                    | 208673.50ns              | 208673.50ns              |
+| all 17 op cycle counts          | identical                | identical                |
+| full-log diff                   | 227902 B                 | 227902 B                 |
+|   changed lines                 | 3c3 compiler timestamp; 8c8 python seed; 1851/1853 real-time/ratio; 1859-60 CPU time/date
+|   everything else               | BYTE-IDENTICAL (all sim-time-stamped events, FSM traces, op results)
+=> The crossbar accept/grant change is behaviorally NEUTRAL on this path.
+
+--------------------------------------------------------------------------------
+VERDICT: PRE-EXISTING  (rollback gate NOT triggered — c478ae5 stays)
+--------------------------------------------------------------------------------
+The op05 attn_score MMUL failure exists with BOTH the pre-fix and post-fix
+axi_crossbar.v. Commit c478ae5 did NOT cause the run_e2e_blk0 FAIL. The
+failure is deterministic and pre-dates the fix.
+
+Supporting facts:
+- Golden vectors/manifest for blk0 generated 2026-07-07 (commit a29e93c
+  "chore(vectors): generate SFU LUTs and qwen_blk0 golden manifest"; dir mtime
+  2026-07-08) — ~8 weeks older than c478ae5 (2026-08-31) AND older than the
+  firmware allowlist fix cee6697 and the rebuilt firmware hex (2026-08-31 13:08).
+  Stale-golden hypothesis OPEN: op05 golden expects full 64-word M=32xN=2
+  output; current RTL produces only words 0-1 (first row) + zeros.
+- Attention-family tie: BUG-RTL-SOC-007 is op07 attn_weight (cycles=0, never
+  executes; still Open). This failure is op05 attn_score — related attention
+  chain, DISTINCT signature (op executes, produces partial/zero output rows).
+- No DESC_BASE warnings, no X-propagation in either run.
+- Firmware held constant in both runs (same hex md5) per single-variable
+  protocol. Note: git-history "pre-fix" state (c478ae5~1) would also have had
+  pre-cee6697 firmware; that confound was deliberately excluded — the
+  experiment isolates the crossbar file only, as tasked.
+
+Recommended next steps (NOT part of this attribution task):
+- scripts/verify_ops_func_model.py (op05/op07 golden correctness vs Func Model)
+- MXU accumulator drain / output-writeback for M=32,N=2,K=128,tiles=2
+  (candidate: multi-tile M-loop drain writes only first row)
+
+--------------------------------------------------------------------------------
+EVIDENCE PATHS
+--------------------------------------------------------------------------------
+.omo/evidence/task-14-blk0-investigation.txt   <- this file
+.omo/evidence/task-14-blk0-repro.log           <- full post-fix run log (227902 B)
+.omo/evidence/task-14-blk0-baseline.log        <- full pre-fix run log (227902 B)
+.omo/evidence/task-14-blk0-build-notes.log     <- HEAD/md5/flist-diff/rc/compile transcripts
+.omo/evidence/_tmp_task14_f3c_blk0.log         <- original todo-14 F3 log (12,662 lines)
+/tmp/blk0_repro/*  /tmp/blk0_baseline/*  /tmp/blk0_runner2.sh  <- sz0001 temp artifacts
+(no git commit performed, per instructions)

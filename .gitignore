@@ -47,6 +47,10 @@ build/p2p3_full_rtl/
 build/p4_full_rtl/
 build/run/
 build/wave1/
+build/ibex_segment_rtl/
+build/fw_dis.txt
+build/hex_head.txt
+build/hex_old.txt
 
 # CMake build output (Python ctypes development symlink)
 software/build/
@@ -57,6 +61,7 @@ results/
 # Regression outputs
 sim/regression/*.xml
 sim/regression/*.json
+sim/regression/verdi_config_file
 
 # Local config and state
 .opencode/

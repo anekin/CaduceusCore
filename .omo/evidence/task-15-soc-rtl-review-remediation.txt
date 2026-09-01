@@ -1,0 +1,115 @@
+TASK-15 EVIDENCE — soc-rtl-review-remediation — todo 15 (red-green summary table)
+
+Timestamp   : 2026-08-31T15:05:00Z (local run; no EDA involved)
+Branch      : soc-rtl-review-remediation
+Task        : Execute plan todo 15 — docs/soc-rtl-review-remediation-rg-table.md
+              with 6 rows (one per negative-test group), RED+GREEN paired
+              evidence paths, live-grepped markers, no git commit.
+LOCAL ONLY  : yes (no VCS/EDA; all verification is file-level grep)
+
+DELIVERABLES
+  docs/soc-rtl-review-remediation-rg-table.md            (new, this task)
+  .omo/evidence/task-15-soc-rtl-review-remediation.txt   (this file)
+  No git commit made (orchestrator commits; todo 15 Commit line).
+
+TABLE CONTENT (6 rows)
+  #1 Timeout exit-code + SEG_TIMEOUT_S validation
+     RED   .omo/evidence/task-1-soc-rtl-review-remediation.txt:302,308,325
+     GREEN .omo/evidence/task-9-soc-rtl-review-remediation.txt:21,116,230
+     fix   todo 9
+     mut   n/a (no mutation design; script self-check per task-1 :77-79)
+  #2 Crossbar real-contention fairness
+     RED   .omo/evidence/task-2-soc-rtl-review-remediation.txt:81-88
+     GREEN .omo/evidence/task-7-soc-rtl-review-remediation.txt:136-141
+     fix   todo 7
+     mut   RED CONFIRMED: task-7:157-166 (fixed-priority: 2751 0x6,
+           max-min=2751 > 1 FAIL, :164 FAIRNESS: FAIL, MUTATION: RED as expected)
+  #3 APB conformance real peripherals
+     RED   .omo/evidence/task-3-soc-rtl-review-remediation.txt:106,108-109
+     GREEN .omo/evidence/task-12-soc-rtl-review-remediation.txt:116-117,131-132
+     fix   todo 12
+     mut   n/a (bug-filing mechanism: BUG-RTL-SOC-009/010/011 at
+           docs/bugs/bugs-soc-rtl.md:646/699/748; [DOC-DIV] tags, no oracle fudge)
+  #4 Regression statistics accounting
+     RED   .omo/evidence/task-4-soc-rtl-review-remediation.txt:69,83,87,149
+     GREEN .omo/evidence/task-9-soc-rtl-review-remediation.txt:122 (test_regression_stats)
+           + .omo/evidence/task-13-soc-rtl-review-remediation.txt:80-83,96
+           ({"executed": 25, "failed": 0, "matched": 33, "mismatches": []},
+            25 executed / 6 superseded / 2 na / 0 failed / 0 timeout)
+     fix   todo 9 (+13 re-audit)
+     mut   n/a (A1/A4 built-in adversarial: fake sim exit 124 + superseded
+           injection samples pin correct semantics, task-4 :129-135)
+  #5 Firmware allowlist/size/completion
+     RED   .omo/evidence/task-5-soc-rtl-review-remediation.txt:6,181
+           ("6 FAILED (RED, expected) + 1 PASSED (near-end source-pin control)")
+     GREEN .omo/evidence/task-8-soc-rtl-review-remediation.txt:22,195
+           ("7 passed in 1.26s (all six previously-RED now GREEN...")
+     fix   todo 8
+     mut   n/a (control test near-end pinned: 6 fixes + 1 control, task-8 :22)
+  #6 Evidence provenance/pickle
+     RED   .omo/evidence/task-6-soc-rtl-review-remediation.txt:41,352,354
+           ("17 failed [RED] / 2 passed")
+     GREEN .omo/evidence/task-11-soc-rtl-review-remediation.txt:146,185
+           ("test_evidence_provenance.sh -> exit 0 (17 PASS / 0 FAIL)")
+     fix   todo 11
+     mut   n/a (adversarial guard built-in: check_evidence_provenance.py
+           forged -> exit 1 REJECTED, truncated -> exit 1 REJECTED,
+           task-11 :74-75 = mutation-equivalent RED confirmed)
+
+PER-PATH GREP PROOFS (actual greps executed 2026-08-31, excerpts)
+  [G1-RED]   grep task-1: line 302 "FAIL [RED]: timeout exit-code mapping:
+             RUN_RC=124 maps to exit 0"; :308 "SEG_TIMEOUT_S='--help' NOT
+             rejected"; :325 "TEST RESULT: RED — 4 assertion(s) failed"
+  [G1-GREEN] grep task-9: :21 '-> GREEN now: rc=0, "assertions passed: 8 /
+             failed: 0"'; :116 "[V4] test_timeout_behavior.sh -> rc=0 GREEN";
+             :230 "TASK-9 RESULT: GREEN (expected)"
+  [G2-RED]   grep task-2: :81 "FAIRNESS: FAIL"; :82 WATCHDOG phantom-accept
+             deadlock (AR accepted cycle 385, not complete in 10000);
+             :88 "[soc-run] RESULT: FAIL for run_crossbar_fairness"
+  [G2-GREEN] grep task-7: :136-139 P4 AR/AW grants 393x7, max-min=0 PASS
+  [G2-MUT]   grep task-7: :157-160 grants 2751 0x6, max-min=2751 FAIL;
+             :164 "FAIRNESS: FAIL"; :165 "CROSSBAR_FAIRNESS_MUTATION: RED as
+             expected (mutation guard holds)"
+  [G3-RED]   grep task-3: :106 "Divergences  : 40"; :108 "APB_CONFORMANCE_REAL:
+             RED (40 divergences vs model-slave oracle)"; :109 TASK-3 RED
+  [G3-GREEN] grep task-12: :116-117 "Total checks : 214 / Passes : 214";
+             :131 "GREEN (7/7 peripherals, 214 checks, 8 doc-div
+             [BUG-RTL-SOC-009/010/011])"; :132 TASK-12 GREEN
+  [G3-BUGS]  grep docs/bugs/bugs-soc-rtl.md: :646 009, :699 010, :748 011
+  [G4-RED]   grep task-4: :69 "ASSERT 1: FAIL - superseded cases
+             misclassified"; :83 "ASSERT 4: FAIL ... swallowed by || true";
+             :87 "OVERALL: RED - 2 assertion(s) failed"; :149 TASK-4 RED
+  [G4-GREEN] grep task-9: :122 "[V5] test_regression_stats.sh -> rc=0 GREEN";
+             grep task-13: :80 {"executed": 25, ... "mismatches": []};
+             :83 "25 executed / 6 superseded / 2 na / 0 failed / 0 timeout";
+             :96 "TASK-13 RESULT: GREEN (expected)"
+  [G5-RED]   grep task-5: :6 "6 FAILED (RED, expected) + 1 PASSED (near-end
+             source-pin control). pytest exit code = 1."; :181 TASK-5 RED
+  [G5-GREEN] grep task-8: :22 "→ 7 passed in 1.26s (all six previously-RED now
+             GREEN; the near-end"; :195 "TASK-8 RESULT: GREEN (expected)"
+  [G6-RED]   grep task-6: :41 "17 failed [RED] / 2 passed"; :352 "TEST RESULT:
+             RED — 17 assertion(s) failed"; :354 TASK-6 RED
+  [G6-GREEN] grep task-11: :146 "test_evidence_provenance.sh -> exit 0 (17 PASS
+             / 0 FAIL)"; :185 "TASK-11 RESULT: GREEN (expected)"
+  [G6-MUT]   grep task-11: :74 "forged (simv tampered after write) -> exit 1
+             REJECTED (sha mismatch)"; :75 "truncated (provenance_end removed)
+             -> exit 1 REJECTED"
+
+VERIFICATION (acceptance criteria check)
+  - Table covers 6/6 negative-test groups: YES (rows #1-#6 above)
+  - Each group has RED + GREEN paired evidence paths: YES (all 12 paths exist
+    on disk; every marker live-grepped this run, line numbers recorded)
+  - All RED->GREEN with mutation staying RED: YES (group 2 real mutation RED
+    confirmed; groups 4/6 built-in adversarial guards RED confirmed; groups
+    1/3/5 no mutation design — stated n/a with honest reason, not fabricated)
+  - Table committed to git: NO — per task instruction, orchestrator commits.
+
+ADVERSARIAL NOTES
+  - misleading_success_output: every marker grepped live from the actual
+    files this session (appendix A in the table = real excerpts with line
+    numbers); no marker cited from memory.
+  - dirty_worktree: only the two new files (table + this evidence) added;
+    git status checked — pre-existing dirty files are the plan/notepad edits
+    owned by the orchestrator, untouched by this task.
+
+TASK-15 RESULT: GREEN (expected)

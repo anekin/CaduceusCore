@@ -1,0 +1,34 @@
+case_id,expected_status,justification
+FM-SOC-001,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-002,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-003,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-004,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-005,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-006,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-007,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-008,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-009,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-010,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-011,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-012,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-013,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-014,SUPERSEDED,runner returns superseded by FM-SOC-027/032/10X (sim/rtl_soc_runner.py:4279) - must count SKIP not PASS
+FM-SOC-015,SUPERSEDED,runner returns superseded by FM-SOC-027/032/10X (sim/rtl_soc_runner.py:4279) - must count SKIP not PASS
+FM-SOC-016,SUPERSEDED,runner returns superseded by FM-SOC-027/032/10X (sim/rtl_soc_runner.py:4279) - must count SKIP not PASS
+FM-SOC-017,N/A,DIRECT_CASES (sim/rtl_soc_runner.py:2174) - skipped: direct APB/AXI case not applicable to Ibex RTL mode (sim/rtl_soc_runner.py:4282)
+FM-SOC-018,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-019,N/A,DIRECT_CASES (sim/rtl_soc_runner.py:2174) - skipped: direct APB/AXI case not applicable to Ibex RTL mode (sim/rtl_soc_runner.py:4282)
+FM-SOC-020,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-021,SUPERSEDED,runner returns superseded by FM-SOC-027/032/10X (sim/rtl_soc_runner.py:4279) - must count SKIP not PASS
+FM-SOC-022,SUPERSEDED,runner returns superseded by FM-SOC-027/032/10X (sim/rtl_soc_runner.py:4279) - must count SKIP not PASS
+FM-SOC-023,SUPERSEDED,runner returns superseded by FM-SOC-027/032/10X (sim/rtl_soc_runner.py:4279) - must count SKIP not PASS
+FM-SOC-024,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-025,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-026,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-027,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-028,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-029,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-030,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-031,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-032,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)
+FM-SOC-10X,EXECUTED,full Ibex RTL run in the 33-case loop (sim/regression/run_ibex_full_rtl.sh:77-97)

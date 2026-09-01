@@ -1,0 +1,216 @@
+Plan: .omo/plans/soc-rtl-review-remediation.md
+Todo: 12. APB conformance 连接真实外设（承接 todo 3 红测试）→ GREEN
+Executor: Sisyphus (rtl/tb testbench worker)
+Timestamp: 2026-08-31T12:30+08:00
+Directory: /home/prj/zhengs/caduceuscore/CaduceusCore (main checkout, branch soc-rtl-review-remediation)
+HEAD: 886ccb410b9e39c256f55ff344fefaed7390b52f
+
+================================================================================
+WHAT CHANGED (todo 12, GREEN — this todo's own files only)
+================================================================================
+  M rtl/tb/apb_conformance_real_tb.sv      — oracle rebuilt to REAL RTL semantics
+  M sim/regression/Makefile                — new target run_apb_conformance_real
+  M docs/bugs/bugs-soc-rtl.md              — 3 new bug entries (009/010/011)
+  (this evidence file)
+No file under rtl/soc/, rtl/wrapper/, rtl/ip/, rtl/intc/, rtl/mxu/, rtl/sfu/,
+rtl/vector/, rtl/cpu/ was modified. apb_decoder.v untouched. The model TB
+target run_apb_conformance (apb_register_conformance_tb.sv + its Makefile
+rule) is intact and unchanged.
+
+================================================================================
+ORACLE SOURCES (independent of the Func Model factories)
+================================================================================
+1. Base addresses — gen/npu_abi_firmware.h NPU_ABI_* constants:
+   DMA :17, DOORBELL :19, INTC :25, MXU :27, PCIE :29, PCIE_DMA :31,
+   SFU :33, VECTOR :37 (values transcribed in the TB header, :75-91).
+2. Offsets/access classes — each peripheral's DOCUMENTED MMIO header table:
+   rtl/wrapper/mxu_soc_wrapper.v:16-21 (+ RTL :245-249 resets, :252-256 masks)
+   rtl/wrapper/vector_soc_wrapper.v:30-36 (+ RTL :183-186 resets, :192 mask)
+   rtl/ip/dma_wrapper.v:12-26 (reg map), rtl/ip/README.md:32-43 (access table)
+   rtl/ip/pcie_ep_wrapper.v:252-268 (+ RTL :293/:296/:304-306/:314-316/:387-395)
+   rtl/intc/intc_top.v:15-25 (+ RTL :98/:104/:117/:131/:133/:180-181)
+   rtl/soc/doorbell.v:5-18 (+ RTL :69-70/:76/:80-83/:107/:127)
+   Address map cross-check: rtl/soc/caduceus_soc_top.v (0x4000_0000 window).
+3. Real semantics encoded (the todo-3 "40 divergences" were almost all WRONG
+   model expectations; the REAL behaviors verified here):
+   - MXU/SFU/VECTOR CMD = write-only PULSE, readback 0 (mmio_if.v:139,
+     sfu_top.v:134, vector_top.v:144); STATUS RO; rest full-width RW; reset 0.
+   - MXU wrapper ext regs 0x30/0x34/0x38 reset 0x8002_0000/0x8001_0000/
+     0x8003_0000; 0x44=1, 0x48=64 (16-bit masked); 0x3C WO; 0x40 RO.
+   - VECTOR wrapper ext regs 0x30/0x34/0x38 reset 0x2030_0000/0x2030_0000/
+     0x2034_0000; 0x44=0x4000 (16-bit masked); 0x3C WO; 0x40 RO (live).
+   - DMA CMD STORES + reads back (0x42 -> 0x42, dma_wrapper.v:285/:128);
+     STATUS RO; rest RW (incl. _pad0 0x0C); reset 0.
+   - DOORBELL 4 RW regs 0x00-0x0C; 0x10/0x14 silent-0 (addr_valid gate :70).
+   - INTC PENDING live-sticky RO; ENABLE 8-bit; THRESHOLD 4-bit RESET=1;
+     ACK W1C readback 0.
+   - PCIE CTRL mps stored readback-shifted to [3:1] with bit0=0; STATUS RO;
+     COMPLETER_ID RW[15:0]; BAR0_BASE 0x2000_0000 / BAR0_MASK 0xFFC0_0000 /
+     BAR1_BASE 0x8000_0000 / BAR1_MASK 0x8000_0000 RO consts; MSIX_CTRL
+     {16'h0,vec,7'h0,en}; IRQ_CTRL {29'h0,err_en,pending,en} + W1C[1];
+     offsets >= 0x24 UNMAPPED -> pslverr=1.
+4. WO stimulus value 0x0000_0080 (not 0x42): 0x42 would set VECTOR
+   WRP_CMD[1]=LOAD_B and arm an AXI load — 0x80 has no functional bits on any
+   WO register, so the write-only readback-0 check provably causes no side
+   effects.
+
+================================================================================
+DOCUMENTED-DIVERGENCE POLICY (todo 12 mandate)
+================================================================================
+Checks whose REAL behavior contradicts a DOCUMENTED spec are tagged
+[DOC-DIV <bug-id>], counted in the doc_div bucket, and reference bugs filed
+in docs/bugs/. They are NOT silently passed. 8 such checks in this run:
+
+  DMA     CMD@0x04  (2 checks) — rtl/ip/README.md:35 says "W"; RTL stores and
+           reads back (dma_wrapper.v:285/:128).            -> BUG-RTL-SOC-011
+  PCIE    CTRL@0x00 (1 check) — header :258 says [3]=enable; not implemented
+           (no storage, reads 0, IP enable unconnected).   -> BUG-RTL-SOC-010
+  PCIE    BAR1_MASK@0x18 (1) — header :264 says bit31=writable; hard constant.
+                                                           -> BUG-RTL-SOC-010
+  DOORBELL 0x10/0x14 (4) — ABI npu_doorbell_t (npu-regmap.h:179-187, pinned
+           :308-310) declares LAST_STATUS R/W + COMPLETION_STATUS[16]; RTL
+           implements neither (reads 0, writes dropped).   -> BUG-RTL-SOC-009
+
+Bug entries filed in docs/bugs/bugs-soc-rtl.md:
+  :646  BUG-RTL-SOC-009 — Doorbell ABI window (LAST_STATUS/COMPLETION_STATUS)
+  :699  BUG-RTL-SOC-010 — pcie_ep_wrapper header overstates CTRL[3]/BAR1_MASK
+  :748  BUG-RTL-SOC-011 — rtl/ip/README DMA access classes (CMD W / STATUS R)
+(009/010/011 — 008 was already taken by the DESC_BASE-overlap bug.)
+Also noted in 009: the regmap's own discrepancy note (:317-322) overstates
+RTL ("implements only LAST_STATUS at 0x10") — RTL implements neither.
+Not bug-filed (no documented contradiction): INTC THRESHOLD reset=1 and the
+8/4-bit ENABLE/THRESHOLD masks are undocumented in intc_top.v's header, so
+they are real-semantics facts, not doc divergences. Doorbell HOST_TAIL
+"W"/HOST_HEAD "R"/NPU_TAIL "R" ABI annotations vs all-RW RTL is a benign
+superset (documented in 009's Symptom as secondary annotation drift).
+
+================================================================================
+PER-PERIPHERAL COVERAGE (7/7 — no downgrade declaration needed)
+================================================================================
+  Peripheral    covered   checks  fails  doc-div  status
+  MXU           YES       51      0      0        real reset/RW/RO/WO + wrapper regs
+  SFU           YES       22      0      0        real reset/RW/RO/WO
+  VECTOR        YES       37      0      0        real reset/RW/RO/WO + wrapper regs
+  DMA           YES       43      0      2        real reset/RW/RO + CMD store (DOC-DIV)
+  PCIE          YES       24      0      2        real layout/consts/fields/pslverr (DOC-DIV)
+  DOORBELL      YES       16      0      4        real 4xRW + reserved-0 (DOC-DIV)
+  INTC          YES       16      0      0        real RO/RWM/W1C sequence
+  Declared out: pcie_dma_wrapper (0x4000_7000) — AXI master M6, not an APB
+  conformance target; live guard proves psel_o[7] never asserted.
+  All 7 in-scope peripherals covered => 7/7 (>=5 required by acceptance).
+
+================================================================================
+RUN (EDA server sz0001 / 192.168.0.11, VCS V-2023.12-SP2)
+================================================================================
+Command (from this host, auto-SSH forward):
+  bash sim/regression/soc-verification-run.sh run_apb_conformance_real
+Compile (recipe in sim/regression/Makefile, target run_apb_conformance_real):
+  vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps +v2k +lint=all +warn=all \
+      -f rtl/cpu/ibex.flist -f rtl/ip/verilog-axi.flist \
+      -f rtl/ip/verilog-pcie.flist -f rtl/soc/soc.flist \
+      rtl/tb/apb_conformance_real_tb.sv -top apb_conformance_real_tb \
+      -o sim/regression/simv_apb_conformance_real -l sim/regression/compile_apb_real.log
+Compile result: 0 errors (grep -c "Error" compile_apb_real.log = 0).
+
+Verbatim final report (sim/regression/apb_conformance_real.log:270-286):
+  Total checks : 214
+  Passes       : 214
+  Fails        : 0   (unexpected — real RTL != REAL oracle)
+  DOC-DIV      : 8   (real RTL contradicts documented spec,
+                   each bug-filed: BUG-RTL-SOC-009/010/011)
+  Write timeouts: 0   Read timeouts: 0
+  Per-slave coverage (checks / fails / doc-div / psel_o asserts):
+    MXU      : 51 / 0 / 0 / 172
+    SFU      : 22 / 0 / 0 / 76
+    VECTOR   : 37 / 0 / 0 / 130
+    DMA      : 43 / 0 / 2 / 146
+    PCIE     : 24 / 0 / 2 / 76
+    DOORBELL : 16 / 0 / 4 / 99
+    INTC     : 16 / 0 / 0 / 52
+  =====================================================
+  APB_CONFORMANCE_REAL: GREEN (7/7 peripherals, 214 checks, 8 doc-div [BUG-RTL-SOC-009/010/011])
+  TASK-12 RESULT: GREEN (expected)
+  $finish at simulation time 11356000 ps
+
+Key real-semantics log lines (grep from the REAL log on sz0001):
+  :32  [PASS] reset MXU +0x030 (0x80020000)      — wrapper reg non-zero reset
+  :36  [PASS] reset MXU +0x044 (0x00000001)      — WRP_K_TILES reset=1
+  :52  [PASS] reset VECTOR +0x030 (0x20300000)
+  :56  [PASS] reset VECTOR +0x044 (0x00004000)   — WRP_LEN reset=0x4000
+  :77  [PASS] reset PCIE +0x018 (0x80000000)     — BAR1_MASK RO const
+  :86  [PASS] reset INTC +0x008 (0x00000001)     — THRESHOLD reset=1 (real)
+  :169 [PASS] wos-store DMA +0x004 (0x00000042)  + [DOC-DIV] BUG-RTL-SOC-011
+  :198 [PASS] field-full PCIE +0x000 (0x0000000e) — mps<<1, bit0/bit3 = 0
+  :209 [PASS] field-full PCIE +0x01c (0x0000ff01)
+  :211 [PASS] field-full PCIE +0x020 (0x00000005)
+  :213 [PASS] unmap-read  PCIE +0x024 pslverr (0x00000001)
+  :214 [PASS] unmap-write PCIE +0x024 pslverr (0x00000001)
+  :223-230 [PASS] reserved-read/write DOORBELL +0x010/+0x014 (0) + [DOC-DIV] BUG-RTL-SOC-009
+  :232 [PASS] rwm-full INTC +0x004 (0x000000ff)  — 8-bit ENABLE mask
+  :234 [PASS] rwm-full INTC +0x008 (0x0000000f)  — 4-bit THRESHOLD mask
+  :239 [PASS] out-of-range 0x4000_8000 write → pslverr=1
+  :240 [PASS] region-miss 0x1000_0000 read → pslverr=1
+  :242 [PASS] psel_o[7] (PCIE_DMA) never asserted
+  :251-258 INTC W1C sequence: seed 0xE0 → sticky → ACK 0xE0 → 0; ACK reads 0;
+           re-seed 0xE0 → ACK 0x20 → 0xC0 → ACK 0 → 0xC0 → ACK 0xC0 → 0
+  :262 [PASS] mxu_dbg_state = 0 (IDLE — no compute launched)
+  :263 [PASS] all peripheral irqs deasserted at end
+Runner exit: [soc-run] RESULT: PASS for run_apb_conformance_real (exit 0).
+Verification checks: 214 [PASS] / 0 [FAIL] / 8 DOC-DIV lines in the real log.
+
+================================================================================
+ADVERSARIAL NOTES
+================================================================================
+misleading_success_output: the GREEN claim is NOT retyped — it was re-grepped
+from the actual run log ON sz0001 after the run:
+  ssh zhengs@192.168.0.11 'grep -n "APB_CONFORMANCE_REAL\|TASK-12" \
+      /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/apb_conformance_real.log'
+  → :285 APB_CONFORMANCE_REAL: GREEN (7/7 peripherals, 214 checks, 8 doc-div ...)
+    :286 TASK-12 RESULT: GREEN (expected)
+  log file exists (13407 bytes, mtime Aug 31 12:25), grep -c "\[FAIL\]" = 0,
+  grep -c "\[PASS\]" = 214, compile log grep -c Error = 0.
+Fail-closed: the GREEN marker is printed ONLY from the TB's own computed
+counters (fail_cnt==0 && timeouts==0 && covered>=5); every DOC-DIV check
+asserts the REAL behavior (it is a pass only if real matches the RTL-derived
+expectation) and must carry a bug id. No silent pass path exists.
+Positive routing proof: per-slave psel_o assertion counters (172/76/130/146/
+76/99/52) show every peripheral was actually selected through the real
+decoder — the checks did not pass vacuously.
+
+dirty_worktree: porcelain at evidence time shows THIS todo's files:
+  M rtl/tb/apb_conformance_real_tb.sv
+  M sim/regression/Makefile
+  M docs/bugs/bugs-soc-rtl.md
+plus files owned by PARALLEL-WAVE todos (pre-existing before this todo began,
+same as the todo-3 evidence inventory): run_ibex_full_rtl.sh /
+run_ibex_segment_run.sh (todo 9), sim/rtl_soc_runner.py (todo 10),
+sim/rtl_soc_segment_run.py + scripts/gen_evidence_provenance.py /
+scripts/check_evidence_provenance.py (todo 11), task-0/10/11 evidence +
+notepads, W0 leftovers (.omo/evidence/task-0-signoff-v3-runner.txt,
+learnings.md x2, build/evidence/*, deleted task-14 evidence), firmware/build
+artifacts (todo 13 rebuild). NO file under rtl/ product dirs (soc/, wrapper/,
+ip/, intc/, mxu/, sfu/, vector/, cpu/) is modified; apb_decoder.v untouched;
+the model run_apb_conformance target and apb_register_conformance_tb.sv are
+unchanged. Build artifacts (simv_apb_conformance_real, compile/run logs) are
+gitignored and do not appear in porcelain.
+
+Limitations (declared, none blocking):
+  * pcie_dma_wrapper excluded (AXI master M6, not an APB conformance target;
+    guard proves psel_o[7] never asserted).
+  * AXI data paths not exercised (tie-off, no CMD.START) — out of scope for a
+    register-semantics TB; proven safe by the idle checks (mxu_dbg_state=0,
+    all irqs 0).
+  * DMA STATUS read-clears-DONE side effect (dma_wrapper.v:299-301) is
+    unobservable while idle (no transfer launched) — recorded in BUG-RTL-SOC-011
+    rather than silently assumed.
+  * SFU pready stall paths (start_hold/post_start_stall, sfu_soc_wrapper.v:631)
+    are documented in the TB header but never armed by this stimulus
+    (no CMD.START), matching the todo-3 wiring decision.
+  * MXU wrapper 0x44/0x48 are not listed in the wrapper header table but exist
+    in RTL; covered here with RTL-cited resets/masks (16-bit).
+
+NOT COMMITTED (per todo instructions: "Do NOT git commit").
+
+================================================================================
+TASK-12 RESULT: GREEN (expected)
+================================================================================

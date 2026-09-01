@@ -1,0 +1,103 @@
+================================================================================
+TASK 19 — WVR-SOC-RTL-002 保持 Pending (soc-rtl-review-remediation)
+================================================================================
+Timestamp (UTC): 2026-08-31T09:11:24Z
+Branch: soc-rtl-review-remediation
+HEAD at run time: ee095f2 (chore(omo): mark todo 17 complete (status accounting unified))
+Dirty files at run time: 9 pre-existing working-tree modifications from other
+todos (evidence/notepads/build) — NOT touched by this task.
+
+Scope: revert BUG-RTL-SOC-002 ledger status from "formally Waived" to
+"Pending（waiver 待用户签署）" across 4 docs + fix stats tables flagged by
+todo 17 (Total 13→14, Open 1→2, Waived 1→0, Pending 0→1). LOCAL ONLY, no EDA.
+
+--------------------------------------------------------------------------------
+STEP 1(a) — docs/waivers/WVR-SOC-RTL-002.md
+--------------------------------------------------------------------------------
+BEFORE :50:  "**Bug 台账引用**：...BUG-RTL-SOC-002（Status Waived，2026-08-27 更新）。"
+AFTER  :50:  "**Bug 台账引用**：...BUG-RTL-SOC-002（Status Pending（waiver
+             待用户签署），2026-08-31 更新——todo 19 ... 改回 Pending）。"
+UNCHANGED (verified verbatim):
+  - :11 Status = 提交待签（pending sign-off）  — kept, NOT signed
+  - :12 Sign-off = （留空，待用户签署）        — kept blank
+  - :53-57 Closure Criteria 原文保留, incl. #1 "33/33 FM-SOC PASS" wording:
+      1. todo 16 全量 RTL 回归 33/33 FM-SOC PASS（无新增越窗）。
+      2. FPGA bring-up 阶段 DRAM 窗口扩展完成，越 8MB 的模型可单次驻留。
+      3. 用户签署本 waiver。
+  - File NOT deleted, NOT closed, NOT signed.
+
+--------------------------------------------------------------------------------
+STEP 1(b) — docs/bugs/bugs-soc-rtl.md
+--------------------------------------------------------------------------------
+BEFORE → AFTER (6 Waived claims):
+  :78  "### BUG-RTL-SOC-002 — DRAM 地址窗口越界（Waived）"
+    → "### BUG-RTL-SOC-002 — DRAM 地址窗口越界（Pending — waiver 待用户签署）"
+  :87  "| **Status** | Waived |"
+    → "| **Status** | Pending (waiver 待用户签署) |"
+  :112 "2026-08-27: **Waived** — 正式 waiver ...（历史记录保留）
+    + 新增 :114 "2026-08-31: **Pending（waiver 待用户签署）** — todo 19 ...
+                此前台账误标为已 Waived，属状态漂移；签署前不得视为已 Waived。"
+  :373 ledger 新增 2026-08-31 段：BUG-RTL-SOC-002 改回 Pending；
+      BUG-RTL-SOC-012 新增 Open（todo 14 判 PRE-EXISTING）。
+  :387 "| Waived | 1 | BUG-RTL-SOC-002 ... |" → "| Waived | 0 | — |"
+      + 新增 "| Pending (waiver 待用户签署) | 1 | BUG-RTL-SOC-002 (...待用户签署) |"
+  :410 "| Bugs formally waived | 1 (7.7%) — BUG-RTL-SOC-002 ... |"
+    → "| Bugs pending waiver sign-off | 1 (7.1%) — BUG-RTL-SOC-002 (..., 待用户签署) |"
+
+Stats tables updated (todo 17 flags):
+  - Total   :371 "13 bugs" → "14 bugs (BUG-RTL-SOC-001 through -008 + BUG-RTL-SOC-012
+              + 2 wrapper-level + 3 phase-9)"
+  - Severity: Major 10 → 11 (adds BUG-RTL-SOC-012); Critical 3 unchanged. 3+11=14 ✓
+  - Status  : Fixed 11 / Waived 0 / Pending 1 / Open 2 / Re-opened 0 = 14 ✓
+  - Module  : MXU controller row 1→2 (adds BUG-RTL-SOC-012); sum = 14 ✓
+  - Quality : Fixed 11 (78.6%), Pending 1 (7.1%), Open 2 (14.3%) = 100% ✓
+
+--------------------------------------------------------------------------------
+STEP 1(c) — docs/func-model-signoff-checklist.md:270
+--------------------------------------------------------------------------------
+BEFORE: "BUG-RTL-SOC-002 is Waived (`docs/waivers/WVR-SOC-RTL-002.md`),
+         not claimed as fixed."
+AFTER : "BUG-RTL-SOC-002 has a submitted waiver pending user sign-off
+         (`docs/waivers/WVR-SOC-RTL-002.md`, Status = pending sign-off,
+         签字栏留空), not claimed as fixed."
+("not claimed as fixed" preserved verbatim.)
+
+--------------------------------------------------------------------------------
+STEP 1(d) — .omo/plans/soc-rtl-verification-vplan.md:164/171/181
+--------------------------------------------------------------------------------
+:164 Status **Waived** → **Pending（待用户签署）**；影响栏改 "waiver 已提交、
+     pending sign-off（todo 2；todo 19 改回 Pending），签署前不生效"。
+:171 "Total 14，Fixed 11，Waived 1，Open 2" → "Total 14，Fixed 11，Waived 0，
+     Pending 1（BUG-RTL-SOC-002，waiver 待用户签署），Open 2（007、012）"。
+:181 "BUG-RTL-SOC-002 → Waived（WVR-SOC-RTL-002）" → "BUG-RTL-SOC-002 → Pending
+     （waiver 待用户签署，WVR-SOC-RTL-002，todo 19 改回 Pending）"。
+
+--------------------------------------------------------------------------------
+STEP 1(e) — Cross-check greps (exact commands + output)
+--------------------------------------------------------------------------------
+$ grep -rn "formally Waived\|is Waived" docs/ .omo/plans/soc-rtl-verification-vplan.md
+  → (no output, exit 1) — 0 remaining claims that the waiver is signed/waived. PASS
+
+$ grep -rn "Waived" docs/bugs/bugs-soc-rtl.md docs/func-model-signoff-checklist.md \
+           docs/waivers/WVR-SOC-RTL-002.md .omo/plans/soc-rtl-verification-vplan.md \
+           docs/soc-rtl-review-remediation-blockers.md
+  Remaining "Waived" strings are exclusively NON-claims:
+  - bugs-soc-rtl.md:112  dated 2026-08-27 historical record (superseded by :114 Pending)
+  - bugs-soc-rtl.md:377  "从原已 Waived 标记改回 Pending"（reversion description）
+  - bugs-soc-rtl.md:391  "| Waived | 0 | — |"（zero count）
+  - vplan:171            "Waived 0"（zero count）
+  - blockers.md:61       "台账曾误标为已签 Waived——状态漂移，已由 todo 19 改回 Pending"
+  - blockers.md:63       future-conditional "签署后 ... 同步为正式 Waived"
+  (blockers.md:61 reworded in this task so the literal acceptance grep is clean.)
+
+$ grep -c "Pending" docs/bugs/bugs-soc-rtl.md → 5 (heading/Status/:114/:377/:392)
+
+NOTE: 签署是 USER 动作，本 todo 不得也不执行代签。waiver 文件保持
+"pending sign-off"、Sign-off 栏留空、closure 条件原文保留（33/33 原文未改写）。
+reports/CaduceusCore-review-report-2026-08-28.md 为冻结历史评审报告，未改动
+（其 :226/:266 描述的正是本次修复前的状态漂移）。
+
+Verification: local-only doc edit; no pytest/RTL regressions required (no code
+changed). grep proofs above are the acceptance evidence per plan todo 19.
+
+TASK-19 RESULT: GREEN (expected)

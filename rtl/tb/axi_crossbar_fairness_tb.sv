@@ -21,7 +21,9 @@
 //   ARVALID/AWVALID after each handshake so no two masters ever overlap
 //   assertion during a slave-free cycle. Each request is the only requester,
 //   so the arbiter grants it immediately; the resulting grant sequence is
-//   0,1,2,...,6,0,1,... — strictly alternating.
+//   0,1,2,...,6,0,1,... — strictly alternating. The sole exception is Phase
+//   P4, which deliberately violates the sequential-rotation model to expose
+//   the phantom-accept deadlock (RED by design until the RTL fix).
 //
 // Phases:
 //   P1 Fairness window: >=100 cycles (5 rotations, ~350 cycles). Per-channel
@@ -38,6 +40,19 @@
 //      master 4 issues a single-beat write to an unmapped address. AW accepted
 //      immediately, W absorbed, BRESP=DECERR (2'b11), no AW grant consumed,
 //      master 2's write unaffected, master 4's next mapped write OKAY.
+//   P4 Real contention (RED test for the phantom-accept deadlock): all 7
+//      masters assert ARVALID and AWVALID in the SAME slave-free cycle and
+//      KEEP CONTENDING for slave 0 (SRAM) continuously for >=10,000 cycles
+//      (P4_CONTEND_CYCLES). On the UNMODIFIED crossbar (accept decoupled from
+//      grant) every master is accepted while the slave is free but only one
+//      is granted — the ungranted masters wait forever for a response that
+//      never comes, and the per-transaction watchdog (WDT_LIMIT cycles from
+//      VALID-accept to R/B completion; normally <100) prints exactly
+//      "FAIRNESS: FAIL" and $finishes → expected RED. After the todo-7 fix
+//      (accept coupled to grant), the same phase runs to completion and
+//      asserts: per-master grant-count difference <=1 across the window,
+//      every master completes >=P4_MIN_TXN reads and writes, and all
+//      responses are OKAY → GREEN.
 //
 // Probes (hierarchical references into rtl/soc/axi_crossbar.v):
 //   u_dut.ar_granted[0] / u_dut.aw_granted[0] — per-slave granted master index
@@ -49,7 +64,11 @@
 //
 // Usage (via sim/regression/Makefile):
 //   make -C sim/regression run_crossbar_fairness
-// Acceptance: log contains "FAIRNESS: PASS"
+//   make -C sim/regression run_crossbar_fairness_mutation   (fixed-priority
+//       mutation; expects the fairness assertion to FAIL — RED guard)
+// Acceptance: log contains "FAIRNESS: PASS" (fixed crossbar, todo 7). On the
+// unmodified crossbar P4 reproduces the phantom-accept deadlock and the log
+// shows the watchdog marker "FAIRNESS: FAIL" — expected RED for todo 2.
 //=============================================================================
 
 `timescale 1ns / 1ps
@@ -68,12 +87,33 @@ module axi_crossbar_fairness_tb;
     localparam int unsigned S_ID_WIDTH  = M_ID_WIDTH + MSEL_WIDTH;  // 9
     localparam CLK_HALF = 5;  // 100 MHz, 10ns period
 
+    // ── Mutation hook (todo 7 regression guard) ──────────────────────────────
+    // Compiling with +define+MUTATE_FIXED_PRIORITY builds a fixed-priority DUT
+    // variant (FIXED_PRIORITY=1: grants the lowest master index first and
+    // never rotates). The SAME P4 contention stimulus MUST then fail the
+    // fairness assertion (grant-count difference <=1) — that RED result is
+    // the mutation guard proving this fairness test genuinely discriminates
+    // fixed-priority starvation from round-robin fairness.
+`ifdef MUTATE_FIXED_PRIORITY
+    localparam int unsigned MUTATE = 1;
+`else
+    localparam int unsigned MUTATE = 0;
+`endif
+
     localparam [ADDR_WIDTH-1:0] SRAM_BASE   = 32'h2000_0000;
     localparam [ADDR_WIDTH-1:0] UNMAPPED_R  = 32'h1000_0000;  // DECERR read
     localparam [ADDR_WIDTH-1:0] UNMAPPED_W  = 32'h5000_0000;  // DECERR write
     localparam int unsigned     NUM_ROTATIONS = 5;   // 5 x 7 masters x (rd+wr)
     localparam int unsigned     MIN_GRANTS    = 28;  // anti-vacuous floor
                                                       // (>= 4 rotations worth)
+    // P4 real-contention phase (RED test — phantom-accept deadlock)
+    localparam int unsigned     P4_CONTEND_CYCLES = 11000;  // >= 10,000-cycle
+                                                            // contention window
+    localparam int unsigned     WDT_LIMIT         = 10000;  // per-transaction
+                                                            // watchdog cycles
+    localparam int unsigned     P4_MIN_TXN        = 20;     // non-vacuous
+                                                            // completion floor
+                                                            // per master/ch
 
     // =========================================================================
     // Clock and Reset
@@ -167,7 +207,8 @@ module axi_crossbar_fairness_tb;
         .M_ID_WIDTH (M_ID_WIDTH),
         .MSEL_WIDTH (MSEL_WIDTH),
         .NUM_M      (NUM_M),
-        .NUM_S      (NUM_S)
+        .NUM_S      (NUM_S),
+        .FIXED_PRIORITY (MUTATE)
     ) u_dut (
         .clk           (clk),
         .rst_n         (rst_n),
@@ -395,6 +436,119 @@ module axi_crossbar_fairness_tb;
     end
 
     // =========================================================================
+    // Per-transaction watchdog (phantom-accept anti-hang probe)
+    // =========================================================================
+    // From the cycle a transaction's VALID is accepted until its R/B response
+    // completes (normally <100 cycles): if not complete within WDT_LIMIT
+    // cycles, print exactly "FAIRNESS: FAIL" and $finish. The Makefile target
+    // greps for "FAIRNESS: PASS" — its absence fails the target — so the
+    // marker is the RED detector ($finish alone exits 0 and proves nothing).
+    // Per-transaction only: a global "N cycles without ANY completion"
+    // watchdog is deliberately NOT implemented because it would conflict
+    // with the >=10,000-cycle contention window of P4.
+    reg  [63:0]              wdt_cycle;
+    reg  [NUM_M-1:0]         wdt_ar_pend, wdt_aw_pend;
+    reg  [63:0]              wdt_ar_start [0:NUM_M-1];
+    reg  [63:0]              wdt_aw_start [0:NUM_M-1];
+    integer                  wdt_i;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            wdt_cycle <= '0;
+            wdt_ar_pend <= '0;
+            wdt_aw_pend <= '0;
+            for (wdt_i = 0; wdt_i < NUM_M; wdt_i = wdt_i + 1) begin
+                wdt_ar_start[wdt_i] <= '0;
+                wdt_aw_start[wdt_i] <= '0;
+            end
+        end else begin
+            wdt_cycle <= wdt_cycle + 1;
+            for (wdt_i = 0; wdt_i < NUM_M; wdt_i = wdt_i + 1) begin
+                // ── AR accept → R completion ────────────────────────────────
+                if (m_arvalid[wdt_i] && m_arready[wdt_i] && !wdt_ar_pend[wdt_i]) begin
+                    wdt_ar_pend[wdt_i]  <= 1'b1;
+                    wdt_ar_start[wdt_i] <= wdt_cycle;
+                end
+                if (wdt_ar_pend[wdt_i] && m_rvalid[wdt_i] && m_rready[wdt_i] &&
+                    m_rlast[wdt_i])
+                    wdt_ar_pend[wdt_i] <= 1'b0;
+                if (wdt_ar_pend[wdt_i] &&
+                    (wdt_cycle - wdt_ar_start[wdt_i]) >= WDT_LIMIT) begin
+                    $display("FAIRNESS: FAIL");
+                    $display("[TB] WATCHDOG: master %0d AR accepted at cycle %0d, R not complete within %0d cycles (phantom-accept deadlock)",
+                        wdt_i, wdt_ar_start[wdt_i], WDT_LIMIT);
+                    $finish;
+                end
+
+                // ── AW accept → B completion ────────────────────────────────
+                if (m_awvalid[wdt_i] && m_awready[wdt_i] && !wdt_aw_pend[wdt_i]) begin
+                    wdt_aw_pend[wdt_i]  <= 1'b1;
+                    wdt_aw_start[wdt_i] <= wdt_cycle;
+                end
+                if (wdt_aw_pend[wdt_i] && m_bvalid[wdt_i] && m_bready[wdt_i])
+                    wdt_aw_pend[wdt_i] <= 1'b0;
+                if (wdt_aw_pend[wdt_i] &&
+                    (wdt_cycle - wdt_aw_start[wdt_i]) >= WDT_LIMIT) begin
+                    $display("FAIRNESS: FAIL");
+                    $display("[TB] WATCHDOG: master %0d AW accepted at cycle %0d, B not complete within %0d cycles (phantom-accept deadlock)",
+                        wdt_i, wdt_aw_start[wdt_i], WDT_LIMIT);
+                    $finish;
+                end
+            end
+        end
+    end
+
+    // =========================================================================
+    // P4 grant/completion counters (gated by p4_win, driven by the sequencer)
+    // =========================================================================
+    reg  [31:0] p4_ar_grant_cnt [0:NUM_M-1];
+    reg  [31:0] p4_aw_grant_cnt [0:NUM_M-1];
+    reg  [31:0] p4_r_done_cnt   [0:NUM_M-1];
+    reg  [31:0] p4_b_done_cnt   [0:NUM_M-1];
+    reg  [31:0] p4_r_bad, p4_b_bad;
+    reg         p4_win;
+    reg         p4_ar_busy_q, p4_aw_busy_q;
+    integer     p4_i;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            p4_ar_busy_q <= 1'b0;
+            p4_aw_busy_q <= 1'b0;
+            p4_r_bad     <= '0;
+            p4_b_bad     <= '0;
+            for (p4_i = 0; p4_i < NUM_M; p4_i = p4_i + 1) begin
+                p4_ar_grant_cnt[p4_i] <= '0;
+                p4_aw_grant_cnt[p4_i] <= '0;
+                p4_r_done_cnt[p4_i]   <= '0;
+                p4_b_done_cnt[p4_i]   <= '0;
+            end
+        end else begin
+            p4_ar_busy_q <= h_ar_busy;
+            p4_aw_busy_q <= h_aw_busy;
+            if (p4_win) begin
+                // Grant events: rising edge of the slave grant-credit busy.
+                if (h_ar_busy && !p4_ar_busy_q)
+                    p4_ar_grant_cnt[h_ar_granted] <= p4_ar_grant_cnt[h_ar_granted] + 1;
+                if (h_aw_busy && !p4_aw_busy_q)
+                    p4_aw_grant_cnt[h_aw_granted] <= p4_aw_grant_cnt[h_aw_granted] + 1;
+                // Response-completion events per master (single-beat only).
+                for (p4_i = 0; p4_i < NUM_M; p4_i = p4_i + 1) begin
+                    if (m_rvalid[p4_i] && m_rready[p4_i]) begin
+                        p4_r_done_cnt[p4_i] <= p4_r_done_cnt[p4_i] + 1;
+                        if (m_rresp[p4_i] != 2'b00)
+                            p4_r_bad <= p4_r_bad + 1;
+                    end
+                    if (m_bvalid[p4_i] && m_bready[p4_i]) begin
+                        p4_b_done_cnt[p4_i] <= p4_b_done_cnt[p4_i] + 1;
+                        if (m_bresp[p4_i] != 2'b00)
+                            p4_b_bad <= p4_b_bad + 1;
+                    end
+                end
+            end
+        end
+    end
+
+    // =========================================================================
     // Master driver tasks (single-beat; deassert after every handshake so no
     // two masters ever overlap assertion during a slave-free cycle)
     // =========================================================================
@@ -468,7 +622,7 @@ module axi_crossbar_fairness_tb;
     integer   txn_errors;
 
     initial begin
-        integer i, iter;
+        integer i, iter, d;
         reg [31:0] cnt_min, cnt_max, cnt_sum;
         reg [63:0] win_start, win_end;
         reg [1:0]  dec_rresp, dec_bresp;
@@ -477,6 +631,7 @@ module axi_crossbar_fairness_tb;
         reg        dec_rlast;
         reg        dec_ar_accepted, dec_aw_accepted;
         reg        dec_inj_ar_busy, dec_inj_aw_busy;
+        reg        p4_all_done;
         integer    checks_pass, checks_fail;
 
         $display("============================================================");
@@ -491,6 +646,7 @@ module axi_crossbar_fairness_tb;
         // Counting windows start disabled (avoids X before Phase 1)
         ar_win = 1'b0;
         aw_win = 1'b0;
+        p4_win = 1'b0;
 
         // ── Idle all master channels ────────────────────────────────────────
         for (i = 0; i < NUM_M; i = i + 1) begin
@@ -815,6 +971,142 @@ module axi_crossbar_fairness_tb;
             checks_pass = checks_pass + 1;
         end else begin
             $display("[TB]   CHECK DECERR write consumed an AW grant: FAIL");
+            checks_fail = checks_fail + 1;
+        end
+
+        // =====================================================================
+        // PHASE 4 — all-master real contention for the same slave (RED test)
+        // =====================================================================
+        $display("");
+        $display("--- P4: all %0d masters contend for slave 0 for %0d cycles ---",
+            NUM_M, P4_CONTEND_CYCLES);
+
+        // Contention must begin in a single slave-free cycle (both channels).
+        repeat(5) @(posedge clk);   // settle after P3
+        $display("[TB]   slave state at P4 start: ar_busy=%b aw_busy=%b",
+            h_ar_busy, h_aw_busy);
+
+        // Configure all masters for single-beat mapped reads+writes to SRAM
+        // (slave 0) and assert every ARVALID/AWVALID/WVALID in the SAME
+        // cycle. VALIDs stay asserted for the whole contention window.
+        @(negedge clk);
+        for (i = 0; i < NUM_M; i = i + 1) begin
+            m_arid[i]    = i[5:0];
+            m_araddr[i]  = SRAM_BASE + 32'h3000 + (i * 64);
+            m_arlen[i]   = 8'd0;
+            m_arsize[i]  = 3'd6;
+            m_arburst[i] = 2'b01;
+            m_arvalid[i] = 1'b1;
+            m_awid[i]    = i[5:0];
+            m_awaddr[i]  = SRAM_BASE + 32'h4000 + (i * 64);
+            m_awlen[i]   = 8'd0;
+            m_awsize[i]  = 3'd6;
+            m_awburst[i] = 2'b01;
+            m_awvalid[i] = 1'b1;
+            m_wdata[i]   = {DATA_WIDTH/8{8'hC0 + i[7:0]}};
+            m_wstrb[i]   = {DATA_WIDTH/8{1'b1}};
+            m_wlast[i]   = 1'b1;
+            m_wvalid[i]  = 1'b1;
+        end
+        p4_win = 1'b1;
+        @(posedge clk);   // all VALIDs asserted together in the slave-free cycle
+
+        // Keep contending continuously. On the UNMODIFIED crossbar the
+        // per-transaction watchdog fires "FAIRNESS: FAIL" inside this window
+        // (phantom-accept deadlock reproduced — expected RED). On the fixed
+        // crossbar the window runs to completion and the P4 checks below
+        // evaluate.
+        repeat(P4_CONTEND_CYCLES) @(posedge clk);
+
+        // Drain: deassert all VALIDs, wait for the last in-flight
+        // transactions to complete (bounded).
+        @(negedge clk);
+        for (i = 0; i < NUM_M; i = i + 1) begin
+            m_arvalid[i] = 1'b0;
+            m_awvalid[i] = 1'b0;
+            m_wvalid[i]  = 1'b0;
+        end
+        d = 0;
+        while ((d < 200) && (h_ar_busy || h_aw_busy)) begin
+            @(posedge clk);
+            d = d + 1;
+        end
+        p4_win = 1'b0;
+        @(posedge clk);   // settle final non-blocking counter updates
+
+        // ── P4 check 1: per-master AR grant-count difference <= 1 ───────────
+        cnt_min = p4_ar_grant_cnt[0];
+        cnt_max = p4_ar_grant_cnt[0];
+        cnt_sum = 0;
+        for (i = 0; i < NUM_M; i = i + 1) begin
+            if (p4_ar_grant_cnt[i] < cnt_min) cnt_min = p4_ar_grant_cnt[i];
+            if (p4_ar_grant_cnt[i] > cnt_max) cnt_max = p4_ar_grant_cnt[i];
+            cnt_sum = cnt_sum + p4_ar_grant_cnt[i];
+        end
+        $write("[TB]   P4 AR grants per master:");
+        for (i = 0; i < NUM_M; i = i + 1) $write(" %0d", p4_ar_grant_cnt[i]);
+        $display(" (total %0d)", cnt_sum);
+        if ((cnt_max - cnt_min) <= 1) begin
+            $display("[TB]   CHECK P4 AR grant fairness max-min=%0d <= 1: PASS",
+                cnt_max - cnt_min);
+            checks_pass = checks_pass + 1;
+        end else begin
+            $display("[TB]   CHECK P4 AR grant fairness max-min=%0d > 1: FAIL",
+                cnt_max - cnt_min);
+            checks_fail = checks_fail + 1;
+        end
+
+        // ── P4 check 2: per-master AW grant-count difference <= 1 ───────────
+        cnt_min = p4_aw_grant_cnt[0];
+        cnt_max = p4_aw_grant_cnt[0];
+        cnt_sum = 0;
+        for (i = 0; i < NUM_M; i = i + 1) begin
+            if (p4_aw_grant_cnt[i] < cnt_min) cnt_min = p4_aw_grant_cnt[i];
+            if (p4_aw_grant_cnt[i] > cnt_max) cnt_max = p4_aw_grant_cnt[i];
+            cnt_sum = cnt_sum + p4_aw_grant_cnt[i];
+        end
+        $write("[TB]   P4 AW grants per master:");
+        for (i = 0; i < NUM_M; i = i + 1) $write(" %0d", p4_aw_grant_cnt[i]);
+        $display(" (total %0d)", cnt_sum);
+        if ((cnt_max - cnt_min) <= 1) begin
+            $display("[TB]   CHECK P4 AW grant fairness max-min=%0d <= 1: PASS",
+                cnt_max - cnt_min);
+            checks_pass = checks_pass + 1;
+        end else begin
+            $display("[TB]   CHECK P4 AW grant fairness max-min=%0d > 1: FAIL",
+                cnt_max - cnt_min);
+            checks_fail = checks_fail + 1;
+        end
+
+        // ── P4 check 3: every master completes >= P4_MIN_TXN reads+writes ──
+        p4_all_done = 1'b1;
+        for (i = 0; i < NUM_M; i = i + 1) begin
+            if ((p4_r_done_cnt[i] < P4_MIN_TXN) || (p4_b_done_cnt[i] < P4_MIN_TXN))
+                p4_all_done = 1'b0;
+        end
+        $write("[TB]   P4 R completions per master:");
+        for (i = 0; i < NUM_M; i = i + 1) $write(" %0d", p4_r_done_cnt[i]);
+        $display("");
+        $write("[TB]   P4 B completions per master:");
+        for (i = 0; i < NUM_M; i = i + 1) $write(" %0d", p4_b_done_cnt[i]);
+        $display("");
+        if (p4_all_done) begin
+            $display("[TB]   CHECK P4 every master completed >= %0d reads+writes (no starvation): PASS",
+                P4_MIN_TXN);
+            checks_pass = checks_pass + 1;
+        end else begin
+            $display("[TB]   CHECK P4 completion floor: FAIL (some master completed < %0d reads or writes)",
+                P4_MIN_TXN);
+            checks_fail = checks_fail + 1;
+        end
+
+        // ── P4 check 4: all P4 responses OKAY ───────────────────────────────
+        if ((p4_r_bad == 0) && (p4_b_bad == 0)) begin
+            $display("[TB]   CHECK P4 all responses OKAY (0 bad R, 0 bad B): PASS");
+            checks_pass = checks_pass + 1;
+        end else begin
+            $display("[TB]   CHECK P4 all responses OKAY: FAIL (%0d bad R, %0d bad B)",
+                p4_r_bad, p4_b_bad);
             checks_fail = checks_fail + 1;
         end
 

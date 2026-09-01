@@ -1,0 +1,231 @@
+================================================================================
+TASK-9 EVIDENCE — soc-rtl-review-remediation — todo 9 (Runner fail-closed, GREEN)
+================================================================================
+timestamp:       2026-08-31T03:14:51Z
+commit:          d4a0399a74f3b8599daa1418ebf3bc86d6e77063 (HEAD; no new commit — task forbids)
+branch:          soc-rtl-review-remediation
+plan:            .omo/plans/soc-rtl-review-remediation.md todo 9 (W2, blocked-by 1 & 4)
+scope:           LOCAL ONLY (no EDA / no VCS / no SSH / no network)
+
+--------------------------------------------------------------------------------
+RED -> GREEN (W1 negative tests cited)
+--------------------------------------------------------------------------------
+todo 1 (test_timeout_behavior.sh) — RED captured 2026-08-31 (pre-fix, this task,
+recorded at /tmp/pre_t9_timeout.log; historical W1 run at
+.omo/evidence/task-1-soc-rtl-review-remediation.txt 2026-08-31T02:27:43Z):
+    TEST RESULT: RED — 4 assertion(s) failed
+    FAIL: RUN_RC=124 maps to exit 0 (timed-out run reported SUCCESS)
+    FAIL: SEG_TIMEOUT_S=--help NOT rejected with exit 2 (region exited 0)
+    FAIL: SEG_TIMEOUT_S=abc   NOT rejected with exit 2 (region exited 125)
+    FAIL: SEG_TIMEOUT_S=-5    NOT rejected with exit 2 (region exited 125)
+  -> GREEN now: rc=0, "assertions passed: 8 / failed: 0",
+     RUN_RC=124 -> exit 124; all three bad values -> exit 2, no simulator launch.
+
+todo 4 (test_regression_stats.sh) — RED captured 2026-08-31 (pre-fix, this task,
+/tmp/pre_t9_stats.log; historical W1 run at
+.omo/evidence/task-4-soc-rtl-review-remediation.txt 2026-08-31T02:27:22Z):
+    OVERALL: RED — 2 assertion(s) failed
+    ASSERT 1: FAIL — 014/015/016/021/022/023 misclassified PASS (grep missed
+              the :4279 message "superseded by FM-SOC-027/032/10X")
+    ASSERT 4: FAIL — fake simulator exited 124 but `|| true` swallowed it
+              (classified FAIL, TIMEOUT=0)
+    PASS=31 SKIP=2 FAIL=0 TIMEOUT=0
+  -> GREEN now: rc=0, all A0-A4 PASS:
+    ASSERT 1 PASS (6 superseded -> SKIP); ASSERT 2 PASS (017/019 -> SKIP);
+    ASSERT 3 PASS (sum == 33); ASSERT 4 PASS (exit 124 -> TIMEOUT);
+    PASS=25 SKIP=8 FAIL=0 TIMEOUT=0 TOTAL=33
+    (matches plan acceptance: PASS=<n> SKIP=8 FAIL=0 TIMEOUT=0)
+
+--------------------------------------------------------------------------------
+PER-FILE CHANGE SUMMARY
+--------------------------------------------------------------------------------
+1. sim/regression/run_ibex_segment_run.sh  (sha256 dbb2300...)
+   * SEG_TIMEOUT_S strict positive-integer validation moved to the TOP of the
+     script (immediately after REPO_ROOT/RUN_DIR/cd, BEFORE source run_env.sh
+     and any EDA gate / compile / launch). Invalid (--help/abc/-5/0/empty-
+     pattern/oversized) -> error to stderr + exit 2. This keeps the W1
+     extraction contract: the first SEG_TIMEOUT_S mention is the validation
+     line (test anchor = line 27), and bad values exit 2 before the EDA gate.
+   * Timeout handling rewritten: RUN_RC=124 (SIGTERM wall-cap) or 137
+     (SIGKILL) -> TIMEOUT evidence written to a FRESH run-keyed file
+     build/evidence/task-14-soc-rtl-verification-signoff-<RUN_ID>.txt
+     (RUN_ID=<timestamp>-<pid>; never appends to a pre-existing evidence
+     file), then `exit "$RUN_RC"` (124/137 — NEVER 0). The W1 anchor line
+     `if [ "$RUN_RC" -eq 124 ]` is preserved verbatim at the head of this
+     block (test extraction anchor = line 92). Non-timeout rc passes through.
+   * Evidence block records: timebox_status/timebox_note/runner_exit/
+     seg_timeout_s/timestamp/commit.
+
+2. sim/regression/run_ibex_full_rtl.sh  (sha256 649eb88...)
+   * Loop keeps `for CASE in $CASES; do` (bare) + single bare `done` and the
+     variable names CASES/EVIDENCE_DIR/CASE_LOG/SIMV/RUN_DIR/REPO_ROOT/
+     FM_SOC_CASE_ID/PASS/SKIP/FAIL/TIMEOUT — the W1 awk-extraction contract.
+   * `|| true` REMOVED. Exit code captured with the same set +e / set -e
+     guard the segment script already uses (set -e is active from the script
+     header, so the guard is required — without it a failing case would abort
+     the whole run at the first non-zero rc).
+   * Classification order (fail-closed): rc 124/137 -> [TIMEOUT] + TIMEOUT++;
+     rc != 0 -> [FAIL] + FAIL++; superseded msg "superseded by
+     FM-SOC-027/032/10X" (rtl_soc_runner.py:4279) OR N/A msg "skipped: direct
+     APB/AXI case not applicable to Ibex RTL mode" (:4282) -> [SKIP]; cocotb
+     PASS summary "TESTS=1 PASS=1 FAIL=0 SKIP=0" -> [PASS]; else [FAIL].
+   * Each case log gets a structured `runner_classification=<CLASS>` marker
+     (with exit_code for FAIL/TIMEOUT) appended AFTER classification —
+     deterministic input for scripts/audit_fm_soc_statistics.py.
+   * Summary emits the four classes: [SUMMARY] PASS=$PASS SKIP=$SKIP
+     FAIL=$FAIL TIMEOUT=$TIMEOUT TOTAL=$TOTAL; total must equal the number of
+     requested cases (33 for the default list, N for single-case runs) else
+     exit 1; FAIL>0 or TIMEOUT>0 -> exit 1.
+
+3. sim/regression/Makefile  (sha256 2db100f...)
+   * `run_fm_soc_case: SHELL := /bin/bash` (target-specific; /bin/sh on this
+     host is dash which has no pipefail/PIPESTATUS — empirically verified with
+     GNU Make 4.3). Both branches (mixed-mode + full RTL) now run the simv
+     pipeline under `set -o pipefail` and check `rc=${PIPESTATUS[0]:-127}`
+     right after the `| tee ...`; non-zero rc -> error + `exit $rc` so the
+     make target fails. Final grep PASS/FAIL classification line unchanged.
+   * `run_e2e_mobilenetv3: SHELL := /bin/bash` + same pipefail/PIPESTATUS
+     check inside the segment loop; a simulator crash breaks the loop and the
+     FAIL verdict fires (exit 1).
+   * NOTE: the Makefile also contains a `run_crossbar_fairness_mutation`
+     target added by the PARALLEL todo 7 agent (same file, different region);
+     that hunk is not part of this task.
+   * No other targets touched; build semantics of the ~90 remaining targets
+     unchanged (their shells remain /bin/sh).
+
+4. NEW scripts/audit_fm_soc_statistics.py  (sha256 6b7c9a8c...)
+   * Parses the 33 case logs (build/ibex_full_rtl/evidence/<CASE>.log, default
+     paths; --evidence-dir/--manifest/--json-out overrides) with the same
+     classification precedence as the runner (markers first, then :4279/:4282
+     messages, then PASS summary), emits JSON
+     {executed, superseded, na, failed, timeout, total_cases, matched,
+     mismatches} and compares each case against
+     docs/fm_soc_case_manifest.csv (33 rows; 25 EXECUTED / 6 SUPERSEDED /
+     2 N/A). Any per-case mismatch -> stderr detail + exit 1; manifest
+     structural problems (row count / column split / missing file) -> exit 2.
+
+5. NOT modified: soc-verification-run.sh (byte-identical — SSH passthrough
+   preserved; exit codes propagate: make fails -> wrapper `exit 1`).
+
+--------------------------------------------------------------------------------
+VERIFICATION OUTPUTS (all local, no EDA)
+--------------------------------------------------------------------------------
+[V1] bash -n sim/regression/run_ibex_segment_run.sh        -> OK (rc=0)
+[V2] bash -n sim/regression/run_ibex_full_rtl.sh           -> OK (rc=0)
+[V3] python3 -m py_compile scripts/audit_fm_soc_statistics.py -> OK
+[V4] bash sim/regression/test_timeout_behavior.sh          -> rc=0 GREEN
+       assertions passed: 8 / failed: 0
+       - RUN_RC=124 extraction -> exit 124 (non-zero) PASS
+       - --help/abc/-5 each -> exit 2, simulator NOT launched PASS
+       - full-runner smoke: SEG_TIMEOUT_S=abc -> exit 2 (validation fires
+         BEFORE the EDA gate now)
+[V5] bash sim/regression/test_regression_stats.sh          -> rc=0 GREEN
+       A0 manifest OK (33 / 25 / 6 / 2); A1 6 superseded -> SKIP;
+       A2 017/019 -> SKIP; A3 sum == 33;
+       A4 exit-124 -> TIMEOUT (probe STATS: PASS=0 SKIP=0 FAIL=0 TIMEOUT=1)
+       PASS=25 SKIP=8 FAIL=0 TIMEOUT=0 TOTAL=33
+[V6] SEG_TIMEOUT_S=--help bash sim/regression/run_ibex_segment_run.sh -> rc=2
+       (also abc -> 2, -5 -> 2, 0 -> 2; error message before EDA gate)
+[V7] Simulated 124 path (same verbatim-extraction mechanism as the test):
+       RUN_RC=124 -> extracted decision block rc=124; fresh run-keyed evidence
+       file written (timebox_status=TIMEOUT_24H, runner_exit=124,
+       seg_timeout_s=86400, timestamp, commit=unknown in sandbox); a planted
+       pre-existing task-14-soc-rtl-verification-signoff.txt remained
+       byte-identical (33 bytes, "stale pre-existing evidence line") — NO
+       append ever happens.
+[V8] python3 scripts/audit_fm_soc_statistics.py           -> rc=1 (expected on
+       the CURRENT stale logs) — JSON emitted:
+         {"executed": 33, "failed": 0, "na": 0, "superseded": 0,
+          "timeout": 0, "matched": 25, ...}
+       8 legitimate mismatches, all "expected superseded/na, got executed":
+       the OLD logs (pre-fix run) carry only the cocotb PASS summary with no
+       superseded/N/A messages, so 014/015/016/017/019/021/022/023 classify
+       executed. This is exactly the anticipated current-state mismatch of old
+       logs; the script itself runs and produces the required JSON.
+[V9] make -C sim/regression -n run_fm_soc_case            -> rc=0 (syntax OK,
+       recipe renders with set -o pipefail + rc=${PIPESTATUS[0]:-127} + exit
+       check; sub-make compile lines printed only). Mixed-mode branch dry
+       parse also rc=0.
+[V10] Recipe shell-block behavior probe: the exact run_fm_soc_case pipeline
+       pattern (pipefail + PIPESTATUS[0] + exit rc) evaluated with a fake
+       simv exiting 5 -> rc=5, fail-closed YES; the same pattern under GNU
+       Make 4.3 in a minimal makefile propagated exit 3 -> `make: Error 3`.
+[V11] Real-loop end-to-end (post-EDA-gate region of run_ibex_full_rtl.sh run
+       under `set -euo pipefail` with a fake simv covering all five paths):
+       FM-SOC-001->PASS, 014->SKIP, 017->SKIP, 005(exit 3)->FAIL,
+       006(exit 124)->TIMEOUT; [SUMMARY] PASS=1 SKIP=2 FAIL=1 TIMEOUT=1
+       TOTAL=5; exit code 1. All-pass rerun -> exit 0. runner_classification
+       markers present in every case log. This also proves the set +e/set -e
+       guard: a non-zero simv exit no longer aborts the script under set -e.
+[V12] git diff --stat soc-verification-run.sh -> empty (SSH wrapper untouched).
+
+--------------------------------------------------------------------------------
+ADVERSARIAL NOTES
+--------------------------------------------------------------------------------
+dirty_worktree:
+  git status --porcelain (end of task):
+    M sim/regression/Makefile            <- mine (todo 9)
+    M sim/regression/run_ibex_full_rtl.sh    <- mine (todo 9)
+    M sim/regression/run_ibex_segment_run.sh <- mine (todo 9)
+    ?? scripts/audit_fm_soc_statistics.py     <- mine (todo 9)
+    ?? .omo/evidence/task-9-soc-rtl-review-remediation.txt <- mine
+    M rtl/soc/axi_crossbar.v             <- parallel todo 7 (not mine)
+    M rtl/tb/axi_crossbar_fairness_tb.sv <- parallel todo 7 (not mine)
+    ?? docs/waivers/REMEDIATION-RTL-EXCEPTION-2026-08-28.md <- todo 7 (not mine)
+    ?? .omo/evidence/task-0-... / ?? .omo/notepads/...      <- P0/task 0
+  My diff touches ONLY the four product files above; the foreign entries were
+  left byte-identical to how I found them (work-around, not work-through).
+  No commit was created (task forbids).
+misleading_success_output:
+  * Every verdict in this task is an EXIT CODE or file-existence check, not
+    terminal-text interpretation: test scripts assert subshell rc / marker
+    files; V6/V7 assert rc 2 and rc 124; V8 asserts the audit's own exit code;
+    V9-V11 assert rc 0/1 plus content lines emitted by the actual logic.
+  * The GREEN of V4/V5 comes from the same scripts that were RED pre-fix
+    (rc=1 each), run against the live edited files — no fixture substitution.
+  * The audit script's rc=1 on old logs is reported as FAIL explicitly, not
+    papered over; the JSON shows matched=25 and the 8 mismatches.
+  * V11's mixed-path run intentionally mixes a FAIL and a TIMEOUT into the
+    case list and asserts the runner exits 1 — success is proven by a
+    fail-closed failure, and the all-pass rerun proves rc=0 is still
+    reachable.
+malformed_input:
+  The --help / abc / -5 probes ARE the malformed-input adversarial probe:
+  each was fed to (a) the verbatim-extracted validation region (exit 2,
+  no simulator launch) and (b) the real full script locally (exit 2, error
+  printed BEFORE the EDA gate). Additional probes: 0 -> exit 2; the empty
+  value is treated as "use default" by the ${SEG_TIMEOUT_S:-86400} expansion
+  (documented existing convention). Oversized all-digit values are rejected
+  by the `-ge 1` check when `[ ]` errors on overflow (2>/dev/null, fail-closed
+  exit 2).
+other safeguards:
+  * The real simv binaries were never touched (all probes use stubs in
+    mktemp dirs; the pkill EXIT trap is armed only past the EDA gate, which
+    local runs never reach).
+  * Evidence-side effects of every probe were redirected into temp dirs via
+    REPO_ROOT; nothing under the real repo was written by the tests.
+  * Extraction anchors preserved verbatim: `if [ "$RUN_RC" -eq 124 ]` (line
+    92) and the first SEG_TIMEOUT_S mention (line 27) — both W1 contracts
+    re-extract and re-validate these on every run (V4 GREEN).
+  * SSH passthrough: soc-verification-run.sh unmodified; it execs ssh and
+    `exit`s with make's status, so a failed make target (now guaranteed by
+    PIPESTATUS checks) propagates 1 through the wrapper.
+  * The `set +e`/`set -e` guard added around the simv invocation was caught
+    by adversarial self-review: the script header runs `set -euo pipefail`,
+    and the removed `|| true` was the only thing stopping the FIRST failing
+    case from aborting the entire regression before RUN_RC capture (V11
+    proves the guard under the real header flags).
+
+--------------------------------------------------------------------------------
+RESIDUAL / KNOWN LIMITATIONS
+--------------------------------------------------------------------------------
+* The 33-case summary and the audit script can only be exercised against
+  real fresh logs on the EDA server (todo 13 re-run); locally verified via
+  the W1 sandboxed re-evaluation (V5) and the fake-simv end-to-end run (V11).
+* runner_classification markers exist only in logs written by the FIXED
+  runner; the audit correctly flags old-run logs as executed (V8), which is
+  the intended fail-closed behavior until the next EDA re-run.
+
+================================================================================
+TASK-9 RESULT: GREEN (expected)
+================================================================================

@@ -75,7 +75,7 @@ T7 P1 全 7 cases 重跑，Spike plugin 加载成功，firmware 正常启动。
 
 ---
 
-### BUG-RTL-SOC-002 — DRAM 地址窗口越界（Waived）
+### BUG-RTL-SOC-002 — DRAM 地址窗口越界（Pending — waiver 待用户签署）
 
 | 字段 | 内容 |
 |------|------|
@@ -84,7 +84,7 @@ T7 P1 全 7 cases 重跑，Spike plugin 加载成功，firmware 正常启动。
 | **Case** | FM-SOC-010 |
 | **Severity** | Major |
 | **Type** | Environment (DRAM model) |
-| **Status** | Waived |
+| **Status** | Pending (waiver 待用户签署) |
 
 #### Symptom
 
@@ -110,6 +110,8 @@ FM-SOC-010 DRAM preload 无越界错误。
 Phase 10 (8MB window constraint, todo 19): build/evidence/task-19-phase10-rtl-verification.txt
 
 2026-08-27: **Waived** — 正式 waiver `docs/waivers/WVR-SOC-RTL-002.md`（todo 2 of soc-rtl-verification-signoff）。约束：firmware `dram_range_ok()` 拒绝地址 >8MB（`firmware/npu_firmware.c:458,472-485`），33 个 FM-SOC cases 均在此窗口内 PASS。临时 waiver，FPGA 阶段扩 `dram_model.v` 后关闭。
+
+2026-08-31: **Pending（waiver 待用户签署）** — todo 19 soc-rtl-review-remediation 将本条目改回 Pending（此前台账误标为已 Waived，属状态漂移）：`docs/waivers/WVR-SOC-RTL-002.md` Status 为 pending sign-off、签字栏留空，用户签署是明确的生效/关闭条件，签署前不得视为已 Waived。约束本身不变（上述 2026-08-27 描述仍有效）。
 
 ---
 
@@ -332,7 +334,7 @@ no additional RTL bug work.
 | **Case** | 3-layer forward pass (51 ops, Qwen2.5-3B blk.0/1/2) |
 | **Severity** | Critical / Major |
 | **Type** | RTL / Firmware / Runner — under investigation |
-| **Status** | Open（chain-level RTL reproduction pending todo 15） |
+| **Status** | Open（todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，待 FPGA/更早日志追踪） |
 
 #### Symptom
 
@@ -362,30 +364,33 @@ Three working hypotheses, not yet resolved:
 
 **Phase 10 PERF-13 evidence (2026-08-18, Ibex RTL):** `build/evidence/w4-perf-p3.txt` — attn_weight `M=32 K=32 N=64` `cycles=42311` `cos_sim=1.0` `passed=true`. The generic MMUL dispatch path executes `attn_weight` with `cycles>0` in the same per-layer attention shape class the 36-layer Ibex segment run uses（见 `scripts/p10_36layer_preflight.sh` CHECK 4，以及 `.omo/notepads/phase10-rtl-verification/issues.md`）。Ring-overflow hypothesis（32-entry ring）同时被排除：`RING_ENTRIES=1024`（`gen/npu_abi.h:299`）。
 
-**Status 说明:** chain-level RTL reproduction（完整 17-op blk.0 chain 中 op07/24/41 attn_weight cycles>0）仍待 todo 15（`_build_attn_weight_chain`，soc-rtl-verification-signoff）。若 todo 15 复现 cycles=0，本条目保持 Open；若 cycles>0，其 evidence 将回链到此处。本条目 **Open**。
+**Status 说明 (2026-08-31, todo 18 soc-rtl-review-remediation):** todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27，证据 `build/evidence/task-15-soc-rtl-verification-signoff.txt`）：完整 17-op blk.0 chain（含 op07 attn_weight）全部 26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0（14 FP op cos≥0.999 + 3 INT32 bit-exact），链级未复现 cycles=0。根因仍未知，保持 Open 待 FPGA/更早日志追踪。本条目 **Open**。
 
 ---
 
 ## Final Bug Statistics (2026-08-27)
 
-### Total: 13 bugs (BUG-RTL-SOC-001 through BUG-RTL-SOC-008 + 2 wrapper-level-verification bugs + 3 phase-9 bugs)
+### Total: 14 bugs (BUG-RTL-SOC-001 through BUG-RTL-SOC-008 + BUG-RTL-SOC-012 + 2 wrapper-level-verification bugs + 3 phase-9 bugs)
 
-Ledger update 2026-08-27 (todo 1, soc-rtl-verification-signoff): BUG-RTL-SOC-P9-00A、BUG-RTL-SOC-P9-00D、BUG-MXU-P9-00B closed **Fixed**（phase 9/10 evidence）；BUG-RTL-SOC-002 formally **Waived**（WVR-SOC-RTL-002，todo 2）；BUG-RTL-SOC-007 remains **Open** with phase 10 PERF-13 evidence（attn_weight cycles>0），chain-level reproduction pending todo 15。
+Ledger update 2026-08-27 (todo 1, soc-rtl-verification-signoff): BUG-RTL-SOC-P9-00A、BUG-RTL-SOC-P9-00D、BUG-MXU-P9-00B closed **Fixed**（phase 9/10 evidence）；BUG-RTL-SOC-007 remains **Open** with phase 10 PERF-13 evidence（attn_weight cycles>0）；todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27），26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，保持 Open 待 FPGA/更早日志追踪。
+
+Ledger update 2026-08-31 (todo 19, soc-rtl-review-remediation): BUG-RTL-SOC-002 从原已 Waived 标记改回 **Pending（waiver 待用户签署）**（WVR-SOC-RTL-002，todo 2 提交、签署前不生效）；BUG-RTL-SOC-012 新增 **Open**（blk0 E2E op05 attn_score drain，todo 14 blk0 investigation 判 PRE-EXISTING，2026-08-31）。
 
 ### By Severity
 
 | Severity | Count | Bug IDs |
 |----------|:-----:|---------|
 | Critical | 3 | BUG-RTL-SOC-001 (GLIBC ABI — Spike plugin), BUG-RTL-SOC-003 (missing `cb_m_arvalid` — SoC integration), BUG-RTL-SOC-007 (attn_weight dispatch — op never executes) |
-| Major | 10 | BUG-RTL-SOC-002 (DRAM 8 MB window), BUG-RTL-SOC-004 (SFU prefetch dropped), BUG-RTL-SOC-005 (X-prop from DRAM padding), BUG-RTL-SOC-006 (SFU start_hold race), BUG-RTL-SOC-008 (DESC_BASE overlap), BUG-RTL-SOC-WV-001 (SFU status_done 1-cycle pulse), BUG-RTL-SOC-WV-007 (MXU consecutive dispatch DONE timeout), BUG-RTL-SOC-P9-00A (M=1 multi-tile divergence), BUG-RTL-SOC-P9-00D (PERF residual divergence), BUG-MXU-P9-00B (broadcast/multi-tile) |
+| Major | 11 | BUG-RTL-SOC-002 (DRAM 8 MB window), BUG-RTL-SOC-004 (SFU prefetch dropped), BUG-RTL-SOC-005 (X-prop from DRAM padding), BUG-RTL-SOC-006 (SFU start_hold race), BUG-RTL-SOC-008 (DESC_BASE overlap), BUG-RTL-SOC-012 (blk0 op05 attn_score drain), BUG-RTL-SOC-WV-001 (SFU status_done 1-cycle pulse), BUG-RTL-SOC-WV-007 (MXU consecutive dispatch DONE timeout), BUG-RTL-SOC-P9-00A (M=1 multi-tile divergence), BUG-RTL-SOC-P9-00D (PERF residual divergence), BUG-MXU-P9-00B (broadcast/multi-tile) |
 
 ### By Status
 
 | Status | Count | Bug IDs |
 |--------|:-----:|---------|
 | Fixed | 11 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-005, BUG-RTL-SOC-006, BUG-RTL-SOC-008, BUG-RTL-SOC-WV-001, BUG-RTL-SOC-WV-007, BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
-| Waived | 1 | BUG-RTL-SOC-002 (8 MB DRAM window constraint — WVR-SOC-RTL-002) |
-| Open | 1 | BUG-RTL-SOC-007 (attn_weight dispatch — PERF-13 Ibex RTL shows cycles>0; chain-level reproduction pending todo 15) |
+| Waived | 0 | — |
+| Pending (waiver 待用户签署) | 1 | BUG-RTL-SOC-002 (8 MB DRAM window constraint — WVR-SOC-RTL-002, pending sign-off 待用户签署) |
+| Open | 2 | BUG-RTL-SOC-007 (attn_weight dispatch — PERF-13 Ibex RTL shows cycles>0; todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，链级未复现，根因仍未知), BUG-RTL-SOC-012 (blk0 E2E op05 attn_score MMUL drain — todo 14 blk0 investigation 判 PRE-EXISTING) |
 | Re-opened | 0 | — |
 
 ### By Module
@@ -397,7 +402,7 @@ Ledger update 2026-08-27 (todo 1, soc-rtl-verification-signoff): BUG-RTL-SOC-P9-
 | RTL: SFU wrapper (`sfu_soc_wrapper.v`) | 3 | BUG-RTL-SOC-004, BUG-RTL-SOC-006, BUG-RTL-SOC-WV-001 |
 | RTL: SFU/Vector wrapper X-propagation | 1 | BUG-RTL-SOC-005 |
 | RTL: Vector wrapper / Firmware dispatch | 1 | BUG-RTL-SOC-007 |
-| RTL: MXU controller (`mxu/controller.v`) | 1 | BUG-RTL-SOC-WV-007 |
+| RTL: MXU controller (`mxu/controller.v`) / accumulator drain | 2 | BUG-RTL-SOC-WV-007, BUG-RTL-SOC-012 |
 | Integration (firmware command ring vs descriptor region) | 1 | BUG-RTL-SOC-008 |
 | RTL wrapper (MXU broadcast/store-out count) + Firmware K-tile dispatch / accumulate | 3 | BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
 
@@ -405,10 +410,10 @@ Ledger update 2026-08-27 (todo 1, soc-rtl-verification-signoff): BUG-RTL-SOC-P9-
 
 | Metric | Value |
 |--------|:-----:|
-| Total RTL bugs found and documented | 13 |
-| Bugs closed Fixed | 11 (84.6%) |
-| Bugs formally waived | 1 (7.7%) — BUG-RTL-SOC-002 (8 MB DRAM window, WVR-SOC-RTL-002) |
-| Open / under investigation | 1 (7.7%) — BUG-RTL-SOC-007 (chain-level reproduction pending todo 15) |
+| Total RTL bugs found and documented | 14 |
+| Bugs closed Fixed | 11 (78.6%) |
+| Bugs pending waiver sign-off | 1 (7.1%) — BUG-RTL-SOC-002 (8 MB DRAM window, WVR-SOC-RTL-002, pending sign-off 待用户签署) |
+| Open / under investigation | 2 (14.3%) — BUG-RTL-SOC-007 (todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，链级未复现；根因仍未知), BUG-RTL-SOC-012 (blk0 op05 attn_score drain, todo 14 判 PRE-EXISTING) |
 | Ibex-specific bugs (full RTL CPU replacement) | 0 |
 | Regressions after fixes | 0 (491/491 module regression PASS; vector + MXU wrapper 10/10 baseline PASS; PERF-06 M=32 cos=1.000000; PERF-13 9/9 MMUL PASS) |
 | Re-opened bugs | 0 (BUG-RTL-SOC-005 closed in 2026-07-23 rtl-bug-fix-wv round) |
@@ -641,3 +646,198 @@ Commit: `fa4ffec fix(sim): move DESC_BASE out of command ring to prevent descrip
 - Probe reproduction (pre-fix, commit b51fae7): `build/evidence/l0l19-probe-evidence.txt`, `build/evidence/l0l19-probe.json` — L19 wave-1 corruption captured.
 - Python-only change, simv not rebuilt; next segment run (with 6091ec9 + new DESC_BASE) should clear the L19 corruption.
 
+---
+
+### BUG-RTL-SOC-009 — Doorbell ABI window (LAST_STATUS/COMPLETION_STATUS) declared by npu-regmap.h but not implemented in doorbell.v
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-08-31 |
+| **Block** | T12 (APB conformance vs real peripherals, soc-rtl-review-remediation) |
+| **Case** | run_apb_conformance_real (APB_CONFORMANCE_REAL TB, doorbell DOC-DIV checks) |
+| **Severity** | Major |
+| **Type** | Integration (ABI schema vs RTL register window) |
+| **Status** | Open |
+
+#### Symptom
+
+The ABI schema `npu_doorbell_t` (firmware/npu-regmap.h:179-187) declares six
+registers: HOST_TAIL@0x00 (W), NPU_HEAD@0x04 (R/W), HOST_HEAD@0x08 (R),
+NPU_TAIL@0x0C (R), LAST_STATUS@0x10 (R/W), COMPLETION_STATUS[16]@0x14 — pinned
+by _Static_assert at :308-310. The real RTL doorbell.v implements only the four
+0x00-0x0C registers (all RW); offsets 0x10/0x14 are outside `addr_valid`
+(doorbell.v:70), so reads return 0 and writes are silently dropped (no
+pslverr). Firmware mirror writes of COMPLETION_STATUS[cmd_id] therefore land
+in a dead window; the DRAM completion ring remains the only lossless status
+path (see also todo 8's mirror-index clamp).
+
+Secondary annotation drift: the ABI marks HOST_TAIL "W" and HOST_HEAD/NPU_TAIL
+"R", but the RTL implements all four as RW (a superset, functionally benign
+but inconsistent with the schema).
+
+Note: the "Known Discrepancy" comment at firmware/npu-regmap.h:317-322 itself
+overstates the RTL ("implements only LAST_STATUS at 0x10") — the RTL implements
+neither 0x10 nor 0x14. gen/npu_abi_firmware.h:164-168 flags the same gap.
+
+#### Root Cause
+
+Doorbell RTL predates the ABI completion-window extension; the ABI schema grew
+LAST_STATUS/COMPLETION_STATUS without a matching RTL change. No cross-layer
+register-window conformance gate existed until this TB (todo 12).
+
+#### Fix
+
+TBD (future ABI/RTL revision per the header's own note). The APB conformance
+TB tags these offsets [DOC-DIV BUG-RTL-SOC-009] and asserts the REAL behavior
+(read 0 / write dropped) rather than silently passing the ABI-declared
+semantics.
+
+#### Verification
+
+- `bash sim/regression/soc-verification-run.sh run_apb_conformance_real` →
+  doorbell DOC-DIV checks pass against the real-RTL oracle with the
+  BUG-RTL-SOC-009 tag (log: sim/regression/apb_conformance_real.log).
+- Evidence: `.omo/evidence/task-12-soc-rtl-review-remediation.txt`.
+
+---
+
+### BUG-RTL-SOC-010 — pcie_ep_wrapper header overstates implemented fields (CTRL[3]=enable, BAR1_MASK bit31=writable)
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-08-31 |
+| **Block** | T12 (APB conformance vs real peripherals, soc-rtl-review-remediation) |
+| **Case** | run_apb_conformance_real (PCIE DOC-DIV checks @0x00/@0x18) |
+| **Severity** | Minor |
+| **Type** | Wrapper (documentation vs RTL) |
+| **Status** | Open |
+
+#### Symptom
+
+rtl/ip/pcie_ep_wrapper.v header table (:258-268) documents:
+- PCIE_CTRL@0x00 "[2:0]=max_payload_size, [3]=enable" — RTL stores only
+  pwdata[2:0] (max_payload_size_reg, :304-306) and reads back
+  {28'h0, mps, 1'b0} (:387): bit3 is never stored (reads 0), and the
+  pcie_axi_master `enable` input is left unconnected in the instantiation
+  (:174-250). Writing CTRL[3]=1 has no effect.
+- PCIE_BAR1_MASK@0x18 "0x8000_0000 (2 GB, bit31=writable)" — RTL returns the
+  constant 32'h8000_0000 and ignores writes entirely (:393). bit31 is not
+  writable.
+
+Conformance impact: a host writing CTRL[3] to enable the endpoint, or probing
+BAR1_MASK writability, silently gets no-op behavior.
+
+#### Root Cause
+
+Header comment written for the intended config-space semantics; the RTL only
+implements the subset the current firmware/software stack uses (mps, RO BAR
+constants). No register-window conformance gate existed until this TB.
+
+#### Fix
+
+TBD: implement the enable bit (wire to the IP `enable` input) and either
+implement writable BAR1_MASK bit31 or correct the header comment. The APB
+conformance TB tags both offsets [DOC-DIV BUG-RTL-SOC-010] and asserts the
+REAL behavior (CTRL full-write readback 0xE; BAR1_MASK hostile-write stays
+0x8000_0000).
+
+#### Verification
+
+- `bash sim/regression/soc-verification-run.sh run_apb_conformance_real` →
+  PCIE DOC-DIV checks pass against the real-RTL oracle with the
+  BUG-RTL-SOC-010 tag (log: sim/regression/apb_conformance_real.log).
+- Evidence: `.omo/evidence/task-12-soc-rtl-review-remediation.txt`.
+
+---
+
+### BUG-RTL-SOC-011 — rtl/ip/README DMA access classes wrong: CMD documented W but RTL stores+reads back; STATUS documented R but read-clears DONE
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-08-31 |
+| **Block** | T12 (APB conformance vs real peripherals, soc-rtl-review-remediation) |
+| **Case** | run_apb_conformance_real (DMA CMD WOS DOC-DIV check @0x04) |
+| **Severity** | Minor |
+| **Type** | Wrapper (documentation vs RTL) |
+| **Status** | Open |
+
+#### Symptom
+
+rtl/ip/README.md:35-36 documents DMA CMD@0x04 as "W" and STATUS@0x08 as "R".
+The RTL (rtl/ip/dma_wrapper.v) implements:
+- CMD@0x04 as a STORED register: writes latch pwdata (dma_reg[1] <= pwdata,
+  :283-286) and reads return the stored value (:128/:310) — writing 0x42 reads
+  back 0x42. Only bit0 (START) is auto-cleared after the rising edge is
+  consumed (:209). This is the ONLY CMD in the design that is readable
+  (MXU/SFU/Vector CMDs are pulse write-only, readback 0).
+- STATUS@0x08 with a READ side effect: reading it clears DONE bit1
+  (:299-301). A polling loop that reads STATUS twice after completion sees
+  DONE=1 on the first read and DONE=0 on the second — an observable behavior
+  not documented anywhere.
+
+#### Root Cause
+
+README access-class column was written from the axi_cdma convention, not from
+the wrapper's actual reg-file implementation.
+
+#### Fix
+
+TBD: correct the README column (CMD: RW-store with START auto-clear; STATUS:
+RO with DONE read-clear) or change the RTL. The APB conformance TB tags the
+CMD rows [DOC-DIV BUG-RTL-SOC-011] and asserts the REAL store/readback
+behavior; the STATUS read-clear side effect is unobservable while idle (no
+transfer is launched in the conformance TB) and is recorded in the bug entry
+rather than silently assumed.
+
+#### Verification
+
+- `bash sim/regression/soc-verification-run.sh run_apb_conformance_real` →
+  DMA CMD WOS DOC-DIV checks pass against the real-RTL oracle with the
+  BUG-RTL-SOC-011 tag (log: sim/regression/apb_conformance_real.log).
+- Evidence: `.omo/evidence/task-12-soc-rtl-review-remediation.txt`.
+
+---
+
+### BUG-RTL-SOC-012 — blk0 E2E op05 attn_score MMUL drains only first row (words 2-63 zero)
+
+| 字段 | 内容 |
+|------|------|
+| **Date** | 2026-08-31 |
+| **Block** | T14 (blk0 E2E investigation, soc-rtl-review-remediation) |
+| **Case** | run_e2e_blk0 (op05 attn_score MMUL) |
+| **Severity** | Major |
+| **Type** | RTL (MXU controller / accumulator drain) |
+| **Status** | Open |
+
+#### Symptom
+
+run_e2e_blk0 FAILs at op05 attn_score MMUL with 62/64 INT32 mismatches; first
+mismatch @ byte[8] (actual=0x00, golden=0xD0); identical failure with BOTH
+post-fix and pre-fix (c478ae5~1) crossbar — attribution RESOLVED PRE-EXISTING.
+Geometry: M=32, N=2, K=128, tiles=2 → 64-word output; only words 0-1 correct.
+
+Affects SoC E2E blk0 attn_score; NOT caused by crossbar fix c478ae5 —
+attribution verified pre-existing.
+
+#### Root Cause
+
+Candidate root cause: multi-tile M-loop accumulator drain/writeback writes
+only row 0. Golden vectors dated 2026-07-07 — stale-golden hypothesis still
+open.
+
+Distinct from BUG-RTL-SOC-007 (op07 attn_weight cycles=0) — same attention
+chain, different signature.
+
+#### Fix
+
+TBD — root cause not yet identified.
+
+#### Verification
+
+2026-08-31 investigation — byte-identical failure in repro and baseline
+(except 4 environmental lines); determinism confirmed.
+
+Evidence:
+- `.omo/evidence/task-14-blk0-investigation.txt` (verdict + comparison table)
+- `.omo/evidence/task-14-blk0-repro.log`
+- `.omo/evidence/task-14-blk0-baseline.log`

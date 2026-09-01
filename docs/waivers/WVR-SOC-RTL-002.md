@@ -47,8 +47,8 @@ DRAM 地址区间（`firmware/npu_firmware.c:458` 函数定义，`:472-485` 处
   （ISSUE-13A 记录 8MB DRAM 镜像与 bulk preload 实测，逐字节 bit-exact）与
   `firmware/npu_firmware.c` 当前代码（`:19-20` DRAM_SIZE 定义、`:458,472-485`
   `dram_range_ok` 越窗拒绝）。
-- **Bug 台账引用**：`docs/bugs/bugs-soc-rtl.md` BUG-RTL-SOC-002（Status Waived，
-  2026-08-27 更新）。
+- **Bug 台账引用**：`docs/bugs/bugs-soc-rtl.md` BUG-RTL-SOC-002（Status Pending（waiver
+  待用户签署），2026-08-31 更新——todo 19 soc-rtl-review-remediation 改回 Pending）。
 
 ## 关闭条件（Closure Criteria）
 

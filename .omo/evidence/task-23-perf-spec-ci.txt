@@ -1,20 +1,20 @@
 case_id: task-23
-utc_start: 2026-08-24T16:58:16.532820+00:00
-utc_end: 2026-08-24T16:58:20.787644+00:00
-elapsed_s: 4.255
-exit_code: 1
-verdict: fail
-head: 0422d2469d1c047e0e7ee46a9c7e77dd86ca6a64
-dirty_paths: [".omo/evidence/task-0-signoff-v3-runner.txt", ".omo/evidence/task-20-uncertainty-kpis.json", ".omo/evidence/task-23-perf-spec-ci.txt", ".omo/last_fm_gate.json", ".omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md", ".omo/notepads/phase6-rtl-verification/learnings.md", "build/evidence/fm-cv-chain.txt", "build/evidence/task-F3-fm-hardening-phase10.txt", "build/evidence/task-F3-spike-smoke.log", "build/evidence/w3-4-mobilenetv3-fm.txt", "firmware/build/npu_firmware.elf", "firmware/build/npu_firmware.map", "firmware/build/npu_firmware.o", "firmware/build/npu_firmware_spike.elf", "firmware/build/npu_firmware_spike.map", "scripts/fm_hardening_f2_code_quality.sh", "scripts/fm_hardening_f3_manual_qa.sh", "scripts/fm_hardening_f4_scope_gate.sh"]
-doneclaim: {"assertions": [], "evidence_path": "task-23-perf-spec-ci.txt", "evidence_sha256": "3307c8faa7f93e22b7c9902b887cd1a9129195cf2a5b1ae0d9323875bd099353", "green_command": {"argv": ["/usr/bin/python", "/home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_perf_signoff.py", "run", "--all-spec", "--ci-mode", "--evidence-path", "task-23-perf-spec-ci.txt", "--todo-id", "task-23"]}, "green_result": {"calibration_state": "uncalibrated", "canonical_hash": "90baa0c1856f2d0b1926c1552acc713b472b284c78e8d3840d377f1f96b0ae06", "command": "run", "dirty_paths": [".omo/evidence/task-0-signoff-v3-runner.txt", ".omo/evidence/task-20-uncertainty-kpis.json", ".omo/evidence/task-23-perf-spec-ci.txt", ".omo/last_fm_gate.json", ".omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md", ".omo/notepads/phase6-rtl-verification/learnings.md", "build/evidence/fm-cv-chain.txt", "build/evidence/task-F3-fm-hardening-phase10.txt", "build/evidence/task-F3-spike-smoke.log", "build/evidence/w3-4-mobilenetv3-fm.txt", "firmware/build/npu_firmware.elf", "firmware/build/npu_firmware.map", "firmware/build/npu_firmware.o", "firmware/build/npu_firmware_spike.elf", "firmware/build/npu_firmware_spike.map", "scripts/fm_hardening_f2_code_quality.sh", "scripts/fm_hardening_f3_manual_qa.sh", "scripts/fm_hardening_f4_scope_gate.sh"], "elapsed_s": 3.8818682190030813, "head": "0422d2469d1c047e0e7ee46a9c7e77dd86ca6a64", "head_short": "0422d2469d1c", "limits": {"full_signoff_seconds": 1800.0, "peak_rss_mb": 4096.0, "provider_case_seconds": 30.0, "workload_seconds": 120.0}, "mode": "all-spec-ci", "oracle_sha256": "031b42d46f45b03552f26b7443f403fd00e0d166977b2230396933c81eea8ad8", "peak_rss_kb": 17817480, "peak_rss_mb": 17399.88, "provider_sha256": "82c30fefd6ec9cb5c8699139febfd1f047459a5444c9ff5d0d69ca0c1ca79f81", "reasons": ["rss_limit_breach: 17399.9MB > 4096.0MB"], "report_sha256": "c1a931750c4e085f757451845218f5fbdf209bd8fb09a4e12b72a4fc37f325b2", "run_id": "20260824T165820-0422d2469d1c-b34fa4412270", "source_fingerprint": "ec65d05a4f21796e43c5b32460818d93e69959630447275ea306ff610f408ea2", "spec_sha256": "ec65d05a4f21796e43c5b32460818d93e69959630447275ea306ff610f408ea2", "stages": [{"elapsed_s": 0.09743777196854353, "failed": 0, "rows": 104, "stage": "provider_formula_gates", "verdict": "pass", "within_limit": true}, {"cv": {"failed": 0, "passed": 3}, "elapsed_s": 0.4485146179795265, "qwen": {"failed": 0, "passed": 4}, "stage": "qwen_cv_dual_path_gates", "verdict": "pass", "within_limit": true}, {"elapsed_s": 0.7577541479840875, "stage": "sweeps", "verdict": "pass", "within_limit": true}, {"elapsed_s": 0.0010171718895435333, "report_only": true, "stage": "model_scaling", "verdict": "pass", "within_limit": true}, {"cases": ["qwen-prefill-2000", "qwen-model-family", "mobilenetv3", "resnet50", "yolov8n"], "elapsed_s": 0.19312635017558932, "stage": "uncertainty_kpis", "verdict": "pass", "within_limit": true}, {"accepted": 0, "declared_faults": 26, "detected_faults": 26, "elapsed_s": 0.9116649660281837, "rejected": 26, "stage": "adversarial_matrix", "verdict": "pass", "within_limit": true}, {"elapsed_s": 1.4627120210789144, "stage": "baseline_validation", "verdict": "pass", "within_limit": true}], "verdict": "fail", "workload_sha256": "c9ece8467404d99ca6cf5231d4c5c0c90ab82ea1aad8b5ee07f1d8b707885e7c"}, "head": "0422d2469d1c047e0e7ee46a9c7e77dd86ca6a64", "misleading_success_output": false, "provenance": {"argv": ["/home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_perf_signoff.py", "run", "--all-spec", "--ci-mode", "--todo-id", "task-23", "--evidence-path", "task-23-perf-spec-ci.txt"], "calibration_state": "uncalibrated", "dirty_paths": [".omo/evidence/task-0-signoff-v3-runner.txt", ".omo/evidence/task-20-uncertainty-kpis.json", ".omo/evidence/task-23-perf-spec-ci.txt", ".omo/last_fm_gate.json", ".omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md", ".omo/notepads/phase6-rtl-verification/learnings.md", "build/evidence/fm-cv-chain.txt", "build/evidence/task-F3-fm-hardening-phase10.txt", "build/evidence/task-F3-spike-smoke.log", "build/evidence/w3-4-mobilenetv3-fm.txt", "firmware/build/npu_firmware.elf", "firmware/build/npu_firmware.map", "firmware/build/npu_firmware.o", "firmware/build/npu_firmware_spike.elf", "firmware/build/npu_firmware_spike.map", "scripts/fm_hardening_f2_code_quality.sh", "scripts/fm_hardening_f3_manual_qa.sh", "scripts/fm_hardening_f4_scope_gate.sh"], "head": "0422d2469d1c047e0e7ee46a9c7e77dd86ca6a64", "head_short": "0422d2469d1c", "host": "sz0002", "oracle_sha256": "031b42d46f45b03552f26b7443f403fd00e0d166977b2230396933c81eea8ad8", "provider_sha256": "82c30fefd6ec9cb5c8699139febfd1f047459a5444c9ff5d0d69ca0c1ca79f81", "python_version": "3.10.12", "report_sha256": "c1a931750c4e085f757451845218f5fbdf209bd8fb09a4e12b72a4fc37f325b2", "seed": 42, "spec_sha256": "ec65d05a4f21796e43c5b32460818d93e69959630447275ea306ff610f408ea2", "units": {"bandwidth": "GB/s", "cycles": "estimated_cycles", "time": "ns"}, "utc_end": "2026-08-24T16:58:20.787644+00:00", "utc_start": "2026-08-24T16:58:16.818306+00:00", "workload_sha256": "c9ece8467404d99ca6cf5231d4c5c0c90ab82ea1aad8b5ee07f1d8b707885e7c"}, "source_fingerprint": "ec65d05a4f21796e43c5b32460818d93e69959630447275ea306ff610f408ea2", "stale_state": {"stale_evidence": false, "stale_head": false, "stale_report": false, "stale_source": false}, "todo_id": "task-23", "verdict": "fail"}
+utc_start: 2026-08-31T04:31:17.349909+00:00
+utc_end: 2026-08-31T04:31:21.499856+00:00
+elapsed_s: 4.150
+exit_code: 0
+verdict: pass
+head: 886ccb410b9e39c256f55ff344fefaed7390b52f
+dirty_paths: [".omo/evidence/task-0-signoff-v3-runner.txt", ".omo/evidence/task-23-perf-spec-ci.txt", ".omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md", ".omo/notepads/phase6-rtl-verification/learnings.md", "build/evidence/fm-cv-chain.txt", "build/evidence/task-14-soc-rtl-verification-signoff.txt", "build/evidence/w3-4-mobilenetv3-fm.txt", "docs/bugs/bugs-soc-rtl.md", "firmware/build/npu_firmware.elf", "firmware/build/npu_firmware.hex", "firmware/build/npu_firmware.map", "firmware/build/npu_firmware.o", "firmware/build/npu_firmware_spike.elf", "firmware/build/npu_firmware_spike.map", "rtl/tb/apb_conformance_real_tb.sv", "sim/regression/Makefile", "sim/regression/run_ibex_full_rtl.sh", "sim/regression/run_ibex_segment_run.sh", "sim/rtl_soc_runner.py", "sim/rtl_soc_segment_run.py", ".omo/evidence/task-0-soc-rtl-review-remediation.txt", ".omo/evidence/task-10-soc-rtl-review-remediation.txt", ".omo/evidence/task-11-soc-rtl-review-remediation.txt", ".omo/evidence/task-12-soc-rtl-review-remediation.txt", ".omo/notepads/soc-rtl-review-remediation/learnings.md", "scripts/check_evidence_provenance.py", "scripts/gen_evidence_provenance.py"]
+doneclaim: {"assertions": [], "evidence_path": "task-23-perf-spec-ci.txt", "evidence_sha256": "f9acfd3330fdec571c8a7ba22e91298fdc8f8240ccd3800c5f82da7602cd7266", "green_command": {"argv": ["/usr/bin/python3", "/home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_perf_signoff.py", "run", "--all-spec", "--ci-mode", "--evidence-path", "task-23-perf-spec-ci.txt", "--todo-id", "task-23"]}, "green_result": {"calibration_state": "uncalibrated", "canonical_hash": "5996d86af8e97a7bef386a561ce370dfb1925f1fef000000766287f38f1ca52c", "command": "run", "dirty_paths": [".omo/evidence/task-0-signoff-v3-runner.txt", ".omo/evidence/task-23-perf-spec-ci.txt", ".omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md", ".omo/notepads/phase6-rtl-verification/learnings.md", "build/evidence/fm-cv-chain.txt", "build/evidence/task-14-soc-rtl-verification-signoff.txt", "build/evidence/w3-4-mobilenetv3-fm.txt", "docs/bugs/bugs-soc-rtl.md", "firmware/build/npu_firmware.elf", "firmware/build/npu_firmware.hex", "firmware/build/npu_firmware.map", "firmware/build/npu_firmware.o", "firmware/build/npu_firmware_spike.elf", "firmware/build/npu_firmware_spike.map", "rtl/tb/apb_conformance_real_tb.sv", "sim/regression/Makefile", "sim/regression/run_ibex_full_rtl.sh", "sim/regression/run_ibex_segment_run.sh", "sim/rtl_soc_runner.py", "sim/rtl_soc_segment_run.py", ".omo/evidence/task-0-soc-rtl-review-remediation.txt", ".omo/evidence/task-10-soc-rtl-review-remediation.txt", ".omo/evidence/task-11-soc-rtl-review-remediation.txt", ".omo/evidence/task-12-soc-rtl-review-remediation.txt", ".omo/notepads/soc-rtl-review-remediation/learnings.md", "scripts/check_evidence_provenance.py", "scripts/gen_evidence_provenance.py"], "elapsed_s": 3.947336580604315, "head": "886ccb410b9e39c256f55ff344fefaed7390b52f", "head_short": "886ccb410b9e", "limits": {"full_signoff_seconds": 1800.0, "peak_rss_mb": 4096.0, "provider_case_seconds": 30.0, "workload_seconds": 120.0}, "mode": "all-spec-ci", "oracle_sha256": "031b42d46f45b03552f26b7443f403fd00e0d166977b2230396933c81eea8ad8", "peak_rss_kb": 127868, "peak_rss_mb": 124.87, "provider_sha256": "82c30fefd6ec9cb5c8699139febfd1f047459a5444c9ff5d0d69ca0c1ca79f81", "reasons": [], "report_sha256": "fe04432023df129f8218d0c479705a0362f14d9cb97822f880b31b7ea461dc32", "run_id": "20260831T043121-886ccb410b9e-b34fa4412270", "source_fingerprint": "ec65d05a4f21796e43c5b32460818d93e69959630447275ea306ff610f408ea2", "spec_sha256": "ec65d05a4f21796e43c5b32460818d93e69959630447275ea306ff610f408ea2", "stages": [{"elapsed_s": 0.09871396236121655, "failed": 0, "rows": 104, "stage": "provider_formula_gates", "verdict": "pass", "within_limit": true}, {"cv": {"failed": 0, "passed": 3}, "elapsed_s": 0.4732822859659791, "qwen": {"failed": 0, "passed": 4}, "stage": "qwen_cv_dual_path_gates", "verdict": "pass", "within_limit": true}, {"elapsed_s": 0.7822030959650874, "stage": "sweeps", "verdict": "pass", "within_limit": true}, {"elapsed_s": 0.001087687909603119, "report_only": true, "stage": "model_scaling", "verdict": "pass", "within_limit": true}, {"cases": ["qwen-prefill-2000", "qwen-model-family", "mobilenetv3", "resnet50", "yolov8n"], "elapsed_s": 0.20544419437646866, "stage": "uncertainty_kpis", "verdict": "pass", "within_limit": true}, {"accepted": 0, "declared_faults": 26, "detected_faults": 26, "elapsed_s": 0.8949436619877815, "rejected": 26, "stage": "adversarial_matrix", "verdict": "pass", "within_limit": true}, {"elapsed_s": 1.4829411152750254, "stage": "baseline_validation", "verdict": "pass", "within_limit": true}], "verdict": "pass", "workload_sha256": "c9ece8467404d99ca6cf5231d4c5c0c90ab82ea1aad8b5ee07f1d8b707885e7c"}, "head": "886ccb410b9e39c256f55ff344fefaed7390b52f", "misleading_success_output": false, "provenance": {"argv": ["/home/prj/zhengs/caduceuscore/CaduceusCore/scripts/run_func_model_perf_signoff.py", "run", "--all-spec", "--ci-mode", "--todo-id", "task-23", "--evidence-path", "task-23-perf-spec-ci.txt"], "calibration_state": "uncalibrated", "dirty_paths": [".omo/evidence/task-0-signoff-v3-runner.txt", ".omo/evidence/task-23-perf-spec-ci.txt", ".omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md", ".omo/notepads/phase6-rtl-verification/learnings.md", "build/evidence/fm-cv-chain.txt", "build/evidence/task-14-soc-rtl-verification-signoff.txt", "build/evidence/w3-4-mobilenetv3-fm.txt", "docs/bugs/bugs-soc-rtl.md", "firmware/build/npu_firmware.elf", "firmware/build/npu_firmware.hex", "firmware/build/npu_firmware.map", "firmware/build/npu_firmware.o", "firmware/build/npu_firmware_spike.elf", "firmware/build/npu_firmware_spike.map", "rtl/tb/apb_conformance_real_tb.sv", "sim/regression/Makefile", "sim/regression/run_ibex_full_rtl.sh", "sim/regression/run_ibex_segment_run.sh", "sim/rtl_soc_runner.py", "sim/rtl_soc_segment_run.py", ".omo/evidence/task-0-soc-rtl-review-remediation.txt", ".omo/evidence/task-10-soc-rtl-review-remediation.txt", ".omo/evidence/task-11-soc-rtl-review-remediation.txt", ".omo/evidence/task-12-soc-rtl-review-remediation.txt", ".omo/notepads/soc-rtl-review-remediation/learnings.md", "scripts/check_evidence_provenance.py", "scripts/gen_evidence_provenance.py"], "head": "886ccb410b9e39c256f55ff344fefaed7390b52f", "head_short": "886ccb410b9e", "host": "sz0002", "oracle_sha256": "031b42d46f45b03552f26b7443f403fd00e0d166977b2230396933c81eea8ad8", "provider_sha256": "82c30fefd6ec9cb5c8699139febfd1f047459a5444c9ff5d0d69ca0c1ca79f81", "python_version": "3.10.12", "report_sha256": "fe04432023df129f8218d0c479705a0362f14d9cb97822f880b31b7ea461dc32", "seed": 42, "spec_sha256": "ec65d05a4f21796e43c5b32460818d93e69959630447275ea306ff610f408ea2", "units": {"bandwidth": "GB/s", "cycles": "estimated_cycles", "time": "ns"}, "utc_end": "2026-08-31T04:31:21.499856+00:00", "utc_start": "2026-08-31T04:31:17.467667+00:00", "workload_sha256": "c9ece8467404d99ca6cf5231d4c5c0c90ab82ea1aad8b5ee07f1d8b707885e7c"}, "source_fingerprint": "ec65d05a4f21796e43c5b32460818d93e69959630447275ea306ff610f408ea2", "stale_state": {"stale_evidence": false, "stale_head": false, "stale_report": false, "stale_source": false}, "todo_id": "task-23", "verdict": "pass"}
 stdout_preview: {
   "command": "run",
   "mode": "all-spec-ci",
-  "run_id": "20260824T165820-0422d2469d1c-b34fa4412270",
-  "verdict": "fail",
-  "elapsed_s": 3.8818682190030813,
-  "peak_rss_kb": 17817480,
-  "peak_rss_mb": 17399.88,
+  "run_id": "20260831T043121-886ccb410b9e-b34fa4412270",
+  "verdict": "pass",
+  "elapsed_s": 3.947336580604315,
+  "peak_rss_kb": 127868,
+  "peak_rss_mb": 124.87,
   "limits": {
     "provider_case_seconds": 30.0,
     "workload_seconds": 120.0,
@@ -27,7 +27,7 @@ stdout_preview: {
       "verdict": "pass",
       "rows": 104,
       "failed": 0,
-      "elapsed_s": 0.09743777196854353,
+      "elapsed_s": 0.09871396236121655,
       "within_limit": true
     },
     {
@@ -41,20 +41,20 @@ stdout_preview: {
         "passed": 3,
         "failed": 0
       },
-      "elapsed_s": 0.4485146179795265,
+      "elapsed_s": 0.4732822859659791,
       "within_limit": true
     },
     {
       "stage": "sweeps",
       "verdict": "pass",
-      "elapsed_s": 0.7577541479840875,
+      "elapsed_s": 0.7822030959650874,
       "within_limit": true
     },
     {
       "stage": "model_scaling",
       "verdict": "pass",
       "report_only": true,
-      "elapsed_s": 0.0010171718895435333,
+      "elapsed_s": 0.001087687909603119,
       "within_limit": true
     },
     {
@@ -67,7 +67,7 @@ stdout_preview: {
         "resnet50",
         "yolov8n"
       ],
-      "elapsed_s": 0.19312635017558932,
+      "elapsed_s": 0.20544419437646866,
       "within_limit": true
     },
     {
@@ -77,20 +77,19 @@ stdout_preview: {
       "detected_faults": 26,
       "accepted": 0,
       "rejected": 26,
-      "elapsed_s": 0.9116649660281837,
+      "elapsed_s": 0.8949436619877815,
       "within_limit": true
     },
     {
       "stage": "baseline_validation",
       "verdict": "pass",
-      "elapsed_s": 1.4627120210789144,
+      "elapsed_s": 1.4829411152750254,
       "within_limit": true
     }
   ],
-  "reasons": [
-    "rss_limit_breach: 17399.9MB > 4096.0MB"
-  ],
-  "head": "0422d2469d1c047e0e7ee46a9c7e77dd86ca6a64",
-  "head_short": "0422d2469d1c",
+  "reasons": [],
+  "head": "886ccb410b9e39c256f55ff344fefaed7390b52f",
+  "head_short": "886ccb410b9e",
   "dirty_paths": [
-    ".omo/evidence/task-0-s
+    ".omo/evidence/task-0-signoff-v3-runner.txt",
+    ".omo/evidence/task-23-perf

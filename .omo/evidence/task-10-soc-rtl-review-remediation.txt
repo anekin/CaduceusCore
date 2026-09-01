@@ -1,0 +1,116 @@
+TASK-10: FM-SOC-10X full 17-op verification (plan todo 10, soc-rtl-review-remediation)
+=====================================================================================
+Timestamp: 2026-08-31T04:21:27Z (UTC; EDA log mtime Aug 31 12:17 server-local)
+Commit: 886ccb4 (HEAD at evidence time; task started at 6230e21+; parallel W2
+        todos 7-11 landed while this task ran — see dirty_worktree note)
+Branch: soc-rtl-review-remediation
+Decision: FULL-VERIFICATION PATH (no downgrade needed). The plan's preferred
+          option was implemented: truncation removed, all 17 ops verified,
+          "17-op chain PASS" appears only because 17/17 ops were verified.
+
+BEFORE/AFTER of _verify_10X (sim/rtl_soc_runner.py:3607, single diff hunk
+@@ -3607,38 +3607,79 @@; +49/-8; the ONLY change to this file — _build_10X
+corruption-injection mechanics NOT touched):
+
+BEFORE:
+  - `if idx > corrupt_op_idx: continue` truncated verification to ops 0..1
+    yet returned "17-op blk.0 chain PASS via PCIe host readback".
+  - No per-op evidence lines; one raw _pcie_tlp_read per op.
+AFTER:
+  - Truncation removed: all 17 op_meta entries verified against their own
+    golden. Downstream ops compare against the corruption-propagated golden
+    from the corrupt-weight Func-Model build (causal regression).
+  - Corrupt op (op01 Q_proj) keeps the anti-vacuous check: must DIFFER from
+    original_golden AND match the corrupted golden.
+  - Honesty guard: len(op_meta) != 17 => FAIL "refusing to claim 17-op
+    chain PASS" (final message can never over-claim).
+  - Host readback split into 256 B MRds (local read_chunked helper): the
+    PCIe TLP length field is 10-bit DW (max 4096 B) and the DUT
+    pcie_ep_wrapper runs max_payload_size=0; op07 attn_weight outputs
+    8192 B, so a single MRd is malformed and never completed (proved by
+    the first EDA attempt, below).
+  - Per-op results logged via logger.warning as
+    "[10X-VERIFY] opNN name: PASS" — python logging INFO never reaches
+    the cocotb sim log in this harness (verified against prior case logs).
+  - Final message logged AND returned: "17-op blk.0 chain PASS via PCIe
+    host readback (17/17 ops verified, op01 corrupt-expected)".
+
+RUN COMMAND (EDA server sz0001 / 192.168.0.11, launched from sz0002):
+  ssh zhengs@192.168.0.11 'cd /home/prj/zhengs/caduceuscore/CaduceusCore && bash sim/regression/run_fm_soc_all.sh FM-SOC-10X'
+Route: run_fm_soc_all.sh FM-SOC-10X -> run_ibex_full_rtl.sh FM-SOC-10X ->
+  test_soc_ibex_full -> IbexRunner.run_case -> _run_10X -> _verify_10X.
+  This is the plan's "经 run_fm_soc_all.sh FM-SOC-10X" route and the only
+  route that dispatches FM-SOC-10X to the modified code (see adversarial
+  notes). Reused existing simv: build/ibex_full_rtl/simv_soc_ibex
+  (cocotb loads sim/rtl_soc_runner.py at runtime from the NFS repo).
+Log: build/ibex_full_rtl/evidence/FM-SOC-10X.log (12816 B)
+Wrapper summary: [PASS] FM-SOC-10X — PASS=1 SKIP=0 FAIL=0 TIMEOUT=0 TOTAL=1
+Cocotb summary:  TESTS=1 PASS=1 FAIL=0 SKIP=0
+Classification:  runner_classification=PASS
+
+LOG EXCERPTS — per-op results (17 lines) + final message:
+  [10X-VERIFY] op00 RMSNORM pre-attn: PASS
+  [10X-VERIFY] op01 Q_proj MMUL: PASS (corrupt-expected - differs from original golden, matches corrupted golden)
+  [10X-VERIFY] op02 K_proj MMUL: PASS
+  [10X-VERIFY] op03 V_proj MMUL: PASS
+  [10X-VERIFY] op04 ROPE: PASS
+  [10X-VERIFY] op05 attn_score MMUL: PASS
+  [10X-VERIFY] op06 attn_softmax SOFTMAX: PASS
+  [10X-VERIFY] op07 attn_weight MMUL: PASS
+  [10X-VERIFY] op08 O_proj MMUL: PASS
+  [10X-VERIFY] op09 VRESID: PASS
+  [10X-VERIFY] op10 RMSNORM post-attn: PASS
+  [10X-VERIFY] op11 gate MMUL: PASS
+  [10X-VERIFY] op12 up MMUL: PASS
+  [10X-VERIFY] op13 SILU: PASS
+  [10X-VERIFY] op14 VMUL gate*up: PASS
+  [10X-VERIFY] op15 down MMUL: PASS
+  [10X-VERIFY] op16 VRESID: PASS
+  FM-SOC-10X: 17-op blk.0 chain PASS via PCIe host readback (17/17 ops verified, op01 corrupt-expected)
+
+ADVERSARIAL NOTES:
+- misleading_success_output (proof of non-truncation):
+    grep -cE '\[10X-VERIFY\].*PASS' build/ibex_full_rtl/evidence/FM-SOC-10X.log
+    => exactly 17, one line per op (final message uses the
+       "FM-SOC-10X: " prefix and is excluded by this grep). The op01 line
+       must contain "corrupt-expected". Any skipped op drops the count
+       below 17; the len(op_meta)!=17 guard fails the case outright.
+- The plan-literal command "soc-verification-run.sh run_fm_soc_case" with
+  CASE_ID=FM-SOC-10X does NOT exercise the modified code — two independent
+  traps found while checking "how run_fm_soc_case reads CASE_ID from env":
+  (1) SSH from sz0002 to sz0001 does not forward CASE_ID (remote reports
+      CASE_ID=unset), so the remote would silently run the default
+      FM-SOC-001 — a misleading-success trap;
+  (2) even when CASE_ID reaches make, test_soc_rtl_runner_smoke
+      (sim/rtl_soc_runner.py:1081) routes FM-SOC-10X to RTLSoCRunner +
+      golden vectors, never to _run_10X/_verify_10X — verified locally:
+      load_golden_vectors('FM-SOC-10X') returns a TestCaseConfig
+      (rtl/test_vectors/soc_e2e/FM-SOC-10X/input.npz exists).
+      EDA run of that path was therefore SKIPPED: simv_soc_cocotb is
+      absent on sz0001 (would require a 15-30 min VCS compile) and the
+      path cannot exercise the changed code. This evidence honestly uses
+      the ibex route instead.
+- EDA-observed failures during this task (both fixed in _verify_10X):
+  * Attempt 1 (full verification, no chunking):
+      TimeoutError: PCIe TLP read completion timeout for 0x8001A600
+      (= op07 attn_weight out buffer, 8192 B = 2048 DW MRd, overflows the
+      10-bit TLP length field => malformed request, no completion).
+      Fix: 256 B MRd chunks (largest proven size: op01-03/05 256 B reads
+      completed in the same run).
+  * Attempt 2 (log mangling): UnicodeEncodeError 'ascii' codec can't
+      encode '\u2014' from the em-dash in the op01 message (log stream is
+      ASCII-only; prior em-dash messages used logger.info which never
+      reaches the stream). Fix: ASCII hyphen. Final log:
+      grep -c 'Logging error|UnicodeEncodeError' => 0.
+- dirty_worktree (at evidence time, HEAD=886ccb4): MY changes are exactly
+  (a) sim/rtl_soc_runner.py — single hunk _verify_10X, +49/-8, and
+  (b) this evidence file. git status --porcelain also lists files owned by
+  parallel W2 todos 9/11 and earlier tasks (firmware/build/*,
+  sim/regression/Makefile, run_ibex_full_rtl.sh, run_ibex_segment_run.sh,
+  sim/rtl_soc_segment_run.py, rtl/tb/apb_conformance_real_tb.sv,
+  docs/bugs/bugs-soc-rtl.md, scripts/gen_evidence_provenance.py,
+  scripts/check_evidence_provenance.py, build/evidence/*,
+  .omo/notepads/*, .omo/evidence/task-0/11-*.txt) — not mine, not touched.
+- No git commit performed (per task instruction).
+
+TASK-10 RESULT: GREEN (expected)

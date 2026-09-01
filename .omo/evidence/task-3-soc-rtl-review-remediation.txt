@@ -1,0 +1,208 @@
+Plan: .omo/plans/soc-rtl-review-remediation.md
+Todo: 3. APB conformance 真实外设负向测试（红）
+Executor: Sisyphus (rtl/tb testbench worker)
+Timestamp: 2026-08-31T10:45+08:00
+Directory: /home/prj/zhengs/caduceuscore/CaduceusCore (main checkout, branch soc-rtl-review-remediation @ 9d80c96)
+HEAD: 9d80c9650c394de8c7fbe2d78a85b8f1f7e2de58
+
+================================================================================
+TB STRUCTURE
+================================================================================
+New file: rtl/tb/apb_conformance_real_tb.sv  (module apb_conformance_real_tb)
+
+Instantiated (REAL RTL, not model slaves):
+  apb_decoder          rtl/soc/apb_decoder.v            (real 1->8 decoder)
+  mxu_soc_wrapper      rtl/wrapper/mxu_soc_wrapper.v    #(W_BUF_DEPTH=5120, A_BUF_DEPTH=10240) — same params as caduceus_soc_top.v:972-975
+  sfu_soc_wrapper      rtl/wrapper/sfu_soc_wrapper.v
+  vector_soc_wrapper   rtl/wrapper/vector_soc_wrapper.v #(CHUNKS_MAX=128)
+  dma_wrapper          rtl/ip/dma_wrapper.v
+  pcie_ep_wrapper      rtl/ip/pcie_ep_wrapper.v         (APB slave 4 @ 0x4000_4000 — NOT pcie_dma_wrapper which is AXI master M6 on decoder port 7)
+  doorbell             rtl/soc/doorbell.v
+  intc_top             rtl/intc/intc_top.v
+
+Wiring (per caduceus_soc_top.v address map + port lists):
+  * APB: decoder psel_o[6:0]/penable_o[6:0]/paddr_o/pwrite_o/pwdata_o -> peripherals;
+    paddr 12-bit for MXU/SFU/VECTOR/DMA/DOORBELL/INTC, FULL 32-bit for pcie_ep_wrapper
+    (matches caduceus_soc_top.v:1246). pready_i/pslverr_i bit7 = 1/1, prdata_i[7] = 0.
+  * IRQ: mxu_irq->intc bit0, sfu->bit1, vector->bit2, dma->bit3, pcie->bit4,
+    doorbell->bit5 (per SoC wiring). timer_irq (bit6) and pcie_dma_irq (bit7) have
+    no source module in this TB -> driven by TB stimulus regs (SoC-external sources).
+  * AXI4 master ports of all 5 AXI masters tied off (ready=0, no AXI slave model);
+    outputs intentionally unconnected. PCIe TLP RX idles (data/hdr/valid/sop/eop=0),
+    tx_cpl_tlp_ready=1. doorbell bkdoor_we=0 (cocotb backdoor disabled).
+  * No CMD write in the stimulus has START bit set (0x42 bit0=0), so no compute is
+    launched anywhere and the AXI tie-off cannot stall APB. (Verified at runtime:
+    final mxu_dbg_state=0x0 = IDLE; all engine irqs 0.)
+
+ORACLE (independent register sources):
+  * Base addresses: NPU_ABI_* constants transcribed verbatim from
+    gen/npu_abi_firmware.h:17-38 (MXU 0x40000000, SFU 0x40001000,
+    VECTOR 0x40002000, DMA 0x40003000, PCIE 0x40004000, DOORBELL 0x40005000,
+    INTC 0x40006000, PCIE_DMA 0x40007000=guard only).
+  * Per-offset expectation table (REG_CNT/REG_OFFS/REG_ACC/REG_RST) transcribed
+    VERBATIM from rtl/tb/apb_register_conformance_tb.sv:200-256 — the model-slave
+    expectation table pinned by sim/tests/test_apb_register_conformance.py against
+    the Func Model factories (sim/models/apb_peripheral.py). Real behavior that
+    differs from this table is EXPOSED as a FAIL (that is the RED).
+  * No backdoor used for INTC.ACK W1C seeding: PENDING is seeded through REAL
+    sources (TB-reg-driven timer/pcie_dma + real APB doorbell writes HOST_TAIL!=NPU_HEAD).
+
+Stimulus: same phases as the model TB (reset values -> per-register access
+semantics rw/r/w/w1c -> out-of-range pslverr -> PCIE_DMA guard) + informational
+phases (real-W1C demonstration, final irq levels). APB master is pready-aware
+with a 4096-cycle per-transaction watchdog.
+
+================================================================================
+PERIPHERAL INTEGRATION STATUS (7/7 INTEGRATED)
+================================================================================
+  [x] mxu_soc_wrapper      0x4000_0000  integrated (APB + AXI tied off)
+  [x] sfu_soc_wrapper      0x4000_1000  integrated (APB + AXI tied off)
+  [x] vector_soc_wrapper   0x4000_2000  integrated (APB + AXI tied off)
+  [x] dma_wrapper          0x4000_3000  integrated (APB + AXI tied off)
+  [x] pcie_ep_wrapper      0x4000_4000  integrated (APB slave; TLP idle; AXI tied off)
+  [x] doorbell             0x4000_5000  integrated (bkdoor disabled)
+  [x] intc_top             0x4000_6000  integrated (6 real irq sources + 2 TB regs)
+  [ ] pcie_dma_wrapper     0x4000_7000  NOT integrated — it is the AXI master M6
+      (caduceus_soc_top.v:1258, decoder port 7), out of APB conformance scope;
+      live guard proves psel_o[7] never asserted during the whole run.
+No peripheral or apb_decoder RTL was modified. No downgrade declaration needed:
+7/7 of the in-scope peripherals integrated.
+
+================================================================================
+COMPILE (EDA server sz0001 / 192.168.0.11, VCS V-2023.12-SP2)
+================================================================================
+Exact command (run from repo root on sz0001):
+  source /NAS/Tools/methodology/modules/init/bash && module load vcs/vcs_2023.12sp2
+  vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps +v2k +lint=all +warn=all \
+      -f rtl/cpu/ibex.flist -f rtl/ip/verilog-axi.flist \
+      -f rtl/ip/verilog-pcie.flist -f rtl/soc/soc.flist \
+      rtl/tb/apb_conformance_real_tb.sv -top apb_conformance_real_tb \
+      -o sim/regression/simv_apb_conformance_real -l sim/regression/compile_apb_real.log
+
+Log excerpts (sim/regression/compile_apb_real.log, full log on EDA server):
+  Version V-2023.12-SP2_Full64 -- Mon Aug 31 10:38:55 2026
+  recompiling module apb_conformance_real_tb
+  ../sim/regression/simv_apb_conformance_real up to date
+  CPU time: 15.828 seconds to compile + 1.602 seconds to elab + .492 seconds to link
+  RESULT: 0 compile errors (grep -c "Error" compile_apb_real.log = 0)
+          394 Lint-[*] warnings — all from pre-existing RTL (engine wrappers /
+          sfu/vector/mxu internals / vendored verilog-pcie), the same class a
+          full-chip SoC build emits under +lint=all +warn=all; none are errors
+          and none indicate a TB wiring defect.
+Iteration note: first compile failed with ONE syntax error in the new TB
+(multi-line adjacent string-literal concatenation in a $display); fixed to a
+single-line string; second compile clean (this evidence cites the second).
+
+================================================================================
+RUN RESULTS (sim/regression/run_apb_real.log, sim run on sz0001)
+================================================================================
+  ./sim/regression/simv_apb_conformance_real > sim/regression/run_apb_real.log 2>&1
+  SIM_EXIT=0 ($finish semantics; verdict is the marker line, not the exit code —
+  same convention as the existing run_apb_conformance target)
+
+Final report (verbatim from log):
+  Total checks : 168
+  Oracle passes: 128
+  Divergences  : 40   (real RTL != model-slave expectation)
+  Write timeouts: 0   Read timeouts: 0
+  APB_CONFORMANCE_REAL: RED (40 divergences vs model-slave oracle)
+  TASK-3 RESULT: RED (expected)
+  $finish at simulation time 9136000 ps
+
+Divergence inventory (which offsets diverged from the oracle, grouped):
+  MXU      (1):  w-store CMD +0x04 — real readback 0x00000000 (CMD is write-only
+                 pulse in mmio_if; model w-store expects 0x42). All other 10
+                 offsets conform (reset 0, rw overwrite, STATUS hostile-immune).
+  SFU      (1):  w-store CMD +0x04 — same write-only pulse semantics.
+  VECTOR   (1):  w-store CMD +0x04 — same write-only pulse semantics.
+  DMA      (0):  fully conforms to the model oracle (14/14 offsets; even CMD
+                 w-store readback 0x42 matches — axi_cdma-style reg file stores it).
+  PCIE    (27):  real pcie_ep_wrapper layout differs from the Func Model factory
+                 layout used by the oracle:
+                 - reset: +0x00 got 0 (oracle 0x0001 COMPLETER_ID), +0x04 got 0
+                   (oracle 3 MAX_PAYLOAD_SIZE), +0x0C/+0x10/+0x14/+0x18 return
+                   RO BAR constants 0x2000_0000/0xFFC0_0000/0x8000_0000/
+                   0x8000_0000, +0x1C/+0x20 got 0, +0x24 UNMAPPED (pslverr=1,
+                   logged [INFO] pslverr=1) — oracle had BAR0_BASE@0x18=0x2000_0000,
+                   BAR0_MASK@0x1C=0x003F_FFFF, BAR1_BASE@0x20=0x8000_0000,
+                   BAR1_MASK@0x24=0x7FFF_FFFF;
+                 - access: PCIE_CTRL write 0x3 reads back 0x6 (max_payload_size
+                   field sits at bits[3:1], bit[0]=enable — bit-layout divergence
+                   vs oracle's 32-bit store); BAR regs are RO (writes ignored);
+                   MSIX_CTRL/IRQ_CTRL are field-masked (0x3 -> readback 1);
+                   +0x24 unmapped -> pslverr.
+  DOORBELL (6):  +0x08 HOST_HEAD and +0x0C NPU_TAIL are RW in real RTL (hostile
+                 write 0xFFFFFFFF stored, readback 0xFFFFFFFF — oracle expects
+                 RO unchanged 0); +0x10 LAST_STATUS and +0x14 COMPLETION_STATUS
+                 do not exist in real doorbell (reads 0, writes ignored —
+                 oracle expects rw). +0x00 HOST_TAIL and +0x04 NPU_HEAD conform.
+  INTC     (4):  reset THRESHOLD +0x08 = 1 (oracle 0 — real RTL reset default);
+                 r-hostile PENDING +0x00 readback 0x00000020 (real PENDING is a
+                 live 8-bit sticky status register driven by real irq sources —
+                 doorbell_irq was legitimately asserted by the doorbell phase-2
+                 stimulus; oracle expects static RO 0); w1c ACK +0x0C reads 0
+                 (real ACK is clear-only, not readable — oracle w1c expects
+                 16-bit seeded readback 0xFF0F/0xFFFF). ENABLE/THRESHOLD rw
+                 conform for the stimulus values.
+  Decoder routing: out-of-range 0x4000_8000 -> pslverr=1 PASS; psel_o[7]
+  (PCIE_DMA) never asserted PASS.
+
+Real-W1C demonstration (Phase 5, informational — proves the real mechanism works):
+  [INFO] INTC.PENDING after real-source seed = 0x000000e0
+  [INFO] INTC.PENDING after source release (sticky, no ACK) = 0x000000e0
+  [INFO] INTC.PENDING after ACK=0xE0 = 0x00000000  (0 => real W1C clear works)
+
+RED MARKERS:
+  * APB_CONFORMANCE_REAL: RED (40 divergences vs model-slave oracle)   [run log :223]
+  * TASK-3 RESULT: RED (expected)                                     [run log :224]
+  * Divergence counts per peripheral: MXU=1 SFU=1 VECTOR=1 DMA=0 PCIE=27
+    DOORBELL=6 INTC=4 (sum=40, matches report)
+  * 168 total checks == the model TB's 168-check structure (7 slaves x table),
+    so the 40 FAILs are the real-peripheral divergence set, not a smaller test.
+
+================================================================================
+ADVERSARIAL NOTES
+================================================================================
+dirty_worktree: `git status --porcelain` at evidence time shows this todo's own
+addition plus files owned by PARALLEL-WAVE todos (1/2/4/5/6 — their TBs/scripts/
+evidence and the plan-file edit), which were already dirty when this task began
+(recorded in task-0 evidence). THIS todo's changes are exactly:
+  ?? rtl/tb/apb_conformance_real_tb.sv        (the new TB, untracked, not committed per instructions)
+  ?? .omo/evidence/task-3-soc-rtl-review-remediation.txt  (this file)
+No file under rtl/soc/, rtl/wrapper/, rtl/ip/, rtl/intc/, rtl/mxu/, rtl/sfu/,
+rtl/vector/, or rtl/cpu/ was modified (git status shows zero M lines there);
+apb_decoder.v untouched. Build artifacts (simv_apb_conformance_real, csrc/,
+*.daidir, *.log under sim/regression/) are gitignored (simv_*, csrc/, *.log) and
+do not appear in porcelain.
+
+misleading_success_output: the verdict rests on the real run log, not on a
+retyped claim. Reproduce/verify with:
+  ssh zhengs@192.168.0.11
+  grep -n "Divergences\|APB_CONFORMANCE_REAL\|TASK-3 RESULT\|Total checks" \
+      /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/run_apb_real.log
+  grep -c "Error" sim/regression/compile_apb_real.log   # = 0
+SIM_EXIT=0 is NOT a success claim: the TB deliberately calls $finish and the
+pass/fail verdict is the grep-able marker line (same fail-closed convention as
+the existing run_apb_conformance Makefile target). A GREEN result would print
+"APB_CONFORMANCE_REAL: GREEN ... (unexpected)" and the evidence would cite it
+as unexpected — no silent success path exists. The 40 FAIL lines in the log are
+each emitted with got/expected values; they are genuine real-vs-oracle
+divergences (predicted pre-run from RTL source review: INTC THRESHOLD reset=1,
+doorbell 4xRW + no 0x10/0x14, PCIe layout shift + RO BARs + pslverr@0x24,
+CMD write-only readback 0), not stimulus artifacts.
+
+Limitations (declared, none blocking):
+  * pcie_dma_wrapper intentionally excluded (AXI master M6, not an APB-slave
+    conformance target; guard asserts it is never selected).
+  * AXI data paths are not exercised (no AXI slave model) — out of scope for a
+    register-semantics conformance TB; no CMD.START is issued.
+  * The MXU/SFU/VECTOR wrapper-extension registers (0x30-0x48) are outside the
+    oracle table (not in the Func Model factory/ABI) and are not checked here.
+  * 394 lint warnings are pre-existing RTL style warnings surfaced by
+    +lint=all +warn=all (same class in any full-chip build); not caused by the TB.
+
+NOT COMMITTED (per todo-3 instructions: "Do NOT git commit").
+
+================================================================================
+TASK-3 RESULT: RED (expected)
+================================================================================

@@ -167,6 +167,46 @@ $(APB_CONF_SIMV): $(APB_CONF_SRC)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# run_apb_conformance_real — APB conformance vs REAL peripheral RTL (7/7)
+# ═══════════════════════════════════════════════════════════════════════════
+# Instantiates the real apb_decoder plus the 7 REAL peripheral RTL modules
+# (mxu_soc_wrapper / sfu_soc_wrapper / vector_soc_wrapper / dma_wrapper /
+# pcie_ep_wrapper / doorbell / intc_top), wired per rtl/soc/caduceus_soc_top.v
+# address map, and checks their REAL reset/RW/RO/W1C register semantics
+# against an oracle built from gen/npu_abi_firmware.h NPU_ABI_* constants plus
+# each peripheral's documented MMIO header table. pcie_dma_wrapper (AXI master
+# M6) is out of APB-conformance scope and guarded (psel_o[7] must stay 0).
+# The verdict rests on the fail-closed marker "APB_CONFORMANCE_REAL: GREEN"
+# printed only when the TB's own counters prove 0 unexpected fails, 0 APB
+# timeouts, and >= 5 peripherals covered. Run via:
+#   bash sim/regression/soc-verification-run.sh run_apb_conformance_real
+
+APB_REAL_SRC := $(TB_DIR)/apb_conformance_real_tb.sv
+APB_REAL_SIMV := simv_apb_conformance_real
+
+.PHONY: run_apb_conformance_real
+run_apb_conformance_real: $(APB_REAL_SIMV)
+	@echo "$(YELLOW)[APB_CONFORMANCE_REAL] Running...$(NC)"
+	@cd $(REPO_ROOT) && ./sim/regression/$(APB_REAL_SIMV) 2>&1 | \
+		tee sim/regression/apb_conformance_real.log
+	@grep -q "APB_CONFORMANCE_REAL: GREEN" apb_conformance_real.log && \
+		echo "$(GREEN)APB_CONFORMANCE_REAL: PASS$(NC)" || \
+		(echo "$(RED)APB_CONFORMANCE_REAL: FAIL$(NC)" && exit 1)
+
+$(APB_REAL_SIMV): $(APB_REAL_SRC) $(SOC_FLIST) $(IBEX_FLIST) $(AXI_FLIST) $(PCIE_FLIST)
+	@echo "$(YELLOW)[APB_CONFORMANCE_REAL] Compiling (real peripherals, 4 flists)...$(NC)"
+	cd $(REPO_ROOT) && $(VCS) $(VCS_COMMON) \
+		-f rtl/cpu/ibex.flist \
+		-f rtl/ip/verilog-axi.flist \
+		-f rtl/ip/verilog-pcie.flist \
+		-f rtl/soc/soc.flist \
+		rtl/tb/apb_conformance_real_tb.sv \
+		-top apb_conformance_real_tb \
+		-o sim/regression/$(APB_REAL_SIMV) \
+		-l sim/regression/compile_apb_real.log
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # run_intc_test — INTC 7-source Interrupt Controller
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -249,6 +289,32 @@ run_crossbar_fairness: $(XBAR_FAIR_SIMV)
 $(XBAR_FAIR_SIMV): $(XBAR_FAIR_SRC)
 	@echo "$(YELLOW)[CROSSBAR_FAIRNESS] Compiling...$(NC)"
 	$(VCS) $(VCS_COMMON) -top axi_crossbar_fairness_tb $(XBAR_FAIR_SRC) -o $(XBAR_FAIR_SIMV)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# run_crossbar_fairness_mutation — fixed-priority mutation guard (todo 7)
+# ═══════════════════════════════════════════════════════════════════════════
+# Compiles the SAME TB with +define+MUTATE_FIXED_PRIORITY: the DUT parameter
+# FIXED_PRIORITY is set to 1 (grants the lowest master index first and never
+# rotates). Under the P4 contention stimulus the fairness assertion (grant
+# count difference <=1) MUST FAIL — this target PASSES only when the mutation
+# run is RED (log contains "FAIRNESS: FAIL"), proving the fairness test truly
+# discriminates fixed-priority starvation from round-robin fairness.
+
+XBAR_FAIR_MUT_SIMV := simv_axi_crossbar_fairness_tb_mut
+
+.PHONY: run_crossbar_fairness_mutation
+run_crossbar_fairness_mutation: $(XBAR_FAIR_MUT_SIMV)
+	@echo "$(YELLOW)[CROSSBAR_FAIRNESS_MUTATION] Running (expect RED: fairness assertion must FAIL)...$(NC)"
+	@./$(XBAR_FAIR_MUT_SIMV) 2>&1 | tee crossbar_fairness_mutation.log
+	@grep -q "FAIRNESS: FAIL" crossbar_fairness_mutation.log && \
+		echo "$(GREEN)CROSSBAR_FAIRNESS_MUTATION: RED as expected (mutation guard holds)$(NC)" || \
+		(echo "$(RED)CROSSBAR_FAIRNESS_MUTATION: UNEXPECTED PASS (mutation guard broken)$(NC)" && exit 1)
+
+$(XBAR_FAIR_MUT_SIMV): $(XBAR_FAIR_SRC)
+	@echo "$(YELLOW)[CROSSBAR_FAIRNESS_MUTATION] Compiling with +define+MUTATE_FIXED_PRIORITY...$(NC)"
+	$(VCS) $(VCS_COMMON) +define+MUTATE_FIXED_PRIORITY \
+		-top axi_crossbar_fairness_tb $(XBAR_FAIR_SRC) -o $(XBAR_FAIR_MUT_SIMV)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -860,10 +926,11 @@ MOBILENETV3_TESTCASE ?= test_e2e_mobilenetv3_chain
 MOBILENETV3_CHECKPOINT := $(REPO_ROOT)/build/mobilenetv3_checkpoint.npz
 MOBILENETV3_SEGMENTS ?= 8
 
+run_e2e_mobilenetv3: SHELL := /bin/bash
 run_e2e_mobilenetv3: $(SOC_SIMV_COCOTB)
 	@echo "$(YELLOW)[E2E_MOBILENETV3] Running cocotb test $(MOBILENETV3_TESTCASE) (checkpointed segments)...$(NC)"
 	@rm -f $(MOBILENETV3_CHECKPOINT) $(REPO_ROOT)/sim/regression/mobilenetv3_chain.log
-	@ok=0; i=1; while [ $$i -le $(MOBILENETV3_SEGMENTS) ]; do \
+	@set -o pipefail; ok=0; i=1; while [ $$i -le $(MOBILENETV3_SEGMENTS) ]; do \
 		echo "$(YELLOW)[E2E_MOBILENETV3] segment $$i/$(MOBILENETV3_SEGMENTS)$(NC)"; \
 		cd $(REPO_ROOT)/.. && \
 		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
@@ -874,6 +941,11 @@ run_e2e_mobilenetv3: $(SOC_SIMV_COCOTB)
 		MOBILENETV3_CHECKPOINT=$(MOBILENETV3_CHECKPOINT) \
 		./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
 		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee -a $(REPO_ROOT)/sim/regression/mobilenetv3_chain.log; \
+		rc=$${PIPESTATUS[0]:-127}; \
+		if [ $$rc -ne 0 ]; then \
+			echo "$(RED)[E2E_MOBILENETV3] segment $$i: simulator exited $$rc — aborting (fail-closed)$(NC)"; \
+			break; \
+		fi; \
 		if grep -q "MOBILENETV3: PASS" $(REPO_ROOT)/sim/regression/mobilenetv3_chain.log; then ok=1; break; fi; \
 		if ! grep -q "MOBILENETV3: SEGMENT COMPLETE" $(REPO_ROOT)/sim/regression/mobilenetv3_chain.log; then break; fi; \
 		i=$$((i+1)); \
@@ -1007,12 +1079,14 @@ $(MIXED_SIMV_COCOTB): $(PLI_TAB)
 	@echo "$(GREEN)[MIXED_COMPILE] Compilation finished$(NC)"
 
 .PHONY: run_fm_soc_case
+run_fm_soc_case: SHELL := /bin/bash
 run_fm_soc_case:
 ifneq ($(strip $(FM_SOC_EXTRA_DEFINES)),)
 	@# Mixed-mode: recompile with tb_mixed.v and defines
 	@$(MAKE) $(MIXED_SIMV_COCOTB)
 	@echo "$(YELLOW)[FM_SOC_CASE] Running $(FM_SOC_CASE_ID) with mixed-mode defines...$(NC)"
-	cd $(REPO_ROOT)/.. && \
+	@set -o pipefail; \
+		cd $(REPO_ROOT)/.. && \
 		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
 		PYTHONPATH=$(REPO_ROOT)/sim MODULE=rtl_soc_runner TESTCASE=test_soc_rtl_runner_smoke \
 		FM_SOC_CASE_ID=$(FM_SOC_CASE_ID) \
@@ -1022,12 +1096,18 @@ ifneq ($(strip $(FM_SOC_EXTRA_DEFINES)),)
 		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/fm_soc_$(FM_SOC_CASE_ID)_results.xml \
 		./CaduceusCore/sim/regression/$(MIXED_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
 		$(FM_SOC_EXTRA_DEFINES) \
-		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/fm_soc_$(FM_SOC_CASE_ID).log
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/fm_soc_$(FM_SOC_CASE_ID).log; \
+		rc=$${PIPESTATUS[0]:-127}; \
+		if [ $$rc -ne 0 ]; then \
+			echo "$(RED)FM_SOC_$(FM_SOC_CASE_ID): simulator exited $$rc — make target fails (fail-closed)$(NC)"; \
+			exit $$rc; \
+		fi
 else
 	@# Full RTL mode: reuse existing soc_cocotb simv
 	@$(MAKE) $(SOC_SIMV_COCOTB)
 	@echo "$(YELLOW)[FM_SOC_CASE] Running $(FM_SOC_CASE_ID) with full RTL...$(NC)"
-	cd $(REPO_ROOT)/.. && \
+	@set -o pipefail; \
+		cd $(REPO_ROOT)/.. && \
 		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
 		PYTHONPATH=$(REPO_ROOT)/sim MODULE=rtl_soc_runner TESTCASE=test_soc_rtl_runner_smoke \
 		FM_SOC_CASE_ID=$(FM_SOC_CASE_ID) \
@@ -1035,7 +1115,12 @@ else
 		PYTHONIOENCODING=utf-8 \
 		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/fm_soc_$(FM_SOC_CASE_ID)_results.xml \
 		./CaduceusCore/sim/regression/$(SOC_SIMV_COCOTB) +define+COCOTB_SIM=1 +COCOTB -no_save \
-		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/fm_soc_$(FM_SOC_CASE_ID).log
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/fm_soc_$(FM_SOC_CASE_ID).log; \
+		rc=$${PIPESTATUS[0]:-127}; \
+		if [ $$rc -ne 0 ]; then \
+			echo "$(RED)FM_SOC_$(FM_SOC_CASE_ID): simulator exited $$rc — make target fails (fail-closed)$(NC)"; \
+			exit $$rc; \
+		fi
 endif
 	@grep -q "FM-SOC.*PASS\|test_soc_rtl_runner.*PASS" $(REPO_ROOT)/sim/regression/fm_soc_$(FM_SOC_CASE_ID).log && \
 		echo "$(GREEN)FM_SOC_$(FM_SOC_CASE_ID): PASS$(NC)" || \
@@ -1132,6 +1217,8 @@ help:
 	@echo "  run_intc_test       — INTC 7-source controller"
 	@echo "  run_dma_test        — DMA wrapper transfer"
 	@echo "  run_crossbar_stress — AXI crossbar concurrent (>=10k cycles)"
+	@echo "  run_crossbar_fairness — AXI crossbar round-robin fairness (7 masters, P4 contention)"
+	@echo "  run_crossbar_fairness_mutation — fixed-priority mutation (expects RED fairness FAIL)"
 	@echo "  run_pcie_test       — PCIe EP wrapper (TLP→AXI)"
 	@echo "  run_dram_test       — DRAM model (100 random txns)"
 	@echo "  run_soc_elab        — SoC top-level elaboration only"

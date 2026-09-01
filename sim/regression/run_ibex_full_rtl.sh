@@ -71,40 +71,91 @@ fi
 EVIDENCE_DIR="$BUILD_DIR/evidence"
 mkdir -p "$EVIDENCE_DIR"
 
+# ── Provenance binding (todo 11) ─────────────────────────────────────────
+# Snapshot timing contract: captured AFTER the firmware is rebuilt and the
+# simv is compiled above, but BEFORE the case loop starts — every case log
+# below inherits the same hash-bound header (simv/flist/driver/firmware/
+# golden/checkpoint sha256 + tool versions + git commit + dirty state).
+RUN_ID="${RUN_ID:-$(date +%Y%m%dT%H%M%S)-$$}"
+export IBEX_RUN_ID="$RUN_ID"
+export IBEX_SIMV="$SIMV"
+PROVENANCE_FILE="$EVIDENCE_DIR/provenance-$RUN_ID.txt"
+python3 "$REPO_ROOT/scripts/gen_evidence_provenance.py" \
+    --run-id "$RUN_ID" \
+    --simv "$SIMV" \
+    --flist "$REPO_ROOT/rtl/soc/soc.flist" \
+    --driver "$REPO_ROOT/sim/rtl_soc_runner.py" \
+    --firmware "$REPO_ROOT/firmware/build/npu_firmware.hex" \
+    --golden "$REPO_ROOT/rtl/test_vectors/soc_e2e" \
+    --checkpoint "$REPO_ROOT/build/evidence/task-14-soc-rtl-verification-checkpoints.npz" \
+    --out "$PROVENANCE_FILE" \
+    || echo "[WARN] provenance generation failed (case logs will lack hash binding)"
+echo "[INFO] Provenance (hash-bound evidence header, todo 11):"
+sed -e 's/^/    | /' "$PROVENANCE_FILE" 2>/dev/null || true
+
 PASS=0
 FAIL=0
 SKIP=0
+TIMEOUT=0
 for CASE in $CASES; do
     echo ""
     echo "============================================================"
     echo "[RUN] $CASE"
     echo "============================================================"
     export FM_SOC_CASE_ID="$CASE"
-    export TESTCASE=test_soc_ibex_full
     CASE_LOG="$EVIDENCE_DIR/${CASE}.log"
-    (cd "$RUN_DIR" && "$SIMV" +COCOTB +FM_SOC_CASE_ID="$CASE" +BOOTROM_HEX="$REPO_ROOT/firmware/build/npu_firmware.hex") > "$CASE_LOG" 2>&1 || true
-    if grep -qE 'superseded by FM-SOC-032/10X' "$CASE_LOG" || \
-       grep -qE 'skipped: direct APB/AXI case not applicable to Ibex RTL mode' "$CASE_LOG"; then
+    PROV_HEADER="${PROVENANCE_FILE:-$EVIDENCE_DIR/provenance-${RUN_ID:-run}.txt}"
+    if [ -f "$PROV_HEADER" ]; then
+        sed -e 's/^/provenance| /' "$PROV_HEADER" > "$CASE_LOG"
+    else
+        : > "$CASE_LOG"
+    fi
+    set +e
+    (cd "$RUN_DIR" && "$SIMV" +COCOTB +FM_SOC_CASE_ID="$CASE" \
+        +BOOTROM_HEX="$REPO_ROOT/firmware/build/npu_firmware.hex") >> "$CASE_LOG" 2>&1
+    RUN_RC=$?
+    set -e
+    if [ "$RUN_RC" -eq 124 ] || [ "$RUN_RC" -eq 137 ]; then
+        echo "[TIMEOUT] $CASE (simulator exit $RUN_RC; log: $CASE_LOG)"
+        printf 'runner_classification=TIMEOUT exit_code=%s\n' "$RUN_RC" >> "$CASE_LOG"
+        TIMEOUT=$((TIMEOUT + 1))
+    elif [ "$RUN_RC" -ne 0 ]; then
+        echo "[FAIL] $CASE (simulator exit $RUN_RC; log: $CASE_LOG)"
+        printf 'runner_classification=FAIL exit_code=%s\n' "$RUN_RC" >> "$CASE_LOG"
+        FAIL=$((FAIL + 1))
+    elif grep -qE 'superseded by FM-SOC-027/032/10X' "$CASE_LOG" || \
+         grep -qE 'skipped: direct APB/AXI case not applicable to Ibex RTL mode' "$CASE_LOG"; then
         echo "[SKIP] $CASE"
+        printf 'runner_classification=SKIP\n' >> "$CASE_LOG"
         SKIP=$((SKIP + 1))
     elif grep -qE 'TESTS=1 PASS=1 FAIL=0 SKIP=0' "$CASE_LOG"; then
         echo "[PASS] $CASE"
+        printf 'runner_classification=PASS\n' >> "$CASE_LOG"
         PASS=$((PASS + 1))
     else
-        echo "[FAIL] $CASE (log: $CASE_LOG)"
+        echo "[FAIL] $CASE (no cocotb PASS summary; log: $CASE_LOG)"
+        printf 'runner_classification=FAIL reason=no_summary\n' >> "$CASE_LOG"
         FAIL=$((FAIL + 1))
     fi
 done
 
+TOTAL=$((PASS + SKIP + FAIL + TIMEOUT))
+N_CASES=$(echo "$CASES" | wc -w)
+
 echo ""
 echo "============================================================"
-echo "[SUMMARY] Full RTL + Ibex (33-case FM-SOC regression)"
-echo "  PASS: $PASS"
-echo "  FAIL: $FAIL"
-echo "  SKIP: $SKIP"
-echo "  TOTAL: $((PASS + FAIL + SKIP))"
+echo "[SUMMARY] Full RTL + Ibex (FM-SOC regression)"
+echo "  PASS:    $PASS"
+echo "  SKIP:    $SKIP"
+echo "  FAIL:    $FAIL"
+echo "  TIMEOUT: $TIMEOUT"
+echo "[SUMMARY] PASS=$PASS SKIP=$SKIP FAIL=$FAIL TIMEOUT=$TIMEOUT TOTAL=$TOTAL"
 echo "============================================================"
 
-if [ $FAIL -ne 0 ]; then
+if [ "$TOTAL" -ne "$N_CASES" ]; then
+    echo "[ERROR] case accounting mismatch: classified $TOTAL of $N_CASES cases"
+    exit 1
+fi
+if [ "$FAIL" -ne 0 ] || [ "$TIMEOUT" -ne 0 ]; then
     exit 1
 fi

@@ -1,0 +1,354 @@
+================================================================================
+TASK-6 EVIDENCE — soc-rtl-review-remediation (plan todo 6, RED phase)
+Evidence provenance + pickle-safety negative tests
+================================================================================
+Timestamp        : 2026-08-31 (run completed 2026-08-31, local host)
+Branch           : soc-rtl-review-remediation
+HEAD             : 9d80c9650c394de8c7fbe2d78a85b8f1f7e2de58
+Task             : Execute plan todo 6 — create RED test sim/regression/test_evidence_provenance.sh
+                   covering (a) stale-evidence reuse, (b) provenance fields,
+                   (c) pickle safety; run it; record RED evidence. LOCAL ONLY.
+Scope            : Only this test script + this evidence file were added.
+                   run_ibex_segment_run.sh and sim/rtl_soc_segment_run.py were
+                   NOT modified (per plan guardrail). No git commit made.
+
+DELIVERABLE
+--------------------------------------------------------------------------------
+File             : sim/regression/test_evidence_provenance.sh
+SHA256           : 400aa26fa783309866b5e670242aa832138b504e9252a2491be5f816f283d9d4
+Style            : mirrors test_timeout_behavior.sh (todo 1) — verbatim extraction of
+                   the runner's timeout decision block into a private mktemp sandbox,
+                   pass/fail counters, RED/GREEN contract, exit codes 0/1/3.
+Probes (real code, no fabricated constants):
+  (a) extracts run_ibex_segment_run.sh anchor 'if [ "$RUN_RC" -eq 124 ]' ..EOF
+      verbatim, feeds it RUN_RC=124 with REPO_ROOT redirected to a sandbox
+      containing pre-placed OLD evidence (real format: old commit +
+      'status=PASS' lines) at the runner's FIXED path
+      build/evidence/task-14-soc-rtl-verification-signoff.txt.
+  (b) greps the live code path (runner + sim/rtl_soc_segment_run.py +
+      scripts/gen_evidence_provenance.py if present) for the plan's 8
+      provenance field groups, and compares the REAL evidence sample's
+      Commit line against the current git HEAD.
+  (c) greps the live sim/rtl_soc_segment_run.py for allow_pickle usage,
+      extracts _resume_from_npz verbatim to audit load-guarding and commit
+      validation, and runs numpy-only behavioral proofs (pickle bomb /
+      corrupted NPZ / wrong-commit NPZ) in the sandbox.
+
+RUN
+--------------------------------------------------------------------------------
+Command          : bash sim/regression/test_evidence_provenance.sh
+Exit code        : 1  (RED — expected today; must become 0 after todos 9/11)
+Assertions       : 17 failed [RED] / 2 passed (env sanity + timestamp field,
+                   which the writer genuinely emits today — proves the test is
+                   not blindly RED).
+
+PER-ASSERTION RED MARKERS
+--------------------------------------------------------------------------------
+(a) stale-evidence reuse  — 4/4 RED:
+  [RED] a1 : old evidence was APPENDED TO by the new run (sha256 changed
+             f4a5f408... -> a72ce446...) — stale file reused.
+  [RED] a2 : no fresh run-keyed evidence file written (0 new files) — the
+             old 'status=PASS' lines survive as the new run's record.
+  [RED] a2b: EVIDENCE path is a FIXED literal
+             ("$REPO_ROOT/build/evidence/task-14-soc-rtl-verification-signoff.txt")
+             shared by every run — no run-id/timestamp variable.
+  [RED] a3 : two consecutive simulated timeouts produced 2 IDENTICAL
+             'timebox_status=TIMEOUT_24H' entries in the SAME file —
+             PENDING/TIMEOUT entries carry no per-run binding.
+(b) provenance fields     — 10 RED / 1 PASS:
+  [RED] b  : code path emits NO git dirty state ('porcelain|dirty' absent)
+  [RED] b  : code path emits NO run ID ('run[-_]?id' absent)
+  [RED] b  : code path emits NO simv hash ('simv' present, 'sha256' absent)
+  [RED] b  : code path emits NO RTL flist hash
+  [RED] b  : code path emits NO python driver hash
+  [RED] b  : code path emits NO firmware ELF/HEX hash
+  [RED] b  : code path emits NO golden/checkpoint hash
+  [RED] b  : code path emits NO tool versions ('vcs -ID|-ID|tool[_ ]version' absent)
+  [PASS] b : timestamp IS emitted today ('Timestamp start :' in writer) —
+             honest mixed result.
+  [RED] b0 : REAL evidence sample commit c506f8ec4de6740f5371c23b840e22d39cf22b2c
+             != current HEAD 9d80c9650c394de8c7fbe2d78a85b8f1f7e2de58
+             (sample: build/evidence/task-14-soc-rtl-verification-signoff.txt).
+  [RED] b  : REAL evidence sample missing keys: run_id simv_sha256
+             flist_sha256 driver_sha256 firmware_sha256 golden_sha256
+             checkpoint_sha256 tool_versions dirty.
+(c) pickle safety         — 3/3 RED:
+  [RED] c1 : sim/rtl_soc_segment_run.py:346 and :412 both use
+             np.load(..., allow_pickle=True) (checkpoint NPZ_PATH and
+             SPIKE_NPZ) — untrusted local files can execute code on load.
+  [RED] c2 : _resume_from_npz does NOT guard the np.load call (first try:
+             at line 61, first np.load at line 24 of the function body —
+             the existing try/except guards only the evidence-file read).
+             Corrupted checkpoint NPZ -> unhandled BadZipFile crash.
+  [RED] c3 : _resume_from_npz never reads the checkpoint metadata commit —
+             a checkpoint generated at a DIFFERENT commit (or planted by
+             hand) is restored blindly with no provenance check.
+Behavioral proofs (real numpy, sandbox):
+  - allow_pickle=True load+access of a crafted NPZ -> canary file created
+    (arbitrary code execution demonstrated under the exact real load call).
+  - allow_pickle=False rejects the same file (ValueError) — safe alternative.
+  - corrupted NPZ -> BadZipFile (unhandled by current code).
+  - wrong-commit NPZ (metadata commit=0000...0) loads without rejection.
+
+FOUR NEGATIVE SCENARIOS (plan acceptance list)
+--------------------------------------------------------------------------------
+1. OLD evidence        : FULLY covered locally — verbatim-extracted append path
+                         + pre-placed stale PASS evidence (assertions a1/a2/a2b).
+2. PENDING evidence    : covered locally at append-logic level (a3 double-run
+                         distinguishability). PARTIAL: full runner-level
+                         coverage (real simv reaching RUN_RC=124) needs VCS on
+                         the EDA server — run_env.sh aborts locally at its EDA
+                         gate (verified: smoke exit 1, no side effects).
+3. CORRUPTED NPZ       : covered locally at np.load API level + static
+                         no-guard audit of _resume_from_npz (c2). PARTIAL:
+                         script-level handling (cocotb test surviving/refusing
+                         resume) needs VCS+cocotb.
+4. WRONG COMMIT        : covered locally via static resume-path audit + wrong-
+                         commit NPZ behavioral proof (c3). PARTIAL: end-to-end
+                         resume-with-validation needs VCS+cocotb.
+
+ADVERSARIAL NOTES (self-audit)
+--------------------------------------------------------------------------------
+dirty_worktree:
+  Pre-task git status --porcelain had 10 entries (other todos' work:
+  .omo/plans/soc-rtl-review-remediation.md, rtl/tb/axi_crossbar_fairness_tb.sv,
+  task-0/1/4 evidence, notepads/, fm_soc_case_manifest.csv, probe_fw_tmp.py,
+  apb_conformance_real_tb.sv, test_regression_stats.sh,
+  test_timeout_behavior.sh).
+  Post-task porcelain delta attributable to THIS task:
+    + ?? sim/regression/test_evidence_provenance.sh
+    + ?? .omo/evidence/task-6-soc-rtl-review-remediation.txt   (this file)
+  (Concurrent agents meanwhile added task-2/task-5 evidence and
+   sim/tests/test_firmware_addr_allowlist.py and removed probe_fw_tmp.py —
+   not mine.) No product file was modified; no git commit made.
+
+misleading_success_output:
+  All outputs below are REAL, not fabricated:
+  - Extracted-block stdout with RUN_RC=124 printed exactly
+    "[TIMEOUT] 86400s wall-time cap reached ... [TIMEOUT] evidence retained:
+     .../task-14-soc-rtl-verification-signoff.txt" and exited 0 — the
+     misleading "success" output the runner produces on timeout (exit-code
+     mapping itself is todo 1's assertion; printed here as context).
+  - a1 sha256 before/after are the real hashes of the sandboxed old evidence.
+  - b0 compares the REAL on-disk evidence sample commit (c506f8ec) against
+    the real HEAD (9d80c96) at run time.
+  - c1 quotes the REAL source lines 346/412; behavioral proofs executed with
+    the system numpy 2.2.6 and printed their real results (canary created /
+    ValueError / BadZipFile).
+  - One false positive WAS caught and fixed during authoring: the first c2
+    check searched for any try/except in _resume_from_npz and PASSED because
+    of the unrelated evidence-read guard; c2 now requires the try: to precede
+    np.load (first try at 61 > first load at 24 -> RED). This is the exact
+    misleading-success class the test exists to prevent.
+
+SANITY / SIDE-EFFECT CHECK
+--------------------------------------------------------------------------------
+- Real build/evidence/task-14-soc-rtl-verification-signoff.txt: read-only in
+  the test; sha256 unchanged (74b41d85feee5af44d2ed382cdc25b168e4a183f806a1d94f03f8265d4a9942b).
+- All extracted-code execution ran with REPO_ROOT/cwd inside a mktemp
+  sandbox removed by the EXIT trap (verified: no /tmp/test_evidence_provenance.*
+  leftovers).
+- Full-runner smoke invocation aborted at the run_env.sh EDA gate (exit 1,
+  "/NAS/Tools/EDA/env/modules.bash not found") before any evidence write —
+  hence the verbatim-extraction assertion vehicle, documented in the script.
+
+RED->GREEN FLIP CONTRACT (for the W2 fixer, todos 9 + 11)
+--------------------------------------------------------------------------------
+- a1/a2/a2b: timeout path must write fresh run-keyed evidence (new file or
+  backup) and never append to a pre-existing evidence file.
+- a3: per-run entries must be distinguishable (run id in path or entry).
+- b1..b8: runner + segment script + scripts/gen_evidence_provenance.py must
+  emit the 8 field groups (patterns listed in the test header).
+- b0: regenerated evidence must carry the current HEAD commit.
+- c1: remove allow_pickle=True (use allow_pickle=False / .npy mmap / whitelist).
+- c2: guard the checkpoint np.load itself with try/except.
+- c3: validate checkpoint metadata commit against current git HEAD before
+  restoring state.
+
+
+FULL RUN OUTPUT (bash sim/regression/test_evidence_provenance.sh; exit code 1)
+--------------------------------------------------------------------------------
+=== test_evidence_provenance.sh (todo 6 negative test) ===
+REPO_ROOT:  /home/prj/zhengs/caduceuscore/CaduceusCore
+RUNNER:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/run_ibex_segment_run.sh
+SEGMENT_PY: /home/prj/zhengs/caduceuscore/CaduceusCore/sim/rtl_soc_segment_run.py
+HEAD:       9d80c9650c394de8c7fbe2d78a85b8f1f7e2de58 (soc-rtl-review-remediation)
+TMP sandbox: /tmp/test_evidence_provenance.4V2fNX
+RUNNER SHA256:     14fdfc51f00e5251b978fae8b36da1d3a4889b9428c6f6fe761a9a99810dea5b
+SEGMENT_PY SHA256: 6f594bd451daf9a15bf0050ff5d8413f20a01a5b8354d51be3f53cb3f9631bb5
+PASS: environment sanity: all prerequisites present (bash/sed/grep/sha256sum/git/python3+numpy)
+
+--- assertion (a): stale-evidence reuse (old PASS must not satisfy new run) ---
+extraction anchor (runner line with the 124 decision): 68
+[verbatim extracted timeout decision block from run_ibex_segment_run.sh:68..EOF]
+if [ "$RUN_RC" -eq 124 ]; then
+    echo "[TIMEOUT] ${SEG_TIMEOUT_S}s wall-time cap reached — completed checkpoints retained, remaining marked PENDING"
+    EVIDENCE="$REPO_ROOT/build/evidence/task-14-soc-rtl-verification-signoff.txt"
+    if [ -f "$EVIDENCE" ]; then
+        {
+            echo "timebox_status=TIMEOUT_24H"
+            echo "timebox_note=run killed by wall-time cap; checkpoints after the last completed one are marked PENDING"
+        } >> "$EVIDENCE"
+        echo "[TIMEOUT] evidence retained: $EVIDENCE"
+    fi
+    exit 0
+fi
+exit "$RUN_RC"
+[end extracted block]
+[pre-placed OLD evidence at /tmp/test_evidence_provenance.4V2fNX/build/evidence/task-14-soc-rtl-verification-signoff.txt (sha256=f4a5f4080d3cccfec8f43d98c9cabbd692d3de455109c1ac9f4af5850b56149a) — contains literal 'status=PASS' lines from an old run]
+[real output of the extracted block with RUN_RC=124 (misleading-success-output evidence):]
+    | [TIMEOUT] 86400s wall-time cap reached — completed checkpoints retained, remaining marked PENDING
+    | [TIMEOUT] evidence retained: /tmp/test_evidence_provenance.4V2fNX/build/evidence/task-14-soc-rtl-verification-signoff.txt
+[extracted block exit code with RUN_RC=124: 0 (0 == 'timed-out run reports SUCCESS'; exit-code mapping is asserted by test_timeout_behavior.sh todo 1)]
+old evidence sha256 before: f4a5f4080d3cccfec8f43d98c9cabbd692d3de455109c1ac9f4af5850b56149a
+old evidence sha256 after : a72ce4468e2e86a835e238910c2a44f57da9d54cadae4ee48753b44e90656450
+FAIL [RED]: a1: pre-existing old evidence was APPENDED TO by the new run (sha256 changed) — the runner reuses/extends stale evidence instead of writing fresh evidence keyed to this run
+fresh evidence files created (excl. pre-existing old file): 0
+FAIL [RED]: a2: no fresh evidence file written — the new run's record lives only inside the PRE-EXISTING old evidence file (stale PASS satisfies the new run)
+FAIL [RED]: a2b: evidence path is a FIXED literal (EVIDENCE="$REPO_ROOT/build/evidence/task-14-soc-rtl-verification-signoff.txt") shared by every run — a new run cannot be told apart from an old one by its evidence path
+[second simulated timeout executed — checking run distinguishability]
+evidence files after 2 runs: 1; timebox_status lines in old file: 2
+[current evidence tail after 2 runs:]
+    |   Timestamp end: 2026-01-01T12:00:00Z
+    | timebox_status=TIMEOUT_24H
+    | timebox_note=run killed by wall-time cap; checkpoints after the last completed one are marked PENDING
+    | timebox_status=TIMEOUT_24H
+    | timebox_note=run killed by wall-time cap; checkpoints after the last completed one are marked PENDING
+FAIL [RED]: a3: two consecutive timeout runs produced 2 IDENTICAL timebox entries in the SAME file — a prior run's PENDING/TIMEOUT entry is indistinguishable from this run's (no per-run binding)
+
+--- assertion (b): provenance fields ---
+code path probed for provenance emission: /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/run_ibex_segment_run.sh /home/prj/zhengs/caduceuscore/CaduceusCore/sim/rtl_soc_segment_run.py
+FAIL [RED]: b: code path emits NO git dirty state (status --porcelain) — evidence is not bound to git dirty state (status --porcelain) (pattern 'porcelain|dirty' absent from run_ibex_segment_run.sh / rtl_soc_segment_run.py)
+FAIL [RED]: b: code path emits NO run ID — evidence is not bound to run ID (pattern 'run[-_]?id' absent from run_ibex_segment_run.sh / rtl_soc_segment_run.py)
+FAIL [RED]: b: code path emits NO simv hash (need both 'simv' and 'sha256') — evidence is not bound to the simv binary
+FAIL [RED]: b: code path emits NO RTL flist hash — evidence is not bound to RTL flist hash (pattern 'flist.*sha256|sha256.*flist' absent from run_ibex_segment_run.sh / rtl_soc_segment_run.py)
+FAIL [RED]: b: code path emits NO python driver hash — evidence is not bound to python driver hash (pattern 'driver.*sha256|sha256.*driver' absent from run_ibex_segment_run.sh / rtl_soc_segment_run.py)
+FAIL [RED]: b: code path emits NO firmware ELF/HEX hash — evidence is not bound to firmware ELF/HEX hash (pattern 'firmware.*sha256|sha256.*firmware' absent from run_ibex_segment_run.sh / rtl_soc_segment_run.py)
+FAIL [RED]: b: code path emits NO golden/checkpoint hash — evidence is not bound to golden/checkpoint hash (pattern '(golden|checkpoint).*sha256|sha256.*(golden|checkpoint)' absent from run_ibex_segment_run.sh / rtl_soc_segment_run.py)
+FAIL [RED]: b: code path emits NO tool versions (vcs -ID etc.) — evidence is not bound to tool versions (vcs -ID etc.) (pattern 'vcs -ID|-ID|tool[_ ]version' absent from run_ibex_segment_run.sh / rtl_soc_segment_run.py)
+PASS: b: code path emits timestamp (pattern: Timestamp start|timestamp)
+
+evidence sample: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/task-14-soc-rtl-verification-signoff.txt (exists)
+sample Commit line : c506f8ec4de6740f5371c23b840e22d39cf22b2c
+current git HEAD   : 9d80c9650c394de8c7fbe2d78a85b8f1f7e2de58
+FAIL [RED]: b0: evidence sample commit (c506f8ec4de6740f5371c23b840e22d39cf22b2c) does NOT match current git HEAD (9d80c9650c394de8c7fbe2d78a85b8f1f7e2de58) — existing evidence is not bound to the checked-out tree
+FAIL [RED]: b: evidence sample is MISSING required provenance keys: run_id simv_sha256 flist_sha256 driver_sha256 firmware_sha256 golden_sha256 checkpoint_sha256 tool_versions dirty
+[sample head for reference:]
+    | Task 14 - SoC RTL Verification Signoff: Ibex 36-layer 8-checkpoint segment run
+    | ======================================================================
+    | Timestamp start : 2026-08-27T18:52:32Z
+    | Commit          : c506f8ec4de6740f5371c23b840e22d39cf22b2c
+    | Command         : bash sim/regression/run_ibex_segment_run.sh
+    | Driver host     : sz0001 (Ibex SoC VCS + firmware)
+    | Model           : /home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf
+    | Dims            : {"hidden_size": 2048, "intermediate_size": 11008, "q_dim": 2048, "kv_dim": 256, "num_heads": 16, "num_kv_heads": 2, "heads": 16, "kv_heads": 2, "head_dim": 128, "num_hidden_layers": 36, "rope_theta": 1000000.0, "rms_eps": 1e-06}
+
+--- assertion (c): pickle safety + checkpoint resume validation ---
+[real NPZ load sites in rtl_soc_segment_run.py:]
+    | 108:NPZ_PATH = _REPO / "build" / "evidence" / "task-14-soc-rtl-verification-checkpoints.npz"
+    | 109:SPIKE_NPZ = _REPO / "build" / "evidence" / "ph10-36layer-spike.npz"
+    | 346:    with np.load(NPZ_PATH, allow_pickle=True) as d:
+    | 412:    with np.load(SPIKE_NPZ, allow_pickle=True) as d:
+FAIL [RED]: c1: rtl_soc_segment_run.py contains 2 occurrence(s) of allow_pickle=True — untrusted local NPZ files can execute arbitrary code on load
+[behavioral proof — pickle payload execution under the real load call:]
+    | allow_pickle=True load+access -> canary file created: True (arbitrary code executed)
+    | allow_pickle=False rejects object arrays -> Object arrays cannot be loaded when allow_pickle=False (safe alternative exists)
+
+[verbatim _resume_from_npz body from rtl_soc_segment_run.py:]
+    | def _resume_from_npz(spike_layers):
+    |     """Load completed-segment state from NPZ_PATH (todo 14 resume).
+    | 
+    |     The checkpoint npz is saved incrementally after every checkpoint, so a
+    |     timebox-killed run leaves the state of every layer it finished.  This
+    |     helper reconstructs the pre-kill bookkeeping:
+    | 
+    |       completed_checkpoints — CHECKPOINTS entries present in the npz,
+    |       fp32_states / hw_states — per-layer Func Model and hardware outputs,
+    |       cross_checks — pre-layer cross-checks recomputed from the saved hw
+    |                      states (deterministic; identical to the values the
+    |                      prior run reported),
+    |       segment_records — completed segments' descriptions, regenerated from
+    |                         SEGMENTS (the strings are fully deterministic),
+    |       ring_offset / total_consumed — prior run's command counts restored
+    |                         from the evidence file (bookkeeping only: the resumed
+    |                         VCS session reboots the firmware, so the command ring
+    |                         is re-walked from slot 0).
+    | 
+    |     Returns None when there is nothing to resume (npz missing or empty).
+    |     """
+    |     if not NPZ_PATH.exists():
+    |         return None
+    |     with np.load(NPZ_PATH, allow_pickle=True) as d:
+    |         files = set(d.files)
+    |         fp32_states = {}
+    |         hw_states = {}
+    |         for L in EXECUTED_LAYERS:
+    |             k, hk = f"layer_{L}_output", f"hw_layer_{L}_output"
+    |             if k in files and hk in files:
+    |                 fp32_states[L] = d[k].astype(np.float32)
+    |                 hw_states[L] = d[hk].astype(np.int32)
+    |     if not fp32_states:
+    |         return None
+    |     completed_checkpoints = [L for L in CHECKPOINTS if L in fp32_states]
+    |     cross_checks = []
+    |     for (pre, _chk, _seg_in) in SEGMENTS:
+    |         if pre is None or pre not in fp32_states or pre not in spike_layers:
+    |             continue
+    |         hw_f32 = hw_states[pre].astype(np.float32) / P10_RESID_SCALE
+    |         spike_hw = spike_layers[pre]["hw"].astype(np.float32) / P10_RESID_SCALE
+    |         cc = _cos(hw_f32, spike_hw)
+    |         thr = _chain_threshold(pre)
+    |         cross_checks.append({
+    |             "layer": pre, "cos_sim": float(cc), "threshold": thr,
+    |             "status": "PASS" if cc >= thr else "FAIL", "ok": cc >= thr,
+    |         })
+    |     segment_records = []
+    |     for (pre, chk, seg_in) in SEGMENTS:
+    |         if chk not in fp32_states:
+    |             break
+    |         if pre is None:
+    |             segment_records.append("L0: input=embedding (prompt token), checkpoint=L0")
+    |         else:
+    |             segment_records.append(
+    |                 f"L{pre}->L{chk}: segment input=L{seg_in} from spike npz, "
+    |                 f"chain_restart_state_source=ibex_dram")
+    |     ring_offset = 0
+    |     total_consumed = 0
+    |     if EVIDENCE_PATH.exists():
+    |         try:
+    |             for line in EVIDENCE_PATH.read_text(encoding="utf-8").splitlines():
+    |                 if line.startswith("commands_dispatched="):
+    |                     total_consumed = int(line.split("=", 1)[1])
+    |                     ring_offset = total_consumed % RING_SIZE
+    |         except Exception:
+    |             pass
+    |     return (completed_checkpoints, fp32_states, hw_states, cross_checks,
+    |             segment_records, ring_offset, total_consumed)
+    | 
+    | 
+first np.load line in body: 24; first try: line: 61
+FAIL [RED]: c2: _resume_from_npz does NOT guard the np.load call (first try: at line 61, first np.load at line 24) — a corrupted checkpoint NPZ crashes the run with an unhandled BadZipFile traceback instead of being rejected gracefully
+[behavioral proof — corrupted NPZ under the real load call:]
+    | corrupt npz raises unhandled: BadZipFile - File is not a zip file
+
+FAIL [RED]: c3: _resume_from_npz never reads the checkpoint's metadata commit — a checkpoint npz generated at a DIFFERENT commit (or planted by hand) is restored blindly with no provenance check
+[behavioral proof — wrong-commit checkpoint accepted by the current load path:]
+    | wrong-commit checkpoint loaded without rejection; files = ['layer_0_output', 'hw_layer_0_output', 'metadata']
+
+--- informational: full-runner smoke (no assertion) ---
+[INFO] SEG_TIMEOUT_S=1 bash run_ibex_segment_run.sh -> exit 1
+[INFO] (on non-EDA hosts run_env.sh aborts the script at its EDA gate before the evidence region, hence the verbatim-extraction assertions above)
+[INFO] smoke output: ERROR: /NAS/Tools/EDA/env/modules.bash not found — is this the EDA server?
+
+--- negative-scenario coverage (plan acceptance: old evidence / PENDING evidence / corrupted NPZ / wrong commit) ---
+  old evidence   : FULLY covered locally — verbatim-extracted append path + pre-placed stale PASS evidence (assertion a)
+  PENDING evid.  : covered locally at append-logic level (a3 double-run distinguishability); full runner-level coverage needs the EDA simv
+  corrupted NPZ  : covered locally at np.load API level + static no-guard check (c2); script-level handling needs VCS+cocotb
+  wrong commit   : covered locally via static resume-path audit + wrong-commit npz behavioral proof (c3); end-to-end resume needs VCS+cocotb
+
+=== summary ===
+assertions passed: 2
+assertions failed: 17
+TEST RESULT: RED — 17 assertion(s) failed (expected before todo 9/11 fixes; must turn GREEN after provenance + safe-resume land)
+
+TASK-6 RESULT: RED (expected)

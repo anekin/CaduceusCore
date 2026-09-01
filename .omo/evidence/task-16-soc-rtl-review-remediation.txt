@@ -1,0 +1,188 @@
+================================================================================
+TASK 16 — Spike L0 Q_proj FAIL disposition (soc-rtl-review-remediation)
+================================================================================
+Timestamp (UTC): 2026-08-31T08:55:00Z
+Branch: soc-rtl-review-remediation
+HEAD at run time: e73e28e (chore(omo): mark todos 14 and 15 complete)
+Working tree: sim/spike_host.py modified by THIS task (fix, uncommitted — no
+              git commit made per todo-16 instructions).
+Binary/model: spike_src/build/spike (306MB ELF, built 2026-07-27);
+              firmware/build/npu_firmware_spike.elf (rebuilt 2026-08-31T13:08,
+              includes cee6697 address-allowlist firmware);
+              ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf.
+Budget: well under the 1-working-day timebox (~2.5h wall).
+
+--------------------------------------------------------------------------------
+STEP 0 — CONTEXT (plan todo 16 + prior evidence)
+--------------------------------------------------------------------------------
+Plan todo 16 (Wave 3): investigate F3 Spike L0 Q_proj FAIL (max_diff=7.64e+02,
+build/evidence/task-F3-spike-smoke.log:5-13); fix if fast + confined to spike
+host/bridge files, else file formal bug entry + vplan E2E-03 FAIL note.
+Task-14 evidence (.omo/evidence/task-14-soc-rtl-review-remediation.txt:166-175)
+reproduced the same FAIL on this branch and left disposition to todo 16.
+
+--------------------------------------------------------------------------------
+STEP 1 — REPRODUCTION (before any change)
+--------------------------------------------------------------------------------
+Command (todo-14's exact command):
+  env PYTHONPATH=sim python3 sim/spike_host.py --mode mmul_smoke \
+      --model ~/models/qwen2.5-1.5b-instruct-q4_k_m.gguf --layers 1 --ops Q_proj
+Output (.omo/evidence/_tmp_task16_repro.log):
+  [NPU-PY] Loaded 339 tensors, 1777.1M elements in 62.5s
+    [FAIL] L0 Q_proj       (1536x1536)
+      max_diff=7.64e+02
+  spike.exit_code=1, spike.tolerance_result=FAIL, elapsed_s=66.651
+  Spike Host Summary: 0 PASS, 1 FAIL
+→ REPRODUCED EXACTLY (7.64e+02, identical to F3 evidence and task-14).
+
+--------------------------------------------------------------------------------
+HYPOTHESES INVESTIGATED (each with outcome)
+--------------------------------------------------------------------------------
+Instrumentation method: monkeypatched MMIOBridge._run_mxu_compute / .handle to
+count MXU CMD STARTS and per-tile executions; allclose-hook for exact diff.
+Logs: .omo/evidence/_tmp_task16_debug.log / _tmp_task16_debug3.log /
+_tmp_task16_debug4.log.
+
+H1 — Golden (Func Model) vs firmware MMUL semantics mismatch: PARTIALLY
+     CONFIRMED (secondary, comparison-level). run_one_op's golden used a
+     full-K block-order reference (matmul_int4_per_block over K=1536 with 12
+     fp32 block accumulations), while the firmware/bridge executes one
+     64-row K-tile per MXU CMD, scaling each tile by its 128-group scale and
+     fp32-accumulating across 24 K-tiles (cf6736b semantics). This is the
+     ~1e-4-rel summation-order noise that made task-1a (3B) FAIL at
+     9.16e-05 under rtol=1e-5 — it is NOT the 7.64e+02 cause. Fixed by
+     computing the reference in firmware tile order (see FIX below).
+
+H2 — fp32 accumulation ordering / scale application in bridge: RULED OUT.
+     Bridge correctly reads per-tile scales from SCALE_ADDR (firmware
+     mxu_start() writes SCALE_ADDR per K-tile with double-buffered scale
+     SRAM addresses — observed 2 distinct scale addrs across 576 tiles),
+     TILE_SCALE_BYTES=256 == bridge's (K/128 rounded up)*N*4=256, and the
+     cross-tile fp32 accumulate (CTRL[2]=1 for k_block>0) is the documented
+     hardware semantic. No defect.
+
+H3 — Descriptor/address mis-setup for Q_proj: CONFIRMED ROOT CAUSE (primary).
+     TWO defects in sim/spike_host.py run_one_op:
+     (a) out_addr = 0x81000000 (16 MB into DRAM) is OUTSIDE the firmware's
+         8 MB DRAM allowlist window (firmware/npu_firmware.c:16,471-490
+         dram_range_ok; BUG-RTL-SOC-002 / WVR-SOC-RTL-002). The firmware
+         REJECTED the MMUL descriptor (status=1, no MXU CMD ever issued):
+         instrumentation showed cmd_starts=0, wrp_cmds=0, tiles_run=0, while
+         the doorbell still completed (done=True). The host then read an
+         all-zero output → max_diff = max|golden| = 7.6382e+02. The reported
+         7.64e+02 was never a numerical mismatch — it was a phantom diff
+         against zeroed memory.
+     (b) The activation was written row-major (input_size = act.nbytes =
+         1536), but the firmware walks activations at k_block*4096 stride
+         expecting the mxu_soc_wrapper broadcast tile-major layout (ISSUE-13B
+         cf6736b: 64-byte word c of each 4096-byte K-tile holds column k).
+         Even with (a) fixed, the compute would have read corrupted
+         activations. Fixed by packing with _pack_act_tile_major_contig().
+
+H4 — Known quantization-path tolerance (qwen l0 hidden compare): RULED OUT
+     as the 7.64e+02 cause (that family is ~1e-4 rel noise). It DID explain
+     the historical near-miss FAILs (task-1a: 9.16e-05 with rtol=1e-5), now
+     resolved by the H1 reference alignment instead of any tolerance change.
+
+BONUS FINDING — run_one_op had NO `return ok`: it printed "[PASS]" then fell
+off the end returning None, so the mmul_smoke summary counted every op as
+FAIL regardless of the comparison outcome ("0 PASS, 1 FAIL" even when the
+op-level line said PASS — observed mid-fix). Fixed with `return ok`.
+
+--------------------------------------------------------------------------------
+FIX (confined to sim/spike_host.py, run_one_op only — NO RTL touched)
+--------------------------------------------------------------------------------
+1. out_addr computed to stay inside the 8 MB window:
+     out_addr = (wgt_addr + len(combined_weight_blob) + 0xFFF) & ~0xFFF
+   (0x80345000 for Q_proj; well inside [0x80000000, 0x80800000)).
+2. Activation packed to broadcast tile-major layout and descriptor
+   input_size updated:
+     act_packed = _pack_act_tile_major_contig(act, M, K)
+     ... input_size=act_packed.nbytes (24*4096 = 98304 for K=1536).
+3. Golden reference recomputed in firmware execution order (per N-tile,
+   per 64-row K-tile: int32 partial, group scale, fp32 accumulate) from the
+   same reordered tiled blobs the firmware DMAs — bit-comparable with the
+   bridge. No tolerance loosened (rtol=1e-5 unchanged).
+4. `return ok` restored at end of run_one_op.
+Comment citations follow project convention (ISSUE-13B cf6736b, ISSUE-16A,
+BUG-RTL-SOC-002 / WVR-SOC-RTL-002).
+
+--------------------------------------------------------------------------------
+STEP 1b — RE-RUN AFTER FIX (GREEN evidence)
+--------------------------------------------------------------------------------
+(a) Exact todo-14 reproduction command (.omo/evidence/_tmp_task16_fix_run2.log):
+      [PASS] L0 Q_proj       (1536x1536)
+      spike.exit_code=0, spike.tolerance_result=PASS, elapsed_s=60.231
+      Spike Host Summary: 1 PASS, 0 FAIL
+(b) 1-layer Q/K/V (.omo/evidence/_tmp_task16_fix_3op.log):
+      Q_proj/K_proj/V_proj all PASS — 3 PASS, 0 FAIL, exit_code=0
+(c) README canonical 2-layer regression (.omo/evidence/_tmp_task16_canonical.log):
+      L0+L1 Q/K/V proj all PASS — 6 PASS, 0 FAIL, exit_code=0, 340.6s
+(d) Instrumentation (.omo/evidence/_tmp_task16_debug3.log): 576 tiles executed
+      (24 K-tiles × 24 N-tiles), first tile accumulate=False / last
+      accumulate=True, 2 distinct scale SRAM addrs (double-buffered sbuf[0/1])
+      — the MMUL now genuinely runs end-to-end through Spike.
+(e) Bit-exactness (.omo/evidence/_tmp_task16_debug4.log):
+      max|out_fw-golden|=0.000000e+00, mean|diff|=0.000000e+00,
+      n_elem_diff_gt0=0/1536 — firmware output is bit-identical to the
+      firmware-order reference (golden max|.|=7.6382e+02, nonzero, so a
+      zero-output "success" is impossible).
+
+--------------------------------------------------------------------------------
+REGRESSION CHECK (local pytest, spike-scope, run per-file with hard timeout —
+the combined suite has the known order-dependent deadlock documented in
+task-14 evidence)
+--------------------------------------------------------------------------------
+test_spike_host_overlap.py            7 passed  (exercises run_one_op overlap)
+test_spike_mmio_server.py            18 passed
+test_spike_ibex_ring_alignment.py     3 passed
+test_spike_forward_tolerance.py       3 skipped (needs model/npz assets)
+test_spike_toolchain_manifest.py      1 FAILED — PRE-EXISTING, unrelated:
+    "spike commit mismatch: stored=1412bbec3176 current=e73e28e1ada9"
+    (spike_src checkout moved vs the recorded manifest; no relation to
+    spike_host.py).
+python3 -m py_compile sim/spike_host.py → OK.
+
+--------------------------------------------------------------------------------
+DISPOSITION
+--------------------------------------------------------------------------------
+FIXED. Root cause: host-side address/layout contract drift in
+sim/spike_host.py run_one_op (out_addr beyond the firmware 8MB allowlist →
+silent firmware rejection with doorbell completion = misleading all-zero
+output; row-major activation vs broadcast tile-major contract; missing
+`return ok` in the summary accounting) plus reference-order alignment
+(H1/H2 semantics). All fixes confined to sim/spike_host.py. No RTL changes,
+no bug entry needed, no vplan edit needed for the FIXED branch (plan todo 17
+will unify vplan/checklist status). NOTE: the "E2E-03" row label referenced
+in plan todo 16 is not present in the current
+.omo/plans/soc-rtl-verification-vplan.md (Spike rows are E2E-06 / FW-08);
+recorded here for todo-17 to reconcile.
+
+--------------------------------------------------------------------------------
+ADVERSARIAL NOTES
+--------------------------------------------------------------------------------
+- misleading_success_output: the ORIGINAL FAIL was itself a
+  misleading-success trap — doorbell completed (done=True) while the MMUL was
+  silently rejected (status=1) and the host compared golden vs zeros. The new
+  PASS is therefore NOT taken at face value: it was independently confirmed by
+  (d) 576 real tile computations observed via bridge instrumentation and (e)
+  bit-exact nonzero match (0/1536 elements differ). All evidence lines are
+  from real Spike runs this session.
+- No DRY-RUN: real Spike binary + real firmware ELF executed on every run
+  (load 339 tensors, 50-63s per op).
+- No "baseline" exemption, no tolerance loosening (rtol=1e-5 unchanged), no
+  skipped case, no RTL/firmware modification.
+- Residual known limitation (pre-existing, out of todo-16 scope): partial
+  N-tile (<64 cols) weight-row stride in the bridge's _run_mxu_compute reads
+  (K*tile_width+1)//2 bytes of a 2048-byte padded tile — does not affect any
+  mmul_smoke op (all dims divisible by 64); flagged for a follow-up if a
+  non-divisible target is ever added.
+- Environment note: pytest spike files run per-file because the full combined
+  sim/tests suite deadlocks locally (documented in task-14 evidence; local
+  python lacks cocotb/pytest-timeout). One pre-existing unrelated FAIL
+  (toolchain manifest spike_src commit drift) recorded honestly above.
+- No git commit made (todo-16 instruction). sim/spike_host.py carries the
+  uncommitted fix; pre-existing dirty files in the worktree were present
+  before this task started and were not touched.
+
+TASK-16 RESULT: GREEN (expected)

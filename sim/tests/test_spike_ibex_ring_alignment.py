@@ -19,9 +19,14 @@ VADD) is scheduled through both paths:
 Guards:
 
 - happy: both paths write byte-identical ring entries at identical offsets
-  and end at NPU_HEAD = HOST_HEAD = 208 with no wrap; the firmware
-  COMPLETION_STATUS array is written exactly once per dispatch index 0..207
-  with success status.
+  and end at NPU_HEAD = HOST_HEAD = 208 with no wrap.  Completion status is
+  asserted through the firmware's 16-slot MMIO mirror
+  (``COMPLETION_STATUS``), which is CLAMPED to ``min(cmd_id, 15)`` since the
+  todo-8 completion-bounds fix: mirror indices 0..15 reflect the clamped
+  writes (all success, status 0) and indices 16..207 are never written
+  (missing keys).  The unclamped DRAM completion ring is not observable on
+  the spike path (the spike MMIO plugin does not trap DRAM), so its
+  cmd_id/status content is pinned by the FM real-firmware test instead.
 - failure injection: NPUFirmware constructed with the legacy 16-entry ring
   wraps every 16 commands (13 wraps, final head 0) while the Spike firmware
   path ends at head 208 — the head sequences diverge, proving the guard bites.
@@ -111,8 +116,8 @@ def _seed_buffers(model: FuncModel):
 def spike_trace() -> dict:
     """Run the 208-command chain through the Spike path once (module scope).
 
-    Returns the post-drain doorbell state: NPU_HEAD / HOST_HEAD / HOST_TAIL,
-    the per-index COMPLETION_STATUS array, and the scheduled ring-entry bytes.
+    Returns the post-drain doorbell state (NPU_HEAD / HOST_HEAD / HOST_TAIL),
+    the CLAMPED 16-slot MMIO mirror reads, and the scheduled ring-entry bytes.
     """
     _require_spike()
     model = FuncModel(sram_kb=4096)
@@ -138,7 +143,17 @@ def spike_trace() -> dict:
         "npu_head": st.get(DOORBELL.BASE + DOORBELL.NPU_HEAD, 0),
         "host_head": st.get(DOORBELL.BASE + DOORBELL.HOST_HEAD, 0),
         "host_tail": st.get(DOORBELL.BASE + DOORBELL.HOST_TAIL, 0),
-        "completion": [
+        # Clamped MMIO mirror: the firmware writes
+        # COMPLETION_STATUS[min(cmd_id, 15)] only — indices 0..15 hold the
+        # last clamped write (success), and indices 16..207 are absent.
+        # The DRAM completion ring (COMPLETION_RING_ADDR + cmd_id*32) is
+        # NOT readable on the spike path: the spike MMIO plugin traps only
+        # [0x20000000, 0x40011FFF] (npu_mmio_plugin.cc NPU_END), so firmware
+        # DRAM writes stay in spike's native memory and never reach
+        # model.dram; its cmd_id/status content is pinned instead by the
+        # FM real-firmware test (test_firmware_addr_allowlist (c) asserts
+        # ring entry 1019 == (1019, 1)).
+        "mirror": [
             st.get(DOORBELL.BASE + DOORBELL.COMPLETION_STATUS + i * 4)
             for i in range(_NUM_CMDS)
         ],
@@ -260,26 +275,37 @@ def test_failure_injection_ring_size_16_wraps_against_spike_1024(spike_trace):
 
 def test_completion_status_and_host_head_mirror_alignment(
         spike_trace, npufw_1024_trace):
-    """COMPLETION_STATUS indexing + HOST_HEAD mirror on both aligned paths.
+    """Completion semantics + HOST_HEAD mirror on both aligned paths.
 
-    The real firmware writes COMPLETION_STATUS[head] per dispatch, so the
-    written index set IS the dispatch-time head sequence: indices 0..207 each
-    written exactly once with success proves the firmware visited heads
-    0..207 linearly (no wrap, skip, or reorder). NPUFirmware's per-command
-    result list is indexed by the same dispatch order — result k corresponds
-    to COMPLETION_STATUS[k] — and HOST_HEAD mirrors NPU_HEAD on both paths.
+    The real firmware writes the 16-slot MMIO mirror
+    (COMPLETION_STATUS) with the CLAMPED index ``min(cmd_id, 15)`` (todo-8
+    completion-bounds fix): indices 0..15 reflect the clamped writes — every
+    dispatched command succeeds, so all clamped slots hold 0 — and indices
+    16..207 are never written (missing keys).  The unclamped DRAM
+    completion ring (COMPLETION_RING_ADDR + cmd_id*32, full 1024 records)
+    is not observable on the spike path (the MMIO plugin does not trap
+    DRAM); its cmd_id/status fields are pinned by the FM real-firmware
+    test instead.  NPUFirmware's per-command result list is indexed by the
+    same dispatch order — result k corresponds to the k-th ring entry —
+    and HOST_HEAD mirrors NPU_HEAD on both paths.
     """
     st, nf = spike_trace, npufw_1024_trace
 
-    # Firmware completion array: 208 entries, all success.
-    assert len(st["completion"]) == _NUM_CMDS
-    assert all(s == 0 for s in st["completion"]), (
-        "non-zero completion statuses: "
-        f"{[(i, s) for i, s in enumerate(st['completion']) if s != 0][:8]}"
+    # Clamped MMIO mirror: indices 0..15 hold the clamped success writes;
+    # indices 16..207 are never written by the firmware.
+    assert len(st["mirror"]) == _NUM_CMDS
+    assert all(s == 0 for s in st["mirror"][:16]), (
+        "clamped mirror indices 0..15 must hold success status: "
+        f"{[(i, s) for i, s in enumerate(st['mirror'][:16]) if s != 0][:8]}"
+    )
+    assert all(s is None for s in st["mirror"][16:]), (
+        "clamped mirror indices 16..207 must be absent (firmware clamps "
+        "writes to min(cmd_id, 15)): "
+        f"{[(i, s) for i, s in enumerate(st['mirror'][16:], 16) if s is not None][:8]}"
     )
 
     # NPUFirmware per-command completion aligns index-wise with the firmware
-    # completion array: result k ↔ COMPLETION_STATUS[k].
+    # completion array: result k ↔ the k-th ring entry.
     assert len(nf["results"]) == _NUM_CMDS
     assert all(r["status"] == "done" for r in nf["results"])
 
