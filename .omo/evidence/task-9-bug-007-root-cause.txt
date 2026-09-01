@@ -1,0 +1,91 @@
+task-9-bug-007-root-cause
+========================
+Cross-reference + notepad learnings + evidence summary table (todo 9 of
+.omo/plans/bug-007-root-cause.md)
+Date: 2026-09-02
+Branch: bug-007-root-cause
+
+PROVENANCE
+----------
+git HEAD (this task): b86d74f94a6635e86aabe9e70657449a96645028 ("chore(bug007): mark todo 8 complete")
+  branch bug-007-root-cause = main + plan/evidence artifacts only; no firmware/vector/RTL
+  changes introduced by this plan (git diff main..HEAD touches only .omo plan/evidence/docs).
+Prior evidence consumed (all read fresh for this synthesis):
+  .omo/evidence/task-0-bug-007-root-cause.txt  (P0 baseline + provenance)
+  .omo/evidence/task-1-bug-007-root-cause.txt  (MODE-ORIG + dual-mode HEAD re-run)
+  .omo/evidence/task-2-bug-007-root-cause.txt  (H0 differential + instrument audit)
+  .omo/evidence/task-6-bug-007-root-cause.txt  (H4 blk0 tiny-K + N=128 multi-tile)
+  .omo/evidence/task-7-bug-007-root-cause.txt  (bounded flip-commit archaeology)
+  .omo/evidence/task-8-bug-007-root-cause.txt  (attribution + disposition)
+Docs touched: docs/bugs/bugs-soc-rtl.md BUG-012 entry (cross-ref only; Status unchanged).
+
+═══════════════════════════════════════════════════════════════════════════
+1. SUMMARY TABLE — todos 0-8 (executed + skipped) + final verdicts
+═══════════════════════════════════════════════════════════════════════════
+Columns: Todo # | Title | Verdict/Status | Evidence path | Residual/caveat carried to todo 8
+
+| # | Title | Verdict/Status | Evidence path | Residual/caveat carried to todo 8 |
+|---|-------|-----------------|---------------|------------------------------------|
+| 0 | P0 workspace + artifact freshness baseline | PASS — branch/hex/vectors/provenance intact; GENERATOR-DRIFT=no | .omo/evidence/task-0-bug-007-root-cause.txt | 7 parallel-session dirty files untouched/unstaged |
+| 1 | W1.3 mode archaeology + dual-mode HEAD re-run | PASS — MODE-ORIG=per-op-preload; PRIMARY-VERDICT=REPRO-CLEAR (MODE-A 51/51, MODE-B 26/26 cycles>0); RECONSTRUCTION-UNCERTAINTY=medium | .omo/evidence/task-1-bug-007-root-cause.txt | cycles=0 is hardcoded MMUL artifact; 07-07 testcase never committed |
+| 2 | H0 differential FuncModel-vs-RTL + instrument audit | PASS — H0-INSTRUMENT=fm_adapter-python; H0-MATRIX=FM-PASS x REPRO-CLEAR; route=task-7 | .omo/evidence/task-2-bug-007-root-cause.txt | Residuals 1-8 (SCALE_ADDR live hazard; SFU smoke-mode gap; GAP-1..4) |
+| 3 | H1 ring/descriptor integrity + firmware-residency | SKIPPED-INAPPLICABLE — H1 is REPRO-FAIL-conditional; firmware never in dispatch loop (citation task-1 MODE-ORIG, 0 ring hits) | cite .omo/evidence/task-1-bug-007-root-cause.txt | H1 not executed; no FAIL window exists to probe |
+| 4 | H2 address-table audit + generator drift | SKIPPED-INAPPLICABLE — same REPRO-FAIL-conditional routing; drift ruled out (citation task-0 GENERATOR-DRIFT=no + task-1 §2) | cite .omo/evidence/task-{0,1}-bug-007-root-cause.txt | H2 not executed; no FAIL scenario to audit against |
+| 5 | H3 START/status-lifecycle waveform | SKIPPED-INAPPLICABLE — needs a REPRO-FAIL dispatch window; none exists at HEAD (citation task-1 PRIMARY-VERDICT) | cite .omo/evidence/task-1-bug-007-root-cause.txt | H3 not executed; stale-DONE lifecycle stays in residual #2 |
+| 6 | H4 blk0 tiny-K + N=128 multi-tile coverage | PASS — H4-N128-BLK0-SINGLE=PASS cycles=31291 cos=1.0 fp32_bit_exact; H4-N128-CHAIN=unsupported-documented | .omo/evidence/task-6-bug-007-root-cause.txt | _clip_dim is test-builder limit, not fw/RTL; BUG-012 cross-ref seed (op05 K-tiling) |
+| 7 | Bounded flip-commit archaeology | PASS — 3 rerun points (0973d76f/a8af3515/ef090b13) all CLEAR; FLIP=reconstruction-failed | .omo/evidence/task-7-bug-007-root-cause.txt | 07-07 testcase uncommitted; W1.2 golden 07-08 provenance; BOOTROM_HEX workaround |
+| 8 | Attribution + BUG-007 disposition + Blocker-6 | PASS — ATTRIBUTION=testcase/environment reconstruction failure; path (b); Status=disposition-pending-user; USER-ACCEPTANCE-REQUIRED=yes | .omo/evidence/task-8-bug-007-root-cause.txt | 11 residuals (excluded/unexcluded/live-hazard); user must accept disposition |
+
+FINAL VERDICTS (todo 9 view)
+----------------------------
+BUG-007-STATUS: disposition-pending-user (unchanged from todo 8)
+BUG-012-STATUS: Open (unchanged; cross-ref note only, no shared fix claimed)
+ATTRIBUTION (from task-8): testcase/environment reconstruction failure — no committed
+  artifact reproduces the reported W1.3 45-PASS/6-FAIL signature.
+
+═══════════════════════════════════════════════════════════════════════════
+2. CROSS-REFERENCE + LEARNINGS DELIVERABLES
+═══════════════════════════════════════════════════════════════════════════
+BUG-012-CROSS-REF: docs/bugs/bugs-soc-rtl.md BUG-RTL-SOC-012 entry (Verification section,
+  appended 2026-09-02, after the task-14 Evidence list). Notes todo 6 H4-N128-BLK0-SINGLE
+  proves the firmware multi-N-tile loop works for N=128 (op07 attn_weight M=32/K=2/N=128
+  un-clipped, cycles=31291, cos=1.0, fp32_bit_exact=True), while BUG-RTL-SOC-012 op05
+  attn_score has N=2 with tiles=2 = K-tiling (different multi-tile axis). No shared fix
+  claimed; BUG-012 Status remains Open. BUG-012 Status/Root Cause/Fix fields NOT modified
+  (verified by git diff scope).
+
+LEARNINGS-FILE: .omo/notepads/bug-007-root-cause/learnings.md
+  (81 lines, 5 dated sections: mode archaeology under deleted evidence; differential /
+  证伪判据 design; reconstruction uncertainty with uncommitted testcase; "cycles=0"
+  measurement artifact trap; MXU SCALE_ADDR cross-flow hazard. Verified non-empty.)
+
+RESIDUAL (carry-forward view, consolidated from task-2 §5 / task-6 / task-8):
+  - UNEXCLUDED: cocotb back-to-back write timing (#1), STATUS.DONE lifecycle (#2),
+    crossbar fairness (#4), reconstruction uncertainty (#5), multi-tile commonality with
+    BUG-012 (#10, cross-ref only), uncommitted 07-07 testcase + deleted 45/6 artifact (#11).
+  - LIVE HAZARD: MXU SCALE_ADDR cross-flow stale state (#3, FM-confirmed + RTL analogue
+    mxu_soc_wrapper.v:173-182; defensive SCALE_ADDR=0 write verified on FM).
+  - EXCLUDED as 07-07 cause: SFU smoke-mode gap (#6), ROPE DIM encoding (#7),
+    FM-bridge op5 stale semantics (#8), chain-builder _clip_dim clipping (#9).
+  - Non-fixable within this plan (product-code read-only guardrail): residual #3.
+
+ADVERSARIAL-CLASS PROBES (todo 9)
+---------------------------------
+- silent-skip: every todo 0-8 has exactly one table row; todos 3/4/5 rows carry explicit
+  SKIPPED-INAPPLICABLE + citation lines (no un-cited skip).
+- status-creep: BUG-012 Status/Root Cause/Fix untouched (git diff shows only appended
+  cross-ref paragraph in Verification); BUG-007-STATUS unchanged at disposition-pending-user.
+- fake-learning: learnings.md entries cite concrete file:line, sha, cycles/cos values, and
+  plan evidence paths — no generic platitudes.
+- dirty_worktree: only the 7 known parallel-session dirty files remain modified; none
+  staged; commit scoped to docs/bugs/bugs-soc-rtl.md + learnings.md + this evidence file.
+
+MANUAL QA (agent-executed)
+--------------------------
+  $ test -f .omo/notepads/bug-007-root-cause/learnings.md && test -s .omo/notepads/bug-007-root-cause/learnings.md
+    -> exit 0 (file exists, non-empty, 81 lines)
+  $ grep -E "BUG-012-CROSS-REF:|LEARNINGS-FILE:|RESIDUAL" .omo/evidence/task-9-bug-007-root-cause.txt
+    -> 3 hits (see section 2 above)
+  $ grep -c "BUG-RTL-SOC-007" docs/bugs/bugs-soc-rtl.md -> 9 (was 8; +1 in BUG-012 section only)
+
+RESULT: PASS

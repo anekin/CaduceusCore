@@ -854,3 +854,11 @@ Evidence:
 - `.omo/evidence/task-14-blk0-investigation.txt` (verdict + comparison table)
 - `.omo/evidence/task-14-blk0-repro.log`
 - `.omo/evidence/task-14-blk0-baseline.log`
+
+2026-09-02 cross-reference (bug-007-root-cause todo 9; BUG-012 Status/Root Cause/Fix
+untouched): H4-N128-BLK0-SINGLE (`.omo/evidence/task-6-bug-007-root-cause.txt`) proves the
+firmware multi-N-tile loop executes op07 attn_weight at N=128 (M=32/K=2/N=128 un-clipped,
+cycles=31291, cos_sim=1.000000, fp32_bit_exact=True). BUG-RTL-SOC-007 op07 is N-tiled
+(N=128 → 2 N-tiles); BUG-RTL-SOC-012 op05 attn_score has N=2 with tiles=2 = K-tiling
+(K=128 → 2 K-blocks), a different multi-tile axis. No shared fix is claimed; BUG-RTL-SOC-012
+Status remains Open.
