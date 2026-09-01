@@ -1065,12 +1065,13 @@ if COCOTB_AVAILABLE:
         (set by the Makefile/shell wrapper) and defaults to FM-SOC-001.
         Golden vectors are loaded from rtl/test_vectors/soc_e2e/<case_id>/
         when available; otherwise the built-in case definition is used.
-        RING-WRAP-STRESS, FM-SOC-009, FM-SOC-032-CORRUPT and
-        ATTN-WEIGHT-CHAIN are driven through IbexRunner instead (no golden
-        vectors — the workload is built in Python and the on-chip firmware
-        drains the ring on this same tb_soc top; FM-SOC-009 is the
+        RING-WRAP-STRESS, FM-SOC-009, FM-SOC-032-CORRUPT, ATTN-WEIGHT-CHAIN
+        and H4-N128-BLK0-SINGLE are driven through IbexRunner instead (no
+        golden vectors — the workload is built in Python and the on-chip
+        firmware drains the ring on this same tb_soc top; FM-SOC-009 is the
         boot-sequence assertion case; ATTN-WEIGHT-CHAIN is the 17-op blk.0
-        chain-level reproduction of BUG-RTL-SOC-007).
+        chain-level reproduction of BUG-RTL-SOC-007; H4-N128-BLK0-SINGLE is
+        the un-clipped M=32/K=2/N=128 blk.0 op07 coverage case).
         """
         bridge = CocotbBridge(dut)
         await bridge.start_clock()
@@ -1079,7 +1080,7 @@ if COCOTB_AVAILABLE:
         case_id = os.environ.get("FM_SOC_CASE_ID", "FM-SOC-001")
 
         if case_id in ("RING-WRAP-STRESS", "FM-SOC-009", "FM-SOC-032-CORRUPT",
-                       "ATTN-WEIGHT-CHAIN"):
+                       "ATTN-WEIGHT-CHAIN", "H4-N128-BLK0-SINGLE"):
             runner = IbexRunner(dut, bridge)
             await runner.setup()
             passed, msg = await runner.run_case(case_id)
@@ -3951,6 +3952,215 @@ class P4SpikeRunner(P2P3SpikeRunner):
             f"attn_weight cycles={attn_cycles} cos_sim={attn_cos:.6f}, "
             f"min_cos={min_cos:.6f}")
 
+    # ── H4-N128-BLK0-SINGLE (todo 6, bug-007-root-cause) ────────────────────
+    #
+    # Focused coverage for the REAL blk.0 attn_weight shape: manifest op07 =
+    # M=32/K=2/N=128 (tiles=2).  _build_block clips every MMUL dim to <=64
+    # (_clip_dim, task-15 evidence:64-68), so ATTN-WEIGHT-CHAIN ran a clipped
+    # M=32/K=2/N=64 — the true tiny-K + multi-N-tile combination was never
+    # dispatched un-clipped.  This case builds a SINGLE firmware-ring MMUL
+    # command from the manifest op07 vectors with the UN-CLIPPED dims and
+    # gates on cycles>0 + output vs the manifest golden (a dropped op leaves
+    # its zeroed output buffer untouched — the BUG-RTL-SOC-007 signature).
+
+    def _build_attn_weight_n128_single(self) -> Tuple[FuncModel, dict]:
+        manifest = self._load_blk0_manifest()
+        attn_ops = [op for op in manifest["ops"] if "attn_weight" in op["name"]]
+        if len(attn_ops) != 1:
+            raise RuntimeError(
+                f"blk0 manifest has {len(attn_ops)} attn_weight ops, expected exactly one (op07)"
+            )
+        attn_op = attn_ops[0]
+        if attn_op["idx"] != 7:
+            raise RuntimeError(
+                f"blk0 manifest attn_weight is op{attn_op['idx']:02d}, expected op07"
+            )
+        dims = attn_op["dimensions"]
+        M = int(dims["M"])
+        K = int(dims["K"])
+        N = int(dims["N"])
+        if (M, K, N) != (32, 2, 128):
+            raise RuntimeError(
+                f"blk0 manifest op07 dims M={M}/K={K}/N={N} != expected 32/2/128 "
+                f"(stale vectors?)"
+            )
+        logger.info(
+            f"[H4-N128-BLK0-SINGLE] op07 attn_weight manifest dims "
+            f"M={M} K={K} N={N} (UNCLIPPED — _build_block would clip to "
+            f"M={self._clip_dim(M)} K={self._clip_dim(K)} N={self._clip_dim(N)})"
+        )
+
+        act = np.frombuffer(
+            self._blk0_read_hex(attn_op["input_hex"], 1), dtype=np.int8
+        ).reshape(M, K)
+        wgt_packed_full = np.frombuffer(
+            self._blk0_read_hex(attn_op["weight_hex"], 1), dtype=np.uint8
+        )
+        golden_int32 = np.frombuffer(
+            self._blk0_read_hex(attn_op["golden_output_hex"], 4), dtype=np.int32
+        ).reshape(M, N)
+
+        # Anti-stale guard: the Func-Model golden must reproduce the manifest
+        # golden exactly (ones scales — numerically identical through the
+        # wrapper's ISSUE-13B FP32 dequant: fp32 = acc * 1.0).
+        scales = np.ones(((K + 127) // 128, N), dtype=np.float32)
+        fm_golden = np.asarray(
+            GoldenMXU().matmul_int4_per_block(
+                act, wgt_packed_full, scales, M, K, N, group_size=128)
+        ).astype(np.int64).reshape(M, N)
+        if not np.array_equal(fm_golden, golden_int32.astype(np.int64)):
+            raise RuntimeError(
+                "manifest op07 golden != FuncModel golden (stale vectors or scale drift)"
+            )
+
+        # Wrapper layouts: activation [k_tiles*64,64]; weights as one 2048B
+        # wrapper tile per 64-col N-tile, matching the firmware MMUL handler's
+        # (n_tile * num_blocks + k_block) * TILE_WEIGHT_BYTES DRAM layout
+        # (npu_firmware.c:622).  Scales: 256B per 64-col tile.
+        act_wrapped = self._reformat_act_for_mxu_wrapper(act, M, K)
+        wgt_values = GoldenMXU.unpack_int4(wgt_packed_full).reshape(K, N)
+        wgt_wrapped = b""
+        for n_start in range(0, N, 64):
+            tile_natural = GoldenMXU.pack_int4(
+                wgt_values[:, n_start:n_start + 64].flatten())
+            wgt_wrapped += self._reformat_wgt_for_mxu_wrapper(tile_natural, K, 64)
+        scale_bytes = scales.astype(np.float32).tobytes()
+
+        block_base = self._P4_BLOCK_BASE
+        desc_base = block_base + self._P4_DESC_BASE_REL
+        address_space.contract_check(
+            ring_entries=command_ring.RING_ENTRIES,
+            desc_base=desc_base,
+            desc_count=1,
+            act_base=0x80800000,
+        )
+
+        def hw_buf_size(size: int) -> int:
+            return ((size + 511) // 512) * 512
+
+        act_size = hw_buf_size(len(act_wrapped))
+        wgt_size = hw_buf_size(len(wgt_wrapped))
+        out_size = hw_buf_size(M * N * 4)
+        scale_size = hw_buf_size(len(scale_bytes))
+        alloc_off = self._P4_DATA_BASE_REL
+
+        def alloc(size: int, align: int = 512) -> int:
+            nonlocal alloc_off
+            alloc_off = (alloc_off + align - 1) // align * align
+            addr = block_base + alloc_off
+            alloc_off += size
+            if alloc_off > self._P4_DESC_BASE_REL:
+                raise RuntimeError(f"H4-N128-BLK0-SINGLE allocation overflow: {alloc_off:x}")
+            return addr
+
+        act_addr = alloc(act_size)
+        wgt_addr = alloc(wgt_size)
+        out_addr = alloc(out_size)
+        scale_addr = alloc(scale_size)
+
+        model = self._make_model()
+        model.dram[act_addr - self.DRAM_BASE:act_addr - self.DRAM_BASE + len(act_wrapped)] = act_wrapped
+        model.dram[wgt_addr - self.DRAM_BASE:wgt_addr - self.DRAM_BASE + len(wgt_wrapped)] = wgt_wrapped
+        model.dram[scale_addr - self.DRAM_BASE:scale_addr - self.DRAM_BASE + len(scale_bytes)] = scale_bytes
+        model.dram[out_addr - self.DRAM_BASE:out_addr - self.DRAM_BASE + out_size] = bytes(out_size)
+        write_mmul_descriptor(
+            model, desc_base,
+            input_addr=act_addr, weight_addr=wgt_addr, output_addr=out_addr,
+            scale_addr=scale_addr, scale_size=scale_size,
+            input_size=len(act_wrapped), weight_size=len(wgt_wrapped),
+            output_size=M * N * 4,
+            input_sram=0x00000000, weight_sram=0x00010000,
+            output_sram=0x00018000, scale_sram=0x00014000,
+            M=M, K=K, N=N,
+        )
+        cmds = [(self._OP_MMUL, desc_base)]
+        self._write_cmds_to_model(model, cmds)
+        expected = {
+            "num_cmds": 1,
+            "out_addr": out_addr,
+            "golden_int32": golden_int32,
+            "M": M, "K": K, "N": N,
+            "timeout_cycles": 2_000_000,
+        }
+        logger.info(
+            f"[H4-N128-BLK0-SINGLE] built 1 MMUL cmd: act=0x{act_addr:08x} "
+            f"wgt=0x{wgt_addr:08x} out=0x{out_addr:08x} scale=0x{scale_addr:08x} "
+            f"desc=0x{desc_base:08x} (manifest golden {golden_int32.size} INT32 "
+            f"matches FM golden — anti-stale OK)"
+        )
+        return model, expected
+
+    async def _run_attn_weight_n128_single(self) -> Tuple[bool, str]:
+        model, expected = self._build_attn_weight_n128_single()
+
+        await self._preload_rtl(model)
+
+        boot_check = getattr(self, "_check_boot_sequence", None)
+        if boot_check is not None and not await boot_check(expected["timeout_cycles"]):
+            return False, "boot-sequence assertions failed before H4-N128-BLK0-SINGLE dispatch"
+
+        await self._apb_write(Addr.DOORBELL + DOORBELL.HOST_TAIL, expected["num_cmds"])
+        stamps = await self._trace_attn_chain_completions(
+            expected["num_cmds"], expected["timeout_cycles"])
+        if stamps is None:
+            return False, (
+                "completion-ring trace incomplete on H4-N128-BLK0-SINGLE "
+                "(firmware timeout/hang)"
+            )
+        return await self._verify_attn_weight_n128_single(expected, stamps)
+
+    async def _verify_attn_weight_n128_single(self, expected: dict,
+                                              stamps: List[int]) -> Tuple[bool, str]:
+        M, K, N = expected["M"], expected["K"], expected["N"]
+        golden = expected["golden_int32"]
+        if len(stamps) != 1:
+            return False, (
+                f"H4-N128-BLK0-SINGLE: {len(stamps)} completion stamps, expected 1"
+            )
+        cyc = stamps[0]
+        out_bytes = await self._dram_backdoor_read(
+            expected["out_addr"] - self.DRAM_BASE, M * N * 4)
+        if len(out_bytes) != M * N * 4:
+            return False, (
+                f"H4-N128-BLK0-SINGLE: readback {len(out_bytes)}B != {M * N * 4}B"
+            )
+        out = np.frombuffer(out_bytes, dtype=np.int32).reshape(M, N)
+        # ISSUE-13B: the mxu_soc_wrapper store-out dequantizes each row to
+        # FP32 whenever the firmware programmed SCALE_ADDR (it always does —
+        # mxu_start writes it every tile).  With the ones-scales this case
+        # programs, the FP32 output equals the raw INT32 manifest golden
+        # numerically, so the output is compared in the FP32 domain (same
+        # convention as _verify_attn_weight_chain's float32 readback).
+        out_f32 = out.view(np.float32).ravel().astype(np.float64)
+        golden_f32 = golden.astype(np.float32).ravel().astype(np.float64)
+        cos = float(
+            np.dot(out_f32, golden_f32)
+            / (np.linalg.norm(out_f32) * np.linalg.norm(golden_f32) + 1e-30))
+        f32_exact = bool(np.array_equal(
+            out.view(np.float32).ravel(), golden.astype(np.float32).ravel()))
+        if cyc <= 0:
+            logger.warning(
+                f"[H4-N128-BLK0-SINGLE] op07 attn_weight: cycles={cyc} <= 0 — "
+                f"command never executed (BUG-RTL-SOC-007 dispatch-failure signature)")
+            return False, (
+                f"H4-N128-BLK0-SINGLE: FAIL — cycles={cyc} <= 0 "
+                f"(BUG-RTL-SOC-007 dispatch-failure signature)"
+            )
+        if not np.any(golden):
+            return False, "H4-N128-BLK0-SINGLE: manifest golden all-zero (anti-vacuous)"
+        logger.warning(
+            f"[H4-N128-BLK0-SINGLE] op07 attn_weight MMUL M={M}/K={K}/N={N} "
+            f"(UNCLIPPED): cycles={cyc} cos_sim={cos:.6f} fp32_bit_exact={f32_exact}")
+        if not f32_exact and cos < 0.999:
+            return False, (
+                f"H4-N128-BLK0-SINGLE: FAIL — output mismatch fp32_bit_exact={f32_exact} "
+                f"cos_sim={cos:.6f} < 0.999"
+            )
+        return True, (
+            f"H4-N128-BLK0-SINGLE: PASS — un-clipped op07 M={M}/K={K}/N={N} "
+            f"cycles={cyc} cos_sim={cos:.6f} fp32_bit_exact={f32_exact}"
+        )
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Ibex-RTL runner (Task 12)
@@ -4316,6 +4526,9 @@ class IbexRunner(P4SpikeRunner):
 
         if case_id == "ATTN-WEIGHT-CHAIN":
             return await self._run_attn_weight_chain()
+
+        if case_id == "H4-N128-BLK0-SINGLE":
+            return await self._run_attn_weight_n128_single()
 
         if case_id in {"FM-SOC-014", "FM-SOC-015", "FM-SOC-016",
                          "FM-SOC-021", "FM-SOC-022", "FM-SOC-023"}:
