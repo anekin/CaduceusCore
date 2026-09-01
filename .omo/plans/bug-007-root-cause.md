@@ -83,7 +83,7 @@ Your next move: `/start-work` 启动执行，或先跑一轮高精度评审。Fu
 ## Todos
 > Implementation + Test = ONE todo. Never separate.
 
-- [ ] 0. P0 工作区 + 产物新鲜度基线（分支、固件 hex、向量、provenance）
+- [x] 0. P0 工作区 + 产物新鲜度基线（分支、固件 hex、向量、provenance）
   What to do / Must NOT do: (1) `git checkout -b bug-007-root-cause main`（当前目录，禁止新建 worktree）；porcelain 快照确认仅含 7 个已知并行会话 dirty 文件（见 Scope #8），不动不提交；本计划文件 `.omo/plans/bug-007-root-cause.md` 为新增产物。(2) `make -C firmware` 重建固件 hex，`sha256sum firmware/build/npu_firmware.hex` 记录（8 周 ABI/opcode 演进后旧 hex 会污染复现基线）。(3) **记录提交态 manifest**：记录当前 `rtl/test_vectors/soc_e2e/qwen25-3b-3layer-rtl/manifest.json` 的 sha256 与 op07/24/41 dimensions（应为 M=16/K=16/N=128/tiles=2）。(4) **生成器漂移探测**：运行 `python3 scripts/gen_qwen25_3b_rtl_vectors.py`（写 `rtl/test_vectors/soc_e2e/qwen25-3b-3layer-rtl/`），记录生成后 manifest hash 并与提交态比较；生成器 commit 固定为 `b6b0a89`（2026-07-08，自该日后无修改），记录该事实。**决策规则**：若生成后 hash 与提交态不同，立即停止复跑准备，恢复提交态向量（`git checkout -- rtl/test_vectors/soc_e2e/qwen25-3b-3layer-rtl/manifest.json` 及关联 hex），把差异记录为 `GENERATOR-DRIFT: yes` 并纳入 todo 4/H2 审计；若相同则保留生成结果（等价于提交态）。(5) provenance 基线块：git HEAD、生成器 commit、提交态与生成后 manifest hash、simv 标识（存在则记 mtime/sha）、VCS 版本（sz0001 `vcs -ID`）。Must NOT：不 stash/不 commit 并行文件；不碰冻结面与 gen/；不在复跑前用漂移后的向量覆盖提交态。
   Parallelization: Wave 1 | Blocked by: none | Blocks: 1,2,6
   References (executor has NO interview context - be exhaustive): `sim/regression/Makefile:434-470`（run_qwen25_3b_3layer 目标）；`scripts/gen_qwen25_3b_rtl_vectors.py`（向量生成器，commit b6b0a89 后无修改）；`scripts/run_qwen25_3b_rtl.py:38-41`（缺失时自动重生成逻辑）；`firmware/Makefile`；AGENTS.md NOTES（opcode 演进：SFU 0x01+desc.sfu_op、ROPE 0x05、Vector 0x0F-0x14——旧产物 staleness 风险来源）
