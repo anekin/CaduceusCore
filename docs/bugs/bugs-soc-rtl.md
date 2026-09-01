@@ -333,8 +333,8 @@ no additional RTL bug work.
 | **Block** | W1.3 |
 | **Case** | 3-layer forward pass (51 ops, Qwen2.5-3B blk.0/1/2) |
 | **Severity** | Critical / Major |
-| **Type** | RTL / Firmware / Runner — under investigation |
-| **Status** | Open（todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，待 FPGA/更早日志追踪） |
+| **Type** | RTL / Firmware / Runner — reconstruction failure（无已提交产物可归因） |
+| **Status** | **disposition-pending-user**（2026-09-02 根因追查计划 `.omo/plans/bug-007-root-cause.md` todo 8 结论：testcase/environment reconstruction failure；任何已提交可重跑点均未复现 45-PASS/6-FAIL；Blocker-6 分支 (b) 处置，待用户接受，agent 不代签） |
 
 #### Symptom
 
@@ -344,27 +344,36 @@ Evidence:
 - `build/wave1/w1-3-rtl-op-summary.json`: op07/24/41 `"passed": false, "cycles": 0`
 - `docs/vector-workaround-3layer-issue.md` §2.3
 
-#### Root Cause — Under Investigation
+#### Root Cause — Reconstruction Failure（不可归因，2026-09-02 定级）
 
-Three working hypotheses, not yet resolved:
+**结论：testcase/environment reconstruction failure — 任何已提交产物均不支持 FuncModel 或 RTL 故障，报告的 45-PASS/6-FAIL 签名未复现。**
 
-1. **Firmware ring buffer overflow**: The 51-op dispatch may overflow the 32-entry firmware command ring buffer. When the ring wraps, `attn_weight` commands (which arrive later in the per-layer sequence) may be silently dropped or written to a corrupted slot. The fact that all three `attn_weight` ops (one per layer, same position in the 17-op chain) fail identically is consistent with a deterministic ring-wrap collision.
+证据链（`.omo/evidence/task-{1,2,6,7}-bug-007-root-cause.txt`）：
 
-2. **Weight preload address out of bounds**: `attn_weight` reads a Q/K/V score tile from SRAM. The 3-layer runner's automatic SRAM/DRAM address allocation may place the weight pointer or operand address for `attn_weight` outside the valid range (e.g., overlapping with MMUL scratch space or exceeding the 4 MB SRAM window), causing the AXI read to return X or hang.
+1. **MODE-ORIG = per-op-preload**（task-1 §1）：07-07 W1.3 跑批为 Python MMIO 直驱、固件 resident/idle（计划定义 + 首个提交 testcase `79654175` + HEAD 结构三方收敛，test body 内 0 处 doorbell/ring 命中）。台账原"32-entry ring overflow"假设被双重排除（per-op 模式无 ring 调度；固件 `RING_ENTRIES=1024`）。
+2. **MODE-A HEAD 重跑 = 51/51 PASS**（task-1 §3）：op07/24/41 attn_weight 全部执行（compute_en_cycles=19，2 个 N-tile）、cos_sim=1.000000、max_abs≤0.0003、ok=True。45/6 签名不存在。
+3. **MODE-B HEAD 重跑（ATTN-WEIGHT-CHAIN）**（task-1 §4）：op07 attn_weight cycles=31046、cos_sim=1.000000，全部 26 命令 cycles>0。链级调度功能正常。
+4. **H4 un-clipped blk0 op07 M=32/K=2/N=128 单 op = PASS**（task-6）：cycles=31291、cos_sim=1.000000、fp32_bit_exact=True。台账所指"未以未 clip 形态跑过"的 tiny-K + multi-N 组合实测通过；clip 是 `_build_block`（`rtl_soc_runner.py:2908-2910`）的测试构造器限制，非固件/RTL 限制。
+5. **历史考古（task-7）**：3 个重跑点（最早可重跑点 `0973d76f` 2026-07-08 07:38、`a8af3515` infra 漂移、`ef090b13` wrapper 修复）**全部 CLEAR**；主线上不存在 FAIL→CLEAR 翻转；`FLIP: reconstruction-failed`。07-07 的 testcase 从未提交（首个提交在 07-08，晚于失败记录 ~17 h），原始 45/6 证据已删除，且幸存 07-08 JSON 为 51/51（passed=true），与台账引用的 "passed": false 矛盾。
+6. **"cycles=0" 是测量伪影**：W1.3 测试驱动自首个 testcase 起对全部 MMUL op 硬编码 `cycles = 0`（`79654175:sim/cocotb_bridge.py:3798-3800`，HEAD `:5382-5383`）。幸存 JSON 中 attn_weight passed=true 且 cycles=0，证明 cycles=0 并非"未执行"签名；台账"STATUS.BUSY 从未拉高"的症状描述无任何幸存产物支撑。
 
-3. **MMU CMD.START blocked**: A race condition similar to BUG-RTL-SOC-006's `start_hold` may block `CMD.START` from reaching the engine. The `attn_weight` op reuses the MXU datapath; if the MXU wrapper's START gating logic has a corner case for zero-cycle MMULs (score computation is a small K-dim matmul that may complete in a single tile), the START write may be swallowed.
+原三假设（ring overflow / weight 地址越界 / START 阻塞）均无 FAIL 场景可证实，随定级关闭（未证实 ≠ 已证实为假，但无 FAIL 可观测即无根因可修）。
 
 #### Fix
 
-**TBD** — root cause not yet identified.
+**无主线上根因修复被 claim**（2026-09-02 定级）：任何已提交可重跑点均未复现 FAIL，不存在可修复的根因，按 Blocker-6 分支 (b) 处置为 reconstruction-failure（待用户接受）。不 claim Fixed。若用户拒绝 (b) 定级并指定升级路径（如 FPGA/更早日志），本条目重新打开并按新证据再判。
 
-#### Verification
-
-**TBD** — depends on root cause. Expected: re-run W1.3 3-layer forward pass after fix, verify all 3 `attn_weight` ops report `cycles > 0` and outputs match Func Model golden.
+**Verification — root-cause 计划重跑 (2026-09-01/02, `.omo/plans/bug-007-root-cause.md` todo 1/6/7)：**
+- MODE-A HEAD 重跑（`make -C sim/regression run_qwen25_3b_3layer`）：**51/51 PASS**，op07/24/41 attn_weight compute_en_cycles=19（执行）、cos_sim=1.000000、max_abs≤0.0003、ok=True（`.omo/evidence/task-1-bug-007-root-cause.txt`）。
+- MODE-B HEAD 重跑（ATTN-WEIGHT-CHAIN）：op07 cycles=31046、cos=1.0，26 命令全 cycles>0（task-1 evidence）。
+- H4 un-clipped blk0 op07 M=32/K=2/N=128：**PASS cycles=31291 cos=1.0 fp32_bit_exact=True**（task-6 evidence；`H4-N128-CHAIN: unsupported-documented`——`_build_block` clip 为测试构造器限制）。
+- 历史考古：3 重跑点全 CLEAR，无 FAIL→CLEAR 翻转，`FLIP: reconstruction-failed`（task-7 evidence）。
 
 **Phase 10 PERF-13 evidence (2026-08-18, Ibex RTL):** `build/evidence/w4-perf-p3.txt` — attn_weight `M=32 K=32 N=64` `cycles=42311` `cos_sim=1.0` `passed=true`. The generic MMUL dispatch path executes `attn_weight` with `cycles>0` in the same per-layer attention shape class the 36-layer Ibex segment run uses（见 `scripts/p10_36layer_preflight.sh` CHECK 4，以及 `.omo/notepads/phase10-rtl-verification/issues.md`）。Ring-overflow hypothesis（32-entry ring）同时被排除：`RING_ENTRIES=1024`（`gen/npu_abi.h:299`）。
 
-**Status 说明 (2026-08-31, todo 18 soc-rtl-review-remediation):** todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27，证据 `build/evidence/task-15-soc-rtl-verification-signoff.txt`）：完整 17-op blk.0 chain（含 op07 attn_weight）全部 26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0（14 FP op cos≥0.999 + 3 INT32 bit-exact），链级未复现 cycles=0。根因仍未知，保持 Open 待 FPGA/更早日志追踪。本条目 **Open**。
+**Status 说明 (2026-08-31, todo 18 soc-rtl-review-remediation, 历史记录):** todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27，证据 `build/evidence/task-15-soc-rtl-verification-signoff.txt`）：完整 17-op blk.0 chain（含 op07 attn_weight）全部 26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0（14 FP op cos≥0.999 + 3 INT32 bit-exact），链级未复现 cycles=0。当时根因未知，保持 Open 待 FPGA/更早日志追踪（已被 2026-09-02 定级取代）。
+
+**Status 说明 (2026-09-02, todo 8 bug-007-root-cause):** 根因追查计划完成。ATTRIBUTION = **testcase/environment reconstruction failure**——任何已提交可重跑点（最早 `0973d76f` 2026-07-08 07:38 至 HEAD）均未复现 45-PASS/6-FAIL 签名；无 FuncModel 或 RTL 故障证据；"cycles=0" 为测试驱动硬编码测量伪影。按 Blocker-6 分支 (b) 处置（重建失败，需用户接受）。本条目状态 **disposition-pending-user**，不 claim Fixed。残差候选清单见 `.omo/evidence/task-8-bug-007-root-cause.txt`（11 项，含 live hazard：MXU SCALE_ADDR 跨流程状态泄漏）。
 
 ---
 
@@ -375,6 +384,8 @@ Three working hypotheses, not yet resolved:
 Ledger update 2026-08-27 (todo 1, soc-rtl-verification-signoff): BUG-RTL-SOC-P9-00A、BUG-RTL-SOC-P9-00D、BUG-MXU-P9-00B closed **Fixed**（phase 9/10 evidence）；BUG-RTL-SOC-007 remains **Open** with phase 10 PERF-13 evidence（attn_weight cycles>0）；todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27），26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，保持 Open 待 FPGA/更早日志追踪。
 
 Ledger update 2026-08-31 (todo 19, soc-rtl-review-remediation): BUG-RTL-SOC-002 从原已 Waived 标记改回 **Pending（waiver 待用户签署）**（WVR-SOC-RTL-002，todo 2 提交、签署前不生效）；BUG-RTL-SOC-012 新增 **Open**（blk0 E2E op05 attn_score drain，todo 14 blk0 investigation 判 PRE-EXISTING，2026-08-31）。
+
+Ledger update 2026-09-02 (todo 8, bug-007-root-cause): BUG-RTL-SOC-007 根因追查计划完成，ATTRIBUTION = **testcase/environment reconstruction failure**（无已提交产物支持 FuncModel 或 RTL 故障；45-PASS/6-FAIL 未在任何已提交可重跑点复现；`FLIP: reconstruction-failed`，证据 `.omo/evidence/task-{1,2,6,7,8}-bug-007-root-cause.txt`）。按 Blocker-6 分支 (b) 处置（重建失败，需用户接受），状态 **disposition-pending-user**，不 claim Fixed。BUG-RTL-SOC-012 保持 **Open**（未并案）。
 
 ### By Severity
 
@@ -390,7 +401,8 @@ Ledger update 2026-08-31 (todo 19, soc-rtl-review-remediation): BUG-RTL-SOC-002 
 | Fixed | 11 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-005, BUG-RTL-SOC-006, BUG-RTL-SOC-008, BUG-RTL-SOC-WV-001, BUG-RTL-SOC-WV-007, BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
 | Waived | 0 | — |
 | Pending (waiver 待用户签署) | 1 | BUG-RTL-SOC-002 (8 MB DRAM window constraint — WVR-SOC-RTL-002, pending sign-off 待用户签署) |
-| Open | 2 | BUG-RTL-SOC-007 (attn_weight dispatch — PERF-13 Ibex RTL shows cycles>0; todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，链级未复现，根因仍未知), BUG-RTL-SOC-012 (blk0 E2E op05 attn_score MMUL drain — todo 14 blk0 investigation 判 PRE-EXISTING) |
+| Disposition-pending-user | 1 | BUG-RTL-SOC-007 (attn_weight — ATTRIBUTION 2026-09-02: testcase/environment reconstruction failure，45/6 未复现，无 FuncModel/RTL 故障证据；Blocker-6 path (b)，待用户接受，不 claim Fixed) |
+| Open | 1 | BUG-RTL-SOC-012 (blk0 E2E op05 attn_score MMUL drain — todo 14 blk0 investigation 判 PRE-EXISTING) |
 | Re-opened | 0 | — |
 
 ### By Module
@@ -413,7 +425,8 @@ Ledger update 2026-08-31 (todo 19, soc-rtl-review-remediation): BUG-RTL-SOC-002 
 | Total RTL bugs found and documented | 14 |
 | Bugs closed Fixed | 11 (78.6%) |
 | Bugs pending waiver sign-off | 1 (7.1%) — BUG-RTL-SOC-002 (8 MB DRAM window, WVR-SOC-RTL-002, pending sign-off 待用户签署) |
-| Open / under investigation | 2 (14.3%) — BUG-RTL-SOC-007 (todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，链级未复现；根因仍未知), BUG-RTL-SOC-012 (blk0 op05 attn_score drain, todo 14 判 PRE-EXISTING) |
+| Disposition pending user acceptance | 1 (7.1%) — BUG-RTL-SOC-007 (2026-09-02 定级 reconstruction failure，Blocker-6 path (b)，待用户接受，不 claim Fixed) |
+| Open / under investigation | 1 (7.1%) — BUG-RTL-SOC-012 (blk0 op05 attn_score drain, todo 14 判 PRE-EXISTING) |
 | Ibex-specific bugs (full RTL CPU replacement) | 0 |
 | Regressions after fixes | 0 (491/491 module regression PASS; vector + MXU wrapper 10/10 baseline PASS; PERF-06 M=32 cos=1.000000; PERF-13 9/9 MMUL PASS) |
 | Re-opened bugs | 0 (BUG-RTL-SOC-005 closed in 2026-07-23 rtl-bug-fix-wv round) |

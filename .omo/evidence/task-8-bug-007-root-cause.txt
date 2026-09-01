@@ -1,0 +1,210 @@
+task-8-bug-007-root-cause
+========================
+Attribution synthesis + BUG-007 ledger disposition + Blocker-6 backfill
+Todo 8 of .omo/plans/bug-007-root-cause.md
+Date: 2026-09-02
+Branch: bug-007-root-cause
+
+PROVENANCE
+----------
+git HEAD (this task): 9938c20 ("chore(bug007): mark todos 3-5 skipped-inapplicable")
+  branch bug-007-root-cause = main + plan/evidence artifacts only; no firmware/vector/RTL
+  changes introduced by this plan (verified: git diff main..HEAD touches only .omo plan/evidence).
+Upstream evidence consumed (all read fresh for this synthesis):
+  .omo/evidence/task-0-bug-007-root-cause.txt  (P0 baseline + provenance)
+  .omo/evidence/task-1-bug-007-root-cause.txt  (MODE-ORIG + dual-mode HEAD re-run)
+  .omo/evidence/task-2-bug-007-root-cause.txt  (H0 differential + instrument audit)
+  .omo/evidence/task-6-bug-007-root-cause.txt  (H4 blk0 tiny-K + N=128 multi-tile)
+  .omo/evidence/task-7-bug-007-root-cause.txt  (bounded flip-commit archaeology)
+Docs consumed: docs/bugs/bugs-soc-rtl.md:328-367 (BUG-007 entry),
+  docs/soc-rtl-review-remediation-blockers.md:66-73 (Blocker 6 close conditions),
+  docs/vector-workaround-3layer-issue.md:40-61 (45 PASS / 6 FAIL W1.3 record).
+
+SKIPPED TODOS (explicit, no_silent_skip)
+---------------------------------------
+Todo 3 (H1 ring/descriptor integrity + firmware-residency): SKIPPED-INAPPLICABLE —
+  PRIMARY-VERDICT=REPRO-CLEAR (task-1). H1 is REPRO-FAIL-conditional per plan
+  Mixed-mode routing table; MODE-ORIG=per-op-preload means firmware never in the
+  dispatch loop (task-1 §1: 0 doorbell/ring hits at 79654175 and HEAD).
+Todo 4 (H2 address-table audit): SKIPPED-INAPPLICABLE — same routing; no REPRO-FAIL
+  scenario to audit against. Generator drift independently ruled out by task-0
+  (GENERATOR-DRIFT: no, b6b0a89 last commit) and task-1 §2 (same).
+Todo 5 (H3 START/status-lifecycle waveform): SKIPPED-INAPPLICABLE — H3 needs a
+  REPRO-FAIL dispatch window to capture; no FAIL exists to capture at HEAD.
+
+═══════════════════════════════════════════════════════════════════════════
+ATTRIBUTION
+═══════════════════════════════════════════════════════════════════════════
+
+ATTRIBUTION: testcase/environment reconstruction failure — neither FuncModel nor
+RTL fault confirmed in any committed artifact; the reported W1.3 45-PASS/6-FAIL
+signature is not reproduced at any committed rerunnable point.
+
+Answer to the user's original question ("是 Func Model 的问题还是 RTL 的问题"):
+No committed evidence supports a FuncModel fault, and no committed evidence
+supports an RTL fault. The original failure was recorded 2026-07-07 against an
+UNCOMMITTED testcase whose failure artifact (45 PASS / 6 FAIL) was deleted from
+git and is contradicted by the surviving 07-08 JSON (passed=51). Every committed,
+rerunnable artifact — the earliest (0973d76f, 2026-07-08 07:38) through today's
+HEAD — passes the 3-layer per-op target 51/51, and the firmware-ring chain mode
+also passes with all 26 commands cycles>0. The failure therefore cannot be
+attributed to any code that exists in the repository; it is a reconstruction
+failure of an uncommitted testcase/environment, formally distinct from a
+dismissive "environmental flake" claim (see task-7 FLIP rationale).
+
+KEY FINDINGS (evidence chain, each with task citation)
+------------------------------------------------------
+1. MODE-ORIG = per-op-preload (task-1 §1): the 07-07 W1.3 run used Python MMIO
+   direct drive with firmware resident/idle. Plan definition
+   (.omo/plans/soc-verification-gaps-phase5.md:186-190), the first committed
+   testcase (79654175:sim/cocotb_bridge.py), and HEAD (:5261-5480) all converge;
+   0 doorbell/ring hits in any test body. The ledger's "32-entry ring overflow"
+   hypothesis is refuted twice over (per-op mode has no ring dispatch;
+   RING_ENTRIES=1024 in firmware).
+2. MODE-A HEAD re-run = 51/51 PASS (task-1 §3): attn_weight op07/24/41 all
+   executed with compute_en_cycles=19 (2 N-tiles), cos_sim=1.000000,
+   max_abs<=0.0003, ok=True. The 45/6 signature is absent.
+3. MODE-B HEAD re-run (ATTN-WEIGHT-CHAIN, firmware ring chain) = op07
+   attn_weight cycles=31046, cos_sim=1.000000, all 26 commands cycles>0
+   (task-1 §4). Chain-level dispatch is functional.
+4. H4 un-clipped blk0 op07 M=32/K=2/N=128 single-op = PASS, cycles=31291,
+   cos_sim=1.000000, fp32_bit_exact=True (task-6). The exact shape that the
+   ledger flagged (blk0 chain clips N=64) executes correctly when un-clipped;
+   the firmware multi-N-tile loop and wrapper N>64 store-out path are proven
+   functional. The clip is a test-builder limitation, not firmware/RTL.
+5. Historical archaeology (task-7): 3 rerun points (0973d76f earliest rerunnable
+   point, a8af3515 infra-drift, ef090b13 wrapper-fix) ALL CLEAR. No FAIL→CLEAR
+   flip is observed anywhere in mainline. The earliest committed point already
+   passes, ~17 h after the 07-07 failure record. FLIP: reconstruction-failed.
+6. "cycles=0" in the W1.3 summary is a MEASUREMENT ARTIFACT: the test driver
+   hardcodes `cycles = 0` for all MMUL ops since the original testcase
+   (79654175:sim/cocotb_bridge.py:3798-3800; HEAD :5382-5383). The surviving
+   07-08 JSON shows attn_weight passed=true with cycles=0, i.e., cycles=0 is NOT
+   a dispatch-failure signature. The ledger's symptom wording ("passed": false,
+   STATUS.BUSY never asserted) is not reproduced by any surviving artifact.
+
+DISPOSITION-PATH
+----------------
+DISPOSITION-PATH: (b)
+  Blocker-6 close-condition branch (b): environmental / reconstruction failure
+  requiring user explicit acceptance.
+  Rationale: branch (a) (root-cause + fix + re-run gate) is not supported by the
+  evidence — no committed artifact FAILs, so there is no root cause to fix and
+  no "Fixed" claim is lawful (Must NOT: claim Fixed). Branch (b) is the correct
+  formal classification per todo 7: "reconstruction failure", NOT a dismissive
+  "environmental flake". Blocker-6 original close text: (b) 正式定级为环境性/偶发
+  并记录复现条件与影响面，ledger 写明处置结论（不 claim Fixed 则需用户接受）。
+  The user has NOT yet accepted → ledger status = disposition-pending-user.
+
+RECONSTRUCTION-UNCERTAINTY: medium (carried from task-1 §5, re-affirmed by
+  task-7): the exact 07-07 testcase was never committed (first commit 79654175
+  on 07-08 ~17 h later); the original 45/6 artifact is absent from git; the
+  surviving JSON is a 07-08 re-run (51/51). Mode classification itself is robust
+  (3 independent sources), so uncertainty is bounded to the 07-07 run's exact
+  code/artifacts, not to the mode.
+
+RESIDUAL-CANDIDATES:
+-------------------
+Numbered list carried from task-2 §5, plus new items from task-6 and task-7.
+Each labelled: excluded (with evidence) / unexcluded (still possible) /
+live hazard.
+
+1. cocotb-driver back-to-back write timing (task-2 #1) — UNEXCLUDED. RTL-only
+   candidate; the FM bridge is synchronous so inter-write APB timing cannot be
+   discriminated. No FAIL exists to probe it against, so it stays unexcluded,
+   not confirmed.
+2. STATUS.DONE lifecycle / stale-DONE (task-2 #2) — UNEXCLUDED. RTL-only
+   candidate; FM sets STATUS=2 synchronously, cannot reproduce a stale-DONE
+   window. Related pre-existing fixes exist (BUG-RTL-SOC-WV-001 status_done
+   pulse, WV-007 consecutive-dispatch DONE timeout, ef090b13 in task-7 point 3),
+   all CLEAR at rerun.
+3. Cross-engine / cross-flow stale-state leak (MXU SCALE_ADDR) (task-2 #3) —
+   LIVE HAZARD for mixed firmware-then-per-op flows; EXCLUDED as the 07-07 cause
+   in pure MODE-A (firmware never dispatched → SCALE_ADDR stays 0). Confirmed on
+   the FM instrument (task-2 §3: firmware dispatch leaves SCALE_ADDR=0x14000,
+   flips later per-op MMULs into scaled store-out); RTL analogue at
+   rtl/wrapper/mxu_soc_wrapper.v:173-182. Mitigation verified on FM
+   (defensive SCALE_ADDR=0 write). Not fixable within this plan (product-code
+   read-only guardrail).
+4. Crossbar fairness (task-2 #4) — UNEXCLUDED. RTL-only; not observable in the
+   FM (no arbitration model). No FAIL observed to implicate it.
+5. Reconstruction uncertainty (task-2 #5; task-1 RECONSTRUCTION-UNCERTAINTY:
+   medium) — UNEXCLUDED BY DEFINITION: the exact 07-07 testcase was never
+   committed and the original 45/6 artifact was deleted. This is the primary
+   driver of the disposition, not a candidate that can ever be closed from git.
+6. W1.3 SFU smoke-mode gap (task-2 #6, audit (e)) — EXCLUDED as a 07-07
+   signature contributor (07-07 failure ops were MMUL + VMUL, both
+   golden-compared); recorded as an evidence-coverage gap only: per-op SFU ops
+   (RMSNorm/RoPE/softmax/SiLU) were never golden-compared in ANY W1.3 run
+   (cocotb_bridge.py:5421-5431); a strict compare would fail on RMSNorm GAP-4
+   (gamma fold, golden_executor.py rmsnorm has no gamma input).
+7. ROPE DIM encoding divergence (task-2 #7, GAP-2) — EXCLUDED as a 07-07 cause
+   (driver quirk that works on RTL: sfu_soc_wrapper.v:167 consumes pairs, driver
+   writes pairs); noted as an ABI-canonical hazard (ABI/firmware/FM pack
+   elements).
+8. FM-bridge VECTOR op5 stale semantics (task-2 #8, GAP-1) — EXCLUDED from
+   BUG-007 scope (pre-existing FM-model gap: fp16 operand-A vs RTL/ABI INT32;
+   rtl_soc_runner.py:3058-3060 already works around it). Noted for completeness.
+9. (NEW, task-6) Chain-builder `_clip_dim` clipping — EXCLUDED as a fault:
+   H4-N128-CHAIN: unsupported-documented — the clip (rtl_soc_runner.py:2908-2910)
+   is a mini-regression-builder limitation; the firmware-ring + wrapper
+   multi-N-tile path itself is proven functional by H4-N128-BLK0-SINGLE
+   (cycles=31291). Recorded as the formal chain coverage gap.
+10. (NEW, task-6/9-seed) Multi-tile commonality with BUG-012 (op05) — UNEXCLUDED,
+    cross-ref only. Todo 6 proves the firmware multi-N-tile loop works for
+    N-tiling (op07, N=128 → 2 N-tiles); op05's tiles=2 is K-tiling and remains
+    BUG-012's separate concern. BUG-012 ledger status untouched here; cross-ref
+    wording lands in todo 9.
+11. (NEW, task-7) Uncommitted 07-07 testcase + deleted 45/6 artifact —
+    UNVERIFIABLE BY DEFINITION. No committed code path reproduces the failure;
+    the reconstruction caveats (W1.2 golden copied with 07-08 provenance,
+    firmware rebuilt on sz0002, BOOTROM_HEX env workaround) bound but cannot
+    eliminate the uncertainty.
+
+USER-ACCEPTANCE-REQUIRED
+------------------------
+USER-ACCEPTANCE-REQUIRED: yes
+
+EXACT-QUESTION (the user must answer; agent will not sign on their behalf):
+「您是否接受将 BUG-RTL-SOC-007 正式定级为『重建失败 / 不可归因（reconstruction
+failure）』——即：任何已提交产物均不支持 Func Model 或 RTL 故障；报告的
+45-PASS/6-FAIL 签名在全部已提交可重跑点（最早 0973d76f 至 HEAD）上均未复现；
+缺陷按 Blocker-6 分支 (b) 处置，ledger 状态由 disposition-pending-user 关闭为
+accepted（reconstruction-failure）？请回复：接受 / 拒绝并指明升级路径。」
+
+BUG-007-STATUS: disposition-pending-user
+
+LEDGER + BLOCKER UPDATES MADE (this todo)
+-----------------------------------------
+- docs/bugs/bugs-soc-rtl.md BUG-007 entry (:328-367): Status → disposition-pending-user;
+  Root Cause section replaced with the ATTRIBUTION + evidence-chain summary;
+  Fix section: no fix claimed (path (b)); Verification section: task-1/2/6/7
+  evidence citations appended; new dated ledger-update paragraph 2026-09-02;
+  By-Status summary table: BUG-007 moved out of Open into disposition-pending-user
+  (BUG-012 remains Open, untouched).
+- docs/soc-rtl-review-remediation-blockers.md Blocker 6 row (:66-73): 现状证据路径
+  updated with task-0/1/2/6/7/8 evidence; 解除条件 annotated with path (b)
+  selection; disposition line appended (path (b), evidence citations, date
+  2026-09-02, disposition-pending-user).
+
+MANUAL QA (post-update, agent-executed)
+---------------------------------------
+  grep -E "BUG-RTL-SOC-007.*Status|Status.*(disposition-pending-user)" docs/bugs/bugs-soc-rtl.md
+    → hits Status row + disposition note (verified after edits)
+  grep -E "Blocker 6|BUG-007" docs/soc-rtl-review-remediation-blockers.md
+    → Blocker 6 row contains path (b) disposition + evidence citations (verified)
+
+ADVERSARIAL-CLASS PROBES
+------------------------
+- Over-attribution (claiming Fixed without evidence): AVOIDED — no FAIL is
+  reproduced in any committed artifact, so no fix/commit is claimed; Fix section
+  explicitly says "no root-cause fix in mainline is claimed"; Status is
+  disposition-pending-user, NOT Fixed.
+- Under-attribution (omitting residuals): AVOIDED — 11 residual candidates
+  listed above, each with excluded/unexcluded/live-hazard label.
+- Scope creep (touching other bugs/statuses): AVOIDED — BUG-012 remains Open and
+  untouched (only a cross-ref seed in the residual list); BUG-002 Pending
+  untouched; no other ledger entry modified; frozen faces, vendored IP, gen/
+  untouched; the 7 parallel-session dirty files unmodified and unstaged.
+
+RESULT: PASS
