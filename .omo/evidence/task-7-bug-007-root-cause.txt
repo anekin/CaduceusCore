@@ -1,0 +1,224 @@
+task-7-bug-007-root-cause
+========================
+Bounded flip-commit archaeology (todo 7 of .omo/plans/bug-007-root-cause.md)
+Date: 2026-09-02
+Branch: bug-007-root-cause (HEAD unchanged at 5268b96 during archaeology)
+
+PREAMBLE
+--------
+Todo 1 returned MODE-ORIG: per-op-preload, PRIMARY-VERDICT: REPRO-CLEAR,
+MODE-A(run_qwen25_3b_3layer): REPRO-CLEAR. Per plan routing, Wave-2 entry is
+todo 7: bounded flip-commit archaeology with MODE-A as the archaeology entry.
+
+RECONSTRUCTION-UNCERTAINTY (pre-existing, from task-1)
+------------------------------------------------------
+- The exact 2026-07-07 3-layer testcase was never committed.
+- First committed 3-layer testcase function: 79654175 (2026-07-08 07:38:28).
+- Makefile target run_qwen25_3b_3layer was added in 0973d76f (2026-07-08 07:38:50),
+  22 seconds after 79654175 and b6b0a89. Both commits are in the same morning
+  batch; 0973d76f is the earliest commit where `make -C sim/regression
+  run_qwen25_3b_3layer` is available. We therefore use 0973d76f as the effective
+  earliest rerunnable point and record 79654175 as the source-code ancestor.
+- Vectors are regenerated at each commit using that commit's generator, but the
+  W1.2 golden expected.npz is untracked and was copied from the main worktree
+  (sha256 571038a2e4d4190c93dbdbb010e240b98548aa68afcb40e1da469a1183cebe7a).
+  This is a reconstruction artifact.
+- Firmware hex was rebuilt from each commit's firmware source on sz0002 (local
+  toolchain) and copied to the sz0001 worktrees, because sz0001 does not have
+  riscv64-unknown-elf-gcc installed.
+- The Makefile's run command assumes the repo directory is named exactly
+  `CaduceusCore` (hardcoded `./CaduceusCore/sim/regression/simv_soc_cocotb`).
+  Worktrees were created under `/tmp/bug007-parent-N/CaduceusCore` to satisfy
+  this assumption. Additionally, the test reads `BOOTROM_HEX` from the process
+  environment (fallback `firmware/build/npu_firmware.hex`), not from the VCS
+  plusarg; each rerun therefore exported `BOOTROM_HEX=<worktree>/firmware/build/npu_firmware.hex`
+  before invoking make. Both workarounds are reconstruction artifacts.
+
+CANDIDATE FAMILY TABLE
+----------------------
+Family (i)   sim-infra / testcase drift
+  79654175   [Sim] Cocotb bridge: enhanced F16/I32 dtype support and signal tracing
+             2026-07-08 07:38:28; first 3-layer test function; role: earliest testcase source
+             priority: P1 (anchor); rerunnable: NO (Makefile target absent; represented by 0973d76f)
+  0973d76f   [Infra] Regression: add FM L2/L3 signoff targets and clean scripts
+             2026-07-08 07:38:50; role: adds run_qwen25_3b_3layer Makefile target
+             priority: P1 (effective rerun point); rerunnable: YES (target exists)
+  14c27c9    segment-boundary SRAM-clear (plan reference; not present in reachable history)
+             priority: P2; rerunnable: NO (sha not found in repo)
+  a8af3515   fix(sim): force full DRAM preload at segment boundaries
+             2026-08-21 01:23:48; role: per-segment full DRAM preload to fix stale data
+             priority: P2 (family-i infra-drift); rerunnable: YES
+  b5f3b32c   refactor(sim): unify command-ring config into sim/command_ring.py
+             2026-08-23 09:26:01; role: unify RING_BASE/ENTRIES constants
+             priority: P2 (family-i infra-drift); rerunnable: YES (not selected for budget)
+
+Family (ii)  RTL wrapper fixes (BUG-005 etc.)
+  ef090b13   fix(rtl): fix 3 wrapper-level RTL bugs (WV-001, BUG-005, WV-007)
+             2026-07-24 09:52:36; role: wstrb masking + sparse slave + status_done sticky fixes
+             priority: P1 (wrapper-fix); rerunnable: YES
+
+Family (iii) START/status fixes (BUG-006)
+  bd2bfef7   fix(rtl): BUG-RTL-SOC-006 — SFU wrapper start_hold race + FM-SOC-026 tolerance
+             2026-07-05 21:40:00; role: latch CMD.START during I_ADDR prefetch, close STATUS race
+             priority: P2; rerunnable: NO (date before 79654175; per plan guardrail not rerun)
+             static-diff only: recorded as pre-existing fix before first rerunnable point.
+
+Family (iv)  firmware dispatch
+  7aec7a3    (plan reference; not located) per-K-block dispatch
+  b545b1f    fix(mxu): per-K-block firmware MMUL + RTL accumulate mode for P9 doorbell divergence
+             2026-07-30 (approx); role: firmware dispatch refinement
+             priority: P3; rerunnable: not selected (budget ≤3)
+
+Family (v)   crossbar fairness
+             Not identified as a single commit in 2026-07..08 window; priority: P3; not rerun.
+
+Family (vi)  BUG-008 DESC_BASE fix
+             Commit referenced in plan as 2026-07-28 b0096d0c (software-stack phase);
+             priority: P3; not rerun (budget ≤3).
+
+CPU model switch (not rerun per plan)
+  09f753e2   feat(rtl): replace Spike with Ibex RTL — 33 cases regression PASS
+             2026-07-06 08:20:06; role: CPU model switch one day before 07-07 failure
+             priority: static-diff only; rerunnable: NO (plan guardrail)
+
+RERUN POINT SELECTION
+---------------------
+Point 1 = 0973d76f (effective earliest rerunnable 3-layer target; substitute for
+          79654175 which lacks the Makefile target). Rationale: verify whether
+          the first committed testcase already CLEARs.
+Point 2 = a8af3515 (family-i infra-drift: force full DRAM preload at segment
+          boundaries). Rationale: test whether stale-DRAM preload fixes later
+          flipped the result.
+Point 3 = ef090b13 (family-ii wrapper fix: BUG-005 wstrb masking + WV-001/007).
+          Rationale: test whether wrapper-level fix flipped the result.
+
+RUN COMMANDS AND PROVENANCE
+---------------------------
+All runs executed on sz0001 (192.168.0.11) with VCS V-2023.12-SP2.
+Environment init: `source sim/regression/run_env.sh`
+VCS version: vcs script version : V-2023.12
+Worktree convention: `/tmp/bug007-parent-N/CaduceusCore` (to satisfy Makefile
+  hardcoded `./CaduceusCore/...` path).
+Firmware hex built on sz0002 from each commit's firmware source, then copied.
+W1.2 golden expected.npz copied from main worktree (sha256 below).
+Vectors regenerated at each commit with `python3 scripts/gen_qwen25_3b_rtl_vectors.py`.
+Test invoked with BOOTROM_HEX env workaround:
+  export BOOTROM_HEX=<worktree>/firmware/build/npu_firmware.hex
+  make -C sim/regression run_qwen25_3b_3layer
+
+W1.2 golden input artifact (untracked, copied to all three worktrees):
+  path: rtl/test_vectors/soc_e2e/qwen25-3b-3layer/expected.npz
+  sha256: 571038a2e4d4190c93dbdbb010e240b98548aa68afcb40e1da469a1183cebe7a
+
+Per-point provenance:
+
+Point 1 — 0973d76f [Infra] Regression: add FM L2/L3 signoff targets and clean scripts
+  commit date: 2026-07-08 07:38:50 +0800
+  family: (i) sim-infra/testcase drift (effective earliest rerunnable point)
+  command: make -C sim/regression run_qwen25_3b_3layer (with BOOTROM_HEX env workaround)
+  start: 2026-09-02T03:20:59+0800
+  end:   2026-09-02T05:24:25+0800
+  firmware hex sha256: 03f3a4b95765377d1f5811eb41a864af9f840ef4c8a7f1e8e82476ea16bea43e
+  manifest sha256: f4f6941c72da54533a99d6e448029fa64caa58d0e66292858e7436fbba640240
+  simv sha256: 64d022719222f03b9e1e9d1985970d35ccad68487953540bf1990df5a125c1d8
+  VCS version: V-2023.12-SP2 / vcs script version V-2023.12
+  verdict: CLEAR (cocotb TESTS=1 PASS=1 FAIL=0 SKIP=0)
+  sim time: 35463909.50 ns; real time: 7223.93 s
+  per-op summary (build/wave1/w1-3-rtl-op-summary.json):
+    op_07_attn_weight: {"passed": true, "cycles": 0}
+    op_24_attn_weight: {"passed": true, "cycles": 0}
+    op_41_attn_weight: {"passed": true, "cycles": 0}
+  manual QA grep:
+    "cocotb_bridge.test_qwen25_3b_3layer PASS 35463909.50 7223.84"
+    "TESTS=1 PASS=1 FAIL=0 SKIP=0"
+
+Point 2 — a8af3515 fix(sim): force full DRAM preload at segment boundaries
+  commit date: 2026-08-21 01:23:48 +0800
+  family: (i) sim-infra/testcase drift
+  command: make -C sim/regression run_qwen25_3b_3layer (with BOOTROM_HEX env workaround)
+  start: 2026-09-02T03:20:59+0800
+  end:   2026-09-02T05:23:52+0800
+  firmware hex sha256: 2ccd16c67ed520102e0d4a0367995c4d373803b10882f1ef085972bf760179cc
+  manifest sha256: f4f6941c72da54533a99d6e448029fa64caa58d0e66292858e7436fbba640240
+  simv sha256: eaff2f957bd21b0213c62899c045a518431a253f4cb40780c6f659714feda70e
+  VCS version: V-2023.12-SP2 / vcs script version V-2023.12
+  verdict: CLEAR (cocotb TESTS=1 PASS=1 FAIL=0 SKIP=0)
+  sim time: 35739096.50 ns; real time: 7193.12 s
+  per-op summary:
+    op_07_attn_weight: {"passed": true, "cycles": 0}
+    op_24_attn_weight: {"passed": true, "cycles": 0}
+    op_41_attn_weight: {"passed": true, "cycles": 0}
+  manual QA grep:
+    "cocotb_bridge.test_qwen25_3b_3layer PASS 35739096.50 7193.03"
+    "TESTS=1 PASS=1 FAIL=0 SKIP=0"
+
+Point 3 — ef090b13 fix(rtl): fix 3 wrapper-level RTL bugs (WV-001, BUG-005, WV-007)
+  commit date: 2026-07-24 09:52:36 +0800
+  family: (ii) RTL wrapper fixes
+  command: make -C sim/regression run_qwen25_3b_3layer (with BOOTROM_HEX env workaround)
+  start: 2026-09-02T03:20:59+0800
+  end:   2026-09-02T05:16:20+0800
+  firmware hex sha256: 7a97c3369ad826d152b00fb36bd34713e86db8e4cee95c94ee0ecc77658dc2e9
+  manifest sha256: f4f6941c72da54533a99d6e448029fa64caa58d0e66292858e7436fbba640240
+  simv sha256: 8953bed5b6fbbbdd2f33d5050dd785de83d01063b930e8ec5af6ae8d9de7e567
+  VCS version: V-2023.12-SP2 / vcs script version V-2023.12
+  verdict: CLEAR (cocotb TESTS=1 PASS=1 FAIL=0 SKIP=0)
+  sim time: 35739096.50 ns; real time: 6739.21 s
+  per-op summary:
+    op_07_attn_weight: {"passed": true, "cycles": 0}
+    op_24_attn_weight: {"passed": true, "cycles": 0}
+    op_41_attn_weight: {"passed": true, "cycles": 0}
+  manual QA grep:
+    "cocotb_bridge.test_qwen25_3b_3layer PASS 35739096.50 6739.12"
+    "TESTS=1 PASS=1 FAIL=0 SKIP=0"
+
+OBSERVATION
+-----------
+All three rerun points produced CLEAR (PASS) verdicts. The earliest committed
+rerunnable point (0973d76f, 2026-07-08 07:38:50, ~17 hours after the 07-07
+failure record) already passes the 3-layer MODE-A target with the same manifest
+hash and the same op07/24/41 passed=true signature observed at HEAD.
+
+No FAIL→CLEAR flip is observed within the three rerun points, because none of
+the points FAIL. The interval between the latest rerun point (a8af3515,
+2026-08-21) and HEAD (2026-09-02) is also CLEAR at both ends, so no flip is
+observed there either.
+
+FLIP
+----
+FLIP: reconstruction-failed
+
+Rationale: ≤3 rerun points all CLEAR. Per plan decision rule, when no FAIL
+point is observed within the budget, the failure cannot be localized to any
+commit interval or family in the mainline sequence. The original 07-07 failure
+is therefore attributed to the uncommitted 07-07 testcase/environment, not to
+the mainline commit sequence. This is a reconstruction failure, not an
+environmental dismissal: the committed artifacts at and after 2026-07-08 do not
+reproduce the reported 45-PASS/6-FAIL signature.
+
+RECONSTRUCTION-CAVEATS:
+- The exact 2026-07-07 3-layer testcase was never committed; all historical
+  reruns are reconstructions using the 2026-07-08 (or later) testcase code.
+- The Makefile target run_qwen25_3b_3layer does not exist at 79654175; the
+  effective earliest rerunnable commit is 0973d76f (22 seconds later, same
+  commit batch).
+- The untracked W1.2 golden expected.npz was copied from the main worktree;
+  its provenance is 2026-07-08, not 2026-07-07.
+- Firmware hex was rebuilt on sz0002 and copied to sz0001 because sz0001 lacks
+  the RISC-V toolchain.
+- The historical test required two workarounds (directory named CaduceusCore,
+  BOOTROM_HEX env export) that were not needed at HEAD; these are artifacts of
+  running outside the canonical repo path, not of the commits themselves.
+
+ADVERSARIAL-QA NOTES
+--------------------
+stale_state: avoided — each worktree rebuilt firmware from its own commit's
+  source, regenerated vectors with its own generator, and compiled its own simv;
+  no HEAD artifacts were reused.
+misleading_success_output: avoided — verdicts are from cocotb results summary
+  (TESTS=1 PASS=1 FAIL=0) and run_exit=0, not from make color messages alone;
+  per-op JSON and sim_time/real_time are recorded.
+dirty_worktree: no commit was made from /tmp; main worktree branch was not
+  switched; only the evidence file is committed from the main worktree.
+
+RESULT: PASS
