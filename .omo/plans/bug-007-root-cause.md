@@ -156,7 +156,7 @@ Your next move: `/start-work` 启动执行，或先跑一轮高精度评审。Fu
   QA scenarios: happy=某 family 出现 FAIL→CLEAR 翻转；failure=≤3 点全 FAIL → 显式标记 `FLIP: no-clear-observed` 并说明无法定位修复区间；failure=≤3 点全 CLEAR 或 build-failed → 显式标记 reconstruction-failed 并说明缺失的 family。Evidence `.omo/evidence/task-7-bug-007-root-cause.txt`
   Commit: Y | test(bug007): bounded flip-commit archaeology with reconstruction caveats
 
-- [ ] 8. 归因结论 + BUG-007 ledger 处置 + Blocker-6 回填
+- [x] 8. 归因结论 + BUG-007 ledger 处置 + Blocker-6 回填
   What to do / Must NOT do: 汇总 todo 1-7 → `ATTRIBUTION:` 一句话归属判定（FuncModel | RTL | 固件 | 测试 case/生成器/驱动 | 环境/重建失败，可组合）+ 证据链。必须显式列出所有**残差候选**（cocotb-driver back-to-back write timing、STATUS.DONE lifecycle、跨引擎状态泄漏、crossbar fairness、重建不确定性），并说明哪些被排除、哪些因证据删除无法排除。按 **Blocker-6 关闭条件**处置（`docs/soc-rtl-review-remediation-blockers.md:66-73` 原文）：(a) 根因定位 + 修复（历史修复族已合入 HEAD 的，修复即该 commit 族；活缺陷仍在的则做**最小修复**）+ **重跑 3-layer forward 全部 51 op cycles>0 且 golden 匹配** → Status=Fixed，Root Cause 字段写明修复族/commit；(b) 环境性/不可归因/重建失败 → 定级 + 复现条件 + 影响面 + 未排除残差清单，**需用户在终审后亲自接受**。更新 `docs/bugs/bugs-soc-rtl.md` BUG-007（Root Cause/Verification 字段，:328-367）+ `docs/soc-rtl-review-remediation-blockers.md` Blocker 6 行（解除证据路径+日期；走 (b) 且用户未接受 → 记 disposition-pending-user）。Must NOT：代用户接受 (b)；证据不足时 claim Fixed。
   Parallelization: Wave 3 | Blocked by: 2,3,4,5,6,7 | Blocks: 9, F1-F4
   References (executor has NO interview context - be exhaustive): `docs/soc-rtl-review-remediation-blockers.md:66-73`（Blocker 6 关闭条件原文）；`docs/bugs/bugs-soc-rtl.md:328-367`（待更新条目）；`reports/CaduceusCore-review-report-2026-08-28.md:218-220`（§4.5 评审要求）
