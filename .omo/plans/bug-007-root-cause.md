@@ -164,7 +164,7 @@ Your next move: `/start-work` 启动执行，或先跑一轮高精度评审。Fu
   QA scenarios: happy=三分支之一完整落地；failure=证据不足以支撑任一分支 → 显式记录 open-questions 并 STOP 呈报（不硬写结论）。Evidence `.omo/evidence/task-8-bug-007-root-cause.txt`
   Commit: Y | docs(bugs): BUG-RTL-SOC-007 root cause + disposition (Blocker-6)
 
-- [ ] 9. 交叉记录 + notepad learnings + 证据汇总表
+- [x] 9. 交叉记录 + notepad learnings + 证据汇总表
   What to do / Must NOT do: (a) BUG-012 cross-ref 注记：若 H4 结果指向 multi-tile 共因，仅在 BUG-012 条目（`bugs-soc-rtl.md:801-843`）追加 cross-ref 行——**不改其 Status、不写 Fix**；(b) `.omo/notepads/bug-007-root-cause/learnings.md` 记录方法论收获（模式考古/differential/证伪判据设计/删除证据下的重建不确定性）；(c) 汇总表：模式×假设×结论×证据路径（含全部 SKIPPED 行的 citation 与残差候选）。Must NOT：并案修复 BUG-012。
   Parallelization: Wave 3 | Blocked by: 8 | Blocks: F1-F4
   References (executor has NO interview context - be exhaustive): `docs/bugs/bugs-soc-rtl.md:801-843`（BUG-012 条目——只加注不改状态）；`.omo/notepads/` 惯例（参考 soc-rtl-review-remediation notepad 结构）
