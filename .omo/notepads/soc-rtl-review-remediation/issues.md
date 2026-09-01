@@ -25,3 +25,32 @@
   `sim/rtl_soc_runner.py:4402` (consistent with surrounding usage), then
   re-run full regression and re-audit.
 - **Status**: OPEN — disposition to todo 15 (red→green summary) / F2.
+
+## Issue 2 (todo 14 F3, 2026-08-31): run_e2e_blk0 op05 attn_score MMUL FAIL — PRE-EXISTING, NOT a crossbar regression
+
+- **Where**: `rtl/test_vectors/qwen_blk0/op05_attn_score_MMUL_golden.hex` vs RTL
+  output SRAM @0x20020000; fails in `make run_e2e_blk0` (TESTCASE=test_qwen_blk0).
+- **What**: op5 attn_score MMUL (M=32 K=128 N=2 tiles=2) FAILs with
+  62/64 INT32 mismatches — first mismatch @ byte[8] (actual=0x00, golden=0xD0);
+  words 0-1 correct, words 2-63 zero; 634 cycles; 1/17 ops failed.
+- **Attribution (this investigation)**: single-variable A/B on sz0001 —
+  post-fix HEAD e73e28e vs pre-fix crossbar `c478ae5~1:rtl/soc/axi_crossbar.v`,
+  same firmware/tb/test/vectors, /tmp builds, identical Makefile recipe.
+  Both runs FAIL **byte-identically** (log diff = only 4 environmental lines:
+  compiler timestamp, python seed, wall-clock real time/ratio, CPU time).
+  Crossbar fix c478ae5 is behaviorally neutral on this path.
+  => **PRE-EXISTING. Rollback gate (plan Metis m4) NOT triggered; c478ae5 stays.**
+- **Stale-golden hypothesis (OPEN)**: blk0 golden vectors + manifest generated
+  2026-07-07 (a29e93c), ~8 weeks before the fix and before the firmware
+  allowlist fix (cee6697) + firmware rebuild (hex mtime 2026-08-31 13:08).
+  No DESC_BASE warnings and no X-propagation in either run (0 hits).
+- **Attention-family tie**: BUG-RTL-SOC-007 is op07 attn_weight (cycles=0,
+  op never executes, still Open). This is op05 attn_score — same attention
+  chain, DISTINCT signature (op executes; output rows beyond row 0 are zero).
+- **Evidence**: `.omo/evidence/task-14-blk0-investigation.txt` (+ full logs
+  `task-14-blk0-repro.log`, `task-14-blk0-baseline.log` — 227902 B each,
+  `task-14-blk0-build-notes.log`; F3 original `_tmp_task14_f3c_blk0.log`).
+- **Suggested next steps**: `scripts/verify_ops_func_model.py` op05 golden
+  sanity; MXU accumulator-drain / writeback for multi-tile M-loop.
+- **Status**: attribution RESOLVED (PRE-EXISTING); root cause OPEN — not a
+  crossbar defect, does not block c478ae5.
