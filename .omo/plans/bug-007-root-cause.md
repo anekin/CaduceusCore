@@ -174,9 +174,9 @@ Your next move: `/start-work` 启动执行，或先跑一轮高精度评审。Fu
 
 ## Final verification wave
 > Runs in parallel after ALL todos. ALL must APPROVE. Surface results and wait for the user's explicit okay before declaring complete.
-- [ ] F1. Plan compliance audit — 10 todos 逐条核对：evidence 存在、判定行满足、commit 已做、全部条件 skip 均有 citation（no_silent_skip 抽查）、残差候选清单非空。
-- [ ] F2. Code quality review — 本计划新增/修改的 sim/ 测试基建（focused case、H0 instrument）质量 + 越界检查；若 todo 8 走了修复分支则审查 rtl/firmware 改动的最小性。
-- [ ] F3. Real manual QA — **agent 可执行**：重跑 MODE-A（`make -C sim/regression run_qwen25_3b_3layer`）与 MODE-B（`make -C sim/regression run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN`）各一次，核对 evidence provenance 块齐全（git HEAD/hex sha/manifest pre+post hash/simv/VCS）、判定行与日志逐字一致；**用户门禁仅保留给处置 (b) 的接受**（agent 不代签）。
+- [x] F1. Plan compliance audit — 10 todos 逐条核对：evidence 存在、判定行满足、commit 已做、全部条件 skip 均有 citation（no_silent_skip 抽查）、残差候选清单非空。
+- [x] F2. Code quality review — 本计划新增/修改的 sim/ 测试基建（focused case、H0 instrument）质量 + 越界检查；若 todo 8 走了修复分支则审查 rtl/firmware 改动的最小性。
+- [x] F3. Real manual QA — **agent 可执行**：重跑 MODE-A（`make -C sim/regression run_qwen25_3b_3layer`）与 MODE-B（`make -C sim/regression run_fm_soc_case CASE_ID=ATTN-WEIGHT-CHAIN`）各一次，核对 evidence provenance 块齐全（git HEAD/hex sha/manifest pre+post hash/simv/VCS）、判定行与日志逐字一致；**用户门禁仅保留给处置 (b) 的接受**（agent 不代签）。
 - [ ] F4. Scope fidelity — Must NOT 清单逐项核对：冻结面零 diff（`git diff main --stat -- config/ sim/arc_model.py sim/quantize.py rtl/cpu/ibex/ rtl/ip/ gen/` 为空）、BUG-012 状态未动、无主工作 worktree、并行 dirty 文件未入库、历史 worktree 已清理。
 
 ## Commit strategy
