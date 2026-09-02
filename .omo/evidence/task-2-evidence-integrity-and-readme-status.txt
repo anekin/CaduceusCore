@@ -48,3 +48,20 @@ result: PASS
 
 ## Post-commit git status --porcelain snapshot
 command: git status --porcelain
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/evidence-integrity-and-readme-status/learnings.md
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M .omo/plans/evidence-integrity-and-readme-status.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+ M docs/bugs/bugs-module-level.md
+
+MUST-NOT lines present: 7/7 (task-0-signoff-v3-runner.txt, task-20-uncertainty-kpis.json, task-23-perf-spec-ci.txt, fm-e2e-qwen-cv-software-stack/learnings.md, phase6-rtl-verification/learnings.md, fm-cv-chain.txt, w3-4-mobilenetv3-fm.txt)
+SNAPSHOT_VALIDATION: PASS (all 7 Must-NOT dirty files present, none staged/committed by todo 2)
+Extra in-flight lines (NOT committed by todo 2, NOT Must-NOT, orchestrator/parallel-session owned -> plan merge commit):
+- .omo/plans/evidence-integrity-and-readme-status.md (P0 todo-0 checkbox tick)
+- .omo/notepads/evidence-integrity-and-readme-status/learnings.md (this plan's notepad, appended finding; merge commit pickup)
+- docs/bugs/bugs-module-level.md (parallel Wave-2 todo 3 in-flight edit, not mine)

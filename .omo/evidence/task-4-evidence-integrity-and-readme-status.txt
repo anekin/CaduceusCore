@@ -163,15 +163,57 @@ PART G — Staged-set assertion + commit (todo 4 pathspec)
 ====================================================================
 See staged-set output below (asserted == exactly README.md +
 .omo/evidence/task-4-evidence-integrity-and-readme-status.txt)
-RESULT:
+RESULT: PASS — staged count 2/2; both paths match; zero Must-NOT files
+        staged. (git add + git commit each retried with 3-15s backoff
+        on index.lock; both succeeded on attempt 1.)
 
 COMMIT MESSAGE: docs(readme): add project status snapshot + key file index
-COMMIT SHA:
+COMMIT SHA: 3bc1301
+COMMITTED FILES (git show --name-only --format= HEAD):
+  README.md
+  .omo/evidence/task-4-evidence-integrity-and-readme-status.txt
+RESULT: PASS — commit contains exactly the two pathspec files; all 7
+        Must-NOT parallel-session dirty files absent from the commit.
 
 ====================================================================
 PART H — Post-commit git status --porcelain
 ====================================================================
 COMMAND: git status --porcelain
-OUTPUT:
-(see below — 7 Must-NOT parallel-session dirty files remain unstaged/uncommitted)
-RESULT:
+OUTPUT:  (verbatim below)
+RESULT:  7 Must-NOT parallel-session dirty files remain unstaged and
+         uncommitted. Two extra dirty files are workflow bookkeeping
+         produced by the parallel Wave-2 execution itself, NOT by this
+         todo and NOT committed by it: .omo/plans/evidence-integrity-
+         and-readme-status.md (start-work checkbox [x] flip on todo 0)
+         and .omo/notepads/evidence-integrity-and-readme-status/
+         learnings.md (todo 2/4 shared-notepad appends). Both are
+         excluded from the todo-4 staging and left for the plan-level
+         bookkeeping pass.
+
+PORCELAIN (verbatim, post-commit 3bc1301):
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/evidence-integrity-and-readme-status/learnings.md
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M .omo/plans/evidence-integrity-and-readme-status.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+
+Must-NOT 7 present and untouched (unstaged/uncommitted):
+  1. .omo/evidence/task-0-signoff-v3-runner.txt              ✓
+  2. .omo/evidence/task-20-uncertainty-kpis.json             ✓
+  3. .omo/evidence/task-23-perf-spec-ci.txt                  ✓
+  4. .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md ✓
+  5. .omo/notepads/phase6-rtl-verification/learnings.md      ✓
+  6. build/evidence/fm-cv-chain.txt                          ✓
+  7. build/evidence/w3-4-mobilenetv3-fm.txt                  ✓
+
+Workflow bookkeeping (NOT staged/committed by todo 4):
+  - .omo/plans/evidence-integrity-and-readme-status.md (checkbox [x] flip)
+  - .omo/notepads/evidence-integrity-and-readme-status/learnings.md
+    (todo 2/4 shared-notepad append; my todo-4 entry appended per
+     notepad convention, never overwritten)
+
+OVERALL RESULT: PASS

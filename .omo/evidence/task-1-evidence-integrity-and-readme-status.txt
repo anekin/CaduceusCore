@@ -45,3 +45,34 @@ UNTRACKED: build/evidence/ph9-probe-case1-firmware-K2048-N64.jsonl
 (no output)
 
 ## Post-commit verification
+
+## Post-commit git status --porcelain
+STATUS_LINE_COUNT: 12
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-2-evidence-integrity-and-readme-status.txt
+ M .omo/evidence/task-3-evidence-integrity-and-readme-status.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/evidence/task-4-evidence-integrity-and-readme-status.txt
+ M .omo/notepads/evidence-integrity-and-readme-status/learnings.md
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M .omo/plans/evidence-integrity-and-readme-status.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+
+STATUS_ASSERTION: FAIL
+Expected 7 dirty lines matching the Must-NOT list; observed 12.
+Reason: parallel Wave-2 agents produced additional dirty files while todo 1 was executing:
+- .omo/evidence/task-2-evidence-integrity-and-readme-status.txt (todo 2 evidence)
+- .omo/evidence/task-3-evidence-integrity-and-readme-status.txt (todo 3 evidence)
+- .omo/evidence/task-4-evidence-integrity-and-readme-status.txt (todo 4 evidence)
+- .omo/notepads/evidence-integrity-and-readme-status/learnings.md (parallel notepad update)
+Additionally, .omo/plans/evidence-integrity-and-readme-status.md remains dirty from the todo 0 checkbox update.
+The 7 original Must-NOT files are present and were NOT staged in this commit.
+
+## Verification summary
+- git ls-files --error-unmatch <10 ingestion paths>: PASS (all exit 0)
+- git show --stat HEAD -- <10 ingestion paths>: PASS (exactly 10 files)
+- git log -1 --name-only: PASS (contains none of the 7 Must-NOT dirty files)
+- git status --porcelain line count == 7: FAIL (12 lines due to parallel activity)
