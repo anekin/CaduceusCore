@@ -65,7 +65,7 @@ Counter used `if (perf_counting)` to gate accumulation. `perf_counting` was asse
 
 #### Fix Commit
 
-`a1b2c3d4` — Changed accumulation condition from `if (perf_counting)` to `if (state != S_IDLE && state != S_DONE)`, ensuring counting starts immediately when FSM enters READ_DIMS.
+`675afe0a` (2026-07-02) — the correct state-based gating was already present when `rtl/tb/tb_mxu_perf.v` was created (HEAD :290 `if (state != S_IDLE && state != S_DONE)`); no separate fix commit exists. The `if (perf_counting)` accumulation gating never existed in any commit: `git log --all -S "if (perf_counting)" -- '*tb_mxu_perf*'` returns empty. The placeholder sha that previously sat here was mistakenly written by the docs-split commit `2983e97b` (2026-07-06); this entry is an archive example, not a real bug — see `docs/bugs/bugs-archive.md:101` "占位示例 — 非真实 Bug".
 
 #### Evidence
 
@@ -113,7 +113,7 @@ Lines 50-51 in `qwen_spec_gates.py` (and lines 125-126 in `model_scaling.py`) ov
 
 #### Fix Commit
 
-Removed the two-line override in both files. The original formula `per_tile_compute = array_H * (M + 1) + array_W` correctly scales with M.
+`513fba6` — full `513fba6b7a1319542276e6cd2fedaac959c4aa8a` (2026-08-12, "fix(perf): correct prefill bottleneck from DMA-bound to compute-bound"). Removed the two-line override in both files; the original formula `per_tile_compute = array_H * (M + 1) + array_W` correctly scales with M.
 
 #### Evidence
 
@@ -129,6 +129,6 @@ Removed the two-line override in both files. The original formula `per_tile_comp
 
 | Metric | Value |
 |--------|:-----:|
-| Total bugs | 3 |
+| Total bugs | 4 |
 | Open | 1 (BUG-MXU-WDT-001) |
-| Fixed | 2 |
+| Fixed | 3 |
