@@ -334,7 +334,7 @@ no additional RTL bug work.
 | **Case** | 3-layer forward pass (51 ops, Qwen2.5-3B blk.0/1/2) |
 | **Severity** | Critical / Major |
 | **Type** | RTL / Firmware / Runner — reconstruction failure（无已提交产物可归因） |
-| **Status** | **disposition-pending-user**（2026-09-02 根因追查计划 `.omo/plans/bug-007-root-cause.md` todo 8 结论：testcase/environment reconstruction failure；任何已提交可重跑点均未复现 45-PASS/6-FAIL；Blocker-6 分支 (b) 处置，待用户接受，agent 不代签） |
+| **Status** | **accepted (reconstruction-failure)**（2026-09-02 根因追查计划 `.omo/plans/bug-007-root-cause.md` todo 8 定级：testcase/environment reconstruction failure；任何已提交可重跑点均未复现 45-PASS/6-FAIL；Blocker-6 分支 (b)，用户已于 2026-09-02 接受定级并关闭。不 claim Fixed） |
 
 #### Symptom
 
@@ -361,7 +361,7 @@ Evidence:
 
 #### Fix
 
-**无主线上根因修复被 claim**（2026-09-02 定级）：任何已提交可重跑点均未复现 FAIL，不存在可修复的根因，按 Blocker-6 分支 (b) 处置为 reconstruction-failure（待用户接受）。不 claim Fixed。若用户拒绝 (b) 定级并指定升级路径（如 FPGA/更早日志），本条目重新打开并按新证据再判。
+**无主线上根因修复被 claim**（2026-09-02 定级，用户同日接受）：任何已提交可重跑点均未复现 FAIL，不存在可修复的根因，按 Blocker-6 分支 (b) 处置为 reconstruction-failure（用户已于 2026-09-02 回复"接受"，定级生效）。不 claim Fixed。若未来出现新证据（如 FPGA/更早日志），本条目可按新证据重新打开再判。
 
 **Verification — root-cause 计划重跑 (2026-09-01/02, `.omo/plans/bug-007-root-cause.md` todo 1/6/7)：**
 - MODE-A HEAD 重跑（`make -C sim/regression run_qwen25_3b_3layer`）：**51/51 PASS**，op07/24/41 attn_weight compute_en_cycles=19（执行）、cos_sim=1.000000、max_abs≤0.0003、ok=True（`.omo/evidence/task-1-bug-007-root-cause.txt`）。
@@ -373,7 +373,9 @@ Evidence:
 
 **Status 说明 (2026-08-31, todo 18 soc-rtl-review-remediation, 历史记录):** todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27，证据 `build/evidence/task-15-soc-rtl-verification-signoff.txt`）：完整 17-op blk.0 chain（含 op07 attn_weight）全部 26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0（14 FP op cos≥0.999 + 3 INT32 bit-exact），链级未复现 cycles=0。当时根因未知，保持 Open 待 FPGA/更早日志追踪（已被 2026-09-02 定级取代）。
 
-**Status 说明 (2026-09-02, todo 8 bug-007-root-cause):** 根因追查计划完成。ATTRIBUTION = **testcase/environment reconstruction failure**——任何已提交可重跑点（最早 `0973d76f` 2026-07-08 07:38 至 HEAD）均未复现 45-PASS/6-FAIL 签名；无 FuncModel 或 RTL 故障证据；"cycles=0" 为测试驱动硬编码测量伪影。按 Blocker-6 分支 (b) 处置（重建失败，需用户接受）。本条目状态 **disposition-pending-user**，不 claim Fixed。残差候选清单见 `.omo/evidence/task-8-bug-007-root-cause.txt`（11 项，含 live hazard：MXU SCALE_ADDR 跨流程状态泄漏）。
+**Status 说明 (2026-09-02, todo 8 bug-007-root-cause):** 根因追查计划完成。ATTRIBUTION = **testcase/environment reconstruction failure**——任何已提交可重跑点（最早 `0973d76f` 2026-07-08 07:38 至 HEAD）均未复现 45-PASS/6-FAIL 签名；无 FuncModel 或 RTL 故障证据；"cycles=0" 为测试驱动硬编码测量伪影。按 Blocker-6 分支 (b) 处置（重建失败，需用户接受）。本条目当时状态 **disposition-pending-user**，不 claim Fixed（已被同日用户接受关闭取代，见下）。残差候选清单见 `.omo/evidence/task-8-bug-007-root-cause.txt`（11 项，含 live hazard：MXU SCALE_ADDR 跨流程状态泄漏）。
+
+**Status 说明 (2026-09-02, 用户接受):** 用户对 todo 8 提出的定级问题（`.omo/evidence/task-8-bug-007-root-cause.txt` EXACT-QUESTION）回复"接受"。BUG-RTL-SOC-007 正式定级 **reconstruction-failure** 并关闭：状态由 disposition-pending-user → **accepted (reconstruction-failure)**（不 claim Fixed）；Blocker 6 随之关闭（`docs/soc-rtl-review-remediation-blockers.md`）。残差候选清单（11 项，含 live hazard：MXU SCALE_ADDR 跨流程状态泄漏）继续由 task-8 evidence 跟踪；若未来出现新证据（如 FPGA/更早日志），本条目可重新打开再判。
 
 ---
 
@@ -386,6 +388,8 @@ Ledger update 2026-08-27 (todo 1, soc-rtl-verification-signoff): BUG-RTL-SOC-P9-
 Ledger update 2026-08-31 (todo 19, soc-rtl-review-remediation): BUG-RTL-SOC-002 从原已 Waived 标记改回 **Pending（waiver 待用户签署）**（WVR-SOC-RTL-002，todo 2 提交、签署前不生效）；BUG-RTL-SOC-012 新增 **Open**（blk0 E2E op05 attn_score drain，todo 14 blk0 investigation 判 PRE-EXISTING，2026-08-31）。
 
 Ledger update 2026-09-02 (todo 8, bug-007-root-cause): BUG-RTL-SOC-007 根因追查计划完成，ATTRIBUTION = **testcase/environment reconstruction failure**（无已提交产物支持 FuncModel 或 RTL 故障；45-PASS/6-FAIL 未在任何已提交可重跑点复现；`FLIP: reconstruction-failed`，证据 `.omo/evidence/task-{1,2,6,7,8}-bug-007-root-cause.txt`）。按 Blocker-6 分支 (b) 处置（重建失败，需用户接受），状态 **disposition-pending-user**，不 claim Fixed。BUG-RTL-SOC-012 保持 **Open**（未并案）。
+
+Ledger update 2026-09-02 (用户接受, bug-007-root-cause 收尾): 用户回复"接受" BUG-RTL-SOC-007 按 Blocker-6 分支 (b) 的 reconstruction-failure 定级。状态由 **disposition-pending-user** 关闭为 **accepted (reconstruction-failure)**（不 claim Fixed）；Blocker 6 关闭（`docs/soc-rtl-review-remediation-blockers.md`）。BUG-RTL-SOC-012 保持 **Open**。
 
 ### By Severity
 
@@ -401,7 +405,7 @@ Ledger update 2026-09-02 (todo 8, bug-007-root-cause): BUG-RTL-SOC-007 根因追
 | Fixed | 11 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-005, BUG-RTL-SOC-006, BUG-RTL-SOC-008, BUG-RTL-SOC-WV-001, BUG-RTL-SOC-WV-007, BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
 | Waived | 0 | — |
 | Pending (waiver 待用户签署) | 1 | BUG-RTL-SOC-002 (8 MB DRAM window constraint — WVR-SOC-RTL-002, pending sign-off 待用户签署) |
-| Disposition-pending-user | 1 | BUG-RTL-SOC-007 (attn_weight — ATTRIBUTION 2026-09-02: testcase/environment reconstruction failure，45/6 未复现，无 FuncModel/RTL 故障证据；Blocker-6 path (b)，待用户接受，不 claim Fixed) |
+| Accepted (reconstruction-failure) | 1 | BUG-RTL-SOC-007 (attn_weight — ATTRIBUTION 2026-09-02: testcase/environment reconstruction failure，45/6 未复现，无 FuncModel/RTL 故障证据；Blocker-6 path (b)，用户已接受关闭，不 claim Fixed) |
 | Open | 1 | BUG-RTL-SOC-012 (blk0 E2E op05 attn_score MMUL drain — todo 14 blk0 investigation 判 PRE-EXISTING) |
 | Re-opened | 0 | — |
 
@@ -425,7 +429,7 @@ Ledger update 2026-09-02 (todo 8, bug-007-root-cause): BUG-RTL-SOC-007 根因追
 | Total RTL bugs found and documented | 14 |
 | Bugs closed Fixed | 11 (78.6%) |
 | Bugs pending waiver sign-off | 1 (7.1%) — BUG-RTL-SOC-002 (8 MB DRAM window, WVR-SOC-RTL-002, pending sign-off 待用户签署) |
-| Disposition pending user acceptance | 1 (7.1%) — BUG-RTL-SOC-007 (2026-09-02 定级 reconstruction failure，Blocker-6 path (b)，待用户接受，不 claim Fixed) |
+| Accepted (reconstruction-failure, 用户已接受) | 1 (7.1%) — BUG-RTL-SOC-007 (2026-09-02 定级 + 用户接受关闭，Blocker-6 path (b)，不 claim Fixed) |
 | Open / under investigation | 1 (7.1%) — BUG-RTL-SOC-012 (blk0 op05 attn_score drain, todo 14 判 PRE-EXISTING) |
 | Ibex-specific bugs (full RTL CPU replacement) | 0 |
 | Regressions after fixes | 0 (491/491 module regression PASS; vector + MXU wrapper 10/10 baseline PASS; PERF-06 M=32 cos=1.000000; PERF-13 9/9 MMUL PASS) |

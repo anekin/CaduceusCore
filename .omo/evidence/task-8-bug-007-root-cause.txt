@@ -208,3 +208,15 @@ ADVERSARIAL-CLASS PROBES
   untouched; the 7 parallel-session dirty files unmodified and unstaged.
 
 RESULT: PASS
+
+USER-ACCEPTANCE (2026-09-02)
+----------------------------
+USER-ACCEPTANCE: accepted
+User replied "接受" to the EXACT-QUESTION above (2026-09-02 session).
+BUG-007-STATUS (post-acceptance): accepted (reconstruction-failure)
+Blocker-6: closed — branch (b) accepted by user; docs/bugs/bugs-soc-rtl.md
+and docs/soc-rtl-review-remediation-blockers.md updated accordingly
+(Status row, Fix section, Status note, ledger update, By-Status table,
+Quality-Metrics table, Blocker 6 table + disposition note, P2.5 row).
+No Fixed claim made; the 11-item residual-candidates list above remains
+tracked (incl. live hazard: MXU SCALE_ADDR cross-flow stale state).
