@@ -260,7 +260,10 @@ FM-SOC-026 re-run after BUG-RTL-SOC-004 fix + `dram_mb=8` runner fix (2026-07-05
 
 FM-SOC-026 re-run after BUG-RTL-SOC-006 fix (2026-07-05): **PASS**.  
 FM-SOC-011 single-command SFU sanity check: **PASS**.  
-Evidence: `.omo/evidence/task-7-p1-full-rtl.txt`, `CaduceusCore/build/p1_full_rtl/evidence/FM-SOC-026.log`.
+Evidence: `build/p1_full_rtl/evidence/FM-SOC-026.log`；注：原 task-7 p1 full-RTL 证据引用从未入库，已移除（2026-09-02）。入库替代证据：
+- `build/evidence/fm-soc-regression.txt`
+- `build/evidence/task-16-soc-rtl-verification-signoff.txt`
+- `build/evidence/task-22-phase10-rtl-verification.txt`
 
 ---
 
