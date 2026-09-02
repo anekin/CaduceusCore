@@ -379,9 +379,11 @@ Evidence:
 
 ---
 
-## Final Bug Statistics (2026-08-27)
+## Final Bug Statistics (2026-08-27; refreshed 2026-09-02)
 
-### Total: 14 bugs (BUG-RTL-SOC-001 through BUG-RTL-SOC-008 + BUG-RTL-SOC-012 + 2 wrapper-level-verification bugs + 3 phase-9 bugs)
+### Total: 17 bugs (BUG-RTL-SOC-001 through BUG-RTL-SOC-012 + 2 wrapper-level-verification bugs + 3 phase-9 bugs)
+
+Ledger update 2026-09-02 (statistics refresh): 汇总表补记 2026-08-31 T12 新增的 BUG-RTL-SOC-009/010/011（此前 2026-08-27 版汇总未计入，导致 Total/Open 计数过期）——Total 14→**17**；By-Status Open 1→**4**（009/010/011/012）；By-Severity 新增 Minor 2（010/011）、Major +1（009）；By-Module 新增 doorbell ABI 窗口与 wrapper 文档 2 行；Quality Metrics 百分比按 17 重算。各条目正文状态不变。
 
 Ledger update 2026-08-27 (todo 1, soc-rtl-verification-signoff): BUG-RTL-SOC-P9-00A、BUG-RTL-SOC-P9-00D、BUG-MXU-P9-00B closed **Fixed**（phase 9/10 evidence）；BUG-RTL-SOC-007 remains **Open** with phase 10 PERF-13 evidence（attn_weight cycles>0）；todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27），26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，保持 Open 待 FPGA/更早日志追踪。
 
@@ -396,7 +398,8 @@ Ledger update 2026-09-02 (用户接受, bug-007-root-cause 收尾): 用户回复
 | Severity | Count | Bug IDs |
 |----------|:-----:|---------|
 | Critical | 3 | BUG-RTL-SOC-001 (GLIBC ABI — Spike plugin), BUG-RTL-SOC-003 (missing `cb_m_arvalid` — SoC integration), BUG-RTL-SOC-007 (attn_weight dispatch — op never executes) |
-| Major | 11 | BUG-RTL-SOC-002 (DRAM 8 MB window), BUG-RTL-SOC-004 (SFU prefetch dropped), BUG-RTL-SOC-005 (X-prop from DRAM padding), BUG-RTL-SOC-006 (SFU start_hold race), BUG-RTL-SOC-008 (DESC_BASE overlap), BUG-RTL-SOC-012 (blk0 op05 attn_score drain), BUG-RTL-SOC-WV-001 (SFU status_done 1-cycle pulse), BUG-RTL-SOC-WV-007 (MXU consecutive dispatch DONE timeout), BUG-RTL-SOC-P9-00A (M=1 multi-tile divergence), BUG-RTL-SOC-P9-00D (PERF residual divergence), BUG-MXU-P9-00B (broadcast/multi-tile) |
+| Major | 12 | BUG-RTL-SOC-002 (DRAM 8 MB window), BUG-RTL-SOC-004 (SFU prefetch dropped), BUG-RTL-SOC-005 (X-prop from DRAM padding), BUG-RTL-SOC-006 (SFU start_hold race), BUG-RTL-SOC-008 (DESC_BASE overlap), BUG-RTL-SOC-009 (doorbell ABI window unimplemented), BUG-RTL-SOC-012 (blk0 op05 attn_score drain), BUG-RTL-SOC-WV-001 (SFU status_done 1-cycle pulse), BUG-RTL-SOC-WV-007 (MXU consecutive dispatch DONE timeout), BUG-RTL-SOC-P9-00A (M=1 multi-tile divergence), BUG-RTL-SOC-P9-00D (PERF residual divergence), BUG-MXU-P9-00B (broadcast/multi-tile) |
+| Minor | 2 | BUG-RTL-SOC-010 (pcie_ep_wrapper header overstates fields), BUG-RTL-SOC-011 (rtl/ip/README DMA access classes wrong) |
 
 ### By Status
 
@@ -406,7 +409,7 @@ Ledger update 2026-09-02 (用户接受, bug-007-root-cause 收尾): 用户回复
 | Waived | 0 | — |
 | Pending (waiver 待用户签署) | 1 | BUG-RTL-SOC-002 (8 MB DRAM window constraint — WVR-SOC-RTL-002, pending sign-off 待用户签署) |
 | Accepted (reconstruction-failure) | 1 | BUG-RTL-SOC-007 (attn_weight — ATTRIBUTION 2026-09-02: testcase/environment reconstruction failure，45/6 未复现，无 FuncModel/RTL 故障证据；Blocker-6 path (b)，用户已接受关闭，不 claim Fixed) |
-| Open | 1 | BUG-RTL-SOC-012 (blk0 E2E op05 attn_score MMUL drain — todo 14 blk0 investigation 判 PRE-EXISTING) |
+| Open | 4 | BUG-RTL-SOC-009 (doorbell ABI window — LAST_STATUS/COMPLETION_STATUS 未实现, T12 2026-08-31), BUG-RTL-SOC-010 (pcie_ep_wrapper header 夸大字段, T12), BUG-RTL-SOC-011 (rtl/ip/README DMA 访问类别错误, T12), BUG-RTL-SOC-012 (blk0 E2E op05 attn_score MMUL drain — todo 14 blk0 investigation 判 PRE-EXISTING) |
 | Re-opened | 0 | — |
 
 ### By Module
@@ -420,17 +423,19 @@ Ledger update 2026-09-02 (用户接受, bug-007-root-cause 收尾): 用户回复
 | RTL: Vector wrapper / Firmware dispatch | 1 | BUG-RTL-SOC-007 |
 | RTL: MXU controller (`mxu/controller.v`) / accumulator drain | 2 | BUG-RTL-SOC-WV-007, BUG-RTL-SOC-012 |
 | Integration (firmware command ring vs descriptor region) | 1 | BUG-RTL-SOC-008 |
+| Integration (doorbell ABI window vs RTL register map) | 1 | BUG-RTL-SOC-009 |
+| Wrapper documentation vs RTL (`pcie_ep_wrapper` header / `rtl/ip/README`) | 2 | BUG-RTL-SOC-010, BUG-RTL-SOC-011 |
 | RTL wrapper (MXU broadcast/store-out count) + Firmware K-tile dispatch / accumulate | 3 | BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
 
 ### Quality Metrics
 
 | Metric | Value |
 |--------|:-----:|
-| Total RTL bugs found and documented | 14 |
-| Bugs closed Fixed | 11 (78.6%) |
-| Bugs pending waiver sign-off | 1 (7.1%) — BUG-RTL-SOC-002 (8 MB DRAM window, WVR-SOC-RTL-002, pending sign-off 待用户签署) |
-| Accepted (reconstruction-failure, 用户已接受) | 1 (7.1%) — BUG-RTL-SOC-007 (2026-09-02 定级 + 用户接受关闭，Blocker-6 path (b)，不 claim Fixed) |
-| Open / under investigation | 1 (7.1%) — BUG-RTL-SOC-012 (blk0 op05 attn_score drain, todo 14 判 PRE-EXISTING) |
+| Total RTL bugs found and documented | 17 |
+| Bugs closed Fixed | 11 (64.7%) |
+| Bugs pending waiver sign-off | 1 (5.9%) — BUG-RTL-SOC-002 (8 MB DRAM window, WVR-SOC-RTL-002, pending sign-off 待用户签署) |
+| Accepted (reconstruction-failure, 用户已接受) | 1 (5.9%) — BUG-RTL-SOC-007 (2026-09-02 定级 + 用户接受关闭，Blocker-6 path (b)，不 claim Fixed) |
+| Open / under investigation | 4 (23.5%) — BUG-RTL-SOC-009 (doorbell ABI window), BUG-RTL-SOC-010/011 (wrapper 文档 vs RTL), BUG-RTL-SOC-012 (blk0 op05 attn_score drain, todo 14 判 PRE-EXISTING) |
 | Ibex-specific bugs (full RTL CPU replacement) | 0 |
 | Regressions after fixes | 0 (491/491 module regression PASS; vector + MXU wrapper 10/10 baseline PASS; PERF-06 M=32 cos=1.000000; PERF-13 9/9 MMUL PASS) |
 | Re-opened bugs | 0 (BUG-RTL-SOC-005 closed in 2026-07-23 rtl-bug-fix-wv round) |
