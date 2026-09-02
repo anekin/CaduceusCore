@@ -67,10 +67,14 @@ todos 0-16 执行；P2/P3 项不在此计划执行，全部在此登记为 block
 
 | 字段 | 内容 |
 |------|------|
-| **现状证据路径** | `docs/bugs/bugs-soc-rtl.md:326-366`（Status = **Open**；todo 15 ATTN-WEIGHT-CHAIN 已执行 2026-08-27，26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；Root Cause = Under Investigation，三假设（ring overflow / weight 地址越界 / START 阻塞）均未证实；待 FPGA/更早日志追踪）；链级证据 `build/evidence/task-15-soc-rtl-verification-signoff.txt`；`reports/CaduceusCore-review-report-2026-08-28.md:218-220`（§4.5） |
-| **阻塞原因** | 原 W1.3 三处 `attn_weight` cycles=0 的根因仍未定位（链级未复现 ≠ 根因已找到）；不能 claim Fixed。完整 SoC RTL signoff 要求 Open bug 有明确处置结论。 |
-| **解除条件** | 二选一：(a) 根因定位并修复，重跑 3-layer forward 全部 op cycles>0 且 golden 匹配，Status 转 Fixed；(b) 正式定级为环境性/偶发并记录复现条件与影响面，ledger 写明处置结论（不 claim Fixed 则需用户接受）。 |
-| **建议 owner** | RTL/固件调试负责人（联合 FPGA 阶段更早日志追踪） |
+| **现状证据路径** | `docs/bugs/bugs-soc-rtl.md:326-367`（Status = **accepted (reconstruction-failure)**，2026-09-02 根因追查计划 `.omo/plans/bug-007-root-cause.md` todo 8 定级：ATTRIBUTION = **testcase/environment reconstruction failure**，无已提交产物支持 FuncModel 或 RTL 故障，**用户已于 2026-09-02 接受**）；根因计划证据 `.omo/evidence/task-{0,1,2,6,7,8}-bug-007-root-cause.txt`（MODE-ORIG=per-op-preload；MODE-A HEAD 51/51 PASS、attn_weight compute_en_cycles=19；MODE-B op07 cycles=31046、26 命令全 cycles>0；H4 un-clipped M=32/K=2/N=128 cycles=31291 PASS；历史 3 重跑点全 CLEAR、`FLIP: reconstruction-failed`）；链级证据 `build/evidence/task-15-soc-rtl-verification-signoff.txt`；`reports/CaduceusCore-review-report-2026-08-28.md:218-220`（§4.5） |
+| **阻塞原因** | 原 W1.3 三处 `attn_weight` cycles=0 的根因追查已完成：任何已提交可重跑点均未复现 45-PASS/6-FAIL 签名，无 FuncModel/RTL 故障证据可支撑 claim Fixed（"cycles=0" 为测试驱动硬编码测量伪影）。按分支 (b) 处置为 reconstruction-failure，**用户已于 2026-09-02 接受定级，阻塞解除**。 |
+| **解除条件** | 二选一：(a) 根因定位并修复，重跑 3-layer forward 全部 op cycles>0 且 golden 匹配，Status 转 Fixed；(b) 正式定级为环境性/偶发并记录复现条件与影响面，ledger 写明处置结论（不 claim Fixed 则需用户接受）。**已走分支 (b)**：定级 = reconstruction failure（重建失败，区别于轻率的环境性 dismissal），复现条件/影响面/残差清单见 `.omo/evidence/task-8-bug-007-root-cause.txt`；**用户已于 2026-09-02 回复"接受"，Blocker 6 关闭**。 |
+| **建议 owner** | **用户**（分支 (b) 定级接受，不可代理）；RTL/固件调试负责人仅当用户拒绝 (b) 并指定升级路径（如 FPGA/更早日志）时继续。 |
+
+> **解除证据路径（2026-09-02，分支 (b) 处置，用户已接受，Blocker 6 关闭）**：
+> 根因追查计划 `.omo/plans/bug-007-root-cause.md` todos 1/2/6/7/8 完成。ATTRIBUTION：testcase/environment reconstruction failure——MODE-A HEAD 51/51 PASS（attn_weight op07/24/41 compute_en_cycles=19、cos=1.0）、MODE-B op07 cycles=31046 全命令 cycles>0、H4 un-clipped M=32/K=2/N=128 cycles=31291 PASS、历史最早可重跑点 `0973d76f`（2026-07-08）即 CLEAR、3/3 重跑点无 FAIL→CLEAR 翻转（`FLIP: reconstruction-failed`）。原始 07-07 testcase 未提交、45/6 证据已删除，无法归因到任何已提交 commit。残差候选 11 项（含 live hazard：MXU SCALE_ADDR 跨流程状态泄漏）见 `.omo/evidence/task-8-bug-007-root-cause.txt`。
+> **用户接受记录（2026-09-02）**：用户对 task-8 evidence 的 EXACT-QUESTION（定级 reconstruction-failure）回复"接受"。ledger 状态由 disposition-pending-user 关闭为 **accepted (reconstruction-failure)**（`docs/bugs/bugs-soc-rtl.md` BUG-007）；不 claim Fixed。**Blocker 6 关闭。**
 
 ## Blocker 7 — P3.1 遗留工作区状态清理（评审报告 §7 P3.1）
 
@@ -118,7 +122,7 @@ todos 0-16 执行；P2/P3 项不在此计划执行，全部在此登记为 block
 | P2.2 处理 performance CI 17.4GB RSS 超限 | **#1** | gating：阻塞项目级 signoff，非 SoC RTL 功能 signoff |
 | P2.3 完成或明确重新定界全连续 36 层 Ibex forward | **#4** | deferred 到 FPGA |
 | P2.4 解除 FPGA L5 和 ggml lifecycle blocker | **#3** | 外部依赖 |
-| P2.5 继续定位 BUG-RTL-SOC-007 根因 | **#6** | Open，FPGA/更早日志追踪 |
+| P2.5 继续定位 BUG-RTL-SOC-007 根因 | **#6** | 根因追查完成（2026-09-02），定级 reconstruction-failure，用户已接受，Blocker 6 关闭 |
 | P2.6 用户评审并签署 WVR-SOC-RTL-002，签署前保持 Pending | **#5** | 待用户签署 |
 | P3.1 清理并分类当前 dirty worktree，不覆盖现有修改 | **#7** | stash@{0} + 分支收尾 + 87M 磁盘清理 |
 | P3.2 正式 feature-status/计划/签核报告/必要 evidence 纳入版本控制 | **#7 + #8** | 主体由本计划 todo 0/17 执行（docs 入库、CSV 入库）；**residual**：stash@{0} 内 14 evidence 文件入库 → #7；manifest/签收记录最终入库 → #8 |

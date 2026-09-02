@@ -1,0 +1,252 @@
+task-2-bug-007-root-cause
+==========================
+H0 differential FuncModel-vs-RTL: instrument audited + FM-side 51-op replay
+Todo 2 of .omo/plans/bug-007-root-cause.md
+Date: 2026-09-02
+Branch: bug-007-root-cause
+
+PROVENANCE
+----------
+git HEAD (this task): 97bd9c2cd1f890619817db741b02a66fea234243 ("chore(bug007): mark todos 1 and 6 complete")
+  branch bug-007-root-cause = main + plan artifacts only; no firmware/vector/RTL changes.
+Host: sz0002 (FM replay is pure Python — no VCS/cocotb required; RTL re-runs live in todo 1 evidence on sz0001)
+firmware hex sha256: 6f261c6e35e65a190c887ba0dc50d604e2601e39b6aa99524ea5284a35165ec0 (todo 0 baseline, unchanged)
+manifest sha256: f4f6941c72da54533a99d6e448029fa64caa58d0e66292858e7436fbba640240
+  (rtl/test_vectors/soc_e2e/qwen25-3b-3layer-rtl/manifest.json — committed state, == todo 0/1)
+3-layer manifest op07/24/41 dimensions: M=16 K=16 N=128 tiles=2 (all three layers)
+instrument helper: sim/verification/bug007_fm_replay.py (NEW, 1 file — within todo-2 cap ≤3)
+  sha256: 6f1cee3bdd7bd28a2c77579ea6e91d85e6873b1a7a562d9bfbf80e89ca56502a
+Python: 3.10.12 (sz0002); run logs: /tmp/bug007-fm-replay-full.log, /tmp/bug007-fm-replay-both.log
+Commands executed (exact):
+  PYTHONPATH=sim python3 sim/verification/bug007_fm_replay.py \
+      --manifest rtl/test_vectors/soc_e2e/qwen25-3b-3layer-rtl --variant a
+  PYTHONPATH=sim python3 sim/verification/bug007_fm_replay.py \
+      --manifest rtl/test_vectors/soc_e2e/qwen25-3b-3layer-rtl --variant both
+  PYTHONPATH=sim python3 sim/verification/bug007_fm_replay.py \
+      --manifest rtl/test_vectors/soc_e2e/qwen25-3b-3layer-rtl --variant both --defensive-scale
+  (helper self-checks fast_read_hex against cocotb_bridge.read_hex_file_bytes at startup)
+
+═══════════════════════════════════════════════════════════════════════════
+1. INSTRUMENT AUDIT (sim/verification framework)
+═══════════════════════════════════════════════════════════════════════════
+
+H0-INSTRUMENT: fm_adapter-python
+  Primary instrument: FuncModelAdapter(firmware_mode="python") — NPUFirmware (miniv)
+  emulator + FuncModel + MMIOBridge, driven through the shared DUTAdapter action
+  surface (Action.sram_preload / mmio_write / poll_status / sram_readback).
+
+Audit findings (file:line citations):
+(a) Dual firmware modes CONFIRMED: fm_adapter.py:54-79 — "python" (miniv.NPUFirmware)
+    and "spike" (real firmware compiled to npu_firmware_spike.elf; FuncModel
+    use_spike=True). Spike artifacts PRESENT on this host (spike_src/build +
+    firmware/build/npu_firmware_spike.elf; spike_firmware._is_spike_available()=True),
+    so fm_adapter-spike is runnable in principle. However, spike mode runs the REAL
+    firmware dispatch loop — that is MODE-B (firmware-ring-chain) semantics, NOT the
+    MODE-ORIG per-op-preload flow. For the H0 replay of MODE-A the python mode is the
+    faithful instrument; spike mode is recorded as available-but-not-applicable.
+(b) 17-op descriptor-stream dispatch via mmio_bridge._run_mxu_compute: NOT a direct
+    adapter action. The FM bridge exposes it ONLY through the frontdoor MMIO path —
+    writing MXU.CMD with START bit triggers _run_mxu_compute synchronously
+    (mmio_bridge.py:136-174). There is no Action type that maps to a descriptor/
+    ring command (doorbell Action maps to FuncModel.host_write_command, the
+    firmware-ring flow). This is CONSISTENT with todo 1: MODE-ORIG=per-op-preload
+    never uses descriptors — firmware resident/idle, Python MMIO direct drive
+    (cocotb_bridge.py:5261-5283, 0 doorbell/ring hits). Descriptor dispatch is
+    therefore n/a for the per-op H0 replay (and for H0's firmware-scheduling
+    discriminative power, see matrix).
+(c) Backdoor observation tagging AVAILABLE: sram_readback/dram_readback/mmio_readback
+    classified allowed_obs_backdoor (scenario.py:176-186, operation_classifier),
+    registered in _backdoor_classification, evidence_metadata carries
+    action_counts + backdoor_classification + firmware_mode + abi_version
+    (fm_adapter.py:688-744). RTLAdapter mirrors the same contract
+    (rtl_adapter.py:52+, cocotb/VCS-bound — not runnable on sz0002).
+(d) Instrument gaps found while building the replay (transport-level only; the
+    logical op stream and all data are unchanged):
+    GAP-1 VRESID operand width: FM MMIOBridge VECTOR op=5 reads operand A as FP16
+        (dim*2 bytes, mmio_bridge.py:563-565) and fp16->int32 converts inside
+        GoldenVector.residual_add. RTL loads BOTH operands as INT32
+        (vector_soc_wrapper.v valid_bytes_total_rd = wrp_len_eff*4) and
+        resid_add.v adds raw INT32 lanes; ABI: "RESID_ADD — Saturating INT32
+        residual add". The 3-layer golden is a+b (INT32; verified element-wise).
+        Replay computes INT64-add-with-INT32-clip (resid_add.v semantics) and
+        matched=int64-add on all 6 VRESID ops. => the FM bridge op5 fp16 path is
+        a STALE pre-ABI semantic (cross-ref: rtl_soc_runner.py:3058-3060 stages
+        the residual pre-converted to INT32 for exactly this reason).
+    GAP-2 ROPE DIM encoding: RTL per-op driver writes DIM[15:0]=element PAIRS
+        (elements//2); RTL SFU wrapper consumes pairs (sfu_soc_wrapper.v:167
+        "one pair (x,y) per dim"). ABI (spec/npu_abi.json SFU DIM) and firmware
+        (npu_firmware.c:664) pack ELEMENTS; FM bridge follows the ABI. Replay
+        writes DIM=(head_dim<<16)|elements — same logical op, canonical FM encoding.
+    GAP-3 partial-N weight staging: RTL driver stages 64-col-padded tile-major
+        (pack_int4_tile_major); FM bridge contract is dense row-major (K*N/2 bytes).
+        Byte-identical for all 64-wide tiles; dense used for attn_score N=16.
+    GAP-4 RMSNorm norm-weight fold: generator golden = (x/rms)*gamma
+        (gen_qwen25_3b_rtl_vectors.py:256-258 _rmsnorm with attn_norm_w/ffn_norm_w,
+        eps=1e-6); FM bridge rmsnorm_hw has NO gamma input and eps=1e-5
+        (golden_executor.py:515-532); RTL rmsnorm_hw.v has no weight port either.
+        => strict compare vs manifest golden FAILS for all 6 RMSNorm ops
+        (1900-2042 of 2048 elements out of tolerance; e.g. g/fm elementwise ratio
+        0.33..0.63 = the model's norm weights). NOT a driver-layer fault.
+(e) W1.3 SFU smoke-mode discovery (audit finding with 07-07 relevance):
+    test_qwen25_3b_3layer builds SFU instructions WITHOUT golden_output
+    (cocotb_bridge.py:5421-5431) -> run_step sets passed=True unconditionally
+    ("smoke mode", :1807-1811). So the W1.3 per-op run — both the 07-07 original
+    and today's MODE-A re-run — NEVER golden-compared any SFU op (RMSNorm/RoPE/
+    softmax/SiLU). Only MMUL (fp32 cos vs expected.npz) and Vector (INT32 exact
+    vs golden hex) were compared. GAP-4 therefore went unobserved on the RTL side.
+    This does not change the REPRO verdict (the 07-07 failure ops were MMUL +
+    VMUL, which ARE golden-compared) but it bounds what the RTL per-op evidence
+    can claim about SFU.
+
+Audit conclusion: the framework is reusable as-is for the FM side of MODE-A.
+FuncModelAdapter(python) + MMIO bridge can dispatch the 17-op-class manifest
+stream (all 51 ops) through the frontdoor MMIO surface (MXU via CMD.START ->
+_run_mxu_compute per tile; SFU/Vector via CMD.START), with backdoor tagging.
+A direct "descriptor stream" dispatch is n/a (per-op mode has none — consistent
+with MODE-ORIG). Instrument verdict: fm_adapter-python (primary), fm_adapter-spike
+available but semantically MODE-B, no built(bounded) needed beyond 1 helper file.
+
+═══════════════════════════════════════════════════════════════════════════
+2. FM-SIDE RUN (same 3-layer manifest, 51 ops, MODE-A shape)
+═══════════════════════════════════════════════════════════════════════════
+Criteria = IDENTICAL to the RTL W1.3 driver (todo 1):
+  MMUL  -> cos_sim>=0.999 AND max_abs<10 vs expected.npz fp32 (bias + activation_scale applied)
+  Vector-> INT32 byte-exact vs golden hex
+  SFU   -> driver-equivalent (W1.3 smoke-mode: passed=True without golden compare);
+           strict-vs-golden additionally reported for transparency
+Result: FM-REPLAY variant=A total=51 passed=51 wall=11.5s
+
+attn_weight highlighted rows (the 07-07 failure signature — identical to RTL run):
+  FM-OP  7 attn_weight PASS cos=1.000000 max_abs=0.0003 d=2   (RTL: cos=1.000000 max_abs=0.0003)
+  FM-OP 24 attn_weight PASS cos=1.000000 max_abs=0.0003 d=2   (RTL: cos=1.000000 max_abs=0.0003)
+  FM-OP 41 attn_weight PASS cos=1.000000 max_abs=0.0002 d=2   (RTL: cos=1.000000 max_abs=0.0002)
+Other 07-07 failure ops:
+  FM-OP 14/31/48 VMUL gate*up PASS path=mmio-bridge-op1 (INT32 exact)   (RTL: cycles=23814, bit-exact)
+Representative rest:
+  FM-OP  1 Q_proj  PASS cos=1.000000 max_abs=0.0010 d=512
+  FM-OP  5 attn_score PASS cos=1.000000 max_abs=0.6035 d=1    (== RTL log max_abs=0.6035)
+  FM-OP 11 gate    PASS cos=1.000000 max_abs=0.0006 d=2752
+  FM-OP 16 VRESID post-FFN PASS path=direct-int64-add(GAP-1) matched=int64-add
+  FM-OP 13 SiLU    PASS strict=PASS
+  FM-OP  6 attn_softmax PASS strict=PASS
+Strict SFU observations (informational; W1.3 never compares SFU — see audit (e)):
+  RMSNorm x6 strict=FAIL (GAP-4 weight fold; bad=1900-2042/2048)
+  RoPE    x3 strict=FAIL near-miss (bad=6/2/1 of 2304; worst margins ~1.3x tolerance —
+          CORDIC-vs-generator precision delta, not a driver/staging fault)
+  softmax/SiLU strict=PASS
+Layer-output cos (informational, per-op dataflow reconstruction — not gating):
+  layer_0 cos=0.990140, layer_1 cos=0.998923, layer_2 cos=0.999996
+  (vs layer_{l}_output fp32; per-op mode blocks true op-to-op flow by design —
+  cross-ref phase5 plan; these are reconstruction-consistency figures only.)
+
+FM-PASS/FM-FAIL cell: FM-PASS — the instrument/driver layer (manifest parse,
+address mapping, MMIO register programming order, staging, readback, compare)
+reproduces the committed manifest golden on the FuncModel side for every op
+with the same criteria the RTL run used. Numerical semantics are NOT re-verified
+here (golden lineage = FuncModel; PERF-13 cos=1.0 / ATTN-WEIGHT-CHAIN cos=1.0
+already cover op-level consistency) — no circular verification performed.
+
+═══════════════════════════════════════════════════════════════════════════
+3. FIRMWARE-RESIDENT CHEAP DIFFERENTIAL (variant B)
+═══════════════════════════════════════════════════════════════════════════
+MODE-ORIG=per-op-preload => firmware is resident but NOT in the dispatch loop
+(todo 1). H0's firmware-SCHEDULING discriminative power is therefore
+n/a-firmware-not-in-loop. Cheap FM-side analogue performed anyway:
+  variant A: firmware booted, resident, idle (default) -> 51/51 PASS
+  variant B: firmware first DISPATCHES one real ring MMUL command
+             (host_write_command + run_loop, conv2d-smoke-shaped), then the same
+             51-op per-op replay.
+Result (full 51-op): FM-RESIDENT-DIFF: DIFFERENT (defensive_scale=False)
+  - MMUL ops that run after the firmware dispatch FAIL: e.g.
+    op05 cos=0.2026 max_abs=1.7e9 | op07 cos=0.2308 max_abs=7.5e5 |
+    op41 cos=0.1720 max_abs=3.4e5 | op46 cos=0.2001 max_abs=4.8e9 (A: cos=1.0)
+  - Root cause PROVEN: firmware ring dispatch leaves MXU SCALE_ADDR=0x14000 in the
+    bridge state (probe: before=0x0, after=0x14000). The per-op driver never
+    writes SCALE_ADDR; MMIOBridge._run_mxu_compute uses raw_s>0 -> scaled FP32
+    store-out path REGARDLESS of CTRL (mmio_bridge.py:247-262).
+  - RTL ANALOGUE EXISTS: mxu_soc_wrapper.v:173-182 — "SCALE_ADDR != 0 => scaled
+    store-out; SCALE_ADDR == 0 keeps raw-INT32 store-out", latched from the APB
+    MMIO stream. Same hazard class on the RTL side for mixed firmware-then-per-op
+    flows.
+  - Mitigation verified: with a defensive MXU SCALE_ADDR=0 write per MMUL dispatch
+    (--defensive-scale), FM-RESIDENT-DIFF: identical (51/51 both variants).
+  - BUG-007 relevance: in pure MODE-A the firmware never dispatches (todo 1:
+    resident/idle, 0 ring writes) => SCALE_ADDR stays 0 => this mechanism is NOT
+    the 07-07 cause; it is a live cross-flow stale-state hazard (residual candidate
+    #3). Not fixable in this task (no product-code edits allowed).
+
+═══════════════════════════════════════════════════════════════════════════
+4. H0 MATRIX AND ROUTING
+═══════════════════════════════════════════════════════════════════════════
+
+H0-MATRIX: FM-PASS × REPRO-CLEAR
+  Firmware-scheduling dimension: n/a-firmware-not-in-loop
+    (MODE-ORIG=per-op-preload; firmware resident/idle, never in the dispatch
+    loop — H0 cannot discriminate firmware scheduling in this mode by design;
+    the cheap firmware-resident variant-B differential is recorded in §3 instead.)
+  Four cells:
+    REPRO-FAIL + FM-PASS      -> (not the case) would narrow to {RTL ∪ testcase/allocator/driver}
+    REPRO-FAIL + FM-FAIL      -> (not the case) would isolate firmware/case/generator first
+    REPRO-CLEAR + FM-PASS     -> ** OBSERVED ** => route to todo 7 archaeology
+    REPRO-CLEAR + FM-FAIL     -> (not the case) would STOP and report testcase/vector drift
+  Cross-check of the observed cell: FM side 51/51 PASS under the exact criteria
+  todo 1 used for the RTL run (MMUL fp32 cos + Vector INT32 exact + SFU
+  driver-equivalence), attn_weight rows cos/max_abs IDENTICAL between FM replay
+  and RTL re-run; PRIMARY-VERDICT from todo 1 = REPRO-CLEAR (MODE-A).
+  Note: FM-PASS+RTL-PASS does NOT prove "RTL innocent" — the FM cannot see driver
+  write timing, STATUS.DONE lifecycle, crossbar fairness, or 07-07 environment
+  drift; those remain in RESIDUAL-CANDIDATES for todo 8.
+
+Routing decision: → todo 7 (bounded flip-commit archaeology, MODE-A as the
+  archaeology entry), per plan Execution-strategy Mixed-mode routing table:
+  MODE-ORIG=per-op-preload + primary verdict REPRO-CLEAR -> todo 7.
+  Todo 3/4/5 remain skipped (they are REPRO-FAIL-conditional); no claim that
+  BUG-007 is cleared is made by this matrix — attribution lands in todo 8 with
+  the residual list below.
+
+═══════════════════════════════════════════════════════════════════════════
+5. RESIDUAL CANDIDATES (all listed explicitly; carried into todo 8)
+═══════════════════════════════════════════════════════════════════════════
+
+RESIDUAL-CANDIDATES:
+1. cocotb-driver back-to-back write timing — FM bridge is synchronous; inter-write
+   APB timing cannot be discriminated here. RTL-only candidate (unexcluded).
+2. STATUS.DONE lifecycle / stale-DONE — FM bridge sets STATUS=2 synchronously;
+   cannot reproduce a stale-DONE window. RTL-only candidate (unexcluded).
+3. Cross-engine / cross-flow stale-state leak — CONFIRMED instance on the FM
+   instrument: MXU SCALE_ADDR survives a firmware ring dispatch and flips later
+   per-op MMULs into the scaled store-out path (§3, proven + mitigation verified);
+   RTL analogue exists (mxu_soc_wrapper.v:173-182). Not the 07-07 cause in pure
+   MODE-A (firmware never dispatched) but a live hazard for mixed flows.
+4. Crossbar fairness — not observable in the FM (functional model, no arbitration);
+   RTL-only candidate (unexcluded).
+5. Reconstruction uncertainty (todo 1: medium) — the exact 07-07 testcase was
+   never committed (first commit 79654175 on 07-08); original 45/6 artifact
+   deleted; environment drift bounded but not eliminable.
+6. W1.3 SFU smoke-mode gap — per-op SFU ops (RMSNorm/RoPE/softmax/SiLU) were never
+   golden-compared in ANY W1.3 run (cocotb_bridge.py:5421-5431); GAP-4 (RMSNorm
+   gamma fold) would fail a strict compare. Affects evidence coverage, not the
+   07-07 failure ops (MMUL/VMUL).
+7. ROPE DIM encoding divergence — RTL wrapper consumes PAIRS (sfu_soc_wrapper.v:167)
+   vs ABI/firmware/FM ELEMENTS; per-op driver writes pairs. Works on RTL, would
+   not work on an ABI-canonical wrapper. Driver-encoding quirk (GAP-2).
+8. FM-bridge VECTOR op5 stale semantics — fp16 operand-A vs RTL/ABI INT32 (GAP-1);
+   the FM bridge's chain-flow VRESID path diverges from resid_add.v/ABI. Pre-existing
+   FM-model gap, out of BUG-007 scope, noted for completeness.
+
+ADVERSARIAL QA NOTES
+--------------------
+stale_state: helper self-checks its hex reader against cocotb_bridge.
+  read_hex_file_bytes at startup; manifest sha256 re-verified == committed state;
+  firmware hex sha256 == todo 0 baseline; no DRY-RUN (fresh run logs in /tmp,
+  timestamps + wall times in output).
+misleading_success_output: "PASS" lines decomposed into driver-equivalent vs
+  strict; SFU smoke-mode and GAP-1/2/3/4 divergences explicitly reported instead
+  of silently passing; variant-B DIFFERENT result reported honestly (not fudged
+  into parity); layer-cos artifact (shared o_addr) found and fixed before evidence.
+dirty_worktree: only the 7 known parallel-session dirty files remain modified;
+  none staged; the only new file is sim/verification/bug007_fm_replay.py.
+Cap compliance: 1 worker session, <1 wall-clock hour, 1 new file (≤3), no
+  RTL/firmware/product edits, no frozen-face edits, no vendored/generated edits.
+
+RESULT: PASS

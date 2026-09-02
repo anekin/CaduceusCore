@@ -1,0 +1,40 @@
+task-0-bug-007-root-cause
+========================
+P0 workspace + artifact freshness baseline (branch, firmware hex, vectors, provenance)
+Todo 0 of .omo/plans/bug-007-root-cause.md
+Date: 2026-09-01
+Branch: bug-007-root-cause
+
+PROVENANCE
+----------
+git HEAD: 6f6a8d52108dee572d239f74d5233832b24b9ac1
+branch: bug-007-root-cause (created from main, current dir, no worktree)
+firmware hex sha256: 6f261c6e35e65a190c887ba0dc50d604e2601e39b6aa99524ea5284a35165ec0
+firmware build: make -C firmware (exit 0, npu_firmware.hex rebuilt 2026-09-01 23:20)
+manifest sha256 (pre-generation): f4f6941c72da54533a99d6e448029fa64caa58d0e66292858e7436fbba640240
+manifest sha256 (post-generation): f4f6941c72da54533a99d6e448029fa64caa58d0e66292858e7436fbba640240
+manifest path: rtl/test_vectors/soc_e2e/qwen25-3b-3layer-rtl/manifest.json
+GENERATOR-DRIFT: no (post-generation manifest hash == committed hash; generated vectors equivalent to committed state, git status on vector dir = 0 modified)
+generator: scripts/gen_qwen25_3b_rtl_vectors.py, commit b6b0a89 (2026-07-08; git log confirms b6b0a89 is the last commit touching the generator, no later changes)
+VCS version: VCS_V-2023.12-SP2 / vcs script version V-2023.12 (queried via `vcs -ID` on sz0001, 192.168.0.11)
+simv identifier: not-present (todo 0 does not compile simv; simv build belongs to todo 1)
+manifest op07 dimensions: M=16 K=16 N=128 tiles=2 (idx=7 attn_weight l0, op07_l0_attn_weight)
+manifest op24 dimensions: M=16 K=16 N=128 tiles=2 (idx=24 attn_weight l1, op24_l1_attn_weight)
+manifest op41 dimensions: M=16 K=16 N=128 tiles=2 (idx=41 attn_weight l2, op41_l2_attn_weight)
+manifest num_ops: 51
+
+WORKSPACE STATE
+---------------
+git status --porcelain before commit (relative to main) shows exactly:
+  M .omo/evidence/task-0-signoff-v3-runner.txt                      (parallel-session dirty, NOT committed)
+  M .omo/evidence/task-20-uncertainty-kpis.json                     (parallel-session dirty, NOT committed)
+  M .omo/evidence/task-23-perf-spec-ci.txt                          (parallel-session dirty, NOT committed)
+  M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md        (parallel-session dirty, NOT committed)
+  M .omo/notepads/phase6-rtl-verification/learnings.md              (parallel-session dirty, NOT committed)
+  M build/evidence/fm-cv-chain.txt                                  (parallel-session dirty, NOT committed)
+  M build/evidence/w3-4-mobilenetv3-fm.txt                          (parallel-session dirty, NOT committed)
+  ?? .omo/plans/bug-007-root-cause.md                               (plan artifact, committed with todo 0)
+The 7 parallel-session dirty files were NOT staged, NOT committed, NOT stashed, NOT reset.
+Plan artifacts committed with todo 0: .omo/plans/bug-007-root-cause.md, .omo/drafts/bug-007-root-cause.md (draft is gitignored per .gitignore:91, force-added like prior drafts), this evidence file.
+
+RESULT: PASS
