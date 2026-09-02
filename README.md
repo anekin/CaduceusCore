@@ -10,6 +10,42 @@ CaduceusCore 是一颗 **通用 NPU 协处理器**，同时面向 **CV（YOLOv8/
 >
 > S2 和 S3 共享同一颗 die。两颗芯片覆盖三个产品线。面积模型经 TPUv1 ISCA 2017 die-shot 校准，BW 采用 area×7.5 GB/s/mm² 耦合模型。
 
+## 项目状态总览
+
+快照日期：2026-09-02
+
+本表为入口快照，详细/最新状态以各台账为唯一权威源。
+
+### 状态快照
+
+| 维度 | 状态 | 来源 |
+|------|------|------|
+| 芯片/RTL 阶段 | RTL Phase 3 SoC 集成完成（Ibex RV32IMC + AXI crossbar + APB + doorbell ring），详见 RTL Phase 3 章节 | （来源：README.md） |
+| 验证基线 | pytest 210 基线（Quick Start 口径）+ FM-SOC 33-case 全量回归套件（`run_fm_soc_all.sh`）+ 模块级回归详见各 Phase 章节，计数口径警告见 NOTES | （来源：AGENTS.md） |
+| Bug 台账 SoC RTL | **17 = 11 Fixed / 1 Pending（waiver 待签）/ 1 Accepted（reconstruction-failure）/ 4 Open**，见 Final Bug Statistics | （来源：docs/bugs/bugs-soc-rtl.md） |
+| module-level | **4 = 3 Fixed / 1 Open（WDT-001）** | （来源：docs/bugs/bugs-module-level.md） |
+| Func Model | 全部 Fixed/Deferred、零 waiver | （来源：docs/bugs/bugs-soc-func-model.md） |
+| PCIe DMA | 4 个 UCOV 覆盖缺口（Uncovered） | （来源：docs/bugs/bugs-pcie-dma.md） |
+| Blocker 全 8 项 | #1 perf-CI 17.4GB RSS 超限（gating）、#2 36 层连续 forward 定界（defer FPGA）、#3 FPGA L5 + ggml lifecycle（**BLOCKED**）、#4 同 #2 defer FPGA、#5 WVR-SOC-RTL-002 waiver 待用户签署、#6 BUG-007 根因追查已关闭（用户接受）、#7 工作区状态清理（open）、#8 可重放 signoff manifest + 用户签收（open） | （来源：docs/soc-rtl-review-remediation-blockers.md） |
+| Defer | E2E-07 perf calibration → FPGA，见 NOTES | （来源：AGENTS.md） |
+| 已知 live hazard | MXU SCALE_ADDR 跨流程状态泄漏（BUG-007 调查发现，未立案，残差 #3） | （来源：.omo/evidence/task-8-bug-007-root-cause.txt） |
+
+### 关键文件索引
+
+| 路径 | 用途 |
+|------|------|
+| `docs/bugs/bugs-soc-rtl.md` | SoC RTL 层 bug 台账：BUG-RTL-SOC-001..012 + wrapper/phase-9 条目与 Final Bug Statistics |
+| `docs/bugs/bugs-soc-func-model.md` | SoC Func Model 层 bug 台账：全部 Fixed/Deferred、零 waiver |
+| `docs/bugs/bugs-module-level.md` | 模块级 bug 台账：4 = 3 Fixed / 1 Open（WDT-001） |
+| `docs/bugs/bugs-pcie-dma.md` | PCIe DMA 覆盖缺口台账：4 个 UCOV Uncovered 项 |
+| `docs/soc-rtl-review-remediation-blockers.md` | 评审整改 P2/P3 Blocker 1-8 跟踪清单（只跟踪、不执行） |
+| `docs/waivers/` | waiver 文档目录（WVR-SOC-RTL-002，8MB DRAM 窗口，待用户签署） |
+| `.omo/plans/` | agent 工作流计划（todo 清单 + Commit 预声明） |
+| `.omo/evidence/` | agent 工作流证据（task-N 证据文件随 todo 提交入库） |
+| `.omo/notepads/` | agent 会话笔记（learnings/issues/decisions/problems） |
+| `build/evidence/` | 验证证据产物目录（gitignored，关键件已 `git add -f` 入库） |
+| `reports/CaduceusCore-review-report-2026-08-28.md` | 2026-08-28 SoC RTL 评审报告（§7 整改优先级与 blocker 出处） |
+
 ## 文档索引
 
 优先按要回答的问题选文档。`docs/` 放设计、验证、软件和经验文档；`reports/` 放 Arc/DSE 架构报告和专项分析。

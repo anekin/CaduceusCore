@@ -1,0 +1,31 @@
+Todo 13 - L19 root-cause probe: L0 -> L19 in one VCS session
+======================================================================
+Timestamp      : 2026-08-21T09:42:26Z
+Commit         : b51fae720f53e2a0fc354c84da00738eb9633158
+Model          : /home/zhengs/models/qwen2.5-3b-instruct-q4_k_m.gguf
+engine=ibex
+layers_run=L0,L19
+boundary=full_dram_preload+sram_clear
+L0_cos_vs_golden=0.997371
+
+Per-wave L19 readbacks (hardware DRAM vs Python golden):
+wave=w1    tensor=q_out        cos=-0.043190 hw=[-10.615,12.797] g=[-25.802,8.603]
+wave=w1    tensor=k_out        cos=0.111971 hw=[-26.428,33.274] g=[-6.491,18.287]
+wave=w1    tensor=v_out        cos=0.258098 hw=[-22.534,20.001] g=[-4.237,3.165]
+wave=w1    tensor=o_out        cos=nan hw=[nan,nan] g=[-4.751,11.642]
+wave=w1    tensor=residual1    cos=0.031251 hw=[-1854523132.000,1695531624.000] g=[-3027314.000,1325580.000]
+wave=w1    tensor=ffn_in       cos=0.000455 hw=[-21902.680,15313073.000] g=[-8.175,8.672]
+wave=w2-4  tensor=gate_out     cos=0.696466 hw=[-97.358,25.563] g=[-3.379,2.227]
+wave=w2-4  tensor=silu         cos=-0.000831 hw=[-0.000,2.089] g=[-0.278,2.010]
+wave=w5-7  tensor=up_out       cos=nan hw=[nan,nan] g=[-3.337,4.540]
+wave=w5-7  tensor=ffn_hidden   cos=-0.014233 hw=[-3.000,4.000] g=[-1245.000,2611.000]
+wave=w8-10 tensor=ffn_out      cos=0.999187 hw=[-799.039,304.528] g=[-16.129,6.114]
+wave=w11   tensor=l_out        cos=1.000000 hw=[-3030217.000,1331841.000] g=[-3030220.000,1331841.000]
+
+Final L19 comparisons:
+  l_out vs python golden  cos=1.000000
+  l_out vs spike hw L19   cos=1.000000
+  l_out vs run1 garbage   cos=0.031203
+  hw_range=[-3030217.0,1331841.0]
+  elapsed_s=6678.1
+PROBE-RUN-COMPLETE

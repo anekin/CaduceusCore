@@ -1,0 +1,20 @@
+=== Task 18 Phase 10 RTL Verification Evidence ===
+Date: 2026-08-19T02:27:24+08:00
+
+--- SFU Wrapper Functional Tests ---
+  test_apb_regmap_rw: PASS
+  test_sfu_softmax_normal: PASS
+  test_sfu_gelu_normal: PASS
+  test_sfu_width_converter_32to512: PASS
+  test_sfu_line_buffer_prefetch: PASS
+
+Wrapper PASS count: 5
+Wrapper FAIL count: 0
+
+--- SFU Module Batch Regression ---
+SFU: 319/319 PASS
+
+--- Raw Logs ---
+Compile log: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/p10-sfu-wrapper-compile.log
+Wrapper run log: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/p10-sfu-wrapper-run.log
+Batch run log: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/p10-sfu-batch-run.log

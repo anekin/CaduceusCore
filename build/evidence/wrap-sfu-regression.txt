@@ -1,0 +1,1485 @@
+/NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+=== CaduceusCore EDA Environment ===
+VCS:         /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/bin/vcs
+VCS_HOME:    /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+Python:      Python 3.11.9
+PLI_TAB:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/pli.tab
+LICENSE:     27020@sz0001
+====================================
+Info: [VCS_SAVE_RESTORE_INFO] ASLR (Address Space Layout Randomization) is detected on the machine. To enable $save functionality, ASLR will be switched off and simv re-executed.
+Please use '-no_save' simv switch to avoid re-execution or '-suppress=ASLR_DETECTED_INFO' to suppress this message.
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Jul 23 16:07 2026
+     -.--ns INFO     gpi                                ..mbed/gpi_embed.cpp:79   in set_program_name_in_venv        Did not detect Python virtual environment. Using system-wide Python interpreter
+     -.--ns INFO     gpi                                ../gpi/GpiCommon.cpp:101  in gpi_print_registered_impl       VPI registered
+     0.00ns INFO     cocotb                             Running on Chronologic Simulation VCS Release version V-2023.12-SP2_Full64
+     0.00ns INFO     cocotb                             Running tests with cocotb v1.9.0 from /NAS/Tools/anaconda3/envs/py3.11/lib/python3.11/site-packages/cocotb
+     0.00ns INFO     cocotb                             Seeding Python random module with 1784794059
+     0.00ns INFO     cocotb.regression                  pytest not found, install it to enable better AssertionError messages
+     0.00ns INFO     cocotb.regression                  Found test sim.tests.wrapper.test_sfu_wrapper.test_apb_regmap_rw
+     0.00ns INFO     cocotb.regression                  Found test sim.tests.wrapper.test_sfu_wrapper.test_sfu_softmax_normal
+     0.00ns INFO     cocotb.regression                  Found test sim.tests.wrapper.test_sfu_wrapper.test_sfu_gelu_normal
+     0.00ns INFO     cocotb.regression                  Found test sim.tests.wrapper.test_sfu_wrapper.test_sfu_width_converter_32to512
+     0.00ns INFO     cocotb.regression                  Found test sim.tests.wrapper.test_sfu_wrapper.test_sfu_line_buffer_prefetch
+     0.00ns INFO     cocotb.regression                  Found test sim.tests.wrapper.test_sfu_wrapper.test_bug005_sfu_nonaligned_xprop
+     0.00ns INFO     cocotb.regression                  Found test sim.tests.wrapper.test_sfu_wrapper.test_bug007_sfu_start_hold
+     0.00ns INFO     cocotb.regression                  running test_apb_regmap_rw (1/7)
+                                                          Write to and read back each SFU regmap offset 0x00-0x1C.
+   140.00ns INFO     cocotb.tb_sfu_wrapper              Clock started, reset de-asserted
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb          cocotbext-axi version 0.1.28
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb          Copyright (c) 2025 Alex Forencich
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb          https://github.com/alexforencich/cocotbext-axi
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master configuration:
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb            Address width: 12 bits
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb            Byte size: 8 bits
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb            Data width: 32 bits (4 bytes)
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master signals:
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb            paddr width: 12 bits
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb            penable width: 1 bits
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb            pprot: not present
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb            prdata width: 32 bits
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb            pready width: 1 bits
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb            psel width: 1 bits
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb            pslverr width: 1 bits
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb            pstrb width: 4 bits
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwdata width: 32 bits
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwrite width: 1 bits
+   140.00ns INFO     cocotb.tb_sfu_wrapper.apb          Reset de-asserted
+   150.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000000 prot: 2 data: 06 00 00 00
+   170.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000000 prot: 2 resp: 0 length: 4
+   180.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000000 prot: 2 length: 4
+   200.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000000 prot: 2 resp: 0 data: 06 00 00 00
+   210.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000004 prot: 2 data: 00 00 00 00
+   230.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000004 prot: 2 resp: 0 length: 4
+   260.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+   280.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 00 00 00 00
+   290.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000000c prot: 2 data: 00 00 ad de
+   310.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000000c prot: 2 resp: 0 length: 4
+   320.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x0000000c prot: 2 length: 4
+   340.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x0000000c prot: 2 resp: 0 data: 00 00 ad de
+   350.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000010 prot: 2 data: 00 00 ef be
+   370.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000010 prot: 2 resp: 0 length: 4
+   380.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000010 prot: 2 length: 4
+   400.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000010 prot: 2 resp: 0 data: 00 00 ef be
+   410.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000014 prot: 2 data: 00 01 00 00
+   430.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000014 prot: 2 resp: 0 length: 4
+   440.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000014 prot: 2 length: 4
+   460.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000014 prot: 2 resp: 0 data: 00 01 00 00
+   470.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000018 prot: 2 data: 2a 00 00 00
+   490.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000018 prot: 2 resp: 0 length: 4
+   500.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000018 prot: 2 length: 4
+   520.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000018 prot: 2 resp: 0 data: 2a 00 00 00
+   530.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000001c prot: 2 data: 01 00 00 00
+   550.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000001c prot: 2 resp: 0 length: 4
+   560.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x0000001c prot: 2 length: 4
+   580.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x0000001c prot: 2 resp: 0 data: 01 00 00 00
+   580.00ns INFO     cocotb.tb_sfu_wrapper              test_apb_regmap_rw: PASS
+   580.00ns INFO     cocotb.regression                  test_apb_regmap_rw passed
+   580.00ns INFO     cocotb.regression                  running test_sfu_softmax_normal (2/7)
+                                                          256-element FP16 softmax via SFU wrapper, compare against golden.
+   730.00ns INFO     cocotb.tb_sfu_wrapper              Clock started, reset de-asserted
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb          cocotbext-axi version 0.1.28
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb          Copyright (c) 2025 Alex Forencich
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb          https://github.com/alexforencich/cocotbext-axi
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master configuration:
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb            Address width: 12 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb            Byte size: 8 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb            Data width: 32 bits (4 bytes)
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master signals:
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb            paddr width: 12 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb            penable width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb            pprot: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb            prdata width: 32 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb            pready width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb            psel width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb            pslverr width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb            pstrb width: 4 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwdata width: 32 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwrite width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.apb          Reset de-asserted
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model (write)
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        cocotbext-axi version 0.1.28
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Copyright (c) 2021-2025 Alex Forencich
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        https://github.com/alexforencich/cocotbext-axi
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model configuration:
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Address width: 32 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ID width: 8 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Byte size: 8 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Data width: 512 bits (64 bytes)
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model signals:
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awaddr width: 32 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awburst width: 2 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awcache: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awid width: 8 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awlen width: 8 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awlock: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awprot: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awqos: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awready width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awregion: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awsize width: 3 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awuser: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awvalid width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wdata width: 512 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wlast width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wready width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wstrb width: 64 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wuser: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wvalid width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bid width: 8 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bready width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bresp width: 2 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          buser: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bvalid width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model (read)
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        cocotbext-axi version 0.1.28
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Copyright (c) 2021-2025 Alex Forencich
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        https://github.com/alexforencich/cocotbext-axi
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model configuration:
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Address width: 32 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ID width: 8 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Byte size: 8 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Data width: 512 bits (64 bytes)
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model signals:
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          araddr width: 32 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arburst width: 2 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arcache: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arid width: 8 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arlen width: 8 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arlock: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arprot: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arqos: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arready width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arregion: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arsize width: 3 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          aruser: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arvalid width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rdata width: 512 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rid width: 8 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rlast width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rready width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rresp width: 2 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ruser: not present
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rvalid width: 1 bits
+   730.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+   740.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000000 prot: 2 data: 00 00 00 00
+   760.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000000 prot: 2 resp: 0 length: 4
+   770.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000000c prot: 2 data: 00 00 00 00
+   790.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000000c prot: 2 resp: 0 length: 4
+   800.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000010 prot: 2 data: 00 10 00 00
+   800.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000000 arlen: 0 arsize: 6 arprot: 0
+   820.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000010 prot: 2 resp: 0 length: 4
+   830.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000014 prot: 2 data: 00 01 00 00
+   850.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000014 prot: 2 resp: 0 length: 4
+   860.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000018 prot: 2 data: 00 00 00 00
+   880.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000018 prot: 2 resp: 0 length: 4
+   890.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000001c prot: 2 data: 00 00 00 00
+   910.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000001c prot: 2 resp: 0 length: 4
+  1920.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000004 prot: 2 data: 01 00 00 00
+  1940.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000004 prot: 2 resp: 0 length: 4
+  1950.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  1970.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  1990.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2010.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2030.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2050.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2070.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2090.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2110.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2130.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2150.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000040 arlen: 0 arsize: 6 arprot: 0
+  2170.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2190.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2210.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2230.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2250.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2270.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2290.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2310.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2330.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2350.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2370.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2390.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2410.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2430.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2450.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2470.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2480.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000080 arlen: 0 arsize: 6 arprot: 0
+  2490.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2510.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2530.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2550.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2570.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2590.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2610.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2630.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2650.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2670.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2690.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2710.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2730.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2750.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2770.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2790.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2800.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x000000c0 arlen: 0 arsize: 6 arprot: 0
+  2810.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2830.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2850.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2870.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2890.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2910.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2930.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2950.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  2970.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  2990.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3010.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3030.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3050.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3070.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3090.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3110.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3120.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000100 arlen: 0 arsize: 6 arprot: 0
+  3130.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3150.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3170.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3190.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3210.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3230.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3250.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3270.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3290.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3310.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3330.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3350.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3370.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3390.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3410.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3430.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3440.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000140 arlen: 0 arsize: 6 arprot: 0
+  3450.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3470.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3490.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3510.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3530.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3550.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3570.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3590.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3610.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3630.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3650.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3670.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3690.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3710.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3730.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3750.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3760.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000180 arlen: 0 arsize: 6 arprot: 0
+  3770.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3790.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3810.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3830.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3850.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3870.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3890.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3910.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3930.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3950.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  3970.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  3990.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4010.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4030.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4050.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4070.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4080.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x000001c0 arlen: 0 arsize: 6 arprot: 0
+  4090.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4110.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4130.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4150.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4170.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4190.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4210.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4230.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4250.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4270.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4290.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4310.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4330.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4350.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4370.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4390.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4400.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000200 arlen: 0 arsize: 6 arprot: 0
+  4410.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4430.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4450.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4470.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4490.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4510.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4530.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4550.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4570.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4590.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4610.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4630.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4650.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4670.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4690.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4710.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4730.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4750.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4770.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4790.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4810.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4830.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4850.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4870.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4890.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4910.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4930.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4950.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  4970.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  4990.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5010.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5030.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5050.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5070.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5090.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5110.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5130.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5150.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5170.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5190.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5210.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5230.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5250.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5270.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5290.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5310.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5330.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5350.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5370.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5390.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5410.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5430.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5450.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5470.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5490.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5510.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5530.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5550.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5570.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5590.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5610.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5630.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5650.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5670.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5690.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5710.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5730.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5750.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5770.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5790.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5810.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5830.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5850.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5870.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5890.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5910.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5930.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5950.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  5970.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  5990.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6010.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6030.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6050.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6070.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6090.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6110.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6130.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6150.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6170.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6190.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6210.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6230.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6250.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6270.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6290.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6310.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6330.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6350.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6370.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6390.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6410.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6430.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6450.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6470.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6490.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6510.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6530.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6550.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6570.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6590.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6610.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6630.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6650.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6670.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6690.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6710.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6730.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6750.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6770.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6790.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6810.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6830.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6850.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6870.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6890.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6910.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6930.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6950.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  6970.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  6990.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7010.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7030.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7050.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7070.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7090.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7110.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7130.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7150.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7170.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7190.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7210.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7230.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7250.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7270.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7290.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7310.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7330.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7350.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7370.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7390.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7410.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7430.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7450.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7470.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7490.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7510.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7530.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7550.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7570.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7590.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7610.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7630.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7650.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7670.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7690.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7710.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7730.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7750.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7760.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Write burst awid: 0x11 awaddr: 0x00001000 awlen: 0 awsize: 6 awprot: 0
+  7770.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7790.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7810.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7830.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7850.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7870.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7890.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7910.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7930.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7950.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  7970.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  7990.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8010.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8030.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8050.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8070.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8080.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Write burst awid: 0x11 awaddr: 0x00001040 awlen: 0 awsize: 6 awprot: 0
+  8090.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8110.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8130.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8150.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8170.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8190.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8210.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8230.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8250.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8270.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8290.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8310.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8330.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8350.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8370.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8390.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8400.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Write burst awid: 0x11 awaddr: 0x00001080 awlen: 0 awsize: 6 awprot: 0
+  8410.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8430.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8450.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8470.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8490.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8510.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8530.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8550.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8570.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8590.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8610.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8630.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8650.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8670.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8690.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8710.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8720.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Write burst awid: 0x11 awaddr: 0x000010c0 awlen: 0 awsize: 6 awprot: 0
+  8730.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8750.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8770.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8790.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8810.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8830.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8850.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8870.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8890.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8910.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8930.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8950.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  8970.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  8990.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9010.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9030.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9040.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Write burst awid: 0x11 awaddr: 0x00001100 awlen: 0 awsize: 6 awprot: 0
+  9050.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9070.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9090.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9110.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9130.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9150.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9170.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9190.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9210.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9230.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9250.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9270.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9290.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9310.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9330.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9350.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9360.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Write burst awid: 0x11 awaddr: 0x00001140 awlen: 0 awsize: 6 awprot: 0
+  9370.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9390.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9410.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9430.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9450.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9470.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9490.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9510.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9530.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9550.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9570.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9590.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9610.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9630.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9650.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9670.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9680.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Write burst awid: 0x11 awaddr: 0x00001180 awlen: 0 awsize: 6 awprot: 0
+  9690.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9710.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9730.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9750.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9770.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9790.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9810.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9830.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9850.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9870.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9890.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9910.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9930.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9950.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+  9970.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+  9990.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 10000.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Write burst awid: 0x11 awaddr: 0x000011c0 awlen: 0 awsize: 6 awprot: 0
+ 10010.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 02 00 00 00
+ 10010.00ns INFO     cocotb.tb_sfu_wrapper              test_sfu_softmax_normal: PASS
+ 10010.00ns INFO     cocotb.regression                  test_sfu_softmax_normal passed
+ 10010.00ns INFO     cocotb.regression                  running test_sfu_gelu_normal (3/7)
+                                                          64-element FP16 GELU via SFU wrapper, compare against golden.
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper              Clock started, reset de-asserted
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb          cocotbext-axi version 0.1.28
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb          Copyright (c) 2025 Alex Forencich
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb          https://github.com/alexforencich/cocotbext-axi
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master configuration:
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb            Address width: 12 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb            Byte size: 8 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb            Data width: 32 bits (4 bytes)
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master signals:
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb            paddr width: 12 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb            penable width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb            pprot: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb            prdata width: 32 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb            pready width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb            psel width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb            pslverr width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb            pstrb width: 4 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwdata width: 32 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwrite width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.apb          Reset de-asserted
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model (write)
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        cocotbext-axi version 0.1.28
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Copyright (c) 2021-2025 Alex Forencich
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        https://github.com/alexforencich/cocotbext-axi
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model configuration:
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Address width: 32 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ID width: 8 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Byte size: 8 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Data width: 512 bits (64 bytes)
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model signals:
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awaddr width: 32 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awburst width: 2 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awcache: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awid width: 8 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awlen width: 8 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awlock: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awprot: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awqos: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awready width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awregion: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awsize width: 3 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awuser: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awvalid width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wdata width: 512 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wlast width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wready width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wstrb width: 64 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wuser: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wvalid width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bid width: 8 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bready width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bresp width: 2 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          buser: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bvalid width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model (read)
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        cocotbext-axi version 0.1.28
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Copyright (c) 2021-2025 Alex Forencich
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        https://github.com/alexforencich/cocotbext-axi
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model configuration:
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Address width: 32 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ID width: 8 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Byte size: 8 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Data width: 512 bits (64 bytes)
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model signals:
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          araddr width: 32 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arburst width: 2 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arcache: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arid width: 8 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arlen width: 8 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arlock: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arprot: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arqos: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arready width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arregion: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arsize width: 3 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          aruser: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arvalid width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rdata width: 512 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rid width: 8 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rlast width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rready width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rresp width: 2 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ruser: not present
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rvalid width: 1 bits
+ 10160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 10170.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000000 prot: 2 data: 02 00 00 00
+ 10190.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000000 prot: 2 resp: 0 length: 4
+ 10200.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000000c prot: 2 data: 00 00 00 00
+ 10220.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000000c prot: 2 resp: 0 length: 4
+ 10230.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000010 prot: 2 data: 00 10 00 00
+ 10230.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000000 arlen: 0 arsize: 6 arprot: 0
+ 10250.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000010 prot: 2 resp: 0 length: 4
+ 10260.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000014 prot: 2 data: 40 00 00 00
+ 10280.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000014 prot: 2 resp: 0 length: 4
+ 10290.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000018 prot: 2 data: 00 00 00 00
+ 10310.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000018 prot: 2 resp: 0 length: 4
+ 10320.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000001c prot: 2 data: 00 00 00 00
+ 10340.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000001c prot: 2 resp: 0 length: 4
+ 11350.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000004 prot: 2 data: 01 00 00 00
+ 11370.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000004 prot: 2 resp: 0 length: 4
+ 11380.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11400.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11420.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11440.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11460.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11480.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11500.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11520.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11540.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11560.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11580.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11590.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000040 arlen: 0 arsize: 6 arprot: 0
+ 11600.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11620.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11640.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11660.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11680.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11700.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11720.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11740.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11760.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11780.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11790.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Write burst awid: 0x11 awaddr: 0x00001000 awlen: 0 awsize: 6 awprot: 0
+ 11800.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11820.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11840.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11860.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11880.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11900.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11910.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000080 arlen: 0 arsize: 6 arprot: 0
+ 11920.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11940.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 11960.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 11980.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 12000.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 12020.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 12040.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 12060.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 12080.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 12100.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 12110.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Write burst awid: 0x11 awaddr: 0x00001040 awlen: 0 awsize: 6 awprot: 0
+ 12120.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 02 00 00 00
+ 12120.00ns ERROR    cocotb.tb_sfu_wrapper              GELU FAIL: max_abs=4.000000e+00 max_rel=1.000000e+00
+                                                          first failing elements: [32] g=0.033356 r=0.000000 [33] g=0.109619 r=0.000000 [34] g=0.198242 r=0.000000 [35] g=0.298340 r=0.000000 [36] g=0.409180 r=0.000000 [37] g=0.528809 r=0.000000 [38] g=0.656250 r=0.000000 [39] g=0.789551 r=0.000000
+ 12120.00ns INFO     cocotb.regression                  test_sfu_gelu_normal failed
+                                                        Traceback (most recent call last):
+                                                          File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_sfu_wrapper.py", line 315, in test_sfu_gelu_normal
+                                                            assert passed, f"GELU comparison failed: max_abs={max_abs:.6e} max_rel={max_rel:.6e}"
+                                                                   ^^^^^^
+                                                        AssertionError: GELU comparison failed: max_abs=4.000000e+00 max_rel=1.000000e+00
+ 12120.00ns INFO     cocotb.regression                  running test_sfu_width_converter_32to512 (4/7)
+                                                          Verify 16x32-bit SFU output writes pack into one 512-bit AXI beat.
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper              Clock started, reset de-asserted
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb          cocotbext-axi version 0.1.28
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb          Copyright (c) 2025 Alex Forencich
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb          https://github.com/alexforencich/cocotbext-axi
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master configuration:
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb            Address width: 12 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb            Byte size: 8 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb            Data width: 32 bits (4 bytes)
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master signals:
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb            paddr width: 12 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb            penable width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb            pprot: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb            prdata width: 32 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb            pready width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb            psel width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb            pslverr width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb            pstrb width: 4 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwdata width: 32 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwrite width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.apb          Reset de-asserted
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model (write)
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        cocotbext-axi version 0.1.28
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Copyright (c) 2021-2025 Alex Forencich
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        https://github.com/alexforencich/cocotbext-axi
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model configuration:
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Address width: 32 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ID width: 8 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Byte size: 8 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Data width: 512 bits (64 bytes)
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model signals:
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awaddr width: 32 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awburst width: 2 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awcache: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awid width: 8 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awlen width: 8 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awlock: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awprot: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awqos: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awready width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awregion: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awsize width: 3 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awuser: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awvalid width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wdata width: 512 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wlast width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wready width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wstrb width: 64 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wuser: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wvalid width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bid width: 8 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bready width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bresp width: 2 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          buser: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bvalid width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model (read)
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        cocotbext-axi version 0.1.28
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Copyright (c) 2021-2025 Alex Forencich
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        https://github.com/alexforencich/cocotbext-axi
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model configuration:
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Address width: 32 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ID width: 8 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Byte size: 8 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Data width: 512 bits (64 bytes)
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model signals:
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          araddr width: 32 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arburst width: 2 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arcache: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arid width: 8 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arlen width: 8 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arlock: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arprot: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arqos: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arready width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arregion: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arsize width: 3 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          aruser: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arvalid width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rdata width: 512 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rid width: 8 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rlast width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rready width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rresp width: 2 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ruser: not present
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rvalid width: 1 bits
+ 12270.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 12280.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000000 prot: 2 data: 00 00 00 00
+ 12300.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000000 prot: 2 resp: 0 length: 4
+ 12310.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000000c prot: 2 data: 00 00 00 00
+ 12330.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000000c prot: 2 resp: 0 length: 4
+ 12340.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000010 prot: 2 data: 00 10 00 00
+ 12340.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000000 arlen: 0 arsize: 6 arprot: 0
+ 12360.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000010 prot: 2 resp: 0 length: 4
+ 12370.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000014 prot: 2 data: 10 00 00 00
+ 12390.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000014 prot: 2 resp: 0 length: 4
+ 12400.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000018 prot: 2 data: 00 00 00 00
+ 12420.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000018 prot: 2 resp: 0 length: 4
+ 12430.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000001c prot: 2 data: 00 00 00 00
+ 12450.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000001c prot: 2 resp: 0 length: 4
+ 13460.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000004 prot: 2 data: 01 00 00 00
+ 13480.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000004 prot: 2 resp: 0 length: 4
+ 13490.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 13510.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 13530.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 13550.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 13570.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 13590.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 13610.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 13630.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 13650.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 13670.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 13690.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 13710.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 13730.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 13750.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 13770.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 13790.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 13810.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 13830.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 13850.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 13870.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 13890.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 13910.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 13930.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 13950.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 13970.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 13990.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 14010.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 14030.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 14050.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 14070.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 14090.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 14110.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 14130.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 14150.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 14170.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 14190.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 14210.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 14230.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 14250.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 14270.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 14290.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 14310.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 14330.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 14350.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 02 00 00 00
+ 14350.00ns ERROR    cocotb.tb_sfu_wrapper              WIDTH CONVERTER FAIL: max_abs=3.781738e-01 max_rel=1.000000e+00
+ 14350.00ns INFO     cocotb.regression                  test_sfu_width_converter_32to512 failed
+                                                        Traceback (most recent call last):
+                                                          File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_sfu_wrapper.py", line 358, in test_sfu_width_converter_32to512
+                                                            assert passed, (
+                                                                   ^^^^^^
+                                                        AssertionError: Width converter packing failed: max_abs=3.781738e-01 max_rel=1.000000e+00
+ 14350.00ns INFO     cocotb.regression                  running test_sfu_line_buffer_prefetch (5/7)
+                                                          Verify line buffer prefetch with non-cache-line-aligned I_ADDR and
+                                                          DIM that is not a multiple of 128 elements (512 bytes).
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper              Clock started, reset de-asserted
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb          cocotbext-axi version 0.1.28
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb          Copyright (c) 2025 Alex Forencich
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb          https://github.com/alexforencich/cocotbext-axi
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master configuration:
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb            Address width: 12 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb            Byte size: 8 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb            Data width: 32 bits (4 bytes)
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master signals:
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb            paddr width: 12 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb            penable width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb            pprot: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb            prdata width: 32 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb            pready width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb            psel width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb            pslverr width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb            pstrb width: 4 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwdata width: 32 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwrite width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.apb          Reset de-asserted
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model (write)
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        cocotbext-axi version 0.1.28
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Copyright (c) 2021-2025 Alex Forencich
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        https://github.com/alexforencich/cocotbext-axi
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model configuration:
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Address width: 32 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ID width: 8 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Byte size: 8 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Data width: 512 bits (64 bytes)
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model signals:
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awaddr width: 32 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awburst width: 2 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awcache: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awid width: 8 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awlen width: 8 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awlock: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awprot: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awqos: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awready width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awregion: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awsize width: 3 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awuser: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awvalid width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wdata width: 512 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wlast width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wready width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wstrb width: 64 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wuser: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wvalid width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bid width: 8 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bready width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bresp width: 2 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          buser: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bvalid width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model (read)
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        cocotbext-axi version 0.1.28
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Copyright (c) 2021-2025 Alex Forencich
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        https://github.com/alexforencich/cocotbext-axi
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model configuration:
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Address width: 32 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ID width: 8 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Byte size: 8 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Data width: 512 bits (64 bytes)
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model signals:
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          araddr width: 32 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arburst width: 2 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arcache: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arid width: 8 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arlen width: 8 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arlock: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arprot: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arqos: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arready width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arregion: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arsize width: 3 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          aruser: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arvalid width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rdata width: 512 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rid width: 8 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rlast width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rready width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rresp width: 2 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ruser: not present
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rvalid width: 1 bits
+ 14500.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 14510.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000000 prot: 2 data: 00 00 00 00
+ 14530.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000000 prot: 2 resp: 0 length: 4
+ 14540.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000000c prot: 2 data: 08 00 00 00
+ 14560.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000000c prot: 2 resp: 0 length: 4
+ 14570.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000010 prot: 2 data: 08 20 00 00
+ 14570.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000000 arlen: 0 arsize: 6 arprot: 0
+ 14590.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000010 prot: 2 resp: 0 length: 4
+ 14600.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000014 prot: 2 data: 19 00 00 00
+ 14620.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000014 prot: 2 resp: 0 length: 4
+ 14630.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000018 prot: 2 data: 00 00 00 00
+ 14650.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000018 prot: 2 resp: 0 length: 4
+ 14660.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000001c prot: 2 data: 00 00 00 00
+ 14680.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000001c prot: 2 resp: 0 length: 4
+ 15690.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000004 prot: 2 data: 01 00 00 00
+ 15710.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000004 prot: 2 resp: 0 length: 4
+ 15720.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 15740.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 15760.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 15780.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 15800.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 15820.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 15840.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 15860.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 15880.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 15890.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000040 arlen: 0 arsize: 6 arprot: 0
+ 15900.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 15920.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 15940.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 15960.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 15980.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16000.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16020.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16040.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16060.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16080.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16100.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16120.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16140.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16160.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16180.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16200.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16220.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16240.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16260.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16280.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16300.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16320.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16340.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16360.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16380.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16400.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16420.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16440.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16460.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16480.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16500.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16520.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16540.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16560.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16580.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16600.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16620.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16640.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16660.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16680.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16700.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16720.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16740.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16760.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16780.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16800.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16820.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 16840.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 16860.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 02 00 00 00
+ 16860.00ns ERROR    cocotb.tb_sfu_wrapper              PREFETCH FAIL: max_abs=4.912109e-01 max_rel=1.000000e+00
+                                                          first failing elements: [0] g=0.005909 r=0.000000 [1] g=0.021927 r=0.000000 [3] g=0.010246 r=0.000000 [4] g=0.012215 r=0.000000 [6] g=0.006889 r=0.000000 [8] g=0.333740 r=0.000000 [10] g=0.007542 r=0.000000 [11] g=0.098999 r=0.000000
+ 16860.00ns INFO     cocotb.regression                  test_sfu_line_buffer_prefetch failed
+                                                        Traceback (most recent call last):
+                                                          File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_sfu_wrapper.py", line 426, in test_sfu_line_buffer_prefetch
+                                                            assert passed, (
+                                                                   ^^^^^^
+                                                        AssertionError: Line buffer prefetch failed: max_abs=4.912109e-01 max_rel=1.000000e+00
+ 16860.00ns INFO     cocotb.regression                  running test_bug005_sfu_nonaligned_xprop (6/7)
+                                                          BUG-005 SFU: X-propagation from non-aligned 64B cache-line padding.
+                                                          
+                                                          Uses tb_sfu_wrapper_sparse. The sparse slave's uninitialized reg
+                                                          memory returns X for bytes 50-63 of word 0, which the wrapper's
+                                                          64-byte cache-line prefetch will read.
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper              Clock started, reset de-asserted
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb          cocotbext-axi version 0.1.28
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb          Copyright (c) 2025 Alex Forencich
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb          https://github.com/alexforencich/cocotbext-axi
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master configuration:
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb            Address width: 12 bits
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb            Byte size: 8 bits
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb            Data width: 32 bits (4 bytes)
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master signals:
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb            paddr width: 12 bits
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb            penable width: 1 bits
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb            pprot: not present
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb            prdata width: 32 bits
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb            pready width: 1 bits
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb            psel width: 1 bits
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb            pslverr width: 1 bits
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb            pstrb width: 4 bits
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwdata width: 32 bits
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwrite width: 1 bits
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.apb          Reset de-asserted
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.e_axi        AXI master (write)
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.e_axi        cocotbext-axi version 0.1.28
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.e_axi        Copyright (c) 2020-2025 Alex Forencich
+ 17010.00ns INFO     cocotb.tb_sfu_wrapper.e_axi        https://github.com/alexforencich/cocotbext-axi
+ 17010.00ns INFO     cocotb.regression                  test_bug005_sfu_nonaligned_xprop failed
+                                                        Traceback (most recent call last):
+                                                          File "/home/prj/zhengs/caduceuscore/CaduceusCore/sim/tests/wrapper/test_sfu_wrapper.py", line 510, in test_bug005_sfu_nonaligned_xprop
+                                                            e_master = AxiMaster(e_bus, dut.clk, dut.rst_n, reset_active_level=False)
+                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                                          File "/home/zhengs/.local/lib/python3.11/site-packages/cocotbext/axi/axi_master.py", line 1043, in __init__
+                                                            self.write_if = AxiMasterWrite(bus.write, clock, reset, reset_active_level, max_burst_len, **kwargs)
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                                          File "/home/zhengs/.local/lib/python3.11/site-packages/cocotbext/axi/axi_master.py", line 211, in __init__
+                                                            self.aw_channel = AxiAWSource(bus.aw, clock, reset, reset_active_level)
+                                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                                          File "/home/zhengs/.local/lib/python3.11/site-packages/cocotbext/axi/stream.py", line 222, in __init__
+                                                            super().__init__(bus, clock, reset, reset_active_level, *args, **kwargs)
+                                                          File "/home/zhengs/.local/lib/python3.11/site-packages/cocotbext/axi/stream.py", line 120, in __init__
+                                                            self.valid.setimmediatevalue(self._valid_init)
+                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                                        AttributeError: 'NoneType' object has no attribute 'setimmediatevalue'
+ 17010.00ns INFO     cocotb.regression                  running test_bug007_sfu_start_hold (7/7)
+                                                          BUG-007: Verify SFU start_hold gates CMD.START during I_ADDR prefetch.
+                                                          
+                                                          Writes I_ADDR then immediately writes CMD.START (0-cycle gap) for
+                                                          two consecutive operations (GELU then SOFTMAX).  The wrapper's
+                                                          start_hold mechanism must:
+                                                            - Block the first START until the cache-line prefetch completes
+                                                            - Replay the START (via start_pending latch) when prefetch finishes
+                                                            - Block the second START similarly for the second op
+                                                          
+                                                          BUG-RTL-SOC-WV-001 (STATUS.DONE never asserts) is handled gracefully:
+                                                          the test still verifies BUSY assertion and output correctness.
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper              Clock started, reset de-asserted
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb          cocotbext-axi version 0.1.28
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb          Copyright (c) 2025 Alex Forencich
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb          https://github.com/alexforencich/cocotbext-axi
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master configuration:
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb            Address width: 12 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb            Byte size: 8 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb            Data width: 32 bits (4 bytes)
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb          APB master signals:
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb            paddr width: 12 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb            penable width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb            pprot: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb            prdata width: 32 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb            pready width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb            psel width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb            pslverr width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb            pstrb width: 4 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwdata width: 32 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb            pwrite width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.apb          Reset de-asserted
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model (write)
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        cocotbext-axi version 0.1.28
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Copyright (c) 2021-2025 Alex Forencich
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        https://github.com/alexforencich/cocotbext-axi
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model configuration:
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Address width: 32 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ID width: 8 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Byte size: 8 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Data width: 512 bits (64 bytes)
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model signals:
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awaddr width: 32 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awburst width: 2 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awcache: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awid width: 8 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awlen width: 8 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awlock: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awprot: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awqos: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awready width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awregion: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awsize width: 3 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awuser: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          awvalid width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wdata width: 512 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wlast width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wready width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wstrb width: 64 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wuser: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          wvalid width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bid width: 8 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bready width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bresp width: 2 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          buser: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          bvalid width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model (read)
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        cocotbext-axi version 0.1.28
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Copyright (c) 2021-2025 Alex Forencich
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        https://github.com/alexforencich/cocotbext-axi
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model configuration:
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Address width: 32 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ID width: 8 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Byte size: 8 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          Data width: 512 bits (64 bytes)
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        AXI slave model signals:
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          araddr width: 32 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arburst width: 2 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arcache: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arid width: 8 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arlen width: 8 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arlock: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arprot: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arqos: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arready width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arregion: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arsize width: 3 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          aruser: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          arvalid width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rdata width: 512 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rid width: 8 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rlast width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rready width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rresp width: 2 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          ruser: not present
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi          rvalid width: 1 bits
+ 17160.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Reset de-asserted
+ 17170.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000000 prot: 2 data: 02 00 00 00
+ 17190.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000000 prot: 2 resp: 0 length: 4
+ 17200.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000000c prot: 2 data: 00 00 00 00
+ 17220.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000000c prot: 2 resp: 0 length: 4
+ 17230.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000010 prot: 2 data: 00 08 00 00
+ 17230.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000000 arlen: 0 arsize: 6 arprot: 0
+ 17250.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000010 prot: 2 resp: 0 length: 4
+ 17260.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000014 prot: 2 data: 40 00 00 00
+ 17280.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000014 prot: 2 resp: 0 length: 4
+ 17290.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000018 prot: 2 data: 00 00 00 00
+ 17310.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000018 prot: 2 resp: 0 length: 4
+ 17320.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000001c prot: 2 data: 00 00 00 00
+ 17340.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000001c prot: 2 resp: 0 length: 4
+ 17340.00ns INFO     cocotb.tb_sfu_wrapper              BUG-007 phase1-GELU: issuing CMD.START (0-cycle gap)
+ 17350.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000004 prot: 2 data: 01 00 00 00
+ 17370.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000004 prot: 2 resp: 0 length: 4
+ 17370.00ns INFO     cocotb.tb_sfu_wrapper              BUG-007 phase1-GELU: CMD.START write completed
+ 17380.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17400.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17400.00ns INFO     cocotb.tb_sfu_wrapper              BUG-007 phase1-GELU: BUSY asserted
+ 17410.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17430.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17450.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17470.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17490.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17510.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17530.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17550.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17570.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17590.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17590.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000040 arlen: 0 arsize: 6 arprot: 0
+ 17610.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17630.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17650.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17670.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17690.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17710.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17730.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17750.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17770.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17790.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17790.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Write burst awid: 0x11 awaddr: 0x00000800 awlen: 0 awsize: 6 awprot: 0
+ 17810.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17830.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17850.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17870.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17890.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17910.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17910.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000080 arlen: 0 arsize: 6 arprot: 0
+ 17930.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17950.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 17970.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 17990.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18010.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18030.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18050.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18070.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18090.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18110.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 02 00 00 00
+ 18110.00ns INFO     cocotb.tb_sfu_wrapper              BUG-007 phase1-GELU: DONE asserted
+ 18110.00ns WARNING  cocotb.tb_sfu_wrapper              BUG-007 phase1-GELU: output mismatch max_abs=4.000000e+00 max_rel=1.000000e+00
+ 18110.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Write burst awid: 0x11 awaddr: 0x00000840 awlen: 0 awsize: 6 awprot: 0
+ 18120.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000000 prot: 2 data: 00 00 00 00
+ 18140.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000000 prot: 2 resp: 0 length: 4
+ 18150.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000000c prot: 2 data: 00 04 00 00
+ 18170.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000000c prot: 2 resp: 0 length: 4
+ 18180.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000010 prot: 2 data: 00 0c 00 00
+ 18180.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000400 arlen: 0 arsize: 6 arprot: 0
+ 18200.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000010 prot: 2 resp: 0 length: 4
+ 18210.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000014 prot: 2 data: 40 00 00 00
+ 18230.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000014 prot: 2 resp: 0 length: 4
+ 18240.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000018 prot: 2 data: 00 00 00 00
+ 18260.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000018 prot: 2 resp: 0 length: 4
+ 18270.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x0000001c prot: 2 data: 00 00 00 00
+ 18290.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x0000001c prot: 2 resp: 0 length: 4
+ 18290.00ns INFO     cocotb.tb_sfu_wrapper              BUG-007 phase2-SOFTMAX: issuing CMD.START (0-cycle gap)
+ 18300.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write start addr: 0x00000004 prot: 2 data: 01 00 00 00
+ 18320.00ns INFO     cocotb.tb_sfu_wrapper.apb          Write complete addr: 0x00000004 prot: 2 resp: 0 length: 4
+ 18320.00ns INFO     cocotb.tb_sfu_wrapper              BUG-007 phase2-SOFTMAX: CMD.START write completed
+ 18330.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18350.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18350.00ns INFO     cocotb.tb_sfu_wrapper              BUG-007 phase2-SOFTMAX: BUSY asserted
+ 18360.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18380.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18400.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18420.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18440.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18460.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18480.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18500.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18520.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18540.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18540.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000440 arlen: 0 arsize: 6 arprot: 0
+ 18560.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18580.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18600.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18620.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18640.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18660.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18680.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18700.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18720.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18740.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18760.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18780.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18800.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18820.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18840.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18860.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18860.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Read burst arid: 0x10 araddr: 0x00000480 arlen: 0 arsize: 6 arprot: 0
+ 18880.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18900.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18920.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18940.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 18960.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 18980.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19000.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19020.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19040.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19060.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19080.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19100.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19120.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19140.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19160.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19180.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19200.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19220.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19240.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19260.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19280.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19300.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19320.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19340.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19360.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19380.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19400.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19420.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19440.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19460.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19480.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19500.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19520.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19540.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19560.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19580.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19600.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19620.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19640.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19660.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19680.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19700.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19720.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19740.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19760.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19780.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19800.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19820.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19840.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19860.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19880.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19900.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19920.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19940.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 19960.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 19980.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20000.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20020.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20040.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20060.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20080.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20100.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20120.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20140.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20160.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20180.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20200.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20220.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20240.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20260.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20280.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20300.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20300.00ns INFO     cocotb.tb_sfu_wrapper.m_axi        Write burst awid: 0x11 awaddr: 0x00000c00 awlen: 0 awsize: 6 awprot: 0
+ 20320.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20340.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20360.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20380.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20400.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20420.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20440.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20460.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20480.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20500.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20520.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20540.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20560.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20580.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 01 00 00 00
+ 20600.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read start addr: 0x00000008 prot: 2 length: 4
+ 20620.00ns INFO     cocotb.tb_sfu_wrapper.apb          Read complete addr: 0x00000008 prot: 2 resp: 0 data: 02 00 00 00
+ 20620.00ns INFO     cocotb.tb_sfu_wrapper              BUG-007 phase2-SOFTMAX: DONE asserted
+ 20620.00ns WARNING  cocotb.tb_sfu_wrapper              BUG-007 phase2-SOFTMAX: output mismatch max_abs=7.822266e-01 max_rel=1.000000e+00
+ 20620.00ns INFO     cocotb.tb_sfu_wrapper              BUG-007 SFU summary: phase1 accepted=True correct=False, phase2 accepted=True correct=False
+ 20620.00ns INFO     cocotb.tb_sfu_wrapper              SFU: PASS -- start_hold correctly gates and replays START for both ops
+ 20620.00ns INFO     cocotb.regression                  test_bug007_sfu_start_hold passed
+ 20620.00ns INFO     cocotb.regression                  *****************************************************************************************************************************
+                                                        ** TEST                                                                 STATUS  SIM TIME (ns)  REAL TIME (s)  RATIO (ns/s) **
+                                                        *****************************************************************************************************************************
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_apb_regmap_rw                 PASS         580.00           0.11       5108.93  **
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_sfu_softmax_normal            PASS        9430.00           0.14      65240.99  **
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_sfu_gelu_normal               FAIL        2110.00           0.03      69463.92  **
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_sfu_width_converter_32to512   FAIL        2230.00           0.03      74015.76  **
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_sfu_line_buffer_prefetch      FAIL        2510.00           0.03      72562.81  **
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_bug005_sfu_nonaligned_xprop   FAIL         150.00           0.00      46469.13  **
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_bug007_sfu_start_hold         PASS        3610.00           0.06      57350.67  **
+                                                        *****************************************************************************************************************************
+                                                        ** TESTS=7 PASS=3 FAIL=4 SKIP=0                                                     20620.00           0.50      41169.84  **
+                                                        *****************************************************************************************************************************
+                                                        
+$finish at simulation time             20620001
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 20620001 ps
+CPU Time:      1.080 seconds;       Data structure size:   8.3Mb
+Thu Jul 23 16:07:40 2026
+
+=== Regression Summary ===
+
+RUN_EXIT_CODE=0
