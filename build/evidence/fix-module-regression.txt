@@ -1,0 +1,21 @@
+Module-level regression summary
+Date: 2026-07-23
+
+SFU module regression
+  Source: scripts/run_batch_regression.py on sz0001
+  Evidence: .omo/evidence/task-17-rerun.txt
+  Result: 319/319 PASS
+
+Vector module regression
+  Source: scripts/run_batch_regression.py on sz0001
+  Evidence: .omo/evidence/task-17-rerun.txt
+  Result: 63/63 PASS
+
+MXU module regression
+  Source: scripts/run_mxu_module_regression.sh on sz0001
+  Evidence: build/evidence/fix-mxu-module-regression.txt
+  Result: 109/109 PASS
+    - Named scenarios: 9/9 PASS
+    - Random regression: 100/100 PASS
+
+OVERALL_MODULE_REGRESSION: PASS 491/491

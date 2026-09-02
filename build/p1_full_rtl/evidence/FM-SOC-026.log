@@ -1,0 +1,276 @@
+Info: [VCS_SAVE_RESTORE_INFO] ASLR (Address Space Layout Randomization) is detected on the machine. To enable $save functionality, ASLR will be switched off and simv re-executed.
+Please use '-no_save' simv switch to avoid re-execution or '-suppress=ASLR_DETECTED_INFO' to suppress this message.
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Jul  5 22:52 2026
+     -.--ns INFO     gpi                                ..mbed/gpi_embed.cpp:79   in set_program_name_in_venv        Did not detect Python virtual environment. Using system-wide Python interpreter
+     -.--ns INFO     gpi                                ../gpi/GpiCommon.cpp:101  in gpi_print_registered_impl       VPI registered
+     0.00ns INFO     cocotb                             Running on Chronologic Simulation VCS Release version V-2023.12-SP2_Full64
+     0.00ns INFO     cocotb                             Running tests with cocotb v1.9.0 from /NAS/Tools/anaconda3/envs/py3.11/lib/python3.11/site-packages/cocotb
+     0.00ns INFO     cocotb                             Seeding Python random module with 1783263166
+     0.00ns INFO     cocotb.regression                  pytest not found, install it to enable better AssertionError messages
+     0.00ns INFO     cocotb.regression                  Found test sim.rtl_soc_runner.test_soc_spike_p1
+     0.00ns INFO     cocotb.regression                  running test_soc_spike_p1 (1/1)
+     4.50ns WARNING  gpi                                VPI: Not able to map type vpiNamedEvent(34) to object.
+     4.50ns WARNING  gpi                                Unable to create sim_done via any registered implementation
+     4.50ns WARNING  gpi                                VPI: Not able to map type vpiTask(59) to object.
+     4.50ns WARNING  gpi                                Unable to create apply_reset via any registered implementation
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      AXI master (write)
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      cocotbext-axi version 0.1.28
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Copyright (c) 2020-2025 Alex Forencich
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      https://github.com/alexforencich/cocotbext-axi
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset de-asserted
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset de-asserted
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset de-asserted
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      AXI master configuration:
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        Address width: 32 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        ID width: 4 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        Byte size: 8 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        Data width: 32 bits (4 bytes)
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        Max burst size: 2 (4 bytes)
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        Max burst length: 256 cycles (1024 bytes)
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      AXI master signals:
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        awaddr width: 32 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        awburst width: 2 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        awcache: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        awid width: 4 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        awlen width: 8 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        awlock: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        awprot: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        awqos: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        awready width: 1 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        awregion: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        awsize width: 3 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        awuser: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        awvalid width: 1 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        wdata width: 32 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        wlast width: 1 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        wready width: 1 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        wstrb width: 4 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        wuser: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        wvalid width: 1 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        bid width: 4 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        bready width: 1 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        bresp width: 2 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        buser: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        bvalid width: 1 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset de-asserted
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      AXI master (read)
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      cocotbext-axi version 0.1.28
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Copyright (c) 2020-2025 Alex Forencich
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      https://github.com/alexforencich/cocotbext-axi
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset de-asserted
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset de-asserted
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      AXI master configuration:
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        Address width: 32 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        ID width: 4 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        Byte size: 8 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        Data width: 32 bits (4 bytes)
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        Max burst size: 2 (4 bytes)
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        Max burst length: 256 cycles (1024 bytes)
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      AXI master signals:
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        araddr width: 32 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        arburst width: 2 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        arcache: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        arid width: 4 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        arlen width: 8 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        arlock: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        arprot: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        arqos: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        arready width: 1 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        arregion: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        arsize width: 3 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        aruser: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        arvalid width: 1 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        rdata width: 32 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        rid width: 4 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        rlast width: 1 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        rready width: 1 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        rresp width: 2 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        ruser: not present
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi        rvalid width: 1 bits
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset de-asserted
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset asserted
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset asserted
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset asserted
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset asserted
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset asserted
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset asserted
+     4.50ns INFO     cocotb.tb_soc_spike.cpu_m_axi      Reset asserted
+
+============================================================
+[TB] tb_soc_spike — CaduceusCore Spike-CPU Testbench
+[TB] Clock: 1 GHz (period = 1 ns)
+[TB] DUT: caduceus_soc_spike_top (no Ibex)
+============================================================
+[TB] Reset released at cycle 4 (t=5000 ns)
+
+[TB] COCOTB mode — waiting for Python control...
+[SPIKE] writing HOST_TAIL=3
+[SPIKE] reading HOST_TAIL
+[SPIKE] HOST_TAIL=3 (expected 3) cmd0=(0, 2147483776, 0, 0, 0, 0, 0, 0)
+[SPIKE] NPU_HEAD=0 LAST_STATUS=0x00000000 after 0 cycles
+[SRAM_WR] awid=256 addr=0x20000000 beat=0 wlast=0 wstrb=0xffffffffffffffff data=0x00000000000000fd
+[SRAM_WR] awid=256 addr=0x20000040 beat=1 wlast=0 wstrb=0xffffffffffffffff data=0x00000000000000ff
+[SRAM_WR] awid=256 addr=0x20000080 beat=2 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000006
+[SRAM_WR] awid=256 addr=0x200000c0 beat=3 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000100 beat=4 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000140 beat=5 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000180 beat=6 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200001c0 beat=7 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000200 beat=8 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000240 beat=9 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000280 beat=10 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200002c0 beat=11 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000300 beat=12 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000340 beat=13 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000380 beat=14 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200003c0 beat=15 wlast=1 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000400 beat=0 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000440 beat=1 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000480 beat=2 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200004c0 beat=3 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000500 beat=4 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000540 beat=5 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000580 beat=6 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200005c0 beat=7 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000600 beat=8 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000640 beat=9 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000680 beat=10 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200006c0 beat=11 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000700 beat=12 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000740 beat=13 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000780 beat=14 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200007c0 beat=15 wlast=1 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000800 beat=0 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000840 beat=1 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000880 beat=2 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200008c0 beat=3 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000900 beat=4 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000940 beat=5 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000980 beat=6 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200009c0 beat=7 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000a00 beat=8 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000a40 beat=9 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000a80 beat=10 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000ac0 beat=11 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000b00 beat=12 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000b40 beat=13 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000b80 beat=14 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000bc0 beat=15 wlast=1 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000c00 beat=0 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000c40 beat=1 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000c80 beat=2 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000cc0 beat=3 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000d00 beat=4 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000d40 beat=5 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000d80 beat=6 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000dc0 beat=7 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000e00 beat=8 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000e40 beat=9 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000e80 beat=10 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000ec0 beat=11 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000f00 beat=12 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000f40 beat=13 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000f80 beat=14 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20000fc0 beat=15 wlast=1 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010000 beat=0 wlast=0 wstrb=0xffffffffffffffff data=0x00000000000000cf
+[SRAM_WR] awid=256 addr=0x20010040 beat=1 wlast=0 wstrb=0xffffffffffffffff data=0x000000000000005d
+[SRAM_WR] awid=256 addr=0x20010080 beat=2 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200100c0 beat=3 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010100 beat=4 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010140 beat=5 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010180 beat=6 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200101c0 beat=7 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010200 beat=8 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010240 beat=9 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010280 beat=10 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200102c0 beat=11 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010300 beat=12 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010340 beat=13 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010380 beat=14 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200103c0 beat=15 wlast=1 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010400 beat=0 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010440 beat=1 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010480 beat=2 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200104c0 beat=3 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010500 beat=4 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010540 beat=5 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010580 beat=6 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200105c0 beat=7 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010600 beat=8 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010640 beat=9 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010680 beat=10 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200106c0 beat=11 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010700 beat=12 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010740 beat=13 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20010780 beat=14 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200107c0 beat=15 wlast=1 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20014000 beat=0 wlast=0 wstrb=0xffffffffffffffff data=0x3f8000003f800000
+[SRAM_WR] awid=256 addr=0x20014040 beat=1 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20014080 beat=2 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200140c0 beat=3 wlast=1 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=65 addr=0x20018000 beat=0 wlast=1 wstrb=0x00000000000000ff data=0x00000029ffffffed
+[SRAM_WR] awid=256 addr=0x20014000 beat=0 wlast=0 wstrb=0xffffffffffffffff data=0x3f8000003f800000
+[SRAM_WR] awid=256 addr=0x20014040 beat=1 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20014080 beat=2 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200140c0 beat=3 wlast=1 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20080000 beat=0 wlast=0 wstrb=0xffffffffffffffff data=0xbf5bb906baec2a67
+[SRAM_WR] awid=256 addr=0x20080040 beat=1 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20080080 beat=2 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200800c0 beat=3 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20080100 beat=4 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20080140 beat=5 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20080180 beat=6 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200801c0 beat=7 wlast=1 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=145 addr=0x20080400 beat=0 wlast=1 wstrb=0x00000000ffffffff data=0x1f80267025202a60
+[SRAM_WR] awid=256 addr=0x20081000 beat=0 wlast=0 wstrb=0xffffffffffffffff data=0xffffffe9fffffffd
+[SRAM_WR] awid=256 addr=0x20081040 beat=1 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20081080 beat=2 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200810c0 beat=3 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20081100 beat=4 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20081140 beat=5 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20081180 beat=6 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200811c0 beat=7 wlast=1 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20081400 beat=0 wlast=0 wstrb=0xffffffffffffffff data=0xffffffca0000005c
+[SRAM_WR] awid=256 addr=0x20081440 beat=1 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20081480 beat=2 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200814c0 beat=3 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20081500 beat=4 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20081540 beat=5 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x20081580 beat=6 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SRAM_WR] awid=256 addr=0x200815c0 beat=7 wlast=1 wstrb=0xffffffffffffffff data=0x0000000000000000
+[VEC_WRP_STORE] chunk=0 beat=0 wlast=0 addr=0x20081800 data=0xffffffb300000059
+[SRAM_WR] awid=225 addr=0x20081800 beat=0 wlast=0 wstrb=0xffffffffffffffff data=0xffffffb300000059
+[VEC_WRP_STORE] chunk=0 beat=1 wlast=0 addr=0x20081840 data=0x0000000000000000
+[SRAM_WR] awid=225 addr=0x20081840 beat=1 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[VEC_WRP_STORE] chunk=0 beat=2 wlast=0 addr=0x20081880 data=0x0000000000000000
+[SRAM_WR] awid=225 addr=0x20081880 beat=2 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[VEC_WRP_STORE] chunk=0 beat=3 wlast=0 addr=0x200818c0 data=0x0000000000000000
+[SRAM_WR] awid=225 addr=0x200818c0 beat=3 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[VEC_WRP_STORE] chunk=0 beat=4 wlast=0 addr=0x20081900 data=0x0000000000000000
+[SRAM_WR] awid=225 addr=0x20081900 beat=4 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[VEC_WRP_STORE] chunk=0 beat=5 wlast=0 addr=0x20081940 data=0x0000000000000000
+[SRAM_WR] awid=225 addr=0x20081940 beat=5 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[VEC_WRP_STORE] chunk=0 beat=6 wlast=0 addr=0x20081980 data=0x0000000000000000
+[SRAM_WR] awid=225 addr=0x20081980 beat=6 wlast=0 wstrb=0xffffffffffffffff data=0x0000000000000000
+[VEC_WRP_STORE] chunk=0 beat=7 wlast=1 addr=0x200819c0 data=0x0000000000000000
+[SRAM_WR] awid=225 addr=0x200819c0 beat=7 wlast=1 wstrb=0xffffffffffffffff data=0x0000000000000000
+[SPIKE] NPU_HEAD=3 LAST_STATUS=0x00002000 after 9619 cycles
+[SPIKE] NPU_HEAD=3 LAST_STATUS=0x00002000 after 9619 cycles
+796083.50ns ERROR    rtl_soc_runner                     [SPIKE STDERR]
+                                                        warning: tohost and fromhost symbols not in ELF; can't communicate with target
+796084.50ns INFO     cocotb.regression                  test_soc_spike_p1 passed
+796084.50ns INFO     cocotb.regression                  **********************************************************************************************
+                                                        ** TEST                                  STATUS  SIM TIME (ns)  REAL TIME (s)  RATIO (ns/s) **
+                                                        **********************************************************************************************
+                                                        ** sim.rtl_soc_runner.test_soc_spike_p1   PASS      796084.50          39.54      20134.25  **
+                                                        **********************************************************************************************
+                                                        ** TESTS=1 PASS=1 FAIL=0 SKIP=0                     796084.50          39.65      20078.26  **
+                                                        **********************************************************************************************
+                                                        
+$finish at simulation time            796084501
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 796084501 ps
+CPU Time:     40.010 seconds;       Data structure size:  11.9Mb
+Sun Jul  5 22:53:25 2026
