@@ -68,7 +68,7 @@ Your next move: 直接 `/start-work bug-012-fm-audit` 开始执行，或先跑�
 ## Todos
 > Implementation + Test = ONE todo. Never separate.
 <!-- APPEND TASK BATCHES BELOW THIS LINE WITH edit/apply_patch - never rewrite the headers above. -->
-- [ ] 0. P0 基线：分支 + provenance + pathspec 提交 + 终拍 7 行快照断言
+- [x] 0. P0 基线：分支 + provenance + pathspec 提交 + 终拍 7 行快照断言
   What to do / Must NOT do: (1) `git checkout -b bug-012-fm-audit main`（当前目录、**禁止 worktree**；确认 `git branch --show-current`）。(2) provenance 块：git HEAD sha + branch；`python3 --version`；**不跑任何测试**（基线跑在 todo 1）。(3) 落档 `.omo/evidence/task-0-bug-012-fm-audit.txt`。(4) pathspec 提交 plan + draft（`add -f`）+ 本 evidence；`.omo/notepads/bug-012-fm-audit/` 若存在一并显式路径提交。(5) **提交完成后拍 `git status --porcelain` 终拍快照（最后一步）**：必须**恰好等于**以下 8 行（任何额外行 → STOP 上报）：` M .omo/evidence/task-0-signoff-v3-runner.txt`、` M .omo/evidence/task-20-uncertainty-kpis.json`、` M .omo/evidence/task-23-perf-spec-ci.txt`、` M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md`、` M .omo/notepads/phase6-rtl-verification/learnings.md`、` M build/evidence/fm-cv-chain.txt`、` M build/evidence/w3-4-mobilenetv3-fm.txt`、`?? .omo/plans/bug-012-fix.md`（**Metis BLOCKER 折入**：Phase B 计划文件现存 untracked——保持 untracked、归 bug-012-fix 计划所有，本 todo 不得提交/触碰它）。Must NOT：不动/不提交 7 个 dirty 文件与 bug-012-fix.md；不用 `git add .`/`-A`/`commit -a`。
   Parallelization: Wave 1 | Blocked by: none | Blocks: 1,2,3,4,5
   References (executor has NO interview context - be exhaustive): 7 个 dirty 文件清单见 Scope Must-NOT（与 bug-012-root-cause todo 0 同一清单）；P0 先例 `.omo/evidence/task-0-bug-012-root-cause.txt`
@@ -76,7 +76,7 @@ Your next move: 直接 `/start-work bug-012-fm-audit` 开始执行，或先跑�
   QA scenarios: happy=provenance 齐全 + 8 行快照 PASS；failure=快照出现额外行（并行会话新产物？）→ STOP 记录根因。Evidence `.omo/evidence/task-0-bug-012-fm-audit.txt`
   Commit: Y | chore(omo): P0 baseline — branch + provenance snapshot (bug-012-fm-audit)
 
-- [ ] 1. A1 FM 基线复跑（本地；只写 evidence，零代码改动）
+- [x] 1. A1 FM 基线复跑（本地；只写 evidence，零代码改动）
   What to do / Must NOT do: (1) `PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q` → 预期 `210 passed`（README Quick Start 口径；AGENTS.md NOTES 警告 210/802/700 口径差异——**cite 实际执行的命令与末行数字**）；(2) `PYTHONPATH=sim python3 scripts/verify_ops_func_model.py` → 预期 `op05 (attn_score MMUL): PASS`、`op07 (attn_weight MMUL): PASS`、`MMUL VERDICT: ALL PASS`、`op10 (RMSNORM post-attn): PASS`、`FINAL VERDICT: ALL PASS`（**5 条判定行**，:233/:234/:235/:263/:264——Metis MINOR 折入：计划原写 4 条漏了 MMUL VERDICT）；(3) 两段全量输出落档 evidence + 判定行 `FM-BASELINE: <实际计数>-passed` / `OP05/OP07/OP10: PASS`。Must NOT：改任何代码；跳过失败项；旧 evidence 冒充新跑。
   Parallelization: Wave 2 | Blocked by: 0 | Blocks: 4,5 | 可与 2/3 并行（异文件、只写 evidence）
   References: `README.md` Quick Start（`PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q`，预期 210）；`scripts/verify_ops_func_model.py:199-264`（op05/op07/op10 判定行原文）；`AGENTS.md` NOTES（计数口径警告）
