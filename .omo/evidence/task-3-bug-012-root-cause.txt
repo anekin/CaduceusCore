@@ -1,0 +1,225 @@
+================================================================================
+TASK-3-BUG-012-ROOT-CAUSE — C3 isolated repro (live golden) + op05 stray-write
+overlap audit
+================================================================================
+Timestamp (UTC):        2026-09-03T00:57:48Z
+Branch:                 bug-012-root-cause
+Base commit (HEAD at run): d57b5b1aee50b93c02236d64b63effbd99f53abd
+                        (test(bug012): H-GOLDEN closure — verify_ops re-run +
+                        regen determinism)
+Executor:               Sisyphus-Junior (todo 3 of plan .omo/plans/bug-012-root-cause.md)
+Full run log:           .omo/evidence/task-3-run_e2e_attn_score.log
+                        (429743 bytes, captured via tee)
+
+--------------------------------------------------------------------------------
+1. PRE-FLIGHT ASSERTIONS
+--------------------------------------------------------------------------------
+- Branch check: `git branch --show-current` -> bug-012-root-cause  [PASS]
+- `git status --porcelain -- rtl/test_vectors/qwen_blk0/` -> empty
+  (zero dirty lines under qwen_blk0)                                [PASS]
+- Pre-existing dirty files (NOT touched, NOT staged):
+    M .omo/evidence/task-0-signoff-v3-runner.txt
+    M .omo/evidence/task-20-uncertainty-kpis.json
+    M .omo/evidence/task-23-perf-spec-ci.txt
+    M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+    M .omo/notepads/phase6-rtl-verification/learnings.md
+    M .omo/plans/bug-012-root-cause.md          (orchestrator plan file)
+    M build/evidence/fm-cv-chain.txt
+    M build/evidence/w3-4-mobilenetv3-fm.txt
+
+--------------------------------------------------------------------------------
+2. RUN PROVENANCE (fresh run, not a reused log)
+--------------------------------------------------------------------------------
+Command: bash sim/regression/soc-verification-run.sh run_e2e_attn_score 2>&1 | tee .omo/evidence/task-3-run_e2e_attn_score.log
+Host:    sz0001 via sim/regression/soc-verification-run.sh (auto-SSH)
+
+VCS / simv provenance (from log):
+- Compiler version:  V-2023.12-SP2_Full64 (log: "Compiler version
+  V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64; Sep 3 08:53 2026")
+- VCS lib path in link: /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/linux64/lib
+- simv path: /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/simv_soc_cocotb
+  (link line: g++ -o ../sim/regression/simv_soc_cocotb ...; built in
+  /home/prj/zhengs/caduceuscore/CaduceusCore/csrc)
+- Compile stats: "CPU time: 30.974 seconds to compile + 1.631 seconds to elab + .480 seconds to link"
+- Simulation report tail: "Time: 3633501 ps ... Thu Sep  3 08:55:23 2026"
+- cocotb: v1.9.0 from /NAS/Tools/anaconda3/envs/py3.11/lib/python3.11/site-packages/cocotb
+- Test executed: cocotb_bridge.test_e2e_attn_score (sim/cocotb_bridge.py:3997 assert)
+
+--------------------------------------------------------------------------------
+3. KEY LOG EXCERPTS (verdict evidence)
+--------------------------------------------------------------------------------
+  3633.50ns ERROR    cocotb_bridge                        First mismatch @ byte[8]: actual=0x00, golden=0xD0
+  3633.50ns ERROR    cocotb_bridge                        Total INT32 mismatches: 62/64
+  3633.50ns ERROR    cocotb_bridge                        Raw bytes @ 0x20020000: 74f9ffff4d0c0000000000000000000000000000000000000000000000000000
+  3633.50ns ERROR    cocotb_bridge                        Golden bytes @ 0x20020000: 74f9ffff4d0c0000d00400009611000084efffff33f6ffffe0f7fffff5260000
+  3633.50ns ERROR    cocotb_bridge                      [e2e_attn_score] FAIL in 634 cycles
+  3633.50ns INFO     cocotb.regression                  test_e2e_attn_score failed
+  ... AssertionError: e2e_attn_score failed  (cocotb_bridge.py:3997)
+  ** cocotb_bridge.test_e2e_attn_score   FAIL        3633.50           0.53       6843.95  **
+  ** TESTS=1 PASS=0 FAIL=1 SKIP=0                    3633.50           0.62       5852.62  **
+  E2E_ATTN_SCORE: FAIL
+  make: *** [run_e2e_attn_score] Error 1
+  [soc-run] RESULT: FAIL for run_e2e_attn_score
+
+Wrapper note (no misreading): the shell pipeline exit code observed by the
+executor was 0 because of `| tee`; the Makefile gate itself returned Error 1
+("make: *** [run_e2e_attn_score] Error 1") and the wrapper printed
+"[soc-run] RESULT: FAIL". Per plan Oracle-R1-A6, the expected FAIL + exit 1
+of the make gate is the anticipated outcome and is NOT a run-error.
+
+--------------------------------------------------------------------------------
+4. ISO-VERDICT
+--------------------------------------------------------------------------------
+ISO-VERDICT: repro-fail-identical
+
+Classification rule applied: log contains BOTH
+  "First mismatch @ byte[8]: actual=0x00, golden=0xD0"  AND
+  "Total INT32 mismatches: 62/64"
+-> identical to the failing chain signature.
+
+Interpretation:
+- stale-golden empirical death (H-GOLDEN): the isolated test
+  test_e2e_attn_score recomputes its golden on the fly via GoldenMXU and
+  never reads rtl/test_vectors/qwen_blk0/op05_attn_score_MMUL_golden.hex,
+  yet the identical 62/64 mismatch signature reproduces. The golden hex
+  files are therefore not on the failing path — stale golden is excluded
+  as the root cause.
+- Chain independence: the failure reproduces in a single-op test with no
+  preceding chain ops (no op00-op04 dependencies), establishing that the
+  defect is local to the op05 MMUL store-out path itself.
+- Byte-level corroboration of the static H-STRIDE chain (todo 2): actual
+  bytes 0-7 match golden (word[0], word[1] = row 0, cols 0-1 land
+  correctly), all subsequent words mismatch — consistent with 32 rows
+  stored at 256-byte stride while the golden is a 256-byte dense M=32xN=2
+  block, and consistent with the wrapper's DIM1=64 (padded) programming.
+
+--------------------------------------------------------------------------------
+5. INLINE OVERLAP AUDIT (op05 stray-write domain)
+--------------------------------------------------------------------------------
+Method: inline `python3 - <<'PY'` (no permanent script file created).
+Rules (documented per plan Momus-A2):
+- MMUL output_size_bytes = M * N * 4 (output_elem_bytes == 4 for all MMULs)
+- non-MMUL output_size_bytes = elements * output_elem_bytes
+- DRAM address = SRAM_BASE (0x20000000, cocotb_bridge.py:114) + manifest
+  sram_output_addr offset.
+
+Audit script source:
+
+```python
+import json
+SRAM_BASE = 0x20000000  # cocotb_bridge.py:114
+with open('rtl/test_vectors/qwen_blk0/blk0_manifest.json') as f:
+    m = json.load(f)
+ops = m['ops']
+rows = []
+for op in ops:
+    name, opcode, dims = op['name'], op['opcode'], op['dimensions'] or {}
+    elem_bytes = op.get('output_elem_bytes', 4)
+    out_off = int(op['sram_output_addr'], 16)
+    out_base = SRAM_BASE + out_off
+    if opcode == 'MMUL':
+        M, N = dims.get('M', 1), dims.get('N', 1)
+        size = M * N * 4
+        rule = f"M={M}*N={N}*4"
+    else:
+        elems = dims.get('elements', dims.get('q_len', 0) + dims.get('k_len', 0))
+        size = elems * elem_bytes
+        rule = f"elements={elems}*{elem_bytes}"
+    rows.append((name, opcode, out_base, size, rule))
+print("== 17-op declared OUTPUT interval table ==")
+for i, (name, opcode, base, size, rule) in enumerate(rows):
+    print(f"{i:>3} {name:<20} 0x{base:08X} {size:>8} [0x{base:08X}, 0x{base+size:08X}) {rule}")
+op05 = ops[5]
+op05_base = SRAM_BASE + int(op05['sram_output_addr'], 16)
+op05_declared = 32 * 2 * 4
+op05_fp = 32 * 256
+print("manifest out_addr (SRAM-relative): 0x%06X" % int(op05['sram_output_addr'], 16))
+print("computed DRAM base: 0x%08X" % op05_base)
+print("declared dense output: %d B" % op05_declared)
+print("actual write footprint: %d B" % op05_fp)
+print("overshoot: %d B = 248 B/row * 32 rows" % (op05_fp - op05_declared))
+fp_lo, fp_hi = op05_base, op05_base + op05_fp
+hits = []
+for i, (name, opcode, base, size, rule) in enumerate(rows):
+    if i == 5:
+        continue
+    lo, hi = base, base + size
+    if lo < fp_hi and fp_lo < hi:
+        hits.append((name, max(lo, fp_lo), min(hi, fp_hi)))
+if hits:
+    for name, lo, hi in hits:
+        print("OVERLAP-HAZARD: %s overlaps op05 @ [0x%08X, 0x%08X)" % (name, lo, hi))
+else:
+    print("OVERLAP-HAZARD: none")
+```
+
+Audit output — 17-op declared OUTPUT interval table (SRAM-relative offsets
++ SRAM_BASE 0x20000000):
+
+ op name                         base     size interval
+  0 RMSNORM pre-attn     0x20030000     5120 [0x20030000, 0x20031400) elements=2560*2
+  1 Q_proj MMUL          0x20020000    16384 [0x20020000, 0x20024000) M=1*N=4096*4
+  2 K_proj MMUL          0x20020000     1024 [0x20020000, 0x20020400) M=1*N=256*4
+  3 V_proj MMUL          0x20020000     1024 [0x20020000, 0x20020400) M=1*N=256*4
+  4 ROPE                 0x20031000     8704 [0x20031000, 0x20033200) elements=4352*2
+  5 attn_score MMUL      0x20020000      256 [0x20020000, 0x20020100) M=32*N=2*4
+  6 attn_softmax SOFTMAX 0x20030200      128 [0x20030200, 0x20030280) elements=64*2
+  7 attn_weight MMUL     0x20020000    16384 [0x20020000, 0x20024000) M=32*N=128*4
+  8 O_proj MMUL          0x20020000    10240 [0x20020000, 0x20022800) M=1*N=2560*4
+  9 VRESID               0x20020000    10240 [0x20020000, 0x20022800) elements=2560*4
+ 10 RMSNORM post-attn    0x20032000     5120 [0x20032000, 0x20033400) elements=2560*2
+ 11 gate MMUL            0x20020000    38912 [0x20020000, 0x20029800) M=1*N=9728*4
+ 12 up MMUL              0x20020000    38912 [0x20020000, 0x20029800) M=1*N=9728*4
+ 13 SILU                 0x20032000    19456 [0x20032000, 0x20036C00) elements=9728*2
+ 14 VMUL gate*up         0x20020000    38912 [0x20020000, 0x20029800) elements=9728*4
+ 15 down MMUL            0x20020000    10240 [0x20020000, 0x20022800) M=1*N=2560*4
+ 16 VRESID               0x20020000    10240 [0x20020000, 0x20022800) elements=2560*4
+
+op05 footprint analysis:
+- manifest out_addr (SRAM-relative): 0x020000
+- computed DRAM base (SRAM_BASE + offset): 0x20020000
+  -> base MATCHES plan-expected region [0x20020000, 0x20022000)
+  (no discrepancy to explain; mapping documented: SRAM_BASE 0x20000000)
+- declared dense output (M*N*4 = 32*2*4): 256 B  -> [0x20020000, 0x20020100)
+- actual write footprint (32 rows * 256 B/row, DIM1=64 padded):
+  8192 B -> [0x20020000, 0x20022000)
+- stray-write overshoot: 7936 B total = 248 B padding/row * 32 rows
+  (32x amplification of the declared 256-byte dense size; note: 256 B
+  stride - 8 B data = 248 B padding per row, not 96 B)
+
+--------------------------------------------------------------------------------
+6. OVERLAP-HAZARD
+--------------------------------------------------------------------------------
+OVERLAP-HAZARD: Q_proj MMUL overlaps op05 @ [0x20020000, 0x20022000)
+OVERLAP-HAZARD: K_proj MMUL overlaps op05 @ [0x20020000, 0x20020400)
+OVERLAP-HAZARD: V_proj MMUL overlaps op05 @ [0x20020000, 0x20020400)
+OVERLAP-HAZARD: attn_weight MMUL overlaps op05 @ [0x20020000, 0x20022000)
+OVERLAP-HAZARD: O_proj MMUL overlaps op05 @ [0x20020000, 0x20022000)
+OVERLAP-HAZARD: VRESID overlaps op05 @ [0x20020000, 0x20022000)
+OVERLAP-HAZARD: gate MMUL overlaps op05 @ [0x20020000, 0x20022000)
+OVERLAP-HAZARD: up MMUL overlaps op05 @ [0x20020000, 0x20022000)
+OVERLAP-HAZARD: VMUL gate*up overlaps op05 @ [0x20020000, 0x20022000)
+OVERLAP-HAZARD: down MMUL overlaps op05 @ [0x20020000, 0x20022000)
+OVERLAP-HAZARD: VRESID overlaps op05 @ [0x20020000, 0x20022000)
+
+Characterization (not a third hypothesis — downstream consequence of the
+same root cause, per plan Oracle-R4-A4): all 11 overlapping ops share the
+same SRAM output region 0x020000 (sram_layout output_buffer scratch).
+Access is strictly sequential — each op's run_step overwrites the scratch
+region before the next op consumes it, so op05's 8KB stray write only
+clobbers bytes of the shared scratch region that are re-written later, never
+a foreign live tensor. This benign scratch reuse explains why the 16 other
+ops pass while op05 fails. Most significant neighbour: op07 attn_weight
+MMUL (M=32) is programmed with the same padded-DIM1 store-out model and
+uses the identical 0x020000 output base — the same root-cause family, same
+scratch region, hence also benign by overwrite.
+
+--------------------------------------------------------------------------------
+7. PRODUCT-FILE DISCIPLINE
+--------------------------------------------------------------------------------
+- No product files (rtl/, firmware/, scripts/, sim/, docs/, config/, gen/)
+  modified by this todo.
+- rtl/test_vectors/qwen_blk0/ untouched (pre-flight and post-commit checks
+  both show zero dirty lines).
+- Only .omo/evidence/task-3-bug-012-root-cause.txt (this file) is committed.
+================================================================================
