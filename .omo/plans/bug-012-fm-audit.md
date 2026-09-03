@@ -118,10 +118,10 @@ Your next move: 直接 `/start-work bug-012-fm-audit` 开始执行，或先跑�
 
 ## Final verification wave
 > Runs in parallel after ALL todos. ALL must APPROVE. Surface results and wait for the user's explicit okay before declaring complete.
-- [ ] F1. Plan compliance audit — 5 todos 逐条：evidence 存在、acceptance 断言复跑、`Commit:` 行与 `git log --oneline main..HEAD` 实际提交一一对应、判定行（FM-BASELINE/FM-HUNT-*/FM-ABI-CONTRACT/FM-FIX）齐全、无 silent skip（112 组合全部显式跑）。
-- [ ] F2. Code quality review — oracle 独立性复核（三个新测试文件零 import sim.models/sim.engine/sim.timing/sim.npu_sim）；seed 确定性（42）；纯加法 diff；无改既有测试；契约测试的 grep 审计不误报（padding 模式正则精确）。
-- [ ] F3. Real manual QA — fresh 独立复跑：`PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q` 计数（含新测试后的实际总数，对照 todo 1 基线的 210 + 3 个新文件用例数）、`scripts/verify_ops_func_model.py` **五判定行**（op05/op07/MMUL VERDICT/op10/FINAL VERDICT——Oracle+Momus round-1 折入：原写四判定行漏了 MMUL VERDICT）、三个新测试文件各自单独跑；输出逐项与 task-1/2/3/4 evidence 对照。
-- [ ] F4. Scope fidelity — `git diff $(git merge-base main HEAD) HEAD --name-only` 变更集 ⊆ {`sim/tests/test_fm_audit_narrow_n.py`, `sim/tests/test_fm_audit_pack_edges.py`, `sim/tests/test_fm_abi_contract.py`, `sim/golden_executor.py`（**仅 :96 docstring 注释 1 行**——Oracle round-1 折入）, `docs/bugs/bugs-soc-func-model.md`（仅 A4 触发时）, `.omo/*`}；rtl/、firmware/、scripts/、gen/、config/、vendored 零命中；每提交 `git show --name-only` 均不含 7 个 dirty 文件；未 push；分支纪律（单一 worktree）。
+- [x] F1. Plan compliance audit — 5 todos 逐条：evidence 存在、acceptance 断言复跑、`Commit:` 行与 `git log --oneline main..HEAD` 实际提交一一对应、判定行（FM-BASELINE/FM-HUNT-*/FM-ABI-CONTRACT/FM-FIX）齐全、无 silent skip（112 组合全部显式跑）。
+- [x] F2. Code quality review — oracle 独立性复核（三个新测试文件零 import sim.models/sim.engine/sim.timing/sim.npu_sim）；seed 确定性（42）；纯加法 diff；无改既有测试；契约测试的 grep 审计不误报（padding 模式正则精确）。
+- [x] F3. Real manual QA — fresh 独立复跑：`PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q` 计数（含新测试后的实际总数，对照 todo 1 基线的 210 + 3 个新文件用例数）、`scripts/verify_ops_func_model.py` **五判定行**（op05/op07/MMUL VERDICT/op10/FINAL VERDICT——Oracle+Momus round-1 折入：原写四判定行漏了 MMUL VERDICT）、三个新测试文件各自单独跑；输出逐项与 task-1/2/3/4 evidence 对照。
+- [x] F4. Scope fidelity — `git diff $(git merge-base main HEAD) HEAD --name-only` 变更集 ⊆ {`sim/tests/test_fm_audit_narrow_n.py`, `sim/tests/test_fm_audit_pack_edges.py`, `sim/tests/test_fm_abi_contract.py`, `sim/golden_executor.py`（**仅 :96 docstring 注释 1 行**——Oracle round-1 折入）, `docs/bugs/bugs-soc-func-model.md`（仅 A4 触发时）, `.omo/*`}；rtl/、firmware/、scripts/、gen/、config/、vendored 零命中；每提交 `git show --name-only` 均不含 7 个 dirty 文件；未 push；分支纪律（单一 worktree）。
 
 ## Commit strategy
 - 一个 todo 一个原子 commit（type: chore/test/docs/fix），message 预声明于各 todo `Commit:` 行；evidence 随对应 todo 一并入库

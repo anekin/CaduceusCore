@@ -1,0 +1,66 @@
+# bug-012-fm-audit — F4 scope fidelity review evidence
+
+## Provenance
+- timestamp: 2026-09-03T17:23:30Z
+- branch:     bug-012-fm-audit
+- HEAD:       4fb0a3e5b375ace9e6217e66942bfab6597a9d3b
+- merge-base (main): c43954a6c8a1983ff1e5aa88e7ffffb2af030c50
+- worktree:   /home/prj/zhengs/caduceuscore/CaduceusCore (single worktree, no --worktree path)
+
+## Verdict
+F4: APPROVE
+
+## Checklist (PASS/FAIL per item)
+
+### 1. Merge-base diff within whitelist — PASS
+Command: `git diff $(git merge-base main HEAD) HEAD --name-only`
+All 13 paths fall inside the allowed set:
+- sim/tests/test_fm_audit_narrow_n.py          (allowed)
+- sim/tests/test_fm_audit_pack_edges.py        (allowed)
+- sim/tests/test_fm_abi_contract.py            (allowed)
+- sim/golden_executor.py                       (allowed; diff is exactly ONE
+  docstring line at :96 — "pre-unpacked" → "packed" in the GoldenMXU class
+  docstring; no code/behavior change)
+- .omo/drafts/bug-012-fm-audit.md              (.omo/*)
+- .omo/evidence/task-0..5-bug-012-fm-audit.txt (.omo/*)
+- .omo/notepads/bug-012-fm-audit/learnings.md  (.omo/*)
+- .omo/plans/bug-012-fm-audit.md               (.omo/*)
+- docs/bugs/bugs-soc-func-model.md — ABSENT, as expected (conditional A4:
+  no Func Model bug found, so no ledger entry was required).
+
+### 2. Forbidden directories — PASS
+Command: `git diff <merge-base> HEAD --name-only | grep -E '^(rtl/|firmware/|scripts/|gen/|config/|vendored|rtl/cpu/ibex|rtl/ip/)'`
+Zero hits (grep exit 1). No product code, generated ABI, config, or
+vendored paths touched.
+
+### 3. Per-commit dirty-file check — PASS
+Commands: `git log --oneline main..HEAD` (6 commits:
+5396932, d6131ea, c216573, 550c1cc, 9db3b11, 4fb0a3e) and
+`git show --name-only <commit>` for each, plus
+`git log --name-only --format="COMMIT %h" main..HEAD | grep -E '(task-0-signoff-v3-runner|task-20-uncertainty-kpis|task-23-perf-spec-ci|fm-e2e-qwen-cv-software-stack|phase6-rtl-verification|fm-cv-chain|w3-4-mobilenetv3-fm)'`
+→ zero hits (grep exit 1). None of the 7 parallel-session dirty files
+appear in any commit:
+- .omo/evidence/task-0-signoff-v3-runner.txt
+- .omo/evidence/task-20-uncertainty-kpis.json
+- .omo/evidence/task-23-perf-spec-ci.txt
+- .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+- .omo/notepads/phase6-rtl-verification/learnings.md
+- build/evidence/fm-cv-chain.txt
+- build/evidence/w3-4-mobilenetv3-fm.txt
+Working tree `git status --short` shows all 7 as modified-but-unstaged
+(never committed) + `?? .omo/plans/bug-012-fix.md` (intentionally
+untracked Phase B plan — must remain so).
+
+### 4. Branch not pushed — PASS
+Command: `git branch -r --contains HEAD` → empty output.
+No remote tracking branch contains HEAD; `origin/bug-012-fm-audit`
+does not exist.
+
+### 5. Single worktree — PASS
+Command: `git worktree list` → exactly one entry:
+`/home/prj/zhengs/caduceuscore/CaduceusCore 4fb0a3e [bug-012-fm-audit]`.
+No secondary worktree or `--worktree` path.
+
+## Verification
+- Read-only review: no files modified, no commits created, no push.
+- Evidence file (this file) is NOT committed, per F4 mandate.

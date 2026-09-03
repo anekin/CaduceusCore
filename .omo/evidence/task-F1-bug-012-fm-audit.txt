@@ -1,0 +1,174 @@
+case_id: task-F1-bug-012-fm-audit
+reviewer: F1 (plan compliance audit)
+plan: .omo/plans/bug-012-fm-audit.md
+utc_timestamp: 2026-09-04T00:00:00Z (recorded at write time; see shell dates below)
+verdict_line: F1: APPROVE
+
+PROVENANCE
+BRANCH: bug-012-fm-audit
+HEAD: 4fb0a3e5b375ace9e6217e66942bfab6597a9d3b (docs(bugs): FM audit disposition — none-needed)
+MAIN: c43954a6c8a1983ff1e5aa88e7ffffb2af030c50
+PYTHON: Python 3.10.12
+PYTEST: pytest 9.0.3
+HOST: sz0002 (local, no EDA)
+SCOPE_OF_REVIEW: todos 0-5 of bug-012-fm-audit — evidence existence, acceptance
+  reproducibility, Commit:-line vs git-log correspondence, decision-line
+  presence, no-silent-skip verification.
+
+================================================================================
+1. EVIDENCE EXISTENCE (todos 0-5)
+================================================================================
+All six evidence files exist and were read:
+  .omo/evidence/task-0-bug-012-fm-audit.txt   (2383 B)  P0 baseline + 8-line snapshot
+  .omo/evidence/task-1-bug-012-fm-audit.txt   (11097 B) A1 baseline re-run
+  .omo/evidence/task-2-bug-012-fm-audit.txt   (2332 B)  A2-1 narrow-N matrix
+  .omo/evidence/task-3-bug-012-fm-audit.txt   (2094 B)  A2-2 pack/tile/scale
+  .omo/evidence/task-4-bug-012-fm-audit.txt   (2323 B)  A3 ABI contract
+  .omo/evidence/task-5-bug-012-fm-audit.txt   (2388 B)  A4 disposition
+Each contains a provenance block (branch/HEAD/python) per plan requirement.
+RESULT: PASS
+
+================================================================================
+2. ACCEPTANCE COMMAND RE-RUN (executed by F1, fresh shell, this session)
+================================================================================
+COMMAND 1 (exact, plan-prescribed):
+  PYTHONPATH=sim python -m pytest sim/tests/test_fm_audit_narrow_n.py -q
+OUTPUT:
+  ........................................................................ [ 63%]
+  .........................................                                [100%]
+  113 passed in 0.22s
+RESULT: PASS (matches task-2 evidence: 113 = 112 combos + 1 anti-silent-skip)
+
+COMMAND 2 (exact, plan-prescribed):
+  PYTHONPATH=sim python -m pytest sim/tests/test_fm_audit_pack_edges.py -q
+OUTPUT:
+  .............                                                            [100%]
+  13 passed in 0.14s
+RESULT: PASS (matches task-3 evidence: 13 passed)
+
+COMMAND 3 (exact, plan-prescribed):
+  PYTHONPATH=sim python -m pytest sim/tests/test_fm_abi_contract.py -q
+OUTPUT:
+  ......                                                                   [100%]
+  6 passed in 0.11s
+RESULT: PASS (matches task-4 evidence: 6 passed)
+
+NOTE ON TODO 1 FULL-SUITE BASELINE: not re-run by F1 (task scope limits the
+re-run to the three new test files; the full-suite command is a known
+env-collection-error case per plan context). The three new files collect
+cleanly under plain PYTHONPATH=sim, as the task's inherited-wisdom notes
+predicted.
+
+================================================================================
+3. COMMIT: LINE vs git log --oneline main..HEAD (one-to-one)
+================================================================================
+ACTUAL (newest first):
+  4fb0a3e docs(bugs): FM audit disposition — none-needed
+  9db3b11 test(fm): ABI contract — DIM1=actual-N + dense output + zero-padding audit
+  550c1cc test(fm): pack zero-fill / tile-ceil / scale-accumulate attack tests
+  c216573 test(fm): narrow-N attack matrix — 112 combos vs independent numpy oracle
+  d6131ea test(fm): FM baseline re-run evidence — pytest + verify_ops (no code change)
+  5396932 chore(omo): P0 baseline — branch + provenance snapshot (bug-012-fm-audit)
+
+MAPPING (todo -> declared Commit: -> actual):
+  todo 0: chore(omo): P0 baseline — branch + provenance snapshot (bug-012-fm-audit)
+          -> 5396932  EXACT MATCH
+  todo 1: test(fm): FM baseline re-run evidence — pytest + verify_ops (no code change)
+          -> d6131ea  EXACT MATCH
+  todo 2: test(fm): narrow-N attack matrix — 112 combos vs independent numpy oracle
+          -> c216573  EXACT MATCH
+  todo 3: test(fm): pack zero-fill / tile-ceil / scale-accumulate attack tests
+          -> 550c1cc  EXACT MATCH
+  todo 4: test(fm): ABI contract — DIM1=actual-N + dense output + zero-padding audit
+          -> 9db3b11  EXACT MATCH
+  todo 5: docs(bugs)/fix(sim): FM audit disposition — <none-needed 或 bug 条目>
+          -> 4fb0a3e  MATCH with plan-checkbox fold: type-choice resolved to
+          docs(bugs) (no fix needed) and placeholder <none-needed 或 bug 条目>
+          resolved to none-needed. Allowed per task brief.
+6 commits for 6 todos, linear, in todo order (parents verified chained).
+RESULT: PASS
+
+DISCREPANCY 1 (non-blocking, documented): task-1 evidence final line records
+  "COMMIT: 12fbe25d864e3f38a9f9bc5a740200e884ccb45b". That object EXISTS in
+  the repo (verified: git cat-file -t = commit; same message, same parent
+  5396932) but is NOT in main..HEAD — it is the pre-amend version of d6131ea.
+  Comparison: 12fbe25d contains only the evidence file (159 insertions);
+  d6131ea additionally carries .omo/notepads/bug-012-fm-audit/learnings.md
+  (+2) and the plan-checkbox fold (+4/-2). Message and parent identical ->
+  the commit was amended after the evidence was written. Commit-message
+  correspondence is unaffected; only the recorded SHA is stale. Not a
+  compliance violation of the plan's Commit:-line requirement.
+
+DISCREPANCY 2 (plan-sanctioned, documented): todo 1 baseline was not the
+  README 210. Plain command exited 2 with 9 collection errors (5x cocotb
+  missing, 4x gen/ FlatBuffers stubs outside PYTHONPATH). Triage run
+  (PYTHONPATH=sim:gen + --continue-on-collection-errors) yielded
+  2326 passed / 13 failed / 4 skipped / 11 errors, every non-pass classified
+  in the TRIAGE block (pre-existing engine drift 8F, env deps, stale fixture
+  pins, host vendored-tree state, concurrent-load RSS gate). Plan success
+  criterion 1 carries an explicit triage clause ("若 triage 出非 210 ... 以
+  实际数字为准绳，本成功标准随之更新"); evidence verdict line
+  "FM-BASELINE: 2326-passed" records the triaged actual. Zero FM-op
+  regressions claimed; A4 not triggered. verify_ops (5/5 decision lines,
+  exit 0) unaffected. Handled per plan QA failure path, not a silent skip.
+
+================================================================================
+4. DECISION-LINE PRESENCE (mechanical grep, this session)
+================================================================================
+  task-1: FM-BASELINE: 2326-passed (line 42)          PRESENT
+  task-1: OP05/OP07/OP10: PASS (line 87)              PRESENT
+  task-2: FM-HUNT-NARROW-N: clean (line 49)           PRESENT
+  task-3: FM-HUNT-PACK: clean (line 45)               PRESENT
+  task-3: FM-HUNT-TILE: clean (line 46)               PRESENT
+  task-3: FM-HUNT-SCALE: clean (line 47)              PRESENT
+  task-4: FM-ABI-CONTRACT: pass (line 58)             PRESENT
+  task-5: FM-FIX: none-needed (line 10)               PRESENT
+  task-0: no FM-* decision line required by plan (P0 provenance todo);
+          carries RESULT: PASS + post-commit 8-line whitelist assertion PASS.
+RESULT: PASS
+
+================================================================================
+5. NO-SILENT-SKIP VERIFICATION (narrow-N matrix)
+================================================================================
+Read sim/tests/test_fm_audit_narrow_n.py (74 LOC <= 250 gate) in full:
+  - NS=[2,10,12,20,33,40,64] x MS=[1,4,32,65] x KS=[1,64,128,129] = 112,
+    enumerated at module level as COMBOS, @pytest.mark.parametrize over ALL
+    of them with per-combo ids (M{m}_K{k}_N{n}).
+  - Dedicated anti-silent-skip test test_narrow_n_matrix_explicit_112
+    asserts len(COMBOS)==112 AND uniqueness AND presence of 5 boundary
+    combos (65,129,33),(1,1,2),(65,1,64),(4,129,10),(32,128,12).
+  - Reproduced run: 113 passed = 112 + anti-silent-skip, so every combo
+    executed, none skipped.
+  - Oracle independence (plan acceptance form, re-run by F1):
+    grep -c "import sim.models\|import sim.engine\|import sim.timing\|import sim.npu_sim"
+    -> narrow_n: 0, pack_edges: 0, abi_contract: 0. PASS on all three.
+  - Oracle in-file: np.dot(act.astype(np.int32), wgt.astype(np.int32)),
+    weights passed PACKED via GoldenMXU.pack_int4 (plan Metis MAJOR pin),
+    rng = default_rng(42). Matches plan verbatim.
+  - LOC gates: narrow_n 74/250, pack_edges 199/200, abi_contract 136/150. PASS.
+RESULT: PASS
+
+================================================================================
+6. SUPPORTING SCOPE CHECKS (F1 cross-checks, not replacements for F4)
+================================================================================
+  - git diff main..HEAD --name-only ⊆ {sim/tests/test_fm_audit_narrow_n.py,
+    sim/tests/test_fm_audit_pack_edges.py, sim/tests/test_fm_abi_contract.py,
+    sim/golden_executor.py, .omo/*} — verified by direct run.
+  - sim/golden_executor.py diff is exactly one line: docstring
+    "pre-unpacked INT4" -> "packed INT4" (todo 4 whitelisted comment-only fix).
+  - Zero hits in rtl/, firmware/, scripts/, gen/, config/, vendored/.
+  - Branch bug-012-fm-audit checked out; HEAD == todo 5 commit; main unmoved.
+  - Plan checkboxes: todos 0-5 all [x]; F1-F4 unchecked (correct pre-final state).
+RESULT: PASS
+
+================================================================================
+VERDICT
+================================================================================
+All five F1 gates pass: evidence exists (6/6), acceptance reproduces
+(113/13/6), commit messages one-to-one with declared Commit: lines (todo 5
+fold allowed), all 8 decision lines present, no silent skip (112 combos
+explicit + anti-silent-skip test). Two non-blocking discrepancies recorded
+above: stale amended-SHA in task-1 evidence footer, and the triaged
+non-210 baseline handled exactly per the plan's own triage clause.
+
+F1: APPROVE
