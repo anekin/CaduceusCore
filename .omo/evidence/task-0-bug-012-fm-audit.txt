@@ -1,0 +1,59 @@
+case_id: task-0-bug-012-fm-audit
+utc_start: 2026-09-03T13:10:16Z
+verdict: pass
+
+PROVENANCE
+BRANCH: bug-012-fm-audit
+HEAD: c43954a6c8a1983ff1e5aa88e7ffffb2af030c50 merge(bug012): root-cause investigation complete — stride mechanism, BUG-012 Open
+BASE: main @ c43954a6c8a1983ff1e5aa88e7ffffb2af030c50
+PYTHON: Python 3.10.12
+TIMESTAMP_UTC: 2026-09-03T13:10:16Z
+
+SNAPSHOT_BEFORE_COMMIT:
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+?? .omo/plans/bug-012-fix.md
+?? .omo/plans/bug-012-fm-audit.md
+
+COMMIT_PLAN: chore(omo): P0 baseline — branch + provenance snapshot (bug-012-fm-audit)
+STAGED_PATHS (explicit pathspec only, no git add ./-A):
+  .omo/plans/bug-012-fm-audit.md
+  .omo/drafts/bug-012-fm-audit.md
+  .omo/evidence/task-0-bug-012-fm-audit.txt
+  .omo/notepads/bug-012-fm-audit/learnings.md
+
+SNAPSHOT_AFTER_COMMIT:
+ M .omo/evidence/task-0-bug-012-fm-audit.txt
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+
+SNAPSHOT_AFTER_COMMIT (captured immediately post-commit, before evidence tail append):
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+?? .omo/plans/bug-012-fix.md
+WHITELIST_8LINES:
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+?? .omo/plans/bug-012-fix.md
+ASSERTION: post-commit git status --porcelain == 8-line whitelist (set-equal) -> PASS
+RESULT: PASS
