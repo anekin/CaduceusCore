@@ -3997,6 +3997,190 @@ if COCOTB_AVAILABLE:
         assert passed, f"{label} failed"
 
     @cocotb.test()
+    async def test_e2e_attn_score_layout(dut):
+        """
+        BUG-012 characterization probe (NO FIX) — dual-phase layout/trigger
+        characterization for op05 attn_score MMUL (M=32, K=128, N=2).
+
+        Phase A reproduces the current driver programming model (DIM1=64
+        padded, WRP_DIM_N=2) and characterizes the real SRAM layout via an
+        8KB backdoor read: for each row r the golden words [2r, 2r+1] are
+        expected at byte offset r*256 (window word indices [64r, 64r+1]),
+        with the remaining 62 words of each 256-byte row zero.
+
+        Phase B isolates the DIM1 trigger by programming DIM1=2 (real N,
+        firmware-aligned) and asserts a dense layout: 64 contiguous words
+        matching the golden reference (64/64).
+
+        This test is a RED anchor for the future fix; it changes no existing
+        function and no existing Makefile target.
+        """
+        bridge = await _setup_single_op_test(dut)
+
+        if not NUMPY_AVAILABLE or GoldenMXU is None:
+            raise RuntimeError("numpy and GoldenMXU are required for this test")
+
+        M, K, N = 32, 128, 2
+        vector_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..", "rtl", "test_vectors", "qwen_blk0"
+        )
+        act_hex = os.path.join(vector_dir, "op05_attn_score_MMUL_input.hex")
+        wt_hex = os.path.join(vector_dir, "weight_attn_score_w.hex")
+
+        act_bytes = read_hex_file_bytes(act_hex, elem_bytes=1)
+        wt_bytes = read_hex_file_bytes(wt_hex, elem_bytes=1)
+
+        act_packed = pack_int8_activation_tile_major(act_bytes, M, K)
+        wt_packed = pack_int4_tile_major(wt_bytes, K, N)
+
+        w_addr = SRAM_BASE + 0x0000
+        i_addr = SRAM_BASE + 0x010000
+        o_addr = SRAM_BASE + 0x020000
+
+        await bridge.preload_sram(w_addr, wt_packed)
+        await bridge.preload_sram(i_addr, act_packed)
+
+        act_arr = np.frombuffer(act_bytes, dtype=np.int8)
+        wt_arr = np.frombuffer(wt_bytes, dtype=np.uint8)
+        golden = GoldenMXU().matmul_int32(act_arr, wt_arr, M, K, N)
+        golden_bytes = golden.astype(np.int32).tobytes()
+        golden_words = [int(v) for v in golden.reshape(-1)]
+
+        async def run_engine_phase(phase_label: str, dim1: int):
+            """Program MMIO (padded or real-N DIM1) and run one engine pass."""
+            base = MXU_BASE
+            await bridge._apb_write(base + 0x00, 0x0000_0000)
+            await bridge._apb_write(base + 0x0C, (K << 16) | M)
+            await bridge._apb_write(base + 0x10, dim1)
+            await bridge._apb_write(base + 0x14, i_addr)
+            await bridge._apb_write(base + 0x18, w_addr)
+            await bridge._apb_write(base + 0x1C, o_addr)
+
+            await bridge._mxu_preload(
+                base, w_addr, i_addr, o_addr,
+                k_tiles=2, dim_n=N,
+                op_name=f"e2e_attn_score_layout_{phase_label}"
+            )
+
+            cycle_start = int(dut.sim_cycle.value) if hasattr(dut, "sim_cycle") else 0
+            await bridge._apb_write(base + 0x04, 0x0000_0001)
+            status = await bridge._poll_done(base + 0x08)
+            store_wait = max(200, M * 8 + 200)
+            await bridge.wait_cycles(store_wait)
+            cycle_end = int(dut.sim_cycle.value) if hasattr(dut, "sim_cycle") else 0
+            return cycle_end - cycle_start, status
+
+        # ── Phase A: current padded-DIM1 programming (DIM1=64, WRP_DIM_N=2) ──
+        cycles_a, status_a = await run_engine_phase("phase_a", 64)
+        phase_a_bytes = await bridge._sram_backdoor_read(o_addr, 8192)
+
+        # X-guard: detect X bits in the 8KB output window before asserting.
+        x_words = [
+            w for w in range(0x020000 // 64, (0x020000 + 8192 + 63) // 64)
+            if "x" in str(bridge.dut.u_dut.u_sram_ctrl.mem[w].value).lower()
+        ]
+        prezeroed = False
+        if x_words:
+            logger.warning(
+                f"[e2e_attn_score_layout] WRAPPER-WRITE-GEOMETRY: partial-row "
+                f"(X in padding); X words: {x_words[:8]}"
+            )
+            await bridge.preload_sram(o_addr, b"\x00" * 8192)
+            prezeroed = True
+            logger.warning(
+                "[e2e_attn_score_layout] Phase A rerun after pre-zeroing the "
+                "output region; post-pre-zero padding assertions are "
+                "uninformative (Oracle-R4-A3)"
+            )
+            cycles_a, status_a = await run_engine_phase("phase_a_rerun", 64)
+            phase_a_bytes = await bridge._sram_backdoor_read(o_addr, 8192)
+        else:
+            logger.warning(
+                "[e2e_attn_score_layout] WRAPPER-WRITE-GEOMETRY: full-row "
+                "(no X in padding)"
+            )
+
+        # Assert rows land at r*256 with golden words [2r, 2r+1] at the row
+        # head and zero padding for the remaining 62 words (padding check
+        # skipped when the region was pre-zeroed: provenance=pre-zeroed).
+        phase_a_ok = True
+        for r in range(M):
+            w0 = int.from_bytes(
+                phase_a_bytes[r * 256:r * 256 + 4], "little", signed=True
+            )
+            w1 = int.from_bytes(
+                phase_a_bytes[r * 256 + 4:r * 256 + 8], "little", signed=True
+            )
+            pad = phase_a_bytes[r * 256 + 8:r * 256 + 256]
+            pad_zero = all(b == 0 for b in pad)
+            logger.warning(
+                f"[e2e_attn_score_layout] PhaseA row={r:2d} off=0x{r * 256:04X} "
+                f"w0=0x{w0 & 0xFFFFFFFF:08X} w1=0x{w1 & 0xFFFFFFFF:08X} "
+                f"pad_zero={pad_zero}"
+            )
+            if w0 != golden_words[2 * r] or w1 != golden_words[2 * r + 1]:
+                phase_a_ok = False
+                logger.error(
+                    f"[e2e_attn_score_layout] PhaseA row {r}: window words "
+                    f"(0x{w0 & 0xFFFFFFFF:08X}, 0x{w1 & 0xFFFFFFFF:08X}) != "
+                    f"golden (0x{golden_words[2 * r] & 0xFFFFFFFF:08X}, "
+                    f"0x{golden_words[2 * r + 1] & 0xFFFFFFFF:08X})"
+                )
+            if not prezeroed and not pad_zero:
+                phase_a_ok = False
+                logger.error(
+                    f"[e2e_attn_score_layout] PhaseA row {r}: padding not zero"
+                )
+
+        logger.warning(
+            f"[e2e_attn_score_layout] Phase A "
+            f"{'PASS' if phase_a_ok else 'FAIL'} in {cycles_a} cycles "
+            f"(prezeroed={prezeroed}, STATUS=0x{status_a:08X})"
+        )
+        assert phase_a_ok, "Phase A layout characterization failed"
+
+        # ── Phase B: DIM1=2 trigger isolation (real N, firmware-aligned) ──
+        phase_b_engine_error = False
+        try:
+            cycles_b, status_b = await run_engine_phase("phase_b", 2)
+        except RuntimeError as exc:
+            phase_b_engine_error = True
+            cycles_b, status_b = 0, None
+            logger.error(f"[e2e_attn_score_layout] Phase B engine error: {exc}")
+        else:
+            logger.warning(
+                f"[e2e_attn_score_layout] Phase B engine STATUS=0x{status_b:08X}"
+            )
+
+        phase_b_bytes = await bridge._sram_backdoor_read(o_addr, 256)
+        instr_b = NPUInstruction(
+            opcode="MMUL",
+            op_id=0,
+            dim_m=M,
+            dim_n=N,
+            dim_k=K,
+            elements=M * N,
+            w_addr=w_addr,
+            i_addr=i_addr,
+            o_addr=o_addr,
+            golden_output=golden_bytes,
+            output_elem_bytes=4,
+            name="e2e_attn_score_layout_phase_b",
+        )
+        phase_b_dense = await bridge._golden_compare(instr_b, bytearray(phase_b_bytes))
+        logger.warning(
+            f"[e2e_attn_score_layout] Phase B dense match: "
+            f"{'64/64' if phase_b_dense else 'FAIL'}"
+        )
+        assert not phase_b_engine_error, "Phase B engine reported an error"
+        assert phase_b_dense, "Phase B DIM1=2 isolation failed"
+        logger.warning(
+            f"[e2e_attn_score_layout] Phase B PASS in {cycles_b} cycles "
+            f"(dense 64/64, DIM1=2 accepted by engine)"
+        )
+
+    @cocotb.test()
     async def test_e2e_vector_vresid(dut):
         bridge = await _setup_single_op_test(dut)
         ok, cycles, _instr = await _run_manifest_op(bridge, 9)

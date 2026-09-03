@@ -1,0 +1,206 @@
+================================================================================
+TASK-4-BUG-012-ROOT-CAUSE — C4 dual-phase layout/trigger probe
+(characterization ONLY; NO FIX — RED anchor for the future fix)
+================================================================================
+Timestamp (UTC):        2026-09-03T01:19:50Z
+Branch:                 bug-012-root-cause
+Base commit (HEAD at run): 6f2d3a7d5fe5cc5f5326a395dbdab3fb567a145a
+                        (test(bug012): isolated repro (live golden) + stray-write
+                        overlap audit)
+Executor:               Sisyphus-Junior (todo 4 of plan .omo/plans/bug-012-root-cause.md)
+New test run log:       .omo/evidence/task-4-run_e2e_attn_score_layout.log
+                        (tee of soc-verification-run.sh; cocotb log also at
+                        sim/regression/qwen_e2e_attn_score_layout.log)
+NON-FIX rerun log:      .omo/evidence/task-4-run_e2e_attn_score_rerun.log
+                        (sim/regression/qwen_e2e_attn_score.log overwritten by
+                        this rerun at HEAD)
+
+--------------------------------------------------------------------------------
+1. PRE-FLIGHT / CHARACTERIZATION-ONLY FIREWALL
+--------------------------------------------------------------------------------
+- Symbol conflict check (Metis #11):
+    grep -n "test_e2e_attn_score_layout\|run_e2e_attn_score_layout" \
+      sim/cocotb_bridge.py sim/regression/Makefile
+  -> zero hits before edits                                     [PASS]
+- git diff additive-only check before run:
+    git diff -- sim/cocotb_bridge.py sim/regression/Makefile | grep -c '^-[^-]'
+  -> 0 (pure insertion; 184 lines bridge + 14 lines Makefile)    [PASS]
+- `git status --porcelain -- rtl/test_vectors/qwen_blk0/` -> empty [PASS]
+- Pre-existing dirty files (NOT touched, NOT staged):
+    M .omo/evidence/task-0-signoff-v3-runner.txt
+    M .omo/evidence/task-20-uncertainty-kpis.json
+    M .omo/evidence/task-23-perf-spec-ci.txt
+    M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+    M .omo/notepads/phase6-rtl-verification/learnings.md
+    M .omo/plans/bug-012-root-cause.md          (orchestrator plan file)
+    M build/evidence/fm-cv-chain.txt
+    M build/evidence/w3-4-mobilenetv3-fm.txt
+
+--------------------------------------------------------------------------------
+2. RUN PROVENANCE (fresh runs, not reused logs)
+--------------------------------------------------------------------------------
+New-target run:
+  Command: bash sim/regression/soc-verification-run.sh run_e2e_attn_score_layout
+           2>&1 | tee .omo/evidence/task-4-run_e2e_attn_score_layout.log
+  Host:    sz0001 via sim/regression/soc-verification-run.sh (auto-SSH)
+  RESULT:  "[soc-run] RESULT: PASS for run_e2e_attn_score_layout" (exit 0)
+           Makefile gate: "E2E_ATTN_SCORE_LAYOUT: PASS"
+
+VCS / simv provenance (from log):
+- Compiler version:  V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;
+  Sep 3 09:12 2026
+- VCS lib path in link: /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/linux64/lib
+- simv path: /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/simv_soc_cocotb
+  (clean rebuild: "[soc-run] removing stale simv to force full rebuild")
+- Compile stats: "CPU time: 30.819 seconds to compile + 1.687 seconds to elab + .495 seconds to link"
+- Simulation report tail: "Time: 4494501 ps ... Thu Sep  3 09:13:54 2026"
+- cocotb: v1.9.0 from /NAS/Tools/anaconda3/envs/py3.11/lib/python3.11/site-packages/cocotb
+- Test executed: cocotb_bridge.test_e2e_attn_score_layout
+  (sim/cocotb_bridge.py:4000; new function, additive only)
+
+NON-FIX rerun provenance:
+  Command: bash sim/regression/soc-verification-run.sh run_e2e_attn_score
+           2>&1 | tee .omo/evidence/task-4-run_e2e_attn_score_rerun.log
+  RESULT:  "[soc-run] RESULT: FAIL for run_e2e_attn_score" (exit 1 = EXPECTED)
+  Compiler version V-2023.12-SP2_Full64; Sep 3 09:17 2026
+  Simulation report tail: "Time: 3633501 ps ... Thu Sep  3 09:19:29 2026"
+
+--------------------------------------------------------------------------------
+3. PHASE A — current padded-DIM1 programming characterization
+--------------------------------------------------------------------------------
+Programming (identical to the failing path of test_e2e_attn_score):
+  DIM0=(K<<16)|M = 0x00800020, DIM1=64 (padded), WRP_DIM_N=2, WRP_K_TILES=2,
+  w_addr=0x20000000, i_addr=0x20010000, o_addr=0x20020000 (SRAM_BASE+0x020000,
+  manifest op05 sram_output_addr 0x020000 confirmed).
+Read: explicit 8KB backdoor read  bridge._sram_backdoor_read(o_addr, 8192).
+
+X-GUARD OBSERVATION:
+- Raw-memory probe of the 128 SRAM words covering [0x20020000, 0x20022000):
+  zero words contained X bits.
+- Log grep for literal "contains X" (_sram_backdoor_read warning text):
+  0 hits in both sim/regression/qwen_e2e_attn_score_layout.log and the tee'd
+  evidence log.
+- Recorded: WRAPPER-WRITE-GEOMETRY: full-row
+  (wrapper writes every 256-byte store row in full — 4 x 64B beats, full
+  WSTRB — padding columns hold computed zeros, no uninitialized SRAM
+  exposed. X-branch (pre-zero + rerun) NOT taken; prezeroed=False.)
+
+PHASE A 8KB DUMP SUMMARY (row | byte offset | first two INT32 words | padding):
+  row= 0 off=0x0000 w0=0xFFFFF974 w1=0x00000C4D pad_zero=True
+  row= 1 off=0x0100 w0=0x000004D0 w1=0x00001196 pad_zero=True
+  row= 2 off=0x0200 w0=0xFFFFEF84 w1=0xFFFFF633 pad_zero=True
+  row= 3 off=0x0300 w0=0xFFFFF7E0 w1=0x000026F5 pad_zero=True
+  row= 4 off=0x0400 w0=0xFFFFFE11 w1=0x000007B9 pad_zero=True
+  row= 5 off=0x0500 w0=0x0000042A w1=0x000003A5 pad_zero=True
+  row= 6 off=0x0600 w0=0x00000C37 w1=0xFFFFF456 pad_zero=True
+  row= 7 off=0x0700 w0=0x000003D0 w1=0x000001EA pad_zero=True
+  row= 8 off=0x0800 w0=0x00000D8F w1=0xFFFFF9F6 pad_zero=True
+  row= 9 off=0x0900 w0=0x00000CB6 w1=0xFFFFFF7A pad_zero=True
+  row=10 off=0x0A00 w0=0xFFFFEAB6 w1=0xFFFFF7D1 pad_zero=True
+  row=11 off=0x0B00 w0=0xFFFFDA16 w1=0xFFFFD95C pad_zero=True
+  row=12 off=0x0C00 w0=0x00001833 w1=0xFFFFF0ED pad_zero=True
+  row=13 off=0x0D00 w0=0x0000132E w1=0x00001325 pad_zero=True
+  row=14 off=0x0E00 w0=0xFFFFF7E6 w1=0x00001006 pad_zero=True
+  row=15 off=0x0F00 w0=0x0000019F w1=0x00000DEE pad_zero=True
+  row=16 off=0x1000 w0=0x000017E7 w1=0x0000354A pad_zero=True
+  row=17 off=0x1100 w0=0xFFFFCB34 w1=0xFFFFE18C pad_zero=True
+  row=18 off=0x1200 w0=0xFFFFDCD3 w1=0xFFFFE907 pad_zero=True
+  row=19 off=0x1300 w0=0xFFFFEE8C w1=0xFFFFF0F0 pad_zero=True
+  row=20 off=0x1400 w0=0x0000128C w1=0xFFFFFB2F pad_zero=True
+  row=21 off=0x1500 w0=0x00000A83 w1=0xFFFFF5CE pad_zero=True
+  row=22 off=0x1600 w0=0xFFFFF588 w1=0x0000117A pad_zero=True
+  row=23 off=0x1700 w0=0xFFFFDCF1 w1=0x00000F0B pad_zero=True
+  row=24 off=0x1800 w0=0xFFFFF6F1 w1=0xFFFFEFEA pad_zero=True
+  row=25 off=0x1900 w0=0x000002CE w1=0x00000B77 pad_zero=True
+  row=26 off=0x1A00 w0=0xFFFFF432 w1=0xFFFFEFC6 pad_zero=True
+  row=27 off=0x1B00 w0=0xFFFFFBEB w1=0x000018A6 pad_zero=True
+  row=28 off=0x1C00 w0=0x00000F0C w1=0xFFFFFEFF pad_zero=True
+  row=29 off=0x1D00 w0=0x00001D5C w1=0x00000D8F pad_zero=True
+  row=30 off=0x1E00 w0=0x00000972 w1=0xFFFFE70C pad_zero=True
+  row=31 off=0x1F00 w0=0x00000A21 w1=0xFFFFEF5F pad_zero=True
+
+PHASE A ASSERTION RESULT:
+  All 32 rows asserted: window word indices [64r, 64r+1] (bytes r*256 and
+  r*256+4) == dense-golden words [2r, 2r+1]; bytes [r*256+8, r*256+256) all
+  zero (prezeroed=False, so padding check informative). 0 error lines.
+  Log: "[e2e_attn_score_layout] Phase A PASS in 634 cycles
+        (prezeroed=False, STATUS=0x00000002)"                      [PASS]
+  Write geometry basis (Momus-R3-B1): wrapper writes each store row as a full
+  256B row — so_beats=(256+63)>>6=4 x 64B beats with full WSTRB
+  (rtl/wrapper/mxu_soc_wrapper.v:725-759), FIFO captures the full 2048-bit row
+  (64 columns, :547-584), columns 2..63 are computed zeros (weights zero
+  padded by pack_int4_tile_major for c>=N).
+
+--------------------------------------------------------------------------------
+4. PHASE B — DIM1=2 trigger isolation (firmware-aligned real N)
+--------------------------------------------------------------------------------
+Programming: identical to Phase A except DIM1=2 written to MMIO 0x40000010
+  (real N; matches firmware semantics npu_firmware.c:273). WRP_DIM_N=2,
+  WRP_K_TILES=2 unchanged.
+Run: engine start (0x40000004=1) -> _poll_done(STATUS) -> store-out wait ->
+  read 256 bytes from o_addr (dense window).
+
+PHASE B ASSERTION RESULT:
+- Engine accepted DIM1=2: no error bit, no hang. STATUS=0x00000002 (DONE).
+  MXU_FSM trace shows the same clean done sequence as Phase A
+  (state=6 done=1 -> state=0, no error pulses beyond the expected
+  state-3 pulse present in all passing runs).
+- Log: "[e2e_attn_score_layout] Phase B dense match: 64/64"
+- Log: "[e2e_attn_score_layout] Phase B PASS in 634 cycles
+        (dense 64/64, DIM1=2 accepted by engine)"
+- _golden_compare (INT32 byte-exact) returned True on the 256-byte read. [PASS]
+- cocotb summary: "** cocotb_bridge.test_e2e_attn_score_layout   PASS  **",
+  TESTS=1 PASS=1 FAIL=0 SKIP=0.
+
+--------------------------------------------------------------------------------
+5. NON-FIX-ASSERTION — existing target unchanged at HEAD
+--------------------------------------------------------------------------------
+After adding the new test + target, the existing target was rerun:
+  bash sim/regression/soc-verification-run.sh run_e2e_attn_score
+Log still contains (signature IDENTICAL to todo 3):
+  3633.50ns ERROR  cocotb_bridge  First mismatch @ byte[8]: actual=0x00, golden=0xD0
+  3633.50ns ERROR  cocotb_bridge  Total INT32 mismatches: 62/64
+  3633.50ns ERROR  cocotb_bridge  [e2e_attn_score] FAIL in 634 cycles
+  Raw bytes @ 0x20020000: 74f9ffff4d0c0000000000000000000000000000000000000000000000000000
+  Golden bytes @ 0x20020000: 74f9ffff4d0c0000d00400009611000084efffff33f6ffffe0f7fffff5260000
+  ** cocotb_bridge.test_e2e_attn_score   FAIL ... TESTS=1 PASS=0 FAIL=1 SKIP=0 **
+  E2E_ATTN_SCORE: FAIL / "[soc-run] RESULT: FAIL" (exit 1, expected for a
+  failing-characterization target — the PASS grep gate at Makefile:683 fires)
+- Existing test function untouched (assert still at sim/cocotb_bridge.py:3997,
+  line numbers before the insertion unchanged).                 [PASS]
+
+--------------------------------------------------------------------------------
+6. VERDICT LINES
+--------------------------------------------------------------------------------
+H-STRIDE-EMPIRICAL: confirmed
+    (Phase A: 32/32 rows at byte offset r*256; window words [64r,64r+1] ==
+    golden [2r,2r+1]; zero padding in each 256-byte row; full-row write
+    geometry, no X. Empirically pins the current 256B-stride layout that
+    makes _read_sram_output's 256-byte window see only row 0 -> 62/64.)
+
+H-TRIGGER-DIM1: actual-N-sufficient
+    (Phase B: DIM1=2 produces dense 64/64 golden match with no engine error.
+    The DIM1 padding in the driver programming model is the trigger; the fix
+    direction is driver-side: program DIM1=actual N, firmware-aligned.)
+
+H-DIM1-CLAIM: refuted
+    (The driver comment "MXU engine controller requires DIM1 multiple of 64"
+    is stale: the engine accepts and correctly computes DIM1=2.)
+
+NON-FIX-ASSERTION: PASS
+    (run_e2e_attn_score still FAIL 62/64 at HEAD with the identical signature
+    — First mismatch @ byte[8]: actual=0x00, golden=0xD0. Existing behavior
+    is untouched by this characterization-only commit.)
+
+--------------------------------------------------------------------------------
+7. FILE MANIFEST (this todo)
+--------------------------------------------------------------------------------
+- sim/cocotb_bridge.py: new test function test_e2e_attn_score_layout
+  (line 4000, +184 lines; no existing function modified)
+- sim/regression/Makefile: new target run_e2e_attn_score_layout
+  (after run_e2e_attn_score block, +14 lines; existing targets untouched)
+- .omo/evidence/task-4-bug-012-root-cause.txt: this file (new)
+- .omo/evidence/task-4-run_e2e_attn_score_layout.log: new-target run log
+- .omo/evidence/task-4-run_e2e_attn_score_rerun.log: NON-FIX rerun log
+- NOT touched: rtl/, firmware/, scripts/, docs/, config/, gen/,
+  rtl/test_vectors/qwen_blk0/ (all clean in git status)
