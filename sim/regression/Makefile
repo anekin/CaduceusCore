@@ -684,6 +684,20 @@ run_e2e_attn_score: $(SOC_SIMV_COCOTB)
 		echo "$(GREEN)E2E_ATTN_SCORE: PASS$(NC)" || \
 		(echo "$(RED)E2E_ATTN_SCORE: FAIL$(NC)" && exit 1)
 
+run_e2e_attn_score_layout: $(SOC_SIMV_COCOTB)
+	@echo "$(YELLOW)[E2E_ATTN_SCORE_LAYOUT] Running dual-phase layout/trigger cocotb test test_e2e_attn_score_layout...$(NC)"
+	@cd $(REPO_ROOT)/.. && \
+		LD_LIBRARY_PATH=$(COCOTB_LIB_DIR):$(COCOTB_PY_ENV)/lib:$(LD_LIBRARY_PATH) \
+		PYTHONPATH=$(REPO_ROOT)/sim MODULE=cocotb_bridge TESTCASE=test_e2e_attn_score_layout \
+		TOPLEVEL=tb_soc TOPLEVEL_LANG=verilog \
+		PYTHONIOENCODING=utf-8 \
+		COCOTB_RESULTS_FILE=$(REPO_ROOT)/sim/regression/qwen_e2e_attn_score_layout_results.xml \
+		./CaduceusCore/sim/regression/simv_soc_cocotb +define+COCOTB_SIM=1 +COCOTB -no_save \
+		+BOOTROM_HEX=$(REPO_ROOT)/firmware/build/npu_firmware.hex 2>&1 | tee $(REPO_ROOT)/sim/regression/qwen_e2e_attn_score_layout.log
+	@grep -q "test_e2e_attn_score_layout.*PASS" $(REPO_ROOT)/sim/regression/qwen_e2e_attn_score_layout.log && \
+		echo "$(GREEN)E2E_ATTN_SCORE_LAYOUT: PASS$(NC)" || \
+		(echo "$(RED)E2E_ATTN_SCORE_LAYOUT: FAIL$(NC)" && exit 1)
+
 run_e2e_mxu_op05: $(SOC_SIMV_COCOTB)
 	@echo "$(YELLOW)[E2E_MXU_OP05] Running single-op cocotb test test_e2e_mxu_op05...$(NC)"
 	@cd $(REPO_ROOT)/.. && \
