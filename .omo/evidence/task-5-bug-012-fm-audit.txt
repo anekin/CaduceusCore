@@ -1,0 +1,52 @@
+# bug-012-fm-audit — todo 5 (A4 conditional disposition) evidence
+
+## Provenance
+- timestamp: 2026-09-03T17:20:10Z
+- branch:     bug-012-fm-audit
+- HEAD:       9db3b114415d774f7ad64f613ac525137f2945cc
+- python:     Python 3.10.12
+
+## Verdict
+FM-FIX: none-needed
+
+## Disposition rationale
+Plan checkbox 5 is conditional (A4): it commits the FM-fix branch only if
+todos 2/3/4 surfaced a Func Model bug. All three audit todos completed with
+clean verdicts and are committed on this branch:
+
+- todo 2 (A2-1, commit c216573): `FM-HUNT-NARROW-N: clean`
+  113 passed — 112 matrix combos (N∈{2,10,12,20,33,40,64} × M∈{1,4,32,65} ×
+  K∈{1,64,128,129}) bit-exact vs independent in-file numpy oracle.
+  Evidence: .omo/evidence/task-2-bug-012-fm-audit.txt
+
+- todo 3 (A2-2, commit 550c1cc): `FM-HUNT-PACK: clean`, `FM-HUNT-TILE: clean`,
+  `FM-HUNT-SCALE: clean`
+  13 passed — pack zero-fill round-trips, tile-ceil arithmetic, scale-hex
+  reshape, and MMIO accumulate (2×K=64) == single matmul_int32(K=128)
+  bit-exact.
+  Evidence: .omo/evidence/task-3-bug-012-fm-audit.txt
+
+- todo 4 (A3, commit 9db3b11): `FM-ABI-CONTRACT: pass`
+  6 passed — DIM1=actual-N write/read-back + dense compute (no 64-col output
+  padding), dense row-major layout, pad-up regex audit matches exactly the
+  RTL-driver set {sim/cocotb_bridge.py:2104, sim/diagnose_data_layout.py:151}
+  with zero FM-domain hits. One comment-only docstring fix
+  (sim/golden_executor.py:96) — no behavior change.
+  Evidence: .omo/evidence/task-4-bug-012-fm-audit.txt
+
+## Conclusion
+No Func Model defect was found by the A2-1/A2-2 attack matrices or the A3
+ABI contract audit, so no FM fix is required. Per the plan's A4 conditional,
+the disposition is the none-needed branch: no bug-ledger entry is added to
+docs/bugs/bugs-soc-func-model.md, and no product file is modified. The BUG-012
+stride root cause (c43954a) is tracked outside the Func Model domain.
+
+## Changed in this commit
+- .omo/evidence/task-5-bug-012-fm-audit.txt (this file)
+- .omo/notepads/bug-012-fm-audit/learnings.md (none-needed disposition note)
+
+## Verification
+- git add used with explicit pathspecs only (no `git add .`/`-A`).
+- Pre-commit `git status --porcelain` == 7 parallel-session dirty files +
+  `?? .omo/plans/bug-012-fix.md` (whitelist asserted; untouched here).
+- Post-commit `git diff HEAD^ HEAD --name-only` == the two files listed above.

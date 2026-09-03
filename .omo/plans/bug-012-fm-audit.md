@@ -108,7 +108,7 @@ Your next move: 直接 `/start-work bug-012-fm-audit` 开始执行，或先跑�
   QA scenarios: happy=三断言全 PASS；failure=任一项违约 → 签名落档（A4 路由——契约被打破本身就是 FM bug）。Evidence `.omo/evidence/task-4-bug-012-fm-audit.txt`
   Commit: Y | test(fm): ABI contract — DIM1=actual-N + dense output + zero-padding audit
 
-- [ ] 5. A4 修复处置（条件 todo：仅当 2/3/4 任一失败时激活；否则证据记 FM-FIX: none-needed）
+- [x] 5. A4 修复处置（条件 todo：仅当 2/3/4 任一失败时激活；否则证据记 FM-FIX: none-needed）
   What to do / Must NOT do: 若 2/3/4 全绿：evidence 记 `FM-FIX: none-needed`，本 todo 零代码改动、仅证据 + 计划标注。若发现 FM bug：(1) 在 FM 域修复（sim/golden_executor.py 或 sim/models 或 mmio_bridge——**修复面 ≤2 文件且 ≤200 LOC**，否则 STOP 上报不自行扩大）。(2) `docs/bugs/bugs-soc-func-model.md` 新增条目（Date/SEV/Title/Description/Root Cause/Fix Commit/Evidence 全字段，格式同 BUG-SOC-FM-001..003 先例）。(3) 重跑 A1 基线 + 相关 hunt 测试全绿。(4) 判定行 `FM-FIX: <BUG-ID>-fixed`。Must NOT：改 rtl//firmware//scripts/；跨计划修 RTL；无证据 claim Fixed。
   Parallelization: Wave 4 | Blocked by: 4 | Blocks: F1-F4 | —
   References: `docs/bugs/bugs-soc-func-model.md:26-84`（BUG-SOC-FM-001..003 条目格式先例）；todo 1 基线命令；`.omo/evidence/task-{2,3,4}-bug-012-fm-audit.txt`（失败签名）
