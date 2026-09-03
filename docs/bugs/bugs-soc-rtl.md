@@ -823,15 +823,15 @@ rather than silently assumed.
 
 ---
 
-### BUG-RTL-SOC-012 — blk0 E2E op05 attn_score MMUL drains only first row (words 2-63 zero)
+### BUG-RTL-SOC-012 — blk0 E2E op05 attn_score MMUL 256B-stride store-out vs dense 256B readback (words 2-63 zero)
 
 | 字段 | 内容 |
 |------|------|
-| **Date** | 2026-08-31 |
-| **Block** | T14 (blk0 E2E investigation, soc-rtl-review-remediation) |
+| **Date** | 2026-08-31 (root cause confirmed 2026-09-03, branch bug-012-root-cause) |
+| **Block** | T14 (blk0 E2E investigation, soc-rtl-review-remediation; root-cause todos 1-4) |
 | **Case** | run_e2e_blk0 (op05 attn_score MMUL) |
 | **Severity** | Major |
-| **Type** | RTL (MXU controller / accumulator drain) |
+| **Type** | RTL (MXU wrapper store-out geometry × driver DIM1 programming model) |
 | **Status** | Open |
 
 #### Symptom
@@ -846,26 +846,114 @@ attribution verified pre-existing.
 
 #### Root Cause
 
-Candidate root cause: multi-tile M-loop accumulator drain/writeback writes
-only row 0. Golden vectors dated 2026-07-07 — stale-golden hypothesis still
-open.
+CONFIRMED mechanism (2026-09-03, bug-012-root-cause todos 2-4): RTL-wrapper ×
+driver-programming-model interaction. MXU store-out row stride is driven by
+the driver's PADDED DIM1 (latched in the wrapper), NOT by WRP_DIM_N, so the
+M=32/N=2 result is written as 32 rows at a 256B stride; the test then reads a
+dense 256B window and sees only row 0 (words 0-1 real, 62 zero-padding words).
+
+Mechanism chain (all file:line verified at HEAD):
+1. Driver pads DIM1 to a 64-wide tile before the MMIO write:
+   `sim/cocotb_bridge.py:2100-2107` — `engine_n = ((instr.dim_n + 63)//64)*64`
+   at :2104, written to MXU DIM1 at :2107. The :2103 comment ("the wrapper's
+   WRP_DIM_N still uses actual N for correct store-out") is STALE.
+2. Wrapper latches MXU DIM1 and gives it priority over WRP_DIM_N for
+   store-out: `rtl/wrapper/mxu_soc_wrapper.v:207` (dim1_n reset default
+   16'd64), `:221` (`wrp_n_derived = (dim1_n != 0) ? dim1_n : wrp_n` — a
+   non-zero latched DIM1 ALWAYS wins over the WRP_DIM_N APB register),
+   `:719-721` (`row_bytes_full = wrp_n_derived*4` → dim1_n=64 →
+   `row_bytes_per_store` = 256B/row).
+3. Controller drains ALL M rows — `rtl/mxu/controller.v:277-308`
+   (S_STORE_OUT, store_row 0..m_cur-1) — so every one of the 32 rows IS
+   written, at `out_base + r*256` as a full 256B store row (4×64B beats,
+   full WSTRB, `rtl/wrapper/mxu_soc_wrapper.v:725-759`); columns ≥ N hold
+   computed zeros (pack_int4_tile_major zero-pads c≥N).
+4. Test readback expects a DENSE 256B window: `sim/cocotb_bridge.py:2424-2438`
+   (`size_bytes = elements*4 = 32*2*4 = 256` contiguous bytes) via
+   `host_read_sram` (:574-599; with DUT present the real path is
+   `_sram_backdoor_read` VPI at :591-592 — the :2426 "PCIe TLP" docstring is
+   stale) → sees only row 0's real data + zero padding → 62/64 mismatches,
+   first @ byte[8] (actual=0x00, golden=0xD0). Exact signature match.
+
+Provenance:
+- INTRODUCING-COMMIT: 8dd5dbe ("fix(rtl/wrapper): correct M=1 multi-tile
+  broadcast/store-out count (P9 branch B)", 2026-07-23) — switched row_bytes
+  from `wrp_n` (WRP_DIM_N APB register) to `wrp_n_derived` (latched MXU DIM1),
+  creating the override mechanism.
+- STALE-COMMIT-ORIGIN: f9a32204 (2026-07-02) — the driver padding + :2103
+  comment were CORRECT at birth (the wrapper then used wrp_n) and were staled
+  by 8dd5dbe's switch to wrp_n_derived.
+- Firmware path UNAFFECTED: `firmware/npu_firmware.c:273` writes
+  `mxu->DIM1 = (N & 0xFFFF)` (REAL N, no padding) → correct store-out
+  geometry — explains why firmware-path MMULs all PASS while the cocotb
+  driver path (padded) fails.
+
+Original hypotheses — REFUTED:
+- stale-golden — REFUTED by todo 3 isolated repro: `test_e2e_attn_score`
+  recomputes its golden live (GoldenMXU) and never reads the op05 golden hex,
+  yet reproduces the identical 62/64 signature
+  (`ISO-VERDICT: repro-fail-identical`,
+  `.omo/evidence/task-3-bug-012-root-cause.txt`).
+- drain-only-row — REFUTED by controller drain-all-rows logic
+  (`rtl/mxu/controller.v:277-308`) and by todo 4 Phase A full-row geometry:
+  all 32 rows are present at byte offset r*256 with per-row words matching
+  golden (`H-STRIDE-EMPIRICAL: confirmed`,
+  `.omo/evidence/task-4-bug-012-root-cause.txt`).
 
 Distinct from BUG-RTL-SOC-007 (op07 attn_weight cycles=0) — same attention
 chain, different signature.
 
 #### Fix
 
-TBD — root cause not yet identified.
+Root cause CONFIRMED but NOT fixed — investigation-only disposition (user
+decision, 2026-09-03; Status stays Open). Two fix directions, ordered by the
+todo 4 Phase B empirical result:
+
+1. Driver-side (PREFERRED — low-risk, test-infra): program MXU DIM1 = actual
+   N (drop the pad-to-64 in `sim/cocotb_bridge.py:2100-2107`), aligned with
+   firmware semantics (`firmware/npu_firmware.c:273`). Supported by
+   `H-TRIGGER-DIM1: actual-N-sufficient` (DIM1=2 → dense 64/64 golden match,
+   engine accepts without error/hang) and `H-DIM1-CLAIM: refuted` (the driver
+   comment "MXU engine controller requires DIM1 multiple of 64" is stale).
+2. Wrapper-side (product RTL — heavier): make WRP_DIM_N take priority over the
+   latched dim1_n for store-out (`rtl/wrapper/mxu_soc_wrapper.v:221`), or
+   otherwise reconcile the two N sources; requires the full 33-case FM-SOC
+   regression + module-level + wrapper-level regression before landing.
+
+RED anchor: `test_e2e_attn_score_layout` (`sim/cocotb_bridge.py:4000`,
+target `run_e2e_attn_score_layout`) is a characterization test added in todo 4
+(NO FIX). Phase A pins the current 256B-stride layout (row r words at window
+offset r*256); Phase B proves the fix geometry (DIM1=2 → dense 64/64). A
+future fix flips its Phase A assertions RED→GREEN as acceptance. Note:
+`test_e2e_attn_score` is currently a RED anchor too — the future fix will flip
+its 62/64 failure to a dense pass.
 
 #### Verification
 
 2026-08-31 investigation — byte-identical failure in repro and baseline
 (except 4 environmental lines); determinism confirmed.
 
-Evidence:
-- `.omo/evidence/task-14-blk0-investigation.txt` (verdict + comparison table)
-- `.omo/evidence/task-14-blk0-repro.log`
-- `.omo/evidence/task-14-blk0-baseline.log`
+Evidence (root-cause chain, 2026-09-03, branch bug-012-root-cause):
+- `.omo/evidence/task-1-bug-012-root-cause.txt` — H-GOLDEN closure: verify_ops
+  fresh re-run ALL PASS; regen drift confined to manifest metadata-only
+  (`H-GOLDEN: undetermined-drift`).
+- `.omo/evidence/task-2-bug-012-root-cause.txt` — H-STRIDE static chain
+  (file:line citation table) + 8dd5dbe archaeology + stale-comment provenance.
+- `.omo/evidence/task-3-bug-012-root-cause.txt` — isolated live-golden repro →
+  `ISO-VERDICT: repro-fail-identical`; op05 stray-write overlap audit.
+- `.omo/evidence/task-4-bug-012-root-cause.txt` — Phase A/B layout + trigger
+  probe → `H-STRIDE-EMPIRICAL: confirmed`,
+  `H-TRIGGER-DIM1: actual-N-sufficient`, `NON-FIX-ASSERTION: PASS`.
+- `.omo/evidence/task-5-bug-012-root-cause.txt` — consolidated verdict lines +
+  `ATTRIBUTION:` (this entry).
+- `.omo/evidence/task-14-blk0-investigation.txt` (original verdict +
+  comparison table) / `.omo/evidence/task-14-blk0-repro.log` /
+  `.omo/evidence/task-14-blk0-baseline.log`.
+
+RED-anchor note: characterization test `test_e2e_attn_score_layout`
+(sim/cocotb_bridge.py:4000, target `run_e2e_attn_score_layout`, added todo 4,
+NO FIX) is currently RED-by-design; a future fix flips its Phase A assertions
+RED→GREEN as acceptance.
 
 2026-09-02 cross-reference (bug-007-root-cause todo 9; BUG-012 Status/Root Cause/Fix
 untouched): H4-N128-BLK0-SINGLE (`.omo/evidence/task-6-bug-007-root-cause.txt`) proves the

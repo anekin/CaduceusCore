@@ -1,0 +1,162 @@
+================================================================================
+TASK-5-BUG-012-ROOT-CAUSE — C5 ATTRIBUTION + BUG-012 ledger disposition
+(investigation-only; Status stays Open)
+================================================================================
+Timestamp (UTC):        2026-09-03T02:00:00Z (approx; commit time authoritative)
+Branch:                 bug-012-root-cause
+Plan:                   .omo/plans/bug-012-root-cause.md todo 5 (C5)
+Executor:               Sisyphus-Junior
+Scope:                  docs/bugs/bugs-soc-rtl.md BUG-012 section ONLY +
+                        this evidence file. NO product code changed.
+Pre-existing dirty files (NOT touched, NOT staged, per todo-0 7-line snapshot):
+    M .omo/evidence/task-0-signoff-v3-runner.txt
+    M .omo/evidence/task-20-uncertainty-kpis.json
+    M .omo/evidence/task-23-perf-spec-ci.txt
+    M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+    M .omo/notepads/phase6-rtl-verification/learnings.md
+    M .omo/plans/bug-012-root-cause.md          (orchestrator plan file)
+    M build/evidence/fm-cv-chain.txt
+    M build/evidence/w3-4-mobilenetv3-fm.txt
+
+--------------------------------------------------------------------------------
+1. CONSOLIDATED VERDICT LINES (todos 0-4 evidence, verbatim routing)
+--------------------------------------------------------------------------------
+Source: .omo/evidence/task-{0..4}-bug-012-root-cause.txt
+
+H-GOLDEN: undetermined-drift
+    (task-1: verify_ops fresh re-run ALL PASS — op05 attn_score MMUL PASS,
+    op07 attn_weight MMUL PASS, op10 RMSNORM post-attn PASS; regen drift
+    confined to blk0_manifest.json metadata-only — 47/48 vector data files
+    byte-identical; golden DATA matches current Func Model. Stale-golden
+    empirically dead via task-3 isolated live-golden repro.)
+
+GENERATOR-DRIFT: yes
+    (task-1: drift scope metadata-only — blk0_manifest.json "files" map omits
+    9 pre-existing weight entries; mechanism gen_blk0_golden.py:600-604
+    registers weight hex only when file does not pre-exist. Restored via
+    directory-level git checkout; qwen_blk0 zero dirty post-restore.)
+
+GENERATOR-CRASH: no
+    (task-1: REGEN-EXIT 0, no partial output, no crash.)
+
+H-STRIDE-STATIC: supported
+    (task-2: mechanism chain verified at HEAD — driver DIM1 padding
+    sim/cocotb_bridge.py:2100-2107 × wrapper dim1_n override
+    rtl/wrapper/mxu_soc_wrapper.v:207/221/719-721 → row_bytes_per_store 256B;
+    readback 256B dense window sim/cocotb_bridge.py:2424-2438 →
+    _sram_backdoor_read VPI :591-592.)
+
+INTRODUCING-COMMIT: 8dd5dbe
+    (8dd5dbe669a15af5fbc865badc68d2a8c96967c9, 2026-07-23 commit; subject
+    verbatim: "fix(rtl/wrapper): correct M=1 multi-tile broadcast/store-out
+    count (P9 branch B)" — switched row_bytes from wrp_n (WRP_DIM_N APB
+    register) to wrp_n_derived (latched MXU DIM1).)
+
+STALE-COMMIT-ORIGIN: f9a32204
+    (f9a32204f155b894d3ff8468f6553bd66cf3e314, 2026-07-02 — introduced BOTH
+    the DIM1 pad-to-64 and the :2103 comment "the wrapper's WRP_DIM_N still
+    uses actual N for correct store-out"; correct at birth, staled by
+    8dd5dbe's wrp_n_derived switch.)
+
+LAST-KNOWN-PASS: unknown
+    (task-2: qwen_blk0.log gitignored → na; vectors commit a29e93cf is
+    generation-only; no committed RTL-e2e blk0/attn_score PASS record; only
+    Func-Model-domain PASS records 2026-07-24.)
+
+H-DIM1-CLAIM: pre-weakened → refuted
+    (task-2 pre-weakened: controller ceil-tile math controller.v:18/173-176 +
+    module partial_tile_N PASS artifact. task-4 REFUTED: engine accepts and
+    correctly computes DIM1=2 with no error/hang — the driver comment "MXU
+    engine controller requires DIM1 multiple of 64" is stale.)
+
+ISO-VERDICT: repro-fail-identical
+    (task-3: isolated test_e2e_attn_score recomputes golden live via
+    GoldenMXU — golden hex NOT on failing path — yet reproduces identical
+    "First mismatch @ byte[8]: actual=0x00, golden=0xD0" + "Total INT32
+    mismatches: 62/64". Stale-golden excluded as root cause; failure local to
+    op05 MMUL store-out path.)
+
+OVERLAP-HAZARD: 11 ops share the 0x020000 scratch output region; access
+    strictly sequential/benign
+    (task-3: op05 actual write footprint 8192B @ [0x20020000, 0x20022000)
+    overlaps Q_proj/K_proj/V_proj/attn_weight/O_proj/VRESID/gate/up/VMUL/down
+    declared intervals — all shared scratch region 0x020000, each op
+    overwrites before next consumes → benign; downstream consequence of the
+    same root cause, NOT a third hypothesis.)
+
+H-STRIDE-EMPIRICAL: confirmed
+    (task-4 Phase A: 32/32 rows at byte offset r*256; window words [64r,64r+1]
+    == golden [2r,2r+1]; zero padding in each 256B row; full-row write
+    geometry, no X. Pins the 256B-stride layout that makes the 256B dense
+    readback see only row 0 → 62/64.)
+
+H-TRIGGER-DIM1: actual-N-sufficient
+    (task-4 Phase B: DIM1=2 produces dense 64/64 golden match, STATUS DONE,
+    no engine error/hang. DIM1 padding in the driver programming model is the
+    trigger; fix direction is driver-side — program DIM1=actual N,
+    firmware-aligned.)
+
+NON-FIX-ASSERTION: PASS
+    (task-4: run_e2e_attn_score rerun at HEAD still FAIL 62/64 with identical
+    signature — characterization-only probe changed nothing.)
+
+--------------------------------------------------------------------------------
+2. ATTRIBUTION
+--------------------------------------------------------------------------------
+ATTRIBUTION: BUG-RTL-SOC-012 root cause is an RTL-wrapper × driver-
+programming-model interaction — the wrapper's latched MXU DIM1 override
+(rtl/wrapper/mxu_soc_wrapper.v:207/221/719-721, introduced by 8dd5dbe
+"fix(rtl/wrapper): correct M=1 multi-tile broadcast/store-out count (P9
+branch B)") forces a 256B-per-row store-out geometry driven by the driver's
+pad-to-64 DIM1 (sim/cocotb_bridge.py:2100-2107), so op05's M=32/N=2 result is
+written as 32 rows at a 256B stride and the test's dense 256B readback
+(sim/cocotb_bridge.py:2424-2438 via _sram_backdoor_read :591-592) sees only
+row 0 → 62/64 INT32 mismatches, first @ byte[8]; the two original hypotheses
+are refuted — stale-golden by the task-3 live-golden isolated repro
+(ISO-VERDICT: repro-fail-identical) and drain-only-row by controller
+drain-all-rows logic (rtl/mxu/controller.v:277-308) plus task-4 Phase A
+full-row geometry (H-STRIDE-EMPIRICAL: confirmed); firmware path unaffected
+because it programs DIM1=real N (firmware/npu_firmware.c:273). Status remains
+Open (investigation-only, user decision); fix directions recorded: (1)
+driver-side DIM1=actual N (preferred, H-TRIGGER-DIM1: actual-N-sufficient),
+(2) wrapper-side WRP_DIM_N priority over dim1_n (product RTL, full regression
+required).
+
+--------------------------------------------------------------------------------
+3. LEDGER DISPOSITION SUMMARY (docs/bugs/bugs-soc-rtl.md BUG-012)
+--------------------------------------------------------------------------------
+- Symptom preserved (62/64 INT32 mismatches, first mismatch @ byte[8], only
+  words 0-1 correct, M=32/N=2/K=128/tiles=2).
+- Root Cause rewritten to the confirmed 256B-stride mechanism with file:line
+  citations (wrapper dim1_n override mxu_soc_wrapper.v:207/221/719-721;
+  driver DIM1 padding cocotb_bridge.py:2100-2107; introducing commit
+  8dd5dbe; stale-comment origin f9a32204; readback path
+  cocotb_bridge.py:2424-2438/574-599/591-592; drain-all-rows refutation
+  controller.v:277-308; firmware real-N unaffected npu_firmware.c:273).
+- Original hypotheses explicitly refuted: stale-golden (task-3
+  ISO-VERDICT: repro-fail-identical), drain-only-row (controller drain logic
+  + task-4 Phase A H-STRIDE-EMPIRICAL: confirmed).
+- Status: Open (unchanged — user decided investigation-only).
+- Fix: two directions recorded, ordered by task-4 Phase B result:
+  1. driver-side DIM1=actual N (preferred, low-risk, test-infra;
+     H-TRIGGER-DIM1: actual-N-sufficient, H-DIM1-CLAIM: refuted);
+  2. wrapper-side WRP_DIM_N priority over latched dim1_n for store-out
+     (product RTL, heavier; requires full 33-case FM-SOC + module + wrapper
+     regression).
+- Verification updated with task-3/4 evidence paths; test_e2e_attn_score
+  and test_e2e_attn_score_layout noted as RED anchors (future fix flips their
+  assertions).
+- BUG-007 cross-reference (2026-09-02) kept unchanged; BUG-007
+  Status/Root Cause/Fix NOT altered.
+
+--------------------------------------------------------------------------------
+4. FILE MANIFEST (this todo)
+--------------------------------------------------------------------------------
+- docs/bugs/bugs-soc-rtl.md: BUG-012 section rewritten (lines 826-876 region),
+  BUG-007 cross-ref untouched. Status Open.
+- .omo/evidence/task-5-bug-012-root-cause.txt: this file (new).
+- NOT touched: any other bug entry (BUG-007/002/009/010/011/WDT-001), any
+  other docs/bugs/ file, rtl/, firmware/, scripts/, sim/, config/, gen/.
+- Staged+committed files: ONLY the two above (pathspec commit; no
+  git add . / -A / commit -a).
+================================================================================
