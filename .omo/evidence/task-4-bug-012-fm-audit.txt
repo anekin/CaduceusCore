@@ -1,0 +1,58 @@
+# bug-012-fm-audit — todo 4 (A3 ABI contract) evidence
+
+## Provenance
+- branch: bug-012-fm-audit
+- HEAD: 550c1cc097f2badf1ea4dc5a824522f8490e5605
+- python: Python 3.10.12
+- timestamp: 2026-09-03T17:17:10Z
+
+## Commands executed
+```
+PYTHONPATH=sim python -m pytest sim/tests/test_fm_abi_contract.py -q
+```
+Output:
+```
+......                                                                   [100%]
+6 passed in 0.22s
+```
+
+```
+PYTHONPATH=sim python3 - <<'EOF'  # regex audit matched-set printout
+import os, re
+pat = re.compile(r"\(\([^)]*(?:dim_n|\bN\b)\s*\+\s*63\)\s*//\s*64\)\s*\*\s*64")
+hits = []
+for root, _d, files in os.walk("sim"):
+    for name in files:
+        if name.endswith(".py"):
+            p = os.path.join(root, name)
+            with open(p, encoding="utf-8") as fh:
+                if pat.search(fh.read()):
+                    hits.append(p)
+print("AUDIT MATCHED SET:", sorted(hits))
+EOF
+```
+Output:
+```
+AUDIT MATCHED SET: ['sim/cocotb_bridge.py', 'sim/diagnose_data_layout.py']
+```
+
+## Contract assertions (all 6 tests PASS)
+1. test_dim1_write_readback_real_n[N=2/33/64] ×3 — MXU DIM1 (0x10, spec/npu_abi.json:147-153
+   "[15:0]=N columns, [31:16]=reserved") write N → read back == N.
+2. test_dim1_n33_compute_dense_no_padding — DIM0=(K=64<<16)|M=8, DIM1=33, I_ADDR/W_ADDR/O_ADDR
+   staged via pack_int8_activation_tile_major (K-tile broadcast layout) + GoldenMXU.pack_int4
+   (dense packed bytes), CMD=1 → SRAM dense M×N INT32 == GoldenMXU().matmul_int32(..., 33)
+   bit-exact; sentinel tail (o_off+M*33*4 .. o_off+M*64*4) untouched — no 64-column padding.
+3. test_golden_mxu_dense_row_major — M=32/N=2/K=128 output shape (M,N), C-contiguous,
+   element (r,c) at flat index r*N+c for corner + interior probes.
+4. test_dim1_padding_audit_only_in_rtl_drivers — os.walk over sim/*.py, pad-up regex
+   `\(\([^)]*(?:dim_n|\bN\b)\s*\+\s*63\)\s*//\s*64\)\s*\*\s*64` matches EXACTLY
+   {sim/cocotb_bridge.py (:2104), sim/diagnose_data_layout.py (:151)}; FM domain
+   (mmio_bridge/golden_executor/models/tests/engine/timing) zero hits.
+
+## Docstring fix (comment-only, no behavior change)
+- sim/golden_executor.py:96 matmul_int32 docstring: "pre-unpacked INT4" → "packed INT4"
+  (implementation at :103 unpacks packed weights; stale wording contradicted it).
+
+## Verdict
+FM-ABI-CONTRACT: pass

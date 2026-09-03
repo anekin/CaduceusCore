@@ -1,0 +1,186 @@
+case_id: task-1-bug-012-fm-audit
+utc_start: 2026-09-03T13:15:00Z
+utc_end: 2026-09-03T17:02:11Z
+verdict: pass-with-triage (verify_ops 5/5 PASS; pytest baseline non-210 → triaged per plan QA failure path)
+
+PROVENANCE
+BRANCH: bug-012-fm-audit
+HEAD: 539693282d385bc5d25489deba8fb6735c0db029 chore(omo): P0 baseline — branch + provenance snapshot (bug-012-fm-audit)
+PYTHON: Python 3.10.12 (/usr/bin/python)
+PYTEST: pytest 9.0.3
+HOST: sz0002 (local, no EDA; no PyPI access — cocotb not installable)
+TIMESTAMP_UTC: 2026-09-03T17:02:11Z
+
+COMMAND 1 (exact, plan-prescribed):
+  PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q
+EXIT: 2 — Interrupted: 9 errors during collection
+TAIL (verbatim):
+  ERROR sim/tests/test_cv_conv2d_rtl.py
+  ERROR sim/tests/test_device_protocol.py
+  ERROR sim/tests/test_device_protocol_cpp.py
+  ERROR sim/tests/test_device_server_per_conn.py
+  ERROR sim/tests/test_runtime_rtl_transport.py
+  ERROR sim/tests/test_soc_pcie_dma.py
+  ERROR sim/tests/wrapper/test_mxu_wrapper.py
+  ERROR sim/tests/wrapper/test_sfu_wrapper.py
+  ERROR sim/tests/wrapper/test_vector_wrapper.py
+  !!!!!!!!!!!!!!!!!!! Interrupted: 9 errors during collection !!!!!!!!!!!!!!!!!!!!
+  10 warnings, 9 errors in 5.98s
+ROOT CAUSE (verified from tracebacks): 4× ModuleNotFoundError 'caduceus_device_protocol'
+  (FlatBuffers stubs live in gen/; PYTHONPATH=sim alone cannot see them — documented
+  precedent .omo/evidence/final-manual-qa.md:50) + 5× ModuleNotFoundError 'cocotb'
+  (cocotb not installed; PyPI unreachable → pip download timed out).
+
+COMMAND 1A (triage run — env fix only, no test skipped; isolation of the two env gaps):
+  PYTHONPATH=sim:gen python -m pytest sim/tests/ sim/timing/tests/ -q --continue-on-collection-errors
+EXIT: 1
+TAIL (verbatim):
+  13 failed, 2326 passed, 4 skipped, 219 warnings, 11 errors in 10806.26s (3:00:06)
+  (wall-clock ~3h under heavy parallel-session load; 36-layer spike ladder alone ~90 min —
+   historical 34 min per .omo/retro/phase10-rtl-verification/presentation.html:345)
+
+FM-BASELINE: 2326-passed (2326 passed / 13 failed / 4 skipped / 11 errors — every non-pass
+  triaged as pre-existing/environment; zero FM-op regressions. See TRIAGE.)
+
+COMMAND 2 (exact, plan-prescribed):
+  PYTHONPATH=sim python3 scripts/verify_ops_func_model.py
+EXIT: 0
+FULL OUTPUT (verbatim, 37 lines):
+  ── attn_score MMUL (M=32, K=128, N=2) ──
+    Input:    4096 INT8 values (expect 4096)
+    Weight:   128 packed INT4 bytes (expect 128)
+    Golden:   64 INT32 values (expect 64)
+    First 8 values (got):  [np.int32(-1676), np.int32(3149), np.int32(1232), np.int32(4502), np.int32(-4220), np.int32(-2509), np.int32(-2080), np.int32(9973)]
+    First 8 values (gold): [np.int32(-1676), np.int32(3149), np.int32(1232), np.int32(4502), np.int32(-4220), np.int32(-2509), np.int32(-2080), np.int32(9973)]
+    Result: ALL 64 VALUES MATCH — PASS
+  ── attn_weight MMUL (M=32, K=2, N=128) ──
+    Input:    64 INT8 values (expect 64)
+    Weight:   128 packed INT4 bytes (expect 128)
+    Golden:   4096 INT32 values (expect 4096)
+    First 8 values (got):  [np.int32(0), np.int32(0), np.int32(0), np.int32(0), np.int32(0), np.int32(0), np.int32(0), np.int32(0)]
+    First 8 values (gold): [np.int32(0), np.int32(0), np.int32(0), np.int32(0), np.int32(0), np.int32(0), np.int32(0), np.int32(0)]
+    Result: ALL 4096 VALUES MATCH — PASS
+  ============================================================
+    op05 (attn_score MMUL):  PASS
+    op07 (attn_weight MMUL): PASS
+    MMUL VERDICT: ALL PASS
+  ============================================================
+  ── MMUL ops PASSED — proceeding to op10 RMSNORM check ──
+  ── RMSNORM post-attn (elements=2560) ──
+    Input:    2560 FP16 values (expect 2560)
+    Golden:   2560 FP16 values (expect 2560)
+    First 8 values (got):  ['0.230469', '0.834473', '-0.604004', '0.556152', '1.525391', '1.442383', '0.834473', '-0.369385']
+    First 8 values (gold): ['0.230469', '0.834473', '-0.604004', '0.556152', '1.525391', '1.442383', '0.834473', '-0.369385']
+    max_abs_err=0.000000, max_rel_err=0.000000
+    Result: ALL 2560 VALUES WITHIN TOLERANCE (atol=0.002, rtol=0.01) — PASS
+  ============================================================
+    op10 (RMSNORM post-attn): PASS
+    FINAL VERDICT: ALL PASS
+  ============================================================
+
+DECISION LINES (verbatim, exactly as printed):
+  op05 (attn_score MMUL): PASS
+  op07 (attn_weight MMUL): PASS
+  MMUL VERDICT: ALL PASS
+  op10 (RMSNORM post-attn): PASS
+  FINAL VERDICT: ALL PASS
+OP05/OP07/OP10: PASS
+
+TRIAGE (13 failed + 4 skipped + 11 errors — no_silent_skip, all classified):
+  [8F] sim/tests/test_engines.py (tensor_core_decode, os_systolic_decode,
+        systolic_vs_mxumodel_decode, systolic_vs_mxumodel_prefill, gmma_decode,
+        gmma_tma_overlap, systolic_npu_sim_baseline, block_npu_sim_baseline)
+        -> PRE-EXISTING engine-drift. Prior baseline precedent: "8 known failed
+           (test_engines.py, 不变)" (.omo/plans/func-model-remaining-fixes.md:42);
+           identical 8F at base commit f982bef (.omo/evidence/
+           final-wave-f1f4-soc-rtl-review-remediation.txt:237-240). NOT FM-op regression.
+  [1F] sim/tests/test_func_model_dut_adapter.py::test_real_spike_missing_artifacts_fails
+        -> PRE-EXISTING (spike binary present in this env; test expects missing-artifact
+           error — same classification at f982bef in f1f4 audit).
+  [1F] sim/tests/test_llama_dependency_lock.py::test_fetch_script_check_exits_zero_when_commit_matches
+        -> PRE-EXISTING host vendored-tree state (third_party/llama.cpp NPU patch markers
+           absent locally; f1f4 audit: "base passes only via a vacuous skip path").
+  [1F] sim/tests/test_runtime_real_firmware.py::TestMissingPrereqFails::test_missing_prereq_fails_flag_is_set
+        -> PRE-EXISTING (same failure at f982bef per f1f4 audit).
+  [1F] sim/tests/test_spike_toolchain_manifest.py::test_rejects_incomplete_or_stale_manifest
+        -> PRE-EXISTING stale fixture pin: "spike commit mismatch:
+           stored=1412bbec3176 current=539693282d38" (f1f4 audit documented identical pin drift).
+  [1F] sim/timing/tests/test_perf_ci.py::test_run_all_spec_ci_mode
+        -> ENV-INTERACTION, not FM regression: the perf-signoff CI runner returned
+           verdict fail with reasons=["rss_limit_breach: 19979.8MB > 4096.0MB"] — the
+           runner's 4GB peak-RSS gate measured my concurrent baseline suite's ~17GB.
+           ALL 7 signoff stages passed (provider_formula_gates 104 rows,
+           qwen_cv_dual_path_gates 7/7, sweeps, adversarial_matrix 26/26, baseline_validation).
+  [5E] cocotb collection errors (test_cv_conv2d_rtl, test_soc_pcie_dma,
+        wrapper/test_mxu_wrapper, wrapper/test_sfu_wrapper, wrapper/test_vector_wrapper)
+        -> ENV: cocotb not installed; PyPI unreachable. Known local limitation
+           (prior "5 cocotb collection errors (环境依赖, 不变)" precedent).
+  [4E] sim/tests/test_soc_differential.py (4 tests, all same failure)
+        -> HARNESS/suite-order: asyncio.get_event_loop() RuntimeError at fixture
+           (sim/tests/test_soc_differential.py:42). pytest-asyncio not installed
+           (requirements.txt has no pytest-asyncio); earlier tests in the single-process
+           run leave the default event-loop policy in a state where get_event_loop()
+           raises. Passed in f1f4 audit's per-file isolated runs (not in its failure list).
+           Zero code changed in this todo.
+  [2E] sim/timing/tests/test_perf_ci.py (test_validate_done_claims_1_to_22,
+        test_audit_recompute_and_checks) -> same rss_limit_breach root cause as [1F] above.
+  [4s] skipped — 3× model-data manifest skips + 1 spike-toolchain skip; consistent with
+        local suite behavior (data absent → skip, not fail).
+VERDICT: ZERO FM-op/functional regressions. All 13 F / 11 E traced to pre-existing
+  engine-drift, missing env deps (cocotb/pytest-asyncio), stale fixture pins, host
+  vendored-tree state, or concurrent-load RSS-gate interaction. A4 route NOT triggered.
+
+SIDE-EFFECT NOTE (collateral of the mandated baseline run, documented honestly):
+  The full suite regenerates evidence artifacts. Five of the 7 parallel-session dirty
+  files were overwritten by test side effects during Command 1A (mtimes CST):
+    .omo/evidence/task-0-signoff-v3-runner.txt   (21:54:58, written by sim/tests/test_func_model_signoff_v3.py run)
+    build/evidence/fm-cv-chain.txt               (21:53:27, CV chain test)
+    build/evidence/w3-4-mobilenetv3-fm.txt       (21:53:27, CV test)
+    .omo/evidence/task-23-perf-spec-ci.txt       (00:51:43, test_perf_ci fixture runner)
+    .omo/evidence/task-20-uncertainty-kpis.json  (00:52:42, perf-signoff runner stage)
+  These are deterministically generated artifacts (seed 42, frozen configs), so content is
+  reproducible; the parallel sessions' uncommitted edits in them are NOT recoverable.
+  Porcelain line set unchanged (same 9 lines before/after). This executor did not stage,
+  commit, or deliberately edit any of them.
+
+SNAPSHOT_PRE_COMMIT:
+  M .omo/evidence/task-0-signoff-v3-runner.txt
+  M .omo/evidence/task-20-uncertainty-kpis.json
+  M .omo/evidence/task-23-perf-spec-ci.txt
+  M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+  M .omo/notepads/phase6-rtl-verification/learnings.md
+  M .omo/plans/bug-012-fm-audit.md
+  M build/evidence/fm-cv-chain.txt
+  M build/evidence/w3-4-mobilenetv3-fm.txt
+  ?? .omo/plans/bug-012-fix.md
+
+COMMIT_PLAN: test(fm): FM baseline re-run evidence — pytest + verify_ops (no code change)
+STAGED_PATHS (explicit pathspec only, no git add ./-A):
+  .omo/evidence/task-1-bug-012-fm-audit.txt
+
+SNAPSHOT_AFTER_COMMIT (captured immediately post-commit, 2026-09-03T17:05:00Z):
+  M .omo/evidence/task-0-signoff-v3-runner.txt
+  M .omo/evidence/task-20-uncertainty-kpis.json
+  M .omo/evidence/task-23-perf-spec-ci.txt
+  M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+  M .omo/notepads/phase6-rtl-verification/learnings.md
+  M .omo/plans/bug-012-fm-audit.md
+  M build/evidence/fm-cv-chain.txt
+  M build/evidence/w3-4-mobilenetv3-fm.txt
+  ?? .omo/plans/bug-012-fix.md
+WHITELIST_8LINES (todo 0):
+  M .omo/evidence/task-0-signoff-v3-runner.txt
+  M .omo/evidence/task-20-uncertainty-kpis.json
+  M .omo/evidence/task-23-perf-spec-ci.txt
+  M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+  M .omo/notepads/phase6-rtl-verification/learnings.md
+  M build/evidence/fm-cv-chain.txt
+  M build/evidence/w3-4-mobilenetv3-fm.txt
+  ?? .omo/plans/bug-012-fix.md
+ASSERTION: post-commit status ⊇ 8-line whitelist (all 8 present, set-equal on whitelist
+  lines) -> PASS. One extra line: ' M .omo/plans/bug-012-fm-audit.md' — orchestrator
+  plan-state checkbox edit (- [x] 0.), present since BEFORE this todo started
+  (verified at first status capture), NOT created/staged/committed by this todo.
+  Commit content check: git diff HEAD^ HEAD --name-only == .omo/evidence/task-1-bug-012-fm-audit.txt ONLY.
+COMMIT: 12fbe25d864e3f38a9f9bc5a740200e884ccb45b
+RESULT: PASS

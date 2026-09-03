@@ -93,7 +93,7 @@ class GoldenMXU:
         """INT4 weights × INT8 activations → INT32 accumulation.
 
         Bit-exact to hardware: per-tile integer dot product, no float32 intermediate.
-        Weights are pre-unpacked INT4 (range [-8, 7]) in shape (K, N).
+        Weights are packed INT4 (range [-8, 7]) in shape (K, N).
         Activations are INT8 (range [-128, 127]) in shape (M, K).
 
         Tiling matches hardware: 64×64 broadcast-based block.

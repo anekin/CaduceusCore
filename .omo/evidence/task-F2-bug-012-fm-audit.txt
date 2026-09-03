@@ -1,0 +1,92 @@
+# F2 Code Quality Review — bug-012-fm-audit
+# Timestamp: 2026-09-04 (session-local)
+# Reviewer: F2 (code quality)
+
+## Provenance
+git HEAD: 4fb0a3e5b375ace9e6217e66942bfab6597a9d3b
+branch:    bug-012-fm-audit
+python:    Python 3.10.12
+git status --porcelain (pre-review snapshot; 7 parallel-session dirty files untouched):
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+?? .omo/plans/bug-012-fix.md
+?? .omo/evidence/task-F4-bug-012-fm-audit.txt   (parallel F4 session artifact; not mine, untouched)
+
+## 1. Oracle-independence grep (exact plan form, all three files)
+Command (per plan):
+  test "$(grep -c "import sim.models\|import sim.engine\|import sim.timing\|import sim.npu_sim" sim/tests/test_fm_audit_narrow_n.py || true)" -eq 0
+  (same form for test_fm_audit_pack_edges.py, test_fm_abi_contract.py)
+
+Output:
+  narrow_n:   grep -c -> 0 ; test -eq 0 -> PASS
+  pack_edges: grep -c -> 0 ; test -eq 0 -> PASS
+  abi_contract: grep -c -> 0 ; test -eq 0 -> PASS
+
+Alternate-form sweep (defense in depth; zero hits, grep exit=1):
+  grep -n "from sim\.\|import sim\." <three files>  -> no output
+
+Prose false-positive check (inherited wisdom): docstrings mention
+"sim.models / sim.engine / sim.timing / sim.npu_sim" WITHOUT the literal
+"import " prefix, so the acceptance grep cannot false-positive. Verified
+empirically by the zero-count output above.
+F2-ORACLE-GREP: PASS (3/3 files, 0 hits each, both import forms)
+
+## 2. Deterministic seeding
+test_fm_audit_narrow_n.py:46   rng = np.random.default_rng(42)
+test_fm_audit_pack_edges.py:32 SEED = 42 (used at :43,:87,:168 via default_rng(SEED))
+test_fm_abi_contract.py:32     SEED = 42 (used at :57,:98 via default_rng(SEED))
+F2-SEED: PASS (42 everywhere)
+
+## 3. Diff scope: purely additive except golden_executor comment fix
+git diff main..HEAD --stat: 13 files, 1092 insertions(+), 1 deletion(-)
+git diff main..HEAD --name-only (== merge-base form):
+  .omo/{drafts,evidence/task-0..5,notepads,plans}/...  (plan artifacts)
+  sim/tests/test_fm_abi_contract.py       (new, 136 LOC <= 150)
+  sim/tests/test_fm_audit_narrow_n.py     (new, 74 LOC <= 250)
+  sim/tests/test_fm_audit_pack_edges.py   (new, 199 LOC <= 200)
+  sim/golden_executor.py                  (sole modified file)
+rtl/, firmware/, scripts/, gen/, config/, vendored: zero hits.
+No pre-existing test modified (only 3 brand-new files).
+
+golden_executor.py diff (sole change):
+  -        Weights are pre-unpacked INT4 (range [-8, 7]) in shape (K, N).
+  +        Weights are packed INT4 (range [-8, 7]) in shape (K, N).
+One docstring line, comment-only, within class GoldenMXU matmul_int32
+docstring. Verified via git show HEAD:sim/golden_executor.py sed -n '93,98p'.
+F2-DIFF-SCOPE: PASS (additive + 1 comment-only line)
+
+## 4. Per-commit scope (no dirty-file leakage)
+git show --name-only per commit main..HEAD:
+  5396932 chore P0        -> .omo only
+  d6131ea test baseline   -> .omo only (no code change)
+  c216573 narrow-N        -> + test_fm_audit_narrow_n.py, .omo
+  550c1cc pack edges      -> + test_fm_audit_pack_edges.py, .omo
+  9db3b11 ABI contract    -> + test_fm_abi_contract.py, golden_executor.py, .omo
+  4fb0a3e docs disposition-> .omo only
+None of the 7 dirty files appear in any commit. Commit messages match the
+plan's pre-declared Commit: lines.
+F2-COMMIT-SCOPE: PASS
+
+## 5. Contract regex audit — false-positive check
+Plan regex: re.compile(r"\(\([^)]*(?:dim_n|\bN\b)\s*\+\s*63\)\s*//\s*64\)\s*\*\s*64")
+Expected hit set exactly {sim/cocotb_bridge.py, sim/diagnose_data_layout.py}.
+Executed the audit itself:
+  PYTHONPATH=sim python -m pytest sim/tests/test_fm_abi_contract.py::test_dim1_padding_audit_only_in_rtl_drivers -q
+  -> 1 passed in 0.09s
+Hit set == expected set; self-file non-match by design (regex kept escaped
+so the pattern literal cannot match itself; comment at :33-34 documents it).
+F2-PAD-REGEX: PASS (no false positive)
+
+## 6. Code-quality sanity run of the three new files
+PYTHONPATH=sim python -m pytest sim/tests/test_fm_audit_narrow_n.py \
+    sim/tests/test_fm_audit_pack_edges.py sim/tests/test_fm_abi_contract.py -q
+  -> 132 passed in 0.35s
+  (113 narrow-N [112 param + 1 anti-silent-skip] + 13 pack/tile/scale + 6 abi)
+
+## Verdict
+F2: APPROVE

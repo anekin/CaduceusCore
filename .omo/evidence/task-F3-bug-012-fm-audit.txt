@@ -1,0 +1,125 @@
+case_id: task-F3-bug-012-fm-audit
+utc_start: 2026-09-03T17:24:18Z
+utc_end:   2026-09-03T20:25:00Z
+verdict: APPROVE (fresh independent re-run; all 5 verify_ops decision lines PASS;
+  3 new test files 113/13/6 passed exactly as evidence; full suite 2458 passed =
+  todo-1 baseline 2326 + exactly the 3 new files' 132 tests; failure profile
+  byte-identical to todo-1's triaged pre-existing/environment set)
+
+PROVENANCE
+BRANCH: bug-012-fm-audit
+HEAD: 4fb0a3e5b375ace9e6217e66942bfab6597a9d3b docs(bugs): FM audit disposition — none-needed
+PYTHON: Python 3.10.12 (/usr/bin/python)
+PYTEST: pytest 9.0.3
+NUMPY:  numpy 2.2.6
+HOST: local, no EDA (cocotb not installed; gen/ stubs exist)
+LOAD:  load average ~17-21 (48 users) during full-suite run
+NOTE: this reviewer created ZERO source modifications; only this evidence file
+  (untracked, NOT committed per instructions).
+
+COMMAND 1 (plan-prescribed, EXIT=0):
+  PYTHONPATH=sim python3 scripts/verify_ops_func_model.py
+VERBATIM DECISION LINES (all 5, exactly as printed):
+  op05 (attn_score MMUL): PASS
+  op07 (attn_weight MMUL): PASS
+  MMUL VERDICT: ALL PASS
+  op10 (RMSNORM post-attn): PASS
+  FINAL VERDICT: ALL PASS
+Full output byte-comparable to task-1 evidence (same 37 lines: attn_score 64/64
+  INT32 match first-8 [-1676,3149,1232,4502,-4220,-2509,-2080,9973]; attn_weight
+  4096/4096 match; RMSNORM max_abs_err=0.000000 max_rel_err=0.000000).
+COMPARE vs task-1: MATCH (op05/op07/MMUL VERDICT/op10/FINAL VERDICT all PASS).
+
+COMMAND 2 (plan-prescribed, EXIT=0):
+  PYTHONPATH=sim python -m pytest sim/tests/test_fm_audit_narrow_n.py -q
+OUTPUT: 113 passed in 0.22s
+COMPARE vs task-2 evidence: MATCH (evidence: 113 passed in 0.23s; runtime delta
+  trivial). 113 = 112 combos + 1 anti-silent-skip test, confirmed by file read
+  (NS×MS×KS = 7×4×4, rng=default_rng(42), weights passed packed via pack_int4).
+
+COMMAND 3 (plan-prescribed, EXIT=0):
+  PYTHONPATH=sim python -m pytest sim/tests/test_fm_audit_pack_edges.py -q
+OUTPUT: 13 passed in 0.14s
+COMPARE vs task-3 evidence: MATCH (evidence: 13 passed in 0.15s). File read
+  confirms (a) pack zero-fill M∈{4,64}×K∈{64,129} + N∈{2,10,33}×K∈{64,129},
+  (b) tile ceil {1,1,2}/{1,2,3}/{1,2}, (c) _read_scale_hex reshape + MMIO
+  accumulate 2×K=64 == matmul_int32(K=128) INT32 bit-exact.
+
+COMMAND 4 (plan-prescribed, EXIT=0):
+  PYTHONPATH=sim python -m pytest sim/tests/test_fm_abi_contract.py -q
+OUTPUT: 6 passed in 0.11s
+COMPARE vs task-4 evidence: MATCH (evidence: 6 passed in 0.22s). File read
+  confirms (a) DIM1 read-back N∈{2,33,64} + DIM1=33 dense compute no-64-col
+  padding (sentinel tail), (b) dense row-major r*N+c indexing, (c) pad-up regex
+  audit == exactly {sim/cocotb_bridge.py, sim/diagnose_data_layout.py}.
+
+COMMAND 5 (oracle-independence grep, plan acceptance form, all 3 files):
+  test "$(grep -c "import sim.models\|import sim.engine\|import sim.timing\|import sim.npu_sim" sim/tests/test_fm_audit_narrow_n.py || true)" -eq 0
+  (same for test_fm_audit_pack_edges.py, test_fm_abi_contract.py)
+RESULT: 0 / 0 / 0 — PASS (matches task-2/3 evidence claims).
+
+COMMAND 6 (todo-4 regex audit re-run, independent):
+  AUDIT MATCHED SET: ['sim/cocotb_bridge.py', 'sim/diagnose_data_layout.py']
+COMPARE vs task-4 evidence: MATCH (evidence: same set, :2104/:151).
+
+COMMAND 7 (golden_executor.py change audit):
+  git diff $(git merge-base main HEAD) HEAD -- sim/golden_executor.py
+RESULT: exactly ONE line changed — :96 docstring "pre-unpacked INT4" →
+  "packed INT4". Comment-only, matches task-4 claim. No other sim/ file in
+  changeset beyond the 3 new test files + evidence/drafts/plan artifacts.
+
+COMMAND 8 (plain prescribed full pytest — env-gap reproduction, EXIT=2):
+  PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q
+OUTPUT: Interrupted: 9 errors during collection; 10 warnings, 9 errors in 5.78s.
+  Same 9 files as todo-1 Command 1 (4× caduceus_device_protocol gen/-stub gap
+  + 5× cocotb-not-installed). Reproduces task-1 evidence exactly.
+
+COMMAND 9 (full suite, triage env as todo-1 Command 1A — the real QA re-run):
+  PYTHONPATH=sim:gen python -m pytest sim/tests/ sim/timing/tests/ -q --continue-on-collection-errors
+OUTPUT (final line): 13 failed, 2458 passed, 4 skipped, 219 warnings, 11 errors in 10442.96s (2:54:02)
+COMPARE vs task-1 evidence (2326 passed / 13 failed / 4 skipped / 11 errors,
+  219 warnings, 10806.26s):
+  passed delta = 2458 - 2326 = +132 = 113 + 13 + 6 — EXACTLY the three new
+  files' test counts; nothing else moved.
+  FAILED set identical (13/13, same test IDs): test_engines ×8
+  (tensor_core_decode, os_systolic_decode, systolic_vs_mxumodel_decode,
+  systolic_vs_mxumodel_prefill, gmma_decode, gmma_tma_overlap,
+  systolic_npu_sim_baseline, block_npu_sim_baseline) — engine-drift tracebacks
+  reproduced; test_func_model_dut_adapter::test_real_spike_missing_artifacts_fails;
+  test_llama_dependency_lock::test_fetch_script_check_exits_zero_when_commit_matches;
+  test_runtime_real_firmware::TestMissingPrereqFails::test_missing_prereq_fails_flag_is_set;
+  test_spike_toolchain_manifest::test_rejects_incomplete_or_stale_manifest;
+  test_perf_ci::test_run_all_spec_ci_mode.
+  ERROR set identical (11/11): 5× cocotb collection (cv_conv2d_rtl, soc_pcie_dma,
+  wrapper/{mxu,sfu,vector}) + 4× test_soc_differential fixture +
+  2× test_perf_ci module fixture (ci_run_evidence assert returncode==0).
+  4 skipped identical; 219 warnings identical.
+
+COMMAND 10 (perf_ci root-cause confirmation, isolated — EXIT=0):
+  PYTHONPATH=sim:gen python -m pytest "sim/timing/tests/test_perf_ci.py::test_validate_done_claims_1_to_22" "sim/timing/tests/test_perf_ci.py::test_audit_recompute_and_checks" "sim/timing/tests/test_perf_ci.py::test_run_all_spec_ci_mode" -q
+OUTPUT: 3 passed in 91.05s
+FINDING: all three perf_ci items PASS in isolation (the isolated run rewrote
+  .omo/evidence/task-20-uncertainty-kpis.json + task-23-perf-spec-ci.txt,
+  proving the 7 signoff stages completed). Their full-suite failures come from
+  a shared module-scope fixture running the SAME signoff command
+  (run --all-spec --ci-mode --todo-id task-23) which exits non-zero only in
+  the memory-heavy full-suite context — todo-1 traced this to the RSS gate
+  (19979.8MB > 4096.0MB; README blocker #1 "perf-CI 17.4GB RSS 超限" is the
+  same known issue). Suite-context/environment, NOT an FM regression.
+
+DEVIATIONS FROM EARLIER EVIDENCE (all trivial or already-documented):
+1. Runtime deltas on the 3 new files (0.22s/0.14s/0.11s vs 0.23s/0.15s/0.22s)
+   and full suite (2:54:02 vs 3:00:06) — non-deterministic timings only.
+2. Full-suite side effect: this run regenerated the same deterministic evidence
+   artifacts (task-0-signoff-v3-runner.txt, fm-cv-chain.txt,
+   w3-4-mobilenetv3-fm.txt, and — via Command 10 — task-20-uncertainty-kpis.json,
+   task-23-perf-spec-ci.txt). Same category as todo-1's documented side effect;
+   porcelain line set unchanged (7 M + ?? bug-012-fix.md).
+3. Three untracked files task-F{1,2,4}-bug-012-fm-audit.txt appeared during
+   this review — written by the parallel F1/F2/F4 sessions, not by this reviewer.
+
+VERDICT: every plan-prescribed command re-run fresh, all decision lines and
+  counts reproduce the todo-1..4 evidence; full suite confirms +132 passes =
+  the 3 new files and an otherwise identical failure profile (all pre-existing/
+  environment, zero FM-op regressions).
+F3: APPROVE
