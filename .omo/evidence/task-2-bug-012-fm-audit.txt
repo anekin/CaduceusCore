@@ -1,0 +1,49 @@
+# Task 2 (A2-1) — narrow-N attack matrix — bug-012 FM audit
+
+## Provenance
+- timestamp:     2026-09-03T17:09:36Z
+- branch:        bug-012-fm-audit
+- HEAD:          d6131eab329efe6a21f55484717050566b92aca7
+- python:        Python 3.10.12
+- numpy:         2.2.6
+- new file:      sim/tests/test_fm_audit_narrow_n.py (74 LOC, limit 250)
+- rng:           np.random.default_rng(42)
+- weights:       rng.integers(-8, 8, (K, N))     # INT4 full range incl. +7
+- activations:   rng.integers(-128, 128, (M, K)) # INT8 full range incl. +127
+- combos:        N∈{2,10,12,20,33,40,64} × M∈{1,4,32,65} × K∈{1,64,128,129} = 112
+
+## Command (prescribed, ran as-is)
+PYTHONPATH=sim python -m pytest sim/tests/test_fm_audit_narrow_n.py -q
+
+## Result
+........................................................................ [ 63%]
+.........................................                                [100%]
+113 passed in 0.23s
+
+113 = 112 matrix combos + 1 anti-silent-skip test (test_narrow_n_matrix_explicit_112).
+No gen/ PYTHONPATH triage needed: golden_executor transitive imports
+(models.dma, engine.isa) are stdlib-only; PYTHONPATH=sim collected cleanly.
+
+## Under test
+GoldenMXU().matmul_int32(act, GoldenMXU.pack_int4(wgt), M, K, N)
+Weights passed PACKED (implementation unpacks at golden_executor.py:103;
+docstring at :96 saying "pre-unpacked" is stale — raw (K,N) weights would
+corrupt negatives and produce 112 false failures).
+
+## Oracle (independent, in-file)
+np.dot(act.astype(np.int32), wgt.astype(np.int32)) — no packing logic involved.
+Bit-exact per-element compare via np.array_equal; on mismatch the test prints
+(M,K,N), mismatch count, first-bad index, and the first 10 actual vs expected
+elements, then fails.
+
+## Oracle-independence grep (plan acceptance form)
+$ grep -c "import sim.models\|import sim.engine\|import sim.timing\|import sim.npu_sim" sim/tests/test_fm_audit_narrow_n.py || true
+0
+$ test "$(grep -c "import sim.models\|import sim.engine\|import sim.timing\|import sim.npu_sim" sim/tests/test_fm_audit_narrow_n.py || true)" -eq 0 && echo ACCEPTANCE-GREP-OK
+ACCEPTANCE-GREP-OK
+(Note: docstring deliberately avoids the literal "import sim.models" wording so
+the audit grep does not false-positive on prose; only imports present are
+numpy, pytest, golden_executor.)
+
+## Verdict
+FM-HUNT-NARROW-N: clean
