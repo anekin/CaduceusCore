@@ -51,15 +51,15 @@
   Acceptance: 冒烟 import 全绿；pytest≥9；python3 shim 就位；venv 无 root 依赖改动。
   Commit: Y | chore(omo): sz0001 FM-env venv smoke evidence
 
-- [ ] 3. sz0001 新环境基线重跑 + 取证
+- [x] 3. sz0001 新环境基线重跑 + 取证
   What to do: ssh sz0001——`PATH=/home/zhengs/venvs/fmpytest/bin:$PATH PYTHONPATH=sim:gen /home/zhengs/venvs/fmpytest/bin/python -m pytest sim/tests/ sim/timing/tests/ -q --continue-on-collection-errors --ignore=sim/tests/test_cv_conv2d_rtl.py --ignore=sim/tests/test_soc_pcie_dma.py --ignore=sim/tests/wrapper/test_mxu_wrapper.py --ignore=sim/tests/wrapper/test_sfu_wrapper.py --ignore=sim/tests/wrapper/test_vector_wrapper.py`；`PYTHONPATH=sim ~/venvs/fmpytest/bin/python scripts/verify_ops_func_model.py`；三个新 FM 文件单独跑。evidence `.omo/evidence/sz0001-fmenv-baseline.txt`（判定行 `SZ0001-FMENV-BASELINE:` / `SZ0001-FMENV-VERIFY: 5/5 PASS` / 113/13/6）；逐项 triage 并对照 `.omo/evidence/sz0001-baseline-rerun.txt` 算 delta（预期消失：flatbuffers×17、onnx×38、python3×44、soc_diff×4；预期残留：8F、stale pins、glibc 二进制类）。
   Acceptance: 判定行齐全；delta 分类明确；零 FM-op 回归；`git diff HEAD^ HEAD --name-only` == 仅 evidence。
   Commit: Y | chore(omo): sz0001 FM-env baseline re-run evidence
 
-- [ ] 4. AGENTS.md 政策升级为可执行口径
-  What to do: 把 2026-09-04 政策 bullet 改为：FM pytest 在 sz0001 经 `~/venvs/fmpytest`（命令模板：`PATH=~/venvs/fmpytest/bin:$PATH PYTHONPATH=sim:gen ~/venvs/fmpytest/bin/python -m pytest sim/tests/ sim/timing/tests/ -q --continue-on-collection-errors --ignore=<5 cocotb 文件>`）；RTL/VCS/cocotb 仍在 sz0001 py3.11 VCS 流程；spike/llama 依赖测试暂留 sz0002（open item：glibc/toolchain 待齐）。COMMANDS 段同步。只提交 AGENTS.md。
-  Acceptance: `git diff HEAD^ HEAD --name-only` == `AGENTS.md`；政策含命令模板与 open item。
-  Commit: Y | docs(agents): executable FM-pytest policy — sz0001 fmpytest venv + ignore-list (2026-09-04)
+- [ ] 4. 收尾：gguf wheel 补装 + AGENTS.md 可执行政策落档
+  What to do: (a) sz0002 下载 `gguf` 纯 python wheel（pip download --no-deps -d <repo>/build/wheels gguf）→ sz0001 venv `pip install --no-index --find-links` → 重跑 grep `gguf` 命中的测试文件确认 33 个 F-GGUF 转绿（落档）；(b) AGENTS.md 政策 bullet 升级为完整可执行模板（**todo 3 实测关键项全部折入**）：① 命令模板含 **readline-segfault shim**（pytest 9.x 在 sz0001 上 `import readline` 会 segfault——`/tmp/fmpytest-shim/readline.py` 抛 ImportError 的 stub 目录加进 PYTHONPATH，shim 内容写进政策注释）；② `PYTHONPATH=sim:gen`；③ `--ignore` 清单 = D2 五 cocotb + D4 二 onnxruntime（test_cv_e2e/test_gen_cv_golden）+ D3 八 spike/llama/glibc（test_runtime_real_firmware/test_qwen3b_full_forward/test_qwen3b_per_layer_compare/test_qwen3b_software_signoff/test_device_server_fixture/test_func_model_dut_adapter/test_llama_dependency_lock/test_spike_toolchain_manifest）；④ 偏离记录：onnx==1.19.1（glibc 2.17，requirements >=1.22 不可装）、无 onnxruntime、31 个 stripped-env python3 失败属测试设计隔离（非环境缺口）、test_engines 8F 为既有漂移**修而非 ignore**（open item）。只提交 AGENTS.md。
+  Acceptance: gguf 测试转绿证据 + AGENTS.md 含完整模板；`git diff HEAD^ HEAD --name-only` == `AGENTS.md`。
+  Commit: Y | docs(agents): executable sz0001 FM-pytest policy — fmpytest venv + readline shim + ignore list
 
 ## Final verification wave
 - [ ] F1. 合规审计：todos 0-4 各一原子 commit、message 对应、判定行齐全、evidence 存在。

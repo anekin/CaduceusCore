@@ -1,0 +1,333 @@
+case_id: sz0001-fmenv-baseline (todo 3 of .omo/plans/sz0001-fm-env-setup.md)
+utc_start: 2026-09-04T08:06:21Z
+utc_end:   2026-09-04T08:20:21Z
+verdict: honest-baseline (SZ0001-FMENV-VERIFY 5/5 PASS; three FM audit files 113/13/6
+  PASS; full suite 2344 passed / 80 failed / 7 skipped / 11 errors — reproduced
+  twice (376.50s / 363.24s). Every non-pass triaged. All predicted env-family
+  recoveries except two are confirmed: flatbuffers×17 GONE, onnx×38 GONE,
+  cocotb-collection×5 GONE (--ignore), python3×44 PARTIAL (13 gone, 31 remain by
+  test design), soc_differential asyncio×4 REMAIN (task prediction wrong —
+  root cause documented). One NET-NEW family: F-GGUF×33 (venv lacks gguf; not
+  declared in requirements.txt). ZERO FM-op regressions.)
+
+════════════════════════════════════════════════════════════════════════════
+PROVENANCE
+════════════════════════════════════════════════════════════════════════════
+HOST_PROOF (verbatim, via ssh -o BatchMode=yes zhengs@192.168.0.11):
+  $ hostname
+  sz0001
+
+VENV (todo 2 deliverable, pre-existing — nothing installed this run):
+  $ /home/zhengs/venvs/fmpytest/bin/python --version
+  Python 3.12.4
+  $ /home/zhengs/venvs/fmpytest/bin/pytest --version
+  pytest 9.1.1
+  $ /home/zhengs/venvs/fmpytest/bin/python -c "import pytest, flatbuffers, onnx, \
+      pydantic, pytest_asyncio, pytest_timeout, numpy, google.protobuf, yaml; ..."
+  pytest 9.1.1 | numpy 2.2.6 | onnx 1.19.1 | pydantic 2.13.5 | flatbuffers 25.2.10
+  $ ls /home/zhengs/venvs/fmpytest/bin/python3
+  python3 -> python            (venv shim present; PATH resolution verified:
+  PATH=/home/zhengs/venvs/fmpytest/bin:/usr/bin:/bin `which python3`
+  → /home/zhengs/venvs/fmpytest/bin/python3)
+  $ /home/zhengs/venvs/fmpytest/bin/python -c "import onnxruntime"
+  ModuleNotFoundError: No module named 'onnxruntime'   (expected; drives D4)
+  onnx==1.19.1 vs requirements.txt onnx>=1.22: documented deviation from todo 2
+  (≥1.20 cp312 wheels are manylinux_2_27/2_28; glibc 2.17 cannot load them).
+
+REPO (NFS-shared, same path on both hosts):
+  $ cd /home/prj/zhengs/caduceuscore/CaduceusCore && git branch --show-current \
+      && git rev-parse HEAD
+  main
+  75e0605c8c2da658ce51d20ba060bd69f6cb943f
+  (Previous baseline sz0001-baseline-rerun.txt was run at e670129. Repo has
+   moved since; delta below is cross-commit and flagged where relevant.)
+
+LOAD (uptime):
+  start: 16:06:21 up 53 days, 22:32, 15 users, load average: 3.23, 3.76, 4.64
+  end:   16:25:35 up 53 days, 22:51, 15 users, load average: 3.03, 3.92, 4.73
+  (Previous run window had load spiking to 10.00; this window stayed ~3-5.)
+
+════════════════════════════════════════════════════════════════════════════
+CRITICAL ENV FINDING — pytest 9.x segfaults on sz0001 without a shim
+════════════════════════════════════════════════════════════════════════════
+`import readline` SEGFAULTS (exit 139) under EVERY anaconda python on sz0001:
+  - /NAS/Tools/anaconda3/bin/python (3.12.4 base)      → segfault
+  - /NAS/Tools/anaconda3/envs/py3.11/bin/python        → segfault
+  - /home/zhengs/venvs/fmpytest/bin/python (3.12.4)    → segfault
+  - /usr/bin/python (system 2.7.5, system libreadline) → OK
+Fault chain (faulthandler): segfault inside readline.cpython-312 extension
+module init (`create_module`). The extension links anaconda's bundled
+libreadline.so.8 + libtinfow.so.6; objdump shows those libs need only
+GLIBC_2.15 (so it is NOT a simple version gate) — crash occurs in module init
+itself. Root cause is an anaconda-bundled-libreadline vs sz0001 (CentOS 7)
+incompatibility; NOT caused by the new venv.
+pytest 9.1.1's `_pytest.capture._readline_workaround` imports readline
+UNCONDITIONALLY at startup (pytest 7.4.4 had a win32-only guard) → every
+pytest 9.x invocation crashed before collecting a single test.
+WORKAROUND (no installs, no repo changes, ephemeral):
+  /tmp/fmpytest-shim/readline.py contains:
+    raise ImportError("readline import disabled by /tmp/fmpytest-shim shim: "
+      "anaconda readline ext segfaults on sz0001 (pytest 9.x startup workaround)")
+  and PYTHONPATH is extended to `sim:gen:/tmp/fmpytest-shim`. pytest's
+  try/except ImportError then skips the workaround cleanly.
+  Verified: with shim, `python -m pytest sim/tests/test_fm_abi_contract.py -q`
+  → 6 passed (without shim: segfault).
+MANDATORY for todo 4 policy: every FM-pytest command on sz0001 needs the shim
+dir in PYTHONPATH (or a durable equivalent) or it will crash before running.
+
+════════════════════════════════════════════════════════════════════════════
+D4 FILE LIST — grep onnxruntime (sz0001 side, repo root)
+════════════════════════════════════════════════════════════════════════════
+  $ grep -rl onnxruntime sim/tests/ sim/timing/tests/ | grep -v __pycache__ | sort
+  sim/tests/test_cv_e2e.py
+  sim/tests/test_gen_cv_golden.py
+→ 2 source files (only these; sim/timing/tests has zero matches). Both added to
+  the --ignore list per D4. (sim/tests/conftest.py does NOT import onnxruntime;
+  test_mobilenetv3_fm_chain.py imports only `onnx`, which is installed.)
+
+════════════════════════════════════════════════════════════════════════════
+COMMAND 1 — verify_ops_func_model.py (venv) — EXIT 0
+════════════════════════════════════════════════════════════════════════════
+  $ PYTHONPATH=sim /home/zhengs/venvs/fmpytest/bin/python scripts/verify_ops_func_model.py
+5 decision lines:
+  op05 (attn_score MMUL):  PASS
+  op07 (attn_weight MMUL): PASS
+  MMUL VERDICT: ALL PASS
+  op10 (RMSNORM post-attn): PASS
+  FINAL VERDICT: ALL PASS
+(All value comparisons bit-exact: 64/64, 4096/4096 INT32; RMSNORM 2560 FP16
+ max_abs_err=0.000000, max_rel_err=0.000000.)
+
+════════════════════════════════════════════════════════════════════════════
+COMMAND 2 — three new FM audit files (venv + shim)
+════════════════════════════════════════════════════════════════════════════
+  $ .../fmpytest/bin/python -m pytest sim/tests/test_fm_audit_narrow_n.py -q
+  113 passed in 0.18s
+  $ .../fmpytest/bin/python -m pytest sim/tests/test_fm_audit_pack_edges.py -q
+  13 passed in 0.12s
+  $ .../fmpytest/bin/python -m pytest sim/tests/test_fm_abi_contract.py -q
+  6 passed in 0.08s
+(All three also pass inside the full-suite run — none appear in FAILED/ERROR.)
+
+════════════════════════════════════════════════════════════════════════════
+COMMAND 3 — full suite (venv + shim + D4 ignores), run TWICE (reproducibility)
+════════════════════════════════════════════════════════════════════════════
+  $ cd <repo> && env PATH=/home/zhengs/venvs/fmpytest/bin:/usr/bin:/bin \
+      PYTHONPATH=sim:gen:/tmp/fmpytest-shim \
+      /home/zhengs/venvs/fmpytest/bin/python -m pytest sim/tests/ sim/timing/tests/ \
+      -q -rf --continue-on-collection-errors \
+      --ignore=sim/tests/test_cv_conv2d_rtl.py \
+      --ignore=sim/tests/test_soc_pcie_dma.py \
+      --ignore=sim/tests/wrapper/test_mxu_wrapper.py \
+      --ignore=sim/tests/wrapper/test_sfu_wrapper.py \
+      --ignore=sim/tests/wrapper/test_vector_wrapper.py \
+      --ignore=sim/tests/test_cv_e2e.py \
+      --ignore=sim/tests/test_gen_cv_golden.py
+Run 1 (launched 08:06:21Z, setsid+nohup, log /tmp/sz0001-fmenv-baseline.log):
+  80 failed, 2344 passed, 7 skipped, 213 warnings, 11 errors in 376.50s (0:06:16)
+Run 2 (identical command, log /tmp/sz0001-fmenv-baseline-r2.log):
+  80 failed, 2344 passed, 7 skipped, 213 warnings, 11 errors in 363.24s (0:06:03)
+Command deviations from the plan template (all documented):
+  - PYTHONPATH adds /tmp/fmpytest-shim (readline segfault workaround, above).
+  - `-rf` instead of bare -q (to enumerate failures; `-rs` was tried first and
+    suppresses the default FAILED/ERROR listing — run 1 used it, run 2 is
+    authoritative for the list).
+  - 2 extra --ignore entries per D4.
+Previous run took 2916.62s (48:36) at load 3.54→10.00; these runs are ~8x
+faster at load ~3-5. Both completed fully (final summary line present). No
+claim beyond that — per-test timing of the previous run is not recoverable.
+
+════════════════════════════════════════════════════════════════════════════
+DECISION LINES
+════════════════════════════════════════════════════════════════════════════
+SZ0001-FMENV-BASELINE: 2344-passed (80 failed/7 skipped/11 errors)
+SZ0001-FMENV-VERIFY: 5/5 PASS
+SZ0001-FMENV-NARROW-N: 113
+SZ0001-FMENV-PACK: 13
+SZ0001-FMENV-ABI: 6
+
+════════════════════════════════════════════════════════════════════════════
+TRIAGE — 11 errors + 80 failures + 7 skips, all classified (no_silent_skip)
+════════════════════════════════════════════════════════════════════════════
+ERRORS (11):
+  [E-ASYNC ×4] sim/tests/test_soc_differential.py (test_happy_round_trip_apb_mmio,
+    test_detects_divergence_with_injected_data_corruption,
+    test_rejects_evidence_with_mismatched_scenario_hash,
+    test_rejects_missing_golden_observations) — RuntimeError: no current event
+    loop at test_soc_differential.py:42. The file's sync `adapter` fixture calls
+    asyncio.get_event_loop(); pytest-asyncio 1.4.0 (now installed) runs in
+    STRICT mode where a sync fixture has no loop. Installing pytest-asyncio does
+    NOT fix this — the test pattern itself is legacy. Same 4 errors exist on
+    sz0002 (per previous evidence: "same harness gap as sz0002's 4 errors").
+    → PRE-EXISTING test-harness pattern, NOT an env gap, NOT fixed by the venv.
+    Task expected these to vanish — they did not; root cause recorded here.
+  [E-PY3-RESTRICTED ×7] TestBaselineValidate ×4 + TestBaselineNegative ×1
+    (sim/timing/tests/test_perf_baseline.py, setUpClass → create_baseline) and
+    test_validate_done_claims_1_to_22 + test_audit_recompute_and_checks
+    (sim/timing/tests/test_perf_ci.py) — setup errors cascading from
+    FileNotFoundError: 'python3' in sim/timing/qwen_spec_gates.py:335
+    (evaluate_qwen_workload). See F-PY3-RESTRICTED below for the mechanism.
+    Same 7 as the previous run's E-PY3-CASCADE, same root cause, different
+    trigger detail (python3 now exists on the venv PATH but the restricted env
+    deliberately excludes PATH).
+
+FAILURES (80):
+  [F-PY3-RESTRICTED ×24] sim/timing/tests/test_cv_spec_gates.py 10
+    (DualPathComparison mobilenetv3/resnet50/yolov8n, FaultInjectors ×4,
+    SignoffRunnerCLI ×3), test_qwen_spec_gates.py 7 (DualPathComparison ×4,
+    SignoffRunnerCLI ×3), test_perf_baseline.py 2 (TestBaselineCreate ×2),
+    test_perf_ci.py 2, test_uncertainty_kpis.py 3 (KpiReports ×2,
+    SignoffRunnerCLI ×1) — all trace to ONE mechanism: the Path-B oracle reducer
+    is spawned with a DELIBERATELY RESTRICTED env:
+      sim/timing/qwen_spec_gates.py:325-327:
+        env = (path_b_subprocess_env or {}).copy()
+        env.setdefault("PYTHONPATH", "")
+        subprocess.run(["python3", "scripts/reduce_func_model_perf_oracle.py", ...], env=env)
+    (identical pattern at sim/timing/cv_spec_gates.py:190-191). The child gets
+    an env containing ONLY PYTHONPATH — no PATH. execvp then falls back to the
+    C-library default /bin:/usr/bin, where sz0001 has NO python3 (system python
+    is 2.7.5). sz0002 has /usr/bin/python3, so these pass there. The venv's
+    python3 on PATH can never reach these children — a test-design isolation
+    choice (oracle must not import Path-A modules), not an installable gap.
+    Fix options (for todo 4, NOT executed): add a system-level python3 to
+    /usr/bin (requires root) or relax the test env construction.
+    → ENV-DESIGN residual; the task's expectation that all python3×44 vanish
+    was PARTIAL: 13 DID vanish (see DELTA), these 24F+7E remain.
+  [F-GGUF ×33, NET-NEW] test_qwen3b_full_forward.py 23 + test_qwen3b_per_layer_
+    compare.py 10 — ModuleNotFoundError: No module named 'gguf' at
+    sim/signoff/qwen3b_full_forward.py:41. The new venv has NO gguf and
+    requirements.txt does NOT declare it (grep: zero hits). The base anaconda
+    env only had it via ~/.local/lib/python3.12/site-packages (user site), which
+    venvs deliberately exclude. Previously these two files largely PASSED on
+    sz0001 (base env had gguf). → NET-NEW venv wheel-set gap. NOT fixed this
+    run (no installs allowed); flagged for todo 4 (either add gguf to the wheel
+    set or --ignore these two files).
+  [F-GLIBC ×11] NFS-shared binaries built on newer glibc cannot run on sz0001
+    (glibc 2.17):
+      test_runtime_real_firmware.py 9 (TestCorruptedDescriptor ×3,
+      TestEngineClasses ×4, TestChainedCommands ×1, TestReset ×1) — spike
+      binary fails to load (GLIBC_2.32/GLIBCXX_3.4.20) → engine status
+      0x00000000 → asserts fail;
+      test_qwen3b_software_signoff.py 1 (test_gate_supported_single_ops) —
+      build/llama/bin/test-backend-ops loader failure (GateResult exit_code=1);
+      test_device_server_fixture.py 1 (test_full_shape_blk0_passes_without_
+      preserving_server) — "SIGNOFF ERROR: dump_hidden_states failed:
+      `GLIBCXX_3.4.26' not found (required by build/llama/bin/libggml.so.0)".
+      The last one is NEWLY EXPOSED: previously this file failed at the
+      flatbuffers import layer; with flatbuffers fixed it now reaches the llama
+      binary and hits the glibc wall. → HOST-ARTIFACT gap, unchanged family.
+  [F-KNOWN ×12] the pre-existing known set, unchanged from the previous run:
+      test_engines.py 8 (tensor_core_decode, os_systolic_decode,
+      systolic_vs_mxumodel_decode/prefill, gmma_decode, gmma_tma_overlap,
+      systolic_npu_sim_baseline, block_npu_sim_baseline) — 8F engine-drift;
+      test_func_model_dut_adapter.py 1 (test_real_spike_missing_artifacts_fails);
+      test_llama_dependency_lock.py 1 (test_fetch_script_check_exits_zero_when_
+      commit_matches — ggml-backend-reg.cpp not patched);
+      test_runtime_real_firmware.py 1 (test_missing_prereq_fails_flag_is_set —
+      stale --require-spike fixture pin);
+      test_spike_toolchain_manifest.py 1 (test_preflight_detects_missing_abi_
+      header — trips on PreflightError: riscv64-unknown-elf-gcc not found in
+      PATH). → PRE-EXISTING, unchanged.
+
+SKIPPED (7, now enumerated thanks to -rs in run 1):
+  test_cv_mobilenetv3.py:21 ×1 — could not import 'torch' (torch absent from venv)
+  test_spike_forward_tolerance.py ×6 (lines 197/215/228/248/270/286) —
+    tokenizer/gguf dependency unavailable (this file SKIPS GRACEFULLY on
+    missing gguf — contrast with the two signoff files that hard-import).
+  Previous run had 5 unenumerated skips; +2 and different composition —
+  partially env-driven (torch), partially repo delta (e670129→75e0605).
+
+════════════════════════════════════════════════════════════════════════════
+DELTA vs PREVIOUS sz0001 RUN (.omo/evidence/sz0001-baseline-rerun.txt:
+  2316P / 113F / 5S / 21E, 2455 collected, at e670129)
+════════════════════════════════════════════════════════════════════════════
+TOTALS: 2344P (+28) / 80F (−33) / 7S (+2) / 11E (−10). Collected 2442 (−13):
+  −14 from the two D4-ignored files, +1 net from the repo moving e670129→75e0605.
+  Runtime 2916s → 376s / 363s (two reproducible runs; prior window load 10.0).
+
+Expected-to-vanish checklist:
+  flatbuffers ×17 (4E + 13F)  → VANISHED ✓  (flatbuffers 25.2.10; the 4
+      collection-error files test_device_protocol / test_device_protocol_cpp /
+      test_device_server_per_conn / test_runtime_rtl_transport now collect and
+      run; test_cv_device_server.py ×10 + test_device_server_fixture ×2 pass)
+  onnx ×38 (1E + 37F)        → VANISHED ✓  (onnx 1.19.1; mobilenetv3_fm_chain +
+      cv_host_runner/cv_full_graph/cv_command_ir run and PASS; the 14 failures
+      inside the two onnxruntime-dependent files are now excluded by D4 --ignore)
+  python3-subprocess ×44      → PARTIAL ✗  (13 vanished: test_benchmark 1,
+      func_model_signoff_runner 3, func_model_signoff_docs 2, PathBSubprocess
+      suites 7 — those spawn with full env and now find the venv python3;
+      31 remain: 24F + 7E per F-PY3-RESTRICTED/E-PY3-RESTRICTED above)
+  soc_differential asyncio ×4 → REMAIN ✗  (E-ASYNC; pytest-asyncio 1.4.0 strict
+      mode vs legacy test pattern — installing the plugin does not and cannot
+      fix this; the task's expectation was incorrect, documented honestly)
+  onnx collection ×1         → VANISHED ✓  (subsumed by onnx install)
+
+Expected-to-remain checklist:
+  8F test_engines drift       → REMAINS ✓ (identical 8)
+  spike/llama glibc failures  → REMAINS ✓ (11 now: 9+1 as before +1 newly
+      exposed in test_device_server_fixture)
+  stale fixture pins          → REMAINS ✓ (runtime missing_prereq,
+      spike_toolchain_manifest, func_model_dut_adapter, llama_dependency_lock)
+  riscv-gcc preflight         → REMAINS ✓ (spike_toolchain_manifest)
+
+NET-NEW (not in either expectation):
+  F-GGUF ×33 — venv lacks gguf; requirements.txt does not declare it.
+  F-GLIBC +1 net — device_server_fixture newly exposed (was flatbuffers-masked);
+      offset by test_qwen3b_full_forward's 4 previous GLIBC failures now being
+      masked by the gguf import error (reclassified, not fixed).
+VERDICT: ZERO FM-op/functional regressions. The FM truth anchors all hold:
+  verify_ops 5/5, FM audit files 113+13+6 (individually AND inside the full
+  suite), and no golden-executor/FM-core test appears in FAILED/ERROR.
+
+════════════════════════════════════════════════════════════════════════════
+RECOMMENDATION FOR TODO 4 — D3-family files for a permanently-green sz0001
+daily baseline (NOT ignored in this run; listed with rationale only)
+════════════════════════════════════════════════════════════════════════════
+spike/llama/firmware/glibc-dependent (D3 family — --ignore candidates):
+  1. sim/tests/test_runtime_real_firmware.py        10F — spike binary
+       (GLIBC_2.32/GLIBCXX_3.4.20), firmware ELF, stale --require-spike pin
+  2. sim/tests/test_qwen3b_full_forward.py          23F — build/llama/bin/cli
+       absent from shared tree + hard `import gguf`
+  3. sim/tests/test_qwen3b_per_layer_compare.py     10F — hard `import gguf` +
+       llama artifacts
+  4. sim/tests/test_qwen3b_software_signoff.py       1F — test-backend-ops
+       (GLIBC_2.29/GLIBCXX_3.4.20)
+  5. sim/tests/test_device_server_fixture.py         1F — dump_hidden_states /
+       libggml.so (GLIBCXX_3.4.26)
+  6. sim/tests/test_func_model_dut_adapter.py        1F — spike artifact check
+  7. sim/tests/test_llama_dependency_lock.py         1F — llama.cpp tree state
+  8. sim/tests/test_spike_toolchain_manifest.py      1F — riscv64-unknown-elf-gcc
+       preflight
+  NOT needed: sim/tests/test_spike_forward_tolerance.py — skips gracefully (gguf).
+Non-D3 files that ALSO block a green baseline (flag separately for todo 4):
+  - sim/tests/test_soc_differential.py              4E — asyncio legacy pattern
+  - sim/timing/tests/test_{qwen,cv}_spec_gates.py, test_perf_baseline.py,
+    test_perf_ci.py, test_uncertainty_kpis.py       24F+7E — Path-B
+    restricted-env python3 spawn (needs python3 in /bin or /usr/bin)
+  - sim/tests/test_engines.py                       8F — REAL engine-drift bugs:
+    fix, never ignore
+  - venv gap: gguf (and torch if test_cv_mobilenetv3 matters) absent from the
+    wheel set; requirements.txt declares neither.
+  - readline shim (CRITICAL ENV FINDING above) must be part of the policy's
+    command template.
+
+════════════════════════════════════════════════════════════════════════════
+SIDE-EFFECT NOTE (honest)
+════════════════════════════════════════════════════════════════════════════
+The full suite deterministically regenerates evidence artifacts. `git status
+--porcelain` before and after this todo is UNCHANGED (same 7 M + 2 ?? lines):
+   M .omo/evidence/task-0-signoff-v3-runner.txt
+   M .omo/evidence/task-20-uncertainty-kpis.json
+   M .omo/evidence/task-23-perf-spec-ci.txt
+   M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+   M .omo/notepads/phase6-rtl-verification/learnings.md
+   M build/evidence/fm-cv-chain.txt
+   M build/evidence/w3-4-mobilenetv3-fm.txt
+  ?? .omo/plans/bug-012-fix.md
+  ?? .omo/plans/verification-env-sz0001.md
+None of those were staged/edited by this executor. No VCS/make targets were run
+(pytest only). Nothing was installed (no pip, no network).
+
+COMMIT_PLAN: chore(omo): sz0001 FM-env baseline re-run evidence
+STAGED_PATHS (explicit pathspec only, no git add ./-A):
+  .omo/evidence/sz0001-fmenv-baseline.txt
