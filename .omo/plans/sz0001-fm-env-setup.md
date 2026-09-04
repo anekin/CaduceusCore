@@ -46,7 +46,7 @@
   Acceptance: `ls ~/venvs/wheels/*.whl | wc -l` ≥ 目标集数量；清单含版本号；判定行 `FMENV-WHEELS: <n>-wheels ready`。
   Commit: Y | chore(omo): sz0001 FM-env offline wheel set
 
-- [ ] 2. sz0001 建 venv + 离线安装 + 冒烟
+- [x] 2. sz0001 建 venv + 离线安装 + 冒烟
   What to do: ssh sz0001——`/NAS/Tools/anaconda3/bin/python -m venv ~/venvs/fmpytest`；在 `<repo>/build/wheels` 写 `requirements-fmpytest.txt`（**onnx 钉死 ==1.19.1**：T1 实测 ≥1.20 的 cp312 wheel 只有 manylinux_2_27/2_28，glibc 2.17 不可加载——与仓库 requirements.txt `>=1.22` 的偏离在 evidence 与 AGENTS.md 政策中记录）；`~/venvs/fmpytest/bin/pip install --no-index --find-links <repo>/build/wheels -r <repo>/build/wheels/requirements-fmpytest.txt`；冒烟脚本：`~/venvs/fmpytest/bin/python -c "import pytest, flatbuffers, onnx, pydantic, pytest_asyncio, pytest_timeout, numpy, google.protobuf, yaml; print(pytest.__version__, numpy.__version__, onnx.__version__)"` 且 `pytest --version`≥9；`ls ~/venvs/fmpytest/bin/python3` 存在。落档 `.omo/evidence/sz0001-fmenv-venv.txt`（判定行 `FMENV-VENV: ready`）。
   Acceptance: 冒烟 import 全绿；pytest≥9；python3 shim 就位；venv 无 root 依赖改动。
   Commit: Y | chore(omo): sz0001 FM-env venv smoke evidence
