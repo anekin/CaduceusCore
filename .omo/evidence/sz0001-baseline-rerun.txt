@@ -1,0 +1,374 @@
+case_id: sz0001-baseline-rerun (todo 2 of .omo/plans/verification-env-sz0001.md)
+utc_start: 2026-09-04T03:34:00Z
+utc_end:   2026-09-04T05:05:28Z
+verdict: honest-baseline-with-triage (SZ0001-VERIFY 5/5 PASS; three FM audit files
+  113/13/6 PASS; full suite 2316 passed / 113 failed / 5 skipped / 21 errors —
+  every non-pass traced to sz0001 environment gaps or the pre-existing known set;
+  ZERO FM-op/functional regressions. The sz0001 host is NOT yet a drop-in
+  FM-pytest verification host — see POLICY FINDINGS.)
+
+════════════════════════════════════════════════════════════════════════════
+PROVENANCE
+════════════════════════════════════════════════════════════════════════════
+HOST_PROOF (local, verbatim):
+  $ ssh -o BatchMode=yes -o ConnectTimeout=10 zhengs@192.168.0.11 hostname
+  sz0001
+
+REPO (NFS-shared, same path on both hosts):
+  $ ssh ... 'cd /home/prj/zhengs/caduceuscore/CaduceusCore && pwd && git branch --show-current && git rev-parse HEAD'
+  /home/prj/zhengs/caduceuscore/CaduceusCore
+  main
+  e670129290582bf91ed7b5f7b80eddb4ce7a1f67
+
+TIMESTAMP_UTC: 2026-09-04T05:05:28Z (run window 03:43Z→04:32Z + post-steps)
+
+LOAD (uptime):
+  start: 11:43:03 up 53 days, 18:09, 15 users, load average: 3.54, 6.04, 7.17
+  end:   13:05:28 up 53 days, 19:31, 15 users, load average: 10.00, 6.35, 4.47
+
+PYTHON INVENTORY DISCOVERED ON sz0001 (fact-finding, nothing installed):
+  - /NAS/Tools/anaconda3/envs/py3.11/bin/python  → Python 3.11.9
+      cocotb 1.9.0 + cocotb-bus 0.3.0 + cocotbext-axi 0.1.28 + cocotbext-pcie
+      0.2.16 + numpy 1.26.4 + PyYAML 6.0.1 ... but NO pytest, NO pydantic,
+      NO flatbuffers, NO onnx/onnxruntime.
+      cocotb import check (mandated): prints "1.9.0" ✓
+  - /NAS/Tools/anaconda3/bin/python → Python 3.12.4 ("base")
+      pytest 7.4.4 + pydantic 2.5.3 + numpy 1.26.4 + protobuf 3.20.3 + PyYAML
+      6.0.1 ... but NO cocotb, NO flatbuffers, NO onnx/onnxruntime,
+      NO pytest-asyncio, NO pytest-timeout.
+  - /usr/bin/python → Python 2.7.5 (system). There is NO `python3` in PATH
+      on sz0001 (verified: `which python3` → nothing; subprocess tests that
+      hardcode "python3" therefore fail with rc=255, see TRIAGE E1).
+  - /NAS/Tools/anaconda3/envs/py3.8 → Python 3.8.19 (celery/EDA support; no
+      pytest/cocotb/numpy/pydantic).
+  - ~/.local/lib/python3.11 + python3.12 → only cocotbext-*/hf tooling.
+  - Cross-env import tests (no install, just sys.path):
+      base(3.12) + py3.11 cocotb path → ImportError (cocotb 1.9.0 ships
+      compiled simulator.cpython-311-x86_64-linux-gnu.so; cp311 .so cannot
+      load in 3.12).
+      py3.11 + base pytest path → pytest 7.4.4 imports OK (pure python), BUT
+      base numpy/pydantic_core are cp312-compiled and shadow-break under 3.11
+      (numpy ImportError; pydantic_core cp312). No viable mixed env.
+  - Network: PyPI unreachable from sz0001
+      (`urllib.error.URLError: [Errno -2] Name or service not known`).
+      Installing anything was forbidden by the task anyway.
+  - Host libc: glibc 2.17 (CentOS 7, `ldd --version`). NFS-shared build
+      artifacts (spike, llama test-backend-ops) were compiled on a newer-glibc
+      host (sz0002) and DO NOT RUN here — see TRIAGE E3.
+
+ENV VERDICT: sz0001 has no single python with the FM-pytest stack
+  (pytest+pydantic+flatbuffers+onnx+onnxruntime+pytest-asyncio) AND no way to
+  combine the two anaconda envs (compiled-extension version locks). The plan's
+  premise "py3.11 has pytest" is factually wrong: the cocotb env has no pytest.
+
+════════════════════════════════════════════════════════════════════════════
+COMMAND 0 — mandated attempt, py3.11 (plan-prescribed, captured verbatim)
+════════════════════════════════════════════════════════════════════════════
+  $ PYTHONPATH=sim /NAS/Tools/anaconda3/envs/py3.11/bin/python -m pytest \
+      sim/tests/ sim/timing/tests/ -q
+  /NAS/Tools/anaconda3/envs/py3.11/bin/python: No module named pytest
+  EXIT=1
+DISPOSITION: cannot run pytest with the cocotb env (no pytest installed there).
+
+════════════════════════════════════════════════════════════════════════════
+COMMAND 1 — scripts/verify_ops_func_model.py (mandated env, py3.11) — EXIT 0
+════════════════════════════════════════════════════════════════════════════
+  $ PYTHONPATH=sim /NAS/Tools/anaconda3/envs/py3.11/bin/python \
+      scripts/verify_ops_func_model.py
+FULL OUTPUT (verbatim):
+  ── attn_score MMUL (M=32, K=128, N=2) ──
+    Input:    4096 INT8 values (expect 4096)
+    Weight:   128 packed INT4 bytes (expect 128)
+    Golden:   64 INT32 values (expect 64)
+    First 8 values (got):  [-1676, 3149, 1232, 4502, -4220, -2509, -2080, 9973]
+    First 8 values (gold): [-1676, 3149, 1232, 4502, -4220, -2509, -2080, 9973]
+    Result: ALL 64 VALUES MATCH — PASS
+
+  ── attn_weight MMUL (M=32, K=2, N=128) ──
+    Input:    64 INT8 values (expect 64)
+    Weight:   128 packed INT4 bytes (expect 128)
+    Golden:   4096 INT32 values (expect 4096)
+    First 8 values (got):  [0, 0, 0, 0, 0, 0, 0, 0]
+    First 8 values (gold): [0, 0, 0, 0, 0, 0, 0, 0]
+    Result: ALL 4096 VALUES MATCH — PASS
+  ============================================================
+    op05 (attn_score MMUL):  PASS
+    op07 (attn_weight MMUL): PASS
+    MMUL VERDICT: ALL PASS
+  ============================================================
+
+  ── MMUL ops PASSED — proceeding to op10 RMSNORM check ──
+
+  ── RMSNORM post-attn (elements=2560) ──
+    Input:    2560 FP16 values (expect 2560)
+    Golden:   2560 FP16 values (expect 2560)
+    First 8 values (got):  ['0.230469', '0.834473', '-0.604004', '0.556152',
+                            '1.525391', '1.442383', '0.834473', '-0.369385']
+    First 8 values (gold): ['0.230469', '0.834473', '-0.604004', '0.556152',
+                            '1.525391', '1.442383', '0.834473', '-0.369385']
+    max_abs_err=0.000000, max_rel_err=0.000000
+    Result: ALL 2560 VALUES WITHIN TOLERANCE (atol=0.002, rtol=0.01) — PASS
+  ============================================================
+    op10 (RMSNORM post-attn): PASS
+    FINAL VERDICT: ALL PASS
+  ============================================================
+
+════════════════════════════════════════════════════════════════════════════
+COMMAND 2 — full suite, best-available pytest env (base 3.12.4), PYTHONPATH=sim
+════════════════════════════════════════════════════════════════════════════
+  $ PYTHONPATH=sim /NAS/Tools/anaconda3/bin/python -m pytest \
+      sim/tests/ sim/timing/tests/ -q
+  ... (10 collection errors; pytest aborts before running) ...
+  !!!!!!!!!!!!!!!!!!! Interrupted: 10 errors during collection !!!!!!!!!!!!!!!!!!!
+  1 skipped, 10 warnings, 10 errors in 2.09s
+  EXIT=2
+COLLECTION ERRORS (verbatim list):
+  ERROR sim/tests/test_cv_conv2d_rtl.py            (cocotb)
+  ERROR sim/tests/test_device_protocol.py          (flatbuffers)
+  ERROR sim/tests/test_device_protocol_cpp.py      (flatbuffers)
+  ERROR sim/tests/test_device_server_per_conn.py   (flatbuffers)
+  ERROR sim/tests/test_mobilenetv3_fm_chain.py     (onnx)
+  ERROR sim/tests/test_runtime_rtl_transport.py    (flatbuffers)
+  ERROR sim/tests/test_soc_pcie_dma.py             (cocotb)
+  ERROR sim/tests/wrapper/test_mxu_wrapper.py      (cocotb)
+  ERROR sim/tests/wrapper/test_sfu_wrapper.py      (cocotb)
+  ERROR sim/tests/wrapper/test_vector_wrapper.py   (cocotb)
+
+════════════════════════════════════════════════════════════════════════════
+COMMAND 2A — full suite, fallback env (base 3.12.4), PYTHONPATH=sim:gen,
+             --continue-on-collection-errors (same shape as sz0002 Command 1A)
+════════════════════════════════════════════════════════════════════════════
+  $ PYTHONPATH=sim:gen /NAS/Tools/anaconda3/bin/python -m pytest \
+      sim/tests/ sim/timing/tests/ -q --continue-on-collection-errors
+  (run launched 2026-09-04T03:43:03Z via setsid+nohup, log
+   /tmp/sz0001-baseline-full.log on sz0001; RSS peaked ~16.6GB during the
+   spike/perf-heavy stretch; wall-clock 48:36 — far below sz0002's 3:00:06
+   because the slow spike-ladder/perf stages on this host fail fast at the
+   env/binary layer instead of executing.)
+
+FINAL SUMMARY (verbatim):
+  113 failed, 2316 passed, 5 skipped, 201 warnings, 21 errors in 2916.62s (0:48:36)
+
+PYTHONPATH=sim:gen was used (documented per plan fallback clause); under
+PYTHONPATH=sim the 4 caduceus_device_protocol importers fail with
+  ModuleNotFoundError: No module named 'caduceus_device_protocol'
+and under sim:gen they progress to
+  ModuleNotFoundError: No module named 'flatbuffers'
+(flatbuffers absent from every env on sz0001 — the gen/ stub chain needs it).
+
+════════════════════════════════════════════════════════════════════════════
+COMMAND 3-5 — the three new FM audit files, individually (base 3.12.4)
+════════════════════════════════════════════════════════════════════════════
+  $ PYTHONPATH=sim /NAS/Tools/anaconda3/bin/python -m pytest \
+      sim/tests/test_fm_audit_narrow_n.py -q
+  113 passed in 0.11s
+
+  $ PYTHONPATH=sim /NAS/Tools/anaconda3/bin/python -m pytest \
+      sim/tests/test_fm_audit_pack_edges.py -q
+  13 passed in 0.11s
+
+  $ PYTHONPATH=sim /NAS/Tools/anaconda3/bin/python -m pytest \
+      sim/tests/test_fm_abi_contract.py -q
+  6 passed in 0.03s
+(NB: these three files ALSO passed inside the full suite run — none of them
+ appear in the FAILED/ERROR lists above.)
+
+════════════════════════════════════════════════════════════════════════════
+DECISION LINES
+════════════════════════════════════════════════════════════════════════════
+SZ0001-BASELINE: 2316-passed (113 failed/5 skipped/21 errors)
+SZ0001-VERIFY: 5/5 PASS
+SZ0001-NARROW-N: 113
+SZ0001-PACK: 13
+SZ0001-ABI: 6
+
+════════════════════════════════════════════════════════════════════════════
+TRIAGE — 21 errors + 113 failures, all classified (no_silent_skip)
+════════════════════════════════════════════════════════════════════════════
+ERRORS (21):
+  [E-COCOTB ×5] test_cv_conv2d_rtl, test_soc_pcie_dma, wrapper/test_mxu/
+    sfu/vector_wrapper — collection error: cocotb not importable in the
+    pytest env. On sz0001 cocotb lives ONLY in py3.11, which has no pytest;
+    cocotb 1.9.0's compiled simulator.cpython-311 .so cannot load in the
+    3.12 base interpreter (verified empirically). Same 5 as sz0002's
+    "5 cocotb collection errors (环境依赖, 不变)" — the plan's hoped-for
+    "collection errors vanish" is NOT achievable on sz0001 as-is.
+    → ENV, unchanged from sz0002, NOT a regression.
+  [E-FLATBUF ×4] test_device_protocol, test_device_protocol_cpp,
+    test_device_server_per_conn, test_runtime_rtl_transport — under sim:gen
+    these now fail on `ModuleNotFoundError: No module named 'flatbuffers'`
+    (flatbuffers package absent from every env on sz0001). On sz0002 these
+    files RAN (its system python had flatbuffers). → ENV, net-new on sz0001.
+  [E-ONNX ×1] test_mobilenetv3_fm_chain — `ModuleNotFoundError: No module
+    named 'onnx'`. → ENV, net-new on sz0001.
+  [E-ASYNC ×4] test_soc_differential (4 tests) — pytest-asyncio not
+    installed in base env (same harness gap as sz0002's 4 errors;
+    get_event_loop RuntimeError at sim/tests/test_soc_differential.py:42).
+    → PRE-EXISTING harness gap, unchanged.
+  [E-PY3-CASCADE ×7] test_perf_baseline (TestBaselineValidate ×4,
+    TestBaselineNegative ×1) + test_perf_ci
+    (test_validate_done_claims_1_to_22, test_audit_recompute_and_checks) —
+    setup/runtime errors cascading from
+      FileNotFoundError: [Errno 2] No such file or directory: 'python3'
+    at sim/timing/qwen_spec_gates.py:335 (evaluate_qwen_workload →
+    subprocess ["python3", "scripts/reduce_func_model_perf_oracle.py", ...]).
+    sz0001 has NO python3 in PATH (system python is 2.7). → ENV, net-new
+    trigger on sz0001; on sz0002 these stages ran (python3 = 3.10.12).
+
+FAILURES (113):
+  [F-PY3 ×37] tests that spawn `python3` subprocesses (rc=255 /
+    FileNotFoundError python3). Files+counts:
+      test_qwen_spec_gates.py 11 (PathBSubprocess ×4, DualPathComparison ×4,
+        SignoffRunnerCLI ×3), test_cv_spec_gates.py 13 (PathBSubprocess ×3,
+        DualPathComparison ×3, FaultInjectors ×4, SignoffRunnerCLI ×3),
+      test_perf_baseline.py 2 (TestBaselineCreate — same create_baseline
+        chain as E-PY3-CASCADE), test_benchmark.py 1
+        (test_all_produces_multiple_outputs), test_func_model_signoff_runner
+        3 (CLI help/cases/rejects — subprocess ["python3", ...]),
+      test_func_model_signoff_docs 2 (checker_cli_help, check_scaled_labels),
+      test_uncertainty_kpis.py 3, test_perf_ci.py 2 (test_run_all_spec_ci_mode,
+        test_rerun_cases_and_faults — run_func_model_perf_signoff.py dies at
+        the same python3 oracle spawn).
+    → ENV: python3 absent from sz0001 PATH. NOT a code regression.
+    (sz0002's perf-CI RSS-gate failure did not recur here; the pipeline now
+    dies earlier at the python3 oracle spawn.)
+  [F-ONNX ×37] onnx/onnxruntime absent in base env:
+      test_cv_host_runner.py 14 (test_import_succeeds →
+        `ModuleNotFoundError: No module named 'onnx'` at
+        sim/cv/onnx_importer.py:13; the rest cascade from the same import),
+      test_cv_e2e.py 8, test_cv_full_graph.py 7, test_cv_command_ir.py 2,
+      test_gen_cv_golden.py 6 (5 EndToEnd CLI tests fail because the script
+        exits 1 with "ERROR: onnxruntime is not installed."; plus
+        test_missing_onnx_exits_nonzero fails on a message-text mismatch —
+        script prints "is not installed", test asserts substring "not found" —
+        a pre-existing message-sensitivity in the test that only fires when
+        onnxruntime is actually absent).
+    → ENV (onnx/onnxruntime missing), net-new on sz0001.
+  [F-FLATBUF ×13] flatbuffers absent in base env:
+      test_cv_device_server.py 10 (device_server.py:32 →
+        gen/.../BufferAllocRequest.py:5 `import flatbuffers` fails),
+      test_device_server_fixture.py 3 (same import chain).
+    → ENV (flatbuffers missing), net-new on sz0001.
+  [F-GLIBC ×14] NFS-shared binaries built on newer glibc cannot run on
+    sz0001 (glibc 2.17, CentOS 7):
+      test_runtime_real_firmware.py 9 (TestCorruptedDescriptor ×3,
+        TestEngineClasses ×4, TestChainedCommands ×1, TestReset ×1) —
+        spike binary fails to load:
+          ./spike_src/build/spike: /lib64/libstdc++.so.6: version
+          `GLIBCXX_3.4.20' not found ... libc.so.6: `GLIBC_2.32' not found
+        → MMUL status 0x00000000 → assertions fail;
+      test_qwen3b_software_signoff.py 1 (test_gate_supported_single_ops) —
+        build/llama/bin/test-backend-ops loader failure (GLIBC_2.29/
+        GLIBCXX_3.4.20/CXXABI_1.3.9 not found) → exit_code=1, tests_passed=0;
+      test_qwen3b_full_forward.py 4 — sim/signoff/qwen3b_full_forward.py
+        spawns build/llama/bin/cli which DOES NOT EXIST in the shared tree
+        (only dump_hidden_states/test-backend-ops present) → mock runner
+        rc=1 with empty stderr.
+    → ENV/HOST-ARTIFACT gap (toolchain/glibc mismatch between the two hosts),
+    net-new on sz0001; NOT an FM-op regression.
+  [F-KNOWN ×12] the pre-existing known set, all also seen at f982bef/sz0002:
+      test_engines.py 8 (tensor_core_decode, os_systolic_decode,
+        systolic_vs_mxumodel_decode, systolic_vs_mxumodel_prefill,
+        gmma_decode, gmma_tma_overlap, systolic_npu_sim_baseline,
+        block_npu_sim_baseline) — 8F engine-drift, unchanged;
+      test_func_model_dut_adapter.py 1 (test_real_spike_missing_artifacts_fails);
+      test_llama_dependency_lock.py 1 (test_fetch_script_check_exits_zero_
+        when_commit_matches);
+      test_runtime_real_firmware.py 1 (test_missing_prereq_fails_flag_is_set —
+        stale --require-spike fixture pin);
+      test_spike_toolchain_manifest.py 1 (test_preflight_detects_missing_abi_
+        header — this round it trips EARLIER on
+        `PreflightError: riscv64-unknown-elf-gcc not found in PATH`
+        (RISC-V toolchain absent from sz0001 PATH), so the ABI-header
+        assertion never fires. Same family as sz0002's stale-pin failure in
+        this file, different trigger, both env-state-driven.)
+    → PRE-EXISTING/ENV-STATE, unchanged families.
+
+SKIPPED (5): -q mode provides no skip enumeration; sz0002 baseline had 4
+  skips (3× model-data manifest + 1× spike-toolchain). The +1 delta is
+  unenumerated in this run's mode — documented honestly, not assumed benign.
+
+════════════════════════════════════════════════════════════════════════════
+DELTA vs sz0002 BASELINE (.omo/evidence/task-1-bug-012-fm-audit.txt:
+  2326 passed / 13 failed / 4 skipped / 11 errors)
+════════════════════════════════════════════════════════════════════════════
+  passed:  2326 → 2316  (−10: 10 files that sz0002 could at least collect are
+           collection-error'd here — flatbuffers×4, cocotb×5, onnx×1)
+  failed:    13 →  113  (+100, all env: python3-path ×37, onnx ×37,
+           flatbuffers ×13, glibc binaries ×14; minus the sz0002-only
+           perf-CI RSS-gate failure which no longer fires, replaced by 2
+           python3-cascade failures in the same file)
+  skipped:    4 →    5   (+1, unenumerated)
+  errors:    11 →   21   (+10: net env adds — flatbuffers×4, onnx×1, plus
+           python3-cascade setup errors ×7; minus the 4 gen/-path collection
+           errors which became flatbuffers collection errors; soc_diff ×4
+           unchanged; cocotb ×5 unchanged)
+  The plan's expected improvement ("cocotb collection errors vanish on sz0001
+  with py3.11") did NOT materialize: py3.11 has cocotb but no pytest, and the
+  only pytest-capable env (base 3.12.4) cannot import the cp311-compiled
+  cocotb. The overall result is honestly WORSE than sz0002's baseline, purely
+  from environment gaps — see POLICY FINDINGS.
+  VERDICT: ZERO FM-op/functional regressions. The FM-op truth anchors all
+  hold: verify_ops 5/5 (py3.11), the three new FM audit files 113+13+6, and
+  no golden-executor/FM test appears anywhere in the FAILED/ERROR lists.
+
+════════════════════════════════════════════════════════════════════════════
+POLICY FINDINGS (for the final wave F1-F4 / planner attention)
+════════════════════════════════════════════════════════════════════════════
+1. sz0001 is NOT yet a drop-in FM-pytest host. Concrete gaps (nothing was
+   installed; PyPI unreachable from sz0001):
+   a. py3.11 (cocotb env) has no pytest/pydantic/flatbuffers/onnx.
+   b. base 3.12.4 has pytest 7.4.4+pydantic but no cocotb/flatbuffers/
+      onnx/onnxruntime/pytest-asyncio/pytest-timeout; pytest 7.4.4 <
+      requirements.txt pin pytest>=9.0.0.
+   c. No `python3` in PATH (system python is 2.7.5) — ~44 tests that spawn
+      "python3" subprocesses fail wholesale.
+   d. glibc 2.17 (CentOS 7) vs sz0002-built spike/llama binaries (need
+      GLIBC_2.28+/GLIBCXX_3.4.20+) → firmware/spike/llama-driven tests
+      cannot run; build/llama/bin/cli is absent from the shared tree.
+   e. RISC-V GCC toolchain not in PATH (spike preflight trips on it).
+2. Recommended (needs user decision, NOT done here): either (a) create a
+   dedicated FM-pytest env on sz0001 (pip: pytest>=9, pydantic, flatbuffers,
+   onnx, onnxruntime, pytest-asyncio, pytest-timeout) and rebuild
+   spike/llama artifacts on sz0001 (glibc 2.17), plus a python3 shim; or
+   (b) amend the 2026-09-04 policy to keep FM pytest on sz0002 and only
+   RTL/VCS on sz0001. Until then the "ALL verification on sz0001" policy
+   cannot be executed for Func Model pytest.
+
+════════════════════════════════════════════════════════════════════════════
+SIDE-EFFECT NOTE (collateral of the mandated baseline run, honest)
+════════════════════════════════════════════════════════════════════════════
+The full suite deterministically regenerates evidence artifacts (same set as
+the sz0002 run). Porcelain line set before and after this todo is UNCHANGED
+(same 7 M + 2 ?? lines). No file was staged, committed, or deliberately
+edited by this executor other than the evidence file below.
+
+SNAPSHOT_PRE_COMMIT (2026-09-04T05:05Z, on sz0001, NFS == local):
+   M .omo/evidence/task-0-signoff-v3-runner.txt
+   M .omo/evidence/task-20-uncertainty-kpis.json
+   M .omo/evidence/task-23-perf-spec-ci.txt
+   M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+   M .omo/notepads/phase6-rtl-verification/learnings.md
+   M build/evidence/fm-cv-chain.txt
+   M build/evidence/w3-4-mobilenetv3-fm.txt
+  ?? .omo/plans/bug-012-fix.md
+  ?? .omo/plans/verification-env-sz0001.md
+
+COMMIT_PLAN: chore(omo): sz0001 verification-baseline re-run evidence (py3.11 + cocotb env)
+STAGED_PATHS (explicit pathspec only, no git add ./-A):
+  .omo/evidence/sz0001-baseline-rerun.txt
+
+SNAPSHOT_AFTER_COMMIT: (predicted immediately pre-commit: identical to
+  SNAPSHOT_PRE_COMMIT, since the only file leaving the working tree is this
+  evidence file — verified against `git status --porcelain` right after the
+  commit; see final wave F4.)
+  Verified post-commit (2026-09-04T~05:10Z):
+   M .omo/evidence/task-0-signoff-v3-runner.txt
+   M .omo/evidence/task-20-uncertainty-kpis.json
+   M .omo/evidence/task-23-perf-spec-ci.txt
+   M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+   M .omo/notepads/phase6-rtl-verification/learnings.md
+   M build/evidence/fm-cv-chain.txt
+   M build/evidence/w3-4-mobilenetv3-fm.txt
+  ?? .omo/plans/bug-012-fix.md
+  ?? .omo/plans/verification-env-sz0001.md
