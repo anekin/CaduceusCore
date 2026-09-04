@@ -10,7 +10,7 @@
 ## Scope
 ### Must have
 1. **P0 快速确认**（用户已给出结论，只需实证落档）：sz0002 `curl -sI https://pypi.org/simple/` 通 + `pip download` 快测成功；NFS 共享 marker 测试（sz0002 建 `~/venvs/wheels/.probe-*`，sz0001 可见）；sz0002 `python3 -m pip list` 抓已装包版本；`ls ~/.cache/pip` 缓存盘点。落档 `.omo/evidence/sz0001-fmenv-p0.txt`（判定行 `FMENV-P0: network=yes nfs=shared wheels=<n-cached>`）。
-2. **wheel 集齐**（T1）：sz0002（网络已证 yes）上 `pip download --only-binary=:all: --platform manylinux2014_x86_64 --python-version 312` 目标集（pytest>=9、pytest-asyncio、pytest-timeout、pydantic>=2、numpy>=2.2、flatbuffers==25.2.10、onnx>=1.22、onnxruntime==1.23.0、protobuf>=3.20.2,<6、pyyaml）→ 落到 **`<repo>/build/wheels`（gitignore 覆盖、NFS 两机可见；P0 实测 `~/venvs` 不跨机共享，故不用家目录）**；备选：scp 到 sz0001 `~/venvs/wheels`。
+2. **wheel 集齐**（T1）：sz0002（网络已证 yes）上 `pip download`（编译包走 `--platform manylinux2014_x86_64 --implementation cp --python-version 312 --abi cp312 --only-binary=:all:`，纯 python 包直接下载 py3-none-any）目标集（pytest>=9、pytest-asyncio、pytest-timeout、pydantic>=2、numpy>=2.2、flatbuffers==25.2.10、onnx>=1.22、protobuf>=3.20.2,<6、pyyaml、typing_extensions、packaging、pluggy、iniconfig、exceptiongroup、anyio 等传递依赖）→ 落到 **`<repo>/build/wheels`（gitignore 覆盖、NFS 两机可见；P0 实测 `~/venvs` 不跨机共享，故不用家目录）**。**onnxruntime==1.23.0 明确排除**（glibc 硬阻塞：PyPI 无 manylinux2014 wheel，2_27/2_28 版在 sz0001 glibc 2.17 不可加载——实测落档；其依赖测试文件留 sz0002，同 D2 模式）。
 3. **venv 搭建**（T2）：sz0001 上用 base 3.12.4 `python -m venv ~/venvs/fmpytest`；`pip install --no-index --find-links ~/venvs/wheels -r <固定版本清单>`；冒烟：`pytest --version`≥9 + import 全绿（flatbuffers/onnx/onnxruntime/pydantic/pytest_asyncio/pytest_timeout/numpy）+ `bin/python3` 存在（python3 shim 由 venv 自带）。
 4. **基线重跑**（T3）：sz0001 上 `PATH=~/venvs/fmpytest/bin:$PATH PYTHONPATH=sim:gen ~/venvs/fmpytest/bin/python -m pytest sim/tests/ sim/timing/tests/ -q --continue-on-collection-errors --ignore=<5 个 cocotb 文件>` + `verify_ops_func_model.py` 五判定行 + 三个新 FM 文件（113/13/6）；evidence `.omo/evidence/sz0001-fmenv-baseline.txt` 判定行 `SZ0001-FMENV-BASELINE: <n>-passed (<m> failed/<k> skipped/<e> errors)` / `SZ0001-FMENV-VERIFY: 5/5 PASS`；逐项 triage（期望残留仅：8F 漂移、stale spike pin、glibc 二进制类、5 cocotb collection error——`--ignore` 后应消失）。
 5. **政策落档**（T4）：AGENTS.md 政策 bullet 升级为可执行口径：FM pytest 在 sz0001 用 `~/venvs/fmpytest`（给出确切命令模板）+ `--ignore` 5 cocotb 文件；RTL/VCS/cocotb 仍 sz0001 py3.11 流程；spike/llama 依赖测试暂留 sz0002（open item，待工具链齐备后单独计划）。
@@ -25,6 +25,7 @@
 - **D1 wheel 源**（**用户已确认 2026-09-04**）：sz0002 可访问外网（P0 实测 network=yes）；wheel 在 sz0002 pip 下载到 **`<repo>/build/wheels`（NFS 共享树内、gitignore 覆盖）**——P0 实测 `~/venvs` 不跨机共享（sz0001 看不到 marker），sz0001 从仓库树同一路径直接安装，无需搬运。
 - **D2 5 个 cocotb pytest 文件**：`test_cv_conv2d_rtl.py`、`test_soc_pcie_dma.py`、`wrapper/test_{mxu,sfu,vector}_wrapper.py` 在 FM pytest 基线中经 `--ignore` 排除——它们当前在 sz0002（无 cocotb）和 sz0001（pytest 环境无 cocotb）都从未跑过，属 RTL/cocotb 验证域（VCS 流程 py3.11），不作为 FM 基线的一部分。
 - **D3 spike/llama 依赖测试**（glibc 2.17 vs 2.28 二进制不兼容）：暂留 sz0002，记 open item；sz0001 本地重建（gcc 9.3.1 devtoolset-9）放后续独立计划。NFS 共享树上的 `spike_src/build` 同一路径无法同时服务两机，重建需先解决产物路径分离（届时再定）。
+- **D4 onnxruntime 依赖测试**（**计划新增，同 D2/D3 模式**）：onnxruntime 无 glibc 2.17 兼容 wheel（manylinux2014 不存在、2_27/2_28 需 glibc≥2.27），其依赖测试文件（以 grep `onnxruntime` 命中的 sim/tests 文件为准，预计 test_gen_cv_golden 等）随 D2 的 --ignore 清单一并排除、留 sz0002；onnx 本身（manylinux2010 wheel，glibc 2.12+ 可加载）照常安装。
 
 ## Execution strategy
 - Wave 1：P0 探测（worker；失败路径 STOP 上报）。
@@ -40,13 +41,13 @@
   Acceptance: evidence 存在且四问均有实测答案；`FMENV-P0:` 判定行存在。
   Commit: Y | chore(omo): sz0001 FM-env P0 probe evidence
 
-- [ ] 1. wheel 集齐（pytest≥9 全家桶 + onnx 栈，目标 cp312/manylinux2014）
+- [x] 1. wheel 集齐（pytest≥9 全家桶 + onnx 栈，目标 cp312/manylinux2014）
   What to do: 按 P0 结果选源；优先 `pip download --only-binary=:all: --platform manylinux2014_x86_64 --implementation cp --python-version 312 --no-deps -d ~/venvs/wheels <pkg>` 逐个下载（pytest、pytest-asyncio、pytest-timeout、pydantic、numpy、flatbuffers、onnx、onnxruntime、protobuf、pyyaml、typing_extensions、packaging、pluggy、iniconfig、exceptiongroup、idna、anyio、coloredlogs、flatbuffers 依赖等——先 `--no-deps` 逐个，缺失依赖补下）；若源无 PyPI 但有已装环境：`pip download` 同版或 `pip wheel` 从 site-packages 打包。落档 wheel 清单 `.omo/evidence/sz0001-fmenv-wheels.txt`。
   Acceptance: `ls ~/venvs/wheels/*.whl | wc -l` ≥ 目标集数量；清单含版本号；判定行 `FMENV-WHEELS: <n>-wheels ready`。
   Commit: Y | chore(omo): sz0001 FM-env offline wheel set
 
 - [ ] 2. sz0001 建 venv + 离线安装 + 冒烟
-  What to do: ssh sz0001——`/NAS/Tools/anaconda3/bin/python -m venv ~/venvs/fmpytest`；`~/venvs/fmpytest/bin/pip install --no-index --find-links ~/venvs/wheels -r ~/venvs/wheels/requirements-fmpytest.txt`（按 T1 清单固定版本写该文件，放在 wheels 目录）；冒烟脚本：`~/venvs/fmpytest/bin/python -c "import pytest, flatbuffers, onnx, onnxruntime, pydantic, pytest_asyncio, pytest_timeout, numpy; print(pytest.__version__, numpy.__version__)"` 且 `pytest --version`≥9；`ls ~/venvs/fmpytest/bin/python3` 存在。落档 `.omo/evidence/sz0001-fmenv-venv.txt`（判定行 `FMENV-VENV: ready`）。
+  What to do: ssh sz0001——`/NAS/Tools/anaconda3/bin/python -m venv ~/venvs/fmpytest`；在 `<repo>/build/wheels` 写 `requirements-fmpytest.txt`（**onnx 钉死 ==1.19.1**：T1 实测 ≥1.20 的 cp312 wheel 只有 manylinux_2_27/2_28，glibc 2.17 不可加载——与仓库 requirements.txt `>=1.22` 的偏离在 evidence 与 AGENTS.md 政策中记录）；`~/venvs/fmpytest/bin/pip install --no-index --find-links <repo>/build/wheels -r <repo>/build/wheels/requirements-fmpytest.txt`；冒烟脚本：`~/venvs/fmpytest/bin/python -c "import pytest, flatbuffers, onnx, pydantic, pytest_asyncio, pytest_timeout, numpy, google.protobuf, yaml; print(pytest.__version__, numpy.__version__, onnx.__version__)"` 且 `pytest --version`≥9；`ls ~/venvs/fmpytest/bin/python3` 存在。落档 `.omo/evidence/sz0001-fmenv-venv.txt`（判定行 `FMENV-VENV: ready`）。
   Acceptance: 冒烟 import 全绿；pytest≥9；python3 shim 就位；venv 无 root 依赖改动。
   Commit: Y | chore(omo): sz0001 FM-env venv smoke evidence
 

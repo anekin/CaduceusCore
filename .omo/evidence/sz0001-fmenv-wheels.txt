@@ -1,0 +1,103 @@
+SZ0001 FM-ENV WHEEL SET EVIDENCE (todo 1)
+========================================
+host: sz0002
+date: 2026-09-04T06:57:48Z (session start) / wheels complete 2026-09-04T15:34:43+08
+HEAD: 4b2f96b63fac068204008cd77dda74e6f2b674d2
+tool: pip 26.0.1 (system python 3.10.12 — platform flags REQUIRED for cp312); wget; curl
+target: CPython 3.12 venv on sz0001 (CentOS 7, glibc 2.17)
+  -> compiled wheels must be cp312 + manylinux2014 (glibc 2.17) or older manylinux tags
+dest: <repo>/build/wheels  (NFS-shared repo tree; gitignored via .git/info/exclude —
+  .gitignore has no blanket build/ rule; wheels NOT committed, verified with git check-ignore)
+
+Pass 1 - compiled packages (cp312, glibc 2.17 target)
+-----------------------------------------------------
+$ python3 -m pip download --only-binary=:all: --platform manylinux2014_x86_64 --implementation cp --python-version 312 --abi cp312 --no-deps -d build/wheels "numpy>=2.2.0" "pydantic_core" "onnx>=1.22.0" "protobuf>=3.20.2,<6" "pyyaml>=5.4.0"
+
+OUTCOME (onnx>=1.22.0, exact error):
+Collecting numpy>=2.2.0
+  Using cached numpy-2.2.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (62 kB)
+Collecting pydantic_core
+  Downloading pydantic_core-2.48.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.5 kB)
+ERROR: Could not find a version that satisfies the requirement onnx>=1.22.0 (from versions: 1.16.0, 1.16.1, 1.16.2, 1.17.0, 1.18.0, 1.19.0, 1.19.1rc1, 1.19.1)
+ERROR: No matching distribution found for onnx>=1.22.0
+
+ROOT CAUSE (PyPI simple-index tag audit, https://pypi.org/simple/onnx/):
+- onnx <= 1.19.1 cp312 x86_64: onnx-1.19.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl  (glibc 2.17 OK)
+- onnx >= 1.20.0 cp312 x86_64: onnx-1.2x.x-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ONLY  (glibc >= 2.27)
+RESOLUTION: pinned onnx==1.19.1 (latest glibc-2.17-compatible release; NOT a 2_2x substitution).
+PLAN IMPACT: requirements.txt pin onnx>=1.22.0 is not installable on sz0001 from any PyPI wheel;
+todo-2 pinned list MUST use onnx==1.19.1 (same glibc blocker class as onnxruntime, newly discovered).
+
+Pass 2 - pure-python packages
+-----------------------------
+$ python3 -m pip download --only-binary=:all: --no-deps -d build/wheels "pytest>=9.0.0" pytest-asyncio pytest-timeout "pydantic>=2.0.0" flatbuffers==25.2.10 typing_extensions packaging pluggy iniconfig exceptiongroup anyio idna sniffio
+RC=0, 13 wheels saved (versions below).
+
+Pass 3 - onnxruntime exclusion proof (glibc 2.17 blocker)
+----------------------------------------------------------
+$ python3 -m pip download --only-binary=:all: --platform manylinux2014_x86_64 --implementation cp --python-version 312 --abi cp312 --no-deps -d build/wheels onnxruntime==1.23.0
+ERROR: Could not find a version that satisfies the requirement onnxruntime==1.23.0 (from versions: none)
+ERROR: No matching distribution found for onnxruntime==1.23.0
+RC=1 -> PyPI ships onnxruntime 1.23.0 cp312 only as manylinux_2_27/2_28 (glibc >= 2.27);
+no manylinux2014 wheel exists -> NOT installable/loadable on sz0001 glibc 2.17. Excluded per plan D4.
+
+WHEEL SET (18 files)
+--------------------
+compiled (cp312 + glibc<=2.17 tags):
+  16,527,618  numpy-2.2.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+   2,074,576  pydantic_core-2.48.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+  18,218,271  onnx-1.19.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+     320,478  protobuf-5.29.6-cp38-abi3-manylinux2014_x86_64.whl   (abi3: loads on cp312)
+     767,542  PyYAML-6.0.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+pure-python (py3-none-any):
+     386,536  pytest-9.1.1-py3-none-any.whl
+      16,930  pytest_asyncio-1.4.0-py3-none-any.whl
+      14,382  pytest_timeout-2.4.0-py3-none-any.whl
+     472,589  pydantic-2.13.5-py3-none-any.whl
+      30,953  flatbuffers-25.2.10-py2.py3-none-any.whl
+      45,571  typing_extensions-4.16.0-py3-none-any.whl
+     129,956  packaging-26.3-py3-none-any.whl
+      20,538  pluggy-1.6.0-py3-none-any.whl
+       7,484  iniconfig-2.3.0-py3-none-any.whl
+      16,740  exceptiongroup-1.3.1-py3-none-any.whl
+     131,908  anyio-4.15.0-py3-none-any.whl
+      68,550  idna-3.19-py3-none-any.whl
+      10,235  sniffio-1.3.1-py3-none-any.whl
+
+sha256 (alphabetical):
+  7ecd9937369ffce8bba0b5ccb9b3a9507b101b0ed50256aecfbab27e6c2acb99  anyio-4.15.0-py3-none-any.whl
+  a7a39a3bd276781e98394987d3a5701d0c4edffb633bb7a5144577f82c773598  exceptiongroup-1.3.1-py3-none-any.whl
+  ebba5f4d5ea615af3f7fd70fc310636fbb2bbd1f566ac0a23d98dd412de50051  flatbuffers-25.2.10-py2.py3-none-any.whl
+  815e7be7a7806d54abb586dc943addc79e8b2ee16915059658cbeff4b1b43bf4  idna-3.19-py3-none-any.whl
+  f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12  iniconfig-2.3.0-py3-none-any.whl
+  fd83c01228a688733f1ded5201c678f0c53ecc1006ffbc404db9f7a899ac6249  numpy-2.2.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+  485d3674d50d789e0ee72fa6f6e174ab81cb14c772d594f992141bd744729d8a  onnx-1.19.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+  d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c  packaging-26.3-py3-none-any.whl
+  e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746  pluggy-1.6.0-py3-none-any.whl
+  e3387f44798ac1106af0233c04fb8abf543772ff241169946f698b3a9a3d3ab9  protobuf-5.29.6-cp38-abi3-manylinux2014_x86_64.whl
+  346a034f080da3755d8e9cb5e00e8b07de1d39e4f6e2c87d8ab7cafa0b269a73  pydantic-2.13.5-py3-none-any.whl
+  3463fb9e857362b896f345f6c4349d20b817865a05eb570bf838d7c406536412  pydantic_core-2.48.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+  37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c  pytest-9.1.1-py3-none-any.whl
+  933ca923a23075a87fb7070c0ec272a6848489824d887c85c812670932835aa1  pytest_asyncio-1.4.0-py3-none-any.whl
+  c42667e5cdadb151aeb5b26d114aff6bdf5a907f176a007a30b940d3d865b5c2  pytest_timeout-2.4.0-py3-none-any.whl
+  2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2  sniffio-1.3.1-py3-none-any.whl
+  481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8  typing_extensions-4.16.0-py3-none-any.whl
+  80bab7bfc629882493af4aa31a4cfa43a4c57c83813253626916b8c7ada83476  PyYAML-6.0.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+
+SANITY
+------
+$ ls build/wheels | grep -c 'manylinux_2_2'   -> 0   (no glibc>=2.27 wheel present)
+$ git check-ignore build/wheels               -> build/wheels  (gitignored; nothing under build/ staged)
+$ ls build/wheels | wc -l                     -> 18
+18/18 wheels pass zip-integrity + WHEEL metadata tag audit (compiled tags: cp312-cp312-manylinux_2_17/manylinux2014; protobuf cp38-abi3).
+
+NETWORK NOTE (provenance)
+-------------------------
+sz0002->PyPI link was degraded during this run (~15KB/s sustained, intermittent stalls);
+pip's large-body transfers stalled repeatedly (no resume support). Compiled wheel BODIES were
+therefore fetched via `wget -c` (resume) with retry-loop + sha256 verification against the
+PyPI simple-index hashes — byte-identical to the files pip resolves for the same target;
+all 5 compiled wheels SHA256-OK. Pure-python pass and both error captures completed via
+pip download directly. /tmp scratch files cleaned after evidence capture.
+
+FMENV-WHEELS: 18-wheels ready (onnxruntime excluded: glibc 2.17 no manylinux2014 wheel)
