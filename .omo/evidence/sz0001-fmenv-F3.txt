@@ -1,0 +1,123 @@
+case_id: sz0001-fmenv-F3 (F3 of .omo/plans/sz0001-fm-env-setup.md — manual re-verification on sz0001)
+utc_start: 2026-09-04T08:46:25Z
+utc_end:   2026-09-04T08:47:28Z
+commit:    19127e9d2f73044b4467f4b6e43c15c908918d45 (main; = todo-4 policy commit)
+verdict: APPROVE. All F3 checks executed ON sz0001, verbatim, against the committed
+  policy template. venv live state matches evidence exactly (pytest 9.1.1 / numpy
+  2.2.6 / onnx 1.19.1 / pydantic 2.13.5 / flatbuffers 25.2.10; gguf importable).
+  Readline shim reproduced; three FM audit files 132/132 passed (113+13+6), no
+  segfault, under BOTH the task template (PYTHONPATH=sim:/tmp/fmpytest-shim) and
+  the committed AGENTS.md template (PYTHONPATH=sim:gen:/tmp/fmpytest-shim).
+  verify_ops_func_model.py 5/5 decision lines PASS, exit 0. No installs, no VCS,
+  no repo changes other than this untracked evidence file.
+
+════════════════════════════════════════════════════════════════════════════
+F3-CHECK 1 — HOST PROOF (ssh -o BatchMode=yes -o ConnectTimeout=10 zhengs@192.168.0.11)
+════════════════════════════════════════════════════════════════════════════
+$ hostname && uname -n && date -u && uptime
+sz0001
+sz0001
+Fri Sep  4 08:46:25 UTC 2026
+ 16:46:25 up 53 days, 23:12, 15 users,  load average: 2.55, 2.97, 3.68
+→ hostname = sz0001 ✓ (matches baseline provenance; load 2.55/2.97/3.68, lower
+  than the baseline window's ~3-5 — nothing contended this run).
+
+REPO (NFS-shared, same path both hosts):
+$ cd /home/prj/zhengs/caduceuscore/CaduceusCore && git branch --show-current && git rev-parse HEAD
+main
+19127e9d2f73044b4467f4b6e43c15c908918d45
+$ git log --oneline -3
+19127e9 docs(agents): executable sz0001 FM-pytest policy — fmpytest venv + readline shim + ignore list
+12c04b5 chore(omo): sz0001 FM-env baseline re-run evidence
+75e0605 chore(omo): sz0001 FM-env venv smoke evidence
+→ HEAD = the todo-4 commit. Baseline evidence ran at 75e0605, gguf evidence at
+  12c04b5 — repo has advanced per the plan's commit strategy (expected; none of
+  the advanced commits touch the files under F3 re-verification).
+
+════════════════════════════════════════════════════════════════════════════
+F3-CHECK 2 — VENV LIVE STATE (verbatim)
+════════════════════════════════════════════════════════════════════════════
+$ /home/zhengs/venvs/fmpytest/bin/python -c "import pytest, flatbuffers, onnx, \
+    pydantic, pytest_asyncio, pytest_timeout, numpy, gguf, yaml; \
+    print(pytest.__version__, numpy.__version__, onnx.__version__, \
+    pydantic.__version__, flatbuffers.__version__)"
+9.1.1 2.2.6 1.19.1 2.13.5 25.2.10
+$ /home/zhengs/venvs/fmpytest/bin/pytest --version
+pytest 9.1.1
+$ ls -l /home/zhengs/venvs/fmpytest/bin/python3
+lrwxrwxrwx 1 zhengs zhengs 6 Sep  4 15:41 /home/zhengs/venvs/fmpytest/bin/python3 -> python
+→ Matches sz0001-fmenv-baseline.txt VENV block EXACTLY: pytest 9.1.1, numpy
+  2.2.6, onnx 1.19.1, pydantic 2.13.5, flatbuffers 25.2.10. `gguf` imports
+  cleanly (todo 4a deliverable, sz0001-fmenv-gguf.txt A2) — zero import errors.
+
+════════════════════════════════════════════════════════════════════════════
+F3-CHECK 3 — READLINE SHIM + THREE FM AUDIT FILES (task template, verbatim)
+════════════════════════════════════════════════════════════════════════════
+$ mkdir -p /tmp/fmpytest-shim && printf 'raise ImportError("readline unavailable")\n' \
+    > /tmp/fmpytest-shim/readline.py && cat /tmp/fmpytest-shim/readline.py
+raise ImportError("readline unavailable")
+$ env PATH=/home/zhengs/venvs/fmpytest/bin:/usr/bin:/bin \
+    PYTHONPATH=sim:/tmp/fmpytest-shim \
+    /home/zhengs/venvs/fmpytest/bin/python -m pytest \
+    sim/tests/test_fm_audit_narrow_n.py sim/tests/test_fm_audit_pack_edges.py \
+    sim/tests/test_fm_abi_contract.py -q
+........................................................................ [ 54%]
+............................................................             [100%]
+132 passed in 0.28s
+EXIT_CODE=0
+→ 113 + 13 + 6 = 132 ✓. No segfault (shim present in PYTHONPATH). Exit 0.
+
+CROSS-CHECK — exact committed AGENTS.md policy template
+(PYTHONPATH=sim:gen:/tmp/fmpytest-shim; the only difference from the task
+template is the `gen` path element):
+$ env PATH=/home/zhengs/venvs/fmpytest/bin:/usr/bin:/bin \
+    PYTHONPATH=sim:gen:/tmp/fmpytest-shim \
+    /home/zhengs/venvs/fmpytest/bin/python -m pytest \
+    sim/tests/test_fm_audit_narrow_n.py sim/tests/test_fm_audit_pack_edges.py \
+    sim/tests/test_fm_abi_contract.py -q
+........................................................................ [ 54%]
+............................................................             [100%]
+132 passed in 0.28s
+EXIT_CODE=0
+→ Both variants identical: 132/132. Runtime delta vs baseline per-file runs
+  (0.18+0.12+0.08=0.38s) is a single-invocation artifact, not a change.
+
+════════════════════════════════════════════════════════════════════════════
+F3-CHECK 4 — verify_ops_func_model.py (verbatim decision lines)
+════════════════════════════════════════════════════════════════════════════
+$ env PYTHONPATH=sim /home/zhengs/venvs/fmpytest/bin/python scripts/verify_ops_func_model.py
+  op05 (attn_score MMUL):  PASS
+  op07 (attn_weight MMUL): PASS
+  MMUL VERDICT: ALL PASS
+  op10 (RMSNORM post-attn): PASS
+  FINAL VERDICT: ALL PASS
+EXIT_CODE=0
+(Detail: MMUL 64/64 + 4096/4096 INT32 bit-exact; RMSNORM 2560 FP16
+  max_abs_err=0.000000, max_rel_err=0.000000 — identical to baseline COMMAND 1.)
+→ 5/5 decision lines PASS ✓, matching sz0001-fmenv-baseline.txt COMMAND 1 verbatim.
+
+════════════════════════════════════════════════════════════════════════════
+COMPARISON WITH PRIOR EVIDENCE
+════════════════════════════════════════════════════════════════════════════
+- sz0001-fmenv-baseline.txt: VENV block + verify_ops + 113/13/6 all reproduce
+  exactly. Load and per-invocation runtime are the only deltas (both benign).
+- sz0001-fmenv-gguf.txt: gguf 0.19.0 import confirmed live in the venv (no
+  "No module named 'gguf'").
+- AGENTS.md policy template: re-executed verbatim (sim:gen variant) → 132/132.
+- Deviations noted: (1) repo HEAD advanced 75e0605 → 19127e9 (planned commits);
+  (2) task template's PYTHONPATH omits `gen` — both variants pass identically;
+  (3) load lower than baseline window. None affect the F3 verdict.
+
+SIDE-EFFECT NOTE: git status --porcelain on sz0001 shows the same pre-existing
+7 M + 2 ?? files recorded in sz0001-fmenv-baseline.txt SIDE-EFFECT NOTE
+(task-0-signoff-v3-runner.txt, task-20-uncertainty-kpis.json, task-23-perf-spec-
+ci.txt, 2× notepads, fm-cv-chain.txt, w3-4-mobilenetv3-fm.txt, plans/bug-012-fix.md,
+plans/verification-env-sz0001.md). None staged/edited by this reviewer. This F3
+run adds only this untracked evidence file. Nothing installed, no pip, no network,
+no VCS targets, no push.
+
+DECISION LINES
+F3-HOST: sz0001 confirmed (ssh BatchMode, hostname=sz0001)
+F3-VENV: pytest 9.1.1 | numpy 2.2.6 | onnx 1.19.1 | pydantic 2.13.5 | flatbuffers 25.2.10 | gguf OK
+F3-AUDIT: 132/132 passed (113+13+6), no segfault, exit 0 — both PYTHONPATH variants
+F3-VERIFY-OPS: 5/5 PASS, exit 0

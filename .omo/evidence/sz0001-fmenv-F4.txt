@@ -1,0 +1,98 @@
+FM-ENV F4 SCOPE-FIDELITY REVIEW EVIDENCE
+========================================
+host: sz0002
+date: 2026-09-04T08:47:11Z
+HEAD: 19127e9d2f73044b4467f4b6e43c15c908918d45 (branch: main)
+reviewer: F4 (scope-fidelity review of .omo/plans/sz0001-fm-env-setup.md)
+commit range: origin/main..HEAD (7 commits; ahead 7, not pushed)
+
+REVIEW SCOPE
+------------
+Commits under review (new, this effort):
+  4b2f96b chore(omo): sz0001 FM-env P0 probe evidence
+  671eb62 chore(omo): sz0001 FM-env offline wheel set
+  75e0605 chore(omo): sz0001 FM-env venv smoke evidence
+  12c04b5 chore(omo): sz0001 FM-env baseline re-run evidence
+  19127e9 docs(agents): executable sz0001 FM-pytest policy
+Older commits of the same effort inside the unpushed range:
+  b93a9ea chore(omo): sz0001 verification-baseline re-run evidence (py3.11 + cocotb env)
+  e670129 docs(agents): verification-environment policy (2026-09-04 directive)
+
+CHECK 1 — PER-COMMIT FILE LISTS (each diffed against its parent)
+----------------------------------------------------------------
+$ git show --name-only --format="%h %s" <commit>
+4b2f96b:  .omo/evidence/sz0001-fmenv-p0.txt
+          .omo/plans/sz0001-fm-env-setup.md
+671eb62:  .omo/evidence/sz0001-fmenv-wheels.txt
+          .omo/plans/sz0001-fm-env-setup.md
+75e0605:  .omo/evidence/sz0001-fmenv-venv.txt
+          .omo/plans/sz0001-fm-env-setup.md
+12c04b5:  .omo/evidence/sz0001-fmenv-baseline.txt
+          .omo/plans/sz0001-fm-env-setup.md
+19127e9:  .omo/evidence/sz0001-fmenv-gguf.txt
+          .omo/plans/sz0001-fm-env-setup.md
+          AGENTS.md
+b93a9ea:  .omo/evidence/sz0001-baseline-rerun.txt          (older)
+e670129:  AGENTS.md                                        (older)
+Every file is a member of the whitelist {.omo/evidence/sz0001-fmenv-*.txt,
+.omo/plans/sz0001-fm-env-setup.md, .omo/evidence/sz0001-baseline-rerun.txt,
+.omo/plans/verification-env-sz0001.md, AGENTS.md, .omo/evidence/task-*-bug-012-*}.
+PASS
+
+CHECK 2 — BUILD/WHEELS NOT COMMITTED
+------------------------------------
+$ git log --name-only -8 | grep -c 'build/wheels'
+0
+$ grep -n wheels .git/info/exclude
+7:build/wheels/
+No commit references build/wheels/; the directory is excluded via
+.git/info/exclude (line 7), consistent with wheels living only in the
+gitignored build/ tree on sz0001.
+PASS
+
+CHECK 3 — NO PRODUCT-CODE DIRS IN NEW COMMITS
+---------------------------------------------
+$ git show --name-only --format= 4b2f96b 671eb62 75e0605 12c04b5 19127e9 \
+    | grep -cE '^(rtl|sim|firmware|scripts|gen|config)/'
+0
+$ git diff --name-only origin/main..HEAD | grep -cE '^(rtl|sim|firmware|scripts|gen|config)/'
+0
+Zero hits for rtl/, sim/, firmware/, scripts/, gen/, config/ across the five
+new commits and across the full 7-commit range. AGENTS.md is the only
+non-.omo file; its deltas are documentation/policy only (executable pytest
+command template + verification-environment policy note), no product code.
+Aggregate diffstat: 8 files changed, 1201 insertions(+), 2 deletions(-).
+PASS
+
+CHECK 4 — PUSH STATUS
+---------------------
+$ git branch -r --contains HEAD
+(empty)
+$ git branch -a --contains HEAD
+* main
+$ git status --short --branch
+## main...origin/main [ahead 7]
+No remote ref contains HEAD; the 7 commits exist only on local main.
+NOT PUSHED.
+PASS
+
+NOTE — Dangling commit 718e86f
+------------------------------
+718e86f ("chore(omo): sz0001 FM-env baseline re-run evidence") is not an
+ancestor of HEAD (rewritten as 12c04b5). Its evidence file content is byte-
+identical to 12c04b5's; only plan-file wording differs (5 insertions,
+5 deletions). It is not in history, not pushed, and its touched paths fall
+within the whitelist. No action required.
+
+NOTE — Pre-existing working-tree state (not part of this review)
+----------------------------------------------------------------
+Working tree contains uncommitted modifications/untracked files predating
+this review (e.g. .omo/evidence/task-0-signoff-v3-runner.txt, build/evidence/*,
+.omo/plans/bug-012-fix.md, .omo/plans/verification-env-sz0001.md). None were
+touched by this review; none are part of the commits under review.
+
+F4 RESULT: APPROVE
+------------------
+All four checks PASS: per-commit files within whitelist, no build/wheels in
+commits, zero product-directory changes, and no remote push.
+VERDICT: APPROVE

@@ -1,0 +1,150 @@
+case_id: sz0001-fmenv-F2 (final wave F2 of .omo/plans/sz0001-fm-env-setup.md)
+utc: 2026-09-04T08:50:45Z
+repo HEAD: 19127e9d2f73044b4467f4b6e43c15c908918d45 (main)
+reviewer: F2 (code/artifact-quality review)
+scope: AGENTS.md policy bullet + COMMANDS template correctness and
+  copy-pasteability; wheel-set version sanity; ignore-list correctness vs
+  D2/D3/D4; evidence authenticity (no fabricated outputs). No product-file
+  edits made; only this evidence file written; no commits.
+verdict: APPROVE
+
+════════════════════════════════════════════════════════════════════════════
+1. AGENTS.md TEMPLATE — INTERNALLY CONSISTENT, COPY-PASTEABLE
+════════════════════════════════════════════════════════════════════════════
+- COMMANDS block (lines 77-96) is valid bash with correct line continuations.
+- --ignore count: 15 entries = D2 five cocotb (test_cv_conv2d_rtl,
+  test_soc_pcie_dma, wrapper/test_{mxu,sfu,vector}_wrapper) + D4 two
+  onnxruntime (test_cv_e2e, test_gen_cv_golden) + D3 eight spike/llama/glibc
+  (test_runtime_real_firmware, test_qwen3b_full_forward,
+  test_qwen3b_per_layer_compare, test_qwen3b_software_signoff,
+  test_device_server_fixture, test_func_model_dut_adapter,
+  test_llama_dependency_lock, test_spike_toolchain_manifest). All 15 files
+  verified to EXIST in the repo (local ls check).
+- NOTES policy bullet states: PYTHONPATH=sim:gen:/tmp/fmpytest-shim (matches
+  COMMANDS block), readline shim with exact content `raise ImportError("readline
+  unavailable")` (matches /tmp/fmpytest-shim/readline.py on sz0001 byte-for-byte,
+  verified via ssh), onnx==1.19.1 deviation + no-onnxruntime deviation stated,
+  31 stripped-env python3 failures classified as by-design Path-B oracle
+  isolation, test_engines 8F = fix-not-ignore.
+- Version pins in NOTES (pytest 9.1.1, numpy 2.2.6, onnx 1.19.1, flatbuffers
+  25.2.10, pydantic 2.13.5, gguf 0.19.0) all match the LIVE venv on sz0001
+  (verified via ssh import/version probe).
+- Consistency of the "31" figure: baseline triage = 24F F-PY3-RESTRICTED +
+  7E E-PY3-RESTRICTED = 31. AGENTS.md and plan todo 4 ④ both say 31. CONSISTENT.
+- Minor nit (non-blocking): template omits `-rf` (evidence's authoritative
+  run used `-q -rf` to enumerate failures; evidence documents why). Template
+  remains executable as-is.
+
+════════════════════════════════════════════════════════════════════════════
+2. IGNORE-LIST CORRECTNESS vs D2/D3/D4
+════════════════════════════════════════════════════════════════════════════
+- D4 file selection reproduced independently on the repo:
+    $ grep -rl onnxruntime sim/tests/ sim/timing/tests/ | grep -v __pycache__ | sort
+    sim/tests/test_cv_e2e.py
+    sim/tests/test_gen_cv_golden.py
+  → exactly 2 files, matching the evidence. sim/tests/conftest.py does NOT
+  import onnxruntime (grep rc=1), matching the evidence's claim.
+- D3 file set matches the baseline evidence's RECOMMENDATION list (8 files)
+  and the plan todo 4 ③ list. test_spike_forward_tolerance.py correctly NOT
+  ignored (skips gracefully; confirmed 6 skip lines in the recorded log).
+- D2 set matches plan D2 verbatim.
+
+════════════════════════════════════════════════════════════════════════════
+3. WHEEL-SET VERSION SANITY
+════════════════════════════════════════════════════════════════════════════
+- onnx==1.19.1 pin INDEPENDENTLY JUSTIFIED: live PyPI simple-index check
+  (2026-09-04) shows onnx 1.20.0/1.20.1/1.21.0/1.22.0 cp312 x86_64 wheels are
+  ONLY manylinux_2_27_x86_64.manylinux_2_28_x86_64 (glibc>=2.27), while
+  1.19.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl exists.
+  sz0001 glibc is 2.17 (ldd --version verified). Pin is correct and minimal.
+- onnxruntime exclusion justified: no manylinux2014 cp312 wheel exists; venv
+  probe confirms ModuleNotFoundError (expected, drives D4).
+- No manylinux_2_2x-ONLY wheel in the INSTALLED set: every installed compiled
+  wheel is manylinux2014/2_17-tagged (numpy, onnx, pydantic_core, PyYAML,
+  ml_dtypes) or cp38-abi3 (protobuf). Verified by successful import of the
+  whole stack on glibc 2.17 (policy run: 2277 passed).
+- gguf closure verified installed: gguf 0.19.0 + tqdm 4.70.0 + requests 2.34.2
+  + urllib3 2.7.0 + certifi 2026.7.22 + charset_normalizer 3.5.1 (pip list on
+  sz0001; all import OK on glibc 2.17).
+- OBSERVATION (non-blocking): `ls build/wheels | grep -c manylinux_2_2` on the
+  CURRENT directory returns 1, not 0 — the gguf-phase wheel
+  charset_normalizer-3.5.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64
+  .manylinux_2_28_x86_64.whl is TRIPLE-tagged (manylinux2014 + 2_17 + 2_28) and
+  loads fine on glibc 2.17 (import verified). The todo-1 wheels evidence's
+  "grep -c manylinux_2_2 -> 0" claim is true of the 18-wheel set it captured
+  but stale w.r.t. today's directory contents; policy intent (no
+  glibc>=2.27-only wheels) is preserved.
+
+════════════════════════════════════════════════════════════════════════════
+4. DECISION-LINE CROSS-CHECK (baseline <-> gguf <-> policy template)
+════════════════════════════════════════════════════════════════════════════
+- Baseline: evidence claims 2344P/80F/7S/11E reproduced twice (376.50s /
+  363.24s). CONFIRMED against live logs on sz0001:
+    /tmp/sz0001-fmenv-baseline.log:  "80 failed, 2344 passed, 7 skipped,
+      213 warnings, 11 errors in 376.50s (0:06:16)"
+    /tmp/sz0001-fmenv-baseline-r2.log: "80 failed, 2344 passed, 7 skipped,
+      213 warnings, 11 errors in 363.24s (0:06:03)"
+- gguf re-run: 29 pass / 4 glibc-wall (10/10 + 19/23). 33 = 29 + 4 CONSISTENT
+  with baseline F-GGUF x33 and its "4 previously-masked GLIBC" prediction.
+  gguf-import failures visible in baseline log (37 lines matching "No module
+  named .gguf", >= 33 failure entries + 6 skip entries) — CONSISTENT.
+- Policy template run: evidence claims 32F/2277P/7S/11E in 348.92s.
+  CONFIRMED against live log:
+    /tmp/sz0001-fmenv-policy-template.log: "32 failed, 2277 passed, 7 skipped,
+      189 warnings, 11 errors in 348.92s (0:05:48)"
+- Delta arithmetic internally consistent: 80F -> 32F = -48 = 10+23+10+1+1+1+1+1
+  (baseline failures in the 8 D3 files); 2344P -> 2277P = -67; collected delta
+  -115 = -48F + -67P. Residual 32F decomposes exactly as triaged (8 engine-
+  drift + 24 Path-B python3), 11E = 4 E-ASYNC + 7 E-PY3, 7S = 6 tokenizers +
+  1 torch. ZERO net-new failures claimed; nothing contradicts that in the log.
+- Triage authenticity spot-checks against /tmp/sz0001-fmenv-baseline.log:
+  all 8 engine-drift test names present (tensor_core_decode, os_systolic_decode,
+  systolic_vs_mxumodel_decode/prefill, gmma_decode, gmma_tma_overlap,
+  systolic_npu_sim_baseline, block_npu_sim_baseline); "no current event loop"
+  x12 lines (4 E-ASYNC family); FileNotFoundError/python3 x42 lines (24F+7E
+  family); TestBaselineValidate/TestBaselineNegative/test_validate_done_claims
+  _1_to_22/test_audit_recompute_and_checks all present in expected shape.
+
+════════════════════════════════════════════════════════════════════════════
+5. EVIDENCE AUTHENTICITY (no fabricated outputs)
+════════════════════════════════════════════════════════════════════════════
+Live ssh spot-checks performed this review (zhengs@192.168.0.11):
+  - hostname -> sz0001; glibc -> GNU libc 2.17 (matches every glibc claim).
+  - /home/zhengs/venvs/fmpytest/bin/pytest --version -> 9.1.1.
+  - venv imports: pytest 9.1.1 / numpy 2.2.6 / onnx 1.19.1 / pydantic 2.13.5 /
+    flatbuffers 25.2.10 / gguf import OK; onnxruntime -> ModuleNotFoundError.
+  - /tmp/fmpytest-shim/readline.py content matches AGENTS.md verbatim.
+  - sha256 of onnx-1.19.1 wheel (485d3674...) and numpy-2.2.6 wheel
+    (fd83c012...) match the wheels evidence entries exactly.
+  - pip list shows pydantic_core 2.46.5 (venv evidence remediation claim
+    confirmed; 2.48.0 was incompatible per pydantic 2.13.5 exact pin).
+  - All three headline logs exist with summary lines matching the evidence
+    verbatim; baseline evidence's recorded line numbers for the restricted-env
+    mechanism (qwen_spec_gates.py:325, cv_spec_gates.py:190) and the hard gguf
+    import (qwen3b_full_forward.py:41) verified against the repo source.
+  - build/wheels is gitignored (git check-ignore OK); contains 29 wheels +
+    requirements-fmpytest.txt (matches venv evidence "NOT committed" note).
+  - P0/venv/baseline/gguf evidence timestamps form a coherent chronological
+    sequence (P0 13:52 -> wheels 14:57 -> venv 15:59 -> baseline 16:06-16:25 ->
+    gguf 16:30-16:42 +08), consistent with file mtimes and the commit at 16:43.
+
+════════════════════════════════════════════════════════════════════════════
+6. NON-BLOCKING OBSERVATIONS
+════════════════════════════════════════════════════════════════════════════
+- (1) wheels-evidence "grep -c manylinux_2_2 -> 0" is stale for today's
+  build/wheels (charset_normalizer triple-tagged wheel carries a 2_28 tag;
+  benign, verified loadable). Consider a dated note if re-grepped.
+- (2) AGENTS.md template lacks `-rf`; the authoritative run used `-q -rf`.
+  Template executable either way.
+- (3) NOTES "GLIBC>=2.28" is a representative threshold; actual binary errors
+  span GLIBC_2.27-2.34 / GLIBCXX_3.4.20+. Not misleading for the policy.
+- (4) Baseline evidence mixes Z/+08 timestamps and the LOAD end snapshot is
+  ~5 min after utc_end. Cosmetic only.
+- (5) gguf-evidence delta phrasing cites baseline failure counts (10+23+10+
+  1+1+1+1+1) for D3 files even though two of those files were already
+  gguf-fixed by the policy run; net numbers (32F/2277P) are correct either way.
+- (6) requirements-fmpytest.txt is not committed (gitignored build/wheels),
+  so a fresh-clone venv rebuild depends on the NFS tree state on sz0001;
+  documented in the policy, acceptable.
+
+VERDICT: APPROVE

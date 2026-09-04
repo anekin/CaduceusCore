@@ -1,0 +1,109 @@
+SZ0001-FM-ENV F1 COMPLIANCE AUDIT EVIDENCE (plan: .omo/plans/sz0001-fm-env-setup.md)
+====================================================================================
+case_id: sz0001-fmenv-F1 (final verification wave, F1 of F1-F4)
+host: sz0002 (local audit + spot re-run; sz0001 evidence audited via NFS-shared repo tree)
+utc_date: 2026-09-04T09:0x:xxZ (recorded at audit completion)
+repo: main @ 19127e9d2f73044b4467f4b6e43c15c908918d45
+boulder: sz0001-fm-env-setup-4a7c55e6
+scope: evidence existence (todos 0-4), commit<->Commit:-line correspondence,
+       decision-line presence, no-silent-skip, spot re-run. NO commits made.
+
+AUDIT COMMANDS EXECUTED (exact)
+-------------------------------
+$ git log --oneline -8
+$ git log origin/main..HEAD --oneline
+$ git show --stat --format="%s%n%ci" 4b2f96b 671eb62 75e0605 12c04b5 19127e9
+$ git ls-files .omo/evidence/ | grep fmenv
+$ grep -hE '^(FMENV-|SZ0001-FMENV-)' .omo/evidence/sz0001-fmenv-*.txt
+$ PYTHONPATH=sim python -m pytest sim/tests/test_fm_audit_narrow_n.py -q
+$ PYTHONPATH=sim python -m pytest sim/tests/test_fm_audit_pack_edges.py -q
+$ PYTHONPATH=sim python -m pytest sim/tests/test_fm_abi_contract.py -q
+
+1. EVIDENCE EXISTENCE (todos 0-4) — PASS
+----------------------------------------
+todo 0 -> .omo/evidence/sz0001-fmenv-p0.txt       (tracked in HEAD, 62 lines)
+todo 1 -> .omo/evidence/sz0001-fmenv-wheels.txt   (tracked, 103 lines)
+todo 2 -> .omo/evidence/sz0001-fmenv-venv.txt     (tracked, 67 lines)
+todo 3 -> .omo/evidence/sz0001-fmenv-baseline.txt (tracked, 333 lines)
+todo 4 -> .omo/evidence/sz0001-fmenv-gguf.txt     (tracked, 165 lines) + AGENTS.md policy
+All five exist, are git-tracked, and each carries provenance (host/hostname
+proof, UTC timestamps, repo HEAD/commit, tool versions).
+
+2. DECISION-LINE PRESENCE — PASS
+--------------------------------
+FMENV-P0: network=yes nfs=not-shared wheels=3
+FMENV-WHEELS: 18-wheels ready (onnxruntime excluded: glibc 2.17 no manylinux2014 wheel)
+FMENV-VENV: ready
+SZ0001-FMENV-BASELINE: 2344-passed (80 failed/7 skipped/11 errors)
+SZ0001-FMENV-VERIFY: 5/5 PASS
+SZ0001-FMENV-NARROW-N: 113
+SZ0001-FMENV-PACK: 13
+SZ0001-FMENV-ABI: 6
+FMENV-GGUF: 29-passed (was 33 F-GGUF)
+FMENV-GGUF-INSTALL: gguf-0.19.0 + tqdm-4.70.0 + requests-2.34.2 (offline, sz0001 venv)
+FMENV-GGUF-POLICY-RUN: 2277-passed (32 failed/7 skipped/11 errors, D2+D3+D4 ignores)
+(gguf prefix FMENV-GGUF: not pre-specified in plan todo 4; naming consistent
+with the FMENV-* family.)
+
+3. COMMIT <-> Commit:-LINE CORRESPONDENCE (one atomic commit per todo) — PASS
+-----------------------------------------------------------------------------
+todo 0 "chore(omo): sz0001 FM-env P0 probe evidence"         = 4b2f96b  (exact)
+todo 1 "chore(omo): sz0001 FM-env offline wheel set"         = 671eb62  (exact)
+todo 2 "chore(omo): sz0001 FM-env venv smoke evidence"       = 75e0605  (exact)
+todo 3 "chore(omo): sz0001 FM-env baseline re-run evidence"  = 12c04b5  (exact)
+todo 4 "docs(agents): executable sz0001 FM-pytest policy — fmpytest venv +
+        readline shim + ignore list"                          = 19127e9  (exact)
+5/5 messages match one-to-one, in plan order, on main, not pushed.
+No foreign commits interleaved (b93a9ea/e670129 belong to the earlier
+verification-env-sz0001 plan, not this one).
+
+4. NO SILENT SKIPS — PASS
+-------------------------
+baseline: all 11 errors + 80 failures + 7 skips classified (E-ASYNC x4,
+E-PY3-RESTRICTED x7, F-PY3-RESTRICTED x24, F-GGUF x33, F-GLIBC x11, F-KNOWN x12,
+7 skips enumerated); delta vs sz0001-baseline-rerun.txt per-family; two honest
+"task expectation was wrong" disclosures (soc_differential asyncio x4 REMAIN,
+python3 x44 PARTIAL -> 31 remain). ZERO FM-op regression claim anchored by
+verify_ops 5/5 + 113/13/6 inside and outside the full suite.
+gguf: 32F/7S/11E fully broken down and shown to equal the baseline's predicted
+triage exactly; no net-new failures. Command-template deviations documented
+in-file (readline shim, -rf, D2/D3/D4 ignores).
+
+5. SPOT RE-RUN (verified, not trusted) — PASS
+---------------------------------------------
+Local sz0002 re-run, current HEAD:
+  test_fm_audit_narrow_n.py  -> 113 passed in 0.24s
+  test_fm_audit_pack_edges.py -> 13 passed in 0.15s
+  test_fm_abi_contract.py     ->  6 passed in 0.24s
+Matches sz0001 evidence (113/13/6) exactly. verify_ops 5/5 accepted on evidence
+(cross-host re-run of verify_ops is F3's remit).
+
+6. AGENTS.md POLICY TEMPLATE (todo 4b) — PASS
+---------------------------------------------
+COMMANDS block: venv path + readline shim in PYTHONPATH (sim:gen:/tmp/fmpytest-
+shim) + 15 --ignore entries = D2 five cocotb + D4 two onnxruntime + D3 eight
+spike/llama/glibc — matches todo-4 spec item-by-item.
+NOTES bullet: onnx==1.19.1 deviation, no-onnxruntime D4, 31 stripped-env
+python3 by-design isolation, 8F engine-drift fix-not-ignore, all recorded.
+
+7. MINOR FINDINGS (non-blocking; disclosed, not violations)
+-----------------------------------------------------------
+F1a  todo-3 acceptance "git diff HEAD^ HEAD --name-only == 仅 evidence" is not
+     literal: commit 12c04b5 also touches the plan file (decision-line/What-to-do
+     bookkeeping). Todos 0/1/2/4 likewise pair evidence with plan bookkeeping
+     (checkbox ticks, text refinements reflecting P0/D4 discoveries). Consistent
+     with the repo's plan-driven workflow (plans+evidence committed per todo);
+     product code (rtl/sim/firmware/scripts) untouched in all 5 commits.
+F1b  todo-4 acceptance "git diff HEAD^ HEAD --name-only == AGENTS.md" is not
+     literal: commit 19127e9 = AGENTS.md + evidence + plan checkbox. Spirit met
+     (policy doc + bookkeeping only); F4 verifies scope formally.
+F1c  todo-4 What-to-do says "只提交 AGENTS.md" while the global Commit-strategy
+     section requires evidence committed per todo; executor followed the global
+     strategy (gguf evidence committed). Internal wording contradiction only.
+F1d  P0 evidence reports nfs=not-shared; plan D1 already reflects this fact
+     (build/wheels chosen over ~/venvs) — decision and evidence consistent.
+F1e  Worktree dirty set (7 M + 2 ??) predates and is unchanged by this plan's
+     commits; baseline SIDE-EFFECT NOTE matches current git status exactly.
+
+VERDICT: APPROVE
+F1-PASS: evidence=todos0-4 decision-lines=11/11 commits=5/5 spot-rerun=113/13/6

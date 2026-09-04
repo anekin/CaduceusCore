@@ -62,10 +62,10 @@
   Commit: Y | docs(agents): executable sz0001 FM-pytest policy — fmpytest venv + readline shim + ignore list
 
 ## Final verification wave
-- [ ] F1. 合规审计：todos 0-4 各一原子 commit、message 对应、判定行齐全、evidence 存在。
-- [ ] F2. 质量复核：venv 冒烟输出真实（非伪造）；wheel 清单与安装一致；--ignore 五文件与 D2 一致。
-- [ ] F3. 人工复验：ssh sz0001 上 `~/venvs/fmpytest/bin/pytest --version` 与 evidence 一致；verify_ops 五判定行原文抽查。
-- [ ] F4. 范围保真：变更集 ⊆ {AGENTS.md, .omo/evidence/sz0001-fmenv-*, .omo/plans/sz0001-fm-env-setup.md, .omo/drafts/*}；/NAS/Tools、rtl/sim/firmware/scripts 零改动；未 push。
+- [x] F1. 合规审计：todos 0-4 各一原子 commit、message 对应、判定行齐全、evidence 存在。
+- [x] F2. 质量复核：venv 冒烟输出真实（非伪造）；wheel 清单与安装一致；--ignore 五文件与 D2 一致。
+- [x] F3. 人工复验：ssh sz0001 上 `~/venvs/fmpytest/bin/pytest --version` 与 evidence 一致；verify_ops 五判定行原文抽查。
+- [x] F4. 范围保真：变更集 ⊆ {AGENTS.md, .omo/evidence/sz0001-fmenv-*, .omo/plans/sz0001-fm-env-setup.md, .omo/drafts/*}；/NAS/Tools、rtl/sim/firmware/scripts 零改动；未 push。
 
 ## Commit strategy
 - 一 todo 一原子 commit（message 见各 todo）；pathspec 显式；不 push；venv/wheel 属用户目录不提交。
