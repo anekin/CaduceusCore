@@ -74,8 +74,26 @@ Centrality unmeasured (no LSP/codegraph installed; grep-based only).
 
 ## COMMANDS
 ```bash
-# sz0001 (verification env, per policy below): full pytest baseline
-PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q
+# sz0001 FM-pytest baseline (fmpytest venv + readline shim; ignore list per NOTES policy)
+env PATH=/home/zhengs/venvs/fmpytest/bin:/usr/bin:/bin \
+  PYTHONPATH=sim:gen:/tmp/fmpytest-shim \
+  /home/zhengs/venvs/fmpytest/bin/python -m pytest sim/tests/ sim/timing/tests/ \
+  -q --continue-on-collection-errors \
+  --ignore=sim/tests/test_cv_conv2d_rtl.py \
+  --ignore=sim/tests/test_soc_pcie_dma.py \
+  --ignore=sim/tests/wrapper/test_mxu_wrapper.py \
+  --ignore=sim/tests/wrapper/test_sfu_wrapper.py \
+  --ignore=sim/tests/wrapper/test_vector_wrapper.py \
+  --ignore=sim/tests/test_cv_e2e.py \
+  --ignore=sim/tests/test_gen_cv_golden.py \
+  --ignore=sim/tests/test_runtime_real_firmware.py \
+  --ignore=sim/tests/test_qwen3b_full_forward.py \
+  --ignore=sim/tests/test_qwen3b_per_layer_compare.py \
+  --ignore=sim/tests/test_qwen3b_software_signoff.py \
+  --ignore=sim/tests/test_device_server_fixture.py \
+  --ignore=sim/tests/test_func_model_dut_adapter.py \
+  --ignore=sim/tests/test_llama_dependency_lock.py \
+  --ignore=sim/tests/test_spike_toolchain_manifest.py
 # Local: perf benchmark
 PYTHONPATH=sim python -m sim.timing.benchmark --model qwen2.5-3b --output results/timing
 # EDA server: full 33-case FM-SOC regression
@@ -88,7 +106,7 @@ make -C firmware
 
 ## NOTES
 - EDA server sz0001 / 192.168.0.11, NFS-shared repo; simv must run from the repo PARENT (`$readmemh` relative paths).
-- **Verification-environment policy (user directive, 2026-09-04)**: ALL verification runs — Func Model pytest AND RTL/VCS — execute on sz0001 for environment consistency. cocotb lives in `/NAS/Tools/anaconda3/envs/py3.11` (see `sim/regression/Makefile` COCOTB_PY_ENV). sz0002 is dev-only: never run full pytest or cocotb-dependent tests there (cocotb is not installed on sz0002).
+- **Verification-environment policy (user directive, 2026-09-04; executable template, todo 4 of `.omo/plans/sz0001-fm-env-setup.md`)**: ALL verification runs — Func Model pytest AND RTL/VCS — execute on sz0001 for environment consistency. FM pytest uses the offline venv `/home/zhengs/venvs/fmpytest` (pytest 9.1.1, numpy 2.2.6, onnx 1.19.1, flatbuffers 25.2.10, pydantic 2.13.5, pytest-asyncio, pytest-timeout, gguf 0.19.0); wheels live in gitignored `build/wheels/`, install via `pip install --no-index --find-links build/wheels`. **readline shim (mandatory)**: pytest 9.x segfaults on sz0001 because anaconda's bundled libreadline crashes on `import readline` (pytest 9 imports it unconditionally at startup) — create `/tmp/fmpytest-shim/readline.py` containing `raise ImportError("readline unavailable")` and include `/tmp/fmpytest-shim` in PYTHONPATH (template uses `PYTHONPATH=sim:gen:/tmp/fmpytest-shim`); without it every pytest run crashes before collecting. `--ignore` list: D2 five cocotb files (`test_cv_conv2d_rtl.py`, `test_soc_pcie_dma.py`, `wrapper/test_{mxu,sfu,vector}_wrapper.py` — RTL/cocotb domain, sz0001 py3.11 env) + D4 two onnxruntime files (`test_cv_e2e.py`, `test_gen_cv_golden.py`) + D3 eight spike/llama/glibc files (`test_runtime_real_firmware.py`, `test_qwen3b_full_forward.py`, `test_qwen3b_per_layer_compare.py`, `test_qwen3b_software_signoff.py`, `test_device_server_fixture.py`, `test_func_model_dut_adapter.py`, `test_llama_dependency_lock.py`, `test_spike_toolchain_manifest.py`) — llama/spike binaries need GLIBC≥2.28, sz0001 has 2.17; local rebuild is a separate open plan. Known deviations (all triaged, none silently skipped): onnx pinned ==1.19.1 (glibc 2.17 — requirements.txt `>=1.22` uninstallable on sz0001); no onnxruntime on sz0001 (glibc blocker, D4); 31 stripped-env `python3` spawn failures are by-design Path-B oracle isolation, not an env gap; test_engines 8F engine-drift = fix-not-ignore open item. cocotb lives in `/NAS/Tools/anaconda3/envs/py3.11` (see `sim/regression/Makefile` COCOTB_PY_ENV). sz0002 is dev-only: never run full pytest or cocotb-dependent tests there (cocotb is not installed on sz0002). Triage background: `.omo/evidence/sz0001-fmenv-baseline.txt`; gguf install proof: `.omo/evidence/sz0001-fmenv-gguf.txt`.
 - CI (`.github/workflows/caduceus-core-ci.yml`) is software-stack only (mock:// device); never runs VCS/RTL.
 - Open items: BUG-RTL-SOC-007 (attn_weight, chain-level not reproduced); WVR-SOC-RTL-002 (8MB DRAM window) active; E2E-07 perf calibration deferred to FPGA.
 - Test-count discrepancy: README "210 passed" vs F2 audit "802/802" vs final summary "700" (see docs/issues_found.md:368) — cite the run you actually executed.

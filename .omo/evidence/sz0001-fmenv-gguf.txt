@@ -1,0 +1,165 @@
+case_id: sz0001-fmenv-gguf (todo 4a of .omo/plans/sz0001-fm-env-setup.md)
+utc_start: 2026-09-04T08:30:11Z
+utc_end:   2026-09-04T08:42:57Z
+commit:    12c04b545ed35b634a90aa9f14c8a41925621b76 (main, todo-3 baseline commit)
+verdict: gguf wheel gap CLOSED. gguf-0.19.0 + transitive deps (tqdm, requests
+  stack) downloaded on sz0002, installed offline into the sz0001 fmpytest venv.
+  Of the 33 baseline F-GGUF failures: 29 now PASS (test_qwen3b_per_layer_compare
+  10/10, test_qwen3b_full_forward 19/23). The remaining 4 in
+  test_qwen3b_full_forward are llama-binary GLIBC walls (GLIBC_2.27/2.29/2.32/2.34,
+  GLIBCXX_3.4.20+...) — the exact "4 GLIBC failures masked by the gguf import
+  error, reclassified not fixed" predicted in sz0001-fmenv-baseline.txt. ZERO
+  "No module named 'gguf'" remains anywhere. Full policy-template run (D2+D3+D4
+  ignores): 32 failed / 2277 passed / 7 skipped / 11 errors — every residual
+  matches the baseline triage; nothing net-new.
+
+════════════════════════════════════════════════════════════════════════════
+A1 — WHEEL DOWNLOAD (sz0002, has internet; sz0001 is offline)
+════════════════════════════════════════════════════════════════════════════
+$ hostname
+sz0002
+$ python3 -m pip download --only-binary=:all: -d /home/prj/zhengs/caduceuscore/CaduceusCore/build/wheels gguf
+Collecting gguf
+  Using cached gguf-0.19.0-py3-none-any.whl.metadata (4.1 kB)
+Collecting numpy>=1.17 (from gguf)
+  Using cached numpy-2.2.6-cp310-cp310-... .whl.metadata (62 kB)
+Collecting pyyaml>=5.1 (from gguf)
+  Using cached pyyaml-6.0.3-cp310-cp310-... .whl.metadata (2.4 kB)
+Collecting requests>=2.25 (from gguf)
+  Using cached requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+Collecting tqdm>=4.27 (from gguf)
+  Downloading tqdm-4.70.0-py3-none-any.whl.metadata (57 kB)
+Collecting charset_normalizer<4,>=2 (from requests>=2.25->gguf)
+  Downloading charset_normalizer-3.5.1-cp310-... .whl.metadata (45 kB)
+Collecting idna<4,>=2.5 (from requests>=2.25->gguf)
+  File was already downloaded .../idna-3.19-py3-none-any.whl
+Collecting urllib3<3,>=1.26 (from requests>=2.25->gguf)
+  Using cached urllib3-2.7.0-py3-none-any.whl.metadata (6.9 kB)
+Collecting certifi>=2023.5.7 (from requests>=2.25->gguf)
+  Using cached certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+Successfully downloaded gguf numpy pyyaml requests charset_normalizer idna
+  urllib3 certifi tqdm
+
+gguf version recorded: gguf-0.19.0-py3-none-any.whl (pure wheel; gguf 0.19.0
+  exposes NO __version__ attribute).
+Dependency delta vs venv (checked on sz0001 before install):
+  - already in venv: numpy 2.2.6, PyYAML 6.0.2, idna 3.19
+  - NEW, added to build/wheels: tqdm-4.70.0, requests-2.34.2, urllib3-2.7.0,
+    certifi-2026.7.22 (all py3-none-any), charset_normalizer-3.5.1
+    (re-downloaded for cp312 via:
+     pip download --only-binary=:all: --no-deps --platform manylinux2014_x86_64
+     --implementation cp --python-version 312 --abi cp312 charset_normalizer —
+     the sz0002 with-deps pass fetched a cp310 wheel, incompatible with the
+     venv's 3.12 interpreter)
+  - cleanup: the cp310 wheels of numpy/pyyaml/charset_normalizer created by the
+    with-deps pass were removed from build/wheels (inert for the cp312 venv)
+gguf import surface (unzipped wheel inspection): numpy/yaml imported at module
+  level; tqdm and requests are function-level lazy imports (gguf_writer.py:451,
+  utility.py:226/248) — but the full declared closure was installed anyway so
+  the venv matches gguf's metadata.
+
+════════════════════════════════════════════════════════════════════════════
+A2 — OFFLINE INSTALL + IMPORT SMOKE (sz0001, fmpytest venv)
+════════════════════════════════════════════════════════════════════════════
+$ /home/zhengs/venvs/fmpytest/bin/pip install --no-index \
+    --find-links /home/prj/zhengs/caduceuscore/CaduceusCore/build/wheels gguf
+Looking in links: /home/prj/zhengs/caduceuscore/CaduceusCore/build/wheels
+Processing .../gguf-0.19.0-py3-none-any.whl
+Requirement already satisfied: numpy>=1.17 ... (2.2.6)
+Requirement already satisfied: pyyaml>=5.1 ... (6.0.2)
+Processing .../requests-2.34.2-py3-none-any.whl (from gguf)
+Processing .../tqdm-4.70.0-py3-none-any.whl (from gguf)
+Processing .../charset_normalizer-3.5.1-cp312-...whl (from requests>=2.25->gguf)
+Requirement already satisfied: idna<4,>=2.5 ... (3.19)
+Processing .../urllib3-2.7.0-py3-none-any.whl (from requests>=2.25->gguf)
+Processing .../certifi-2026.7.22-py3-none-any.whl (from requests>=2.25->gguf)
+Installing collected packages: urllib3, tqdm, charset_normalizer, certifi,
+  requests, gguf
+Successfully installed certifi-2026.7.22 charset_normalizer-3.5.1 gguf-0.19.0
+  requests-2.34.2 tqdm-4.70.0 urllib3-2.7.0
+PIP_EXIT=0
+
+$ /home/zhengs/venvs/fmpytest/bin/python -c \
+    "import gguf; print(gguf.__version__ if hasattr(gguf,'__version__') else 'ok')"
+ok
+$ /home/zhengs/venvs/fmpytest/bin/python -c "import gguf, tqdm, requests; print('imports OK')"
+imports OK
+
+════════════════════════════════════════════════════════════════════════════
+A3 — GGUF-DEPENDENT TESTS (sz0001; readline shim + PATH/PYTHONPATH per baseline)
+════════════════════════════════════════════════════════════════════════════
+Identification (sz0001, repo root):
+$ grep -rl "import gguf\|from gguf" sim/tests/ sim/timing/tests/ | grep -v __pycache__ | sort
+sim/tests/test_spike_forward_tolerance.py
+Direct gguf imports live in non-test modules, so the transitive closure was
+mapped too:
+$ grep -rl "import gguf\|from gguf" sim/ | grep -v __pycache__ | sort
+sim/qwen25_forward.py            (→ test_spike_forward_tolerance chain)
+sim/qwen25_func_model.py         (→ test_spike_forward_tolerance chain)
+sim/signoff/qwen3b_full_forward.py   (→ test_qwen3b_full_forward chain; hard
+                                       import at line 41 = the F-GGUF source)
+sim/signoff/test_qwen25_3b_real_blk0.py
+sim/tests/test_spike_forward_tolerance.py
+sim/tokenizer.py                 (→ test_spike_forward_tolerance chain)
+The two F-GGUF test files (test_qwen3b_full_forward.py 23F,
+test_qwen3b_per_layer_compare.py 10F in the baseline) reach gguf through
+sim/signoff/qwen3b_full_forward.py.
+
+Re-run (env identical to baseline COMMAND 3, per-file for attribution):
+  env PATH=/home/zhengs/venvs/fmpytest/bin:/usr/bin:/bin \
+      PYTHONPATH=sim:gen:/tmp/fmpytest-shim \
+      /home/zhengs/venvs/fmpytest/bin/python -m pytest <file> -q
+
+  sim/tests/test_qwen3b_per_layer_compare.py:  10 passed in 0.12s   (was 10F F-GGUF)
+  sim/tests/test_qwen3b_full_forward.py:       19 passed, 4 failed   (was 23F F-GGUF)
+  sim/tests/test_spike_forward_tolerance.py:   6 skipped in 0.09s    (was 6S)
+Combined (all three files, -q -rf): 4 failed, 29 passed, 6 skipped in 15.30s
+
+The 4 remaining failures in test_qwen3b_full_forward (test_mock_device_traversal,
+test_evidence_json_is_valid, test_layers_flag_override,
+test_mock_device_op_node_count_meets_threshold) are llama-binary load failures:
+  /lib64/libm.so.6: version `GLIBC_2.27/2.29' not found (libggml-base.so.0)
+  /lib64/libc.so.6: version `GLIBC_2.32/2.34' not found (libggml.so.0)
+  /lib64/libstdc++.so.6: GLIBCXX_3.4.20/3.4.21/3.4.29, CXXABI_1.3.9
+= F-GLIBC reclassification, exactly the baseline's prediction ("4 previous
+GLIBC failures now masked by the gguf import error — reclassified, not fixed").
+test_spike_forward_tolerance skips moved from "No module named 'gguf'" to:
+  SKIPPED ...: tokenizer/gguf dependency unavailable: No module named 'tokenizers'
+→ `tokenizers` is the next missing venv dep for that file (open item; the file
+is NOT in the D3 ignore list and skips gracefully either way).
+
+════════════════════════════════════════════════════════════════════════════
+POLICY-TEMPLATE VERIFICATION (the exact ## COMMANDS block committed in AGENTS.md)
+════════════════════════════════════════════════════════════════════════════
+Full-suite run with the exact committed template (venv + shim + D2/D3/D4
+--ignore list), launched setsid+nohup, log /tmp/sz0001-fmenv-policy-template.log:
+  32 failed, 2277 passed, 7 skipped, 189 warnings, 11 errors in 348.92s (0:05:48)
+Failed-set breakdown (all triaged, none silent):
+  - test_engines.py ×8  = the known 8F engine-drift (fix-not-ignore open item)
+  - test_cv_spec_gates ×10 + test_qwen_spec_gates ×7 + test_perf_baseline ×2
+    + test_perf_ci ×2 + test_uncertainty_kpis ×3 = 24F Path-B restricted-env
+    `python3` spawn (by-design oracle isolation; needs python3 in /bin or
+    /usr/bin — root-level fix, documented in baseline evidence)
+  Errors 11 = 4 E-ASYNC (test_soc_differential legacy asyncio pattern) +
+    7 E-PY3-RESTRICTED (cascade of the Path-B spawns).
+  Skips 7 = 6 tokenizers-missing (test_spike_forward_tolerance) + 1 torch
+    (test_cv_mobilenetv3).
+Delta vs baseline (2344P/80F/7S/11E, no D3 ignores): −48F removed with the
+  D3 eight files (10+23+10+1+1+1+1+1), +29P gguf-green inside those files also
+  removed from collection → 2277P (−67). Residual count 32F+11E+7S is EXACTLY
+  the predicted triage. ZERO net-new failures.
+SIDE-EFFECT NOTE: the run regenerated gitignored .omo/evidence/qwen-full-
+  forward-*.json artifacts (git check-ignore confirms); git status porcelain is
+  unchanged apart from the pre-existing 7 M + 2 ?? files — none staged.
+
+════════════════════════════════════════════════════════════════════════════
+DECISION LINES
+════════════════════════════════════════════════════════════════════════════
+FMENV-GGUF: 29-passed (was 33 F-GGUF)
+FMENV-GGUF-INSTALL: gguf-0.19.0 + tqdm-4.70.0 + requests-2.34.2 (offline, sz0001 venv)
+FMENV-GGUF-POLICY-RUN: 2277-passed (32 failed/7 skipped/11 errors, D2+D3+D4 ignores)
+
+COMMIT_PLAN: docs(agents): executable sz0001 FM-pytest policy — fmpytest venv + readline shim + ignore list
+STAGED_PATHS (explicit pathspec only, no git add ./-A):
+  AGENTS.md
+  .omo/evidence/sz0001-fmenv-gguf.txt

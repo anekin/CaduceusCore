@@ -56,7 +56,7 @@
   Acceptance: 判定行齐全；delta 分类明确；零 FM-op 回归；`git diff HEAD^ HEAD --name-only` == 仅 evidence。
   Commit: Y | chore(omo): sz0001 FM-env baseline re-run evidence
 
-- [ ] 4. 收尾：gguf wheel 补装 + AGENTS.md 可执行政策落档
+- [x] 4. 收尾：gguf wheel 补装 + AGENTS.md 可执行政策落档
   What to do: (a) sz0002 下载 `gguf` 纯 python wheel（pip download --no-deps -d <repo>/build/wheels gguf）→ sz0001 venv `pip install --no-index --find-links` → 重跑 grep `gguf` 命中的测试文件确认 33 个 F-GGUF 转绿（落档）；(b) AGENTS.md 政策 bullet 升级为完整可执行模板（**todo 3 实测关键项全部折入**）：① 命令模板含 **readline-segfault shim**（pytest 9.x 在 sz0001 上 `import readline` 会 segfault——`/tmp/fmpytest-shim/readline.py` 抛 ImportError 的 stub 目录加进 PYTHONPATH，shim 内容写进政策注释）；② `PYTHONPATH=sim:gen`；③ `--ignore` 清单 = D2 五 cocotb + D4 二 onnxruntime（test_cv_e2e/test_gen_cv_golden）+ D3 八 spike/llama/glibc（test_runtime_real_firmware/test_qwen3b_full_forward/test_qwen3b_per_layer_compare/test_qwen3b_software_signoff/test_device_server_fixture/test_func_model_dut_adapter/test_llama_dependency_lock/test_spike_toolchain_manifest）；④ 偏离记录：onnx==1.19.1（glibc 2.17，requirements >=1.22 不可装）、无 onnxruntime、31 个 stripped-env python3 失败属测试设计隔离（非环境缺口）、test_engines 8F 为既有漂移**修而非 ignore**（open item）。只提交 AGENTS.md。
   Acceptance: gguf 测试转绿证据 + AGENTS.md 含完整模板；`git diff HEAD^ HEAD --name-only` == `AGENTS.md`。
   Commit: Y | docs(agents): executable sz0001 FM-pytest policy — fmpytest venv + readline shim + ignore list
