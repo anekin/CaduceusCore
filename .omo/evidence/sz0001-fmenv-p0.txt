@@ -1,0 +1,62 @@
+FM-ENV P0 PROBE EVIDENCE
+========================
+host: sz0002
+date: 2026-09-04T05:52:03Z
+HEAD: b93a9ea36d5de106c0e6e83c95cc2064021cbd60
+
+Probe 1 (network)
+-----------------
+$ curl -sI --connect-timeout 5 https://pypi.org/simple/ | head -1
+HTTP/2 200 
+
+$ python3 -m pip download --no-deps -d /tmp/fmenv-probe pytest==9.0.0 2>&1 | tail -3
+
+[notice] A new release of pip is available: 26.0.1 -> 26.2.1
+[notice] To update, run: python3 -m pip install --upgrade pip
+
+Probe 2 (NFS shared)
+--------------------
+$ touch ~/venvs/wheels/.probe-3171751
+
+$ ssh -o BatchMode=yes -o ConnectTimeout=10 zhengs@192.168.0.11 "ls ~/venvs/wheels/.probe-* 2>/dev/null"
+SSH_EXIT:2
+
+$ rm ~/venvs/wheels/.probe-3171751
+
+Probe 3 (installed packages on sz0002)
+--------------------------------------
+$ python3 -m pip list 2>/dev/null | grep -i -E 'flatbuffers|onnx|pytest|pydantic|numpy|protobuf|pyyaml|packaging|pluggy'
+flatbuffers               25.2.10
+numpy                     2.2.6
+onnx                      1.22.0
+onnx-ir                   0.2.1
+onnxruntime               1.23.2
+onnxscript                0.7.0
+packaging                 26.1
+pluggy                    1.6.0
+protobuf                  7.34.1
+pydantic                  2.13.4
+pydantic_core             2.46.4
+pydantic-settings         2.14.1
+pytest                    9.0.3
+PyYAML                    5.4.1
+
+$ python3 --version
+Python 3.10.12
+
+Probe 4 (pip cache)
+-------------------
+$ ls ~/.cache/pip 2>/dev/null | head
+http
+http-v2
+selfcheck
+wheels
+
+$ find ~/.cache/pip -name '*.whl' 2>/dev/null | head -20
+/home/zhengs/.cache/pip/wheels/a2/e3/6a/59f241672f3221253b1236359b0a711dabb69795a006184398/jsonpath-0.82.2-py3-none-any.whl
+/home/zhengs/.cache/pip/wheels/7d/b8/16/48bbd715040679311fa68cb564ad24a97d9a67fea5d4c848c8/jsonpath-0.82.2-py3-none-any.whl
+/home/zhengs/.cache/pip/wheels/cf/6e/86/42cdc93d68295ef50b38b8ad1fba394ac319f2b39c896b1975/pyverilog-1.3.0-py3-none-any.whl
+
+DECISION
+--------
+FMENV-P0: network=yes nfs=not-shared wheels=3
