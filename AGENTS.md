@@ -74,7 +74,7 @@ Centrality unmeasured (no LSP/codegraph installed; grep-based only).
 
 ## COMMANDS
 ```bash
-# Local (no EDA): pytest 210 baseline
+# sz0001 (verification env, per policy below): full pytest baseline
 PYTHONPATH=sim python -m pytest sim/tests/ sim/timing/tests/ -q
 # Local: perf benchmark
 PYTHONPATH=sim python -m sim.timing.benchmark --model qwen2.5-3b --output results/timing
@@ -88,6 +88,7 @@ make -C firmware
 
 ## NOTES
 - EDA server sz0001 / 192.168.0.11, NFS-shared repo; simv must run from the repo PARENT (`$readmemh` relative paths).
+- **Verification-environment policy (user directive, 2026-09-04)**: ALL verification runs — Func Model pytest AND RTL/VCS — execute on sz0001 for environment consistency. cocotb lives in `/NAS/Tools/anaconda3/envs/py3.11` (see `sim/regression/Makefile` COCOTB_PY_ENV). sz0002 is dev-only: never run full pytest or cocotb-dependent tests there (cocotb is not installed on sz0002).
 - CI (`.github/workflows/caduceus-core-ci.yml`) is software-stack only (mock:// device); never runs VCS/RTL.
 - Open items: BUG-RTL-SOC-007 (attn_weight, chain-level not reproduced); WVR-SOC-RTL-002 (8MB DRAM window) active; E2E-07 perf calibration deferred to FPGA.
 - Test-count discrepancy: README "210 passed" vs F2 audit "802/802" vs final summary "700" (see docs/issues_found.md:368) — cite the run you actually executed.
