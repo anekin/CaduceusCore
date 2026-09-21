@@ -2098,13 +2098,10 @@ class CocotbBridge:
         op = instr.opcode
 
         if op == "MMUL":
-            # MXU engine controller requires DIM1 (N dimension) to be a multiple
-            # of 64 (native tile width). Pad to ceil(N/64)*64; the wrapper's
-            # WRP_DIM_N still uses actual N for correct store-out.
-            engine_n = ((instr.dim_n + 63) // 64) * 64
+            engine_n = instr.dim_n  # DIM1 = actual N per spec/npu_abi.json DIM1 ("[15:0]=N columns").
             await self._apb_write(base + 0x00, 0x0000_0000)   # CTRL: INT4xINT8
             await self._apb_write(base + 0x0C, (instr.dim_k << 16) | instr.dim_m)  # DIM0: M,K
-            await self._apb_write(base + 0x10, engine_n)       # DIM1: N (padded to 64-wide tile)
+            await self._apb_write(base + 0x10, engine_n)       # DIM1: N
             await self._apb_write(base + 0x14, instr.i_addr)  # I_ADDR
             await self._apb_write(base + 0x18, instr.w_addr)  # W_ADDR
             await self._apb_write(base + 0x1C, instr.o_addr)  # O_ADDR
@@ -2257,9 +2254,10 @@ class CocotbBridge:
         """Load mxu_soc_wrapper internal buffers via AXI4 preload sequencer.
 
         Configures WRP_WEIGHT_BASE / WRP_ACT_BASE / WRP_OUT_BASE, sets
-        WRP_K_TILES to the number of 64-wide K-tiles required for this MMUL,
-        and WRP_DIM_N to the output N dimension so the store-out sequencer
-        writes the correct number of bytes per row.
+        WRP_K_TILES to the number of 64-wide K-tiles required for this MMUL.
+        WRP_DIM_N is written for backward compatibility but is geometrically
+        inactive when the latched DIM1 is non-zero — store-out row width
+        follows the latched MXU DIM1 (see mxu_soc_wrapper.v:221 wrp_n_derived).
         The wrapper issues AXI4 bursts from SRAM into its internal buffers and
         raises WRP_STATUS[0] when the preload FSM returns to IDLE.
         """
@@ -2423,7 +2421,8 @@ class CocotbBridge:
 
     async def _read_sram_output(self, addr: int, elements: int,
                                 output_elem_bytes: int = 4) -> bytearray:
-        """Read engine output from SRAM via host_read_sram (PCIe TLP).
+        """Read engine output from SRAM via host_read_sram (with DUT present
+        the real path is _sram_backdoor_read VPI).
 
         Args:
             addr: SRAM byte address to read from
@@ -3916,10 +3915,10 @@ if COCOTB_AVAILABLE:
         Isolated op05 attn_score MMUL test (M=32, K=128, N=2).
 
         Loads the real op05 input/weight hex files and verifies the
-        mxu_soc_wrapper preload/store-out path for a small-N MMUL.  The
-        engine is configured with dim_n=64 so it computes one full 64-wide
-        output tile, while the wrapper is told WRP_DIM_N=2 so only the
-        first two INT32 columns per row are stored back to SRAM.
+        mxu_soc_wrapper preload/store-out path for a small-N MMUL.
+        DIM1 is programmed with the actual N (=2); the wrapper's
+        store-out width follows the latched DIM1, producing a dense
+        M×N output.
         """
         bridge = await _setup_single_op_test(dut)
 
@@ -3955,7 +3954,7 @@ if COCOTB_AVAILABLE:
         base = MXU_BASE
         await bridge._apb_write(base + 0x00, 0x0000_0000)
         await bridge._apb_write(base + 0x0C, (K << 16) | M)
-        await bridge._apb_write(base + 0x10, 64)
+        await bridge._apb_write(base + 0x10, N)
         await bridge._apb_write(base + 0x14, i_addr)
         await bridge._apb_write(base + 0x18, w_addr)
         await bridge._apb_write(base + 0x1C, o_addr)
@@ -4002,7 +4001,7 @@ if COCOTB_AVAILABLE:
         BUG-012 characterization probe (NO FIX) — dual-phase layout/trigger
         characterization for op05 attn_score MMUL (M=32, K=128, N=2).
 
-        Phase A reproduces the current driver programming model (DIM1=64
+        Phase A reproduces the legacy (pre-fix) padded programming model (DIM1=64
         padded, WRP_DIM_N=2) and characterizes the real SRAM layout via an
         8KB backdoor read: for each row r the golden words [2r, 2r+1] are
         expected at byte offset r*256 (window word indices [64r, 64r+1]),

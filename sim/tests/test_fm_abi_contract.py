@@ -10,8 +10,9 @@ Three FM contracts pinned as explicit assertions:
 (b) GoldenMXU output is dense row-major M×N: element (r, c) sits at flat
     index r*N + c.
 (c) Zero-padding audit: the engine-N pad-up formula (DIM1 rounded up to a
-    64 multiple) exists ONLY in the RTL-driver files sim/cocotb_bridge.py
-    and sim/diagnose_data_layout.py — the FM domain must have zero hits.
+    64 multiple) has ZERO hits anywhere in sim/ — the bug-012 driver fix
+    removed the last pad-up writers (cocotb_bridge.py / diagnose_data_layout.py
+    now program DIM1 with the actual N); no sim/ file may reintroduce it.
 
 Oracle independence: imports only the devices under test (golden_executor,
 cocotb_bridge pack helper, mmio_bridge, regmap). Forbidden-module imports
@@ -115,11 +116,7 @@ def test_golden_mxu_dense_row_major():
 # ══════════════════════════════════════════════════════════════════════
 
 def test_dim1_padding_audit_only_in_rtl_drivers():
-    """Pad-up formula lives ONLY in the two RTL-driver files under sim/."""
-    expected = {
-        os.path.join("sim", "cocotb_bridge.py"),
-        os.path.join("sim", "diagnose_data_layout.py"),
-    }
+    """Pad-up formula must have ZERO hits anywhere in sim/ (bug-012 driver fix)."""
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     sim_dir = os.path.join(repo_root, "sim")
     hits = []
@@ -131,7 +128,7 @@ def test_dim1_padding_audit_only_in_rtl_drivers():
             with open(path, encoding="utf-8") as fh:
                 if PAD_PATTERN.search(fh.read()):
                     hits.append(os.path.relpath(path, repo_root))
-    assert sorted(hits) == sorted(expected), (
-        f"pad-up formula files={sorted(hits)} — contract allows only the "
-        "RTL drivers {sim/cocotb_bridge.py, sim/diagnose_data_layout.py}"
+    assert hits == [], (
+        f"pad-up formula files={sorted(hits)} — after the bug-012 driver fix "
+        "the pad-up formula must have zero hits anywhere in sim/"
     )

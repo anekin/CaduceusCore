@@ -148,7 +148,7 @@ async def _run_one_variant(bridge, tag, M, K, N, act, wgt, golden, use_tile_majo
         raise TimeoutError(f"{tag}: WRP_STATUS timeout")
 
     # Configure MXU MMIO
-    engine_n = ((N + 63) // 64) * 64  # padded N for the controller
+    engine_n = N  # DIM1 = actual N per ABI
     await bridge._apb_write(MXU_BASE + OFF_CTRL, 0x00000000)       # CTRL: INT4xINT8, no accumulate
     await bridge._apb_write(MXU_BASE + OFF_DIM_MK, (K << 16) | M)  # DIM0
     await bridge._apb_write(MXU_BASE + OFF_DIM_N, engine_n)        # DIM1

@@ -1,0 +1,51 @@
+case_id: task-1-bug-012-driver-fix
+utc_start: 2026-09-21T00:00:00Z
+verdict: pass
+
+EDIT GROUPS (6, per plan todo 1)
+1. sim/cocotb_bridge.py _configure_engine_regs MMUL branch (:2100-2107): deleted pad formula
+   `engine_n = ((instr.dim_n + 63) // 64) * 64` + 3-line stale comment ("multiple of 64" myth);
+   replaced with `engine_n = instr.dim_n  # DIM1 = actual N per spec/npu_abi.json DIM1 ("[15:0]=N columns").`
+   DIM1 write line + readback keep referencing engine_n (trailing stale "(padded to 64-wide tile)" removed).
+2. sim/cocotb_bridge.py test_e2e_attn_score: direct-write :3958 `base + 0x10, 64` -> `base + 0x10, N`;
+   docstring :3916-3922 -> "DIM1 is programmed with the actual N (=2); the wrapper's store-out width
+   follows the latched DIM1, producing a dense M×N output."
+3. sim/cocotb_bridge.py test_e2e_attn_score_layout docstring :4005: "current driver programming model"
+   -> "legacy (pre-fix) padded programming model" (wording only, ZERO assertion changes).
+4. Stale docstrings: _read_sram_output :2426 "(PCIe TLP)" -> "(with DUT present the real path is
+   _sram_backdoor_read VPI)"; _mxu_preload :2259-2262 WRP_DIM_N myth -> "WRP_DIM_N is written for
+   backward compatibility but is geometrically inactive when the latched DIM1 is non-zero — store-out
+   row width follows the latched MXU DIM1 (see mxu_soc_wrapper.v:221 wrp_n_derived)."
+5. sim/diagnose_data_layout.py :151: `engine_n = ((N + 63) // 64) * 64  # padded N for the controller`
+   -> `engine_n = N  # DIM1 = actual N per ABI` (:154 DIM1 write unchanged).
+6. sim/tests/test_fm_abi_contract.py: audit contract FLIPPED expected-two-files -> hits==[]
+   (walk logic preserved, test name preserved); module header :12-14 contract (c) rewritten:
+   pad-up formula has ZERO hits anywhere in sim/ after the bug-012 driver fix.
+
+PROVENANCE
+BRANCH: bug-012-driver-fix
+HEAD_AT_RUN: a3bc43c9cba036fbc6829e91b556abb7c7f8cc01 (P0 commit; todo-1 edits in working tree at run time, committed with this evidence)
+HOST: sz0001 (192.168.0.11, SSH zhengs@192.168.0.11)
+PYTHON: 3.12.4 (/home/zhengs/venvs/fmpytest/bin/python)
+PYTEST: 9.1.1
+READLINE_SHIM: /tmp/fmpytest-shim/readline.py (raise ImportError("readline unavailable"))
+
+ACCEPTANCE (all re-runnable)
+1. py_compile: `PYTHONPATH=sim python -m py_compile sim/cocotb_bridge.py sim/diagnose_data_layout.py sim/tests/test_fm_abi_contract.py` -> PY_COMPILE=OK (zero errors)
+2. PAD_PATTERN-equivalent grep (authoritative manual check; bare grep forbidden — false-hits
+   golden_executor.py:1630/1639/1643/1645 scratch alignment):
+   `grep -rnP "\(\([^)]*(dim_n|\bN\b)\s*\+\s*63\)\s*//\s*64\)\s*\*\s*64" sim/` -> ZERO output (exit 1)
+3. `grep -n "multiple of 64" sim/cocotb_bridge.py` -> ZERO output (exit 1)
+4. Scoped pytest on sz0001 (authoritative gate):
+   `env PATH=/home/zhengs/venvs/fmpytest/bin:/usr/bin:/bin PYTHONPATH=sim:gen:/tmp/fmpytest-shim /home/zhengs/venvs/fmpytest/bin/python -m pytest sim/tests/test_fm_abi_contract.py -q`
+   -> `8 passed in 0.16s`
+   Directed audit test:
+   `... -m pytest sim/tests/test_fm_abi_contract.py::test_dim1_padding_audit_only_in_rtl_drivers -v`
+   -> `sim/tests/test_fm_abi_contract.py::test_dim1_padding_audit_only_in_rtl_drivers PASSED [100%]`
+   `============================== 1 passed in 0.07s ===============================`
+   (hits==[] — pad-up formula zero hits anywhere in sim/)
+5. Diff whitelist: `git diff HEAD^ HEAD --name-only` (after this commit) ⊆ {sim/cocotb_bridge.py,
+   sim/diagnose_data_layout.py, sim/tests/test_fm_abi_contract.py, .omo/evidence/task-1-bug-012-driver-fix.txt}
+
+JUDGMENT
+D-DIM1-WRITERS: 0-padded
