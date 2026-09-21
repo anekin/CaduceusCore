@@ -68,3 +68,18 @@ files: .omo/plans/bug-012-driver-fix.md, .omo/drafts/bug-012-driver-fix.md, .omo
 message: chore(omo): P0 baseline — branch + provenance snapshot (bug-012-driver-fix)
 
 P0-SNAPSHOT: pass (7 M-lines exactly, taken after commit — see final snapshot below)
+
+FINAL SNAPSHOT (appended 2026-09-22 per F1 finding — git status --porcelain at branch HEAD)
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+?? .omo/plans/bug-012-fix.md
+?? .omo/plans/dse-relic-retirement.md
+?? .omo/plans/fm-residual-cleanup.md
+?? .omo/plans/fm-verification-fixes.md
+?? .omo/plans/verification-env-sz0001.md
+?? .omo/tmp/
