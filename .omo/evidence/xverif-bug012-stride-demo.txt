@@ -1,0 +1,61 @@
+xverif trace debug — BUG-RTL-SOC-012 (op05 attn_score MMUL store-out stride)
+================================================================================
+Run: 2026-09-21 on sz0001
+Target: run_e2e_attn_score (single-op op05 MMUL, M=32, K=128, N=2)
+Daidir: /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/simv_soc_cocotb.daidir
+FSDB:   /home/prj/zhengs/caduceuscore/tb_soc.fsdb
+
+1. Reproduction (simulation log)
+--------------------------------
+test_e2e_attn_score FAIL in 634 cycles
+First mismatch @ byte[8]: actual=0x00, golden=0xD0
+Total INT32 mismatches: 62/64
+
+2. xverif queries (condensed)
+-----------------------------
+value.at tb_soc.u_dut.u_mxu_wrapper.dim1_n
+  2500ns  3000ns  3100ns  ...  3633ns
+  16'haa  16'h40  16'h40       16'h40
+  => After init, DIM1 is latched at 0x40 = 64 (driver padded N=2 up to 64).
+
+value.at tb_soc.u_dut.u_mxu_wrapper.m_axi_awaddr (store-out phase)
+  3140ns        3145ns        3150ns        3155ns        3160ns        3165ns
+  32'h20020000  32'h20020000  32'h20020000  32'h20020100  32'h20020200  32'h20020200
+  3170ns        3175ns        3180ns
+  32'h20020300  32'h20020400  32'h20020500
+  => Row base address increments by 0x100 (256 bytes), not by N*4 = 8 bytes.
+
+value.at m_axi_awlen / m_axi_awsize
+  awlen = 8'h3  (4 beats per burst)
+  awsize = 3'h6 (64 bytes per beat)
+  => Each write burst covers 4 × 64 B = 256 B, exactly matching the 0x100 stride.
+
+value.at m_axi_wstrb
+  64'hffffffffffffffff at every sampled beat
+  => The wrapper asserts full 64-byte byte-enable for each beat.
+
+3. Root-cause interpretation
+----------------------------
+The MXU engine controller computes a 64-wide output tile because dim1_n=64.
+The wrapper's store-out FSM uses the same dim1_n to compute the row stride,
+so it advances SRAM addresses by 64 INT32 columns (256 B) per row.
+The firmware/driver expectation for this MMUL is N=2, i.e. dense row stride
+of 2 INT32 = 8 B.  The cocotb checker reads 64 contiguous bytes, so after
+row 0 it finds stale zero/garbage instead of row 1, producing the 62/64
+INT32 mismatch signature.
+
+4. Fix direction (already documented in bugs-soc-rtl.md)
+---------------------------------------------------------
+Preferred low-risk fix: drop the driver-side pad-to-64 in cocotb_bridge.py
+and program DIM1 = actual N, matching firmware semantics (firmware already
+writes real N to DIM1).  xverif evidence shows DIM1=2 is sufficient.
+
+5. Commands used
+----------------
+# Compile + run with FSDB dump on sz0001
+cd sim/regression
+make VCS_OPTS="-full64 -sverilog -debug_access+all -kdb -timescale=1ns/1ps \
+  +define+FSDB -P $VERDI_HOME/share/PLI/VCS/LINUX64/novas.tab" run_e2e_attn_score
+
+# xverif MCP session + queries via custom JSON-RPC driver
+# (batch files saved in .omo/tmp/xverif_*.jsonl)

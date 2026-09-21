@@ -51,9 +51,10 @@ def test_dim1_write_readback_real_n(N):
     )
 
 
-def test_dim1_n33_compute_dense_no_padding():
-    """DIM1=N=33 compute: dense M×N INT32 in SRAM == matmul_int32(M,K,33)."""
-    M, K, N = 8, 64, 33
+@pytest.mark.parametrize("N", [2, 33, 64])
+def test_dim1_compute_dense_no_padding(N):
+    """DIM1=N compute: dense M×N INT32 in SRAM == matmul_int32(M,K,N), no 64-col padding."""
+    M, K = 8, 64
     rng = np.random.default_rng(SEED)
     act = rng.integers(-128, 128, size=(M, K), dtype=np.int8)
     wgt = rng.integers(-8, 8, size=(K, N), dtype=np.int8)
@@ -82,9 +83,9 @@ def test_dim1_n33_compute_dense_no_padding():
     got = np.frombuffer(sram[o_off:o_off + M * N * 4],
                         dtype=np.int32).reshape(M, N)
     ref = GoldenMXU().matmul_int32(act, w_packed, M, K, N)
-    assert np.array_equal(got, ref), "DIM1=N=33 compute must be bit-exact"
+    assert np.array_equal(got, ref), f"DIM1=N={N} compute must be bit-exact"
     assert bytes(sram[tail_start:tail_end]) == b"\xAB" * (tail_end - tail_start), (
-        "FM must write dense M×N output — no padding to 64 columns"
+        f"FM must write dense M×{N} output — no padding to 64 columns"
     )
 
 

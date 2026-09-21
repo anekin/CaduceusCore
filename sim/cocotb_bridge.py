@@ -4181,6 +4181,103 @@ if COCOTB_AVAILABLE:
         )
 
     @cocotb.test()
+    async def test_e2e_mmul_dense_layout_varN(dut):
+        """
+        VPlan supplement: verify RTL MXU dense store-out for small N values
+        (BUG-012 coverage).  Programs DIM1 with the REAL N and checks that the
+        wrapper writes a dense M×N output with no padding beyond column N.
+
+        Covers N=2, 32, 64 using synthetic vectors so the test does not depend
+        on pre-generated Qwen hex files.  N is kept to powers of two because
+        the current wrapper store-out FSM assumes row_bytes = N*4 is a power
+        of two for N <= 64 (see mxu_soc_wrapper.v:729-735).
+        """
+        bridge = await _setup_single_op_test(dut)
+
+        if not NUMPY_AVAILABLE or GoldenMXU is None:
+            raise RuntimeError("numpy and GoldenMXU are required for this test")
+
+        M, K = 8, 64
+        N_values = [2, 32, 64]
+        rng = np.random.default_rng(42)
+        base = MXU_BASE
+
+        for N in N_values:
+            act = rng.integers(-128, 128, size=(M, K), dtype=np.int8)
+            wgt = rng.integers(-8, 8, size=(K, N), dtype=np.int8)
+            w_packed_dense = GoldenMXU.pack_int4(wgt)
+            act_packed = pack_int8_activation_tile_major(act.tobytes(), M, K)
+            w_packed_tile = pack_int4_tile_major(w_packed_dense.tobytes(), K, N)
+
+            w_addr = SRAM_BASE + 0x0000
+            i_addr = SRAM_BASE + 0x010000
+            o_addr = SRAM_BASE + 0x020000
+
+            await bridge.preload_sram(w_addr, w_packed_tile)
+            await bridge.preload_sram(i_addr, act_packed)
+            await bridge.preload_sram(o_addr, b"\x00" * (M * 64 * 4))
+
+            golden = GoldenMXU().matmul_int32(act, w_packed_dense, M, K, N)
+            golden_bytes = golden.astype(np.int32).tobytes()
+
+            await bridge._apb_write(base + 0x00, 0x0000_0000)
+            await bridge._apb_write(base + 0x0C, (K << 16) | M)
+            await bridge._apb_write(base + 0x10, N)
+            await bridge._apb_write(base + 0x14, i_addr)
+            await bridge._apb_write(base + 0x18, w_addr)
+            await bridge._apb_write(base + 0x1C, o_addr)
+
+            await bridge._mxu_preload(
+                base, w_addr, i_addr, o_addr,
+                k_tiles=1, dim_n=N,
+                op_name=f"e2e_mmul_dense_layout_N{N}",
+            )
+
+            cycle_start = int(dut.sim_cycle.value) if hasattr(dut, "sim_cycle") else 0
+            await bridge._apb_write(base + 0x04, 0x0000_0001)
+            status = await bridge._poll_done(base + 0x08)
+            store_wait = max(200, M * 8 + 200)
+            await bridge.wait_cycles(store_wait)
+            cycle_end = int(dut.sim_cycle.value) if hasattr(dut, "sim_cycle") else 0
+
+            actual = await bridge._read_sram_output(o_addr, M * N, 4)
+            instr = NPUInstruction(
+                opcode="MMUL",
+                op_id=0,
+                dim_m=M,
+                dim_n=N,
+                dim_k=K,
+                elements=M * N,
+                w_addr=w_addr,
+                i_addr=i_addr,
+                o_addr=o_addr,
+                golden_output=golden_bytes,
+                output_elem_bytes=4,
+                name=f"e2e_mmul_dense_layout_N{N}",
+            )
+            passed = await bridge._golden_compare(instr, actual)
+
+            if N < 64:
+                tail_bytes = await bridge._sram_backdoor_read(
+                    o_addr + M * N * 4, M * (64 - N) * 4
+                )
+                tail_zero = all(b == 0 for b in tail_bytes)
+                if not tail_zero:
+                    logger.error(
+                        f"[e2e_mmul_dense_layout_N{N}] padding region beyond "
+                        f"column {N} was modified"
+                    )
+                    passed = False
+
+            cycles = cycle_end - cycle_start
+            label = f"e2e_mmul_dense_layout_N{N}"
+            if passed:
+                logger.warning(f"[{label}] PASS in {cycles} cycles (STATUS=0x{status:08X})")
+            else:
+                logger.error(f"[{label}] FAIL in {cycles} cycles (STATUS=0x{status:08X})")
+            assert passed, f"{label} failed"
+
+    @cocotb.test()
     async def test_e2e_vector_vresid(dut):
         bridge = await _setup_single_op_test(dut)
         ok, cycles, _instr = await _run_manifest_op(bridge, 9)

@@ -37,6 +37,9 @@
 | 零维/部分 tile | `tb_mxu` zero_dim/partial | ✅ | PASS |
 | 随机 100 组合 | `tb_mxu` random | ✅ | 100/100 PASS |
 | ACCUMULATE 模式（CTRL[2]） | FM-SOC-003 + FM `test_mmul_accumulate` | ✅ | SoC 路径 + FM golden 加固 |
+| **MMUL DIM1 = 真实 N（非 64 倍数）** | `sim/tests/test_fm_abi_contract.py::test_dim1_compute_dense_no_padding` | ✅ | N=2/33/64 写 DIM1 后读回 == N；dense M×N 输出与 GoldenMXU bit-exact，无 64 列 padding |
+| **MMUL 小 N 的 RTL dense store-out 布局** | `sim/cocotb_bridge.py::test_e2e_mmul_dense_layout_varN` + `run_e2e_mmul_dense_layout` | ✅ | N=2/32/64 直接写 DIM1=N，RTL store-out 为 dense M×N，尾部 padding 区域未被改写；N 取 ≤64 的 2 的幂以匹配当前 wrapper store-out FSM 假设 |
+| **DIM1 pad-to-64 仅限 RTL driver（FM 域禁止）** | `sim/tests/test_fm_abi_contract.py::test_dim1_padding_audit_only_in_rtl_drivers` | ✅ | pad-up 公式只出现在 `sim/cocotb_bridge.py` / `sim/diagnose_data_layout.py`；FM 域零命中 |
 
 ### 2.2 SFU — 7 FP16 算子
 
