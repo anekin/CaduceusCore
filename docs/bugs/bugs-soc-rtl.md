@@ -386,6 +386,8 @@ Evidence:
 
 ### Total: 17 bugs (BUG-RTL-SOC-001 through BUG-RTL-SOC-012 + 2 wrapper-level-verification bugs + 3 phase-9 bugs)
 
+Ledger update 2026-09-22 (bug-012-driver-fix todo 4): BUG-RTL-SOC-012 closed **Fixed**（driver-side，commit `0aca3e8` "fix(sim): program MXU DIM1 with actual N — drop 64-multiple padding (ABI-aligned)"；RED→GREEN + 全量回归证据 `.omo/evidence/task-{2,3}-bug-012-driver-fix.txt`；residual：wrapper pow2 约束 / N>64 producer-must-tile / WRP_DIM_N 几何失效，见该条目 Fix 段）——By-Status 快照 **12 Fixed / 1 Pending（waiver 待签）/ 1 Accepted（reconstruction-failure）/ 3 Open**；Quality Metrics 百分比按 17 重算（Fixed 12 (70.6%)、Open 3 (17.6%)）；By-Severity Major 计数不变（012 仍为 Major）。
+
 Ledger update 2026-09-02 (statistics refresh): 汇总表补记 2026-08-31 T12 新增的 BUG-RTL-SOC-009/010/011（此前 2026-08-27 版汇总未计入，导致 Total/Open 计数过期）——Total 14→**17**；By-Status Open 1→**4**（009/010/011/012）；By-Severity 新增 Minor 2（010/011）、Major +1（009）；By-Module 新增 doorbell ABI 窗口与 wrapper 文档 2 行；Quality Metrics 百分比按 17 重算。各条目正文状态不变。
 
 Ledger update 2026-08-27 (todo 1, soc-rtl-verification-signoff): BUG-RTL-SOC-P9-00A、BUG-RTL-SOC-P9-00D、BUG-MXU-P9-00B closed **Fixed**（phase 9/10 evidence）；BUG-RTL-SOC-007 remains **Open** with phase 10 PERF-13 evidence（attn_weight cycles>0）；todo 15 ATTN-WEIGHT-CHAIN 已执行（2026-08-27），26 命令 cycles>0、op07 attn_weight cycles=30755 cos=1.0，链级未复现；根因仍未知，保持 Open 待 FPGA/更早日志追踪。
@@ -408,11 +410,11 @@ Ledger update 2026-09-02 (用户接受, bug-007-root-cause 收尾): 用户回复
 
 | Status | Count | Bug IDs |
 |--------|:-----:|---------|
-| Fixed | 11 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-005, BUG-RTL-SOC-006, BUG-RTL-SOC-008, BUG-RTL-SOC-WV-001, BUG-RTL-SOC-WV-007, BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
+| Fixed | 12 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-005, BUG-RTL-SOC-006, BUG-RTL-SOC-008, BUG-RTL-SOC-012, BUG-RTL-SOC-WV-001, BUG-RTL-SOC-WV-007, BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
 | Waived | 0 | — |
 | Pending (waiver 待用户签署) | 1 | BUG-RTL-SOC-002 (8 MB DRAM window constraint — WVR-SOC-RTL-002, pending sign-off 待用户签署) |
 | Accepted (reconstruction-failure) | 1 | BUG-RTL-SOC-007 (attn_weight — ATTRIBUTION 2026-09-02: testcase/environment reconstruction failure，45/6 未复现，无 FuncModel/RTL 故障证据；Blocker-6 path (b)，用户已接受关闭，不 claim Fixed) |
-| Open | 4 | BUG-RTL-SOC-009 (doorbell ABI window — LAST_STATUS/COMPLETION_STATUS 未实现, T12 2026-08-31), BUG-RTL-SOC-010 (pcie_ep_wrapper header 夸大字段, T12), BUG-RTL-SOC-011 (rtl/ip/README DMA 访问类别错误, T12), BUG-RTL-SOC-012 (blk0 E2E op05 attn_score MMUL drain — todo 14 blk0 investigation 判 PRE-EXISTING) |
+| Open | 3 | BUG-RTL-SOC-009 (doorbell ABI window — LAST_STATUS/COMPLETION_STATUS 未实现, T12 2026-08-31), BUG-RTL-SOC-010 (pcie_ep_wrapper header 夸大字段, T12), BUG-RTL-SOC-011 (rtl/ip/README DMA 访问类别错误, T12) |
 | Re-opened | 0 | — |
 
 ### By Module
@@ -435,10 +437,10 @@ Ledger update 2026-09-02 (用户接受, bug-007-root-cause 收尾): 用户回复
 | Metric | Value |
 |--------|:-----:|
 | Total RTL bugs found and documented | 17 |
-| Bugs closed Fixed | 11 (64.7%) |
+| Bugs closed Fixed | 12 (70.6%) |
 | Bugs pending waiver sign-off | 1 (5.9%) — BUG-RTL-SOC-002 (8 MB DRAM window, WVR-SOC-RTL-002, pending sign-off 待用户签署) |
 | Accepted (reconstruction-failure, 用户已接受) | 1 (5.9%) — BUG-RTL-SOC-007 (2026-09-02 定级 + 用户接受关闭，Blocker-6 path (b)，不 claim Fixed) |
-| Open / under investigation | 4 (23.5%) — BUG-RTL-SOC-009 (doorbell ABI window), BUG-RTL-SOC-010/011 (wrapper 文档 vs RTL), BUG-RTL-SOC-012 (blk0 op05 attn_score drain, todo 14 判 PRE-EXISTING) |
+| Open / under investigation | 3 (17.6%) — BUG-RTL-SOC-009 (doorbell ABI window), BUG-RTL-SOC-010/011 (wrapper 文档 vs RTL) |
 | Ibex-specific bugs (full RTL CPU replacement) | 0 |
 | Regressions after fixes | 0 (491/491 module regression PASS; vector + MXU wrapper 10/10 baseline PASS; PERF-06 M=32 cos=1.000000; PERF-13 9/9 MMUL PASS) |
 | Re-opened bugs | 0 (BUG-RTL-SOC-005 closed in 2026-07-23 rtl-bug-fix-wv round) |
@@ -832,7 +834,7 @@ rather than silently assumed.
 | **Case** | run_e2e_blk0 (op05 attn_score MMUL) |
 | **Severity** | Major |
 | **Type** | RTL (MXU wrapper store-out geometry × driver DIM1 programming model) |
-| **Status** | Open |
+| **Status** | Fixed |
 
 #### Symptom
 
@@ -905,28 +907,32 @@ chain, different signature.
 
 #### Fix
 
-Root cause CONFIRMED but NOT fixed — investigation-only disposition (user
-decision, 2026-09-03; Status stays Open). Two fix directions, ordered by the
-todo 4 Phase B empirical result:
+FIXED (2026-09-22, driver-side, branch bug-012-driver-fix) — commit `0aca3e8`
+("fix(sim): program MXU DIM1 with actual N — drop 64-multiple padding
+(ABI-aligned)"): the cocotb driver (`sim/cocotb_bridge.py`
+`_configure_engine_regs` MMUL branch) and `sim/diagnose_data_layout.py` now
+program MXU DIM1 with the actual N (ABI: DIM1 "[15:0]=N columns",
+`spec/npu_abi.json`), dropping the pad-to-64; the `test_e2e_attn_score`
+direct write follows (DIM1=N). Mechanism: driver DIM1 = real N aligns with
+the ABI and the firmware path (`firmware/npu_firmware.c:273`); the wrapper's
+store-out follows the latched DIM1 (`wrp_n_derived`), producing a dense M×N
+layout — semantics identical to the firmware path. Product RTL untouched.
 
-1. Driver-side (PREFERRED — low-risk, test-infra): program MXU DIM1 = actual
-   N (drop the pad-to-64 in `sim/cocotb_bridge.py:2100-2107`), aligned with
-   firmware semantics (`firmware/npu_firmware.c:273`). Supported by
-   `H-TRIGGER-DIM1: actual-N-sufficient` (DIM1=2 → dense 64/64 golden match,
-   engine accepts without error/hang) and `H-DIM1-CLAIM: refuted` (the driver
-   comment "MXU engine controller requires DIM1 multiple of 64" is stale).
-2. Wrapper-side (product RTL — heavier): make WRP_DIM_N take priority over the
-   latched dim1_n for store-out (`rtl/wrapper/mxu_soc_wrapper.v:221`), or
-   otherwise reconcile the two N sources; requires the full 33-case FM-SOC
-   regression + module-level + wrapper-level regression before landing.
+Residual constraints (driver-side fix scope):
+- (a) The wrapper store-out FSM still requires N*4 to be a power of two for
+  N≤64 (`rtl/wrapper/mxu_soc_wrapper.v:719-735` beat/WSTRB geometry) —
+  single-command non-power-of-two N (e.g. 33) remains unsupported; hardening
+  (W1: N-source hardening / W2: beat/WSTRB geometry generalization) is
+  deferred to `.omo/plans/bug-012-fix.md` todos 2/3 as follow-up.
+- (b) Single-command N>64 remains producer-must-tile (cap 256 retained).
+- (c) WRP_DIM_N is still written by `_mxu_preload` but is geometrically
+  inactive (`wrp_n_derived` prefers the latched dim1_n,
+  `rtl/wrapper/mxu_soc_wrapper.v:221`).
 
-RED anchor: `test_e2e_attn_score_layout` (`sim/cocotb_bridge.py:4000`,
-target `run_e2e_attn_score_layout`) is a characterization test added in todo 4
-(NO FIX). Phase A pins the current 256B-stride layout (row r words at window
-offset r*256); Phase B proves the fix geometry (DIM1=2 → dense 64/64). A
-future fix flips its Phase A assertions RED→GREEN as acceptance. Note:
-`test_e2e_attn_score` is currently a RED anchor too — the future fix will flip
-its 62/64 failure to a dense pass.
+RED anchors flipped GREEN by this fix: `test_e2e_attn_score` 62/64 FAIL →
+dense 64/64 PASS; `test_e2e_attn_score_layout` Phase A pins the legacy
+(pre-fix) padded geometry (hand-written DIM1=64, driver-independent) and
+Phase B the dense fix geometry — both green post-fix.
 
 #### Verification
 
@@ -950,10 +956,25 @@ Evidence (root-cause chain, 2026-09-03, branch bug-012-root-cause):
   comparison table) / `.omo/evidence/task-14-blk0-repro.log` /
   `.omo/evidence/task-14-blk0-baseline.log`.
 
-RED-anchor note: characterization test `test_e2e_attn_score_layout`
-(sim/cocotb_bridge.py:4000, target `run_e2e_attn_score_layout`, added todo 4,
-NO FIX) is currently RED-by-design; a future fix flips its Phase A assertions
-RED→GREEN as acceptance.
+Fix verification (2026-09-22, branch bug-012-driver-fix):
+- `.omo/evidence/task-2-bug-012-driver-fix.txt` — RED→GREEN proof:
+  `T5-ATTN-SCORE: pass-64-64` — `[e2e_attn_score] PASS in 634 cycles` +
+  make gate `E2E_ATTN_SCORE: PASS` + zero `Total INT32 mismatches:` lines +
+  zero `First mismatch @ byte[` lines (old 62/64 signature absent).
+- `.omo/evidence/task-3-bug-012-driver-fix.txt` — full regression (sz0001,
+  serial): REG-LAYOUT pass / REG-DENSE-VARN pass / REG-FMSOC
+  25-pass-8-skip-0-fail-0-timeout-total-33 (SKIPs by-design superseded /
+  not-applicable) / REG-E2E blk0+op05+op07 pass / REG-W4 6-pass-0-fail /
+  REG-P9 causality-pass + sweep-pass / PYTEST 2279-passed (32 failed +
+  11 errors — all pre-existing documented classes: test_engines 8F
+  engine-drift open item, soc_differential asyncio ×4, stripped-env
+  python3 oracle spawns; zero related to this fix).
+
+RED-anchor note (historical, root-cause era): characterization test
+`test_e2e_attn_score_layout` (sim/cocotb_bridge.py:4000, target
+`run_e2e_attn_score_layout`, added todo 4, NO FIX) was RED-by-design until
+the 2026-09-22 driver-side fix; both anchors are now GREEN (see Fix
+verification above).
 
 2026-09-02 cross-reference (bug-007-root-cause todo 9; BUG-012 Status/Root Cause/Fix
 untouched): H4-N128-BLK0-SINGLE (`.omo/evidence/task-6-bug-007-root-cause.txt`) proves the
@@ -961,4 +982,4 @@ firmware multi-N-tile loop executes op07 attn_weight at N=128 (M=32/K=2/N=128 un
 cycles=31291, cos_sim=1.000000, fp32_bit_exact=True). BUG-RTL-SOC-007 op07 is N-tiled
 (N=128 → 2 N-tiles); BUG-RTL-SOC-012 op05 attn_score has N=2 with tiles=2 = K-tiling
 (K=128 → 2 K-blocks), a different multi-tile axis. No shared fix is claimed; BUG-RTL-SOC-012
-Status remains Open.
+Status remains Open (as of this 2026-09-02 note; fixed 2026-09-22 driver-side — see Fix section above).

@@ -340,7 +340,7 @@ make VCS_OPTS="-full64 -sverilog -debug_access+all -kdb \
     <ul>
       <li>修改 <code>sim/cocotb_bridge.py:2100-2107</code>，去掉 <code>engine_n = ((instr.dim_n + 63)//64)*64</code> 的 pad-to-64。</li>
       <li>让 driver 直接把真实 N（本例为 2）写进 MXU DIM1。</li>
-      <li>wrapper 的 <code>WRP_DIM_N</code> 继续负责 store-out 的真实宽度控制。</li>
+      <li>wrapper 的 store-out 宽度跟随锁存的 DIM1（= 真实 N），<code>WRP_DIM_N</code> 不参与几何。</li>
     </ul>
     <p>修复后用同一个 <code>run_e2e_attn_score</code> 回归验证：</p>
     <table>
@@ -365,7 +365,7 @@ make VCS_OPTS="-full64 -sverilog -debug_access+all -kdb \
     </ul>
 
     <div class="callout warning">
-      <strong>修复状态：</strong> 已在 <code>docs/bugs/bugs-soc-rtl.md</code> 记录。详细 fix 方案与验证结果见上文<a href="#fix">第 9 节</a>。
+      <strong>修复状态：</strong> 已修复（driver-side，commit <code>0aca3e8</code> "fix(sim): program MXU DIM1 with actual N — drop 64-multiple padding (ABI-aligned)"），台账见 <code>docs/bugs/bugs-soc-rtl.md</code>；RED→GREEN 证据见 <code>.omo/evidence/task-2-bug-012-driver-fix.txt</code>。详细 fix 方案与验证结果见上文<a href="#fix">第 9 节</a>。
     </div>
   </main>
 
