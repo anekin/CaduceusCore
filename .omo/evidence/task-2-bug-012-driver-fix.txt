@@ -1,0 +1,33 @@
+case_id: task-2-bug-012-driver-fix
+utc_start: 2026-09-21T23:14:00Z
+verdict: pass
+
+PROVENANCE
+BRANCH: bug-012-driver-fix
+HEAD: 0aca3e87220afbb7a9c095cf38b6cf9781597b6b (fix(sim): program MXU DIM1 with actual N — drop 64-multiple padding (ABI-aligned))
+HOST: sz0001 (192.168.0.11) via sim/regression/soc-verification-run.sh auto-SSH
+VCS: Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64 (Sep 21 23:14 2026)
+SIMV: sim/regression/simv_soc_cocotb — md5 9dee7db283bb5e4f0ac2f0f43854f8ef, mtime Sep 21 23:14 (CLEAN=1 default forced full rebuild: stale simv/daidir/csrc removed before make — driver change compiled in)
+COMMAND: bash sim/regression/soc-verification-run.sh run_e2e_attn_score 2>&1 | tee build/evidence/bug-012-t2-attn-score-run.log
+MAKE TARGET: run_e2e_attn_score (sim/regression/Makefile:673; PASS gate :683 `test_e2e_attn_score.*PASS`)
+COCOTB: v1.9.0 (py3.11), TESTCASE=test_e2e_attn_score, TOPLEVEL=tb_soc, +BOOTROM_HEX=firmware/build/npu_firmware.hex
+
+DUAL-GATE JUDGMENT (all four conditions met)
+1. Make gate line (Makefile:683 grep口径) — present:
+   `** cocotb_bridge.test_e2e_attn_score   PASS        3633.50           0.55       6552.05  **`
+   `E2E_ATTN_SCORE: PASS`
+   `[soc-run] RESULT: PASS for run_e2e_attn_score` (PIPE-EXIT=0)
+2. Test PASS line (cocotb_bridge.py:3994) — present:
+   `  3633.50ns WARNING  cocotb_bridge                      [e2e_attn_score] PASS in 634 cycles`
+   `  3633.50ns INFO     cocotb.regression                  test_e2e_attn_score passed`
+   `** TESTS=1 PASS=1 FAIL=0 SKIP=0                    3633.50           0.70       5224.60  **`
+3. `Total INT32 mismatches:` lines in run log: ZERO (grep -Fc = 0)
+4. `First mismatch @ byte[` lines in run log: ZERO (grep -Fc = 0)
+Old RED signature (62/64, cf. task-14-blk0-investigation.txt:52-73) — ABSENT (grep "62/64" exit 1).
+
+RED→GREEN: pre-fix baseline FAIL 62/64 (First mismatch @ byte[8], Total INT32 mismatches: 62/64 —
+see .omo/evidence/task-14-blk0-investigation.txt:52-73 and task-3-bug-012-root-cause.txt ISO-VERDICT)
+→ post-fix (this run, DIM1=N=2 per todo-1 driver change): PASS 64/64 dense M×N in 634 cycles.
+
+JUDGMENT
+T5-ATTN-SCORE: pass-64-64

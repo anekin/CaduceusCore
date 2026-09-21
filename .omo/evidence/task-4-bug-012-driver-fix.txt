@@ -1,0 +1,52 @@
+case_id: task-4-bug-012-driver-fix
+utc_start: 2026-09-22T02:10:00Z
+verdict: pass
+
+PROVENANCE
+BRANCH: bug-012-driver-fix
+HEAD_BEFORE_THIS_COMMIT: 0fe8bff (test(bug012): FM-SOC 33 + e2e + W4-PERF regression evidence)
+FIX_COMMIT_CITED: 0aca3e8 ("fix(sim): program MXU DIM1 with actual N — drop 64-multiple padding (ABI-aligned)")
+EVIDENCE_BASIS: task-2 (T5-ATTN-SCORE: pass-64-64) + task-3 (7/7 regression groups green) — both committed on this branch
+
+EDITS (per plan todo 4)
+1. docs/bugs/bugs-soc-rtl.md BUG-012 entry:
+   - Status: Open -> Fixed (ATTRIBUTION/root-cause section text preserved verbatim)
+   - Fix section rewritten: FIXED (2026-09-22, driver-side, branch bug-012-driver-fix) + commit 0aca3e8
+     citation + mechanism one-liner (driver DIM1 = real N per ABI; wrapper store-out follows latched
+     DIM1, dense M×N, semantics identical to firmware path; product RTL untouched) + Residual
+     constraints (a) wrapper store-out FSM requires N*4 pow2 for N≤64 — non-pow2 N (e.g. 33)
+     single-command unsupported, W1/W2 hardening deferred to .omo/plans/bug-012-fix.md todos 2/3;
+     (b) single-command N>64 remains producer-must-tile (cap 256 retained); (c) WRP_DIM_N still
+     written by _mxu_preload but geometrically inactive (wrp_n_derived prefers latched dim1_n,
+     mxu_soc_wrapper.v:221)
+   - Verification section: added fix-verification block citing
+     .omo/evidence/task-2-bug-012-driver-fix.txt (T5-ATTN-SCORE: pass-64-64 + PASS line + zero
+     mismatch lines) and .omo/evidence/task-3-bug-012-driver-fix.txt (all 7 regression groups);
+     historical RED-anchor note updated (anchors now GREEN); 2026-09-02 cross-ref final clause
+     annotated (status as of that note; fixed 2026-09-22 driver-side)
+2. By-Status table: Fixed 11 -> 12 (+BUG-RTL-SOC-012 inserted in numeric order); Open 4 -> 3
+   (BUG-RTL-SOC-012 removed). By-Severity :404 Major row UNTOUCHED (BUG-012 stays Major, count 12
+   unchanged — per plan Must-NOT).
+3. Quality Metrics: `Bugs closed Fixed | 11 (64.7%)` -> `12 (70.6%)`; `Open / under
+   investigation | 4 (23.5%)` -> `3 (17.6%)` (percentages recomputed: 12/17=70.6%, 3/17=17.6%).
+4. README.md status snapshot (Bug 台账 SoC RTL row): `17 = 11 Fixed / ... / 4 Open` ->
+   `17 = 12 Fixed / 1 Pending（waiver 待签）/ 1 Accepted（reconstruction-failure）/ 3 Open`.
+5. docs/xverif-debug-case-bug012.html: :343 mechanism line `wrapper 的 WRP_DIM_N 继续负责
+   store-out 的真实宽度控制` -> `wrapper 的 store-out 宽度跟随锁存的 DIM1（= 真实 N），
+   WRP_DIM_N 不参与几何` (consistent with root cause); :368 修复状态 callout now cites fix
+   commit 0aca3e8 + .omo/evidence/task-2-bug-012-driver-fix.txt path.
+
+ACCEPTANCE GREPS (re-runnable)
+- grep -n "LEDGER-STATUS: Fixed" .omo/evidence/task-4-bug-012-driver-fix.txt -> ≥1 (this file)
+- grep -n "12 Fixed" docs/bugs/bugs-soc-rtl.md -> ≥1 (By-Status Fixed row)
+- grep -n "Bugs closed Fixed | 12" docs/bugs/bugs-soc-rtl.md -> ≥1 (Quality Metrics)
+- grep -n "Open / under investigation | 3" docs/bugs/bugs-soc-rtl.md -> ≥1 (Quality Metrics)
+- README snapshot row contains "12 Fixed" and "3 Open"
+- docs/xverif-debug-case-bug012.html no longer contains "WRP_DIM_N 继续负责"
+- git diff main..HEAD --name-only -- docs/ README.md ⊆ {docs/bugs/bugs-soc-rtl.md, README.md,
+  docs/xverif-debug-case-bug012.html}
+- By-Severity Major row (:404) unchanged: count 12, BUG-RTL-SOC-012 still listed Major
+
+JUDGMENT
+LEDGER-STATUS: Fixed
+STATS: 12-fixed-3-open
