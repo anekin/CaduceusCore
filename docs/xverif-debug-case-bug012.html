@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>xverif 波形调试实战：BUG-RTL-SOC-012</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #1f242c;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-secondary: #8b949e;
+      --accent: #58a6ff;
+      --accent-2: #7ee787;
+      --danger: #f85149;
+      --warning: #d29922;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.7;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header {
+      padding: 4rem 1.5rem 3rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+      margin: 0 0 .75rem;
+      font-size: clamp(1.75rem, 5vw, 2.75rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    header .subtitle {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+    .meta {
+      margin-top: 1.5rem;
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      color: var(--text-secondary);
+      font-size: .9rem;
+    }
+    .meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+    }
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 5rem;
+    }
+    h2 {
+      margin-top: 3rem;
+      padding-bottom: .5rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 1.5rem;
+      color: var(--accent);
+    }
+    h3 { margin-top: 2rem; color: var(--text); }
+    p { margin: 1rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: .5rem 0; }
+    code {
+      font-family: var(--font-mono);
+      background: var(--surface-2);
+      padding: .15rem .4rem;
+      border-radius: 4px;
+      font-size: .9em;
+    }
+    pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: .85rem;
+      line-height: 1.6;
+    }
+    pre code { background: transparent; padding: 0; }
+    .callout {
+      background: var(--surface);
+      border-left: 4px solid var(--accent);
+      padding: 1rem 1.25rem;
+      border-radius: 0 8px 8px 0;
+      margin: 1.5rem 0;
+    }
+    .callout.danger { border-left-color: var(--danger); }
+    .callout.warning { border-left-color: var(--warning); }
+    .callout strong { color: var(--text); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      font-size: .9rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: .6rem .8rem;
+      text-align: left;
+    }
+    th {
+      background: var(--surface);
+      font-weight: 600;
+      color: var(--accent);
+    }
+    td { font-family: var(--font-mono); }
+    .highlight { color: var(--accent-2); font-weight: 600; }
+    .bad { color: var(--danger); }
+    .diagram {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+      overflow-x: auto;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      margin: .35rem 0;
+      font-family: var(--font-mono);
+      font-size: .85rem;
+      white-space: nowrap;
+    }
+    .addr { min-width: 110px; color: var(--accent); }
+    .bytes { display: flex; gap: 2px; }
+    .byte {
+      width: 18px; height: 18px;
+      border-radius: 3px;
+      display: inline-block;
+    }
+    .byte.valid { background: var(--accent-2); }
+    .byte.gap { background: var(--surface-2); border: 1px dashed var(--border); }
+    .byte.garbage { background: var(--danger); opacity: .6; }
+    .toc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      margin: 2rem 0;
+    }
+    .toc ul { list-style: none; padding: 0; }
+    .toc li { margin: .4rem 0; }
+    footer {
+      text-align: center;
+      padding: 3rem 1.5rem;
+      border-top: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: .9rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>xverif 波形调试实战</h1>
+    <p class="subtitle">用 combined daidir + FSDB 会话快速定位 BUG-RTL-SOC-012（op05 attn_score MMUL store-out stride 错误）</p>
+    <div class="meta">
+      <span>项目：CaduceusCore</span>
+      <span>作者：Sisyphus</span>
+      <span>日期：2026-09-21</span>
+    </div>
+  </header>
+
+  <main>
+    <nav class="toc">
+      <strong>目录</strong>
+      <ul>
+        <li><a href="#bug">1. 这是个什么 bug</a></li>
+        <li><a href="#pain">2. 传统 debug 痛点</a></li>
+        <li><a href="#xverif">3. xverif 是什么</a></li>
+        <li><a href="#old-debug">4. 对比：不用 xverif 时 debug 了几轮</a></li>
+        <li><a href="#setup">5. 环境准备：跑出一条带 FSDB 的用例</a></li>
+        <li><a href="#session">6. 打开 combined 会话</a></li>
+        <li><a href="#query">7. 关键查询与波形证据</a></li>
+        <li><a href="#analysis">8. 根因分析</a></li>
+        <li><a href="#fix">9. Fix 方案与验证结果</a></li>
+        <li><a href="#takeaway">10. 经验与建议</a></li>
+      </ul>
+    </nav>
+
+    <h2 id="bug">1. 这是个什么 bug</h2>
+    <p><strong>BUG-RTL-SOC-012</strong> 是 SoC E2E 中 op05 <code>attn_score</code> MMUL 的 store-out 布局错误。</p>
+    <ul>
+      <li>算子维度：<code>M=32, K=128, N=2</code></li>
+      <li>预期：每行输出 2 个 INT32（8 字节），32 行在 SRAM 中<strong>紧密排列</strong></li>
+      <li>实际：行与行之间跨度 256 字节，cocotb 读回的数据只有 2/64 INT32 正确</li>
+    </ul>
+    <div class="callout danger">
+      <strong>仿真失败现场：</strong> First mismatch @ byte[8]: actual=0x00, golden=0xD0 — Total INT32 mismatches: 62/64
+    </div>
+
+    <h2 id="pain">2. 传统 debug 痛点</h2>
+    <ul>
+      <li><strong>周期长：</strong> 加 $display、改 testbench、重新编译、重跑，每次十几分钟。</li>
+      <li><strong>信号难找：</strong> SoC 顶层信号多，APB/AXI 跨模块，手工点波形效率低。</li>
+      <li><strong>证据零散：</strong> log、wave、RTL 代码三头跑，难以把“寄存器配置”和“总线行为”关联起来。</li>
+    </ul>
+
+    <h2 id="xverif">3. xverif 是什么</h2>
+    <p>xverif 是团队自研的验证工具链，通过 <strong>MCP server</strong> 暴露给 OpenCode / 脚本调用。它的核心能力是把 <strong>design hierarchy（daidir）</strong> 和 <strong>波形（FSDB）</strong> 绑定到一个 combined session，然后直接查询：</p>
+    <ul>
+      <li><code>scope.list / scope.roots</code>：快速浏览 elaborated hierarchy，定位实例和信号</li>
+      <li><code>value.at</code>：在多个时间点批量采样信号值</li>
+      <li><code>axi.transaction.cursor / apb.query</code>：协议级事务分析</li>
+      <li><code>trace.driver / trace.active_driver</code>：静态/动态驱动追踪</li>
+    </ul>
+    <div class="callout">
+      <strong>关键优势：</strong> 不用开 Verdi GUI，不用写 Tcl/DO，直接通过结构化查询把“寄存器值 + AXI 地址 + 时间点”串成证据链。
+    </div>
+
+    <h2 id="old-debug">4. 对比：不用 xverif 时 debug 了几轮</h2>
+    <p>在 xverif 可用之前，这个 bug 从 2026-08-31 首次暴露到 2026-09-03 根因确认，一共走了 <strong>6 轮有证据记录的迭代</strong>：</p>
+    <table>
+      <tr><th>轮次</th><th>证据文件</th><th>内容</th></tr>
+      <tr>
+        <td>0</td>
+        <td><code>task-14-blk0-investigation.txt</code></td>
+        <td>原始失败定位：run_e2e_blk0 在 op05 报 62/64 mismatch，先排除 crossbar fix 引入，确认是 pre-existing bug</td>
+      </tr>
+      <tr>
+        <td>1</td>
+        <td><code>task-1-bug-012-root-cause.txt</code></td>
+        <td>H-GOLDEN closure：重新跑 verify_ops，确认 golden 本身没问题</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><code>task-2-bug-012-root-cause.txt</code></td>
+        <td>H-STRIDE 静态链路：从代码层面挖 <code>wrp_n_derived</code>、8dd5dbe 引入 commit、stale comment 来源</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><code>task-3-bug-012-root-cause.txt</code></td>
+        <td>孤立 live-golden repro，<span class="bad">refute</span> 了 stale-golden 假设</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td><code>task-4-bug-012-root-cause.txt</code></td>
+        <td>Phase A/B layout + trigger probe，<span class="bad">refute</span> 了 drain-only-row 假设，并证明 DIM1=2 可 dense pass</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td><code>task-5-bug-012-root-cause.txt</code></td>
+        <td>综合 verdict + attribution，定稿 root cause</td>
+      </tr>
+    </table>
+    <p>每一轮都要改 testbench / 加 log / 重跑仿真，平均十几分钟一轮；两个主要假设被证伪后才定位到真正的机制。</p>
+    <div class="callout">
+      <strong>对比：</strong> 用 xverif 后，第一轮查询（<code>dim1_n</code> + <code>m_axi_awaddr</code> + <code>awlen/awsize</code>）就直接在波形上复现了 256B stride，和之前 4 天 6 轮的结论一致。
+    </div>
+
+    <h2 id="setup">5. 环境准备：跑出一条带 FSDB 的用例</h2>
+    <p>目标用例：<code>run_e2e_attn_score</code>（单 op05 MMUL）。要在 VCS 编译时打开 FSDB dump 并生成 Verdi KDB：</p>
+    <pre><code>cd sim/regression
+source /NAS/Tools/methodology/modules/init/bash
+module load vcs/vcs_2023.12sp2 verdi/verdi_2023.12sp2
+
+make VCS_OPTS="-full64 -sverilog -debug_access+all -kdb \
+  -timescale=1ns/1ps +define+FSDB \
+  -P /NAS/Tools/EDA/synopsys/verdi_V-2023.12-SP2_P/share/PLI/VCS/LINUX64/novas.tab" \
+  run_e2e_attn_score</code></pre>
+    <p>注意：Makefile 里 simv 从 repo parent 运行，所以 FSDB 会生成在 <code>/home/prj/zhengs/caduceuscore/tb_soc.fsdb</code>，而不是 repo 内部。</p>
+
+    <h2 id="session">6. 打开 combined 会话</h2>
+    <p>xverif MCP 配置在 <code>.opencode/opencode.json</code>。当前 OpenCode 会话若未重启，可通过 JSON-RPC 直调；正常流程是：</p>
+    <pre><code>xverif_debug_session_open(
+  name="bug012_demo",
+  daidir=".../sim/regression/simv_soc_cocotb.daidir",
+  fsdb=".../tb_soc.fsdb"
+)</code></pre>
+    <p>session 打开后，所有后续查询都基于同一个 combined context，设计层级和波形时间点一一对应。</p>
+
+    <h2 id="query">7. 关键查询与波形证据</h2>
+
+    <h3>7.1 定位 hierarchy</h3>
+    <p>用 <code>scope.list</code> 确认 MXU wrapper 实例路径：</p>
+    <pre><code>tb_soc.u_dut.u_mxu_wrapper   mxu_soc_wrapper   module  true  false</code></pre>
+
+    <h3>7.2 查询 DIM1 寄存器</h3>
+    <pre><code>value.at tb_soc.u_dut.u_mxu_wrapper.dim1_n
+2500ns  3000ns  3100ns  ...  3633ns
+16'haa  16'h40  16'h40       16'h40</code></pre>
+    <p>复位后 <code>dim1_n</code> 稳定在 <span class="highlight">0x40 = 64</span>，而真实 N=2。</p>
+
+    <h3>7.3 查询 AXI 写地址</h3>
+    <pre><code>value.at tb_soc.u_dut.u_mxu_wrapper.m_axi_awaddr
+3140ns  3145ns  3150ns  3155ns  3160ns  3165ns
+0x20020000 0x20020000 0x20020000 0x20020100 0x20020200 0x20020200
+3170ns      3175ns      3180ns
+0x20020300 0x20020400 0x20020500</code></pre>
+    <p>每一行 store-out 的基地址递增 <span class="highlight">0x100 = 256 字节</span>。</p>
+
+    <h3>7.4 确认 burst 长度</h3>
+    <table>
+      <tr><th>信号</th><th>值</th><th>含义</th></tr>
+      <tr><td>m_axi_awlen</td><td>0x3</td><td>4 beats / burst</td></tr>
+      <tr><td>m_axi_awsize</td><td>0x6</td><td>64 bytes / beat</td></tr>
+      <tr><td>m_axi_wstrb</td><td>0xffff_ffff_ffff_ffff</td><td>64 字节 byte-enable 全有效</td></tr>
+    </table>
+    <p>这意味着 wrapper 把每行当成 <strong>64 INT32 = 256 字节</strong> 来写，正好对应 0x100 的 stride。</p>
+
+    <h2 id="analysis">8. 根因分析</h2>
+    <p>MXU controller 用 <code>dim1_n=64</code> 计算输出 tile；wrapper 的 store-out FSM 也用这个 dim1_n 算行 stride，于是 SRAM 里每行之间空出 256B。而本次 MMUL 真实 N=2，期望的 dense stride 只有 8B。</p>
+
+    <div class="diagram">
+      <div style="margin-bottom:.75rem;font-weight:600;">SRAM 布局对比（每格 = 4 字节 INT32）</div>
+      <div class="row"><span class="addr">期望</span></div>
+      <div class="row"><span class="addr">0x20020000</span><span class="bytes"><span class="byte valid"></span><span class="byte valid"></span><span class="byte valid"></span><span class="byte valid"></span><span class="byte valid"></span><span class="byte valid"></span><span class="byte valid"></span><span class="byte valid"></span></span> row0 + row1 + row2 + ...</div>
+      <div class="row"><span class="addr">实际</span></div>
+      <div class="row"><span class="addr">0x20020000</span><span class="bytes"><span class="byte valid"></span><span class="byte valid"></span><span class="byte gap"></span><span class="byte gap"></span><span class="byte gap"></span><span class="byte gap"></span><span class="byte gap"></span><span class="byte gap"></span></span> row0 (2 valid INT32)</div>
+      <div class="row"><span class="addr">0x20020100</span><span class="bytes"><span class="byte valid"></span><span class="byte valid"></span><span class="byte gap"></span><span class="byte gap"></span><span class="byte gap"></span><span class="byte gap"></span><span class="byte gap"></span><span class="byte gap"></span></span> row1</div>
+      <div class="row"><span class="addr">0x20020200</span><span class="bytes"><span class="byte valid"></span><span class="byte valid"></span><span class="byte gap"></span><span class="byte gap"></span><span class="byte gap"></span><span class="byte gap"></span><span class="byte gap"></span><span class="byte gap"></span></span> row2</div>
+      <div style="margin-top:.75rem;font-size:.8rem;color:var(--text-secondary);">
+        <span class="byte valid"></span> 有效 INT32 &nbsp;
+        <span class="byte gap"></span> 未写入 / 读回为 0 &nbsp;
+        cocotb 连续读 64B 时，row0 之后的 14 字节全是 gap，导致 62/64 mismatch。
+      </div>
+    </div>
+
+    <h2 id="fix">9. Fix 方案与验证结果</h2>
+    <p>台账里记录了两个 fix 方向，团队选择了低风险、与 firmware 语义一致的 <strong>driver-side fix</strong>：</p>
+    <ul>
+      <li>修改 <code>sim/cocotb_bridge.py:2100-2107</code>，去掉 <code>engine_n = ((instr.dim_n + 63)//64)*64</code> 的 pad-to-64。</li>
+      <li>让 driver 直接把真实 N（本例为 2）写进 MXU DIM1。</li>
+      <li>wrapper 的 <code>WRP_DIM_N</code> 继续负责 store-out 的真实宽度控制。</li>
+    </ul>
+    <p>修复后用同一个 <code>run_e2e_attn_score</code> 回归验证：</p>
+    <table>
+      <tr><th>指标</th><th>修复前</th><th>修复后</th></tr>
+      <tr><td>dim1_n</td><td>0x40 (64)</td><td>0x0002 (2)</td></tr>
+      <tr><td>m_axi_awaddr 行 stride</td><td>0x100 (256 B)</td><td>0x08 (8 B)</td></tr>
+      <tr><td>INT32 mismatch</td><td>62/64</td><td>0/64</td></tr>
+      <tr><td>test_e2e_attn_score</td><td>FAIL</td><td>PASS</td></tr>
+    </table>
+    <div class="callout">
+      <strong>验证结论：</strong> DIM1 用真实 N 后，store-out 与 readback 的 dense 布局对齐，62/64 mismatch 消失。该改动仅影响 cocotb driver 路径，firmware 路径原本就写真实 N，因此不受影响。
+    </div>
+
+    <h2 id="takeaway">10. 经验与建议</h2>
+    <ul>
+      <li><strong>先抓总线，再抓内部：</strong> AXI AWADDR 的 stride 直接暴露“行宽”假设，比追内部 FSM 更快。</li>
+      <li><strong>寄存器 + 波形联动：</strong> 同时看 <code>dim1_n</code> 和 <code>m_axi_awaddr</code>，一秒钟就能定位是“配置值错了”还是“配置对但行为错”。</li>
+      <li><strong>批量时间点查询：</strong> <code>value.at</code> 一次采样多个时间点，比 GUI 里来回拉 cursor 稳定得多，也方便落档。</li>
+      <li><strong>协议级动作更高效：</strong> 本次只用 <code>value.at</code> 已足够；复杂 AXI/APB 场景优先用 <code>axi.transaction.cursor</code> / <code>apb.query</code>。</li>
+      <li><strong>注意 FSDB 路径：</strong> 该项目的 simv 从 repo parent 启动，FSDB 生成在 <code>../tb_soc.fsdb</code>，不要按惯性在 repo 内找。</li>
+      <li><strong>MCP 需要重启加载：</strong> <code>.opencode/opencode.json</code> 修改后需要重启 OpenCode 才能在 <code>skill_mcp</code> 里直接调用；本次用 JSON-RPC 直调作为 workaround。</li>
+    </ul>
+
+    <div class="callout warning">
+      <strong>修复状态：</strong> 已在 <code>docs/bugs/bugs-soc-rtl.md</code> 记录。详细 fix 方案与验证结果见上文<a href="#fix">第 9 节</a>。
+    </div>
+  </main>
+
+  <footer>
+    原始证据：<code>.omo/evidence/xverif-bug012-stride-demo.txt</code> · 生成时间：2026-09-21
+  </footer>
+</body>
+</html>
