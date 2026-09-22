@@ -1,0 +1,92 @@
+case_id: task-0-bug-009-doorbell-fix
+utc_start: 2026-09-22T00:00:00Z
+verdict: pass
+
+METHOD
+precondition_gate: git log --oneline main -5  -> MUST contain a326ef9 (else STOP)
+branch_create: git checkout -b bug-009-doorbell-fix main (in-place, NO new worktree)
+hash_tool: sha256sum (GNU coreutils)
+firmware: sha256sum firmware/build/npu_firmware.hex (existing hex recorded only — firmware NOT rebuilt)
+
+PRECONDITION GATE (main -5)
+$ git log --oneline main -5
+a326ef9 Merge bug-012-driver-fix: BUG-RTL-SOC-012 Fixed — driver DIM1=actual N (F1-F4 all APPROVE)
+95dbd20 chore(omo): inline P0 snapshot into task-0 evidence (F1 low finding)
+d73ae87 docs(bugs): BUG-RTL-SOC-012 Fixed — driver DIM1 ABI alignment (driver-side)
+0fe8bff test(bug012): FM-SOC 33 + e2e + W4-PERF regression evidence (driver DIM1 fix)
+ac0453d test(bug012): RED→GREEN — run_e2e_attn_score PASS 64/64 evidence
+GATE: a326ef9 present at main tip -> PASS
+
+PROVENANCE
+BRANCH: bug-009-doorbell-fix
+$ git branch --show-current
+bug-009-doorbell-fix
+HEAD: a326ef96eb548455f2b4e400dde345d9f1ed1a6f
+$ git rev-parse HEAD
+a326ef96eb548455f2b4e400dde345d9f1ed1a6f
+BASE: main @ a326ef9
+FIRMWARE_HEX_SHA: 6f261c6e35e65a190c887ba0dc50d604e2601e39b6aa99524ea5284a35165ec0  firmware/build/npu_firmware.hex
+
+TOUCHED-FILE BASELINE HASHES (4 files)
+$ sha256sum rtl/soc/doorbell.v rtl/tb/tb_doorbell.v rtl/tb/apb_conformance_real_tb.sv spec/npu_abi.json
+141cb3a9a32bbca7fc5484e6b652bbae55ab7c2f65e2690737ea6bfe701e7b89  rtl/soc/doorbell.v
+5aaf9e2a64337e65917ef96b2ba8452f7f6672229dc9ce492feeabb23815b863  rtl/tb/tb_doorbell.v
+5f759be5f7cac8a7ebcb7f53b323cda62f4c5cc0511b214d4dac20625addd709  rtl/tb/apb_conformance_real_tb.sv
+eec41a952b425bfb3e8a168dcfed0266b888ea1fecef5248023019cfb5d56d3c  spec/npu_abi.json
+
+INLINE git status --porcelain SNAPSHOT (pre-commit; full literal output, no dangling reference)
+$ git status --porcelain
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+?? .omo/plans/bug-009-doorbell-fix.md
+?? .omo/plans/bug-012-fix.md
+?? .omo/plans/dse-relic-retirement.md
+?? .omo/plans/fm-residual-cleanup.md
+?? .omo/plans/fm-verification-fixes.md
+?? .omo/plans/verification-env-sz0001.md
+?? .omo/tmp/
+
+M-LINE COUNT: $ git status --porcelain | grep -c '^ M'  ->  7
+7 M lines are EXACTLY the 7 parallel-session dirty files in Scope Must-NOT:
+  .omo/evidence/task-0-signoff-v3-runner.txt
+  .omo/evidence/task-20-uncertainty-kpis.json
+  .omo/evidence/task-23-perf-spec-ci.txt
+  .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+  .omo/notepads/phase6-rtl-verification/learnings.md
+  build/evidence/fm-cv-chain.txt
+  build/evidence/w3-4-mobilenetv3-fm.txt
+Untracked entries are pre-existing .omo artifacts (plans/tmp) — none of the 7 dirty files.
+
+COMMIT (pathspec-only, plan + draft + this evidence)
+$ git add -f .omo/plans/bug-009-doorbell-fix.md .omo/drafts/bug-009-doorbell-fix.md .omo/evidence/task-0-bug-009-doorbell-fix.txt
+$ git commit -m "chore(omo): P0 baseline — branch + provenance snapshot (bug-009-doorbell-fix)"
+
+POST-COMMIT FINAL SNAPSHOT (M lines must still be exactly 7)
+$ git status --porcelain
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+?? .omo/plans/bug-012-fix.md
+?? .omo/plans/dse-relic-retirement.md
+?? .omo/plans/fm-residual-cleanup.md
+?? .omo/plans/fm-verification-fixes.md
+?? .omo/plans/verification-env-sz0001.md
+?? .omo/tmp/
+M-LINE COUNT AFTER COMMIT: 7 (identical set, all ⊆ Scope Must-NOT list) -> PASS
+(bug-009 plan/draft/evidence no longer untracked: they are in this commit)
+COMMIT: c200cf5 chore(omo): P0 baseline — branch + provenance snapshot (bug-009-doorbell-fix)
+ 3 files changed, 374 insertions(+)
+ create mode 100644 .omo/drafts/bug-009-doorbell-fix.md
+ create mode 100644 .omo/evidence/task-0-bug-009-doorbell-fix.txt
+ create mode 100644 .omo/plans/bug-009-doorbell-fix.md
+
+P0-SNAPSHOT: pass
