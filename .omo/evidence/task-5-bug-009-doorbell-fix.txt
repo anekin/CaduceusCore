@@ -1,0 +1,178 @@
+case_id: task-5-bug-009-doorbell-fix
+utc_start: 2026-09-22T08:20:00Z
+verdict: pass
+todo: 5 — full regression on sz0001, STRICTLY SERIAL (apb_smoke → rebuilt simv → FM-SOC 33 → W4 → pytest)
+
+PROVENANCE
+EDA_HOST: sz0001 (192.168.0.11)   REPO: /home/prj/zhengs/caduceuscore/CaduceusCore
+BRANCH: bug-009-doorbell-fix
+HEAD_BEFORE: 29b5028 (todo 4 — test(bug009): xverif post-fix live-window verification evidence)
+R1 COMMIT: 3f7871d9003e31b5a6f35772c6df122ee6b65209  (2026-09-22T15:58:23+08:00)
+VCS: V-2023.12 (module vcs/vcs_2023.12sp2)
+Durable logs: build/evidence/bug-009-t5-fmsoc-run.log, build/evidence/bug-009-t5-w4-run.log,
+              build/evidence/bug-009-t5-pytest-run.log, sim/regression/apb_smoke_t5.log
+NOTE: no concurrent sz0001 task was run — steps (1)→(5) executed strictly serially.
+
+================================================================================
+(1) REG-APBSMOKE
+================================================================================
+$ bash sim/regression/soc-verification-run.sh run_apb_smoke
+OBSERVED:
+  RESULT: ALL TESTS PASSED
+  APB_SMOKE: PASS
+  [soc-run] RESULT: PASS for run_apb_smoke
+REG-APBSMOKE: pass
+
+================================================================================
+(2) FORCED FULL-SoC SIMV REBUILD  (mandatory — without it FM-SOC/W4 would run the
+    PRE-FIX binary and the whole regression would be false evidence)
+================================================================================
+PRE-REBUILD: build/ibex_full_rtl/simv_soc_ibex mtime 2026-08-31 13:15
+             sha256 b99b613e4a5916b0e2d33d20a3598de6682ba38f1bb0dae62076f9b5ed2625a3
+$ rm -rf build/ibex_full_rtl/simv_soc_ibex \
+         build/ibex_full_rtl/simv_soc_ibex.daidir \
+         build/ibex_full_rtl/csrc
+  (run_ibex_full_rtl.sh:49 only compiles when `[ ! -x "$SIMV" ]`; run_w4_perf_batch.sh:25-29
+   only errors when it is missing — hence the explicit removal.)
+POST-REBUILD: build/ibex_full_rtl/simv_soc_ibex mtime 2026-09-22 16:21
+              sha256 72199d8ae5d8d69bb2e281a840e61bb81a8de530e6dadf8ed8ccf08837ae96ae
+SIMV-REBUILT: 72199d8ae5d8d69bb2e281a840e61bb81a8de530e6dadf8ed8ccf08837ae96ae
+              mtime 2026-09-22 16:21 > R1 commit 2026-09-22 15:58:23  -> PASS
+              (different sha256 from the pre-fix b99b613e… -> the binary really changed)
+
+================================================================================
+(3) REG-FMSOC — 33-case regression  (`bash sim/regression/run_fm_soc_all.sh`)
+================================================================================
+OBSERVED SUMMARY (verbatim):
+[SUMMARY] Full RTL + Ibex (FM-SOC regression)
+  PASS:    25
+  SKIP:    8
+  FAIL:    0
+  TIMEOUT: 0
+[SUMMARY] PASS=25 SKIP=8 FAIL=0 TIMEOUT=0 TOTAL=33
+[ERROR] case accounting mismatch — NOT printed (accounting matched 33/33)
+exit status 0 (script exits 1 iff FAIL!=0 or TIMEOUT!=0)
+
+8 SKIP CASE IDs (exact IDs, from the log):
+  FM-SOC-014  (superseded)
+  FM-SOC-015  (superseded)
+  FM-SOC-016  (superseded)
+  FM-SOC-017  (not applicable to Ibex RTL mode)
+  FM-SOC-019  (not applicable to Ibex RTL mode)
+  FM-SOC-021  (superseded)
+  FM-SOC-022  (superseded)
+  FM-SOC-023  (superseded)
+=> matches the plan's required set {014,015,016,021,022,023 superseded + 017,019 not-applicable}.
+REG-FMSOC: 25-pass-8-skip-0-fail-0-timeout-total-33
+
+Per-case classification note: skipped cases were classified by the runner's own
+grep of the case log (`superseded by FM-SOC-027/032/10X` / `skipped: direct APB/AXI
+case not applicable to Ibex RTL mode`) — no case was silently dropped; the runner
+enforces `TOTAL == N_CASES` (33/33 accounting matched).
+
+================================================================================
+(4) REG-W4 — 21 `cycles` values vs the todo-1 PRE-FIX CONTROL (== 0 drift)
+================================================================================
+$ bash sim/regression/run_w4_perf_batch.sh
+OBSERVED:
+[W4-PERF SUMMARY]
+  PASS: 6
+  FAIL: 0
+  TOTAL: 6
+[EVIDENCE CHECK] w4-perf-p0..p4.txt (4 lines each) + fullchain-pipeline.txt (1 line) all [OK]
+REG-W4: 6-pass-0-fail
+
+CONTROL COMPARISON (todo 1 (c) fresh pre-fix values vs this post-fix run)
+  p0: PERF-01=39344  PERF-02=39344  PERF-03=39344  PERF-04=33331
+  p1: PERF-05=33339  PERF-06=47037  PERF-07=500    PERF-08=33339
+  p2: PERF-09=39344  PERF-10=76390  PERF-11=125581 PERF-12=39344
+  p3: PERF-13=275705 PERF-14=0      PERF-15=64092  PERF-16=64092
+      PERF-13 nested mmul_results: Q_proj=64092 K_proj=20810 V_proj=20810
+        attn_score=18355 attn_weight=18332 O_proj=58355 gate_proj=20810
+        up_proj=20810 down_proj=33331
+  p4: PERF-17=33339  PERF-18=23104  PERF-19=33339  PERF-20=33333
+  fullchain: FULLCHAIN=33339
+MACHINE COMPARISON (local sz0002, both sides extracted in file order):
+$ grep -o '"cycles": [0-9]*' /tmp/prefix_w4_fresh.txt  > /tmp/cyc_pre.txt     # 30 fields
+$ grep -o '"cycles": [0-9]*' /tmp/postfix_w4_fresh.txt > /tmp/cyc_post.txt    # 30 fields
+$ diff /tmp/cyc_pre.txt /tmp/cyc_post.txt
+  (no output)
+=> W4-CYCLES-IDENTICAL: 30/30 `cycles` fields (21 top-level entries + the 9 nested
+   PERF-13 mmul_results) — zero drift.
+$ diff <(case_id+status+cycles triples pre) <(post)
+  (no output)  => triples identical as well.
+
+TRACKED-EVIDENCE RESTORE DISCIPLINE
+BEFORE: git status --porcelain build/
+ M build/evidence/fm-cv-chain.txt            (pre-existing dirty — NOT touched)
+ M build/evidence/fullchain-pipeline.txt     (rewritten by the batch)
+ M build/evidence/w3-4-mobilenetv3-fm.txt    (pre-existing dirty — NOT touched)
+ M build/evidence/w4-perf-p0.txt  … w4-perf-p4.txt (rewritten by the batch)
+$ git checkout -- build/evidence/w4-perf-p0.txt build/evidence/w4-perf-p1.txt \
+    build/evidence/w4-perf-p2.txt build/evidence/w4-perf-p3.txt \
+    build/evidence/w4-perf-p4.txt build/evidence/fullchain-pipeline.txt
+AFTER: git status --porcelain build/
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+=> no NEW M lines. Fresh W4 data retained in build/evidence/bug-009-t5-w4-run.log
+   (gitignored run log) + this evidence.
+
+================================================================================
+(5) PYTEST — full FM suite, exact AGENTS.md fmpytest env
+================================================================================
+$ cd /home/prj/zhengs/caduceuscore/CaduceusCore
+$ env PATH=/home/zhengs/venvs/fmpytest/bin:/usr/bin:/bin \
+      PYTHONPATH=sim:gen:/tmp/fmpytest-shim \
+      /home/zhengs/venvs/fmpytest/bin/python -m pytest sim/tests/ sim/timing/tests/ \
+      -q --continue-on-collection-errors \
+      --ignore=sim/tests/test_cv_conv2d_rtl.py \
+      --ignore=sim/tests/test_soc_pcie_dma.py \
+      --ignore=sim/tests/wrapper/test_mxu_wrapper.py \
+      --ignore=sim/tests/wrapper/test_sfu_wrapper.py \
+      --ignore=sim/tests/wrapper/test_vector_wrapper.py \
+      --ignore=sim/tests/test_cv_e2e.py \
+      --ignore=sim/tests/test_gen_cv_golden.py \
+      --ignore=sim/tests/test_runtime_real_firmware.py \
+      --ignore=sim/tests/test_qwen3b_full_forward.py \
+      --ignore=sim/tests/test_qwen3b_per_layer_compare.py \
+      --ignore=sim/tests/test_qwen3b_software_signoff.py \
+      --ignore=sim/tests/test_device_server_fixture.py \
+      --ignore=sim/tests/test_func_model_dut_adapter.py \
+      --ignore=sim/tests/test_llama_dependency_lock.py \
+      --ignore=sim/tests/test_spike_toolchain_manifest.py
+  (15 --ignore entries; readline shim /tmp/fmpytest-shim present, verified content
+   `raise ImportError("readline unavailable")`)
+
+OBSERVED SUMMARY: 32 failed, 2279 passed, 7 skipped, 189 warnings, 11 errors in 337.26s (0:05:37)
+PYTEST: 32-failed-2279-passed-7-skipped-11-errors (identical to the recorded baseline
+        32 failed, 2279 passed, 7 skipped, 189 warnings, 11 errors in 330.50s)
+
+BASELINE GUARD (plan-required precondition)
+  file: build/evidence/bug-012-t3-pytest-run.log  (gitignored)  -> EXISTS
+  $ grep -cE '^(FAILED|ERROR)' build/evidence/bug-012-t3-pytest-run.log  ->  43  (== 43 required)
+  $ grep -cE '^(FAILED|ERROR)' build/evidence/bug-009-t5-pytest-run.log  ->  43
+  => guard satisfied (file present AND exactly 43 lines); no STOP.
+
+NODE-ID SET DIFF (the PASS/FAIL verdict — not the terminal text)
+$ comm -13 <(grep -E '^(FAILED|ERROR)' build/evidence/bug-012-t3-pytest-run.log | sed 's/ - .*//' | sort -u) \
+           <(grep -E '^(FAILED|ERROR)' build/evidence/bug-009-t5-pytest-run.log | sed 's/ - .*//' | sort -u)
+  (empty output)
+$ comm -23 (same two sides)
+  (empty output)
+=> COMM -13 IS EMPTY — no NEW failing/erroring node IDs. The two sets are identical (43/43).
+   Raw log files differ only in memory addresses/timings (104 diff lines, all pointer/timing).
+
+DOORBELL-RELATED FM TESTS (plan: must be all green)
+  grep -E '^(FAILED|ERROR)' <new log> | grep -E 'test_firmware_boot_sequence|test_spike_ibex_ring_alignment'
+    -> NONE (both green inside the full run)
+  targeted re-run: pytest sim/tests/test_firmware_boot_sequence.py sim/tests/test_spike_ibex_ring_alignment.py -q
+    -> 8 passed, 3 warnings in 2.37s
+
+================================================================================
+JUDGMENT LINES
+================================================================================
+REG-APBSMOKE: pass
+SIMV-REBUILT: 72199d8ae5d8d69bb2e281a840e61bb81a8de530e6dadf8ed8ccf08837ae96ae (mtime 2026-09-22 16:21 > R1 15:58:23)
+REG-FMSOC: 25-pass-8-skip-0-fail-0-timeout-total-33
+REG-W4: 6-pass-0-fail
+PYTEST: 32-failed-2279-passed-7-skipped-11-errors (node-ID diff vs baseline EMPTY)
