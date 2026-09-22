@@ -1,0 +1,103 @@
+case_id: task-7-bug-009-doorbell-fix
+utc_start: 2026-09-22T09:50:00Z
+verdict: pass
+todo: 7 — ledger BUG-009 → Fixed + statistics 13/2 + README snapshot (local; uses todo 3/4/5/6 evidence)
+
+PROVENANCE
+BRANCH: bug-009-doorbell-fix   REPO: /home/prj/zhengs/caduceuscore/CaduceusCore
+HEAD_BEFORE: c8bb9f5 (todo 6 — docs(abi): resolve doorbell KNOWN_DISCREPANCY ...)
+FILES CHANGED: docs/bugs/bugs-soc-rtl.md, README.md  (docs/ 其他文件零改动)
+
+================================================================================
+(1) docs/bugs/bugs-soc-rtl.md — BUG-RTL-SOC-009 entry (:678-...)
+================================================================================
+| **Status** | Open |  ->  | **Status** | Fixed |
+(Root Cause paragraph preserved verbatim, as required)
+
+#### Fix (new text) — R1 commit citation + one-line mechanism + scope note
+  **Fixed** by `fix(rtl/soc): implement doorbell ABI status window — LAST_STATUS + COMPLETION_STATUS[16]`
+  (commit `3f7871d`, branch `bug-009-doorbell-fix`). rtl/soc/doorbell.v now implements the declared
+  window: last_status_reg + completion_status_reg[0:15], addr_valid = (paddr[11:7]==5'd0) &&
+  (word_idx <= 5'd20) with word_idx = paddr[6:2] → valid window 0x00-0x50; 0x54+ silent-0. Both the
+  write path (case (word_idx)) and the read mux are keyed on word_idx (reg_sel-style decode wraps and
+  would alias array writes onto the pointers / corrupt doorbell_irq). Pointers, doorbell_irq,
+  pready/pslverr and the bkdoor_* path are unchanged. Firmware's 20+ LAST_STATUS writes and its
+  clamped COMPLETION_STATUS mirror now land on live registers (firmware unchanged).
+
+#### Residual constraints — SEVEN items, exactly as enumerated in the plan
+  (a) Access-annotation drift (ABI wo/ro vs RTL RW superset) — documented-benign, user decision
+      2026-09-22 keeps it out of scope; RW superset is load-bearing (firmware polls HOST_TAIL);
+      stated consequence: the 20 conformance slots are checked as ACC_RW deliberately (TB header).
+  (b) COMPLETION_STATUS mirror clamp — cmd_id > 15 collapses onto slot 15 (firmware
+      COMPLETION_STATUS[min(cmd_id,15)]); the lossless 1024-record path is the DRAM completion ring.
+  (c) Address aliasing / out-of-window semantics — paddr[1:0] not decoded → 0x51-0x53 alias to the
+      0x50 slot; 0x54-0x7F unmapped (read 0 / write ignored / pslverr stays 0).
+  (d) firmware/npu-regmap.h:317-322 stale "Known Discrepancy" comment (firmware zero-change here).
+  (e) sim/rtl_soc_runner.py:2688-2689 stale comment (sim/ product code zero-change here).
+  (f) FM<->RTL convergence limited to the DECLARED window 0x00-0x50 — the Func Model doorbell path is
+      an unbounded page store/readback (sim/mmio_bridge.py:719-724) and
+      sim/models/apb_peripheral.py:350 models only a 0x14 scalar, so >=0x54 diverges by design;
+      explicit instruction not to claim unconditional convergence.
+  (g) Pre-existing documentation drift listed but NOT fixed (README.md:450, docs/rtl_development_plan.md:1504,
+      rtl/ip/README.md:124, docs/soc-fm-gap-spec.md:1013/:1105 "113 lines",
+      spec/soc_golden_contract.md:296 obsolete LAST_STATUS text); no new dated snapshot rows added.
+$ grep -c "^- \*\*(" docs/bugs/bugs-soc-rtl.md  ->  7
+
+#### Verification (new text) — evidence paths + judgment lines for todos 1-6
+  run_doorbell_tb 80/80 PASS (task-2 evidence, T2-DOORBELL-TB: pass, R1-WINDOW: 0x00-0x50)
+  xverif pre/post (task-1 XVERIF-PREFIX: dead-window-confirmed / task-4 XVERIF-POSTFIX: window-live)
+  run_apb_conformance_real GREEN + doc_div_cnt=4 + slv_docdivs[5]=0 + doorbell checks=60
+    (task-3 evidence, T3-CONFORMANCE: green-doorbell-docdiv-0)
+  regression apb_smoke / FM-SOC 25-8-0-0-33 (forced simv rebuild) / W4 6-0 with 21 identical cycles /
+    pytest node-ID diff EMPTY (task-5 evidence)
+  ABI STRUCT-FIELDS: ok + --check exit 0 + 29 targeted tests pass / SPEC-NOTE: resolved /
+    GEN-REGEN: clean-regen / ABI-GATES: pass (task-6 evidence)
+  legacy T12 evidence referenced as superseded
+
+================================================================================
+(2) By-Status table
+================================================================================
+$ grep -n "^| Fixed | 12" docs/bugs/bugs-soc-rtl.md      (before) -> line 413
+$ grep -n "^| Open | 3"   docs/bugs/bugs-soc-rtl.md      (before) -> line 417
+AFTER:
+413: | Fixed | 13 | BUG-RTL-SOC-001, 003, 004, 005, 006, 008, 009, 012, WV-001, WV-007, P9-00A, P9-00D, BUG-MXU-P9-00B |
+417: | Open | 2 | BUG-RTL-SOC-010 (pcie_ep_wrapper header 夸大字段, T12), BUG-RTL-SOC-011 (rtl/ip/README DMA 访问类别错误, T12) |
+GUARDRAIL PROOF — lines :415 (Pending waiver) and :416 (Accepted reconstruction-failure) NOT touched:
+$ git diff -- docs/bugs/bugs-soc-rtl.md | grep -E "^[+-]" | grep -E "Pending \(waiver|Accepted \(reconstruction"
+  (no output)
+
+================================================================================
+(3) By-Severity table — :406 NOT touched
+================================================================================
+$ git diff -- docs/bugs/bugs-soc-rtl.md | grep -E "^[+-]" | grep "Major | 12"
+  (no output)
+=> BUG-RTL-SOC-009 remains Major; the Major count stays 12 (correct: the bug is still Major).
+
+================================================================================
+(4) Quality Metrics
+================================================================================
+440: | Bugs closed Fixed | 13 (76.5%) |              (was `12 (70.6%)`)
+443: | Open / under investigation | 2 (11.8%) — BUG-RTL-SOC-010/011 (wrapper 文档 vs RTL) |
+                                                 (was `3 (17.6%) — BUG-RTL-SOC-009 …, BUG-RTL-SOC-010/011 …`)
+$ grep -n "Bugs closed Fixed | 13" docs/bugs/bugs-soc-rtl.md        -> 440
+$ grep -n "Open / under investigation | 2" docs/bugs/bugs-soc-rtl.md -> 443
+
+================================================================================
+(5) README.md status snapshot
+================================================================================
+line 25 BEFORE: **17 = 12 Fixed / 1 Pending（waiver 待签）/ 1 Accepted（reconstruction-failure）/ 3 Open**
+line 25 AFTER : **17 = 13 Fixed / 1 Pending（waiver 待签）/ 1 Accepted（reconstruction-failure）/ 2 Open**
+$ grep -n "13 Fixed" README.md  -> 25   |   $ grep -n "2 Open" README.md  -> 25
+
+================================================================================
+SCOPE
+================================================================================
+$ git diff --name-only -- docs/ README.md
+  README.md
+  docs/bugs/bugs-soc-rtl.md
+=> exactly the plan's allowed set; no other docs/ file modified (the drift files in residual (g)
+   were deliberately left untouched).
+
+JUDGMENT LINES
+LEDGER-STATUS: Fixed
+STATS: 13-fixed-2-open

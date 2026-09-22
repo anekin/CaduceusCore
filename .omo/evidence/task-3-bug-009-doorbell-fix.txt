@@ -1,0 +1,113 @@
+case_id: task-3-bug-009-doorbell-fix
+utc_start: 2026-09-22T08:00:00Z
+verdict: pass
+todo: 3 — T1 conformance TB flip: doorbell 20-slot ABI rows + explicit 0x50/0x54 checks
+
+PROVENANCE
+EDA_HOST: sz0001 (192.168.0.11)   REPO: /home/prj/zhengs/caduceuscore/CaduceusCore
+BRANCH: bug-009-doorbell-fix
+HEAD_BEFORE: 3f7871d (todo 2 — fix(rtl/soc): implement doorbell ABI status window ...)
+VCS: vcs script version : V-2023.12 (module vcs/vcs_2023.12sp2)
+EXACT COMMAND: $ bash sim/regression/soc-verification-run.sh run_apb_conformance_real
+  (cwd=/home/prj/zhengs/caduceuscore/CaduceusCore; binary did not exist → full compile of
+   4 flists: ibex + verilog-axi + verilog-pcie + soc.flist)
+LOG (durable): sim/regression/apb_conformance_real_r1.log (342 lines)
+HASHES: rtl/tb/apb_conformance_real_tb.sv sha256 1b12bfc9c37db6b6df7db5c7a6e8e305f324a67638b6f6adac69497a9daa3e88
+        simv_apb_conformance_real   sha256 1d15e9bebd6d3cada221c8c633bb130d8567c09e0b0559fdc3609710a59b6b8e
+
+================================================================================
+EDITS (rtl/tb/apb_conformance_real_tb.sv — single file)
+================================================================================
+1) REG_OFFS[5] doorbell row → 20 slots (all used):
+   '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h20,
+     12'h24, 12'h28, 12'h2C, 12'h30, 12'h34, 12'h38, 12'h3C, 12'h40, 12'h44,
+     12'h48, 12'h4C}
+   = 4 pointers + LAST_STATUS@0x10 + COMPLETION_STATUS[0..14]@0x14-0x4C (4+1+15=20,
+   exactly fills MAX_REGS=20; the table structure is unchanged).
+1b) REG_CNT[5] 32'd6 → 32'd20  (line 633). Without this the Phase-1/Phase-2 loops
+   (`r < REG_CNT[s]`) would never execute array rows 0x18-0x4C.
+2) REG_ACC[5] doorbell row → 20 × ACC_RW (both ACC_DOCDIVR entries removed).
+   Header clause added: this is DELIBERATE — the ABI marks HOST_TAIL `wo` and
+   HOST_HEAD/NPU_TAIL `ro` while the RTL implements the RW superset; the superset is
+   load-bearing (firmware polls HOST_TAIL) and the annotation drift is
+   documented-benign / out of scope (ledger residual (a)), so asserting the stronger
+   RW property is intentional.
+3) REG_RST[5] doorbell row: all 32'd0 (values unchanged; now semantics cover 20 slots).
+4) REG_MSK[5] doorbell row: unchanged (already all FFFF_FFFF).
+5) doc_bug mux: entry `5: doc_bug = "BUG-RTL-SOC-009";` REMOVED (pcie 4 / dma 3 entries
+   kept); comment notes why.
+5b) REG_DOCDIV[5][4] and [5] zeroed → the whole doorbell row is now all-zero
+   (grep `32'd1, 32'd1` in the file → 0 hits; REG_DOCDIV retains only DMA idx1 and
+   PCIE idx0/idx6).
+6) Header comments updated to the post-fix state: DOORBELL window description with the
+   ACC_RW-annotation clause; the "Bugs filed for this TB" list now records
+   BUG-RTL-SOC-009 as RESOLVED; REG_DOCDIV comment updated.
+7) Final-report strings updated: "each bug-filed: BUG-RTL-SOC-010/011" and the GREEN
+   line "…doc-div [BUG-RTL-SOC-010/011]" no longer name 009.
+8) NEW Phase 2b, placed OUTSIDE the per-slave loops, with `slv = -1` (global — must not
+   increment slv_checks[5], otherwise the doorbell per-slave count would move off 60):
+     apb_write/read 0x4000_5050 (window top, COMPLETION_STATUS[15] — the firmware
+       clamp `min(cmd_id,15)` target) → rw-full + rw-zero
+     apb_read 0x4000_5054 → 0 (above window)
+     apb_write 0x4000_5054 = DEAD_BEEF → read back 0 (dropped)
+     apb_read 0x4000_5000 → HOST_TAIL unaffected by the 0x54 access
+
+Must-NOT respected: pcie/dma DOC-DIV rows untouched (DMA doc_div still 2, PCIE still 2);
+check_docdiv task body (:898-922 → now ~:915) untouched; seed_intc_pending_real untouched;
+MAX_REGS untouched.
+
+================================================================================
+RUN RESULT (sz0001, verbatim)
+================================================================================
+--- Phase 2b: doorbell 0x50 window-top + 0x54 above-window ---
+  [PASS] doorbell +0x50 window-top rw-full (0xf0f00050)
+  [PASS] doorbell +0x50 window-top rw-zero (0x00000000)
+  [PASS] doorbell +0x54 above-window reads 0 (0x00000000)
+  [PASS] doorbell +0x54 write dropped (0x00000000)
+  [PASS] doorbell HOST_TAIL unaffected by 0x54 (0x00000000)
+...
+=====================================================
+ apb_conformance_real_tb — Final Report
+=====================================================
+  Total checks : 263
+  Passes       : 263
+  Fails        : 0   (unexpected — real RTL != REAL oracle)
+  DOC-DIV      : 4   (real RTL contradicts documented spec,
+                 each bug-filed: BUG-RTL-SOC-010/011)
+  Write timeouts: 0   Read timeouts: 0
+  Per-slave coverage (checks / fails / doc-div / psel_o asserts):
+    MXU      : 51 / 0 / 0 / 172
+    SFU      : 22 / 0 / 0 / 76
+    VECTOR      : 37 / 0 / 0 / 130
+    DMA      : 43 / 0 / 2 / 146
+    PCIE      : 24 / 0 / 2 / 76
+    DOORBELL      : 60 / 0 / 0 / 345
+    INTC      : 16 / 0 / 0 / 52
+=====================================================
+APB_CONFORMANCE_REAL: GREEN (7/7 peripherals, 263 checks, 4 doc-div [BUG-RTL-SOC-010/011])
+TASK-12 RESULT: GREEN (expected)
+=====================================================
+APB_CONFORMANCE_REAL: PASS
+[soc-run] RESULT: PASS for run_apb_conformance_real
+
+DOC-DIV lines actually printed (grep of the log) — all 4:
+  :186 [DOC-DIV] ... filed as BUG-RTL-SOC-011
+  :188 [DOC-DIV] ... filed as BUG-RTL-SOC-011
+  :215 [DOC-DIV] ... filed as BUG-RTL-SOC-010
+  :224 [DOC-DIV] ... filed as BUG-RTL-SOC-010
+=> pcie/dma DOC-DIV rows still present (grep BUG-RTL-SOC-010|011 in the TB → 8 hits),
+   doorbell DOC-DIV count is 0.
+
+ACCEPTANCE TABLE
+  APB_CONFORMANCE_REAL: GREEN                      -> observed
+  doc_div_cnt == 4                                 -> observed (DOC-DIV : 4)
+  slv_docdivs[5] == 0  (DOORBELL doc-div)          -> observed (DOORBELL : 60 / 0 / 0 / 345)
+  doorbell per-slave checks == 60                  -> observed (20 ACC_RW rows x (1 + 2))
+                                                      = 60; baseline 4x3 + 2x2 = 16
+  REG_CNT[5] == 20                                 -> code: line 633 `…32'd10, 32'd20, 32'd3`
+                                                      (F2 code re-review item, per plan)
+  0x50/0x54 explicit checks present + slv=-1       -> observed (Phase 2b, 5 PASS lines)
+  pcie/dma DOC-DIV still present                   -> observed (2 + 2)
+
+JUDGMENT LINE
+T3-CONFORMANCE: green-doorbell-docdiv-0

@@ -1,0 +1,96 @@
+case_id: task-4-bug-009-doorbell-fix
+utc_start: 2026-09-22T08:12:00Z
+verdict: pass
+todo: 4 — X1-post: xverif live-window verification on the R1-fixed tree (sz0001)
+
+PROVENANCE
+EDA_HOST: sz0001 (192.168.0.11)   REPO: /home/prj/zhengs/caduceuscore/CaduceusCore
+BRANCH: bug-009-doorbell-fix
+HEAD_BEFORE: bdd08de (todo 3 — test(rtl/tb): doorbell conformance rows flip ...)
+VCS: vcs script version : V-2023.12 (module vcs/vcs_2023.12sp2)
+VERDI: module verdi/verdi_2023.12sp2 ; VERDI_HOME=/NAS/Tools/EDA/synopsys/verdi_V-2023.12-SP2_P
+RTL state: rtl/soc/doorbell.v sha256 9350ceb218b8a3f7663bad7db068ae2477c8f3250d460873955c0c8172d9f0f2 (R1, todo 2)
+TB state : rtl/tb/tb_doorbell.v sha256 2fef3dcfded39aa481a52e65502296eda66b99d280273ebe50a915fc5f766aaa (R1, todo 2)
+
+STEP 1 — SAME FSDB BUILD COMMAND AS TODO 1 (plan: identical command, fixed tree)
+$ cd /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression
+$ rm -rf simv_doorbell_tb simv_doorbell_tb.daidir
+$ make VCS_OPTS="-full64 -sverilog -debug_access+all -kdb -timescale=1ns/1ps +define+FSDB -P $VERDI_HOME/share/PLI/VCS/LINUX64/novas.tab" run_doorbell_tb
+  (with source /NAS/Tools/methodology/modules/init/bash; module load vcs/vcs_2023.12sp2;
+        module load verdi/verdi_2023.12sp2)
+OBSERVED: Total 80 / Passed 80 / Failed 0 / RESULT: ALL TESTS PASSED / DOORBELL_TB: PASS
+FSDB   : /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/tb_doorbell.fsdb
+         (12109 bytes, mtime 2026-09-22 16:13 — pre-fix was 10911 bytes)
+DAIDIR : /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/simv_doorbell_tb.daidir
+simv   : sim/regression/simv_doorbell_tb sha256 2d661de3766d4d3770fc9758090737a035bb66dfbb73f02edca8d58f89517736
+log    : sim/regression/doorbell_tb.log (80 PASS lines)
+
+STEP 2 — xverif SESSION (SAME interface config as todo 1, raw 12-bit offset domain)
+  session_open(name=db_postfix, daidir=.../simv_doorbell_tb.daidir, fsdb=.../tb_doorbell.fsdb)
+  (the open call hit the MCP 30 s client timeout while indexing; session.list confirmed
+   db_postfix alive → used as-is, not reopened)
+  apb.config.load name=db0 — identical signal mapping to todo 1:
+    clock tb_doorbell.clk | paddr tb_doorbell.u_dut.paddr | psel tb_doorbell.u_dut.psel
+    penable tb_doorbell.u_dut.penable | pwrite tb_doorbell.u_dut.pwrite
+    pwdata tb_doorbell.u_dut.pwdata | prdata tb_doorbell.u_dut.prdata
+    pready tb_doorbell.u_dut.pready | pslverr tb_doorbell.u_dut.pslverr
+    reset tb_doorbell.rst_n (active_low)
+
+--- QUERY A: apb.query, address exact 12'h010, direction=all ---
+summary: total_count=7, returned_count=7, scan_complete=true, truncated=false
+transactions:
+  time    addr     data          is_write  has_error
+  1760ns  12'h010  32'h5a5a0000  true      false     <- write  0x5A5A0000
+  1790ns  12'h010  32'h5a5a0000  false     false     <- READ-BACK 0x5A5A0000  (LIVE)
+  1940ns  12'h010  32'ha5a5a5a5  true      false
+  2090ns  12'h010  32'ha5a5a5a5  false     false     <- READ-BACK 0xA5A5A5A5  (LIVE)
+  3210ns  12'h010  32'ha5a5a5a5  false     false
+  3440ns  12'h010  32'hffffffff  true      false     <- T14a hammer
+  4240ns  12'h010  32'h00000000  true      false     <- T14b hammer
+
+--- QUERY B: apb.query, address exact {12'h014, 12'h04C, 12'h050}, direction=all ---
+summary: total_count=12, returned_count=12, scan_complete=true, truncated=false
+transactions:
+  time    addr     data          is_write  has_error
+  2130ns  12'h014  32'hc0de0000  true      false
+  2550ns  12'h04c  32'hc0de000e  true      false
+  2580ns  12'h050  32'hc0de000f  true      false     <- COMPLETION_STATUS[15] write
+  2610ns  12'h014  32'hc0de0000  false     false     <- READ-BACK slot[0]   (LIVE)
+  3030ns  12'h04c  32'hc0de000e  false     false     <- READ-BACK slot[14]  (LIVE)
+  3060ns  12'h050  32'hc0de000f  false     false     <- READ-BACK slot[15]  (LIVE, window top)
+  3470ns  12'h014  32'hffffffff  true      false
+  3890ns  12'h04c  32'hffffffff  true      false
+  3920ns  12'h050  32'hffffffff  true      false
+  4270ns  12'h014  32'h00000000  true      false
+  4690ns  12'h04c  32'h00000000  true      false
+  4720ns  12'h050  32'h00000000  true      false
+
+--- QUERY C: apb.transfer_window db0, time_range 2560ns-2610ns ---
+summary: total_count=2, returned_count=2, scan_complete=true, truncated=false
+transactions:
+  time    type  addr     data          has_error
+  2580ns  WR    12'h050  32'hc0de000f  false     <- COMPLETION_STATUS[15] write
+  2610ns  RD    12'h014  32'hc0de0000  false     <- slot[0] read of the written value
+
+--- QUERY D: value.at tb_doorbell.u_dut.addr_valid (decode gate) ---
+values:
+  name                          1760ns 1790ns 2580ns 3060ns 3920ns
+  tb_doorbell.u_dut.addr_valid  1'h1   1'h1   1'h1   1'h1   1'h1
+  (pre-fix, the SAME signal was 1'h0 for the 0x010/0x014 transfers)
+
+session_close: status=closed, cleanup_complete=true.
+
+================================================================================
+PRE → POST CONTRAST (same interface config, same raw offsets)
+================================================================================
+offset  direction  PRE-FIX (todo 1)              POST-FIX (todo 4)
+0x010   read       returns 0x00000000             write 0x5A5A0000 → reads back 0x5A5A0000
+0x010   write      silently dropped               stored (readback 0xA5A5A5A5 later)
+0x014   read       returns 0x00000000             write 0xC0DE0000 → reads back 0xC0DE0000
+0x014   write      silently dropped               stored
+0x04C   read       n/a (addr_valid=0)             reads back 0xC0DE000E
+0x050   read       n/a (addr_valid=0)             reads back 0xC0DE000F (window top, LIVE)
+addr_valid @ the 0x010/0x014 transfer times  0 →  1  (decode now accepts the ABI window)
+0x54    read/write (todo 2 TB)                    still silent-0 (read 0 / write dropped)
+
+XVERIF-POSTFIX: window-live

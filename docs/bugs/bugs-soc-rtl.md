@@ -410,11 +410,11 @@ Ledger update 2026-09-02 (用户接受, bug-007-root-cause 收尾): 用户回复
 
 | Status | Count | Bug IDs |
 |--------|:-----:|---------|
-| Fixed | 12 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-005, BUG-RTL-SOC-006, BUG-RTL-SOC-008, BUG-RTL-SOC-012, BUG-RTL-SOC-WV-001, BUG-RTL-SOC-WV-007, BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
+| Fixed | 13 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-005, BUG-RTL-SOC-006, BUG-RTL-SOC-008, BUG-RTL-SOC-009, BUG-RTL-SOC-012, BUG-RTL-SOC-WV-001, BUG-RTL-SOC-WV-007, BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
 | Waived | 0 | — |
 | Pending (waiver 待用户签署) | 1 | BUG-RTL-SOC-002 (8 MB DRAM window constraint — WVR-SOC-RTL-002, pending sign-off 待用户签署) |
 | Accepted (reconstruction-failure) | 1 | BUG-RTL-SOC-007 (attn_weight — ATTRIBUTION 2026-09-02: testcase/environment reconstruction failure，45/6 未复现，无 FuncModel/RTL 故障证据；Blocker-6 path (b)，用户已接受关闭，不 claim Fixed) |
-| Open | 3 | BUG-RTL-SOC-009 (doorbell ABI window — LAST_STATUS/COMPLETION_STATUS 未实现, T12 2026-08-31), BUG-RTL-SOC-010 (pcie_ep_wrapper header 夸大字段, T12), BUG-RTL-SOC-011 (rtl/ip/README DMA 访问类别错误, T12) |
+| Open | 2 | BUG-RTL-SOC-010 (pcie_ep_wrapper header 夸大字段, T12), BUG-RTL-SOC-011 (rtl/ip/README DMA 访问类别错误, T12) |
 | Re-opened | 0 | — |
 
 ### By Module
@@ -437,10 +437,10 @@ Ledger update 2026-09-02 (用户接受, bug-007-root-cause 收尾): 用户回复
 | Metric | Value |
 |--------|:-----:|
 | Total RTL bugs found and documented | 17 |
-| Bugs closed Fixed | 12 (70.6%) |
+| Bugs closed Fixed | 13 (76.5%) |
 | Bugs pending waiver sign-off | 1 (5.9%) — BUG-RTL-SOC-002 (8 MB DRAM window, WVR-SOC-RTL-002, pending sign-off 待用户签署) |
 | Accepted (reconstruction-failure, 用户已接受) | 1 (5.9%) — BUG-RTL-SOC-007 (2026-09-02 定级 + 用户接受关闭，Blocker-6 path (b)，不 claim Fixed) |
-| Open / under investigation | 3 (17.6%) — BUG-RTL-SOC-009 (doorbell ABI window), BUG-RTL-SOC-010/011 (wrapper 文档 vs RTL) |
+| Open / under investigation | 2 (11.8%) — BUG-RTL-SOC-010/011 (wrapper 文档 vs RTL) |
 | Ibex-specific bugs (full RTL CPU replacement) | 0 |
 | Regressions after fixes | 0 (491/491 module regression PASS; vector + MXU wrapper 10/10 baseline PASS; PERF-06 M=32 cos=1.000000; PERF-13 9/9 MMUL PASS) |
 | Re-opened bugs | 0 (BUG-RTL-SOC-005 closed in 2026-07-23 rtl-bug-fix-wv round) |
@@ -684,7 +684,7 @@ Commit: `fa4ffec fix(sim): move DESC_BASE out of command ring to prevent descrip
 | **Case** | run_apb_conformance_real (APB_CONFORMANCE_REAL TB, doorbell DOC-DIV checks) |
 | **Severity** | Major |
 | **Type** | Integration (ABI schema vs RTL register window) |
-| **Status** | Open |
+| **Status** | Fixed |
 
 #### Symptom
 
@@ -714,17 +714,81 @@ register-window conformance gate existed until this TB (todo 12).
 
 #### Fix
 
-TBD (future ABI/RTL revision per the header's own note). The APB conformance
-TB tags these offsets [DOC-DIV BUG-RTL-SOC-009] and asserts the REAL behavior
-(read 0 / write dropped) rather than silently passing the ABI-declared
-semantics.
+**Fixed** by `fix(rtl/soc): implement doorbell ABI status window — LAST_STATUS + COMPLETION_STATUS[16]`
+(commit `3f7871d`, branch `bug-009-doorbell-fix`). `rtl/soc/doorbell.v` now implements the
+declared window: `last_status_reg` + `completion_status_reg[0:15]`, with
+`addr_valid = (paddr[11:7]==5'd0) && (word_idx <= 5'd20)` and `word_idx = paddr[6:2]`, so the
+valid doorbell window is **0x00-0x50** (4 pointers + LAST_STATUS@0x10 + 16 array slots
+0x14-0x50; 0x54+ stays silent-0). Both the write path (`case (word_idx)`) and the read mux are
+keyed on `word_idx` — the previous `reg_sel`-style decode wraps and would have aliased array
+writes onto the pointer registers and corrupted `doorbell_irq`. The pointer-register
+behaviour, `doorbell_irq`, `pready`/`pslverr` and the `bkdoor_*` path are unchanged. The
+firmware's 20+ `LAST_STATUS` writes and its clamped `COMPLETION_STATUS` mirror now land on live
+registers instead of a dead window (firmware itself is unchanged — its writes were already
+correct).
+
+Scope note: this is a single-RTL-file + two-TB change. Nothing in the Func Model, firmware,
+device server or the ABI structural fields was touched, so no product behaviour outside the
+doorbell window changes.
+
+#### Residual constraints
+
+- **(a) Access-annotation drift (documented-benign, out of scope).** The ABI declares
+  HOST_TAIL `wo` and HOST_HEAD/NPU_TAIL `ro`, while the RTL implements all four as RW (a
+  superset). The RW superset is load-bearing — firmware *polls* HOST_TAIL — and the user
+  decision of 2026-09-22 keeps this drift out of scope. Consequence for the TB: all 20
+  doorbell slots are checked as `ACC_RW`; that is DELIBERATE and stated in the TB header (it
+  asserts the stronger property), not an oversight.
+- **(b) COMPLETION_STATUS mirror clamp (by design).** The 16-entry hardware array is a status
+  *mirror*: firmware writes `COMPLETION_STATUS[min(cmd_id,15)]`, so `cmd_id > 15` collapses
+  onto slot 15. The lossless path for all 1024 `RING_ENTRIES` commands remains the DRAM
+  completion ring (`COMPLETION_RING_ADDR + cmd_id*32`, `firmware/npu_firmware.c`
+  `write_completion()`). The hardware array is therefore NOT a lossless completion path.
+- **(c) Address aliasing and out-of-window semantics.** `paddr[1:0]` takes no part in the
+  decode (same style as the original 4-register decoder), so `0x51-0x53` alias onto the
+  `0x50` slot; `0x54-0x7F` stay unmapped (read 0 / write ignored / `pslverr` stays 0).
+- **(d) Stale firmware comment.** `firmware/npu-regmap.h:317-322` still describes the RTL as
+  not implementing the window. Firmware is zero-change in this plan, so the comment is left as
+  a recorded residual.
+- **(e) Stale runner comment.** `sim/rtl_soc_runner.py:2688-2689` still says "the RTL doorbell
+  only implements the four head/tail pointer registers". Behaviour is unaffected (that code
+  path reads DRAM), and `sim/` product code is zero-change here → recorded residual.
+- **(f) FM↔RTL convergence is limited to the declared window 0x00-0x50.** The Func Model's
+  doorbell handling is an unbounded whole-page store/readback (`sim/mmio_bridge.py:719-724`)
+  and `sim/models/apb_peripheral.py:350` declares a single 0x14 scalar field without modelling
+  the array, so at addresses >= 0x54 the FM stores and reads back while the RTL returns 0. This
+  is a deliberately retained semantic divergence — **do not claim unconditional FM/RTL
+  convergence** for the doorbell.
+- **(g) Pre-existing documentation drift (out of scope).** Stale line-count/reference texts at
+  `README.md:450`, `docs/rtl_development_plan.md:1504`, `rtl/ip/README.md:124`,
+  `docs/soc-fm-gap-spec.md:1013`/`:1105` ("113 lines") and the obsolete LAST_STATUS text in
+  `spec/soc_golden_contract.md:296` are NOT fixed by this plan; they are recorded here as known
+  drift rather than silently refreshed (no new dated snapshot rows were added).
 
 #### Verification
 
-- `bash sim/regression/soc-verification-run.sh run_apb_conformance_real` →
-  doorbell DOC-DIV checks pass against the real-RTL oracle with the
-  BUG-RTL-SOC-009 tag (log: sim/regression/apb_conformance_real.log).
-- Evidence: `.omo/evidence/task-12-soc-rtl-review-remediation.txt`.
+- Module TB: `bash sim/regression/soc-verification-run.sh run_doorbell_tb` → 80/80 PASS,
+  `RESULT: ALL TESTS PASSED` (Test 12 LAST_STATUS live; Test 13 all 16 slots incl. i=15 @0x50
+  with pointer/irq/LAST_STATUS snapshot compares; Test 14 non-vacuous irq-inert proof + 0x54
+  silent-0). Evidence `.omo/evidence/task-2-bug-009-doorbell-fix.txt`
+  (`T2-DOORBELL-TB: pass`, `R1-WINDOW: 0x00-0x50`).
+- Pre/post waveform evidence (xverif, module-level `tb_doorbell.u_dut`, raw offsets):
+  `.omo/evidence/task-1-bug-009-doorbell-fix.txt` (`XVERIF-PREFIX: dead-window-confirmed`) and
+  `.omo/evidence/task-4-bug-009-doorbell-fix.txt` (`XVERIF-POSTFIX: window-live`).
+- Conformance TB: `bash sim/regression/soc-verification-run.sh run_apb_conformance_real` →
+  `APB_CONFORMANCE_REAL: GREEN`, `doc_div_cnt == 4`, `slv_docdivs[5] == 0`, doorbell per-slave
+  checks == 60 (`T3-CONFORMANCE: green-doorbell-docdiv-0`).
+  Evidence `.omo/evidence/task-3-bug-009-doorbell-fix.txt`.
+- Regression (sz0001, forced full-SoC simv rebuild): apb_smoke PASS;
+  `REG-FMSOC: 25-pass-8-skip-0-fail-0-timeout-total-33`; `REG-W4: 6-pass-0-fail` with all 21
+  `cycles` values identical to the pre-fix control (zero drift); full FM pytest node-ID diff vs
+  the recorded baseline EMPTY. Evidence `.omo/evidence/task-5-bug-009-doorbell-fix.txt`.
+- ABI: `STRUCT-FIELDS: ok` (no offset/width/access/reset/array_size drift), `gen_npu_abi.py
+  --check` exit 0, targeted `test_npu_abi_schema.py` + `test_npu_abi_bindings.py` 29 passed;
+  `SPEC-NOTE: resolved` / `GEN-REGEN: clean-regen` / `ABI-GATES: pass`.
+  Evidence `.omo/evidence/task-6-bug-009-doorbell-fix.txt`.
+- Superseded legacy evidence: `.omo/evidence/task-12-soc-rtl-review-remediation.txt` (the T12
+  run that filed this bug, when the offsets were still DOC-DIV).
 
 ---
 

@@ -471,12 +471,14 @@ def gen_firmware_header(schema: dict[str, Any]) -> str:
         lines.append(f"#define NPU_ABI_STATUS_{name} {sc['value']}")
     lines.append("")
 
-    # DOORBELL known discrepancy note
-    lines.append("/* ── Known Discrepancy: DOORBELL COMPLETION_STATUS ──────────── */")
-    lines.append("/* COMPLETION_STATUS hardware window is 16 entries (offset 0x14). */")
-    lines.append("/* Firmware writes COMPLETION_STATUS[cmd_id] with cmd_id up to */")
-    lines.append(f"/* NPU_ABI_RING_ENTRIES-1 ({rc['ring_entries'] - 1}). This is a */")
-    lines.append("/* known design gap that must be resolved in a future ABI revision. */")
+    # DOORBELL status-window note (BUG-RTL-SOC-009 RESOLVED)
+    lines.append("/* ── Doorbell Status Window (BUG-RTL-SOC-009 RESOLVED) ──────── */")
+    lines.append("/* RTL implements LAST_STATUS@0x10 + COMPLETION_STATUS[16]@0x14-0x50 */")
+    lines.append("/* (valid doorbell window 0x00-0x50; 0x54+ unmapped). Firmware      */")
+    lines.append(f"/* writes COMPLETION_STATUS[min(cmd_id,15)] via an index clamp — a      */")
+    lines.append(f"/* 16-slot mirror. Every command up to NPU_ABI_RING_ENTRIES-1          */")
+    lines.append(f"/* ({rc['ring_entries'] - 1}) is recorded losslessly in the DRAM completion   */")
+    lines.append("/* ring, not in this register window.                                */")
     lines.append("")
 
     lines.append("#endif /* NPU_ABI_FIRMWARE_H */")

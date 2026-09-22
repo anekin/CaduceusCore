@@ -22,11 +22,20 @@
 //                   (MXU 0x30-0x48 and VECTOR 0x30-0x44 have NON-zero resets).
 //   DMA:            CMD STORES the written value and reads it back
 //                   (dma_wrapper.v:285/:128); STATUS RO; rest RW; reset 0.
-//   DOORBELL:       4 RW regs 0x00-0x0C (doorbell.v:80-83); offsets 0x10/0x14
-//                   are silent-0 (addr_valid gate, doorbell.v:70) — the ABI
-//                   (npu-regmap.h npu_doorbell_t) DECLARES LAST_STATUS@0x10
-//                   R/W + COMPLETION_STATUS[16]@0x14 → DOCUMENTED DIVERGENCE,
-//                   filed as BUG-RTL-SOC-009.
+//   DOORBELL:       20-slot ABI window 0x00-0x50 — 4 RW pointer regs
+//                   0x00-0x0C, LAST_STATUS@0x10, COMPLETION_STATUS[0..14]@
+//                   0x14-0x4C; the window top COMPLETION_STATUS[15]@0x50 and
+//                   the first address above the window (0x54, silent-0) are
+//                   checked explicitly in Phase 2b (table is 20 wide).
+//                   BUG-RTL-SOC-009 is RESOLVED (doorbell.v implements the
+//                   declared window) — see the RTL note below.
+//                   DELIBERATE access annotation: all 20 slots are checked as
+//                   ACC_RW.  The ABI marks HOST_TAIL `wo` and HOST_HEAD /
+//                   NPU_TAIL `ro`, but the RTL implements the RW superset; the
+//                   superset is load-bearing (firmware polls HOST_TAIL) and the
+//                   annotation drift is documented-benign / out of scope
+//                   (ledger residual (a) of BUG-RTL-SOC-009), so checking the
+//                   stronger RW property is intentional, not an oversight.
 //   INTC:           PENDING is a LIVE sticky RO reg (hostile writes ignored,
 //                   intc_top.v:98/:104); ENABLE 8-bit masked (:117); THRESHOLD
 //                   4-bit masked, RESET=1 (:131/:133); ACK is W1C and reads
@@ -48,6 +57,10 @@
 // counted in the documented-divergence bucket, and references a bug filed in
 // docs/bugs/. It is NOT silently passed. Bugs filed for this TB:
 //   BUG-RTL-SOC-009 — doorbell ABI window (LAST_STATUS/COMPLETION_STATUS)
+//                     → RESOLVED by the RTL fix (doorbell.v now implements
+//                       LAST_STATUS@0x10 + COMPLETION_STATUS[16]@0x14-0x50);
+//                       the doorbell DOC-DIV rows/mux entry were removed and
+//                       the 20 slots are now checked as real RW registers.
 //   BUG-RTL-SOC-010 — pcie_ep_wrapper header overstates CTRL[3]/BAR1_MASK
 //   BUG-RTL-SOC-011 — rtl/ip/README DMA access classes (CMD W / STATUS R)
 //
@@ -617,7 +630,7 @@ module apb_conformance_real_tb;
     localparam MAX_REGS = 20;
 
     localparam [31:0] REG_CNT [0:6] =
-        '{32'd18, 32'd8, 32'd14, 32'd15, 32'd10, 32'd6, 32'd3};
+        '{32'd18, 32'd8, 32'd14, 32'd15, 32'd10, 32'd20, 32'd3};
 
     localparam [11:0] REG_OFFS [0:6][0:MAX_REGS-1] = '{
         // MXU (slave 0) — engine mmio_if 0x00-0x28 + wrapper regs 0x30-0x48
@@ -630,8 +643,13 @@ module apb_conformance_real_tb;
         '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h20, 12'h24, 12'h28, 12'h2C, 12'h30, 12'h34, 12'h38, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0},
         // PCIE (slave 4) — pcie_ep_wrapper 0x00-0x20 + unmapped 0x24
         '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h20, 12'h24, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0},
-        // DOORBELL (slave 5) — 4 RW regs + ABI-reserved 0x10/0x14
-        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0},
+        // DOORBELL (slave 5) — 20 slots: 4 pointers + LAST_STATUS@0x10 +
+        // COMPLETION_STATUS[0..14]@0x14-0x4C.  The window top slot
+        // COMPLETION_STATUS[15]@0x50 and the first address above the window
+        // (0x54) are checked explicitly outside the table (Phase 2b), because
+        // the table is MAX_REGS=20 wide.  RTL: doorbell.v addr_valid
+        // (paddr[11:7]==0 && word_idx<=20) → 0x00-0x50 valid, 0x54+ silent-0.
+        '{12'h00, 12'h04, 12'h08, 12'h0C, 12'h10, 12'h14, 12'h18, 12'h1C, 12'h20, 12'h24, 12'h28, 12'h2C, 12'h30, 12'h34, 12'h38, 12'h3C, 12'h40, 12'h44, 12'h48, 12'h4C},
         // INTC (slave 6) — PENDING/ENABLE/THRESHOLD (ACK special-cased)
         '{12'h00, 12'h04, 12'h08, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0, 12'h0}
     };
@@ -651,8 +669,14 @@ module apb_conformance_real_tb;
         // unimplemented); STATUS RO; COMPLETER_ID RW[15:0]; BAR0/1 RO consts;
         // MSIX/IRQ_CTRL field-masked; 0x24 unmapped -> pslverr (:296)
         '{ACC_FIELD, ACC_RO, ACC_RWM, ACC_CONST, ACC_CONST, ACC_CONST, ACC_CONST, ACC_FIELD, ACC_FIELD, ACC_UNMAP, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
-        // DOORBELL: 4 RW (doorbell.v:80-83); 0x10/0x14 reserved-in-ABI
-        '{ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_DOCDIVR, ACC_DOCDIVR, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
+        // DOORBELL: all 20 window slots are checked as ACC_RW.  This is
+        // DELIBERATE: the ABI declares HOST_TAIL as `wo` and HOST_HEAD /
+        // NPU_TAIL as `ro`, but the RTL implements the RW superset (a register
+        // that is both writable and readable).  The RW superset is load-bearing
+        // (firmware polls HOST_TAIL) and the access-annotation drift is
+        // documented-benign / out of scope — see the ledger residual (a) of
+        // BUG-RTL-SOC-009.  Checking all 20 as RW asserts the STRONGER property.
+        '{ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
         // INTC: PENDING live-sticky RO; ENABLE 8-bit; THRESHOLD 4-bit
         '{ACC_RO, ACC_RWM, ACC_RWM, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW}
     };
@@ -671,7 +695,8 @@ module apb_conformance_real_tb;
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         // PCIE
         '{32'd0, 32'd0, 32'd0, 32'h2000_0000, 32'hFFC0_0000, 32'h8000_0000, 32'h8000_0000, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
-        // DOORBELL
+        // DOORBELL — all 20 window slots reset to 0 (RTL: doorbell.v reset
+        // branch clears the 4 pointers, LAST_STATUS and all 16 array slots)
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         // INTC — THRESHOLD resets to 1
         '{32'd0, 32'd0, 32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0}
@@ -719,15 +744,17 @@ module apb_conformance_real_tb;
     //   DMA    CMD 0x04 — rtl/ip/README.md:35 says W, RTL stores+reads back
     //   PCIE   CTRL 0x00 — header :258 says [3]=enable (unimplemented)
     //   PCIE   BAR1_MASK 0x18 — header :264 says bit31=writable (constant)
-    //   DOORBELL 0x10/0x14 — ABI npu_doorbell_t declares LAST_STATUS R/W +
-    //                    COMPLETION_STATUS[16]; RTL silent-0 (doorbell.v:70)
+    //   DOORBELL 0x10/0x14 — RESOLVED: BUG-RTL-SOC-009 was fixed in RTL
+    //                    (doorbell.v now implements LAST_STATUS@0x10 +
+    //                    COMPLETION_STATUS[16]@0x14-0x50); the doorbell row
+    //                    below is therefore all-zero (no DOC-DIV any more).
     localparam [31:0] REG_DOCDIV [0:6][0:MAX_REGS-1] = '{
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd0, 32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
-        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd1, 32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0}
     };
 
@@ -755,7 +782,8 @@ module apb_conformance_real_tb;
             case (idx)
                 3: doc_bug = "BUG-RTL-SOC-011";  // DMA README access classes
                 4: doc_bug = "BUG-RTL-SOC-010";  // PCIe header overstates CTRL[3]/BAR1_MASK
-                5: doc_bug = "BUG-RTL-SOC-009";  // doorbell ABI window missing
+                // 5 (DOORBELL) intentionally absent: BUG-RTL-SOC-009 was fixed
+                // in RTL, so the doorbell slave has no DOC-DIV row or check.
                 default: doc_bug = "BUG-RTL-SOC-???";
             endcase
         end
@@ -1124,6 +1152,29 @@ module apb_conformance_real_tb;
             end
         end
 
+        // ── Phase 2b: doorbell window edges (explicit, outside the tables) ──
+        // The per-slave tables are MAX_REGS=20 wide, so the doorbell row covers
+        // 0x00-0x4C.  The window TOP (COMPLETION_STATUS[15] @0x50 — the slot the
+        // firmware clamp `min(cmd_id,15)` targets) and the first address ABOVE
+        // the window (0x54, silent-0) are checked explicitly here.
+        // NOTE: slv = -1 (global) is deliberate — these checks must NOT be
+        // counted in slv_checks[5], so the doorbell per-slave count stays at
+        // exactly 20 rows x 3 = 60.
+        $display("\n--- Phase 2b: doorbell 0x50 window-top + 0x54 above-window ---\n");
+        apb_write(ABI_DOORBELL_BASE + 32'h50, 32'hF0F0_0050);
+        apb_read (ABI_DOORBELL_BASE + 32'h50, rd, rd_err);
+        check(rd, 32'hF0F0_0050, -1, "doorbell +0x50 window-top rw-full");
+        apb_write(ABI_DOORBELL_BASE + 32'h50, 32'h0);
+        apb_read (ABI_DOORBELL_BASE + 32'h50, rd, rd_err);
+        check(rd, 32'h0, -1, "doorbell +0x50 window-top rw-zero");
+        apb_read (ABI_DOORBELL_BASE + 32'h54, rd, rd_err);
+        check(rd, 32'h0, -1, "doorbell +0x54 above-window reads 0");
+        apb_write(ABI_DOORBELL_BASE + 32'h54, 32'hDEAD_BEEF);
+        apb_read (ABI_DOORBELL_BASE + 32'h54, rd, rd_err);
+        check(rd, 32'h0, -1, "doorbell +0x54 write dropped");
+        apb_read (ABI_DOORBELL_BASE + 32'h00, rd, rd_err);
+        check(rd, 32'h0, -1, "doorbell HOST_TAIL unaffected by 0x54");
+
         // ── Phase 3: decoder routing + out-of-range pslverr ────────────────
         $display("\n--- Phase 3: decoder routing & error path ---\n");
         apb_write_err(32'h4000_8000, 32'hDEAD_BEEF, w_err);
@@ -1181,7 +1232,7 @@ module apb_conformance_real_tb;
         $display("  Fails        : %0d   (unexpected — real RTL != REAL oracle)", fail_cnt);
         $display("  DOC-DIV      : %0d   (real RTL contradicts documented spec,",
                  doc_div_cnt);
-        $display("                 each bug-filed: BUG-RTL-SOC-009/010/011)");
+        $display("                 each bug-filed: BUG-RTL-SOC-010/011)");
         $display("  Write timeouts: %0d   Read timeouts: %0d",
                  write_timeouts, read_timeouts);
         $display("  Per-slave coverage (checks / fails / doc-div / psel_o asserts):");
@@ -1209,7 +1260,7 @@ module apb_conformance_real_tb;
             $display("TASK-12 RESULT: PARTIAL: %0d/7 peripherals covered (declared)",
                      covered);
         end else begin
-            $display("APB_CONFORMANCE_REAL: GREEN (%0d/7 peripherals, %0d checks, %0d doc-div [BUG-RTL-SOC-009/010/011])",
+            $display("APB_CONFORMANCE_REAL: GREEN (%0d/7 peripherals, %0d checks, %0d doc-div [BUG-RTL-SOC-010/011])",
                      covered, test_num, doc_div_cnt);
             $display("TASK-12 RESULT: GREEN (expected)");
         end
