@@ -1,0 +1,155 @@
+case_id: task-2-bug-009-doorbell-fix
+utc_start: 2026-09-22T07:45:00Z
+verdict: pass
+todo: 2 — R1: rtl/soc/doorbell.v ABI status-window expansion + tb_doorbell Test 12 flip / Test 13 / Test 14
+
+PROVENANCE
+EDA_HOST: sz0001 (192.168.0.11)   REPO: /home/prj/zhengs/caduceuscore/CaduceusCore
+BRANCH: bug-009-doorbell-fix
+HEAD_BEFORE: 0a10852 (todo 1 — test(bug009): doorbell harness ...)
+VCS: vcs script version : V-2023.12 (module vcs/vcs_2023.12sp2)
+EXACT COMMAND: $ bash sim/regression/soc-verification-run.sh run_doorbell_tb
+  (cwd=/home/prj/zhengs/caduceuscore/CaduceusCore; simv pre-removed:
+   rm -rf sim/regression/simv_doorbell_tb sim/regression/simv_doorbell_tb.daidir)
+LOG (durable): sim/regression/doorbell_tb_r1.log   (80 PASS lines)
+
+POST-EDIT HASHES
+  rtl/soc/doorbell.v     sha256 9350ceb218b8a3f7663bad7db068ae2477c8f3250d460873955c0c8172d9f0f2
+  rtl/tb/tb_doorbell.v   sha256 2fef3dcfded39aa481a52e65502296eda66b99d280273ebe50a915fc5f766aaa
+  simv_doorbell_tb       sha256 dd5c5edbd8cc253629d8c2899cb583636736e994ed2a0937aa9034a750834b0f
+
+================================================================================
+R1 — rtl/soc/doorbell.v (single RTL file)
+================================================================================
+1) New storage + reset:
+     reg [31:0] last_status_reg;
+     reg [31:0] completion_status_reg [0:15];
+     integer i;                       // reset-loop index for the array
+   Reset branch zeroes last_status_reg and all 16 array entries.
+
+2) Decode:
+     wire [4:0] word_idx;
+     assign word_idx   = paddr[6:2];
+     assign addr_valid = (paddr[11:7] == 5'd0) && (word_idx <= 5'd20);
+   → valid window 0x00-0x50 (21 words: 4 pointers + LAST_STATUS@0x10 +
+     16 array slots @0x14-0x50).  0x54+ → addr_valid=0 (silent-0).
+   reg_sel (paddr[3:2]) is retained + assigned but NOT used by the decode
+   (comment states this) — it cannot address the extended window because it
+   wraps at word 4.
+
+3) Write path re-keyed on word_idx (NOT reg_sel — reg_sel would alias words
+   5..8 onto NPU_HEAD/HOST_HEAD/NPU_TAIL/HOST_TAIL and corrupt doorbell_irq):
+     case (word_idx)
+       5'd0..5'd3  → host_tail_reg / npu_head_reg / host_head_reg / npu_tail_reg
+       5'd4        → last_status_reg
+       5'd5..5'd20 → completion_status_reg[word_idx - 5'd5]
+       default: ;
+     endcase
+
+4) Read mux re-keyed on word_idx, WITH the 0-3 pointer mapping included
+   (same order as the write path — omitting it would break pointer reads and
+   Test 1-11 / firmware polling):
+     word 0 → host_tail_reg, 1 → npu_head_reg, 2 → host_head_reg,
+     3 → npu_tail_reg, 4 → last_status_reg,
+     5..20 → completion_status_reg[word_idx - 5'd5],
+     word 21-31 / out of window → 32'd0
+
+5) ZERO-TOUCH confirmed by diff inspection: bkdoor_we/bkdoor_sel/bkdoor_rdata
+   path, doorbell_irq (host_tail_reg != npu_head_reg), pready (psel&&penable),
+   pslverr (1'b0) — all byte-identical to HEAD.
+
+6) Header register table updated: 0x10 LAST_STATUS (RW), 0x14-0x50
+   COMPLETION_STATUS[16] (RW), 0x54+ unmapped (read 0 / write ignored).
+
+================================================================================
+TB — rtl/tb/tb_doorbell.v
+================================================================================
+7) Test 12 FLIPPED (RED anchor → GREEN): now writes 0x5A5A_0000 to 0x10 and
+   asserts the readback.  The two pre-fix 0x14 probe lines from todo 1 were
+   removed here as the plan requires.
+8) NEW Test 13: snapshots the 4 pointers + LAST_STATUS + irq, writes all 16
+   COMPLETION_STATUS slots (i=0..15 → 0xC0DE_0000+i, i=15 = address 0x50),
+   reads them back with unique per-index checks, then asserts the 4 pointers,
+   LAST_STATUS and irq are unchanged (bit-identical snapshot comparison).
+9) NEW Test 14 (NON-VACUOUS): (a) forces HOST_TAIL=1 / NPU_HEAD=0 → irq=1,
+   snapshots irq + 4 pointers, hammers 0x10 + all 16 array slots with
+   0xFFFFFFFF, asserts irq still 1 and pointers bit-identical; (b) sets
+   NPU_HEAD=HOST_TAIL → irq=0, repeats with 0x0 writes, asserts irq still 0
+   and pointers bit-identical; (c) 0x54 above-window: read 0, write dropped
+   (re-read 0), pointers unchanged, pslverr=0.
+10) Header test list updated from Test 1-7 to the full Test 1-14.
+11) New helper `check32_i` (index-qualified description) — required so the
+    Test-13 per-slot PASS lines carry their slot index; descriptions kept
+    <= 32 chars because `desc` is a [255:0] vector (longer strings truncate).
+    Test 1-11 untouched.
+
+TEST RESULT (sz0001)
+--- Test 12: LAST_STATUS @0x10 live ---
+PASS [LAST_STATUS 0x10 wr->rdbk]: value=0x5a5a0000
+--- Test 13: COMPLETION_STATUS[0..15] @0x14-0x50 ---
+PASS [comp-status-slot][0]: value=0xc0de0000
+PASS [comp-status-slot][1]: value=0xc0de0001
+PASS [comp-status-slot][2]: value=0xc0de0002
+PASS [comp-status-slot][3]: value=0xc0de0003
+PASS [comp-status-slot][4]: value=0xc0de0004
+PASS [comp-status-slot][5]: value=0xc0de0005
+PASS [comp-status-slot][6]: value=0xc0de0006
+PASS [comp-status-slot][7]: value=0xc0de0007
+PASS [comp-status-slot][8]: value=0xc0de0008
+PASS [comp-status-slot][9]: value=0xc0de0009
+PASS [comp-status-slot][10]: value=0xc0de000a
+PASS [comp-status-slot][11]: value=0xc0de000b
+PASS [comp-status-slot][12]: value=0xc0de000c
+PASS [comp-status-slot][13]: value=0xc0de000d
+PASS [comp-status-slot][14]: value=0xc0de000e
+PASS [comp-status-slot][15]: value=0xc0de000f      <- i=15 @ 0x50 (window top)
+PASS [T13 HOST_TAIL intact]: value=0x11111111
+PASS [T13 NPU_HEAD intact]: value=0x22222222
+PASS [T13 HOST_HEAD intact]: value=0x33333333
+PASS [T13 NPU_TAIL intact]: value=0x44444444
+PASS [T13 LAST_STATUS intact]: value=0xa5a5a5a5
+PASS [T13 irq unchanged]: value=1
+--- Test 14: status window inert w.r.t. irq/pointers ---
+PASS [T14a irq=1 pre-state]: value=1
+PASS [T14a irq still 1]: value=1
+PASS [T14a HOST_TAIL intact]: value=0x00000001
+PASS [T14a NPU_HEAD intact]: value=0x00000000
+PASS [T14a HOST_HEAD intact]: value=0x33333333
+PASS [T14a NPU_TAIL intact]: value=0x44444444
+PASS [T14b irq=0 pre-state]: value=0
+PASS [T14b irq still 0]: value=0
+PASS [T14b HOST_TAIL intact]: value=0x00000001
+PASS [T14b NPU_HEAD intact]: value=0x00000001
+PASS [T14b HOST_HEAD intact]: value=0x33333333
+PASS [T14b NPU_TAIL intact]: value=0x44444444
+PASS [T14c 0x54 read returns 0]: value=0x00000000
+PASS [T14c 0x54 write dropped]: value=0x00000000
+PASS [T14c HOST_TAIL unchanged]: value=0x00000001
+PASS [T14c NPU_HEAD unchanged]: value=0x00000001
+PASS [T14c pslverr=0 on 0x54]: value=0
+
+=== Test Summary ===
+Total:  80
+Passed: 80
+Failed: 0
+RESULT: ALL TESTS PASSED
+DOORBELL_TB: PASS
+[soc-run] RESULT: PASS for run_doorbell_tb
+
+FAILURE-MODE → CHECK MATRIX (plan item 11)
+| Failure mode                              | Caught by                                        |
+|-------------------------------------------|--------------------------------------------------|
+| addr_valid upper bound too wide           | Test 14c (0x54 must be silent-0)                 |
+| addr_valid lower bound too narrow         | Test 13 i=15 (@0x50, top of window)              |
+| read-mux index mis-wired                  | Test 13 unique per-slot values 0xC0DE_0000+i     |
+| write OK but not read-visible             | Test 12 (0x10) + Test 13 (all 16 slots)          |
+| partial implementation (only 0x10, no arr)| Test 12 and Test 13 respectively                 |
+| irq coupling broken by the new window     | Test 14a/14b (non-vacuous irq snapshot)          |
+| pointer aliasing / word_idx wrap          | Test 13 + Test 14a/14b pointer snapshot compare  |
+| wrong word→pointer mapping in read mux    | Test 1-11 (unchanged) + Test 5/6 register sets   |
+| reset of the new storage missing          | Test 1 (pointers) + Test 13/14 relative state    |
+
+RTL WINDOW: R1-WINDOW: 0x00-0x50
+JUDGMENT LINES
+T2-DOORBELL-TB: pass
+R1-WINDOW: 0x00-0x50
