@@ -22,7 +22,7 @@ CaduceusCore 是一颗 **通用 NPU 协处理器**，同时面向 **CV（YOLOv8/
 |------|------|------|
 | 芯片/RTL 阶段 | RTL Phase 3 SoC 集成完成（Ibex RV32IMC + AXI crossbar + APB + doorbell ring），详见 RTL Phase 3 章节 | （来源：README.md） |
 | 验证基线 | pytest 210 基线（Quick Start 口径）+ FM-SOC 33-case 全量回归套件（`run_fm_soc_all.sh`）+ 模块级回归详见各 Phase 章节，计数口径警告见 NOTES | （来源：AGENTS.md） |
-| Bug 台账 SoC RTL | **17 = 12 Fixed / 1 Pending（waiver 待签）/ 1 Accepted（reconstruction-failure）/ 3 Open**，见 Final Bug Statistics | （来源：docs/bugs/bugs-soc-rtl.md） |
+| Bug 台账 SoC RTL | **17 = 13 Fixed / 1 Pending（waiver 待签）/ 1 Accepted（reconstruction-failure）/ 2 Open**，见 Final Bug Statistics | （来源：docs/bugs/bugs-soc-rtl.md） |
 | module-level | **4 = 3 Fixed / 1 Open（WDT-001）** | （来源：docs/bugs/bugs-module-level.md） |
 | Func Model | 全部 Fixed/Deferred、零 waiver | （来源：docs/bugs/bugs-soc-func-model.md） |
 | PCIe DMA | 4 个 UCOV 覆盖缺口（Uncovered） | （来源：docs/bugs/bugs-pcie-dma.md） |
