@@ -97,3 +97,6 @@ CaduceusCore/
 
 # Backup files
 *.bak.*
+
+# Waveform dumps (VCS/Verdi FSDB, emitted by +define+FSDB TB builds)
+*.fsdb

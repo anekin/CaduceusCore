@@ -143,6 +143,30 @@ $(APB_SIMV): $(APB_SRC)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# run_doorbell_tb — Module-level doorbell TB (BUG-RTL-SOC-009 harness)
+# ═══════════════════════════════════════════════════════════════════════════
+# Compiles rtl/soc/doorbell.v with rtl/tb/tb_doorbell.v and gates on the TB's
+# own self-check summary line.  Compile with VCS_OPTS="... +define+FSDB
+# -P $VERDI_HOME/share/PLI/VCS/LINUX64/novas.tab" to also emit tb_doorbell.fsdb
+# for xverif waveform inspection (force a rebuild: rm -f simv_doorbell_tb*).
+
+DOORBELL_SRC := $(SOC_DIR)/doorbell.v $(TB_DIR)/tb_doorbell.v
+DOORBELL_SIMV := simv_doorbell_tb
+
+.PHONY: run_doorbell_tb
+run_doorbell_tb: $(DOORBELL_SIMV)
+	@echo "$(YELLOW)[DOORBELL_TB] Running...$(NC)"
+	@./$(DOORBELL_SIMV) 2>&1 | tee doorbell_tb.log
+	@grep -q "RESULT: ALL TESTS PASSED" doorbell_tb.log && \
+		echo "$(GREEN)DOORBELL_TB: PASS$(NC)" || \
+		(echo "$(RED)DOORBELL_TB: FAIL$(NC)" && exit 1)
+
+$(DOORBELL_SIMV): $(DOORBELL_SRC)
+	@echo "$(YELLOW)[DOORBELL_TB] Compiling...$(NC)"
+	$(VCS) $(VCS_COMMON) -top tb_doorbell $(DOORBELL_SRC) -o $(DOORBELL_SIMV)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # run_apb_conformance — APB Register Conformance (7 peripherals, skip PCIE_DMA)
 # ═══════════════════════════════════════════════════════════════════════════
 # Verifies write→readback register access semantics (rw/r/w/w1c) for the 7

@@ -55,6 +55,16 @@ module tb_doorbell;
     end
 
     //-------------------------------------------------------------------------
+    // FSDB waveform dump — only when compiled with +define+FSDB
+    //-------------------------------------------------------------------------
+`ifdef FSDB
+    initial begin
+        $fsdbDumpfile("tb_doorbell.fsdb");
+        $fsdbDumpvars(0, tb_doorbell);
+    end
+`endif
+
+    //-------------------------------------------------------------------------
     // Test accounting
     //-------------------------------------------------------------------------
     integer total_tests;
@@ -458,6 +468,13 @@ module tb_doorbell;
         apb_write(12'h10, 32'hDEADBEEF);  // write to undefined
         apb_read(ADDR_HOST_TAIL, rd);
         check32(rd, 32'd42, "HOST_TAIL unchanged after write to undefined addr");
+
+        // Pre-fix characterization probe (BUG-RTL-SOC-009): the ABI-declared
+        // COMPLETION_STATUS[0] @0x14 is outside the pre-fix 4-register window
+        // → read returns 0 and the write is silently dropped.
+        apb_read(12'h14, rd);
+        check32(rd, 32'd0, "pre-fix: read 0x14 returns 0");
+        apb_write(12'h14, 32'hDEADBEEF);
 
         //===============================================================
         // Summary

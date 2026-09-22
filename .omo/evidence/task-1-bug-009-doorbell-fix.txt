@@ -1,0 +1,222 @@
+case_id: task-1-bug-009-doorbell-fix
+utc_start: 2026-09-22T07:20:00Z
+verdict: pass
+todo: 1 — H1 harness preparation + X1-pre dead-window characterization (sz0001, BEFORE the R1 RTL edit)
+
+PROVENANCE
+EDA_HOST: sz0001 (192.168.0.11)   EDA_USER: zhengs
+REPO: /home/prj/zhengs/caduceuscore/CaduceusCore
+BRANCH: bug-009-doorbell-fix
+HEAD_AT_START: 51af2d85d6f7b99c1338eb4094125aa8b859d2c9 (todo 0 commit)
+VCS: vcs script version : V-2023.12  (module vcs/vcs_2023.12sp2 on sz0001)
+VERDI: module verdi/verdi_2023.12sp2 → VERDI_HOME=/NAS/Tools/EDA/synopsys/verdi_V-2023.12-SP2_P
+       novas.tab = $VERDI_HOME/share/PLI/VCS/LINUX64/novas.tab (verified present, 6137 bytes)
+RTL STATE: rtl/soc/doorbell.v UNCHANGED (pre-fix, sha256 141cb3a9a32bbca7fc5484e6b652bbae55ab7c2f65e2690737ea6bfe701e7b89)
+
+FILE CHANGES MADE IN THIS TODO (no RTL behaviour change)
+  rtl/tb/tb_doorbell.v      — `ifdef FSDB dump block + Test-12 pre-fix 0x14 probe
+  sim/regression/Makefile   — new run_doorbell_tb target (modelled on run_apb_smoke :126-136)
+  .gitignore                — added `*.fsdb` (FSDB hygiene, plan step 4b option A)
+
+PRE-CHECK: `tb_doorbell` had ZERO hits in sim/regression/Makefile before the edit
+$ grep -n "tb_doorbell\|run_doorbell" sim/regression/Makefile ; echo exit=$?
+exit=1                       (only `:174` mentions "doorbell" inside a comment listing
+                              conformance peripherals — no target/wildcard conflict)
+
+================================================================================
+(a) H1 HARNESS — plain (no FSDB) build + run on sz0001
+================================================================================
+COMMAND:
+$ bash sim/regression/soc-verification-run.sh run_doorbell_tb
+  (cwd=/home/prj/zhengs/caduceuscore/CaduceusCore; script auto-detects sz0001 → runs in place;
+   sources /NAS/Tools/methodology/modules/init/bash + module load vcs/vcs_2023.12sp2)
+
+OBSERVED (tail of run):
+--- Test 12: Unknown addresses ---
+PASS [read undefined 0x10 returns 0]: value=0x00000000
+PASS [ed after write to undefined addr]: value=0x0000002a
+PASS [pre-fix: read 0x14 returns 0]: value=0x00000000
+
+=== Test Summary ===
+Total:  43
+Passed: 43
+Failed: 0
+RESULT: ALL TESTS PASSED
+Tue Sep 22 15:42:54 2026
+DOORBELL_TB: PASS
+[soc-run] RESULT: PASS for run_doorbell_tb
+
+$ grep -c "^PASS" sim/regression/doorbell_tb.log
+43
+simv (plain build): sim/regression/simv_doorbell_tb
+  sha256 2adeffe2cf9e0f01583282eb7c6532104a7ee780e0da95e972124a9eda607e9e
+log: sim/regression/doorbell_tb.log (durable)
+
+H1-HARNESS: run_doorbell_tb-pass
+
+================================================================================
+(b) X1-pre — FSDB build + xverif dead-window characterization (PRE-FIX RTL)
+================================================================================
+STALE-SIMV GUARD (plan 2c): the Makefile rule depends only on the source files, so
+overriding VCS_OPTS with +define+FSDB does NOT trigger a recompile → simv removed first.
+Also verified: soc-verification-run.sh CLEAN only removes simv_soc_cocotb*.
+
+EXACT COMMAND (sz0001):
+$ cd /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression
+$ rm -rf simv_doorbell_tb simv_doorbell_tb.daidir
+$ make VCS_OPTS="-full64 -sverilog -debug_access+all -kdb -timescale=1ns/1ps +define+FSDB -P $VERDI_HOME/share/PLI/VCS/LINUX64/novas.tab" run_doorbell_tb
+  (with: source /NAS/Tools/methodology/modules/init/bash; module load vcs/vcs_2023.12sp2;
+         module load verdi/verdi_2023.12sp2)
+
+OBSERVED: same 43/43 PASS + `RESULT: ALL TESTS PASSED` + `DOORBELL_TB: PASS`
+(durable copy of the FSDB-build log: sim/regression/doorbell_tb_prefix_fsdb.log, 43 PASS lines)
+
+FSDB / DAIDIR PATHS (actual, plan 4b):
+  FSDB   : /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/tb_doorbell.fsdb
+           (10911 bytes, mtime 2026-09-22 15:28)
+  DAIDIR : /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/simv_doorbell_tb.daidir
+  simv   : sim/regression/simv_doorbell_tb
+           sha256 840eb900cfb189e3f89f43f74e60efa533b7f1d1c0b6c031748f2bf15862bf93
+FSDB HYGIENE (plan 4b): `*.fsdb` added to .gitignore → FSDB build leaves NO new untracked
+file; post-run `git status --porcelain` shows no *.fsdb entry.
+
+xverif MCP SESSION
+  session_open(name=db_prefix, daidir=.../simv_doorbell_tb.daidir, fsdb=.../tb_doorbell.fsdb)
+  → session reported alive via session.list (the open call itself hit the MCP 30 s client
+    timeout while indexing the daidir; the session was confirmed alive, not reopened).
+  apb.config.load name=db0 — target interface = MODULE-LEVEL DUT (raw 12-bit paddr, no decoder):
+    clock   tb_doorbell.clk
+    paddr   tb_doorbell.u_dut.paddr     (12-bit raw offset)
+    psel    tb_doorbell.u_dut.psel
+    penable tb_doorbell.u_dut.penable
+    pwrite  tb_doorbell.u_dut.pwrite
+    pwdata  tb_doorbell.u_dut.pwdata
+    prdata  tb_doorbell.u_dut.prdata
+    pready  tb_doorbell.u_dut.pready
+    pslverr tb_doorbell.u_dut.pslverr
+    reset   tb_doorbell.rst_n (active_low)
+
+--- QUERY 1: apb.query, direction=all, address exact {12'h010, 12'h014}, line_limit=30 ---
+summary: total_count=4, returned_count=4, scan_complete=true, truncated=false
+transactions:
+  time    addr     data          is_write  has_error
+  1760ns  12'h010  32'h00000000  false     false     <- read 0x010 → 0
+  1820ns  12'h010  32'hdeadbeef  true      false     <- write 0x010 (dropped)
+  1880ns  12'h014  32'h00000000  false     false     <- read 0x014 → 0  (dead window)
+  1910ns  12'h014  32'hdeadbeef  true      false     <- write 0x014 (dropped)
+
+--- QUERY 2: value.at tb_doorbell.u_dut.addr_valid (write/read enable gate) ---
+values:
+  name                          1759ns 1760ns 1761ns 1819ns 1820ns 1821ns 1879ns 1880ns 1881ns 1909ns 1910ns 1911ns
+  tb_doorbell.u_dut.addr_valid  1'h0   1'h0   1'h0   1'h0   1'h0   1'h0   1'h0   1'h0   1'h0   1'h0   1'h0   1'h0
+  => addr_valid=0 across all four 0x010/0x014 transfers ⇒ write_en=0 (write silently
+     dropped) and read_en=0 (prdata forced to 0). Pre-fix decode gate is paddr[11:4]==0.
+
+--- QUERY 3 (control): apb.query, address exact {12'h000}, direction=all, line_limit=8 ---
+  time   addr     data          is_write  has_error
+  60ns   12'h000  32'h00000000  false     false
+  190ns  12'h000  32'h0000002a  true      false   <- write 2a
+  220ns  12'h000  32'h0000002a  false     false   <- read-back 2a   (LIVE register)
+  360ns  12'h000  32'h00000000  true      false
+  430ns  12'h000  32'h00000063  true      false
+  540ns  12'h000  32'h00000064  true      false
+  660ns  12'h000  32'haaaaaaaa  true      false
+  780ns  12'h000  32'haaaaaaaa  false     false   <- read-back 0xAAAAAAAA (LIVE register)
+  => contrast: 0x000 write→read-back works; 0x010/0x014 write→read-back does not.
+
+--- QUERY 4: apb.transfer_window db0, time_range 1890ns–1935ns ---
+transactions:
+  time    type  addr     data          has_error
+  1910ns  WR    12'h014  32'hdeadbeef  false
+  => one dead-window access with full APB write handshake; no register effect.
+
+session_close: status=closed, cleanup_complete=true.
+
+XVERIF-PREFIX: dead-window-confirmed
+
+================================================================================
+(c) PRE-FIX W4 CONTROL VALUES (plan 4c)
+================================================================================
+COMMAND (sz0001, pre-fix tree, existing pre-fix simv_soc_ibex):
+$ cd /home/prj/zhengs/caduceuscore/CaduceusCore
+$ bash sim/regression/run_w4_perf_batch.sh        (log: /tmp/w4_prefix.log)
+OBSERVED:
+  [W4-PERF SUMMARY]
+    PASS: 6
+    FAIL: 0
+    TOTAL: 6
+  [EVIDENCE CHECK] w4-perf-p0..p4.txt (4 lines each) + fullchain-pipeline.txt (1 line) all [OK]
+simv identity (pre-fix, NOT rebuilt in this todo):
+  build/ibex_full_rtl/simv_soc_ibex  mtime 2026-08-31 13:15
+  sha256 b99b613e4a5916b0e2d33d20a3598de6682ba38f1bb0dae62076f9b5ed2625a3
+
+FRESH PRE-FIX `cycles` (21 entries — THESE ARE THE todo-5 CONTROL VALUES)
+  p0: PERF-01=39344  PERF-02=39344  PERF-03=39344  PERF-04=33331
+  p1: PERF-05=33339  PERF-06=47037  PERF-07=500    PERF-08=33339
+  p2: PERF-09=39344  PERF-10=76390  PERF-11=125581 PERF-12=39344
+  p3: PERF-13=275705 PERF-14=0      PERF-15=64092  PERF-16=64092
+  p4: PERF-17=33339  PERF-18=23104  PERF-19=33339  PERF-20=33333
+  fullchain: FULLCHAIN=33339
+  PERF-13 nested mmul_results cycles (also part of the control, from the raw JSONL):
+    Q_proj=64092 K_proj=20810 V_proj=20810 attn_score=18355 attn_weight=18332
+    O_proj=58355 gate_proj=20810 up_proj=20810 down_proj=33331
+  PERF-20 runs=[33339, 33331, 33331] mean=33333.666666666664 std=3.7712361663282534
+  NOTE: these fresh values DIFFER from the values committed at HEAD
+        (HEAD p0 PERF-01=38939, HEAD PERF-13=272201) → the HEAD-committed W4 evidence
+        predates the current pre-fix simv. The control for todo 5 is the FRESH table above,
+        as the plan mandates ("跑一次 ... 作为 todo 5 的漂移控制").
+
+RAW PRE-FIX JSONL (verbatim, fresh run)
+### build/evidence/w4-perf-p0.txt
+{"case_id": "PERF-01", "simulator": "ibex", "status": "PASS", "cycles": 39344, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:36:46Z", "cos_sim": 1.0, "M": 1, "K": 256, "N": 64, "tiles": 4}
+{"case_id": "PERF-02", "simulator": "ibex", "status": "PASS", "cycles": 39344, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:36:46Z", "note": "K>64 firmware dispatch"}
+{"case_id": "PERF-03", "simulator": "ibex", "status": "PASS", "cycles": 39344, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:36:46Z", "tiles": 4, "note": "per-tile cycle in total"}
+{"case_id": "PERF-04", "simulator": "ibex", "status": "PASS", "cycles": 33331, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:36:49Z", "cos_sim": 1.0, "M": 1, "K": 128, "N": 128, "tiles": 4}
+### build/evidence/w4-perf-p1.txt
+{"case_id": "PERF-05", "simulator": "ibex", "status": "PASS", "cycles": 33339, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:36:24Z", "cos_sim": 1.0, "M": 1, "K": 128, "N": 128, "tiles": 4}
+{"case_id": "PERF-06", "simulator": "ibex", "status": "PASS", "cycles": 47037, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:36:31Z", "cos_sim": 1.0, "M": 32, "K": 128, "N": 128}
+{"case_id": "PERF-07", "simulator": "ibex", "status": "PASS", "cycles": 500, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:36:31Z", "method": "MXUModel.estimate", "tile_base": 124}
+{"case_id": "PERF-08", "simulator": "ibex", "status": "PASS", "cycles": 33339, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:36:31Z", "predicted": 500, "delta_pct": 98.5}
+### build/evidence/w4-perf-p2.txt
+{"case_id": "PERF-09", "simulator": "ibex", "status": "PASS", "cycles": 39344, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:35:46Z", "cos_sim": 1.0, "M": 1, "K": 256, "N": 64}
+{"case_id": "PERF-10", "simulator": "ibex", "status": "PASS", "cycles": 76390, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:35:56Z", "cos_sim": 1.0, "M": 1, "K": 512, "N": 64}
+{"case_id": "PERF-11", "simulator": "ibex", "status": "PASS", "cycles": 125581, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:36:10Z", "cos_sim": 1.0, "M": 1, "K": 512, "N": 128, "note": "scaled Q_proj"}
+{"case_id": "PERF-12", "simulator": "ibex", "status": "PASS", "cycles": 39344, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:36:10Z", "overlap_ratio": 0.95, "predicted_overlap": 0.98, "delta_pct": 3.1}
+### build/evidence/w4-perf-p3.txt
+{"case_id": "PERF-13", "simulator": "ibex", "status": "PASS", "cycles": 275705, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:35:31Z", "cos_sim": 1.0, "mmul_results": [{"name": "Q_proj", "M": 1, "K": 256, "N": 128, "cycles": 64092, "cos_sim": 1.0, "passed": true}, {"name": "K_proj", "M": 1, "K": 128, "N": 64, "cycles": 20810, "cos_sim": 1.0, "passed": true}, {"name": "V_proj", "M": 1, "K": 128, "N": 64, "cycles": 20810, "cos_sim": 1.0, "passed": true}, {"name": "attn_score", "M": 32, "K": 64, "N": 32, "cycles": 18355, "cos_sim": 1.0, "passed": true}, {"name": "attn_weight", "M": 32, "K": 32, "N": 64, "cycles": 18332, "cos_sim": 1.0, "passed": true}, {"name": "O_proj", "M": 1, "K": 128, "N": 256, "cycles": 58355, "cos_sim": 1.0, "passed": true}, {"name": "gate_proj", "M": 1, "K": 128, "N": 64, "cycles": 20810, "cos_sim": 1.0, "passed": true}, {"name": "up_proj", "M": 1, "K": 128, "N": 64, "cycles": 20810, "cos_sim": 1.0, "passed": true}, {"name": "down_proj", "M": 1, "K": 128, "N": 128, "cycles": 33331, "cos_sim": 1.0, "passed": true}]}
+{"case_id": "PERF-14", "simulator": "ibex", "status": "PASS", "cycles": 0, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:35:31Z", "source": "analytical", "predictions": [{"name": "Q_proj", "pred": 3860}, {"name": "K_proj", "pred": 2744}, {"name": "V_proj", "pred": 2744}, {"name": "attn_score", "pred": 2248}, {"name": "attn_weight", "pred": 2248}, {"name": "O_proj", "pred": 3860}, {"name": "gate_proj", "pred": 2744}, {"name": "up_proj", "pred": 2744}, {"name": "down_proj", "pred": 3116}]}
+{"case_id": "PERF-15", "simulator": "ibex", "status": "PASS", "cycles": 64092, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:35:31Z", "source": "analytical", "note": "chain via 9-MMUL pipeline"}
+{"case_id": "PERF-16", "simulator": "ibex", "status": "PASS", "cycles": 64092, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:35:31Z", "source": "analytical", "cross_engine_gap": 4, "gap_model": "FM-1: 4-cycle same-engine gap (crossbar_wait=2,sram_stall=1,vcov_bubble=1)", "note": "FM-1 calibrated cross-engine gap verified analytically."}
+### build/evidence/w4-perf-p4.txt
+{"case_id": "PERF-17", "simulator": "ibex", "status": "PASS", "cycles": 33339, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:34:39Z", "cos_sim": 1.0, "mxu_busy_ratio": 0.52}
+{"case_id": "PERF-18", "simulator": "ibex", "status": "PASS", "cycles": 23104, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:34:42Z", "source": "analytical", "sequential_1": 11552, "sequential_2": 11552, "inter_op_gap": 0, "note": "Crossbar contention: sequential 2-MMUL gap verified analytically."}
+{"case_id": "PERF-19", "simulator": "ibex", "status": "PASS", "cycles": 33339, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:34:42Z", "source": "analytical", "store_out_ratio": 0.26, "note": "Store-out ratio analytical from MXUModel."}
+{"case_id": "PERF-20", "simulator": "ibex", "status": "PASS", "cycles": 33333, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:34:49Z", "runs": [33339, 33331, 33331], "mean": 33333.666666666664, "std": 3.7712361663282534, "pct_std": 0.01}
+### build/evidence/fullchain-pipeline.txt
+{"case_id": "FULLCHAIN", "simulator": "ibex", "status": "PASS", "cycles": 33339, "commit": "51af2d85d6f7b99c1338eb4094125aa8b859d2c9", "timestamp": "2026-09-22T07:34:25Z", "cos_sim": 0.9999999999999998, "segments": {"mmul_cycles": 33339, "vconv_cycles": 0, "softmax_cycles": 0, "vconv_f16_i32_cycles": 0, "vresid_cycles": 0}, "gaps": {"gap_startup": 0, "gap_mmul_to_vconv": 4, "gap_vconv_to_sfu": 4, "gap_sfu_to_vconv_f16_i32": 4, "gap_vconv_f16_i32_to_vresid": 4}, "mmul_cos_sim": 1.0, "note": "MMUL segment; SFU/Vector dispatch blocked by firmware opcode support"}
+
+TRACKED-EVIDENCE RESTORE DISCIPLINE (plan 4c)
+BEFORE restore: `git status --porcelain build/`
+ M build/evidence/fm-cv-chain.txt                 (pre-existing parallel-session dirty — NOT touched)
+ M build/evidence/fullchain-pipeline.txt          (rewritten by the W4 batch)
+ M build/evidence/w3-4-mobilenetv3-fm.txt         (pre-existing parallel-session dirty — NOT touched)
+ M build/evidence/w4-perf-p0.txt                  (rewritten by the W4 batch)
+ M build/evidence/w4-perf-p1.txt                  (rewritten by the W4 batch)
+ M build/evidence/w4-perf-p2.txt                  (rewritten by the W4 batch)
+ M build/evidence/w4-perf-p3.txt                  (rewritten by the W4 batch)
+ M build/evidence/w4-perf-p4.txt                  (rewritten by the W4 batch)
+RESTORE COMMAND (exactly the 6 batch-rewritten files):
+$ git checkout -- build/evidence/w4-perf-p0.txt build/evidence/w4-perf-p1.txt \
+    build/evidence/w4-perf-p2.txt build/evidence/w4-perf-p3.txt \
+    build/evidence/w4-perf-p4.txt build/evidence/fullchain-pipeline.txt
+AFTER restore: `git status --porcelain build/`
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+=> no NEW M lines (the two remaining are the pre-existing parallel-session dirty files). PASS
+
+================================================================================
+JUDGMENT LINES
+================================================================================
+H1-HARNESS: run_doorbell_tb-pass
+XVERIF-PREFIX: dead-window-confirmed
+T1-W4-CONTROL: 21-fresh-cycles-recorded (PERF-01..20 + FULLCHAIN)
