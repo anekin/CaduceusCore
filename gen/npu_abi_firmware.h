@@ -161,10 +161,12 @@
 #define NPU_ABI_STATUS_CORRUPTED_DESCRIPTOR 3
 #define NPU_ABI_STATUS_UNKNOWN_OPCODE 4
 
-/* ── Known Discrepancy: DOORBELL COMPLETION_STATUS ──────────── */
-/* COMPLETION_STATUS hardware window is 16 entries (offset 0x14). */
-/* Firmware writes COMPLETION_STATUS[cmd_id] with cmd_id up to */
-/* NPU_ABI_RING_ENTRIES-1 (1023). This is a */
-/* known design gap that must be resolved in a future ABI revision. */
+/* ── Doorbell Status Window (BUG-RTL-SOC-009 RESOLVED) ──────── */
+/* RTL implements LAST_STATUS@0x10 + COMPLETION_STATUS[16]@0x14-0x50 */
+/* (valid doorbell window 0x00-0x50; 0x54+ unmapped). Firmware      */
+/* writes COMPLETION_STATUS[min(cmd_id,15)] via an index clamp — a      */
+/* 16-slot mirror. Every command up to NPU_ABI_RING_ENTRIES-1          */
+/* (1023) is recorded losslessly in the DRAM completion   */
+/* ring, not in this register window.                                */
 
 #endif /* NPU_ABI_FIRMWARE_H */

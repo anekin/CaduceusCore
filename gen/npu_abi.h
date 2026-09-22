@@ -58,10 +58,10 @@ extern "C" {
 #define NPU_DMA_STATUS_OFFSET 0x0008UL  /* bit[0]=BUSY, bit[1]=DONE, [7:4]=active_channel */
 
 /* ── DOORBELL Registers (base: NPU_DOORBELL_BASE) ──── */
-#define NPU_DOORBELL_COMPLETION_STATUS_OFFSET 0x0014UL  /* Per-ring-index completion status array. WARNING: array_size=16 per ABI declaration; firmware indexes up to RING_ENTRIES (1024). */
+#define NPU_DOORBELL_COMPLETION_STATUS_OFFSET 0x0014UL  /* Per-slot completion-status MIRROR, 16 entries at 0x14-0x50 (RTL: rtl/soc/doorbell.v). Firmware writes COMPLETION_STATUS[min(cmd_id,15)], so the index is clamped into the declared window: a cmd_id above 15 collapses onto slot 15 and the array holds only the most recent completions. It is NOT a lossless completion path. The authoritative, lossless record for every command (RING_ENTRIES = 1024) is the DRAM completion ring at COMPLETION_RING_ADDR + cmd_id*32. */
 #define NPU_DOORBELL_HOST_HEAD_OFFSET 0x0008UL  /* NPU updates → host reads completion */
 #define NPU_DOORBELL_HOST_TAIL_OFFSET 0x0000UL  /* Host writes after appending command entries; triggers NPU wakeup */
-#define NPU_DOORBELL_LAST_STATUS_OFFSET 0x0010UL  /* Last command status (0=done, non-zero=error). Used by firmware for debug tracking. */
+#define NPU_DOORBELL_LAST_STATUS_OFFSET 0x0010UL  /* Firmware progress/status marker, RW. NOT a simple done/error flag: firmware publishes stage markers while a command executes (e.g. 0x00005000|op through 0x00005500|op for an SFU sequence, 0x00006000|op through 0x00006500|op, 0x00004000|op / 0x00004100|op, and 0x00007000|op for DRAM-window or dimension rejections) and finally 0x00002000|status where status==0 means success. It is also used once at boot for the DRAM completion-ring write probe (0xAA = writable, 0xBB = not writable). Constraint: the host must not interpret LAST_STATUS before HOST_HEAD advances for the command — the value is a firmware-internal progress trace that changes at any time. */
 #define NPU_DOORBELL_NPU_HEAD_OFFSET 0x0004UL  /* NPU firmware updates head (consumed pointer) */
 #define NPU_DOORBELL_NPU_TAIL_OFFSET 0x000CUL  /* Host updates → NPU sees new commands */
 
@@ -138,8 +138,8 @@ typedef struct {
     volatile uint32_t NPU_HEAD;  /* 0x0004: NPU firmware updates head (consumed pointer) */
     volatile uint32_t HOST_HEAD;  /* 0x0008: NPU updates → host reads completion */
     volatile uint32_t NPU_TAIL;  /* 0x000C: Host updates → NPU sees new commands */
-    volatile uint32_t LAST_STATUS;  /* 0x0010: Last command status (0=done, non-zero=error). Used by firmware for debug tracking. */
-    volatile uint32_t COMPLETION_STATUS[16];  /* 0x0014: Per-ring-index completion status array. WARNING: array_size=16 per ABI declaration; firmware indexes up to RING_ENTRIES (1024). */
+    volatile uint32_t LAST_STATUS;  /* 0x0010: Firmware progress/status marker, RW. NOT a simple done/error flag: firmware publishes stage markers while a command executes (e.g. 0x00005000|op through 0x00005500|op for an SFU sequence, 0x00006000|op through 0x00006500|op, 0x00004000|op / 0x00004100|op, and 0x00007000|op for DRAM-window or dimension rejections) and finally 0x00002000|status where status==0 means success. It is also used once at boot for the DRAM completion-ring write probe (0xAA = writable, 0xBB = not writable). Constraint: the host must not interpret LAST_STATUS before HOST_HEAD advances for the command — the value is a firmware-internal progress trace that changes at any time. */
+    volatile uint32_t COMPLETION_STATUS[16];  /* 0x0014: Per-slot completion-status MIRROR, 16 entries at 0x14-0x50 (RTL: rtl/soc/doorbell.v). Firmware writes COMPLETION_STATUS[min(cmd_id,15)], so the index is clamped into the declared window: a cmd_id above 15 collapses onto slot 15 and the array holds only the most recent completions. It is NOT a lossless completion path. The authoritative, lossless record for every command (RING_ENTRIES = 1024) is the DRAM completion ring at COMPLETION_RING_ADDR + cmd_id*32. */
 } npu_doorbell_t;
 
 typedef struct {

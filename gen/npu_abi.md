@@ -54,14 +54,14 @@
 
 ## DOORBELL
 > **Base:** `0x40005000` | Host↔NPU doorbell — ring buffer head/tail pointers and completion status.
-> ⚠️ COMPLETION_STATUS is declared as 16 entries (64 bytes at offset 0x14) in both regmap.py and npu-regmap.h, but firmware accesses COMPLETION_STATUS[cmd_id] where cmd_id can range up to RING_ENTRIES-1 (1023). This means writes for cmd_id >= 16 overflow the declared register window. The current RTL doorbell.v implements only a single LAST_STATUS register at offset 0x10 and no COMPLETION_STATUS array. This discrepancy must be resolved in a future ABI revision.
+> ⚠️ RESOLVED (2026-09-22, BUG-RTL-SOC-009): the RTL now implements the declared window. rtl/soc/doorbell.v provides LAST_STATUS at 0x10 and COMPLETION_STATUS[16] at 0x14-0x50, with addr_valid covering the 21-word window 0x00-0x50 (0x54 and above remain unmapped: read 0 / writes ignored, no pslverr). The firmware-side index overflow for cmd_id >= 16 is handled BY DESIGN and is no longer a hardware gap: firmware writes the MMIO mirror through COMPLETION_STATUS[min(cmd_id,15)] (index clamped to the declared window), while the lossless per-command record for all RING_ENTRIES (1024) commands stays in the DRAM completion ring at COMPLETION_RING_ADDR + cmd_id*32. The 16-entry hardware array is therefore a status MIRROR, not a lossless completion path.
 
 | Offset | Register | Access | Reset | Description |
 |--------|----------|--------|-------|-------------|
-| `0x14` | `COMPLETION_STATUS[16]` | rw | `0x00000000` | Per-ring-index completion status array. WARNING: array_size=16 per ABI declaration; firmware indexes up to RING_ENTRIES (1024). |
+| `0x14` | `COMPLETION_STATUS[16]` | rw | `0x00000000` | Per-slot completion-status MIRROR, 16 entries at 0x14-0x50 (RTL: rtl/soc/doorbell.v). Firmware writes COMPLETION_STATUS[min(cmd_id,15)], so the index is clamped into the declared window: a cmd_id above 15 collapses onto slot 15 and the array holds only the most recent completions. It is NOT a lossless completion path. The authoritative, lossless record for every command (RING_ENTRIES = 1024) is the DRAM completion ring at COMPLETION_RING_ADDR + cmd_id*32. |
 | `0x08` | `HOST_HEAD` | ro | `0x00000000` | NPU updates → host reads completion |
 | `0x00` | `HOST_TAIL` | wo | `0x00000000` | Host writes after appending command entries; triggers NPU wakeup |
-| `0x10` | `LAST_STATUS` | rw | `0x00000000` | Last command status (0=done, non-zero=error). Used by firmware for debug tracking. |
+| `0x10` | `LAST_STATUS` | rw | `0x00000000` | Firmware progress/status marker, RW. NOT a simple done/error flag: firmware publishes stage markers while a command executes (e.g. 0x00005000|op through 0x00005500|op for an SFU sequence, 0x00006000|op through 0x00006500|op, 0x00004000|op / 0x00004100|op, and 0x00007000|op for DRAM-window or dimension rejections) and finally 0x00002000|status where status==0 means success. It is also used once at boot for the DRAM completion-ring write probe (0xAA = writable, 0xBB = not writable). Constraint: the host must not interpret LAST_STATUS before HOST_HEAD advances for the command — the value is a firmware-internal progress trace that changes at any time. |
 | `0x04` | `NPU_HEAD` | rw | `0x00000000` | NPU firmware updates head (consumed pointer) |
 | `0x0C` | `NPU_TAIL` | ro | `0x00000000` | Host updates → NPU sees new commands |
 
@@ -304,7 +304,7 @@
 ## Known Discrepancies
 
 ### DOORBELL_COMPLETION_STATUS_SIZE [HIGH]
-DOORBELL.COMPLETION_STATUS declared as 16 entries (offset 0x14, 64 bytes) in both regmap.py and npu-regmap.h. Firmware writes COMPLETION_STATUS[cmd_id] where cmd_id ranges up to RING_ENTRIES-1 (1023). RTL doorbell.v implements only LAST_STATUS at 0x10 and no COMPLETION_STATUS array. Resolution: define HW doorbell window vs firmware SRAM-backed completion array as separate concepts, or expand the hardware register window.
+DOORBELL.COMPLETION_STATUS declared as 16 entries (offset 0x14, 64 bytes) in both regmap.py and npu-regmap.h. Firmware writes COMPLETION_STATUS[cmd_id] where cmd_id ranges up to RING_ENTRIES-1 (1023). RTL doorbell.v implements only LAST_STATUS at 0x10 and no COMPLETION_STATUS array. Resolution: define HW doorbell window vs firmware SRAM-backed completion array as separate concepts, or expand the hardware register window. RESOLVED (2026-09-22, BUG-RTL-SOC-009): the hardware window was expanded to the declared 16 entries — rtl/soc/doorbell.v now implements LAST_STATUS@0x10 plus COMPLETION_STATUS[16]@0x14-0x50 (valid doorbell window 0x00-0x50). The cmd_id >= 16 case is handled by the firmware clamp COMPLETION_STATUS[min(cmd_id,15)] (16-slot mirror) together with the full 1024-record DRAM completion ring, so no register window overflow occurs.
 
 **Sources:** sim/regmap.py:146, firmware/npu-regmap.h:159, firmware/npu_firmware.c:391
 
