@@ -1,0 +1,387 @@
+================================================================================
+task-3-rtl-open-bugs-cleanup.txt
+BUG-MXU-WDT-001 — MXU wrapper AXI watchdog: sticky timeout + FSM recovery
+Plan: .omo/plans/rtl-open-bugs-cleanup.md (todo 3)   Branch: rtl-open-bugs-cleanup
+================================================================================
+
+--------------------------------------------------------------------------------
+PROVENANCE
+--------------------------------------------------------------------------------
+git HEAD (before this todo's commit): 9b430757c3f3c2170fcbc876a6722115a3e497f7
+  subject: fix(rtl/ip): dma_wrapper CMD write-only on the bus + drop STATUS
+           read-clear (BUG-RTL-SOC-011)
+branch: rtl-open-bugs-cleanup
+VCS: Synopsys VCS V-2023.12-SP2_Full64  (module load vcs/vcs_2023.12sp2)
+  "Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64"
+cocotb 1.9.0 / cocotbext-axi 0.1.28 / Python 3.11.9
+  (/NAS/Tools/anaconda3/envs/py3.11, + /home/zhengs/.local/lib/python3.11/site-packages)
+Host: all VCS work executed on sz0001 (192.168.0.11) only.
+Date: 2026-09-23, 20:04-20:33 (+0800)
+
+ARTIFACT HASHES / MTIMES (the attribution proof between RED and GREEN)
+  sim/tests/wrapper/test_mxu_wrapper.py  20:20:25  sha256 8b1f6dbfcf66d2c780e71e6963d5e8df10eef487170caeaa79ef5966555ab60a
+  scripts/wv_run_mxu.sh                  20:13:58  sha256 a2c94a7e43338cf79d9c0b291fc908893ca47486a89a42d22549dbdd32b332f4
+  rtl/wrapper/mxu_soc_wrapper.v          20:25:57  sha256 e82ab7cd015e9760ffa971fb4aa46b8911deb4e17a05edf6d03ba6a65923eec4
+  RED run   : 20:20:38 -> 20:23:19
+  GREEN run : 20:26:47 -> 20:29:27
+  GREEN2    : 20:30:27 -> 20:33:09
+  => ONLY rtl/wrapper/mxu_soc_wrapper.v was modified between RED and GREEN.
+     The test file and the runner were byte-identical across all three runs, so
+     every behaviour difference below is attributable to the RTL change alone.
+
+EXACT COMMANDS
+  1) CONTROL (pre-edit baseline, unmodified tree, 5 tests):
+       bash scripts/wv_run_mxu.sh                                    # 20:06:20
+  2) RED (pre-RTL, 6 tests, test file + runner already modified):
+       bash scripts/wv_run_mxu.sh                                    # 20:20:38
+  3) RTL change applied (20:25:57)
+  4) GREEN:
+       bash scripts/wv_run_mxu.sh                                    # 20:26:47
+  5) GREEN2 (flaky_tests probe, independent recompile):
+       bash scripts/wv_run_mxu.sh                                    # 20:30:27
+
+  WHY NOT `soc-verification-run.sh run_wrapper_mxu` (the mandated command):
+  that command is BROKEN in the current tree, for a reason outside this todo's
+  whitelist (see BLOCKER-1). Measured failure signature:
+       [soc-run] make run_wrapper_mxu
+       bash: scripts/wv_run_mxu.sh: No such file or directory
+       make: *** [run_wrapper_mxu] Error 127
+       [soc-run] RESULT: FAIL for run_wrapper_mxu
+  Root cause: sim/regression/Makefile:1313-1315 recipe is `@bash scripts/wv_run_mxu.sh`
+  with no `cd $(REPO_ROOT) &&` prefix, while soc-verification-run.sh:47 does
+  `cd "$SOC_DIR"` (= sim/regression) before `make`. Every other Makefile target
+  uses `cd $(REPO_ROOT) && ...`. The Makefile is NOT in this todo's whitelist.
+  The sanctioned equivalent used instead is the script the target intends to run:
+  `scripts/wv_run_mxu.sh` routes ALL compile+simulate work to sz0001 through its
+  own p9_ssh helper (scripts/p9_lib/p9_sz0001.sh) - no VCS ran locally. This is
+  also the historical invocation documented in docs/bugs/bugs-soc-rtl.md:624 and
+  used by the aggregator scripts/wv_regression.sh:65.
+
+--------------------------------------------------------------------------------
+TRUE RESULT MATRIX (read from the cocotb per-test summary lines, NOT from the
+runner's verdict - see BLOCKER-2)
+--------------------------------------------------------------------------------
+  test                                        RED(pre-RTL) GREEN      GREEN2
+  ------------------------------------------- ------------ ---------- ----------
+  test_apb_regmap_rw                          PASS         PASS       PASS
+  test_mxu_preload_single_tile                PASS         PASS       PASS
+  test_mxu_single_tile_compute                FAIL(*)      FAIL(*)    FAIL(*)
+  test_mxu_store_out_burst                    PASS         PASS       PASS
+  test_mxu_accumulate_mode                    FAIL(**)     FAIL(**)   FAIL(**)
+  test_mxu_wrapper_watchdog_timeout (NEW)     FAIL <<RED>> PASS <<GREEN>> PASS
+  ------------------------------------------- ------------ ---------- ----------
+  totals (true)                               3P/3F        4P/2F      4P/2F
+
+  (*)  pre-existing, identical in all three runs:
+       "MISMATCH: 3180/4096 elements differ, max_abs_diff=6400,
+        first_mismatches=[(11, 0), (11, 2), (11, 3), (11, 4), (11, 5)]"  @2880ns
+  (**) pre-existing, identical in all three runs:
+       cocotbext.axi.axi_slave._process_write -> "ValueError: Unresolvable bit
+       in binary string: 'x'" (wrapper drives X on m_axi_wdata)          @2940ns
+  => Neither signature moved by one bit between pre-RTL and post-RTL, which is
+     the proof that the watchdog did NOT perturb the load/store datapath and did
+     NOT false-trip on these legitimate transactions.
+
+--------------------------------------------------------------------------------
+JUDGMENT LINES
+--------------------------------------------------------------------------------
+WDT-IMPL: wrapper-axi-wdt-sticky-bit
+WDT-NEW-TEST: red-to-green, deterministic over 2 independent recompiles
+WDT-TEST: NOT-MET(2-pre-existing-guard-failures)
+  The plan's required all-six-green judgment line is INTENTIONALLY NOT
+  EMITTED, and its literal spelling is deliberately absent from this file so
+  that a grep-based gate fails closed instead of accepting a false pass:
+  only 4 of 6 tests pass. Emitting it would be a false PASS claim. See
+  BLOCKER-3 for the two failures and why they are not this change's.
+WDT-PEAK-CNT: 999009   (threshold 1000000, sampled 1000 cycles before the trip)
+WDT-WAIT-WALLCLOCK: 13.1 s (RED) / 13.9 s (GREEN) / 13.7 s (GREEN2) for
+  1,010,000 cycles of unbounded AXI wait (~75k cycles/s; bound was ~10 min)
+FRESHNESS: PASS (two independent proofs, three judged runs)
+NO-FALSE-TRIP: PASS (pre/post signatures byte-identical on all 5 guard tests)
+SCOPE: PASS (3 whitelisted paths + evidence; no rtl/mxu, rtl/soc, firmware,
+  spec, gen, intc, vendored, or INTC wiring touched; no MMIO register added)
+
+--------------------------------------------------------------------------------
+1. WHAT WAS IMPLEMENTED (WDT-IMPL)
+--------------------------------------------------------------------------------
+File: rtl/wrapper/mxu_soc_wrapper.v (+84 net lines, all additive)
+
+(a) Threshold: `localparam [19:0] WDT_TIMEOUT = 20'd1_000_000;` — fixed in RTL,
+    NO new MMIO register, not software-configurable. Justified in the file
+    header with the existing cocotb budget formula
+    (sim/cocotb_bridge.py:_estimate_timeout, lines 2370-2390):
+        MMUL: max(50000, M*N*K//64 + 20000)
+    for the largest shape in that suite (M=1, K=N=2048):
+        1*2048*2048//64 + 20000 = 85,536 cycles  ->  1e6 leaves >10x headroom.
+
+(b) COUNTER RULE (the exact condition implemented):
+      wdt_cnt advances on every cycle in which
+        (pl_state == PL_LOAD_W_AR) || (pl_state == PL_LOAD_W_R) ||
+        (pl_state == PL_LOAD_A_AR) || (pl_state == PL_LOAD_A_R) ||
+        (so_state == SO_RD_SCALE_AR) || (so_state == SO_RD_SCALE_R) ||
+        (so_state == SO_WRITE_AW)    || (so_state == SO_WRITE_W)
+      and is CLEARED to 0 in every other cycle.
+    Those eight states are exactly the states whose only exit is an AXI
+    handshake (arready / rvalid / awready / wready).  Every other state -
+    PL_IDLE, PL_READY, SO_IDLE, SO_TRANSFORM - is "the FSM made progress" and
+    clears the counter, so a long but healthy transaction can never accumulate
+    to the threshold.  Equivalence note: those eight states are also exactly the
+    states that assert m_axi_arvalid / m_axi_rready / m_axi_awvalid /
+    m_axi_wvalid, and no other state asserts any of them (verified against the
+    four continuous assigns in the same file), so the rule can equivalently be
+    read as "count while the wrapper is presenting an AXI request and waiting
+    for its response".  Counter saturates at WDT_TIMEOUT-1 (no wrap), so
+    wdt_fire is a clean one-cycle pulse.
+
+(c) On trip (wdt_fire):
+      * wrp_wdt_timeout <= 1'b1   (sticky, single driver)
+      * the offending FSM is forced back to IDLE - surgically, only when it is
+        actually in a waiting state:
+            PL block: `else if (wdt_fire && pl_axi_wait) pl_state <= PL_IDLE;`
+            SO block: `else if (wdt_fire && so_axi_wait) so_state <= SO_IDLE;`
+        (surgical gating matters: a blanket reset would also clobber PL_READY
+        and therefore destroy a legitimately-set LOAD_DONE when only the
+        store-out FSM is stuck).  Forcing IDLE drops m_axi_arvalid / awvalid /
+        wvalid combinationally, which is what releases the AXI wait.
+      * irq: mxu_top's own interrupt is now `.irq(mxu_irq)` and
+            `assign irq = mxu_irq | wrp_wdt_timeout;`
+        so the trip is ORed into the shared MXU INTC bit0 line.  The INTC was
+        not touched (rtl/intc/** untouched; caduceus_soc_top.v untouched).
+
+(d) WRP_STATUS readback is now `{30'd0, wrp_wdt_timeout, wrp_load_done}`:
+    bit0 = LOAD_DONE, bit1 = WDT_TIMEOUT (sticky).  Header register table
+    updated for both 0x3C and 0x40, with the threshold rationale added as a
+    new header paragraph.
+
+(e) STICKY CLEAR RULE: ANY write to WRP_CMD clears wrp_wdt_timeout, whatever
+    the data - bit0=0 included.  Rationale (documented in the RTL comment):
+    clearing only on bit0=1 would make the software ack itself re-arm a
+    pre-load, because wrp_trigger is `wrp_cs && pwrite && penable &&
+    (paddr == OFF_WRP_CMD) && pwdata[0]`.  Writes to any OTHER wrapper register
+    (including WRP_STATUS) do not clear it.  If a CMD write and a trip land in
+    the same cycle the write wins (the FSM recovery still happens).
+
+FSM-IDLE OBSERVABLE USED BY THE TEST (the task asked which one):
+    * PRIMARY (hard assert): `dut.u_dut.pl_state.value.integer == 0` - the real
+      wrapper pre-load FSM state, reached through the VPI hierarchy.  Proved
+      reachable in the RED run itself: the same probe read pl_state == 1
+      (PL_LOAD_W_AR) before the threshold.
+    * SECONDARY (hard assert): `dut.m_axi_arvalid.value.integer == 0` - a real
+      AXI-side observable, "no outstanding request", independent of internals.
+    * NOTE: the mechanism the 5 existing tests use for "IDLE" is
+      `dut.dbg_state`, which is mxu_top's CONTROLLER state, not the wrapper
+      FSM state; it is asserted too (==0) but it is IDLE throughout this test
+      and therefore carries no information.  That is why the two observables
+      above are the load-bearing ones.
+
+--------------------------------------------------------------------------------
+2. RED -> GREEN PROOF (failing-first, mandatory)
+--------------------------------------------------------------------------------
+RED (pre-RTL, test file identical to GREEN, only RTL absent):
+  [MXU_WRP_WDT] armed: pl_state=1 (PL_LOAD_W_AR), arvalid=1, arready=0,
+                 irq=0, threshold=1000000 cycles
+  [MXU_WRP_WDT-PROBE-UNAVAILABLE] wdt_cnt not visible:
+                 u_dut contains no object named wdt_cnt
+  [MXU_WRP_WDT] 1010000 cycles of unbounded AXI wait took 13.1 s wall-clock
+  [MXU_WRP_WDT] WRP_STATUS = 0x00000000 (expect bit1 set)
+  AssertionError: WRP_STATUS[1] (wdt_timeout) not set after 1000000 cycles of
+                  unbounded AXI wait: WRP_STATUS=0x00000000
+  ** sim.tests.wrapper.test_mxu_wrapper.test_mxu_wrapper_watchdog_timeout FAIL
+  => fails at the SEMANTIC gate (the missing status bit), not at a harness or
+     lookup error; every pre-flight assertion (dead slave held low, PL FSM
+     parked in PL_LOAD_W_AR, AR asserted, irq==0 before the trip) passed.
+
+GREEN (post-RTL, identical test file):
+  [MXU_WRP_WDT] armed: pl_state=1 (PL_LOAD_W_AR), arvalid=1, arready=0,
+                 irq=0, threshold=1000000 cycles
+  [MXU_WRP_WDT] peak wdt_cnt = 999009 (threshold 1000000, sampled 1000 cycles early)
+  [MXU_WRP_WDT] 1010000 cycles of unbounded AXI wait took 13.9 s wall-clock
+  [MXU_WRP_WDT] WRP_STATUS = 0x00000002 (expect bit1 set)
+  [MXU_WRP_WDT] WRP_STATUS after WRP_CMD=0x0 = 0x00000000
+  TEST PASSED: test_mxu_wrapper_watchdog_timeout (total 14.1 s wall-clock)
+  ** sim.tests.wrapper.test_mxu_wrapper.test_mxu_wrapper_watchdog_timeout PASS
+  Implicit hard asserts all passed on the way there: irq==1, pl_state==0,
+  m_axi_arvalid==0, wdt_cnt==0 (counter cleared by progress), and the sticky
+  clear via a WRP_CMD write with bit0=0 (not a re-arm).
+
+GREEN2 (independent recompile, identical results):
+  peak wdt_cnt = 999009, WRP_STATUS 0x00000002 -> 0x00000000, PASS, 13.7 s,
+  $finish at simulation time 10100555001 (identical to GREEN).
+
+--------------------------------------------------------------------------------
+3. FRESHNESS PROOFS (stale_state class) — two independent proofs, 3 runs
+--------------------------------------------------------------------------------
+The runner script force-cleans before every judged run by construction:
+  scripts/wv_run_mxu.sh: `rm -rf "${SIMV}.daidir" "${SIMV}"` before `vcs ...`
+so no stale simv can survive.  Proven independently, twice:
+
+  PROOF 1 - compile cost line (a fresh compile cannot be reused):
+    RED   : "CPU time: 24.411 seconds to compile + 1.507 to elab + .460 to link"
+    GREEN : "CPU time: 22.747 seconds to compile + 1.499 to elab + .453 to link"
+    GREEN2: "CPU time: 24.948 seconds to compile + 1.491 to elab + .433 to link"
+    simv_tb_mxu_wrapper mtime/size: 20:21 / 20:27 / 20:31, 1,870,832 bytes each.
+
+  PROOF 2 - source-derived invariants (a stale binary cannot reproduce these):
+    (i)  NEW REGISTER EXISTS: the RED binary reports
+         "[MXU_WRP_WDT-PROBE-UNAVAILABLE] ... u_dut contains no object named
+         wdt_cnt", the GREEN binary reads "peak wdt_cnt = 999009".  The VPI
+         hierarchy of a stale (pre-RTL) simv has no wdt_cnt at all.
+    (ii) SIM-TIME DELTA: the new test's own `$finish at simulation time` moved
+         10100495001 ps (RED) -> 10100555001 ps (GREEN) = +60,000 ps = +6 cycles,
+         which is exactly the extra APB traffic of the PASS path (one WRP_CMD
+         write + one WRP_STATUS read after the timeout assertions; the RED path
+         aborted at the first status read).  GREEN2 reproduced 10100555001 ps.
+    (iii) BEHAVIOURAL FLIP with a byte-identical test file: same file, same
+         runner, same threshold -> FAIL(WRP_STATUS=0x0) before, PASS
+         (WRP_STATUS=0x2 -> 0x0) after.
+    NOTE on the plan's suggested form ("report line delta == commit net line
+    delta"): tb_mxu_wrapper.v has no line-count report line, so the wrapper
+    target has no such counter; (i)+(ii) are the equivalent source-derived
+    invariants for this target, and (i) is strictly stronger (it proves the new
+    RTL register is in the loaded binary).
+
+--------------------------------------------------------------------------------
+4. BLOCKERS / PRE-EXISTING DEFECTS DISCOVERED (disclosed, NOT silently skipped)
+--------------------------------------------------------------------------------
+BLOCKER-1 - `soc-verification-run.sh run_wrapper_mxu` is broken (out of scope)
+  Measured: "bash: scripts/wv_run_mxu.sh: No such file or directory" /
+  "make: *** [run_wrapper_mxu] Error 127".  Cause: sim/regression/Makefile:1313-1315
+  omits the `cd $(REPO_ROOT) &&` prefix that every other recipe has, while the
+  runner cds into sim/regression first.  Affects all three wrapper targets
+  (run_wrapper_sfu / run_wrapper_vector / run_wrapper_mxu).  The Makefile is not
+  in this todo's whitelist -> not fixed, recorded here.  Worked around by
+  invoking the same script (which routes everything to sz0001).
+
+BLOCKER-2 - the runner's PASS/FAIL detection is a FALSE-POSITIVE detector
+  scripts/wv_run_mxu.sh:96-103 does:
+      if grep -qE 'TEST.*PASS' "$TEST_LOG"; then RESULT="PASS"
+      elif grep -qE 'TEST.*FAIL' "$TEST_LOG"; then RESULT="FAIL"
+  The FIRST pattern matches cocotb's own summary line for a FAILING test:
+      ** TESTS=1 PASS=0 FAIL=1 SKIP=0  ...
+  Proof: `grep -cE 'TEST.*PASS'` on the FAILING
+  wv-mxu-test_mxu_single_tile_compute.log returns 1 (that summary line).
+  Consequence, measured: on every one of the three runs (including the control
+  run at HEAD and the RED run where the new test demonstrably failed) the runner
+  printed "All 6 tests PASSED" and wrote "Summary: 6 PASS, 0 FAIL" into
+  build/evidence/wrap-mxu-regression.txt - while the cocotb logs say 4 PASS /
+  2 FAIL.  The tracked file build/evidence/wrap-mxu-regression.txt at HEAD
+  ("Summary: 5 PASS, 0 FAIL", 2026-07-23) is likewise NOT evidence of anything.
+  This is exactly the misleading_success_output class; every verdict in this
+  evidence file was therefore taken from the cocotb per-test summary lines
+  (`grep -E '^\s+\*\* sim\.tests\.wrapper'`), never from the runner's summary.
+  scripts/wv_run_mxu.sh is in the whitelist, but this todo's instructions allow
+  only the TESTS=(...) edit there -> NOT fixed, recorded here.
+  (The script's header comment "runs all 5 test cases" is now stale for the same
+  reason and is left untouched per the same instruction.)
+
+BLOCKER-3 - 2 of the 5 pre-existing guard tests FAIL, pre-existing and unrelated
+  (a) test_mxu_single_tile_compute - store-out drain lags STATUS.DONE.
+      Evidence: in the sim log the AxiRam write bursts run
+        2240ns awaddr 0x00040000 (row 0), 2300ns 0x00040100, ... 2840ns 0x00040a00
+      i.e. exactly rows 0..10 are in SRAM when STATUS.DONE is asserted at 2880ns,
+      and the very first golden mismatch is row 11.  The drain runs at ~60ns/row,
+      so rows 11..63 land ~3.2us later, after the test has already read the
+      output.  This contradicts the module's own documented usage flow
+      (mxu_soc_wrapper.v header: "7. Poll STATUS.DONE -> read results from SRAM
+      at WRP_OUT_BASE") and is firmware-visible, since firmware/npu_firmware.c
+      follows exactly that flow.  Signature identical pre- and post-RTL.
+      NOT fixed: fixing it means either changing the store-out datapath (a
+      behaviour change to the load/store path, forbidden by this todo and
+      outside rtl/mxu/**-free scope) or adding a drain wait to the test (which
+      would MASK a real defect).
+  (b) test_mxu_accumulate_mode - X propagation on m_axi_wdata.
+      cocotbext.axi's write coroutine dies converting w.wdata:
+      "ValueError: Unresolvable bit in binary string: 'x'" at the first store-out
+      burst (2930ns).  The wrapper's own `MXU_WRP_DEBUG` guard block in
+      mxu_soc_wrapper.v exists for exactly this hazard.  Signature identical
+      pre- and post-RTL.  NOT fixed (same reasons; also a different bug class
+      from BUG-MXU-WDT-001).
+  (c) These two are why the required "6/6 PASS" gate cannot be met.  They were
+      previously INVISIBLE: at HEAD, 4 of the 5 tests crashed at 160-180ns with
+      "AttributeError: 'ApbMaster' object has no attribute '_bus'" (see section
+      5), so tests 3 and 5 never reached their comparisons.
+
+--------------------------------------------------------------------------------
+5. SCOPE, DISCLOSURES AND ADJACENT NOW-FALSE TEXT
+--------------------------------------------------------------------------------
+(a) PRE-EXISTING HARNESS REPAIR (in whitelist, semantically neutral).
+    CONTROL RUN AT HEAD (unmodified tree, 5 tests, 20:06) true verdicts:
+        test_apb_regmap_rw            PASS   (1090 ns)
+        test_mxu_preload_single_tile  FAIL   (180 ns)  AttributeError: 'ApbMaster' object has no attribute '_bus'
+        test_mxu_single_tile_compute  FAIL   (160 ns)  same
+        test_mxu_store_out_burst      FAIL   (160 ns)  same
+        test_mxu_accumulate_mode      FAIL   (160 ns)  same
+    i.e. the recorded "5 PASS" baseline was already false, and 4 of the 5 guard
+    tests aborted before doing anything - a guard that does not execute cannot
+    guard.  Cause: wrapper_common.wait_done() falls back to `apb._bus.clk` when
+    clk is omitted, and cocotbext-axi 0.1.28's ApbMaster exposes no `_bus`.
+    test_sfu_wrapper.py and test_vector_wrapper.py ALWAYS pass clk=; this file
+    omitted it at 3 of 6 call sites (_preload_and_run x2, test 2 x1).
+    Fix: pass `clk=dut.clk` at those 3 sites - the same pattern the file's own
+    test 6 already uses.  No assertion, threshold or comparison was changed.
+    Disclosure is inline in the file at the first repaired site.
+(b) ADJACENT NOW-FALSE TEXT CORRECTED: the module docstring said "5 cocotb
+    tests" and "Does NOT test watchdog (BUG-MXU-WDT-001)" - both made false by
+    this change; both corrected (test 6's owner, scripts/wv_run_bug007.sh, is
+    also recorded there).  Comment/docstring-only, zero behaviour impact.
+(c) The runner header comment "runs all 5 test cases" is now stale and is
+    deliberately left alone (BLOCKER-2 explains the whitelist constraint).
+(d) NOT touched: rtl/mxu/** (incl. controller.v), rtl/soc/*, rtl/sfu|vector/**,
+    rtl/intc/**, firmware/, spec/, gen/, rtl/ip/**, vendored IP, the APB
+    conformance TB, todos 1/2 files.  No MMIO register added; threshold not
+    configurable; INTC wiring unchanged (shared bit0 as before).
+(e) Tracked build artifacts mutated by the runner (restored to HEAD after the
+    runs so the worktree M-set stays at 7 protected + the plan file):
+      build/evidence/wrap-mxu-regression.txt   (runner rewrites it every run)
+      results.xml                              (cocotb writes it into the repo root)
+    The run records are preserved verbatim in this file instead.
+
+--------------------------------------------------------------------------------
+6. RAW LOG EXCERPTS (verbatim, ANSI stripped)
+--------------------------------------------------------------------------------
+--- GREEN, test 6, complete [MXU_WRP_WDT] trace ---
+   465.00ns INFO  cocotb.tb_mxu_wrapper  [MXU_WRP_WDT] armed: pl_state=1 (PL_LOAD_W_AR), arvalid=1, arready=0, irq=0, threshold=1000000 cycles
+9990465.00ns INFO  cocotb.tb_mxu_wrapper  [MXU_WRP_WDT] peak wdt_cnt = 999009 (threshold 1000000, sampled 1000 cycles early)
+10100465.00ns INFO  cocotb.tb_mxu_wrapper  [MXU_WRP_WDT] 1010000 cycles of unbounded AXI wait took 13.9 s wall-clock (peak_cnt=999009)
+10100495.00ns INFO  cocotb.tb_mxu_wrapper  [MXU_WRP_WDT] WRP_STATUS = 0x00000002 (expect bit1 set)
+10100555.00ns INFO  cocotb.tb_mxu_wrapper  [MXU_WRP_WDT] WRP_STATUS after WRP_CMD=0x0 = 0x00000000
+10100555.00ns INFO  cocotb.tb_mxu_wrapper  TEST PASSED: test_mxu_wrapper_watchdog_timeout (total 14.1 s wall-clock)
+10100555.00ns INFO  cocotb.regression      ** sim.tests.wrapper.test_mxu_wrapper.test_mxu_wrapper_watchdog_timeout  PASS  10100555.00  14.14  714501.33 **
+10100555.00ns INFO  cocotb.regression      ** TESTS=1 PASS=1 FAIL=0 SKIP=0  10100555.00  14.25  708844.99 **
+$finish at simulation time          10100555001
+
+--- RED, test 6, semantic failure ---
+   465.00ns INFO  cocotb.tb_mxu_wrapper  [MXU_WRP_WDT] armed: pl_state=1 (PL_LOAD_W_AR), arvalid=1, arready=0, irq=0, threshold=1000000 cycles
+9990465.00ns WARN  cocotb.tb_mxu_wrapper  [MXU_WRP_WDT-PROBE-UNAVAILABLE] wdt_cnt not visible: u_dut contains no object named wdt_cnt
+10100465.00ns INFO cocotb.tb_mxu_wrapper  [MXU_WRP_WDT] 1010000 cycles of unbounded AXI wait took 13.1 s wall-clock (peak_cnt=None)
+10100495.00ns INFO cocotb.tb_mxu_wrapper  [MXU_WRP_WDT] WRP_STATUS = 0x00000000 (expect bit1 set)
+10100495.00ns INFO cocotb.regression      test_mxu_wrapper_watchdog_timeout failed
+   AssertionError: WRP_STATUS[1] (wdt_timeout) not set after 1000000 cycles of unbounded AXI wait: WRP_STATUS=0x00000000
+10100495.00ns INFO cocotb.regression      ** sim.tests.wrapper.test_mxu_wrapper.test_mxu_wrapper_watchdog_timeout  FAIL  10100495.00  13.35  756676.40 **
+$finish at simulation time          10100495001
+
+--- The runner's verdict on the SAME RED run (false positive, BLOCKER-2) ---
+  test_apb_regmap_rw: PASS
+  test_mxu_preload_single_tile: PASS
+  test_mxu_single_tile_compute: PASS        <- cocotb log says FAIL
+  test_mxu_store_out_burst: PASS
+  test_mxu_accumulate_mode: PASS            <- cocotb log says FAIL
+  test_mxu_wrapper_watchdog_timeout: PASS   <- cocotb log says FAIL (this is the RED run!)
+Summary: 6 PASS, 0 FAIL (6 total)
+
+--------------------------------------------------------------------------------
+7. VERDICT
+--------------------------------------------------------------------------------
+The watchdog itself is DELIVERED and PROVEN: RED -> GREEN with a byte-identical
+test file, deterministic over two independent recompiles, 13-14 s for the
+1M-cycle wait, no false trip on any of the 5 guard tests (pre/post signatures
+byte-identical), threshold justified by the existing budget formula.
+
+The todo's aggregate gate "6/6 PASS" is NOT MET, and the two failures are
+pre-existing defects in the MXU wrapper datapath (store-out drain vs STATUS.DONE;
+X on m_axi_wdata) that this todo neither caused nor is allowed to fix.  They need
+their own ledger entries and a scope decision; this file is the escalation.
+Additionally, the wrapper suite's recorded baseline and the runner's verdict are
+both unreliable (BLOCKER-2), which is itself a verification-integrity issue
+independent of this change.
+================================================================================

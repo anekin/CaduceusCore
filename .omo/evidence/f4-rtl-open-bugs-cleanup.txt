@@ -1,0 +1,294 @@
+================================================================================
+F4 — SCOPE FIDELITY AUDIT (independent re-derivation from git; read-only)
+================================================================================
+Timestamp : 2026-09-23T14:54:15Z (2026-09-23 22:54:15 CST)
+Repo      : /home/prj/zhengs/caduceuscore/CaduceusCore
+Plan      : .omo/plans/rtl-open-bugs-cleanup.md  (todo F4 = raw line 128)
+Branch    : rtl-open-bugs-cleanup
+Base      : main @ 8ba7af181fde58b929fe841bfd0723aca078ee92 (= merge-base main HEAD)
+HEAD      : 1af5c70786a322d3cb0602fb11ad286acb97e2e9
+Auditor   : F4 scope-fidelity auditor; only artifact written = this file
+All git commands prefixed with GIT_MASTER=1.
+
+================================================================================
+[1] OVERALL CHANGED-FILE SET vs PLAN WHITELIST
+================================================================================
+$ GIT_MASTER=1 git diff --name-only $(GIT_MASTER=1 git merge-base main HEAD) HEAD
+.omo/drafts/rtl-open-bugs-cleanup.md
+.omo/evidence/task-0-rtl-open-bugs-cleanup.txt
+.omo/evidence/task-1-rtl-open-bugs-cleanup.txt
+.omo/evidence/task-2-rtl-open-bugs-cleanup.txt
+.omo/evidence/task-3-rtl-open-bugs-cleanup.txt
+.omo/evidence/task-4-rtl-open-bugs-cleanup.txt
+.omo/evidence/task-5-rtl-open-bugs-cleanup.txt
+.omo/plans/rtl-open-bugs-cleanup.md
+README.md
+docs/bugs/BUG-MXU-WDT-001.md
+docs/bugs/bugs-module-level.md
+docs/bugs/bugs-soc-rtl.md
+docs/func-model-mmio-spec.md
+rtl/ip/README.md
+rtl/ip/dma_wrapper.v
+rtl/ip/pcie_ep_wrapper.v
+rtl/tb/apb_conformance_real_tb.sv
+rtl/wrapper/mxu_soc_wrapper.v
+scripts/wv_run_mxu.sh
+sim/tests/wrapper/test_mxu_wrapper.py
+-> 20 files
+
+$ GIT_MASTER=1 git diff --stat $(GIT_MASTER=1 git merge-base main HEAD) HEAD
+ .omo/drafts/rtl-open-bugs-cleanup.md           |  57 +++
+ .omo/evidence/task-0-rtl-open-bugs-cleanup.txt | 124 +++++++
+ .omo/evidence/task-1-rtl-open-bugs-cleanup.txt | 470 +++++++++++++++++++++++++
+ .omo/evidence/task-2-rtl-open-bugs-cleanup.txt | 388 ++++++++++++++++++++
+ .omo/evidence/task-3-rtl-open-bugs-cleanup.txt | 387 ++++++++++++++++++++++++
+ .omo/evidence/task-4-rtl-open-bugs-cleanup.txt | 405 +++++++++++++++++++++
+ .omo/evidence/task-5-rtl-open-bugs-cleanup.txt | 292 +++++++++++++++
+ .omo/plans/rtl-open-bugs-cleanup.md            | 141 ++++++++
+ README.md                                      |   6 +-
+ docs/bugs/BUG-MXU-WDT-001.md                   |   4 +-
+ docs/bugs/bugs-module-level.md                 | 103 +++++-
+ docs/bugs/bugs-soc-rtl.md                      |  98 ++++--
+ docs/func-model-mmio-spec.md                   |  10 +-
+ rtl/ip/README.md                               |   2 +-
+ rtl/ip/dma_wrapper.v                           |  24 +-
+ rtl/ip/pcie_ep_wrapper.v                       |   4 +-
+ rtl/tb/apb_conformance_real_tb.sv              |  63 ++--
+ rtl/wrapper/mxu_soc_wrapper.v                  |  99 +++++-
+ scripts/wv_run_mxu.sh                          |   1 +
+ sim/tests/wrapper/test_mxu_wrapper.py          | 175 ++++++++-
+ 20 files changed, 2773 insertions(+), 80 deletions(-)
+
+$ # mechanical membership test: every non-.omo path must be in the F4 whitelist
+$ BASE=$(GIT_MASTER=1 git merge-base main HEAD); WL=$(cat <<'EOF'
+rtl/ip/pcie_ep_wrapper.v
+rtl/ip/dma_wrapper.v
+rtl/wrapper/mxu_soc_wrapper.v
+rtl/tb/apb_conformance_real_tb.sv
+rtl/ip/README.md
+docs/func-model-mmio-spec.md
+sim/tests/wrapper/test_mxu_wrapper.py
+scripts/wv_run_mxu.sh
+docs/bugs/bugs-soc-rtl.md
+docs/bugs/bugs-module-level.md
+docs/bugs/BUG-MXU-WDT-001.md
+README.md
+EOF
+); GIT_MASTER=1 git diff --name-only $BASE HEAD | while read -r f; do case "$f" in .omo/*) continue;; esac; printf '%s\n' "$WL" | grep -qxF "$f" || echo "OUTSIDE_WHITELIST: $f"; done
+[mechanical whitelist check complete — no OUTSIDE_WHITELIST lines above means CLEAN]
+$ GIT_MASTER=1 git diff --name-only $BASE HEAD | wc -l
+20
+
+PLAN WHITELIST (raw line 128, verbatim subset):
+  rtl/ip/pcie_ep_wrapper.v, rtl/ip/dma_wrapper.v, rtl/wrapper/mxu_soc_wrapper.v,
+  rtl/tb/apb_conformance_real_tb.sv, rtl/ip/README.md, docs/func-model-mmio-spec.md,
+  sim/tests/wrapper/test_mxu_wrapper.py, scripts/wv_run_mxu.sh (仅当加用例名),
+  docs/bugs/bugs-soc-rtl.md, docs/bugs/bugs-module-level.md,
+  docs/bugs/BUG-MXU-WDT-001.md, README.md, .omo/*
+RESULT: 20/20 changed files ∈ whitelist (8 are .omo/*). 0 outside. PASS
+
+================================================================================
+[2] FORBIDDEN ZERO-HIT PROBES (each must return 0 files)
+================================================================================
+$ GIT_MASTER=1 git diff --name-only $BASE HEAD -- rtl/ip/verilog-axi/ rtl/ip/verilog-pcie/ \
+    rtl/cpu/ibex/ rtl/mxu/ rtl/soc/ rtl/intc/ rtl/sfu/ rtl/vector/ firmware/ spec/ gen/
+[END probe1: 0 files]                      <- empty output; 0 files
+
+$ GIT_MASTER=1 git diff --name-only $BASE HEAD -- sim/ | grep -v '^sim/tests/wrapper/test_mxu_wrapper\.py$'
+[END probe2: 0 files]                      <- empty output; 0 files
+
+$ GIT_MASTER=1 git diff --name-only $BASE HEAD -- sim/        # transparency: full sim/ set
+sim/tests/wrapper/test_mxu_wrapper.py
+
+$ GIT_MASTER=1 git diff --name-only $BASE HEAD -- gen/        # guardrail: ABI untouched
+[gen count=0]
+
+$ GIT_MASTER=1 git diff --name-only $BASE HEAD -- rtl/test_vectors/qwen_blk0 \
+    sim/regression/qwen_blk0_cycles.json sim/qwen_blk0_synthetic_vectors.py
+[qwen_blk0 commit-diff count=0]            <- "qwen_blk0 零净 diff" satisfied
+
+RESULT: 0 hits in vendored / rtl/mxu / rtl/soc / rtl/intc / rtl/sfu / rtl/vector /
+        firmware / spec / gen; 0 hits in sim/ outside the whitelisted test file. PASS
+
+================================================================================
+[3] PER-COMMIT PATH SETS vs PLAN-DECLARED SCOPE
+================================================================================
+$ for c in 6c13c48 2e468ac 9b43075 73a59d6 46b17cf 1af5c70; do GIT_MASTER=1 git show \
+    --name-only --format=%h%x20%s $c; done
+
+=== 6c13c48 (todo0) ===
+6c13c48 chore(omo): P0 baseline — branch + provenance snapshot (rtl-open-bugs-cleanup)
+.omo/drafts/rtl-open-bugs-cleanup.md
+.omo/evidence/task-0-rtl-open-bugs-cleanup.txt
+.omo/plans/rtl-open-bugs-cleanup.md
+DECLARED: 3 .omo/ paths -> ACTUAL: 3 (all .omo/)  MATCH
+
+=== 2e468ac (todo1) ===
+2e468ac docs(rtl/ip): align pcie_ep_wrapper header with RTL + retire PCIe DOC-DIV (BUG-RTL-SOC-010)
+.omo/evidence/task-1-rtl-open-bugs-cleanup.txt
+rtl/ip/pcie_ep_wrapper.v
+rtl/tb/apb_conformance_real_tb.sv
+DECLARED: 3 (pcie_ep_wrapper.v, apb_conformance_real_tb.sv, task-1 evidence)  MATCH
+
+=== 9b43075 (todo2) ===
+9b43075 fix(rtl/ip): dma_wrapper CMD write-only on the bus + drop STATUS read-clear (BUG-RTL-SOC-011)
+.omo/evidence/task-2-rtl-open-bugs-cleanup.txt
+docs/func-model-mmio-spec.md
+rtl/ip/README.md
+rtl/ip/dma_wrapper.v
+rtl/tb/apb_conformance_real_tb.sv
+DECLARED: 5 (dma_wrapper.v, TB, rtl/ip/README.md, docs/func-model-mmio-spec.md, task-2 evidence)  MATCH
+
+=== 73a59d6 (todo3, amended) ===
+73a59d6 feat(rtl/wrapper): MXU wrapper AXI watchdog — sticky timeout + FSM recovery (BUG-MXU-WDT-001)
+.omo/evidence/task-3-rtl-open-bugs-cleanup.txt
+rtl/wrapper/mxu_soc_wrapper.v
+scripts/wv_run_mxu.sh
+sim/tests/wrapper/test_mxu_wrapper.py
+DECLARED: 4 (mxu_soc_wrapper.v, test_mxu_wrapper.py, wv_run_mxu.sh, task-3 evidence)  MATCH
+NOTE: scripts/wv_run_mxu.sh change is allowed by plan ("仅当加用例名"). Confirmed 1-line add.
+
+=== 46b17cf (todo4) ===
+46b17cf test(cleanup): conformance doc-div-0 + wrapper + e2e mxu + FM-SOC 33 regression evidence
+.omo/evidence/task-4-rtl-open-bugs-cleanup.txt
+DECLARED: 1 (task-4 evidence)  MATCH
+
+=== 1af5c70 (todo5) ===
+1af5c70 docs(bugs): BUG-RTL-SOC-010/011 + BUG-MXU-WDT-001 Fixed — doc align, DMA bus semantics, MXU watchdog
+.omo/evidence/task-5-rtl-open-bugs-cleanup.txt
+README.md
+docs/bugs/BUG-MXU-WDT-001.md
+docs/bugs/bugs-module-level.md
+docs/bugs/bugs-soc-rtl.md
+DECLARED: 5 (4 docs/README + task-5 evidence)  MATCH
+
+$ per-commit file counts (declared 3,3,5,4,1,5):
+6c13c48 : 3 files
+2e468ac : 3 files
+9b43075 : 5 files
+73a59d6 : 4 files
+46b17cf : 1 files
+1af5c70 : 5 files
+RESULT: all 6 commits match declared scope exactly. 0 deviations. PASS
+
+================================================================================
+[4] PROTECTED DIRTY-FILE PROBE (7 files; must be in NO commit, still dirty)
+================================================================================
+$ for f in <7 protected paths>; do GIT_MASTER=1 git log --name-only --format= $BASE..HEAD -- "$f" | grep -c .; done
+  commits touching [.omo/evidence/task-0-signoff-v3-runner.txt]: 0
+  commits touching [.omo/evidence/task-20-uncertainty-kpis.json]: 0
+  commits touching [.omo/evidence/task-23-perf-spec-ci.txt]: 0
+  commits touching [.omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md]: 0
+  commits touching [.omo/notepads/phase6-rtl-verification/learnings.md]: 0
+  commits touching [build/evidence/fm-cv-chain.txt]: 0
+  commits touching [build/evidence/w3-4-mobilenetv3-fm.txt]: 0
+
+$ GIT_MASTER=1 git diff --name-only $BASE HEAD -- <7 protected paths>   # tree-level
+[count=0]
+
+$ blob identity main vs HEAD per protected file
+  SAME_BLOB  .omo/evidence/task-0-signoff-v3-runner.txt
+  SAME_BLOB  .omo/evidence/task-20-uncertainty-kpis.json
+  SAME_BLOB  .omo/evidence/task-23-perf-spec-ci.txt
+  SAME_BLOB  .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+  SAME_BLOB  .omo/notepads/phase6-rtl-verification/learnings.md
+  SAME_BLOB  build/evidence/fm-cv-chain.txt
+  SAME_BLOB  build/evidence/w3-4-mobilenetv3-fm.txt
+
+$ GIT_MASTER=1 git status --porcelain        # still dirty in worktree (all 7 present)
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M .omo/plans/rtl-open-bugs-cleanup.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+RESULT: 0/7 protected files in any commit; all 7 byte-identical to main and still dirty. PASS
+
+================================================================================
+[5] NOT PUSHED
+================================================================================
+$ GIT_MASTER=1 git rev-parse --abbrev-ref @{upstream}
+fatal: no upstream configured for branch 'rtl-open-bugs-cleanup'
+NO_UPSTREAM
+
+$ GIT_MASTER=1 git branch -r --contains HEAD
+(empty)
+
+$ GIT_MASTER=1 git log --oneline origin/main -3
+8ba7af1 Merge bug-009-doorbell-fix: BUG-RTL-SOC-009 Fixed — doorbell ABI status window implemented in RTL (F1-F4 all APPROVE)
+e6cf0d2 docs(bugs): BUG-RTL-SOC-009 Fixed — doorbell ABI status window implemented in RTL
+c8bb9f5 docs(abi): resolve doorbell KNOWN_DISCREPANCY — generator note fix + regen (HW window implemented)
+-> none of 6c13c48/2e468ac/9b43075/73a59d6/46b17cf/1af5c70 appear; origin/main tip == base 8ba7af1
+
+$ GIT_MASTER=1 git ls-remote --heads origin          # live remote probe (20s timeout)
+8ba7af181fde58b929fe841bfd0723aca078ee92	refs/heads/main
+-> no refs/heads/rtl-open-bugs-cleanup on remote; remote main == local base
+RESULT: branch has no upstream, no remote ref contains HEAD, remote has no such
+        branch, origin/main unchanged at 8ba7af1. NOT PUSHED. PASS
+
+================================================================================
+[6] SINGLE WORKTREE
+================================================================================
+$ GIT_MASTER=1 git worktree list --porcelain
+worktree /home/prj/zhengs/caduceuscore/CaduceusCore
+HEAD 1af5c70786a322d3cb0602fb11ad286acb97e2e9
+branch refs/heads/rtl-open-bugs-cleanup
+-> exactly ONE entry (this repo). PASS
+
+================================================================================
+[7] WORKTREE DIRTY SET (attribution)
+================================================================================
+$ GIT_MASTER=1 git status --porcelain
+ M .omo/evidence/task-0-signoff-v3-runner.txt              <- protected #1
+ M .omo/evidence/task-20-uncertainty-kpis.json             <- protected #2
+ M .omo/evidence/task-23-perf-spec-ci.txt                  <- protected #3
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md <- protected #4
+ M .omo/notepads/phase6-rtl-verification/learnings.md      <- protected #5
+ M .omo/plans/rtl-open-bugs-cleanup.md                     <- expected (orchestrator edit)
+ M build/evidence/fm-cv-chain.txt                          <- protected #6
+ M build/evidence/w3-4-mobilenetv3-fm.txt                  <- protected #7
+?? .omo/notepads/rtl-open-bugs-cleanup/                    <- expected (this branch, 2026-09-23)
+?? .omo/plans/bug-012-fix.md                               <- EXTRA (pre-existing 2026-09-04)
+?? .omo/plans/dse-relic-retirement.md                      <- EXTRA (pre-existing 2026-09-05)
+?? .omo/plans/fm-residual-cleanup.md                       <- EXTRA (pre-existing 2026-09-05)
+?? .omo/plans/fm-verification-fixes.md                     <- EXTRA (pre-existing 2026-09-05)
+?? .omo/plans/verification-env-sz0001.md                   <- EXTRA (pre-existing 2026-09-04)
+?? .omo/tmp/                                               <- expected (pre-existing 2026-09-21, xdebug scratch)
+
+- 8 ` M` entries = 7 protected + the plan file itself. No unexpected modification.
+- `??` set: notepad + tmp are expected; the 5 extra `.omo/plans/*.md` are untracked
+  scratch plans whose mtimes (2026-09-04/05) PREDATE this branch's first commit
+  (6c13c48 @ 2026-09-23 18:42 +0800) -> not produced by this work, in no commit.
+- Note: `.omo/tmp/*_out.jsonl` are mode 0600 root-ish scratch from an earlier xdebug
+  session; untracked, no scope impact.
+
+================================================================================
+F4 FINDINGS
+================================================================================
+1. (LOW / informational, no fix required) 5 extra untracked plan files in the worktree
+   (`.omo/plans/{bug-012-fix,dse-relic-retirement,fm-residual-cleanup,
+   fm-verification-fixes,verification-env-sz0001}.md`). Evidence: §7 git status
+   `??` list + `ls -la` mtimes 2026-09-04/05, all older than the branch's first
+   commit 6c13c48 (2026-09-23 18:42 +0800). They appear in NO commit
+   (`git diff --name-only main..HEAD` = 20 files, none of these). Not attributable
+   to this work; harmless pre-existing dirt. No fix required; do not `git add` them.
+2. (LOW / informational) Pre-amend object dd08a19 still exists as a loose commit
+   object. Evidence: `git merge-base --is-ancestor dd08a19 HEAD` -> no;
+   `git for-each-ref --contains dd08a19` -> empty (no branch/tag refs it);
+   reflog mentions = 2 (normal amend residue, expires by gc). Its only delta vs
+   73a59d6 is `.omo/evidence/task-3-...txt` (+3/-1), i.e. the amend was evidence-text
+   only and stayed inside scope. Unreferenced by refs as required.
+
+No BLOCKER / HIGH / MEDIUM findings. All hard gates PASS:
+  [1] 20/20 changed files in whitelist, 0 outside
+  [2] 0 hits vendored/rtl/mxu/rtl/soc/rtl/intc/rtl/sfu/rtl/vector/firmware/spec/gen;
+      0 sim/ hits outside the whitelisted test; gen/ empty; qwen_blk0 zero net diff
+  [3] 6/6 per-commit path sets match declared scope
+  [4] 0/7 protected files committed; all 7 SAME_BLOB vs main and still dirty
+  [5] not pushed (no upstream, no remote ref contains HEAD, remote has no branch)
+  [6] exactly one worktree
+  [7] dirty set = 7 protected + plan (expected) + known untracked items
+
+VERDICT: APPROVE

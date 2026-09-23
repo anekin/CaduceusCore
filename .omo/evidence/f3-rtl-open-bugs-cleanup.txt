@@ -1,0 +1,269 @@
+F3 — REAL MANUAL QA (re-run by the F3 reviewer, not a runner-verdict transcription)
+================================================================================
+plan      : rtl-open-bugs-cleanup
+branch    : rtl-open-bugs-cleanup
+HEAD      : 1af5c70786a322d3cb0602fb11ad286acb97e2e9  (short 1af5c70)
+host      : sz0001 (192.168.0.11) — all judged runs executed there, serial, one at a time
+timestamp : 2026-09-23 22:51 → 23:08 (+0800)
+compare-to: .omo/evidence/task-4-rtl-open-bugs-cleanup.txt (primary),
+            task-2-…/task-3-… (wrapper failure signatures)
+policy    : no dry runs; runner verdict text NOT trusted; PASS/FAIL parsed from
+            cocotb per-test lines by the reviewer; every judged run used a binary
+            that did not exist before this QA session.
+
+================================================================================
+STEP 0 — FORCE-CLEAN (mandatory; the Makefile tracks flist FILES, not the RTL in them)
+================================================================================
+Reason re-confirmed: `sim/regression/Makefile:220` declares
+  `$(APB_REAL_SIMV): $(APB_REAL_SRC) $(SOC_FLIST) $(IBEX_FLIST) $(AXI_FLIST) $(PCIE_FLIST)`
+i.e. prerequisites are the FLIST FILES, so an RTL edit inside a flist triggers NO
+rebuild; and `soc-verification-run.sh:43-46` only removes simv_soc_cocotb*. A stale
+binary can therefore produce a false PASS.
+
+PRE-CLEAN INVENTORY (measured on sz0001 before removal — these are the task-4
+leftover binaries; every hash matches task-4's post-run table exactly)
+  sim/regression/simv_apb_conformance_real        2026-09-23 21:02:58
+      74e341f8ec1aaeaf4987ea31f42b55a2b19822bcca80caaf82cc2d08426730a4
+  sim/regression/simv_apb_conformance_real.daidir DIR  2026-09-23 21:02:59
+  build/evidence/simv_tb_mxu_wrapper              2026-09-23 21:05:25
+      ea88fe29a13594824c69cd6b9d6f25a2f5f7ccee2464f1d8445c7ea928631714
+  build/evidence/simv_tb_mxu_wrapper.daidir       DIR  2026-09-23 21:05:25
+  sim/regression/simv_soc_cocotb                  2026-09-23 21:16:07
+      4abc9b17b1d6371907f9be4d28f966bd294ebe514c11c3356cf9c55012ffecd1
+  sim/regression/simv_soc_cocotb.daidir           DIR  2026-09-23 21:16:07
+  sim/regression/csrc                              ABSENT
+  build/ibex_full_rtl/simv_soc_ibex               2026-09-23 21:18:38
+      22d5e773258b62f90cc535cbebacea0451c6b319e0d4422834ef7a38f2a209f8
+  build/ibex_full_rtl/simv_soc_ibex.daidir        DIR  2026-09-23 21:18:38
+  build/ibex_full_rtl/csrc                        DIR  2026-09-23 21:18:38
+
+COMMAND (executed on sz0001, repo root)
+  rm -rf sim/regression/simv_apb_conformance_real{,.daidir} \
+         build/evidence/simv_tb_mxu_wrapper{,.daidir} \
+         sim/regression/simv_soc_cocotb{,.daidir} sim/regression/csrc \
+         build/ibex_full_rtl/simv_soc_ibex{,.daidir} build/ibex_full_rtl/csrc
+
+POST-CLEAN VERIFICATION (verbatim, on sz0001) — all 10 read ABSENT
+  ABSENT sim/regression/simv_apb_conformance_real
+  ABSENT sim/regression/simv_apb_conformance_real.daidir
+  ABSENT build/evidence/simv_tb_mxu_wrapper
+  ABSENT build/evidence/simv_tb_mxu_wrapper.daidir
+  ABSENT sim/regression/simv_soc_cocotb
+  ABSENT sim/regression/simv_soc_cocotb.daidir
+  ABSENT sim/regression/csrc
+  ABSENT build/ibex_full_rtl/simv_soc_ibex
+  ABSENT build/ibex_full_rtl/simv_soc_ibex.daidir
+  ABSENT build/ibex_full_rtl/csrc
+
+REBUILT-BINARY / FRESHNESS TABLE (mine vs pre-clean vs task-4 recorded)
+  target                   binary                              my sha256                                                         pre-clean sha256  task-4 recorded
+  ------------------------ ----------------------------------- ----------------------------------------------------------------- -------------     -----------------
+  run_apb_conformance_real sim/regression/simv_apb_conformance_real
+                                                              6ffc68eabc888724a4a94defd4a8a4dffdd797dbc0ee69f2fb0d8a68160387ec  74e341f8…         74e341f8…
+  run_wrapper_mxu (script) build/evidence/simv_tb_mxu_wrapper
+                                                              ee28922ef52db4b7bb1274d246c21f36f000383268df27610311c4aed4b1c5d6  ea88fe29…         ea88fe29…
+  run_e2e_mxu_multi        sim/regression/simv_soc_cocotb
+                                                              502e59f6b4b32f324e29018833028d7c2d90e8e1deeefbdcb89ce72d59ef2cac  4abc9b17…         4abc9b17…
+  => every "my sha256" differs from BOTH the pre-clean and the task-4 binary.
+  (ibex binary was cleaned but not exercised by this QA — it belongs to the
+   REG-FMSOC 33-case flow, which is outside F3's judged scope.)
+
+================================================================================
+(1) REG-CONF — bash sim/regression/soc-verification-run.sh run_apb_conformance_real
+================================================================================
+exit=0   wall=308 s   log build/evidence/f3-1-apb.log
+  "[soc-run] RESULT: PASS for run_apb_conformance_real"
+
+FRESHNESS PROOF (freshly compiled binary — three independent facts)
+  a) the simv did not exist before this session (STEP 0 removed it, verified ABSENT).
+  b) build/evidence/f3-1-apb.log:6 verbatim
+       "[APB_CONFORMANCE_REAL] Compiling (real peripherals, 4 flists)..."
+     -> the Makefile compile recipe really ran.
+  c) sim/regression/compile_apb_real.log mtime 2026-09-23 22:57, verbatim
+       "CPU time: 27.670 seconds to compile + 1.667 seconds to elab + .474 seconds to link"
+     simv mtime 2026-09-23 22:57:06 (> HEAD commit 20:36:48), size 1888776,
+       sha256 6ffc68eabc888724a4a94defd4a8a4dffdd797dbc0ee69f2fb0d8a68160387ec
+     != pre-clean 74e341f8….
+
+MEASURED FINAL REPORT (verbatim from sim/regression/apb_conformance_real.log)
+    Total checks : 263
+    Passes       : 263
+    Fails        : 0   (unexpected — real RTL != REAL oracle)
+    DOC-DIV      : 0   (real RTL contradicts documented spec,
+                   each bug-filed: BUG-RTL-SOC-010/011:retired)
+    Write timeouts: 0   Read timeouts: 0
+    Per-slave coverage (checks / fails / doc-div / psel_o asserts):
+      MXU      : 51 / 0 / 0 / 172
+      SFU      : 22 / 0 / 0 / 76
+      VECTOR      : 37 / 0 / 0 / 130
+      DMA      : 43 / 0 / 0 / 146
+      PCIE      : 24 / 0 / 0 / 76
+      DOORBELL      : 60 / 0 / 0 / 345
+      INTC      : 16 / 0 / 0 / 52
+  =====================================================
+  APB_CONFORMANCE_REAL: GREEN (7/7 peripherals, 263 checks, 0 doc-div [BUG-RTL-SOC-010/011:retired])
+  TASK-12 RESULT: GREEN (expected)
+  =====================================================
+
+  $finish called from file "rtl/tb/apb_conformance_real_tb.sv", line 1291.
+  $finish at simulation time             14636000
+
+ASSERTIONS (all PASS, all read from the log — not from terminal prose)
+  doc_div_cnt      == 0    ("DOC-DIV      : 0")                             PASS
+  slv_docdivs[3]   == 0    (DMA row doc-div column = 0)                      PASS
+  slv_docdivs[4]   == 0    (PCIE row doc-div column = 0)                     PASS
+  doorbell checks  == 60   ("DOORBELL      : 60 / 0 / 0 / 345")              PASS
+  Total checks     == 263  ("Total checks : 263", Passes 263, Fails 0)       PASS
+  $finish source line == 1291  — IDENTICAL to the recorded 1291              PASS
+  per-slave rows byte-identical to task-4's recorded table                   PASS
+  (7 rows sum 51+22+37+43+24+60+16 = 253; +10 global slv=-1 checks = 263, as
+   documented in task-4 — arithmetic re-checked, consistent.)
+
+================================================================================
+(2) REG-WRAPPER — bash scripts/wv_run_mxu.sh
+================================================================================
+exit=0   wall=159 s   log build/evidence/f3-2-wrapper.log
+Why the script and not the make target: `run_wrapper_mxu` recipe is broken in this
+tree (Makefile:1313-1315 runs `@bash scripts/wv_run_mxu.sh` with no
+`cd $(REPO_ROOT) &&` while the runner cds into sim/regression → Error 127). The
+script is what the target intends to run; Makefile is out of F3's scope.
+
+RUNNER VERDICT — QUOTED BUT **UNTRUSTED** (reproduced the known false positive)
+  build/evidence/f3-2-wrapper.log tail:
+    "[wv_run_mxu.sh]   test_mxu_single_tile_compute: PASS"
+    "[wv_run_mxu.sh]   test_mxu_accumulate_mode: PASS"
+    "[wv_run_mxu.sh] All 6 tests PASSED."
+  build/evidence/wrap-mxu-regression.txt:
+    "Summary: 6 PASS, 0 FAIL (6 total)"
+  Both are WRONG. Detector is `grep -qE 'TEST.*PASS'` (script:96), which matches
+  cocotb's own "** TESTS=1 PASS=0 FAIL=1 SKIP=0 **" line of a FAILING test, so
+  FAIL_COUNT never increments and the process exit code is not a usable verdict.
+  Verdicts below come from the cocotb per-test lines, ANSI-stripped and parsed by
+  the reviewer.
+
+TRUE PER-TEST VERDICTS (parsed from build/evidence/wv-mxu-<tc>.log, ANSI-stripped)
+  #  test                                   per-test line verdict   sim time (ns)   TESTS= line
+  -  -------------------------------------- ----------------------  -------------   --------------------------
+  1  test_apb_regmap_rw                     PASS                         1090.00     TESTS=1 PASS=1 FAIL=0 SKIP=0
+  2  test_mxu_preload_single_tile           PASS                         1230.00     TESTS=1 PASS=1 FAIL=0 SKIP=0
+  3  test_mxu_single_tile_compute           FAIL                         2880.00     TESTS=1 PASS=0 FAIL=1 SKIP=0
+  4  test_mxu_store_out_burst               PASS                         2880.00     TESTS=1 PASS=1 FAIL=0 SKIP=0
+  5  test_mxu_accumulate_mode               FAIL                         2940.00     TESTS=1 PASS=0 FAIL=1 SKIP=0
+  6  test_mxu_wrapper_watchdog_timeout      PASS                     10100555.00     TESTS=1 PASS=1 FAIL=0 SKIP=0
+  -  -------------------------------------- ----------------------  -------------
+     totals: 4 PASS / 2 FAIL   (exactly the expected 4/2; NO third failure)
+
+  Assertions:
+    test_mxu_wrapper_watchdog_timeout PASSES                        PASS
+    test_apb_regmap_rw / test_mxu_preload_single_tile /
+      test_mxu_store_out_burst PASS                                  PASS
+    test_mxu_single_tile_compute FAILS                               PASS (expected)
+    test_mxu_accumulate_mode FAILS                                   PASS (expected)
+    no third failing test                                            PASS
+    per-test sim times identical to task-4 (1090/1230/2880/2880/2940/10100555) PASS
+
+FAILURE SIGNATURES — BYTE-IDENTICAL to the recorded ones (both quoted)
+  FAIL #3 test_mxu_single_tile_compute @2880 ns (DEFECT-WRP-1: store-out drain lags
+  STATUS.DONE; last write burst row 10, first mismatch row 11). Mine, verbatim:
+    build/evidence/wv-mxu-test_mxu_single_tile_compute.log:294
+      2880.00ns ERROR    cocotb.tb_mxu_wrapper              MISMATCH: 3180/4096 elements differ, max_abs_diff=6400, first_mismatches=[(11, 0), (11, 2), (11, 3), (11, 4), (11, 5)]
+    build/evidence/wv-mxu-test_mxu_single_tile_compute.log:300
+                                                            AssertionError: Golden comparison failed: 3180 mismatches
+  RECORDED (task-4):
+      MISMATCH: 3180/4096 elements differ, max_abs_diff=6400,
+      first_mismatches=[(11, 0), (11, 2), (11, 3), (11, 4), (11, 5)]
+      AssertionError: Golden comparison failed: 3180 mismatches
+  -> character-for-character identical.
+
+  FAIL #5 test_mxu_accumulate_mode @2940 ns (DEFECT-WRP-2: X on m_axi_wdata).
+  Mine, verbatim:
+    build/evidence/wv-mxu-test_mxu_accumulate_mode.log:281
+        File "/home/zhengs/.local/lib/python3.11/site-packages/cocotbext/axi/axi_slave.py", line 154, in _process_write
+    build/evidence/wv-mxu-test_mxu_accumulate_mode.log:297
+        raise ValueError(
+    build/evidence/wv-mxu-test_mxu_accumulate_mode.log:298
+        ValueError: Unresolvable bit in binary string: 'x'. Set the COCOTB_RESOLVE_X environment variable to configure how special values are resolved.
+  RECORDED (task-4 / task-3): same file, same line 154, same `raise ValueError(`,
+  same "ValueError: Unresolvable bit in binary string: 'x'. Set the COCOTB_RESOLVE_X
+  environment variable to configure how special values are resolved."
+  -> identical (same frame, same message).
+
+  SOURCE-DERIVED INVARIANT (the new todo-3 watchdog RTL is really in the binary):
+    build/evidence/wv-mxu-test_mxu_wrapper_watchdog_timeout.log:64
+      9990465.00ns INFO     cocotb.tb_mxu_wrapper              [MXU_WRP_WDT] peak wdt_cnt = 999009 (threshold 1000000, sampled 1000 cycles early)
+    :68  [MXU_WRP_WDT] WRP_STATUS = 0x00000002 (expect bit1 set)
+    :73  [MXU_WRP_WDT] WRP_STATUS after WRP_CMD=0x0 = 0x00000000
+  `wdt_cnt` exists only in the post-todo-3 RTL (task-3 proved the pre-RTL binary has
+  no such object and logged "[MXU_WRP_WDT-PROBE-UNAVAILABLE]"). Value 999009 matches
+  the recorded one exactly.
+
+FRESHNESS PROOF
+  a) the script itself force-cleans: `rm -rf "${SIMV}.daidir" "${SIMV}"` (script:39),
+     and STEP 0 had already removed it (verified ABSENT).
+  b) build/evidence/wv-compile-tb_mxu_wrapper.log mtime 2026-09-23 22:59, verbatim
+       "CPU time: 23.365 seconds to compile + 1.489 seconds to elab + .466 seconds to link"
+     simv mtime 2026-09-23 22:59:50 (> HEAD 20:36:48), size 1870832,
+       sha256 ee28922ef52db4b7bb1274d246c21f36f000383268df27610311c4aed4b1c5d6
+     != pre-clean ea88fe29….
+
+================================================================================
+(3) REG-E2EMXU — bash sim/regression/soc-verification-run.sh run_e2e_mxu_multi
+================================================================================
+exit=0   wall=311 s   log build/evidence/f3-3-e2e-mxu-multi.log
+  "[soc-run] RESULT: PASS for run_e2e_mxu_multi"
+
+MEASURED (verbatim, ANSI-stripped)
+    ** cocotb_bridge.test_e2e_mxu_multi_tile   PASS        3934.50           1.29       3056.16  **
+    ** TESTS=1 PASS=1 FAIL=0 SKIP=0                        3934.50           1.38       2854.88  **
+  3934.50ns WARNING  cocotb_bridge                      [e2e_mxu_multi_tile] PASS in 923 cycles
+  $finish at simulation time              3934501
+  E2E_MXU_MULTI: PASS
+  -> PASS with cycle count 923. The per-test line (name, verdict, 3934.50 ns sim
+     time) is identical to task-4's recorded
+     "** cocotb_bridge.test_e2e_mxu_multi_tile   PASS   3934.50   1.36   2883.89 **";
+     the REAL TIME / RATIO columns differ (1.29 vs 1.36 s, 3056.16 vs 2883.89
+     ns/s) — host timing noise, not a result difference. task-4 did not record a
+     cycle count for this case (nor does task-3), so 923 is new data, not a
+     conflict.
+
+FRESHNESS PROOF (freshly compiled binary — three independent facts)
+  a) build/evidence/f3-3-e2e-mxu-multi.log:4 verbatim
+       "[soc-run] removing stale simv to force full rebuild"
+     (CLEAN=1 default; STEP 0 had already removed it, verified ABSENT).
+  b) build/evidence/f3-3-e2e-mxu-multi.log:6 verbatim
+       "[SOC_COCOTB] Compiling tb_soc + cocotb VPI..."
+  c) sim/regression/qwen_blk0_elab.log mtime 2026-09-23 23:06, verbatim
+       "CPU time: 31.079 seconds to compile + 1.704 seconds to elab + .522 seconds to link"
+     simv mtime 2026-09-23 23:06:10 (> HEAD 20:36:48), size 1924808,
+       sha256 502e59f6b4b32f324e29018833028d7c2d90e8e1deeefbdcb89ce72d59ef2cac
+     != pre-clean 4abc9b17….
+
+================================================================================
+DEVIATIONS vs RECORDED EVIDENCE
+================================================================================
+  None. Every judged value reproduces task-4:
+    APB GREEN / 263 / 0 doc-div / DMA 0 / PCIE 0 / DOORBELL 60 / $finish 1291  = match
+    wrapper 4 PASS / 2 FAIL, both signatures byte-identical, watchdog PASS      = match
+    e2e mxu multi PASS, 3934.50 ns, TESTS=1 PASS=1 FAIL=0                      = match
+  The only numeric differences anywhere are (a) rebuilt-binary sha256s (expected —
+  VCS embeds build metadata; the point is they differ from the pre-clean ones) and
+  (b) cocotb REAL TIME / RATIO columns (host timing noise). Neither is a result
+  difference.
+
+SIDE EFFECTS / SCOPE DISCIPLINE
+  No product file, TB, script or doc was modified. Two tracked *generated test
+  artifacts* were rewritten as an unavoidable consequence of running the sanctioned
+  runners (both scripts write these paths by design):
+    build/evidence/wrap-mxu-regression.txt  (written by scripts/wv_run_mxu.sh:69-71)
+    results.xml                             (written by cocotb itself)
+  They are build outputs, not product/TB/script/doc, and were left in place rather
+  than reverted so the run's own output stays inspectable.
+
+ARTIFACTS
+  build/evidence/f3-1-apb.log, build/evidence/f3-2-wrapper.log,
+  build/evidence/f3-3-e2e-mxu-multi.log,
+  build/evidence/wv-mxu-test_*.log (6), build/evidence/wv-compile-tb_mxu_wrapper.log,
+  sim/regression/compile_apb_real.log, sim/regression/qwen_blk0_elab.log,
+  sim/regression/apb_conformance_real.log
+
+VERDICT: APPROVE

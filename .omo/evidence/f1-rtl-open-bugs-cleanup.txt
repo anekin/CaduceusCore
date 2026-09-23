@@ -1,0 +1,326 @@
+================================================================================
+F1 — PLAN COMPLIANCE AUDIT (independent re-derivation, read-only)
+Plan    : .omo/plans/rtl-open-bugs-cleanup.md
+Branch  : rtl-open-bugs-cleanup   base main @ 8ba7af1
+Auditor : F1 (independent; no worker/orchestrator summary trusted)
+Method  : every claim below re-derived from the repo / on-disk raw logs.
+          Raw command output is quoted verbatim. Only file written: this one.
+Date    : 2026-09-23
+================================================================================
+
+--------------------------------------------------------------------------------
+1. COMMIT <-> PLAN MAPPING  (byte-exact subject match required)
+--------------------------------------------------------------------------------
+$ GIT_MASTER=1 git log --format='%H %s' 8ba7af1..HEAD
+1af5c70786a322d3cb0602fb11ad286acb97e2e9 docs(bugs): BUG-RTL-SOC-010/011 + BUG-MXU-WDT-001 Fixed — doc align, DMA bus semantics, MXU watchdog
+46b17cf0dd30e1e93f56235231dc79dced0e0f66 test(cleanup): conformance doc-div-0 + wrapper + e2e mxu + FM-SOC 33 regression evidence
+73a59d65f010a95092bf91746733655bfa0ebcdc feat(rtl/wrapper): MXU wrapper AXI watchdog — sticky timeout + FSM recovery (BUG-MXU-WDT-001)
+9b430757c3f3c2170fcbc876a6722115a3e497f7 fix(rtl/ip): dma_wrapper CMD write-only on the bus + drop STATUS read-clear (BUG-RTL-SOC-011)
+2e468ace8141fa91afb7ee872e0b5f994cf54756 docs(rtl/ip): align pcie_ep_wrapper header with RTL + retire PCIe DOC-DIV (BUG-RTL-SOC-010)
+6c13c48950341c5d5e72b9430a5dd77dd8c2cafd chore(omo): P0 baseline — branch + provenance snapshot (rtl-open-bugs-cleanup)
+
+$ # plan Commit: lines (fold -w 4000 to unfold) vs actual subjects, byte compare
+plan count 6 actual count 6
+MATCH todo0: plan='chore(omo): P0 baseline — branch + provenance snapshot (rtl-open-bugs-cleanup)'
+MATCH todo1: plan='docs(rtl/ip): align pcie_ep_wrapper header with RTL + retire PCIe DOC-DIV (BUG-RTL-SOC-010)'
+MATCH todo2: plan='fix(rtl/ip): dma_wrapper CMD write-only on the bus + drop STATUS read-clear (BUG-RTL-SOC-011)'
+MATCH todo3: plan='feat(rtl/wrapper): MXU wrapper AXI watchdog — sticky timeout + FSM recovery (BUG-MXU-WDT-001)'
+MATCH todo4: plan='test(cleanup): conformance doc-div-0 + wrapper + e2e mxu + FM-SOC 33 regression evidence'
+MATCH todo5: plan='docs(bugs): BUG-RTL-SOC-010/011 + BUG-MXU-WDT-001 Fixed — doc align, DMA bus semantics, MXU watchdog'
+
+RESULT: 6 commits, 1 per todo, correct dependency order, subjects byte-identical
+to the plan's declared Commit: lines. Count/order as planned. PASS.
+
+Per-commit file sets (git show --stat), all inside the plan's whitelist:
+  6c13c48: .omo/drafts/..., .omo/evidence/task-0-..., .omo/plans/rtl-open-bugs-cleanup.md
+  2e468ac: evidence task-1, rtl/ip/pcie_ep_wrapper.v, rtl/tb/apb_conformance_real_tb.sv
+  9b43075: evidence task-2, docs/func-model-mmio-spec.md, rtl/ip/README.md,
+           rtl/ip/dma_wrapper.v, rtl/tb/apb_conformance_real_tb.sv
+  73a59d6: evidence task-3, rtl/wrapper/mxu_soc_wrapper.v, scripts/wv_run_mxu.sh,
+           sim/tests/wrapper/test_mxu_wrapper.py
+  46b17cf: evidence task-4 only (regression-evidence commit, as planned)
+  1af5c70: evidence task-5, README.md, docs/bugs/{BUG-MXU-WDT-001,bugs-module-level,bugs-soc-rtl}.md
+None of the 7 protected dirty files appear in any commit. PASS.
+
+Branch-wide scope:
+$ GIT_MASTER=1 git diff main..HEAD --stat -- gen/ spec/ firmware/ rtl/mxu/ rtl/soc/ rtl/ip/verilog-pcie/ rtl/ip/verilog-axi/ rtl/cpu/
+(empty)
+=> gen/ spec/ firmware/ rtl/mxu/ rtl/soc/ vendored IP: ZERO diff. PASS.
+
+$ GIT_MASTER=1 git rev-parse --abbrev-ref @{upstream}  -> fatal: no upstream configured
+$ GIT_MASTER=1 git branch -r --contains HEAD            -> (empty)
+=> NOT pushed. PASS.
+
+--------------------------------------------------------------------------------
+2. EVIDENCE COMPLETENESS (required judgment tokens)
+--------------------------------------------------------------------------------
+All 6 files exist (.omo/evidence/task-{0..5}-rtl-open-bugs-cleanup.txt).
+
+task-0:124  P0-SNAPSHOT: pass
+task-1:11   B10-DOC: aligned
+task-1:12   B10-TB-RETIRED: pcie-docdiv-0
+            (repeated at task-1:468/469)
+task-2:11   B11-RTL: cmd-write-only-status-no-clear
+task-2:12   B11-TB-RETIRED: dma-docdiv-0
+            (repeated at task-2:386/387)
+task-3:88   WDT-IMPL: wrapper-axi-wdt-sticky-bit
+task-3:90   WDT-TEST: NOT-MET(2-pre-existing-guard-failures)      <-- NOT "6-pass"
+task-4:402  REG-CONF: GREEN-docdiv-0
+task-4:403  REG-WRAPPER: 4-pass-2-preexisting-fail                <-- NOT "6-pass"
+task-4:404  REG-E2EMXU: single-pass, multi-pass
+task-4:405  REG-FMSOC: 25-pass-8-skip-0-fail-0-timeout-total-33
+task-5:38   LEDGER-STATUS: Fixed
+task-5:39   STATS: 15-fixed-0-open-socrtl-4-fixed-0-open-module
+
+Extra token present, harmless: task-1:13 `B10-GATE: GREEN doc_div_cnt==2 slv_docdivs[4]==0 exact-grep==0`
+(the planned intermediate gate of todo 1, recorded as required).
+No renamed/missing token. The two deviations from the planned token text
+(WDT-TEST / REG-WRAPPER) are the recorded deviation, not silent substitutions:
+both are qualified `NOT-MET(...)` / `-2-preexisting-fail` and are explained in
+the same files. PASS with the recorded deviation.
+
+todo-0 provenance spot-check (task-0):
+  :18 8ba7af1 Merge bug-009-doorbell-fix: ... (precondition gate)
+  :21 GATE: 8ba7af1 present at main tip -> PASS
+  :27 HEAD: 8ba7af181fde58b929fe841bfd0723aca078ee92
+  :37 $ sha256sum rtl/ip/pcie_ep_wrapper.v rtl/ip/dma_wrapper.v rtl/wrapper/mxu_soc_wrapper.v rtl/tb/apb_conformance_real_tb.sv
+  :60 M-LINE COUNT: $ git status --porcelain | grep -cE '^ ?M'  ->  7
+  :73/:83 7 PROTECTED DIRTY FILES sha256 BEFORE/AFTER (unchanged)
+  :124 P0-SNAPSHOT: pass
+=> HEAD + hex sha + 4 baseline file hashes + inline porcelain snapshot + 7-M
+   assertion all present. PASS.
+
+todo-4 stale-simv proof (task-4:68-110): pre-clean inventory with mtime+sha256
+for simv_apb_conformance_real (e01fae55...), simv_tb_mxu_wrapper (845b75f2...),
+simv_soc_ibex (72199d8a..., PRE-todo-1/2/3 binary — the headline stale state),
+post-clean ABSENT verification, then hash-bound provenance file
+(provenance-20260923T211838-169930.txt: git 73a59d6..., simv 22d5e773..., flist/
+driver/firmware/golden/checkpoint hashes) propagated into all 33 case logs. PASS.
+
+--------------------------------------------------------------------------------
+3. LEDGER ARITHMETIC (re-run by the auditor)
+--------------------------------------------------------------------------------
+$ grep -n "Bugs closed Fixed | 15" docs/bugs/bugs-soc-rtl.md
+440:| Bugs closed Fixed | 15 (88.2%) |
+$ grep -n "Open / under investigation | 0" docs/bugs/bugs-soc-rtl.md
+443:| Open / under investigation | 0 (0.0%) |
+$ grep -n "| Open | 0 |" docs/bugs/bugs-soc-rtl.md
+418:| Open | 0 | — |
+$ grep -n "| Fixed | 4 |" docs/bugs/bugs-module-level.md     -> 227:| Fixed | 4 |
+$ grep -n "| Open | 0 |"  docs/bugs/bugs-module-level.md     -> 226:| Open | 0 |
+$ grep -n "15 Fixed" README.md                              -> 25:| Bug 台账 SoC RTL | **17 = 15 Fixed / 1 Pending（waiver 待签）/ 1 Accepted（reconstruction-failure）/ 0 Open** ...
+$ grep -n "4 = 4 Fixed / 0 Open" README.md                  -> 26:| module-level | **4 = 4 Fixed / 0 Open** |
+                                                               39:| `docs/bugs/bugs-module-level.md` | 模块级 bug 台账：4 = 4 Fixed / 0 Open |
+
+Stale-count zero-hit probes (each must be 0 hits):
+  13 Fixed          : bugs-soc-rtl.md:0 README.md:0 bugs-module-level.md:0
+  2 Open            : bugs-soc-rtl.md:0 README.md:0 bugs-module-level.md:0
+  3 Fixed / 1 Open  : bugs-soc-rtl.md:0 README.md:0 bugs-module-level.md:0
+  13 (76.5%)        : bugs-soc-rtl.md:0 README.md:0 bugs-module-level.md:0
+  2 (11.8%)         : bugs-soc-rtl.md:0 README.md:0 bugs-module-level.md:0
+
+By-Severity table UNCHANGED (010/011 still counted, per the frozen rule):
+407:| Minor | 2 | BUG-RTL-SOC-010 (pcie_ep_wrapper header overstates fields), BUG-RTL-SOC-011 (rtl/ip/README DMA access classes wrong) |
+413:| Fixed | 15 | ... BUG-RTL-SOC-010, BUG-RTL-SOC-011, ... |  (member list updated, count 15)
+README diff main..HEAD touches exactly 3 lines (25, 26, 39) — status rows only.
+Module ledger stats block: Total 4 / Open 0 / Fixed 4.
+=> All ledger assertions in plan todo 5 hold. PASS.
+
+--------------------------------------------------------------------------------
+4. NO-SILENT-SKIP
+--------------------------------------------------------------------------------
+FM-SOC 8 SKIP IDs, per-ID reason (task-4:317-335), verbatim:
+  PASS (25): FM-SOC-001..013, FM-SOC-018, FM-SOC-020, FM-SOC-024..032, FM-SOC-10X
+  SKIP (8):  FM-SOC-014, 015, 016, 017, 019, 021, 022, 023
+  FAIL (0):  -      TIMEOUT (0): -
+    FM-SOC-014..016/021..023  "superseded by FM-SOC-027/032/10X"
+    FM-SOC-017/019            "skipped: direct APB/AXI case not applicable to Ibex RTL mode"
+  => ID-for-ID identical to the .omo/evidence/task-3-bug-009-doorbell-fix.txt baseline.
+33/33 classified, no case dropped. PASS.
+
+Coverage boundary DISCLOSED (not hidden) in todo 2's evidence
+(task-2:289-315), verbatim:
+  "STATUS READ-CLEAR: IS IT OBSERVABLE IN THIS TB?  — NO, and here is the proof
+   Empirical proof: RUN #4 (RTL still has the read-clear) and RUN #5 (read-clear
+   removed) were diffed line-by-line over the whole log. ...
+   => NOT OBSERVABLE in this TB.  Recorded as a coverage note, NOT a silent skip.
+      The end-to-end guard for this half of BUG-RTL-SOC-011 is todo 4's FM-SOC
+      firmware path (a real START -> DONE -> read sequence)"
+Same disclosure is repeated in the ledger (bugs-soc-rtl.md BUG-RTL-SOC-011
+"Coverage boundary (recorded, not a silent skip)"). PASS.
+
+--------------------------------------------------------------------------------
+5. NO-OVERCLAIM SCAN  ("6/6" / "All 6 tests PASSED" / "6-pass" on the wrapper suite)
+--------------------------------------------------------------------------------
+$ grep -rn "6/6" .omo/plans/... docs/bugs/bugs-soc-rtl.md docs/bugs/bugs-module-level.md README.md .omo/evidence/task-?-rtl-open-bugs-cleanup.txt
+  .omo/plans/rtl-open-bugs-cleanup.md:103  QA scenarios: happy=6/6 PASS；failure=...      (plan text, pre-deviation)
+  .omo/plans/rtl-open-bugs-cleanup.md:127  F3 ... `run_wrapper_mxu`（6/6）...             (plan text, pre-deviation)
+  README.md:650  "已完成。Smoke 10/10 ✅、SFU Verify 19/19 ✅、E2E 6/6 ✅..."              (historical Phase-2 text; UNTOUCHED by this branch)
+  .omo/evidence/task-3:299 "(c) These two are why the required "6/6 PASS" gate cannot be met."
+  .omo/evidence/task-3:380 "The todo's aggregate gate "6/6 PASS" is NOT MET, and the two failures are"
+  .omo/evidence/task-4:217 "[wv_run_mxu.sh] All 6 tests PASSED."  -> quoted as UNTRUSTED
+$ grep -n "REG-W4: 6-pass-0-fail" docs/bugs/bugs-soc-rtl.md
+  783: ... (BUG-009 entry)  1083: ... (BUG-009 entry)
+  => different suite (module W4 regression); both lines UNCHANGED by this branch
+     ($ git diff main..HEAD -- docs/bugs/bugs-soc-rtl.md | grep -E '^[+-].*REG-W4' -> empty).
+
+Verification that no evidence file asserts an achieved full pass:
+  task-3:370  "Summary: 6 PASS, 0 FAIL (6 total)" is printed under the heading
+              "--- The runner's verdict on the SAME RED run (false positive, BLOCKER-2) ---"
+              i.e. it is quoted as a false positive, immediately after the same file
+              documents the detector bug (task-3:255-268) and states
+              "Emitting it would be a false PASS claim. See ..." (task-3:94).
+  task-4:217  the same string is explicitly labelled
+              "RUNNER VERDICT — QUOTED BUT **UNTRUSTED** (BLOCKER-2, todo 3)"
+              and the judged verdict is the per-test cocotb parse (4 PASS / 2 FAIL).
+  Module ledger BUG-MXU-WDT-001: "Gate deviation (honest record): ... measured
+              4 PASS / 2 FAIL ... The plan's todo-3 deviation line is the authoritative
+              statement."
+=> NO surviving claim of an achieved wrapper full pass anywhere in
+   evidence/ledgers/README. No REJECT-level overclaim.
+
+Residual inconsistency (plan text only, see FINDING 1): the plan's
+  :102 (acceptance "6 例全 PASS"), :103 (QA happy=6/6), :125 (F1 directive
+  "wrapper 计数按 6-pass 口径核对"), :139 (Success criterion 3 "WDT-TEST: 6-pass"),
+  :140 (Success criterion 4 "REG-WRAPPER: 6-pass")
+still carry the pre-deviation text without a pointer to the todo-3 DEVIATION
+block at :105. These are criteria/directives, not claims that a pass occurred —
+but as written the F1/F3 directives are unsatisfiable.
+
+--------------------------------------------------------------------------------
+6. DEVIATION JUDGEMENT (re-derived from raw logs, not from the summaries)
+--------------------------------------------------------------------------------
+(a) ACCURATELY DESCRIBED?  YES. Recorded: aggregate gate 4 PASS / 2 FAIL,
+    failures = test_mxu_single_tile_compute (store-out drain precedes STATUS.DONE)
+    + test_mxu_accumulate_mode (X on m_axi_wdata); byte-identical across
+    RED/GREEN/GREEN2 + todo 4; HEAD control showed the recorded 5/5 baseline was
+    false (1 PASS / 4 FAIL).
+
+(b) GENUINELY PRE-EXISTING?  Re-derived read-only from on-disk logs:
+    $ # todo-3 RED (pre-WDT-RTL) vs GREEN, ANSI stripped
+    $ grep -h "MISMATCH" wv-mxu-test_mxu_single_tile_compute.RED-pre-RTL.log \
+                        wv-mxu-test_mxu_single_tile_compute.log
+      2880.00ns ERROR cocotb.tb_mxu_wrapper MISMATCH: 3180/4096 elements differ,
+      max_abs_diff=6400, first_mismatches=[(11, 0), (11, 2), (11, 3), (11, 4), (11, 5)]
+      2880.00ns ERROR cocotb.tb_mxu_wrapper MISMATCH: 3180/4096 elements differ,
+      max_abs_diff=6400, first_mismatches=[(11, 0), (11, 2), (11, 3), (11, 4), (11, 5)]
+      (identical line, identical timestamp — RED and GREEN)
+    $ grep -h "Unresolvable bit" wv-mxu-test_mxu_accumulate_mode{,.RED-pre-RTL}.log | sort -u
+      ValueError: Unresolvable bit in binary string: 'x'. Set the COCOTB_RESOLVE_X ...
+      (single distinct signature across both runs)
+    $ # per-test verdict lines, raw logs, ANSI stripped
+      RED  : single_tile_compute FAIL 2880.00 | accumulate_mode FAIL 2940.00
+             watchdog_timeout FAIL 10100495.00 | 3 others PASS
+      GREEN: single_tile_compute FAIL 2880.00 | accumulate_mode FAIL 2940.00
+             watchdog_timeout PASS 10100555.00 | 3 others PASS
+    $ # todo-4 independent re-run (t4-2-*.log)
+      PASS apb_regmap_rw | PASS preload_single_tile | FAIL single_tile_compute
+      PASS store_out_burst | FAIL accumulate_mode | PASS watchdog_timeout
+      => 4 PASS / 2 FAIL, same two tests.
+    $ # HEAD control (build/evidence/task-3-wrapper.log, ANSI stripped)
+      grep -c "object has no attribute '_bus'"  -> 4
+      test_apb_regmap_rw PASS 1090.00 ; preload/single_tile(+store_out,accumulate) FAIL @160-180ns
+      => the recorded "5 PASS" baseline was indeed false (4 of 5 guards aborted
+         before executing; a guard that does not execute cannot guard).
+    => The two failures are NOT caused by the watchdog RTL: they are present in
+       the pre-RTL RED run with identical signatures, unchanged in todo 4, and the
+       new watchdog test is the only test that flips FAIL->PASS. Genuinely
+       pre-existing w.r.t. the WDT change. (Note: at HEAD they were unobservable
+       because the harness crashed first — disclosed in task-3:299-314.)
+
+(c) ADEQUATELY DISCLOSED?  YES, in four independent places:
+    - plan todo-3 DEVIATION block (:105, "orchestrator-accepted", no pass token);
+    - task-3 evidence VERDICT (task-3:376-390) incl. "this file is the escalation";
+    - module ledger bugs-module-level.md BUG-MXU-WDT-001 "Gate deviation (honest
+      record)" + "Explicit non-claim (mandatory)" + 5 residuals;
+    - .omo/notepads/rtl-open-bugs-cleanup/problems.md (DEFECT-WRP-1/-2 + PROCESS-1/2/3).
+
+F1 DEVIATION-CONCUR: YES.
+Residual risk accepted with one follow-up: DEFECT-WRP-1 is firmware-visible
+(store-out drain precedes STATUS.DONE, contradicting the wrapper's own documented
+"poll STATUS.DONE -> read results" flow), and neither defect has a ledger entry
+yet. The plan delegates that filing decision to the user ("是否立案由用户决定"),
+so it is a disclosed residual rather than a compliance breach — but it should not
+be forgotten after merge.
+
+--------------------------------------------------------------------------------
+7. OTHER PLAN-vs-REALITY MISMATCHES
+--------------------------------------------------------------------------------
+M1. Plan file is dirty/uncommitted.
+    $ GIT_MASTER=1 git status --porcelain | grep -cE '^ ?M'   ->  8
+      (the todo-0 assertion was 7; the extra M is .omo/plans/rtl-open-bugs-cleanup.md,
+       modified after todo 3 to carry the DEVIATION annotation)
+    => the DEVIATION text inside the plan exists only in the working tree; the
+       committed copies are task-3 evidence + module ledger (no information loss).
+       Worktree-only annotation means a fresh clone of the branch cannot see it in
+       .omo/plans/. LOW.
+
+M2. Notepads untracked while the committed record points at them.
+    $ git status --porcelain -> "?? .omo/notepads/rtl-open-bugs-cleanup/"
+    The plan deviation block and the module ledger both cite
+    .omo/notepads/rtl-open-bugs-cleanup/problems.md as the escalation record, yet
+    that directory is untracked (other notepad dirs in this repo ARE tracked).
+    LOW.
+
+M3. README line-number drift vs plan todo-5 acceptance text.
+    Plan: "README :26 含 15 Fixed/0 Open 且 :39 含 4 Fixed/0 Open".
+    Actual: SoC RTL row = README:25 (contains 15 Fixed / 0 Open);
+    module-level row = README:26; docs index = README:39.
+    All content assertions hold; only the line number is off by one. LOW.
+
+M4. Wrapper suite still red at the end of the branch (2 pre-existing failures) —
+    disclosed everywhere, see §6. Accepted under the recorded deviation.
+
+M5. Process debt (PROCESS-1 Makefile target missing `cd $(REPO_ROOT)`;
+    PROCESS-2 runner verdict grep false-positive AND exit 0 on real failures;
+    PROCESS-3 tracked build/evidence/wrap-mxu-regression.txt unreliable) is
+    disclosed but unfixed. The plan's todo-3 whitelist allowed only the TESTS=(...)
+    edit in scripts/wv_run_mxu.sh and did not include sim/regression/Makefile, so
+    leaving them is plan-compliant. PROCESS-2 is verification-integrity relevant:
+    any future consumer of `run_wrapper_mxu` exit status or of
+    build/evidence/wrap-mxu-regression.txt can be misled. LOW-MEDIUM (out of scope
+    for this plan; needs its own follow-up).
+
+--------------------------------------------------------------------------------
+8. FINDINGS
+--------------------------------------------------------------------------------
+F1-1 MEDIUM  plan:102,103,125,139,140 — the Success-criteria block and the F1/F3
+     directives still assert the unqualified `WDT-TEST: 6-pass` /
+     `REG-WRAPPER: 6-pass` / "wrapper 计数按 6-pass 口径核对" without a pointer to
+     the todo-3 DEVIATION block at plan:105. Not an overclaim (the plan carries the
+     deviation and no evidence file claims a full pass), but the plan is internally
+     inconsistent and the F1/F3 wording is unsatisfiable as written.
+     Fix: annotate :139/:140 (and :125) to reference the :105 deviation and re-scope
+     the wrapper gate to "4 PASS / 2 pre-existing FAIL + new watchdog test PASS".
+F1-2 LOW     .omo/plans/rtl-open-bugs-cleanup.md is modified-but-uncommitted
+     (M-count 8 vs the asserted 7); the deviation annotation is worktree-only.
+     Fix: commit the plan update (or state it is worktree-only) before merge.
+F1-3 LOW     .omo/notepads/rtl-open-bugs-cleanup/ is untracked while committed text
+     points at problems.md as the escalation record.
+     Fix: `git add -f` the notepad dir, or restate the pointer as session-local.
+F1-4 LOW     README line drift vs plan todo-5 acceptance text (:25 vs stated :26).
+     No functional impact; correct for future audits.
+F1-5 MEDIUM  advisory: DEFECT-WRP-1 (firmware-visible store-out drain vs
+     STATUS.DONE) and DEFECT-WRP-2 remain unledgered; the plan leaves the filing
+     decision to the user. Fix: user decision / file ledger entries before merge.
+
+No BLOCKER, no HIGH. No silent skip, no overclaim, no scope violation.
+
+--------------------------------------------------------------------------------
+9. VERDICT
+--------------------------------------------------------------------------------
+All plan acceptance assertions that are not the recorded deviation hold as
+written: 6 byte-exact commits, all 13 judgment tokens present, ledger arithmetic
+15 Fixed / 0 Open (SoC RTL) + 4 Fixed / 0 Open (module) with By-Severity
+unchanged, all stale-count probes zero-hit, gen/spec/firmware/vendored/mxu/soc
+zero diff, 8 FM-SOC SKIPs enumerated per-ID, coverage boundary disclosed, no
+push, single worktree.
+
+The sole substantive gap is the recorded todo-3 deviation (wrapper aggregate gate
+4 PASS / 2 FAIL instead of 6/6). It is accurately described, independently
+re-derived from the raw RED/GREEN/HEAD-control logs as genuinely pre-existing, and
+disclosed in four places.
+
+F1 DEVIATION-CONCUR: yes
+VERDICT: APPROVE
+================================================================================

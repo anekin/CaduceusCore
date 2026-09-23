@@ -18,7 +18,27 @@
 //   0x34    WRP_ACT_BASE    RW      Activation tile base addr in SRAM [31:0]
 //   0x38    WRP_OUT_BASE    RW      Output tile base addr in SRAM [31:0]
 //   0x3C    WRP_CMD         W       [0]=TRIG_LOAD: start pre-load from SRAM
+//                                   (any write clears WRP_STATUS[1])
 //   0x40    WRP_STATUS      R       [0]=LOAD_DONE: pre-load complete
+//                                   [1]=WDT_TIMEOUT (sticky AXI watchdog trip)
+//
+// AXI watchdog (BUG-MXU-WDT-001):
+//   Both sequencers below park in states whose only exit is an AXI handshake
+//   (PL_LOAD_W_AR/W_R/A_AR/A_R wait for arready/rvalid, SO_RD_SCALE_AR/R for
+//   arready/rvalid, SO_WRITE_AW/W for awready/wready).  A slave that never
+//   answers would hang the wrapper forever and hold the AXI channels, so a
+//   free-running counter times the cycles spent in those states; every other
+//   state is progress and clears it.  On reaching WDT_TIMEOUT (a fixed
+//   localparam - deliberately no MMIO register and no software threshold) the
+//   wrapper latches the sticky WRP_STATUS[1], forces the waiting FSM back to
+//   IDLE (releasing the AXI request) and ORs the condition into irq, which is
+//   the shared MXU INTC bit0 line.  Software acknowledges with ANY write to
+//   WRP_CMD, bit0=0 included: a bit0=1-only ack would re-arm a pre-load.
+//   Threshold rationale: the cocotb budget formula the firmware-driven perf
+//   tests use for MMUL (sim/cocotb_bridge.py:_estimate_timeout) is
+//   max(50000, M*N*K//64 + 20000); the largest shape in that suite
+//   (M=1, K=N=2048) gives 1*2048*2048//64 + 20000 = 85,536 cycles, so 1e6
+//   leaves more than 10x headroom for a legitimate wait.
 //
 // Usage flow:
 //   1. DMA copies weight/activation data to SRAM
@@ -168,6 +188,7 @@ module mxu_soc_wrapper #(
     reg [15:0] wrp_k_tiles;        // number of K-tiles to preload (>=1)
     reg [15:0] wrp_n;              // output N dimension (columns) per logical row
     reg        wrp_load_done;      // WRP_STATUS[0]
+    reg        wrp_wdt_timeout;    // WRP_STATUS[1] — sticky AXI watchdog trip
 
     // ── ISSUE-13B: per-block scale / FP32 dequant state ────────────────
     // mxu_top's SCALE_ADDR (MMIO 0x24) and CTRL[2] (MMIO 0x00) are latched
@@ -268,7 +289,7 @@ module mxu_soc_wrapper #(
                         (paddr == OFF_WRP_K_TILES)     ? {16'd0, wrp_k_tiles} :
                         (paddr == OFF_WRP_DIM_N)       ? {16'd0, wrp_n} :
                         (paddr == OFF_WRP_CMD)         ? 32'd0           :
-                        (paddr == OFF_WRP_STATUS)      ? {31'd0, wrp_load_done} : 32'd0;
+                        (paddr == OFF_WRP_STATUS)      ? {30'd0, wrp_wdt_timeout, wrp_load_done} : 32'd0;
 
     //=========================================================================
     // APB response mux — combine mxu MMIO and wrapper MMIO
@@ -293,6 +314,9 @@ module mxu_soc_wrapper #(
 
     // Tie off internal SRAM interfaces (unused in SoC mode — data comes
     // from AXI4 through the wrapper buffers)
+    // mxu_irq is the engine's own interrupt; the wrapper ORs its watchdog
+    // timeout into it (see the AXI watchdog section below).
+    wire mxu_irq;
     mxu_top #(
         .ADDR_WIDTH(12)
     ) u_mxu_top (
@@ -314,7 +338,7 @@ module mxu_soc_wrapper #(
         .output_sram_addr    (mxu_o_sram_addr),
         .output_sram_wr_en   (mxu_o_sram_wr_en),
         .output_sram_wdata   (mxu_o_sram_wdata),
-        .irq                 (irq),
+        .irq                 (mxu_irq),
         .weight_bus_i        (mxu_weight_bus),
         .activation_bus_i    (mxu_activation_bus),
         .acc_out_bus_o       (mxu_acc_out_bus),
@@ -366,6 +390,61 @@ module mxu_soc_wrapper #(
     localparam ACT_BEATS_PER_K    = 8'd64;
     localparam SCALE_BEATS        = 8'd4;
 
+    //=========================================================================
+    // AXI watchdog (BUG-MXU-WDT-001)
+    //=========================================================================
+    // Counter rule: wdt_cnt advances on every cycle in which the pre-load
+    // sequencer sits in PL_LOAD_W_AR / PL_LOAD_W_R / PL_LOAD_A_AR / PL_LOAD_A_R
+    // or the store-out sequencer sits in SO_RD_SCALE_AR / SO_RD_SCALE_R /
+    // SO_WRITE_AW / SO_WRITE_W — i.e. exactly the states whose only exit is an
+    // AXI handshake.  Any other state (PL_IDLE, PL_READY, SO_IDLE,
+    // SO_TRANSFORM) is progress and clears the counter, so a long but healthy
+    // transaction can never accumulate to the threshold.  Equivalently the
+    // counter runs while the wrapper drives one of m_axi_arvalid / m_axi_rready
+    // / m_axi_awvalid / m_axi_wvalid, since those four are asserted by exactly
+    // those eight states and by no other state.
+    localparam [19:0] WDT_TIMEOUT = 20'd1_000_000;
+
+    reg  [19:0] wdt_cnt;
+    wire        pl_axi_wait;
+    wire        so_axi_wait;
+    wire        wdt_axi_wait;
+    wire        wdt_fire;
+
+    assign pl_axi_wait  = (pl_state == PL_LOAD_W_AR) || (pl_state == PL_LOAD_W_R) ||
+                          (pl_state == PL_LOAD_A_AR) || (pl_state == PL_LOAD_A_R);
+    // so_axi_wait is declared here but assigned next to the store-out FSM, so
+    // that its expression (which references so_state) also comes after that
+    // declaration and every reference in this file stays declared-before-use.
+    assign wdt_axi_wait = pl_axi_wait || so_axi_wait;
+    assign wdt_fire     = wdt_axi_wait && (wdt_cnt == WDT_TIMEOUT - 20'd1);
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            wdt_cnt <= 20'd0;
+        else if (!wdt_axi_wait)
+            wdt_cnt <= 20'd0;
+        else if (wdt_cnt != WDT_TIMEOUT - 20'd1)
+            wdt_cnt <= wdt_cnt + 20'd1;
+    end
+
+    // Sticky trip flag.  Cleared by ANY write to WRP_CMD whatever the data,
+    // because the software ack has to be usable with pwdata[0]=0: clearing on
+    // bit0=1 alone would make the ack itself re-arm a pre-load (wrp_trigger).
+    // A CMD write and a trip in the same cycle: the write wins, and the FSM
+    // recovery below still happens.
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            wrp_wdt_timeout <= 1'b0;
+        else if (wrp_cs && pwrite && (paddr == OFF_WRP_CMD))
+            wrp_wdt_timeout <= 1'b0;
+        else if (wdt_fire)
+            wrp_wdt_timeout <= 1'b1;
+    end
+
+    // Watchdog trip is ORed into the engine interrupt line (INTC bit0 = MXU).
+    assign irq = mxu_irq | wrp_wdt_timeout;
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             pl_state       <= PL_IDLE;
@@ -373,6 +452,11 @@ module mxu_soc_wrapper #(
             pl_k_tile_cnt  <= 16'd0;
             pl_cur_addr    <= 32'd0;
             wrp_load_done  <= 1'b0;
+        end else if (wdt_fire && pl_axi_wait) begin
+            // Abandon a pre-load that cannot make progress.  wrp_load_done is
+            // left as-is (it is only ever set from PL_LOAD_A_R / PL_READY, so
+            // an aborted load reads back as not-done).
+            pl_state <= PL_IDLE;
         end else begin
             case (pl_state)
                 PL_IDLE: begin
@@ -608,6 +692,12 @@ module mxu_soc_wrapper #(
 
     wire so_issuing_s_ar = (so_state == SO_RD_SCALE_AR);
 
+    // AXI watchdog (BUG-MXU-WDT-001): store-out half of the wait flag, declared
+    // in the watchdog section above; assigned here so the expression comes
+    // after so_state is declared.
+    assign so_axi_wait = (so_state == SO_RD_SCALE_AR) || (so_state == SO_RD_SCALE_R) ||
+                         (so_state == SO_WRITE_AW)    || (so_state == SO_WRITE_W);
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             so_state     <= SO_IDLE;
@@ -617,6 +707,11 @@ module mxu_soc_wrapper #(
             so_w_beat    <= 4'd0;
             so_scale_beat <= 8'd0;
             so_fifo_rd_ptr <= {SO_FIFO_PTR_W{1'b0}};
+        end else if (wdt_fire && so_axi_wait) begin
+            // Abandon a store-out that cannot make progress.  The row already
+            // popped from the FIFO is dropped: this is an aborted fault path,
+            // not data.
+            so_state <= SO_IDLE;
         end else begin
             case (so_state)
                 SO_IDLE: begin
