@@ -1,0 +1,388 @@
+case_id: task-2-rtl-open-bugs-cleanup
+plan: .omo/plans/rtl-open-bugs-cleanup.md (todo 2 — BUG-RTL-SOC-011, RTL side)
+branch: rtl-open-bugs-cleanup
+utc_start: 2026-09-23T11:12:00Z
+utc_written: 2026-09-23T11:46:32Z
+verdict: pass
+
+================================================================================
+JUDGMENT LINES (sole verdict tokens — machine grep-able)
+================================================================================
+B11-RTL: cmd-write-only-status-no-clear
+B11-TB-RETIRED: dma-docdiv-0
+B11-GATE: GREEN doc_div_cnt==0 slv_docdivs[3]==0 exact-grep==0 gen-diff-empty
+
+================================================================================
+SCOPE — EXACTLY TWO RTL BEHAVIOR CHANGES (+ comments), ONE TB RETIREMENT, 2 DOCS
+================================================================================
+Behavior (rtl/ip/dma_wrapper.v):
+  (a) CMD (reg_idx==4'd1) is WRITE-ONLY ON THE BUS: `reg_rdata` returns 32'h0
+      for index 1.  The internal `dma_reg[1]` storage AND its write path are
+      KEPT — the FSM consumes `dma_reg[1][0]` for START (`cmd_start_rise`,
+      :332) and clears it on consume (:214).  Deleting the storage would break
+      the DMA.  The bus readback was the only ABI divergence.
+  (b) STATUS READ-CLEAR OF DONE REMOVED: the read-side branch
+      `if (apb_read && reg_idx == 4'd2) dma_reg[2][1] <= 1'b0;` is deleted.
+      DONE is now cleared only by the FSM on the next START (:228) — matching
+      the documented/ABI semantics.
+  (c) Comment sync only: header register table (:13-16), the "Special handling"
+      block (:120-123) and the always-block priority list (:140).
+
+Non-behavior:
+  - rtl/tb/apb_conformance_real_tb.sv : DMA CMD ACC_WOS->ACC_WO,
+    DMA REG_DOCDIV index1 1->0, doc_bug `3:` arm removed, DMA comments,
+    BUG-RTL-SOC-011 header entry, 2 unconditional summary strings.
+  - rtl/ip/README.md, docs/func-model-mmio-spec.md : doc sync (below).
+ZERO changes to: spec/npu_abi.json, gen/ (proven empty diff), sim/models/
+apb_peripheral.py, sim/regmap.py, firmware/, vendored IP, other slaves' rows,
+check()/check_docdiv()/MAX_REGS, the FSM.
+
+WHY AN RTL FIX HERE (scope authority — contrast with todo 1's doc-only fix)
+  BUG-RTL-SOC-010 (todo 1) had no in-authority RTL fix because the waiver
+  docs/waivers/REMEDIATION-RTL-EXCEPTION-2026-08-28.md restricts rtl/ edits to
+  axi_crossbar.v + npu_firmware.c and the only RTL fix needed vendored-IP
+  surgery.  BUG-RTL-SOC-011 is different: the fix lives entirely inside
+  rtl/ip/dma_wrapper.v, needs no vendored IP, and simply makes the RTL agree
+  with the ABI (`"access": "wo"` for DMA CMD, spec/npu_abi.json:87-90) and with
+  the Func Model (sim/models/apb_peripheral.py:288 `RegisterField("CMD", DMA.CMD,
+  access="w")`).  Four-way convergence after this commit:
+    ABI wo | Func Model w | RTL write-only-on-bus | docs W + no-read-clear.
+
+================================================================================
+PROVENANCE
+================================================================================
+git HEAD (pre-commit, unchanged): 2e468ace8141fa91afb7ee872e0b5f994cf54756
+  "docs(rtl/ip): align pcie_ep_wrapper header with RTL + retire PCIe DOC-DIV (BUG-RTL-SOC-010)"
+branch: rtl-open-bugs-cleanup
+VCS: Chronologic VCS V-2023.12-SP2_Full64  (runner loads module vcs/vcs_2023.12sp2)
+Host: sz0001 (192.168.0.11) — all runs via
+      `bash sim/regression/soc-verification-run.sh run_apb_conformance_real`
+
+sha256 of the 4 changed files (pre-commit working tree):
+  a42928cc67a628f7a1350e538699e6cde49b4a42de55a4b7e0d1e5fd0fa6b7bc  rtl/ip/dma_wrapper.v
+  f0186ac27d46f67e1789ee32d235319c533c79597d75f63fe59f82da97d4811b  rtl/tb/apb_conformance_real_tb.sv
+  ece3cbaa3b508ecaa916e73b7032360f9a53be913f1f0596f218122d42dc85c8  rtl/ip/README.md
+  5ea3ad733026be1dce4133dfec84ac95fe380a171154838f27faf71167b392e8  docs/func-model-mmio-spec.md
+sha256 of the PRE-EDIT (HEAD) dma_wrapper.v — the RED baseline:
+  0192edd129baa818bb0ec86a1f564dfbc44fbaedb86d3d28da6c081484ba2a45
+
+Run-log reconstruction (logs are gitignored — verified `git check-ignore`:
+  sim/regression/apb_conformance_real.log (.gitignore:22 "*.log"),
+  sim/regression/compile_apb_real.log  (.gitignore:22),
+  sim/regression/simv_apb_conformance_real (.gitignore:18 "simv_*")):
+  $ bash sim/regression/soc-verification-run.sh run_apb_conformance_real
+  $ cp sim/regression/apb_conformance_real.log <scratch>   # before the next run
+  The runner only `rm -rf simv_soc_cocotb*`; the APB simv must be removed
+  manually for a guaranteed full rebuild (see STALE-STATE below).
+
+================================================================================
+RTL FACTS ENCODED (read + cited, not assumed)
+================================================================================
+F1. rtl/ip/dma_wrapper.v:133-134 (after edit) — the read mux:
+      assign reg_rdata = (reg_idx == 4'd1)  ? 32'h0 :
+                         (reg_idx <= 4'd14) ? dma_reg[reg_idx] : 32'h0;
+    Only index 1 (CMD) changed; the <=14 branch (all other regs) is untouched.
+F2. Internal CMD storage is KEPT and still load-bearing:
+      :186  dma_reg[1]  <= 32'h0;        (reset)
+      :214  dma_reg[1][0] <= 1'b0;       (FSM consumes START)
+      :290  dma_reg[1] <= pwdata;        (APB write — still writes the copy)
+      :332  assign cmd_start_rise = dma_reg[1][0] && !cmd_start_d;
+    => the FSM is unchanged; only the BUS READBACK changed.
+F3. The deleted read-clear was the ONLY `apb_read`-driven register mutation:
+      before: `if (apb_read && reg_idx == 4'd2) dma_reg[2][1] <= 1'b0;`
+      after : absent.  `apb_read` remains used by `assign prdata` (:310), so no
+      dangling wire.  DONE is still set by the FSM (:228/:234/:253/:268) and
+      still cleared by the FSM on the next START (:228).
+F4. Only ONE register-address decode exists (`reg_idx = paddr[5:2]`), and the
+    APB response path is `assign prdata = apb_read ? reg_rdata : 32'h0;` — so
+    the single mux edit is the complete bus-readback fix.
+
+================================================================================
+TB CHANGES (rtl/tb/apb_conformance_real_tb.sv) — and the MUX-ARM SAFETY CHECK
+================================================================================
+T1. DMA REG_ACC row: index1 `ACC_WOS` -> `ACC_WO`.
+    ACC_WO performs 2 checks (write 0x80 -> readback must be 0; write 0 ->
+    readback 0) — the SAME count as ACC_WOS's 2 checks, so Total checks and the
+    DMA per-slave check count are both unchanged.  The probe value 0x80
+    (bit7) is documented at :1117-1119 as having no functional bits on any WO
+    register; DMA CMD functional bits are bit0=START/bit1=ABORT, so the probe
+    cannot arm a transfer.
+T2. DMA REG_DOCDIV row: index1 1 -> 0 (the flag is retired, not moved).
+T3. doc_bug mux: the `3:` arm ("BUG-RTL-SOC-011") is REMOVED.
+    MUX-ARM SAFETY CHECK (the check todo 1 learned the hard way): `doc_bug(s)`
+    is only reached unconditionally from the ACC_WOS and ACC_DOCDIVR arms
+    (:1122/:1127 and :1157/:1162).  Measured AFTER the T1 flip:
+      $ sed -n '666,680p' rtl/tb/apb_conformance_real_tb.sv | grep -c 'ACC_WOS\|ACC_DOCDIVR'
+      0
+      $ sed -n '763,772p' rtl/tb/apb_conformance_real_tb.sv | grep -c "32'd1"
+      0
+    and the DMA row contains no ACC_FIELD/ACC_CONST entry, so no conditional
+    path can reach doc_bug(3) either.  `doc_bug(3)` is UNREACHABLE => deleting
+    the arm cannot emit "BUG-RTL-SOC-???".
+T4. Comment/display sync: DMA semantics block (:22-26), BUG-RTL-SOC-011 header
+    entry (:74-80), DMA REG_ACC comment (:678-680), REG_DOCDIV DMA rationale
+    (:757-761), and the 2 unconditional summary strings
+    (:1255 "each bug-filed: BUG-RTL-SOC-010/011:retired",
+     :1283 "APB_CONFORMANCE_REAL: GREEN (... doc-div [BUG-RTL-SOC-010/011:retired])").
+    All `ACC_WOS` localparam/case-arm code is left intact (dispatch unchanged).
+T5. [DISCLOSED EXTRA — beyond the plan's literal (a)-(e) list] TB header :22-26
+    previously asserted "DMA: CMD STORES the written value and reads it back" —
+    a statement that becomes FALSE with this commit.  Rewritten.  Same class of
+    disclosure todo 1 recorded for its 6th comment site.  Comment-only.
+
+================================================================================
+DOC SYNC
+================================================================================
+D1. rtl/ip/README.md:36 — STATUS row gains "（读不清除 DONE）".  CMD row (:35)
+    was already `W` and is untouched (now literally true on the bus).
+D2. docs/func-model-mmio-spec.md:281 — STATUS row gains "; reads do not clear DONE".
+D3. [DISCLOSED EXTRA — same file, beyond the plan's literal STATUS-row edit]
+    Three now-FALSE statements in the same in-scope file were corrected:
+      :310  "- `STATUS.DONE` clears on read (hardware auto-clear ...)"
+            -> "is **not** cleared by a read ... the FSM clears it on the next CMD.START"
+      :357  "- Reads the engine `STATUS` register (this auto-clears DMA `DONE`)."
+            -> "(DMA `DONE` is **not** cleared by the read; ...)"
+      :390  §7.2 STATUS Bits table, DMA "DONE Clear" cell
+            "Clears on read of STATUS" -> "FSM clears on next `CMD.START` (a read does NOT clear)"
+    Leaving them would have re-created exactly the doc-vs-RTL divergence this
+    plan exists to remove.  Repo-wide grep for the removed claims outside these
+    two files (excluding vendored/gen): 0 hits.
+    These two files are the ONLY docs touched.
+
+================================================================================
+RUN #1 — PRE-EDIT CONTROL (unmodified tree, HEAD 2e468ac)
+================================================================================
+$ bash sim/regression/soc-verification-run.sh run_apb_conformance_real
+PREDICTION (written before the run): GREEN, Total 263, doc_div_cnt 2,
+slv_docdivs[3] 2, DMA 43/0/2/146, $finish line 1280, grep-011 = 2, grep-010 = 0.
+MEASURED (verbatim):
+  Total checks : 263
+  Passes       : 263
+  Fails        : 0
+  DOC-DIV      : 2
+    MXU 51/0/0/172 | SFU 22/0/0/76 | VECTOR 37/0/0/130 | DMA 43 / 0 / 2 / 146
+    PCIE 24/0/0/76 | DOORBELL 60/0/0/345 | INTC 16/0/0/52
+  APB_CONFORMANCE_REAL: GREEN (7/7 peripherals, 263 checks, 2 doc-div [BUG-RTL-SOC-010:retired / 011:active])
+  TASK-12 RESULT: GREEN (expected)
+  $finish called from file "rtl/tb/apb_conformance_real_tb.sv", line 1280.
+  $ grep -cE '\[DOC-DIV\].*BUG-RTL-SOC-011' apb_conformance_real.log  -> 2
+  $ grep -cE '\[DOC-DIV\].*BUG-RTL-SOC-010' apb_conformance_real.log  -> 0
+  $ grep -cE 'filed as BUG-RTL-SOC-011'     apb_conformance_real.log  -> 2
+=> PREDICTION CONFIRMED on every point.  The 2-hit non-zero grep proves the
+   gate pattern discriminates; the post-edit 0 is therefore meaningful.
+DISCLOSED: this control run REUSED the simv built at 19:00:48 by todo 1 (the
+   tree was byte-identical, `git status` unmodified), i.e. it is a valid
+   pre-edit baseline but not a fresh binary.  See STALE-STATE for why, and how
+   every subsequent run was forced to full-rebuild.
+
+================================================================================
+RUN #2 — RED-A (the plan-mandated state: TB (a)+(b) only, RTL NOT fixed)
+================================================================================
+Tree at this point: ONLY `rtl/tb/apb_conformance_real_tb.sv` edited (ACC_WOS->
+ACC_WO + REG_DOCDIV 1->0).  rtl/ip/dma_wrapper.v still byte-identical to HEAD
+(sha256 0192edd1...).  simv removed first => full rebuild (compile CPU 17.970 s).
+PREDICTION: Fails=1, `wo-store DMA +0x004` got 0x80 expected 0, DOC-DIV 0,
+DMA 43/1/0/146, verdict RED.
+MEASURED (verbatim):
+  [FAIL] wo-store DMA +0x004 — got 0x00000080, expected 0x00000000
+  [PASS] wo-zero  DMA +0x004 (0x00000000)
+  Total checks : 263
+  Passes       : 262
+  Fails        : 1   (unexpected — real RTL != REAL oracle)
+  DOC-DIV      : 0
+    DMA      : 43 / 1 / 0 / 146
+  APB_CONFORMANCE_REAL: RED (1 unexpected divergences vs REAL oracle)
+  TASK-12 RESULT: RED (unexpected)
+  APB_CONFORMANCE_REAL: FAIL      (make target, exit 1)
+  [soc-run] RESULT: FAIL for run_apb_conformance_real
+=> The failure is EXACTLY the DMA CMD readback (RTL returns the stored value
+   where the flipped expectation requires 0).  The RED flip BITES.
+NOTE (honesty): the full log of this first RED run was overwritten by the
+   GREEN run's `tee`; the excerpt above is verbatim from that run's console
+   capture.  RED was therefore re-captured as RUN #4 below with a full log.
+
+================================================================================
+RUN #3 — GREEN (RTL fixed + TB finished + docs synced)
+================================================================================
+simv removed => full rebuild (CPU time 17.949 s).
+MEASURED (verbatim):
+  Total checks : 263
+  Passes       : 263
+  Fails        : 0
+  DOC-DIV      : 0
+    MXU 51/0/0/172 | SFU 22/0/0/76 | VECTOR 37/0/0/130 | DMA 43 / 0 / 0 / 146
+    PCIE 24/0/0/76 | DOORBELL 60/0/0/345 | INTC 16/0/0/52
+  APB_CONFORMANCE_REAL: GREEN (7/7 peripherals, 263 checks, 0 doc-div [BUG-RTL-SOC-010/011:retired])
+  TASK-12 RESULT: GREEN (expected)
+  $finish called from file "rtl/tb/apb_conformance_real_tb.sv", line 1291.
+  $ grep -cE '\[DOC-DIV\].*BUG-RTL-SOC-01[01]' apb_conformance_real.log -> 0
+  $ grep -cE 'filed as BUG-RTL-SOC-01[01]'     apb_conformance_real.log -> 0
+
+================================================================================
+RUN #4 — RED-B (full-log re-capture) and RUN #5 — GREEN (final, binary-consistent)
+================================================================================
+Why two more runs: RUN #2's full log was lost to `tee` overwrite, and RUN #3's
+binary was superseded.  The RTL fix was temporarily reverted to HEAD to
+re-capture a COMPLETE RED log, then restored byte-identically:
+  $ cp rtl/ip/dma_wrapper.v <scratch>/dma_wrapper.v.fixed   # sha256 a42928cc...
+  $ git diff -- rtl/ip/dma_wrapper.v > <scratch>/task2-rtl.patch   # 61 lines
+  $ git checkout -- rtl/ip/dma_wrapper.v
+  $ sha256sum rtl/ip/dma_wrapper.v   -> 0192edd1... == `git show HEAD:...|sha256sum`  (proven reverted)
+  RUN #4 (rm simv; full rebuild):
+    [FAIL] wo-store DMA +0x004 — got 0x00000080, expected 0x00000000
+    [PASS] wo-zero  DMA +0x004 (0x00000000)
+    Total checks : 263 / Passes 262 / Fails 1 / DOC-DIV 0
+      DMA      : 43 / 1 / 0 / 146
+    APB_CONFORMANCE_REAL: RED (1 unexpected divergences vs REAL oracle)
+    TASK-12 RESULT: RED (unexpected)
+    $finish ... line 1291.   (identical to RUN #2 on every counter)
+    $ grep -cE '\[DOC-DIV\].*BUG-RTL-SOC-01[01]' -> 0
+  $ cp <scratch>/dma_wrapper.v.fixed rtl/ip/dma_wrapper.v
+  $ sha256sum rtl/ip/dma_wrapper.v   -> a42928cc... == recorded fixed hash   (restored byte-identical)
+  $ git diff -- rtl/ip/dma_wrapper.v | diff - <scratch>/task2-rtl.patch      -> PATCH-IDENTICAL
+  RUN #5 (rm simv; full rebuild, CPU time 17.524 s) — final artifact:
+    Total checks : 263 / Passes 263 / Fails 0 / DOC-DIV 0
+      MXU 51/0/0/172 | SFU 22/0/0/76 | VECTOR 37/0/0/130 | DMA 43 / 0 / 0 / 146
+      PCIE 24/0/0/76 | DOORBELL 60/0/0/345 | INTC 16/0/0/52
+    APB_CONFORMANCE_REAL: GREEN (7/7 peripherals, 263 checks, 0 doc-div [BUG-RTL-SOC-010/011:retired])
+    TASK-12 RESULT: GREEN (expected)
+    $finish ... line 1291.
+  On-disk binary/log pairing after RUN #5: simv 19:43:27 -> log 19:44:57, both
+  newer than the last source edit, so the surviving `sim/regression/` state is
+  self-consistent with the GREEN verdict.
+
+================================================================================
+GATES (measured, not hardcoded)
+================================================================================
+  APB_CONFORMANCE_REAL              : GREEN   (7/7 peripherals)
+  Total checks                      : 263     (unchanged — a DOC-DIV flag is a
+                                                bucket, not an extra check; ACC_WOS
+                                                and ACC_WO each contribute 2)
+  Passes / Fails                    : 263 / 0
+  doc_div_cnt                       : 0       (pre-edit 2)             PASS
+  slv_docdivs[3] DMA                : 0       (pre-edit 2)             PASS
+  slv_docdivs[4] PCIE               : 0       (todo 1)
+  slv_docdivs[0/1/2/5/6]            : 0 / 0 / 0 / 0 / 0
+  doorbell checks (slave 5)         : 60      (unchanged)
+  REG_CNT (tb :647-648)             : {18, 8, 14, 15, 10, 20, 3}
+  per-slave (checks/fails/docdiv/psel_o):
+    MXU 51/0/0/172 | SFU 22/0/0/76 | VECTOR 37/0/0/130 | DMA 43/0/0/146
+    PCIE 24/0/0/76 | DOORBELL 60/0/0/345 | INTC 16/0/0/52
+  exact gate grep                   : grep -E '\[DOC-DIV\].*BUG-RTL-SOC-01[01]' -> 0
+                                      (case-insensitive variant also 0;
+                                       'filed as BUG-RTL-SOC-01[01]' -> 0;
+                                       pre-edit the SAME patterns returned 2/0 -> the
+                                       pattern provably discriminates)
+  gen/ diff                         : EMPTY (below)
+  $finish tb line                   : 1291 = 1280 (todo 1) + 11 = this commit's
+                                      TB net line delta (git diff --numstat: +21/-10)
+
+================================================================================
+gen/ EMPTY PROOF
+================================================================================
+  $ git diff -- gen/ | wc -l          -> 0
+  $ git status --porcelain -- gen/    -> (no output)
+No ABI regeneration; spec/npu_abi.json untouched; the RTL was moved TO the ABI,
+not the ABI to the RTL.
+
+================================================================================
+STATUS READ-CLEAR: IS IT OBSERVABLE IN THIS TB?  — NO, and here is the proof
+================================================================================
+Empirical proof: RUN #4 (RTL still has the read-clear) and RUN #5 (read-clear
+removed) were diffed line-by-line over the whole log.  The ONLY differences are
+the CMD line, the counters it feeds, and timestamps:
+  $ diff red-b.log green-final.log
+    180c180  [FAIL] wo-store DMA +0x004 — got 0x00000080 ...  ->  [PASS] ... (0x00000000)
+    301,302c301,302  Passes 262/Fails 1  ->  263/0
+    310c310  DMA : 43 / 1 / 0 / 146  ->  43 / 0 / 0 / 146
+    315,316c315,316  RED verdict -> GREEN verdict
+    (plus the VCS banner date / CPU-time / wall-clock lines)
+Every STATUS check is byte-identical across the two runs:
+  [PASS] reset DMA +0x008 (0x00000000)        (line 58 in both)
+  [PASS] ro-hostile DMA +0x008 (0x00000000)   (line 187 in both)
+Structural reason: the read-clear can only differ when STATUS.DONE==1, and DONE
+is only set by a completed transfer.  This TB never launches one — its own
+Phase 5 is titled "engine idle proof (no CMD.START was ever written)" (:304) and
+asserts `mxu_dbg_state = 0`; the DMA CMD probes are 0x42 (pre-edit) / 0x80
+(ACC_WO, bit7) — bit0=START is never written, so the FSM never leaves IDLE and
+STATUS stays 0.  ACC_RO compares read-vs-read, and 0==0 either way.
+=> NOT OBSERVABLE in this TB.  Recorded as a coverage note, NOT a silent skip.
+   The end-to-end guard for this half of BUG-RTL-SOC-011 is todo 4's FM-SOC
+   firmware path (a real START -> DONE -> read sequence), which is exactly why
+   todo 2 and todo 4 both exist.
+
+================================================================================
+PRE-EXISTING BENIGN ARTIFACT (not caused by this change)
+================================================================================
+Both RED-B and GREEN logs contain, from the VECTOR wrapper:
+  Error: "rtl/wrapper/vector_soc_wrapper.v", 172: [VEC_WRP] valid_bytes_total
+         262140 exceeds buffer capacity 65536
+This is an intentional hostile-write diagnostic from the unmodified vector
+wrapper (rtl/wrapper/vector_soc_wrapper.v is NOT in this diff; the TB's VECTOR
+rows are NOT in this diff) and the check it accompanies still PASSes.  It is
+identical in both runs and predates this change.
+
+================================================================================
+ADVERSARIAL CLASSES — probe + record
+================================================================================
+misleading_success_output — APPLICABLE -> PASS.
+  GREEN was not inferred from terminal text: the gate line, Total/Passes/Fails,
+  doc_div_cnt, the full per-slave table and the 0-hit exact grep were all read
+  from the log, and the anti-false-pass proof is RUN #2/#4 (the SAME TB printed
+  RED with a real [FAIL] line before the RTL fix).  A one-line assertion would
+  have failed to distinguish those two states.
+stale_state — APPLICABLE -> PASS, and a REAL hazard was found and neutralised.
+  FINDING: the runner's `rm -rf` targets `simv_soc_cocotb*`, NOT
+  `simv_apb_conformance_real`.  Worse, the Makefile's prerequisites for
+  `simv_apb_conformance_real` are the TB file + the four FLIST FILES — the RTL
+  sources listed INSIDE those flists are not tracked, so editing
+  rtl/ip/dma_wrapper.v alone does NOT trigger a rebuild.  Proof: the RUN #1
+  control run reused todo 1's 19:00:48 binary for a 19:15:33 run.  Mitigation:
+  `rm -f sim/regression/simv_apb_conformance_real` before every judged run, and
+  two independent freshness proofs per run — (1) compile-log CPU time/mtime
+  (17.970 s / 17.949 s / 17.524 s) and (2) a SOURCE-DERIVED invariant: the
+  sim's own `$finish` line moved 1280 -> 1291, and +11 is exactly this
+  commit's TB net line delta (numstat +21/-10).  A stale simv would still print
+  1280.
+dirty_worktree — APPLICABLE -> PASS.
+  `git status --porcelain | grep -E '^ ?M'` == the 7 protected paths + the plan
+  file (orchestrator checkbox) + this todo's 4 target files.  None of the 7
+  protected files is staged (see COMMIT).  The 4 target files are the ONLY
+  product files in the M set.
+malformed_input — N/A: no external input; the TB self-drives the APB bus.
+prompt_injection — N/A: no untrusted content read; all sources are in-repo.
+cancel_resume — N/A: single uninterrupted session, no cancellation.
+hung_commands — N/A: every run completed (VCS $finish at 14636000 ps, wall
+  clock ~90 s per run incl. full rebuild); no timeouts observed (TB reports
+  Write/Read timeouts 0).
+flaky_tests — N/A: 5 runs, all deterministic — identical 263 checks, identical
+  14636000 ps, identical per-slave table, and $finish line predicted from the
+  source delta before every judged run.
+repeated_interrupts — N/A: no interrupts delivered to this agent.
+
+================================================================================
+CLEANUP
+================================================================================
+Scratch dir /tmp/task2-scratch-zhengs removed at the end of the todo
+(dma_wrapper.v.fixed, task2-rtl.patch, fixed.sha256, red-b.log,
+green-final.log).  No background jobs.  No leftover files in the repo (the
+sim/regression artifacts are the normal gitignored build products of a
+successful GREEN run and were intentionally left in place so the on-disk
+binary matches the GREEN log).
+
+================================================================================
+COMMIT
+================================================================================
+$ git add rtl/ip/dma_wrapper.v rtl/tb/apb_conformance_real_tb.sv rtl/ip/README.md docs/func-model-mmio-spec.md
+$ git add -f .omo/evidence/task-2-rtl-open-bugs-cleanup.txt
+$ git commit -m "fix(rtl/ip): dma_wrapper CMD write-only on the bus + drop STATUS read-clear (BUG-RTL-SOC-011)"
+Staged set is EXACTLY these 5 paths — no `git add .`, no `-A`, no `commit -a`,
+no stash, no push, no worktree.  The 7 protected dirty files are NOT staged.
+`docs/bugs/bugs-soc-rtl.md` is deliberately NOT touched (todo 5 owns the ledger):
+this commit's scope is 2 RTL behavior changes + TB retirement + 2 doc files.
+Post-commit invariant: `git status --porcelain | grep -cE '^ ?M'` == 8
+(7 protected + the plan checkbox).
+
+B11-RTL: cmd-write-only-status-no-clear
+B11-TB-RETIRED: dma-docdiv-0
+B11-GATE: GREEN doc_div_cnt==0 slv_docdivs[3]==0 exact-grep==0 gen-diff-empty

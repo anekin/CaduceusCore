@@ -20,8 +20,10 @@
 //                   STATUS is RO; the rest full-width RW; reset all 0.
 //                   Wrapper extension regs covered per their header tables
 //                   (MXU 0x30-0x48 and VECTOR 0x30-0x44 have NON-zero resets).
-//   DMA:            CMD STORES the written value and reads it back
-//                   (dma_wrapper.v:285/:128); STATUS RO; rest RW; reset 0.
+//   DMA:            CMD is write-only on the bus — readback 0
+//                   (dma_wrapper.v:128; the internal copy at :290 is retained
+//                   for the FSM); STATUS RO with NO read side effects
+//                   (a read does not clear DONE); rest RW; reset 0.
 //   DOORBELL:       20-slot ABI window 0x00-0x50 — 4 RW pointer regs
 //                   0x00-0x0C, LAST_STATUS@0x10, COMPLETION_STATUS[0..14]@
 //                   0x14-0x4C; the window top COMPLETION_STATUS[15]@0x50 and
@@ -72,6 +74,10 @@
 //                       authorizes rtl edits only for axi_crossbar.v +
 //                       npu_firmware.c.
 //   BUG-RTL-SOC-011 — rtl/ip/README DMA access classes (CMD W / STATUS R)
+//                     → RETIRED by the RTL fix: dma_wrapper CMD is now
+//                       write-only on the bus (readback 0, internal copy kept
+//                       for the FSM) and STATUS reads no longer clear DONE.
+//                       The DMA DOC-DIV row/mux entry were removed.
 //
 // pcie_dma_wrapper (AXI master M6, decoder port 7 @ 0x4000_7000) remains out
 // of APB-conformance scope; a live guard proves psel_o[7] never asserts.
@@ -671,9 +677,10 @@ module apb_conformance_real_tb;
         '{ACC_RW, ACC_WO, ACC_RO, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
         // VECTOR: same shape (vector_top.v:109-114/:144) + wrapper regs
         '{ACC_RW, ACC_WO, ACC_RO, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_WO, ACC_RO, ACC_RWM, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
-        // DMA: CTRL RW; CMD write-STORE (dma_wrapper.v:285/:128); STATUS RO
-        // (read-clears DONE :299-301, unobservable while idle); rest RW
-        '{ACC_RW, ACC_WOS, ACC_RO, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
+        // DMA: CTRL RW; CMD write-only on the bus (dma_wrapper.v:128 reads 0;
+        // the internal copy at :290 is retained for the FSM); STATUS RO with
+        // NO read side effects; rest RW
+        '{ACC_RW, ACC_WO, ACC_RO, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW, ACC_RW},
         // PCIE: CTRL field (mps stored, readback shifted to [3:1], bit3
         // unimplemented); STATUS RO; COMPLETER_ID RW[15:0]; BAR0/1 RO consts;
         // MSIX/IRQ_CTRL field-masked; 0x24 unmapped -> pslverr (:296)
@@ -750,7 +757,9 @@ module apb_conformance_real_tb;
     };
 
     // DOC-DIV flags: real behavior contradicts a DOCUMENTED spec (bug-filed)
-    //   DMA    CMD 0x04 — rtl/ip/README.md:35 says W, RTL stores+reads back
+    //   DMA    CMD 0x04 — RETIRED: the RTL now makes CMD write-only on the
+    //                    bus (readback 0; internal copy retained for the FSM),
+    //                    so the DMA row below is all-zero (no DOC-DIV any more).
     //   PCIE   CTRL 0x00 / BAR1_MASK 0x18 — RETIRED: header :258/:264 were
     //                    aligned to the RTL (comments only), so the PCIE row
     //                    below is all-zero (no DOC-DIV any more).
@@ -762,7 +771,7 @@ module apb_conformance_real_tb;
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
-        '{32'd0, 32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0}
@@ -790,7 +799,9 @@ module apb_conformance_real_tb;
         input integer idx;
         begin
             case (idx)
-                3: doc_bug = "BUG-RTL-SOC-011";  // DMA README access classes
+                // 3 (DMA) intentionally absent: BUG-RTL-SOC-011 was fixed in
+                // RTL (CMD is write-only on the bus, STATUS reads have no side
+                // effects), so the DMA slave has no DOC-DIV row or check any more.
                 // 4 (PCIE) intentionally absent: BUG-RTL-SOC-010 was retired
                 // doc-side (header :258/:264 aligned with the RTL), so the PCIE
                 // slave has no DOC-DIV row or check any more.
@@ -1244,7 +1255,7 @@ module apb_conformance_real_tb;
         $display("  Fails        : %0d   (unexpected — real RTL != REAL oracle)", fail_cnt);
         $display("  DOC-DIV      : %0d   (real RTL contradicts documented spec,",
                  doc_div_cnt);
-        $display("                 each bug-filed: BUG-RTL-SOC-010:retired / 011:active)");
+        $display("                 each bug-filed: BUG-RTL-SOC-010/011:retired)");
         $display("  Write timeouts: %0d   Read timeouts: %0d",
                  write_timeouts, read_timeouts);
         $display("  Per-slave coverage (checks / fails / doc-div / psel_o asserts):");
@@ -1272,7 +1283,7 @@ module apb_conformance_real_tb;
             $display("TASK-12 RESULT: PARTIAL: %0d/7 peripherals covered (declared)",
                      covered);
         end else begin
-            $display("APB_CONFORMANCE_REAL: GREEN (%0d/7 peripherals, %0d checks, %0d doc-div [BUG-RTL-SOC-010:retired / 011:active])",
+            $display("APB_CONFORMANCE_REAL: GREEN (%0d/7 peripherals, %0d checks, %0d doc-div [BUG-RTL-SOC-010/011:retired])",
                      covered, test_num, doc_div_cnt);
             $display("TASK-12 RESULT: GREEN (expected)");
         end

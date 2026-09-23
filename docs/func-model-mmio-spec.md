@@ -279,7 +279,7 @@ All SFU ops follow the same pattern. ROPE uses the extra `POS` register.
 |-------:|-----------|:------:|------------|
 | `0x00` | CTRL      | R/W    | [0]=linked_list_en, [1:2]=channel_mode |
 | `0x04` | CMD       | W      | [0]=START, [1]=ABORT |
-| `0x08` | STATUS    | R      | [0]=BUSY, [1]=DONE, [7:4]=active_channel |
+| `0x08` | STATUS    | R      | [0]=BUSY, [1]=DONE, [7:4]=active_channel; reads do not clear DONE |
 | `0x10` | CH0_SRC   | R/W    | DRAM source address (load) |
 | `0x14` | CH0_DST   | R/W    | SRAM destination address (load) |
 | `0x18` | CH0_SIZE  | R/W    | Transfer bytes for channel 0 |
@@ -307,7 +307,8 @@ All SFU ops follow the same pattern. ROPE uses the extra `POS` register.
 - `STATUS.BUSY` rises on the cycle after START and falls when the AXI read
   burst completes and the last write response is received.
 - `STATUS.DONE` pulses for one cycle at completion; `irq` fires if `IRQ_EN=1`.
-- `STATUS.DONE` clears on read (hardware auto-clear on `STATUS` read).
+- `STATUS.DONE` is **not** cleared by a read (no read side effects); the FSM
+  clears it when the next `CMD.START` is consumed.
 
 ### 5.3 DMA_ST Register Write Sequence (SRAM → DRAM)
 
@@ -354,7 +355,8 @@ All engines share the same completion-interrupt protocol:
    `popcount(PENDING & ENABLE) ≥ THRESHOLD` (default `THRESHOLD = 1`).
 5. Firmware interrupt handler:
    - Reads `INTC.PENDING` to identify the source(s).
-   - Reads the engine `STATUS` register (this auto-clears DMA `DONE`).
+   - Reads the engine `STATUS` register (DMA `DONE` is **not** cleared by the
+     read; the DMA FSM clears it on the next `CMD.START`).
    - Writes `INTC.ACK` with the matching bit(s) to clear the pending flag.
 
 > **RTL implication:** Engine `irq` must be a single-cycle pulse. `INTC.PENDING`
@@ -385,7 +387,7 @@ All engines share the same completion-interrupt protocol:
 | MXU    | [0] | [1] | [2] | Self-clearing after 1 cycle |
 | SFU    | [0] | [1] | —   | Self-clearing after 1 cycle |
 | Vector | [0] | [1] | —   | Self-clearing after 1 cycle |
-| DMA    | [0] | [1] | —   | Clears on read of STATUS |
+| DMA    | [0] | [1] | —   | FSM clears on next `CMD.START` (a read does NOT clear) |
 
 ### 7.3 Minimum Between-Write Delay
 

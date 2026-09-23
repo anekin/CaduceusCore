@@ -12,8 +12,10 @@
 //
 // Backward Compatible Register Map (matches npu-regmap.h npu_dma_t):
 //   0x00: CTRL        [0]=linked_list_en, [1:2]=channel_mode
-//   0x04: CMD         bit[0]=START, bit[1]=ABORT
+//   0x04: CMD         bit[0]=START, bit[1]=ABORT  (write-only on the bus;
+//                     internal copy retained for the FSM; reads return 0)
 //   0x08: STATUS      bit[0]=BUSY, bit[1]=DONE, [7:4]=active_channel
+//                     (read-only; an APB read does NOT clear DONE)
 //   0x0C: _pad0
 //   0x10: CH0_SRC     DRAM src addr
 //   0x14: CH0_DST     SRAM dst addr
@@ -117,15 +119,19 @@ module dma_wrapper #(
     // Write strobes
     wire reg_we = apb_write && (reg_idx <= 4'd14);
 
-    // Special handling: CMD.START is write-only, auto-cleared; STATUS is read-only with side effects
+    // Special handling: CMD is write-only on the bus (the internal copy is
+    // retained for the FSM); STATUS is read-only and reads have NO side effects.
     // CTRL (index 0) — read/write (writable fields only)
-    // CMD  (index 1) — write-only (auto-clear after one cycle)
-    // STATUS (index 2) — read-only (managed by FSM)
+    // CMD  (index 1) — write-only on the bus (readback 0); internal copy kept
+    //                  for the FSM (START/ABORT + self-clear)
+    // STATUS (index 2) — read-only, no read side effects (managed by FSM)
     // _pad0 (index 3) — read/write (unused)
 
-    // Read data mux
+    // Read data mux — CMD (index 1) reads 0 on the bus (ABI npu_dma_t.CMD is
+    // `wo`); dma_reg[1] itself is untouched and still drives the FSM.
     wire [31:0] reg_rdata;
-    assign reg_rdata = (reg_idx <= 4'd14) ? dma_reg[reg_idx] : 32'h0;
+    assign reg_rdata = (reg_idx == 4'd1)  ? 32'h0 :
+                       (reg_idx <= 4'd14) ? dma_reg[reg_idx] : 32'h0;
 
     //=========================================================================
     // Merged register-write + descriptor FSM
@@ -134,7 +140,6 @@ module dma_wrapper #(
     // (CMD) and dma_reg[2] (STATUS). Priority (highest → lowest):
     //   1. APB register write — overrides FSM for CMD
     //   2. FSM state update — manages CMD.START clear, STATUS BUSY/DONE
-    //   3. STATUS read-clear — clears DONE on STATUS read
     //=========================================================================
 
     //=========================================================================
@@ -293,11 +298,6 @@ module dma_wrapper #(
                         end
                     end
                 endcase
-            end
-
-            // ── 3. STATUS read-clear (overrides FSM's DONE=1 this cycle) ──
-            if (apb_read && reg_idx == 4'd2) begin
-                dma_reg[2][1] <= 1'b0;  // clear DONE on read
             end
         end
     end

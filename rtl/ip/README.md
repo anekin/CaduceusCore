@@ -33,7 +33,7 @@ SoC Phase 3-4 集成的外部开源 IP 及其封装。所有 IP 通过标准 AXI
 |:----:|------|:----:|------|
 | 0x00 | CTRL | RW | [0]=linked_list_en |
 | 0x04 | CMD | W | bit[0]=START, bit[1]=ABORT |
-| 0x08 | STATUS | R | bit[0]=BUSY, bit[1]=DONE |
+| 0x08 | STATUS | R | bit[0]=BUSY, bit[1]=DONE（读不清除 DONE） |
 | 0x10 | CH0_SRC | RW | DRAM 源地址 |
 | 0x14 | CH0_DST | RW | SRAM 目的地址 |
 | 0x18 | CH0_SIZE | RW | 传输字节数 |
