@@ -1,0 +1,405 @@
+================================================================================
+task-4-rtl-open-bugs-cleanup.txt
+Plan: .omo/plans/rtl-open-bugs-cleanup.md (todo 4)   Branch: rtl-open-bugs-cleanup
+Todo: 4 — regression on sz0001, STRICTLY SERIAL (conformance -> wrapper -> e2e mxu
+      single -> e2e mxu multi -> FM-SOC 33), with a mandatory force-clean of every
+      simv the four targets use.
+Nature: EVIDENCE-ONLY. No assertion, TB, RTL, script, Makefile or doc was modified
+        by this todo (see SCOPE below).
+================================================================================
+
+--------------------------------------------------------------------------------
+PROVENANCE
+--------------------------------------------------------------------------------
+git HEAD (at run time, unmodified): 73a59d65f010a95092bf91746733655bfa0ebcdc
+  subject: feat(rtl/wrapper): MXU wrapper AXI watchdog — sticky timeout + FSM
+           recovery (BUG-MXU-WDT-001)
+  commit time: 2026-09-23 20:36:48 +0800
+branch: rtl-open-bugs-cleanup
+VCS: vcs/vcs_2023.12sp2  ->  "Compiler version V-2023.12-SP2_Full64; Runtime version
+     V-2023.12-SP2_Full64"  (verified verbatim in every run log below)
+cocotb env: /NAS/Tools/anaconda3/envs/py3.11 (cocotb 1.9.0 / cocotbext-axi) — the
+     env that sim/regression/run_env.sh selects; all simulation on sz0001.
+Host: ALL compile+simulate work executed on sz0001 (192.168.0.11) only. The driver
+     ran on sz0002 purely as a sequencer; every VCS/simv process was on sz0001.
+     (wv_run_mxu.sh CANNOT be driven from sz0001 itself: its p9_ssh helper does
+     `ssh zhengs@192.168.0.11` and sz0001->sz0001 SSH is "Permission denied
+     (publickey,password)" — verified. Driving it from sz0002 is what the script
+     was written for, and is how todos 1-3 ran it.)
+Date / window: 2026-09-23 20:59:28 -> 22:12:19 +0800 (total 1 h 12 min 51 s)
+Serial discipline: the five steps below ran in ONE sequential driver, one sz0001
+     run at a time. No parallel VCS, no concurrent target. Leftover-process probe
+     after the last step: none.
+
+SOURCE BINDING (sha256 of the files under test at run time; all match HEAD)
+  rtl/wrapper/mxu_soc_wrapper.v          e82ab7cd015e9760ffa971fb4aa46b8911deb4e17a05edf6d03ba6a65923eec4
+  rtl/ip/dma_wrapper.v                   a42928cc67a628f7a1350e538699e6cde49b4a42de55a4b7e0d1e5fd0fa6b7bc
+                                         (== the fixed hash recorded by todo 2, unchanged)
+  rtl/tb/apb_conformance_real_tb.sv      f0186ac27d46f67e1789ee32d235319c533c79597d75f63fe59f82da97d4811b
+                                         (unchanged since 9b43075; its `$finish` is at source line 1291)
+  sim/tests/wrapper/test_mxu_wrapper.py  8b1f6dbfcf66d2c780e71e6963d5e8df10eef487170caeaa79ef5966555ab60a
+  scripts/wv_run_mxu.sh                  a2c94a7e43338cf79d9c0b291fc908893ca47486a89a42d22549dbdd32b332f4
+  firmware/build/npu_firmware.hex        6f261c6e35e65a190c887ba0dc50d604e2601e39b6aa99524ea5284a35165ec0
+
+EXACT COMMANDS (driver /tmp/t4work/t4_driver.sh, verbatim sequence)
+  (1) bash sim/regression/soc-verification-run.sh run_apb_conformance_real
+  (2) bash scripts/wv_run_mxu.sh
+  (3) bash sim/regression/soc-verification-run.sh run_e2e_mxu_single
+  (4) bash sim/regression/soc-verification-run.sh run_e2e_mxu_multi
+  (5) ssh zhengs@192.168.0.11 "cd $REPO && timeout -k 30 7200 bash sim/regression/run_fm_soc_all.sh"
+  Every step was wrapped in `timeout -k 30 <bound>` (900 / 1800 / 3600 / 3600 / 7500 s).
+  Wall clock measured per step; no step hit its bound.
+
+DURABLE LOGS (all gitignored, retained on disk)
+  build/evidence/t4-driver.log                        (full driver transcript)
+  build/evidence/t4-1-apb-conformance.log             (step 1 console)
+  build/evidence/t4-1-apb-conformance-run.log         (step 1 sim log, copy)
+  build/evidence/t4-2-wrapper-runner.log              (step 2 runner console)
+  build/evidence/t4-2-wv-mxu-<test>.log               (step 2 per-test cocotb logs, 6x)
+  build/evidence/t4-3-e2e-mxu-single.log / -run.log   (step 3)
+  build/evidence/t4-4-e2e-mxu-multi.log  / -run.log   (step 4)
+  build/evidence/t4-5-fm-soc.log                      (step 5 console, all 33 cases)
+  build/ibex_full_rtl/evidence/FM-SOC-*.log           (33 per-case logs + provenance header)
+  build/ibex_full_rtl/evidence/provenance-20260923T211838-169930.txt
+  sim/regression/compile_apb_real.log, build/evidence/wv-compile-tb_mxu_wrapper.log,
+  sim/regression/qwen_blk0_elab.log, build/ibex_full_rtl/elaborate.log (compile evidence)
+
+--------------------------------------------------------------------------------
+STEP 0 — FORCE-CLEAN OF EVERY simv USED BY THE FOUR TARGETS
+--------------------------------------------------------------------------------
+Why mandatory (inherited, re-confirmed): the APB-conformance Makefile rule lists the
+FLIST FILES as prerequisites, not the RTL inside them, so an RTL edit triggers NO
+rebuild; run_ibex_full_rtl.sh:49 only compiles when `[ ! -x "$SIMV" ]`; and
+soc-verification-run.sh only removes simv_soc_cocotb*. A stale binary can therefore
+produce a false PASS. Todo 2 measured exactly this trap.
+
+PRE-CLEAN INVENTORY (mtime / sha256 of what was on disk before removal)
+  sim/regression/simv_apb_conformance_real     2026-09-23 19:43:27
+                                               sha256 e01fae5596f533e1a1b3714bf7b68f1cc340bc1f2d31224197e7437b246e0c51
+                                               (todo-2 binary)
+  build/evidence/simv_tb_mxu_wrapper           2026-09-23 20:31:15
+                                               sha256 845b75f2b53f5abab502ff1843b451e5c5c6ea7fc0f398f35a607ce2af0ef81e
+                                               (todo-3 GREEN2 binary)
+  sim/regression/simv_soc_cocotb               ABSENT (mtime=ABSENT sha256=ABSENT — no binary at all)
+  build/ibex_full_rtl/simv_soc_ibex            2026-09-22 16:21:55
+                                               sha256 72199d8ae5d8d69bb2e281a840e61bb81a8de530e6dadf8ed8ccf08837ae96ae
+                                               (PRE-todo-1/2/3 binary — the headline stale state)
+  dirs present: sim/regression/simv_apb_conformance_real.daidir,
+                build/evidence/simv_tb_mxu_wrapper.daidir,
+                build/ibex_full_rtl/simv_soc_ibex.daidir, build/ibex_full_rtl/csrc
+  (sim/regression/csrc was already absent)
+  All three pre-existing binaries have sha256 != the rebuilt ones below, i.e. every
+  judged run used a binary that did not exist before this todo.
+
+REMOVED (10 paths, all four targets):
+  sim/regression/simv_apb_conformance_real + .daidir
+  build/evidence/simv_tb_mxu_wrapper + .daidir
+  sim/regression/simv_soc_cocotb + .daidir + sim/regression/csrc
+  build/ibex_full_rtl/simv_soc_ibex + .daidir + build/ibex_full_rtl/csrc
+
+POST-CLEAN VERIFICATION (verbatim from the driver log) — all 10 read ABSENT:
+  ABSENT sim/regression/simv_apb_conformance_real
+  ABSENT sim/regression/simv_apb_conformance_real.daidir
+  ABSENT build/evidence/simv_tb_mxu_wrapper
+  ABSENT build/evidence/simv_tb_mxu_wrapper.daidir
+  ABSENT sim/regression/simv_soc_cocotb
+  ABSENT sim/regression/simv_soc_cocotb.daidir
+  ABSENT sim/regression/csrc
+  ABSENT build/ibex_full_rtl/simv_soc_ibex
+  ABSENT build/ibex_full_rtl/simv_soc_ibex.daidir
+  ABSENT build/ibex_full_rtl/csrc
+
+SIMV REBUILT-PER-TARGET TABLE (the "which binary ran which target" answer)
+  target                     binary                                sha256
+  -------------------------- ------------------------------------- ----------------
+  run_apb_conformance_real   sim/regression/simv_apb_conformance_real
+                             74e341f8ec1aaeaf4987ea31f42b55a2b19822bcca80caaf82cc2d08426730a4  (mtime 21:02:58)
+  run_wrapper_mxu (script)   build/evidence/simv_tb_mxu_wrapper
+                             ea88fe29a13594824c69cd6b9d6f25a2f5f7ccee2464f1d8445c7ea928631714  (mtime 21:05:25)
+  run_e2e_mxu_single         sim/regression/simv_soc_cocotb
+                             69e7e4132f673ab412947303cfcfdb4621817446221e95c31fb9026e42a0b4da  (mtime 21:10:53)
+  run_e2e_mxu_multi          sim/regression/simv_soc_cocotb (rebuilt again)
+                             4abc9b17b1d6371907f9be4d28f966bd294ebe514c11c3356cf9c55012ffecd1  (mtime 21:16:07)
+  run_fm_soc_all (33 cases)  build/ibex_full_rtl/simv_soc_ibex
+                             22d5e773258b62f90cc535cbebacea0451c6b319e0d4422834ef7a38f2a209f8  (mtime 21:18:38)
+
+  Every mtime is LATER than the HEAD commit (2026-09-23 20:36:48) and every sha256
+  is different from the pre-clean binary's (ibex: 72199d8a… -> 22d5e773…), i.e. the
+  binaries really were rebuilt from the current sources.
+
+--------------------------------------------------------------------------------
+(1) REG-CONF — bash sim/regression/soc-verification-run.sh run_apb_conformance_real
+--------------------------------------------------------------------------------
+exit=0   wall=307 s   [soc-run] RESULT: PASS for run_apb_conformance_real
+FRESHNESS (two independent proofs)
+  a) compile evidence: sim/regression/compile_apb_real.log mtime 21:02:59, verbatim
+     "CPU time: 27.180 seconds to compile + 1.641 seconds to elab + .489 seconds to link";
+     simv mtime 21:02:58 (> HEAD 20:36:48).
+  b) source-derived invariant: the sim prints
+       $finish called from file "rtl/tb/apb_conformance_real_tb.sv", line 1291.
+     and line 1291 IS the `$finish;` of the current TB on disk (grep -n '$finish'
+     rtl/tb/apb_conformance_real_tb.sv -> 1291, 1327). A stale binary would print a
+     different line: this same report line read 1268 before todo 1's TB edit and
+     1280 after it, and todo 2's TB edit moved it to 1291 — so 1291 uniquely
+     identifies the post-todo-2 TB that is on disk now.
+
+MEASURED FINAL REPORT (verbatim from build/evidence/t4-1-apb-conformance-run.log)
+   apb_conformance_real_tb — Final Report
+  =====================================================
+    Total checks : 263
+    Passes       : 263
+    Fails        : 0   (unexpected — real RTL != REAL oracle)
+    DOC-DIV      : 0   (real RTL contradicts documented spec,
+                   each bug-filed: BUG-RTL-SOC-010/011:retired)
+    Write timeouts: 0   Read timeouts: 0
+    Per-slave coverage (checks / fails / doc-div / psel_o asserts):
+      MXU      : 51 / 0 / 0 / 172
+      SFU      : 22 / 0 / 0 / 76
+      VECTOR      : 37 / 0 / 0 / 130
+      DMA      : 43 / 0 / 0 / 146
+      PCIE      : 24 / 0 / 0 / 76
+      DOORBELL      : 60 / 0 / 0 / 345
+      INTC      : 16 / 0 / 0 / 52
+  =====================================================
+  APB_CONFORMANCE_REAL: GREEN (7/7 peripherals, 263 checks, 0 doc-div [BUG-RTL-SOC-010/011:retired])
+  TASK-12 RESULT: GREEN (expected)
+
+PER-SLAVE TABLE (measured, NOT hardcoded — copied above): MXU 51/0/0/172,
+  SFU 22/0/0/76, VECTOR 37/0/0/130, DMA 43/0/0/146, PCIE 24/0/0/76,
+  DOORBELL 60/0/0/345, INTC 16/0/0/52.
+  Cross-check against the source (why the seven rows sum to 253 while Total = 263):
+  51+22+37+43+24+60+16 = 253, and `grep -nE ',\s*-1\s*,' rtl/tb/apb_conformance_real_tb.sv`
+  returns exactly 10 check() calls tagged slv = -1 (the global/edge checks, e.g. the
+  Phase-2b 0x50/0x54 window edges at :1189-1199, the Phase-3 pslverr checks at
+  :1204-1208, and the end-of-test irq check at :1244) -> 253 + 10 = 263 = Total.
+  DOORBELL per-slave checks = 60 (matches the baseline; ACC_WOS->ACC_WO
+  re-bucketed a check without changing the count).
+
+GATE VALUES (all read from the log, not from terminal prose)
+  doc_div_cnt                    == 0   (line "DOC-DIV      : 0")
+  slv_docdivs[3] (DMA)           == 0   (DMA row doc-div column = 0)
+  slv_docdivs[4] (PCIE)          == 0   (PCIE row doc-div column = 0)
+  doorbell per-slave checks      == 60  (DOORBELL : 60 / 0 / 0 / 345)
+  Total checks                   == 263 (Passes 263, Fails 0)
+  grep -cE '\[DOC-DIV\].*BUG-RTL-SOC-01[01]'  -> 0
+    (the only literal "[DOC-DIV]" hit in the whole log is the policy header at
+     line 16: "DOC-DIV policy: real-vs-documented contradictions tagged [DOC-DIV]"
+     — not an emission; the retired summary string is the only place the two bug
+     IDs appear)
+  case-sensitive AND case-insensitive variants of the above grep both -> 0
+
+--------------------------------------------------------------------------------
+(2) REG-WRAPPER — bash scripts/wv_run_mxu.sh
+--------------------------------------------------------------------------------
+Why the script and not the make target: `soc-verification-run.sh run_wrapper_mxu` is
+broken in this tree (Makefile:1313-1315 recipe `@bash scripts/wv_run_mxu.sh` has no
+`cd $(REPO_ROOT) &&` prefix while the runner cds into sim/regression first ->
+"bash: scripts/wv_run_mxu.sh: No such file or directory" / make Error 127). The
+Makefile is outside this todo's scope, so the sanctioned equivalent — the script the
+target intends to run, and the historical invocation — was used. It routes all
+compile+simulate work to sz0001 through scripts/p9_lib/p9_sz0001.sh.
+
+exit=0   wall=164 s
+  NB: the script exits 0 even though two tests really FAIL — that is the same
+  false-positive detector described below (its FAIL_COUNT never increments because
+  the PASS pattern matches first), so the process exit code is NOT a usable verdict
+  for this runner. The judged verdict is the per-test cocotb parse.
+FRESHNESS: the script itself force-cleans (`rm -rf "${SIMV}.daidir" "${SIMV}"`) and
+  recompiles; build/evidence/wv-compile-tb_mxu_wrapper.log mtime 21:05:25, verbatim
+  "CPU time: 27.199 seconds to compile + 1.660 seconds to elab + .469 seconds to link";
+  simv mtime 21:05:25 (> HEAD 20:36:48).
+  Source-derived invariant: the watchdog test logs "[MXU_WRP_WDT] peak wdt_cnt =
+  999009" — a signal that exists only in the post-todo-3 RTL (todo 3 proved the
+  pre-RTL binary has no `wdt_cnt` object at all and logged
+  "[MXU_WRP_WDT-PROBE-UNAVAILABLE]").
+
+RUNNER VERDICT — QUOTED BUT **UNTRUSTED** (BLOCKER-2, todo 3): the runner printed
+  "[wv_run_mxu.sh] All 6 tests PASSED."
+  This is the known false-positive: its detector is `grep -qE 'TEST.*PASS'`, which
+  matches cocotb's own "** TESTS=1 PASS=0 FAIL=1 SKIP=0 **" summary line of a
+  FAILING test. It is recorded here only as the demonstration that the detector is
+  still broken; the verdicts below come from the cocotb per-test lines.
+
+TRUE PER-TEST VERDICTS (from `** sim.tests.wrapper.test_mxu_wrapper.<t>  <V> ... **`)
+  #  test                                   verdict  sim time (ns)
+  -  -------------------------------------- -------  -------------
+  1  test_apb_regmap_rw                     PASS          1090.00
+  2  test_mxu_preload_single_tile           PASS          1230.00
+  3  test_mxu_single_tile_compute           FAIL          2880.00   (pre-existing)
+  4  test_mxu_store_out_burst               PASS          2880.00
+  5  test_mxu_accumulate_mode               FAIL          2940.00   (pre-existing)
+  6  test_mxu_wrapper_watchdog_timeout      PASS      10100555.00   (new, todo 3)
+  -  -------------------------------------- -------  -------------
+     totals: 4 PASS / 2 FAIL
+  Per-test TESTS= lines confirm 1/1 each: rw PASS=1, preload PASS=1, single_tile
+  FAIL=1, store_out PASS=1, accumulate FAIL=1, watchdog PASS=1.
+
+NON-REGRESSION PROOF — the two failures are byte-identical to todo 3's signatures
+  FAIL #3 test_mxu_single_tile_compute @2880 ns (DEFECT-WRP-1: store-out drain
+  lags STATUS.DONE; last write burst row 10, first mismatch row 11):
+      MISMATCH: 3180/4096 elements differ, max_abs_diff=6400,
+      first_mismatches=[(11, 0), (11, 2), (11, 3), (11, 4), (11, 5)]
+      AssertionError: Golden comparison failed: 3180 mismatches
+    -> identical (character for character) to todo-3's RED/GREEN/GREEN2 signature.
+  FAIL #5 test_mxu_accumulate_mode @2940 ns (DEFECT-WRP-2: X on m_axi_wdata):
+      File ".../cocotbext/axi/axi_slave.py", line 154, in _process_write
+        raise ValueError(
+      ValueError: Unresolvable bit in binary string: 'x'. Set the COCOTB_RESOLVE_X
+      environment variable to configure how special values are resolved.
+    -> identical to todo-3's RED/GREEN/GREEN2 signature (same frame, same message).
+  Both are pre-existing (present before the watchdog RTL change, unchanged by it)
+  and are NOT regressions of this plan. The new watchdog test PASSES and the
+  watchdog did not perturb the two legitimate load/store tests.
+
+--------------------------------------------------------------------------------
+(3)+(4) REG-E2EMXU — run_e2e_mxu_single, run_e2e_mxu_multi
+--------------------------------------------------------------------------------
+(3) bash sim/regression/soc-verification-run.sh run_e2e_mxu_single
+    exit=0  wall=311 s  ->  "[soc-run] RESULT: PASS for run_e2e_mxu_single"
+    per-test cocotb line:
+      ** cocotb_bridge.test_e2e_mxu_single_tile   PASS   12796.50   2.11   6054.68 **
+      ** TESTS=1 PASS=1 FAIL=0 SKIP=0 **
+    bridge line: "[e2e_mxu_single_tile] PASS in 287 cycles"
+    FRESHNESS: simv_soc_cocotb sha256 69e7e4132f673ab412947303cfcfdb4621817446221e95c31fb9026e42a0b4da,
+      mtime 21:10:53 (> HEAD 20:36:48); compile log qwen_blk0_elab.log verbatim
+      "CPU time: 30.998 seconds to compile + 1.652 seconds to elab + .514 seconds to link";
+      CLEAN=1 (default) removed the stale simv before the build, and the driver had
+      already removed it in STEP 0 — the binary did not exist before this step.
+
+(4) bash sim/regression/soc-verification-run.sh run_e2e_mxu_multi
+    exit=0  wall=313 s  ->  "[soc-run] RESULT: PASS for run_e2e_mxu_multi"
+    per-test cocotb line:
+      ** cocotb_bridge.test_e2e_mxu_multi_tile   PASS   3934.50   1.36   2883.89 **
+      ** TESTS=1 PASS=1 FAIL=0 SKIP=0 **
+    FRESHNESS: simv_soc_cocotb sha256 4abc9b17b1d6371907f9be4d28f966bd294ebe514c11c3356cf9c55012ffecd1,
+      mtime 21:16:07 (> HEAD); compile log verbatim
+      "CPU time: 33.110 seconds to compile + 1.750 seconds to elab + .497 seconds to link";
+      CLEAN=1 removed the step-3 binary and rebuilt it from scratch, so this is a
+      second independent full compile of the same sources. The two simv sha256s
+      differ even though the sources are identical (VCS embeds build metadata —
+      build id/timestamp — in the image); both were built from the same current RTL
+      inside this run window, so neither can be the stale pre-todo binary.
+
+--------------------------------------------------------------------------------
+(5) REG-FMSOC — bash sim/regression/run_fm_soc_all.sh (33 cases, sz0001)
+--------------------------------------------------------------------------------
+exit=0   wall=3276 s (54 min 36 s)   bound was 7200 s (not hit)
+MEASURED SUMMARY (verbatim)
+  [SUMMARY] Full RTL + Ibex (FM-SOC regression)
+    PASS:    25
+    SKIP:    8
+    FAIL:    0
+    TIMEOUT: 0
+  [SUMMARY] PASS=25 SKIP=8 FAIL=0 TIMEOUT=0 TOTAL=33
+  (the "[ERROR] case accounting mismatch" line was NOT printed -> the runner's own
+   TOTAL==N_CASES guard matched 33/33; the script exits 1 iff FAIL!=0 or TIMEOUT!=0)
+
+FRESHNESS (three independent proofs)
+  a) STEP 0 removed the pre-todo-1/2/3 binary (72199d8a…) — the run had to compile.
+  b) compile evidence: build/ibex_full_rtl/elaborate.log mtime 21:18:38, verbatim
+     "CPU time: 32.024 seconds to compile + 1.701 seconds to elab + .513 seconds to link";
+     simv mtime 21:18:38 (> HEAD 20:36:48), sha256 22d5e773… != pre-clean 72199d8a….
+  c) hash-bound provenance: the runner wrote
+     build/ibex_full_rtl/evidence/provenance-20260923T211838-169930.txt with
+       provenance_git_commit=73a59d65f010a95092bf91746733655bfa0ebcdc
+       provenance_simv_sha256=22d5e773258b62f90cc535cbebacea0451c6b319e0d4422834ef7a38f2a209f8
+       provenance_flist_sha256=726270766511a04f3920f946d03738083183a1b54d0553f6d8a6353ad3659cb3
+       provenance_driver_sha256=342b8d86cc82fc322b0e11df485c159b5ff6b4b9fb8e2fcefbe0a38e964eb546
+       provenance_firmware_sha256=6f261c6e35e65a190c887ba0dc50d604e2601e39b6aa99524ea5284a35165ec0
+       provenance_golden_sha256=6238b066436a48092db3ab2dcd6f43a537f1751bbba4c02d2ce430277a80f552
+       provenance_checkpoint_sha256=e568aacac4f8fff64128ef1a959119f551436c67ffe7698238dc8d3ef10eb6f8
+       provenance_tool_versions=python=3.11.9;vcs=vcs script version : V-2023.12;cocotb=1.9.0;...
+     and every one of the 33 case logs starts with this header
+     (`provenance| provenance_simv_sha256=22d5e773…` verified in FM-SOC-011.log and
+     FM-SOC-032.log), so each verdict is bound to the binary that produced it.
+
+PER-CASE CLASSIFICATION (33/33, verbatim runner lines)
+  PASS (25): FM-SOC-001..013, FM-SOC-018, FM-SOC-020, FM-SOC-024..032, FM-SOC-10X
+  SKIP (8):  FM-SOC-014, 015, 016, 017, 019, 021, 022, 023
+  FAIL (0):  -
+  TIMEOUT (0): -
+  Notable: FM-SOC-011 PASSES — this is the DMA case and the one most exposed to
+  todo 2's dma_wrapper change (CMD write-only on the bus + no STATUS read-clear);
+  FM-SOC-032 and FM-SOC-10X (the two longest/full-chain cases) also PASS.
+
+8 SKIP IDs VERIFIED AGAINST THE BASELINE (.omo/evidence/task-3-bug-009-doorbell-fix.txt)
+  baseline set: FM-SOC-014/015/016/021/022/023 (superseded) + FM-SOC-017/019 (N/A)
+  this run, ID by ID, with the classification string grepped out of each case log:
+    FM-SOC-014  "superseded by FM-SOC-027/032/10X"
+    FM-SOC-015  "superseded by FM-SOC-027/032/10X"
+    FM-SOC-016  "superseded by FM-SOC-027/032/10X"
+    FM-SOC-017  "skipped: direct APB/AXI case not applicable to Ibex RTL mode"
+    FM-SOC-019  "skipped: direct APB/AXI case not applicable to Ibex RTL mode"
+    FM-SOC-021  "superseded by FM-SOC-027/032/10X"
+    FM-SOC-022  "superseded by FM-SOC-027/032/10X"
+    FM-SOC-023  "superseded by FM-SOC-027/032/10X"
+  => ID-for-ID identical to the baseline set; no case was silently skipped and no
+     case that PASSED at the baseline now FAILs. Zero regression from todo 2 (DMA)
+     and todo 3 (MXU wrapper watchdog).
+  WATCHDOG THRESHOLD MARGIN (the plan's second purpose for this step): the whole
+  firmware chain (DMA/MXU) is clean, so the 1,000,000-cycle watchdog was NOT
+  false-tripped by any legitimate wait in any of the 25 executed cases.
+
+--------------------------------------------------------------------------------
+SCOPE / CLEANUP RECEIPT
+--------------------------------------------------------------------------------
+  git status --porcelain M-set before and after this todo is IDENTICAL:
+    M .omo/evidence/task-0-signoff-v3-runner.txt
+    M .omo/evidence/task-20-uncertainty-kpis.json
+    M .omo/evidence/task-23-perf-spec-ci.txt
+    M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+    M .omo/notepads/phase6-rtl-verification/learnings.md
+    M .omo/plans/rtl-open-bugs-cleanup.md          (plan file; the 8th M line)
+    M build/evidence/fm-cv-chain.txt
+    M build/evidence/w3-4-mobilenetv3-fm.txt
+  i.e. the 7 protected files + the plan file. None of the 7 protected files was
+  touched; none of them was staged.
+  Two TRACKED artifacts are rewritten as a side effect of the wrapper runner and
+  were restored to HEAD with `git checkout --` (todo-3 disclosure, same handling):
+    build/evidence/wrap-mxu-regression.txt   (the untrusted runner summary)
+    results.xml                              (cocotb writes it into the repo root)
+  `git checkout --` rc=0; the M-set above is the post-restore state.
+  No RTL/TB/Makefile/script/doc was modified by this todo. `git diff --name-only`
+  against HEAD is empty for rtl/, sim/, scripts/, firmware/, spec/, gen/, docs/.
+  Scratch: the driver lived in /tmp/t4work/ (outside the repo); the gitignored
+  build/evidence/t4-*.log files are the retained evidence. The gitignored repo-root
+  `csrc/` (`.gitignore:16 csrc/`) was touched by the e2e-mxu Makefile recipe's
+  default -Mdir: 59 of its 578 files were rewritten, but the directory PRE-DATES
+  this todo (files from 2026-07-23) — it is a pre-existing incremental-compile cache
+  and was deliberately left in place; no tracked file affected.
+  No dangling background jobs: the driver exited; a post-run pgrep on sz0001 for
+  simv_soc_ibex|simv_apb_conformance|simv_soc_cocotb|simv_tb_mxu returned nothing.
+
+--------------------------------------------------------------------------------
+DEVIATIONS / DISCLOSURES (explicit)
+--------------------------------------------------------------------------------
+  D1. Step 2 was run as `bash scripts/wv_run_mxu.sh` instead of the mandated
+      `soc-verification-run.sh run_wrapper_mxu`, because that make target is broken
+      in this tree (Error 127, Makefile:1313-1315 missing `cd $(REPO_ROOT) &&`).
+      The Makefile is outside this todo's evidence-only scope, so it was NOT fixed.
+      This is the same sanctioned bypass todo 3 used, and the reason it is recorded
+      here rather than silently absorbed.
+  D2. The wrapper runner's verdict is a known false-positive detector; its "All 6
+      tests PASSED" is quoted ONLY as evidence that the detector is still broken.
+      The judged verdict is the per-test cocotb line parse (4 PASS / 2 FAIL).
+  D3. The plan's original aggregate wrapper gate (all six green) is NOT met and is
+      deliberately not spelled out here; the task-defined gate for this todo is
+      "4 pass + 2 pre-existing failures", which IS met. The two failures are
+      pre-existing defects (DEFECT-WRP-1/-2) with signatures byte-identical to
+      todo 3's, so they are not regressions and no fix was attempted (evidence-only
+      todo; a fix would be an out-of-scope RTL/test edit).
+  D4. `run_e2e_mxu_multi` re-compiled simv_soc_cocotb from scratch (CLEAN=1), so
+      the two e2e targets used two different binaries (hashes differ by build id)
+      both built from the same, current sources. No stale reuse anywhere.
+  D5. The FM-SOC run was driven over ssh from sz0002 with an outer 7500 s bound and
+      an inner 7200 s bound; it finished in 3276 s, so neither bound fired.
+  No other deviation. No gate was relaxed, no case skipped, no PASS inferred from
+  terminal text.
+
+--------------------------------------------------------------------------------
+JUDGMENT LINES
+--------------------------------------------------------------------------------
+REG-CONF: GREEN-docdiv-0
+REG-WRAPPER: 4-pass-2-preexisting-fail
+REG-E2EMXU: single-pass, multi-pass
+REG-FMSOC: 25-pass-8-skip-0-fail-0-timeout-total-33
