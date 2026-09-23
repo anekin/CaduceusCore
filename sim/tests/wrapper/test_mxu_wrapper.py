@@ -3,21 +3,25 @@ test_mxu_wrapper.py -- MXU SoC Wrapper Functional Tests
 =========================================================================
 Task: wrapper-level-verification / T4 (Wave 1)
 
-5 cocotb tests covering:
+7 cocotb tests covering:
   1. test_apb_regmap_rw         -- native MMIO 0x00-0x28 + wrapper MMIO 0x30-0x48
   2. test_mxu_preload_single_tile -- weight 2048B + act 4096B preload, PL FSM verification
   3. test_mxu_single_tile_compute -- preload + START + store-out + golden comparison
   4. test_mxu_store_out_burst    -- 2048-bit to 4x512-bit burst geometry
   5. test_mxu_accumulate_mode    -- K=128 cross-tile accumulate
+  6. test_bug007_consecutive_dispatch -- BUG-007 back-to-back dispatch
+     (driven by scripts/wv_run_bug007.sh, NOT by scripts/wv_run_mxu.sh)
+  7. test_mxu_wrapper_watchdog_timeout -- BUG-MXU-WDT-001 unbounded AXI wait
 
-Uses AxiRam (NOT axi_sparse_slave.v) for functional tests.
+Tests 1-5 model the AXI slave with AxiRam (NOT axi_sparse_slave.v); test 7 drives
+a deliberately non-responding slave so the wrapper's AXI wait never completes.
 Does NOT modify any RTL file.
-Does NOT test watchdog (BUG-MXU-WDT-001).
 Does NOT instantiate crossbar/DRAM/CPU.
 """
 
 import struct
 import sys
+import time
 from pathlib import Path
 
 # Make sim/ importable for GoldenMXU
@@ -29,6 +33,7 @@ import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles, RisingEdge, Timer
 from cocotb.binary import BinaryValue
+from cocotb.utils import get_sim_time
 
 try:
     from tests.wrapper.wrapper_common import (
@@ -195,7 +200,13 @@ async def _preload_and_run(
     await write_reg(apb, 0, OFF_WRP_CMD, 0x0000_0001)
 
     # 4. Wait for WRP_STATUS[0] = LOAD_DONE
-    await wait_done(apb, 0, OFF_WRP_STATUS, done_bit=0, timeout_cycles=timeout)
+    # NOTE (pre-existing harness gap, repaired here): wait_done() falls back to
+    # `apb._bus.clk` when clk is omitted, and cocotbext-axi 0.1.28's ApbMaster
+    # exposes no `_bus` -> AttributeError.  test_sfu_wrapper.py /
+    # test_vector_wrapper.py always pass clk=; this file did not at these three
+    # call sites.  Passing dut.clk changes no assertion, only the clock source.
+    await wait_done(apb, 0, OFF_WRP_STATUS, done_bit=0, timeout_cycles=timeout,
+                    clk=dut.clk)
     dut._log.info("Preload complete (WRP_STATUS.LOAD_DONE=1)")
 
     # 5. Set MXU MMIO: CTRL, DIM0, DIM1
@@ -215,7 +226,8 @@ async def _preload_and_run(
     await write_reg(apb, 0, OFF_CMD, 0x0000_0001)
 
     # 7. Wait STATUS.DONE (done_bit=1 = STATUS[1])
-    await wait_done(apb, 0, OFF_STATUS, done_bit=1, timeout_cycles=timeout)
+    await wait_done(apb, 0, OFF_STATUS, done_bit=1, timeout_cycles=timeout,
+                    clk=dut.clk)
     dut._log.info("STATUS.DONE asserted -- compute complete")
 
     # 8. Read store-out from AxiRam (rows of 64*4 = 256 bytes each)
@@ -334,7 +346,8 @@ async def test_mxu_preload_single_tile(dut):
     await write_reg(apb, 0, OFF_WRP_CMD, 0x0000_0001)
 
     # Wait for WRP_STATUS.LOAD_DONE
-    status = await wait_done(apb, 0, OFF_WRP_STATUS, done_bit=0, timeout_cycles=50000)
+    status = await wait_done(apb, 0, OFF_WRP_STATUS, done_bit=0, timeout_cycles=50000,
+                             clk=dut.clk)
     dut._log.info(f"WRP_STATUS after preload: {status:#x}")
 
     # dbg_state should still be IDLE (no compute started)
@@ -680,3 +693,153 @@ async def test_bug007_consecutive_dispatch(dut):
             f"BUG-007 MXU consecutive dispatch: "
             f"{len(gaps) - accepted} START(s) swallowed"
         )
+
+
+# ==========================================================================
+# Test 7 -- BUG-MXU-WDT-001: wrapper AXI watchdog (sticky timeout + recovery)
+# ==========================================================================
+
+# Must match the RTL localparam WDT_TIMEOUT in rtl/wrapper/mxu_soc_wrapper.v.
+WDT_TIMEOUT = 1_000_000
+
+# Extra cycles past the RTL threshold before WRP_STATUS is sampled, so the
+# assertion cannot race the final counter increment.
+WDT_MARGIN = 10_000
+
+# Cycles shaved off the threshold for the single watchdog-counter sample that
+# reports the peak value (one read in total -- never per-cycle polling).
+WDT_PRESAMPLE = 1_000
+
+PL_LOAD_W_AR = 1
+
+
+@cocotb.test()
+async def test_mxu_wrapper_watchdog_timeout(dut):
+    """BUG-MXU-WDT-001: an unbounded AXI wait must trip the wrapper watchdog.
+
+    No AxiRam here -- every slave-side handshake is driven low and never
+    changes, so a TRIG_LOAD parks the pre-load sequencer in PL_LOAD_W_AR
+    forever.  After the fixed threshold the watchdog must latch the sticky
+    WRP_STATUS[1] (bit0 stays clear), put the wrapper PL FSM back to IDLE,
+    drop m_axi_arvalid and assert irq; a later WRP_CMD write with bit0=0 must
+    then clear the sticky bit.
+
+    The TB drives clk itself (always #5 clk = ~clk), so no cocotb Clock is
+    started: a second driver would add ~2 Python wake-ups per cycle across the
+    >1e6-cycle wait.  The 10 ns period is asserted below.
+    """
+    t_test_start = time.time()
+
+    # Edge-to-edge window: the first rising edge is at t=5 ns, so only the
+    # delta between two 10-cycle windows is exactly 100 ns.
+    await ClockCycles(dut.clk, 10)
+    ns_before = get_sim_time(units="ns")
+    await ClockCycles(dut.clk, 10)
+    ns_after = get_sim_time(units="ns")
+    assert ns_after - ns_before == 100, (
+        f"TB clock is not 10 ns/cycle: 10 cycles took {ns_after - ns_before} ns"
+    )
+
+    apb = create_apb_master(dut)
+
+    async def _dead_axi_slave():
+        dut.m_axi_arready.value = 0
+        dut.m_axi_rvalid.value = 0
+        dut.m_axi_rdata.value = 0
+        dut.m_axi_rresp.value = 0
+        dut.m_axi_rlast.value = 0
+        dut.m_axi_rid.value = 0
+        dut.m_axi_awready.value = 0
+        dut.m_axi_wready.value = 0
+        dut.m_axi_bvalid.value = 0
+        dut.m_axi_bresp.value = 0
+        dut.m_axi_bid.value = 0
+
+    cocotb.start_soon(_dead_axi_slave())
+    await ClockCycles(dut.clk, 5)
+
+    assert dut.m_axi_arready.value.integer == 0, "dead slave: arready not low"
+    assert dut.m_axi_rvalid.value.integer == 0, "dead slave: rvalid not low"
+    assert dut.m_axi_awready.value.integer == 0, "dead slave: awready not low"
+    assert dut.m_axi_wready.value.integer == 0, "dead slave: wready not low"
+
+    await write_reg(apb, 0, OFF_WRP_WEIGHT_BASE, WGT_BASE)
+    await write_reg(apb, 0, OFF_WRP_ACT_BASE, ACT_BASE)
+    await write_reg(apb, 0, OFF_WRP_OUT_BASE, OUT_BASE)
+    await write_reg(apb, 0, OFF_WRP_CMD, 0x0000_0001)
+    await ClockCycles(dut.clk, 10)
+
+    pl_state_stuck = dut.u_dut.pl_state.value.integer
+    assert pl_state_stuck == PL_LOAD_W_AR, (
+        f"PL FSM not parked in PL_LOAD_W_AR({PL_LOAD_W_AR}) after TRIG_LOAD: "
+        f"pl_state={pl_state_stuck}"
+    )
+    assert dut.m_axi_arvalid.value.integer == 1, "wrapper did not assert AR"
+    pre_irq = dut.irq.value.integer
+    dut._log.info(
+        f"[MXU_WRP_WDT] armed: pl_state={pl_state_stuck} (PL_LOAD_W_AR), "
+        f"arvalid=1, arready=0, irq={pre_irq}, threshold={WDT_TIMEOUT} cycles"
+    )
+
+    t_wait_start = time.time()
+    await ClockCycles(dut.clk, WDT_TIMEOUT - WDT_PRESAMPLE)
+    try:
+        peak_cnt = dut.u_dut.wdt_cnt.value.integer
+        dut._log.info(
+            f"[MXU_WRP_WDT] peak wdt_cnt = {peak_cnt} (threshold {WDT_TIMEOUT}, "
+            f"sampled {WDT_PRESAMPLE} cycles early)"
+        )
+    except Exception as exc:  # only the pre-RTL binary lacks this register
+        peak_cnt = None
+        dut._log.warning(f"[MXU_WRP_WDT-PROBE-UNAVAILABLE] wdt_cnt not visible: {exc}")
+
+    await ClockCycles(dut.clk, WDT_PRESAMPLE + WDT_MARGIN)
+    wait_s = time.time() - t_wait_start
+    dut._log.info(
+        f"[MXU_WRP_WDT] {WDT_TIMEOUT + WDT_MARGIN} cycles of unbounded AXI wait "
+        f"took {wait_s:.1f} s wall-clock (peak_cnt={peak_cnt})"
+    )
+
+    status = await read_reg(apb, 0, OFF_WRP_STATUS)
+    dut._log.info(f"[MXU_WRP_WDT] WRP_STATUS = {status:#010x} (expect bit1 set)")
+    assert (status & 0x2) != 0, (
+        f"WRP_STATUS[1] (wdt_timeout) not set after {WDT_TIMEOUT} cycles of "
+        f"unbounded AXI wait: WRP_STATUS={status:#010x}"
+    )
+    assert (status & 0x1) == 0, (
+        f"WRP_STATUS[0] (LOAD_DONE) must stay clear for an aborted pre-load: "
+        f"WRP_STATUS={status:#010x}"
+    )
+
+    irq_val = dut.irq.value.integer
+    assert irq_val == 1, f"irq not asserted on watchdog timeout (irq={irq_val})"
+
+    pl_state_after = dut.u_dut.pl_state.value.integer
+    assert pl_state_after == 0, (
+        f"wrapper PL FSM not back to IDLE after timeout (pl_state={pl_state_after})"
+    )
+
+    arvalid_after = dut.m_axi_arvalid.value.integer
+    assert arvalid_after == 0, (
+        f"AXI wait not released after timeout (m_axi_arvalid={arvalid_after})"
+    )
+
+    wdt_cnt_after = dut.u_dut.wdt_cnt.value.integer
+    assert wdt_cnt_after == 0, (
+        f"watchdog counter not cleared once the FSM made progress "
+        f"(wdt_cnt={wdt_cnt_after})"
+    )
+
+    await write_reg(apb, 0, OFF_WRP_CMD, 0x0000_0000)
+    status2 = await read_reg(apb, 0, OFF_WRP_STATUS)
+    dut._log.info(f"[MXU_WRP_WDT] WRP_STATUS after WRP_CMD=0x0 = {status2:#010x}")
+    assert (status2 & 0x2) == 0, (
+        f"sticky wdt_timeout not cleared by a WRP_CMD write with bit0=0: "
+        f"WRP_STATUS={status2:#010x}"
+    )
+    assert (status2 & 0x1) == 0, f"unexpected LOAD_DONE after ack: {status2:#010x}"
+
+    dut._log.info(
+        f"TEST PASSED: test_mxu_wrapper_watchdog_timeout "
+        f"(total {time.time() - t_test_start:.1f} s wall-clock)"
+    )

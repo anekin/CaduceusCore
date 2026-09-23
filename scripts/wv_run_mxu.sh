@@ -23,6 +23,7 @@ TESTS=(
   "test_mxu_single_tile_compute"
   "test_mxu_store_out_burst"
   "test_mxu_accumulate_mode"
+  "test_mxu_wrapper_watchdog_timeout"
 )
 
 # ══════════════════════════════════════════════════════════════════════════════
