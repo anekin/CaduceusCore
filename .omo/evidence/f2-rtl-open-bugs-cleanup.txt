@@ -1,0 +1,178 @@
+================================================================================
+F2 — CODE QUALITY REVIEW EVIDENCE
+Branch: rtl-open-bugs-cleanup   Base: main @ 8ba7af1   HEAD: 1af5c70
+Reviewer: F2 (independent; re-derived from diffs, no summary trusted)
+Date: 2026-09-23
+================================================================================
+
+COMMANDS / RAW OUTPUTS USED
+--------------------------------------------------------------------------------
+[0] Scope
+$ GIT_MASTER=1 git diff --stat 8ba7af1..HEAD
+ .omo/* (drafts, plans, evidence task-0..5) | README.md | docs/bugs/*.md (3)
+ docs/func-model-mmio-spec.md | rtl/ip/README.md | rtl/ip/dma_wrapper.v (24 +-)
+ rtl/ip/pcie_ep_wrapper.v (4 +-) | rtl/tb/apb_conformance_real_tb.sv (63 +-)
+ rtl/wrapper/mxu_soc_wrapper.v (99 +-) | scripts/wv_run_mxu.sh (1 +)
+ sim/tests/wrapper/test_mxu_wrapper.py (175 +-)          20 files, +2773/-80
+
+$ GIT_MASTER=1 git log --oneline 8ba7af1..HEAD
+ 1af5c70 docs(bugs): BUG-RTL-SOC-010/011 + BUG-MXU-WDT-001 Fixed
+ 46b17cf test(cleanup): conformance doc-div-0 + wrapper + e2e mxu + FM-SOC 33 evidence
+ 73a59d6 feat(rtl/wrapper): MXU wrapper AXI watchdog (BUG-MXU-WDT-001)
+ 9b43075 fix(rtl/ip): dma_wrapper CMD write-only on the bus (BUG-RTL-SOC-011)
+ 2e468ac docs(rtl/ip): align pcie_ep_wrapper header with RTL (BUG-RTL-SOC-010)
+ 6c13c48 chore(omo): P0 baseline snapshot
+
+[1] PCIe file MUST be comment-only
+$ GIT_MASTER=1 git diff -U0 8ba7af1..HEAD -- rtl/ip/pcie_ep_wrapper.v \
+    | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' | grep -vE '^[+-]\s*//'
+(no output; grep exit=1)   => 0 non-comment changed lines.  PASS
+Full diff = 2 hunks, both inside the module header register-map comment:
+  - //   0x00    RW      PCIE_CTRL          [2:0]=max_payload_size, [3]=enable
+  + //   0x00    RW      PCIE_CTRL          [2:0]=max_payload_size ([3]=enable NOT implemented; reads 0)
+  - //   0x18    RO      PCIE_BAR1_MASK     0x8000_0000 (2 GB, bit31=writable)
+  + //   0x18    RO      PCIE_BAR1_MASK     0x8000_0000 (2 GB, RO constant; bit31 not writable)
+
+[2] DMA wrapper — EXACTLY two behavior changes + comment sync
+$ GIT_MASTER=1 git diff 8ba7af1..HEAD -- rtl/ip/dma_wrapper.v   (4 hunks)
+  H1 header comment (CMD/STATUS doc sync)                          -- comment
+  H2 :133 read mux  reg_rdata = (reg_idx == 4'd1) ? 32'h0 : ...    -- BEHAVIOR #1
+  H3 comment "3. STATUS read-clear" line removed from priority list-- comment
+  H4 deleted `if (apb_read && reg_idx == 4'd2) dma_reg[2][1] <= 1'b0;` -- BEHAVIOR #2
+=> no third behavior change.
+
+Internal storage INTACT:
+$ grep -n "dma_reg\[1\]" rtl/ip/dma_wrapper.v
+ 186: dma_reg[1] <= 32'h0;        (reset)
+ 214: dma_reg[1][0] <= 1'b0;      (START consumed / self-clear)
+ 290: dma_reg[1] <= pwdata;       (APB write)
+ 330: cmd_start_d <= dma_reg[1][0];   332: cmd_start_rise = dma_reg[1][0] && !cmd_start_d
+$ grep -n "apb_read" rtl/ip/dma_wrapper.v
+ 114: wire apb_read = psel && penable && !pwrite;   310: assign prdata = apb_read ? reg_rdata : 32'h0;
+=> no dangling apb_read consumer; FSM still sees CMD.  PASS
+
+[3] MXU wrapper watchdog
+$ GIT_MASTER=1 git diff --stat 8ba7af1..HEAD -- rtl/mxu/ rtl/soc/ rtl/intc/ rtl/sfu/ rtl/vector/
+(empty)  => zero changes outside the wrapper.  PASS
+irq: `wire mxu_irq;` :319, mxu_top .irq(mxu_irq) :341, `assign irq = mxu_irq | wrp_wdt_timeout;` :446.
+Counter rule :411-431 (pl_axi_wait :414 = 4 PL wait states; so_axi_wait :698 = 4 SO wait states;
+wdt_fire :418 = wdt_axi_wait && cnt == 1e6-1; cnt cleared when !wdt_axi_wait).
+Recovery gated on the wait flag: :455 `else if (wdt_fire && pl_axi_wait)` / :710 `&& so_axi_wait`
+=> PL_READY unreachable from the recovery branch; wrp_load_done not written there (:463 clears it
+in PL_IDLE next cycle).  Sticky clear :437-442 `wrp_cs && pwrite && (paddr == OFF_WRP_CMD)`.
+Status readback :292 `{30'd0, wrp_wdt_timeout, wrp_load_done}`.
+Threshold margin claim verified: sim/cocotb_bridge.py:2378-2382 `max(50000, macs//64 + 20000)`;
+2048*2048//64 + 20000 = 85,536 -> 1e6 = 11.7x.
+Empirical no-false-trip: task-3 `NO-FALSE-TRIP: PASS`; task-4 25 FM-SOC cases + both e2e-mxu PASS.
+
+[4] Conformance TB
+$ GIT_MASTER=1 git diff -U0 8ba7af1..HEAD -- rtl/tb/apb_conformance_real_tb.sv | grep -E '^@@'
+ @@ -23,2 +23,4 @@  @@ -45 +47,3 @@  @@ -49,4 +53,4 @@  @@ -64,0 +69,7 @@  @@ -65,0 +77,4 @@
+ @@ -665,3 +680,4 @@  @@ -720 +736 @@  @@ -744,3 +760,6 @@  @@ -755,2 +774,2 @@
+ @@ -783,2 +802,6 @@  @@ -1235 +1258 @@  @@ -1263 +1286 @@
+=> none inside check() (def :925) / check_docdiv() (def :949); MAX_REGS (:645) unchanged.
+Removed mux arms safe:
+$ grep -n "ACC_WOS\|ACC_DOCDIVR" rtl/tb/apb_conformance_real_tb.sv
+ 122/125 declarations; 1051/1128/1163 case arms ONLY.
+=> no REG_ACC row selects ACC_WOS or ACC_DOCDIVR (DMA row now ACC_WO; PCIE row
+   ACC_FIELD/ACC_RO/ACC_RWM/ACC_CONST/ACC_UNMAP) => doc_bug(3)/doc_bug(4) unreachable. PASS
+REG_EXP_DOCDIV rows 3 and 4 zeroed (both were the only non-zero DOC-DIV entries besides
+doorbell); PCIE row's bits were index 0 (CTRL) and 6 (0x18=BAR1_MASK) - matches the comment.
+
+[5] Watchdog test
+$ GIT_MASTER=1 git diff 8ba7af1..HEAD -- sim/tests/wrapper/test_mxu_wrapper.py
+New test asserts: pl_state == PL_LOAD_W_AR(1) + arvalid==1 (parked), WRP_STATUS bit1 SET,
+bit0 CLEAR, irq == 1, pl_state == 0 (recovery), m_axi_arvalid == 0 (release),
+wdt_cnt == 0 (counter cleared), then WRP_CMD=0x0 write -> bit1 cleared, bit0 still 0.
+Non-vacuous proof: task-3 matrix `test_mxu_wrapper_watchdog_timeout (NEW) FAIL <<RED>> PASS
+<<GREEN>> PASS` (2 independent recompiles).
+3 clk= repairs neutral: wrapper_common.create_apb_master (:59-60) builds
+`ApbMaster(bus, dut.clk, dut.rst_n, ...)` and wait_done (:142) fallback is `apb._bus.clk`
+=> clk=dut.clk is the same clock object, only avoids the cocotbext-axi 0.1.28 AttributeError.
+
+[6] Runner script
+$ GIT_MASTER=1 git diff 8ba7af1..HEAD -- scripts/wv_run_mxu.sh
+ single hunk: TESTS array + "test_mxu_wrapper_watchdog_timeout" (5 -> 6 entries). PASS
+
+[7] ABI / func-model untouched
+$ GIT_MASTER=1 git diff 8ba7af1..HEAD -- gen/ spec/            -> EMPTY (exit 0, no output)
+$ GIT_MASTER=1 git diff --stat 8ba7af1..HEAD -- sim/models/apb_peripheral.py sim/regmap.py
+(empty)  PASS
+ABI cross-check: spec/npu_abi.json modules/DMA/registers/CMD access="wo", STATUS="ro";
+sim/models/apb_peripheral.py:288 RegisterField("CMD", DMA.CMD, access="w").
+
+[8] Docs / ledger honesty
+- BUG-RTL-SOC-010: Status Fixed, commit `2e468ac`, evidence task-1. Justification verified:
+  $ grep -c enable rtl/ip/verilog-pcie/pcie_axi_master.v -> 1  (only :217 `.enable(1'b1)`)
+  port list :55-62 has no `enable`; rtl/AGENTS.md:36 forbids vendored edits;
+  docs/waivers/REMEDIATION-RTL-EXCEPTION-2026-08-28.md:20-31 authorizes exactly
+  rtl/soc/axi_crossbar.v + firmware/npu_firmware.c and exempts TB/runner/evidence/docs.
+- BUG-RTL-SOC-011: Status Fixed, commit `9b43075`, evidence task-2; coverage boundary for the
+  STATUS read-clear explicitly recorded (TB never launches a transfer; RED/GREEN DMA +0x008
+  checks byte-identical, task-2 :294-302).
+- BUG-MXU-WDT-001: Fixed + commit `73a59d6` + evidence task-3; explicit mandatory non-claim
+  ("this fix does NOT instrument the failure mode originally described here ... STATUS.ERROR
+  was not implemented"); 5 residuals; gate deviation recorded honestly (6-case gate ->
+  4 PASS / 2 FAIL, both pre-existing, RED/GREEN signature-identical).
+- Statistics vs evidence: task-1 `doc_div_cnt==2 slv_docdivs[4]==0`; task-2 `doc_div_cnt==0
+  slv_docdivs[3]==0`, Total checks 263 unchanged, gen-diff-empty; task-3 `WDT-PEAK-CNT:
+  999009`, wallclock 13.1/13.9/13.7 s; task-4 `REG-FMSOC: 25-pass-8-skip-0-fail-0-timeout-
+  total-33`. All numbers cited in the ledgers match the evidence files.
+- Severity re-grade Medium -> Major in BUG-MXU-WDT-001.md aligns it with the ledger header
+  (`### 2026-06-29 [Major]`, unchanged context line) => alignment, not inflation.
+- By Severity (3+12+2=17) and By Module (sum=17) tables are all-bug breakdowns, so keeping
+  010/011 in the Minor row is correct after they became Fixed.
+
+FINDINGS
+--------------------------------------------------------------------------------
+F2-1 MEDIUM  rtl/wrapper/mxu_soc_wrapper.v:31 / :401-402 + docs/bugs/bugs-module-level.md:53-56
+  Overclaim in the watchdog's no-false-trip argument: "every other state ... is progress and
+  clears the counter, so a long but healthy transaction can never accumulate to the threshold".
+  FALSE: the K-tile turnover inside the pre-load is wait->wait (PL_LOAD_W_R -(rlast, more
+  tiles)-> PL_LOAD_W_AR -> PL_LOAD_W_R, :483-495 and :509-520) and both states are in
+  pl_axi_wait (:414), so wdt_cnt accumulates continuously from the first PL_LOAD_W_AR until
+  PL_READY. The counter is a PER-PHASE budget (whole pre-load; one store-out row, cleared only
+  by SO_IDLE/SO_TRANSFORM), not a per-transaction-stretch budget. A legitimately slow slave
+  (~244+ cycles/beat average) on a large-K pre-load can false-trip; the practical margin is the
+  separately-stated 10x threshold headroom (85,536 vs 1e6) plus the empirical 25-case run, which
+  do hold. Required fix: reword both sites to "cleared when both sequencers leave the AXI-wait
+  states (PL_READY / SO_IDLE / SO_TRANSFORM) - once per pre-load phase and once per store-out
+  row" and state the large-K exposure. No RTL change required.
+
+F2-2 LOW  rtl/tb/apb_conformance_real_tb.sv:24, :680; docs/bugs/bugs-soc-rtl.md:907
+  Mixed-revision line citations: ":128" is the BASE 8ba7af1 line of the read mux (HEAD :133);
+  ":290" is a HEAD line (base :290 = `default:`); ":209" for the START self-clear is the BASE
+  line (HEAD :214). Behavior described is correct in every case. Fix: cite HEAD numbers or drop.
+
+F2-3 LOW  rtl/wrapper/mxu_soc_wrapper.v:439
+  Sticky-clear `wrp_cs && pwrite && (paddr == OFF_WRP_CMD)` omits `penable` (the module's own
+  wrp_trigger :210 requires it), so the flag clears in the APB setup phase and for an aborted
+  write. Still "any WRP_CMD write clears" as documented, but the earliest-clear semantics are
+  unstated. Fix: add `penable` or document the setup-phase clear.
+
+F2-4 LOW  rtl/wrapper/mxu_soc_wrapper.v:455, :710
+  The recovery branch outranks the FSM case, so on the exact first-trip cycle a COMPLETED
+  handshake is discarded: if arvalid&&arready (or awvalid&&awready) is high that cycle the slave
+  has accepted the burst, the FSM goes IDLE, rready/wvalid drop, and the abandoned burst's beats
+  can later be consumed by an unrelated pre-load / leave a write burst without WLAST. Window is
+  exactly one cycle and only on the fault path. Fix: gate the trip on "no handshake this cycle"
+  or record it as a residual (the ledger currently calls the recovery "surgical" unconditionally).
+
+F2-5 LOW  sim/tests/wrapper/test_mxu_wrapper.py:792
+  `except Exception` around the wdt_cnt diagnostic probe. Not silent (logs
+  [MXU_WRP_WDT-PROBE-UNAVAILABLE]) and no assertion depends on it, but it would swallow a real
+  handle/rename error. Fix: narrow to AttributeError/ValueError.
+
+F2-6 INFO  docs/soc-rtl-review-remediation-rg-table.md:77-80
+  Still quotes pre-branch ledger line numbers (699/748) for BUG-RTL-SOC-010/011. Frozen T12
+  grep evidence, untouched by this branch; no action, noted for consistency only.
+
+STRUCTURAL REJECT TRIGGERS — ALL CLEAR
+--------------------------------------------------------------------------------
+ non-comment change in rtl/ip/pcie_ep_wrapper.v .................. NO
+ third behavior change in rtl/ip/dma_wrapper.v ................... NO (exactly 2)
+ watchdog change outside rtl/wrapper/ ............................ NO
+ gen/ or spec/ diff .............................................. NO (empty)
+================================================================================
+VERDICT: APPROVE
+================================================================================
