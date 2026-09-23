@@ -410,11 +410,11 @@ Ledger update 2026-09-02 (用户接受, bug-007-root-cause 收尾): 用户回复
 
 | Status | Count | Bug IDs |
 |--------|:-----:|---------|
-| Fixed | 13 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-005, BUG-RTL-SOC-006, BUG-RTL-SOC-008, BUG-RTL-SOC-009, BUG-RTL-SOC-012, BUG-RTL-SOC-WV-001, BUG-RTL-SOC-WV-007, BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
+| Fixed | 15 | BUG-RTL-SOC-001, BUG-RTL-SOC-003, BUG-RTL-SOC-004, BUG-RTL-SOC-005, BUG-RTL-SOC-006, BUG-RTL-SOC-008, BUG-RTL-SOC-009, BUG-RTL-SOC-010, BUG-RTL-SOC-011, BUG-RTL-SOC-012, BUG-RTL-SOC-WV-001, BUG-RTL-SOC-WV-007, BUG-RTL-SOC-P9-00A, BUG-RTL-SOC-P9-00D, BUG-MXU-P9-00B |
 | Waived | 0 | — |
 | Pending (waiver 待用户签署) | 1 | BUG-RTL-SOC-002 (8 MB DRAM window constraint — WVR-SOC-RTL-002, pending sign-off 待用户签署) |
 | Accepted (reconstruction-failure) | 1 | BUG-RTL-SOC-007 (attn_weight — ATTRIBUTION 2026-09-02: testcase/environment reconstruction failure，45/6 未复现，无 FuncModel/RTL 故障证据；Blocker-6 path (b)，用户已接受关闭，不 claim Fixed) |
-| Open | 2 | BUG-RTL-SOC-010 (pcie_ep_wrapper header 夸大字段, T12), BUG-RTL-SOC-011 (rtl/ip/README DMA 访问类别错误, T12) |
+| Open | 0 | — |
 | Re-opened | 0 | — |
 
 ### By Module
@@ -437,10 +437,10 @@ Ledger update 2026-09-02 (用户接受, bug-007-root-cause 收尾): 用户回复
 | Metric | Value |
 |--------|:-----:|
 | Total RTL bugs found and documented | 17 |
-| Bugs closed Fixed | 13 (76.5%) |
+| Bugs closed Fixed | 15 (88.2%) |
 | Bugs pending waiver sign-off | 1 (5.9%) — BUG-RTL-SOC-002 (8 MB DRAM window, WVR-SOC-RTL-002, pending sign-off 待用户签署) |
 | Accepted (reconstruction-failure, 用户已接受) | 1 (5.9%) — BUG-RTL-SOC-007 (2026-09-02 定级 + 用户接受关闭，Blocker-6 path (b)，不 claim Fixed) |
-| Open / under investigation | 2 (11.8%) — BUG-RTL-SOC-010/011 (wrapper 文档 vs RTL) |
+| Open / under investigation | 0 (0.0%) |
 | Ibex-specific bugs (full RTL CPU replacement) | 0 |
 | Regressions after fixes | 0 (491/491 module regression PASS; vector + MXU wrapper 10/10 baseline PASS; PERF-06 M=32 cos=1.000000; PERF-13 9/9 MMUL PASS) |
 | Re-opened bugs | 0 (BUG-RTL-SOC-005 closed in 2026-07-23 rtl-bug-fix-wv round) |
@@ -801,7 +801,7 @@ doorbell window changes.
 | **Case** | run_apb_conformance_real (PCIE DOC-DIV checks @0x00/@0x18) |
 | **Severity** | Minor |
 | **Type** | Wrapper (documentation vs RTL) |
-| **Status** | Open |
+| **Status** | Fixed |
 
 #### Symptom
 
@@ -826,18 +826,39 @@ constants). No register-window conformance gate existed until this TB.
 
 #### Fix
 
-TBD: implement the enable bit (wire to the IP `enable` input) and either
-implement writable BAR1_MASK bit31 or correct the header comment. The APB
-conformance TB tags both offsets [DOC-DIV BUG-RTL-SOC-010] and asserts the
-REAL behavior (CTRL full-write readback 0xE; BAR1_MASK hostile-write stays
-0x8000_0000).
+**DOC-ONLY fix — no RTL behavior change.** The header comment was corrected to
+match the implemented RTL: the two overstated fields are now documented as the
+RTL actually behaves (CTRL[3] is not stored and reads 0; BAR1_MASK returns the
+constant 0x8000_0000 and is not writable).
+
+Why the documentation side and not the RTL side:
+
+- The enable bit is **not implementable without editing vendored IP**:
+  `rtl/ip/verilog-pcie/pcie_axi_master.v` exposes **no top-level `enable` port**
+  (`:58-130` — its Configuration group is only `completer_id` +
+  `max_payload_size`). The sole `enable` token in that file is the internal
+  hard-tie `.enable(1'b1)` at `:217`. Wiring CTRL[3] would require modifying
+  vendored third-party RTL, which `rtl/AGENTS.md` forbids.
+- Product-RTL edits are scope-limited: `docs/waivers/REMEDIATION-RTL-EXCEPTION-2026-08-28.md:20-31`
+  authorizes product-code changes for exactly two files (`rtl/soc/axi_crossbar.v`
+  + `firmware/npu_firmware.c`); any other `rtl/` edit needs a new/extended
+  exception. TB/runner/evidence/docs are explicitly outside that restriction,
+  which is why the conformance TB retirement is in scope while an RTL fix is not.
+
+Commit `2e468ac` — `docs(rtl/ip): align pcie_ep_wrapper header with RTL + retire
+PCIe DOC-DIV (BUG-RTL-SOC-010)`.
 
 #### Verification
 
 - `bash sim/regression/soc-verification-run.sh run_apb_conformance_real` →
-  PCIE DOC-DIV checks pass against the real-RTL oracle with the
-  BUG-RTL-SOC-010 tag (log: sim/regression/apb_conformance_real.log).
-- Evidence: `.omo/evidence/task-12-soc-rtl-review-remediation.txt`.
+  `APB_CONFORMANCE_REAL: GREEN`, Total checks **263** (unchanged), `doc_div_cnt`
+  **4 → 2**, `slv_docdivs[4] == 0` (PCIE bucket retired); exact gate grep
+  `\[DOC-DIV\].*BUG-RTL-SOC-010` → **0 hits**. A DOC-DIV flag retirement is a
+  *re-bucket*, not a removed check (each flag site increments `test_num` exactly
+  once), so Total checks cannot move.
+- Evidence: `.omo/evidence/task-1-rtl-open-bugs-cleanup.txt`.
+- Superseded: `.omo/evidence/task-12-soc-rtl-review-remediation.txt` (the T12 run
+  that filed this bug, when both offsets were still DOC-DIV).
 
 ---
 
@@ -850,7 +871,7 @@ REAL behavior (CTRL full-write readback 0xE; BAR1_MASK hostile-write stays
 | **Case** | run_apb_conformance_real (DMA CMD WOS DOC-DIV check @0x04) |
 | **Severity** | Minor |
 | **Type** | Wrapper (documentation vs RTL) |
-| **Status** | Open |
+| **Status** | Fixed |
 
 #### Symptom
 
@@ -873,19 +894,50 @@ the wrapper's actual reg-file implementation.
 
 #### Fix
 
-TBD: correct the README column (CMD: RW-store with START auto-clear; STATUS:
-RO with DONE read-clear) or change the RTL. The APB conformance TB tags the
-CMD rows [DOC-DIV BUG-RTL-SOC-011] and asserts the REAL store/readback
-behavior; the STATUS read-clear side effect is unobservable while idle (no
-transfer is launched in the conformance TB) and is recorded in the bug entry
-rather than silently assumed.
+**Real RTL behavior fix in `rtl/ip/dma_wrapper.v` — not a doc alignment.** The RTL
+was the outlier: the ABI (`spec/npu_abi.json`, DMA `CMD` access `"wo"`), the Func
+Model (`sim/models/apb_peripheral.py:288`, access `w`) and the docs all agreed on
+write-only-on-the-bus; only the wrapper stored-and-returned the value and
+read-cleared DONE. Aligning RTL to the ABI needs **zero spec/gen changes**.
+
+Two behavior changes:
+
+- **CMD@0x04 is write-only on the bus**: the read path returns `32'h0` for
+  `reg_idx == 4'd1`. The internal `dma_reg[1]` copy is **retained** — the FSM
+  depends on `dma_reg[1][0]`/`[1]` for START/ABORT and on the self-clear at `:209`;
+  deleting the storage would break the transfer. It is an implementation detail the
+  ABI never described.
+- **STATUS@0x08 read-clear of DONE removed**: `dma_reg[2][1]` is no longer cleared
+  by a read; DONE is cleared by the FSM on the next launch. STATUS reads have no
+  side effects.
+
+Four-way convergence after the fix: ABI `"wo"` == Func Model `w` == RTL
+write-only-on-bus == docs (CMD `W`; STATUS "no read-clear").
+
+Commit `9b43075` — `fix(rtl/ip): dma_wrapper CMD write-only on the bus + drop
+STATUS read-clear (BUG-RTL-SOC-011)`.
 
 #### Verification
 
 - `bash sim/regression/soc-verification-run.sh run_apb_conformance_real` →
-  DMA CMD WOS DOC-DIV checks pass against the real-RTL oracle with the
-  BUG-RTL-SOC-011 tag (log: sim/regression/apb_conformance_real.log).
-- Evidence: `.omo/evidence/task-12-soc-rtl-review-remediation.txt`.
+  `APB_CONFORMANCE_REAL: GREEN`, Total checks **263** (unchanged), `doc_div_cnt == 0`,
+  `slv_docdivs[3] == 0`, `slv_docdivs[4] == 0`; exact gate grep
+  `\[DOC-DIV\].*BUG-RTL-SOC-011` → **0 hits**; `git diff -- gen/` **empty** (ABI
+  untouched). The `ACC_WOS -> ACC_WO` flip is a re-bucket: both arms emit 2 checks,
+  so DMA's per-slave count stays 43 and only the doc-div counters move.
+- FM-SOC-011 (the firmware DMA case most exposed to this change) **PASS** in the
+  todo-4 33-case regression (`25-pass-8-skip-0-fail-0-timeout-total-33`), with the
+  full-chain FM-SOC-032 / FM-SOC-10X also PASS.
+- **Coverage boundary (recorded, not a silent skip):** the STATUS read-clear
+  removal is **not observable in `apb_conformance_real_tb`** — it can only differ
+  when `STATUS.DONE == 1`, and this TB never launches a transfer (its own Phase 5
+  asserts that no CMD.START was ever written). Proven empirically, not merely
+  argued: the RED (read-clear present) and GREEN (read-clear removed) logs are
+  byte-identical except the single CMD check and the counters it feeds — every
+  `DMA +0x008` STATUS check is identical. The end-to-end guard for the DONE/read
+  semantics is the FM-SOC firmware path above.
+- Evidence: `.omo/evidence/task-2-rtl-open-bugs-cleanup.txt`.
+- Superseded: `.omo/evidence/task-12-soc-rtl-review-remediation.txt`.
 
 ---
 

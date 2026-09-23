@@ -1,0 +1,292 @@
+================================================================================
+EVIDENCE — todo 5 of .omo/plans/rtl-open-bugs-cleanup.md
+"台账收尾": BUG-RTL-SOC-010 / BUG-RTL-SOC-011 / BUG-MXU-WDT-001 -> Fixed
+================================================================================
+Timestamp (UTC) : 2026-09-23T14:42:07Z  (local 2026-09-23 22:42:07 CST)
+Repo            : /home/prj/zhengs/caduceuscore/CaduceusCore
+Branch          : rtl-open-bugs-cleanup
+Parent commit   : 46b17cf0dd30e1e93f56235231dc79dced0e0f66
+                  "test(cleanup): conformance doc-div-0 + wrapper + e2e mxu + FM-SOC 33 regression evidence"
+Todo            : 5 (documentation only — ZERO code / TB / script / spec / gen changes)
+Declared commit : docs(bugs): BUG-RTL-SOC-010/011 + BUG-MXU-WDT-001 Fixed — doc align,
+                  DMA bus semantics, MXU watchdog
+
+--------------------------------------------------------------------------------
+0. PRECHECK (all four items, run before any edit)
+--------------------------------------------------------------------------------
+$ GIT_MASTER=1 git branch --show-current
+rtl-open-bugs-cleanup
+$ GIT_MASTER=1 git log -1 --format=%s
+test(cleanup): conformance doc-div-0 + wrapper + e2e mxu + FM-SOC 33 regression evidence
+$ GIT_MASTER=1 git show --name-only HEAD
+.omo/evidence/task-4-rtl-open-bugs-cleanup.txt          <-- exactly 1 path
+$ GIT_MASTER=1 git status --porcelain | grep -E '^ ?M'
+ M .omo/evidence/task-0-signoff-v3-runner.txt           \
+ M .omo/evidence/task-20-uncertainty-kpis.json           | 7 protected dirty
+ M .omo/evidence/task-23-perf-spec-ci.txt                | files (byte-identical
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md  | to todo 0's AFTER
+ M .omo/notepads/phase6-rtl-verification/learnings.md    | snapshot; not staged)
+ M build/evidence/fm-cv-chain.txt                        |
+ M build/evidence/w3-4-mobilenetv3-fm.txt               /
+ M .omo/plans/rtl-open-bugs-cleanup.md                  <-- orchestrator checkbox (allowed)
+
+PRECHECK: PASS (M-set == {7 protected} U {plan file}; subset assertion holds exactly).
+
+--------------------------------------------------------------------------------
+1. JUDGMENT LINES
+--------------------------------------------------------------------------------
+LEDGER-STATUS: Fixed
+STATS: 15-fixed-0-open-socrtl-4-fixed-0-open-module
+SCOPE: docs-only-4-files-plus-evidence
+NO-CODE-CHANGE: verified (see section 5 — name-only diff of this todo's delta)
+
+--------------------------------------------------------------------------------
+2. WHAT WAS CHANGED (4 whitelisted files + this evidence file)
+--------------------------------------------------------------------------------
+(1) docs/bugs/bugs-soc-rtl.md
+    - BUG-RTL-SOC-010  Status: Open -> Fixed.
+      Fix section rewritten: DOC-ONLY fix + why the documentation side.
+        * vendored rtl/ip/verilog-pcie/pcie_axi_master.v has NO top-level
+          `enable` port (:58-130; Configuration group = completer_id +
+          max_payload_size only); the sole `enable` token in that file is the
+          internal hard-tie `.enable(1'b1)` at :217.
+        * docs/waivers/REMEDIATION-RTL-EXCEPTION-2026-08-28.md:20-31 authorizes
+          product-code edits for exactly rtl/soc/axi_crossbar.v +
+          firmware/npu_firmware.c; TB/runner/evidence/docs are outside that
+          restriction (which is why the TB retirement was in scope and the RTL
+          fix was not).
+      Commit 2e468ac; evidence .omo/evidence/task-1-rtl-open-bugs-cleanup.txt.
+    - BUG-RTL-SOC-011  Status: Open -> Fixed.
+      Fix section rewritten: REAL RTL behavior fix in rtl/ip/dma_wrapper.v.
+        * CMD@0x04 write-only on the bus (read path returns 32'h0 for
+          reg_idx==4'd1); internal dma_reg[1] RETAINED (FSM needs [1][0]/[1]
+          for START/ABORT + the :209 self-clear).
+        * STATUS@0x08 read-clear of DONE removed; reads have no side effects.
+        * Four-way convergence: ABI "wo" == Func Model w == RTL write-only ==
+          docs (CMD W; STATUS "no read-clear").
+      Commit 9b43075; evidence .omo/evidence/task-2-rtl-open-bugs-cleanup.txt.
+      Verification section carries the measured gate (GREEN, 263 checks,
+      doc_div_cnt==0, slv_docdivs[3]==0, slv_docdivs[4]==0, gen/ diff empty,
+      FM-SOC-011 PASS) AND the coverage boundary: the STATUS read-clear removal
+      is NOT observable in apb_conformance_real_tb (DONE is never 1 there; the
+      RED/GREEN logs are byte-identical except the one CMD check), so the
+      end-to-end guard is the FM-SOC firmware path.
+    - By Status table: Fixed 13 -> 15 (010 + 011 inserted in numeric order),
+      Open 2 -> 0 (row body now "—").
+    - Quality Metrics: "13 (76.5%)" -> "15 (88.2%)";
+      "Open / under investigation | 2 (11.8%) ..." -> "| 0 (0.0%) |".
+    - By Severity table: ZERO change (rule fixed in the plan: severity counts
+      ALL bugs regardless of status; 010/011 stay in "Minor | 2").
+    - Pending (waiver 待用户签署) row and Accepted (reconstruction-failure) row:
+      untouched. No other bug entry touched. No new ledger-update prose line
+      added (the plan's todo-5 edit list does not include one; the entries
+      themselves carry Date/commit/evidence).
+
+(2) docs/bugs/bugs-module-level.md — BUG-MXU-WDT-001
+    - Status: Open -> Fixed.
+    - Fix Commit section rewritten (was "None — still open. Requires adding a
+      watchdog counter ... sets STATUS.ERROR=1"):
+        * commit 73a59d6; wrapper AXI-layer watchdog in
+          rtl/wrapper/mxu_soc_wrapper.v;
+        * localparam [19:0] WDT_TIMEOUT = 20'd1_000_000 (fixed, no new MMIO
+          register; >10x margin over the ~85.5k-cycle cocotb budget);
+        * counter runs ONLY in the 8 AXI-handshake-only states, cleared by any
+          FSM progress;
+        * on trip: sticky wrp_wdt_timeout, surgical FSM recovery to IDLE gated
+          on wdt_fire && (pl_axi_wait | so_axi_wait), irq = mxu_irq |
+          wrp_wdt_timeout (shared INTC bit0);
+        * WRP_STATUS[1] sticky, cleared by ANY WRP_CMD write;
+        * new test test_mxu_wrapper_watchdog_timeout, peak wdt_cnt=999009,
+          1.01 M-cycle wait ~13.9 s.
+      DEVIATION FROM THE ENTRY'S ORIGINAL SUGGESTION — recorded with reasons:
+        * controller is fully self-timed (compute_timer/store_counter,
+          rtl/mxu/controller.v:234/268/285/306) -> cannot stall when the
+          datapath stops responding;
+        * the real unbounded waits live in the wrapper's AXI handshake FSM
+          (mxu_soc_wrapper.v:388-436, :639-687);
+        * STATUS.ERROR in the controller is a 1-cycle pulse (controller.v:144
+          default status_error<=0; abort branches :185/219/239/256/284) -> it
+          cannot serve as a latched status.
+      EXPLICIT NON-CLAIM (verbatim): "this fix does NOT instrument the failure
+      mode originally described here (stuck in COMPUTE -> STATUS.ERROR). A
+      wrapper-AXI watchdog cannot observe a self-timed controller; the
+      STATUS.ERROR mechanism planned under MX-10 was not implemented."
+      GATE DEVIATION (honest): the plan's aggregate gate was "6 cases all PASS";
+      measured 4 PASS / 2 FAIL, both failures pre-existing and byte-identical in
+      RED / GREEN / GREEN2 (and in todo 4). WDT itself RED->GREEN proven; no
+      false trip; sticky clear works. The plan's todo-3 deviation line is the
+      authoritative statement.
+      RESIDUALS (5): (a) the originally-described failure mode is not
+      instrumented; (b) rtl/tb/tb_controller.v is stale (forces a non-existent
+      u_dut.state_r at :345/:358; controller.v has `state` at :60) and does not
+      compile against current RTL; (c) timer_irq has no on-chip source
+      (caduceus_soc_top.v:93 input, TBs tie 0 — rtl/tb/tb_intc.v:108);
+      (d) wrapper registers 0x30-0x48 are not in spec/npu_abi.json (only
+      firmware/npu-regmap.h MXU_WRP_*), and this fix adds a new bit
+      (WRP_STATUS[1]) to that divergence; (e) first hardware watchdog in this
+      repo — no precedent.
+      NOTE (discovered during the fix; NOT filed as new bug entries, statistics
+      stay 4 Fixed / 0 Open): DEFECT-WRP-1 (store-out AXI drain precedes
+      STATUS.DONE; firmware-visible; MISMATCH 3180/4096, first mismatch row 11),
+      DEFECT-WRP-2 (m_axi_wdata X in accumulate mode), PROCESS-1
+      (run_wrapper_mxu target missing cd $(REPO_ROOT) -> Error 127), PROCESS-2
+      (runner verdict grep -qE 'TEST.*PASS' false-positives AND exits 0 with real
+      failures), PROCESS-3 (tracked build/evidence/wrap-mxu-regression.txt
+      unreliable — claims 5 PASS, real HEAD control baseline was 1 PASS / 4 FAIL).
+      Pointer: .omo/notepads/rtl-open-bugs-cleanup/problems.md; flagged for a
+      follow-up plan.
+    - Stats table: Total 4 (unchanged) | Open 1 -> 0 | Fixed 3 -> 4.
+
+(3) docs/bugs/BUG-MXU-WDT-001.md — Severity Medium -> Major (定级归一, ledger is
+    authoritative: bugs-module-level.md:30 heading is [Major]).
+    DISCLOSED EXTRA (in-whitelist consistency edit): the file's "Status: Open"
+    line was ALSO synced to Fixed, because leaving it would have re-created
+    exactly the doc-vs-reality divergence this plan exists to remove (BUG-010/011
+    are that bug class). The line points at the ledger entry for mechanism /
+    evidence / residuals / non-claim. No other section of that file was rewritten
+    (the historical Description/Expected/Verification/Impact text is preserved;
+    the non-claim in the status line covers its now-false "timeout path cannot be
+    tested" statement).
+
+(4) README.md — both status-snapshot rows + the index row that carried the same
+    stale string:
+    - line 25 (SoC RTL) : "17 = 13 Fixed / ... / 2 Open" ->
+                          "17 = 15 Fixed / 1 Pending（waiver 待签）/ 1 Accepted
+                          （reconstruction-failure）/ 0 Open"
+    - line 26 (module-level): "4 = 3 Fixed / 1 Open（WDT-001）" ->
+                          "4 = 4 Fixed / 0 Open"
+    - line 39 (关键文件索引): "4 = 3 Fixed / 1 Open（WDT-001）" ->
+                          "4 = 4 Fixed / 0 Open"   (required: the stale-string
+                          probe "3 Fixed / 1 Open" must return 0 hits repo-wide
+                          in README.md, and this row contained it)
+
+--------------------------------------------------------------------------------
+3. ACCEPTANCE GREPS — RAW OUTPUT (verbatim, run after the edits)
+--------------------------------------------------------------------------------
+### GREP-1  Bugs closed Fixed | 15
+440:| Bugs closed Fixed | 15 (88.2%) |
+hits=1
+### GREP-2  Open / under investigation | 0
+443:| Open / under investigation | 0 (0.0%) |
+hits=1
+### GREP-3  | Open | 0 |
+417:| Open | 0 | — |
+hits=1
+### GREP-4  15 Fixed (README)
+25:| Bug 台账 SoC RTL | **17 = 15 Fixed / 1 Pending（waiver 待签）/ 1 Accepted（reconstruction-failure）/ 0 Open**，见 Final Bug Statistics | （来源：docs/bugs/bugs-soc-rtl.md） |
+hits=1
+### GREP-5  4 = 4 Fixed / 0 Open (README)
+26:| module-level | **4 = 4 Fixed / 0 Open** | （来源：docs/bugs/bugs-module-level.md） |
+39:| `docs/bugs/bugs-module-level.md` | 模块级 bug 台账：4 = 4 Fixed / 0 Open |
+hits=2
+### GREP-6  STALE '3 Fixed / 1 Open' (README) — must be 0
+hits=0
+### GREP-7  STALE counts — must be 0
+grep -rn "13 Fixed\|2 Open\|13 (76.5%)\|2 (11.8%)" docs/bugs/bugs-soc-rtl.md README.md
+hits=docs/bugs/bugs-soc-rtl.md:0,README.md:0
+
+ALL SEVEN GREPS HOLD. (GREP-6 / GREP-7 are the misleading_success_output probe:
+they return 0, so no stale count survived in either ledger or README.)
+
+--------------------------------------------------------------------------------
+4. INTERNAL CONSISTENCY ARITHMETIC (recomputed from the entries, not from memory)
+--------------------------------------------------------------------------------
+By-Status : Fixed=15 (15 IDs listed) Waived=0 Pending=1 Accepted=1 Open=0 Re-opened=0
+By-Status sum = 17 | By-Severity sum = 17 (Critical 3 + Major 12 + Minor 2)
+QualityMetrics Total = 17
+By-Severity: 010 in Minor list = True, 011 in Minor list = True  (row UNTOUCHED)
+Quality Metrics: "Bugs closed Fixed" -> 15 (88.2%)   [15/17 = 88.2%]
+                 "Open / under investigation" -> 0 (0.0%)   [0/17 = 0.0%]
+                 1/17 = 5.9% (Pending and Accepted rows, unchanged)
+Module-level: Total 4 | Open 0 | Fixed 4  (4 entries: BUG-MX-PERF-000, BUG-001,
+              BUG-PERF-MXU-001, BUG-MXU-WDT-001 — all Fixed)
+No number disagreed with what was computed from the entries -> no STOP condition.
+
+--------------------------------------------------------------------------------
+5. SCOPE / NO-CODE-CHANGE PROOF
+--------------------------------------------------------------------------------
+$ GIT_MASTER=1 git status --porcelain | grep -E '^ ?M'
+(12 M-lines = 7 protected + .omo/plans/rtl-open-bugs-cleanup.md + the 4 target docs)
+$ GIT_MASTER=1 git diff --stat -- docs/bugs/bugs-soc-rtl.md docs/bugs/bugs-module-level.md docs/bugs/BUG-MXU-WDT-001.md README.md
+ README.md                      |   6 +--
+ docs/bugs/BUG-MXU-WDT-001.md   |   4 +-
+ docs/bugs/bugs-module-level.md | 103 +++++++++++++++++++++++++++++++++++++++--
+ docs/bugs/bugs-soc-rtl.md      |  98 ++++++++++++++++++++++++++++++---------
+ 4 files changed, 178 insertions(+), 33 deletions(-)
+=> this todo's delta touches exactly the 4 whitelisted files; zero .v / .sv / .py /
+   .sh / Makefile / spec/ / gen/ paths; no code, TB, script, spec or gen change.
+
+DISCLOSED DEVIATION (acceptance-line vs plan F4, recorded not silently dropped):
+  The todo-5 acceptance line reads
+    `git diff main..HEAD --name-only -- docs/ README.md` ⊆ {4 files}
+  Measured (branch-level, main..HEAD):
+    docs/func-model-mmio-spec.md     <-- todo 2 (commit 9b43075), IN the plan's F4
+                                         whitelist (plan line 180)
+    docs/bugs/bugs-soc-rtl.md
+    docs/bugs/bugs-module-level.md
+    docs/bugs/BUG-MXU-WDT-001.md
+    README.md
+  So the literal branch-level assertion cannot hold without reverting approved
+  todo-2 work. The correct reading — this todo's own delta — is exactly the 4
+  whitelisted files (uncommitted diff above; `git diff HEAD --name-only` after the
+  commit == 4 paths + this evidence file). F4 (branch-level scope fidelity, plan
+  line 180) is the governing gate and it explicitly whitelists
+  docs/func-model-mmio-spec.md. Recorded here rather than claiming a pass.
+
+--------------------------------------------------------------------------------
+6. ADVERSARIAL CLASSES (probe + result)
+--------------------------------------------------------------------------------
+- misleading_success_output (APPLICABLE): probe = the 7 acceptance greps above,
+  incl. the two zero-hit stale-count probes. Result: PASS — raw output quoted in
+  section 3; GREP-6/GREP-7 return 0 hits, so no stale count survived.
+- dirty_worktree (APPLICABLE): probe = `git status --porcelain | grep -E '^ ?M'`.
+  Result: PASS — M-set == {7 protected} U {plan file} U {4 target docs}; the 7
+  protected files were NOT staged (staged set verified in section 7).
+- stale_state: NOT APPLICABLE — docs-only todo; no binary/simv/compile artifact is
+  consumed. The verification facts cited are already-committed evidence files
+  (task-1/2/3/4) whose provenance is recorded in those files.
+- malformed_input: NOT APPLICABLE — the only inputs are repo text files read via
+  Read/grep; no parser, no schema, no external data.
+- prompt_injection: NOT APPLICABLE — no untrusted external content was fetched;
+  all inputs are in-repo docs written by this session's own todos 1-4.
+- cancel_resume: NOT APPLICABLE — single-pass execution, no resume boundary.
+- hung_commands: NOT APPLICABLE — no VCS/cocotb/long-running command in this todo;
+  every command is a local git/grep/python one-liner.
+- flaky_tests: NOT APPLICABLE — no test is executed in this todo (the gates are
+  grep assertions over static text, deterministic by construction).
+- repeated_interrupts: NOT APPLICABLE — no interrupt observed; each command ran to
+  completion once.
+
+--------------------------------------------------------------------------------
+7. STAGING / COMMIT DISCIPLINE
+--------------------------------------------------------------------------------
+- Staged set (explicit per-path `git add`, no add . / -A / commit -a / stash):
+    docs/bugs/bugs-soc-rtl.md
+    docs/bugs/bugs-module-level.md
+    docs/bugs/BUG-MXU-WDT-001.md
+    README.md
+    .omo/evidence/task-5-rtl-open-bugs-cleanup.txt   (staged with `git add -f` as the
+                                                     todo mandates; note .omo/evidence/
+                                                     is NOT gitignored — check-ignore
+                                                     exit=1 — so -f is belt-and-braces)
+- NOT staged: the 7 protected dirty files (listed in section 0).
+- Message: docs(bugs): BUG-RTL-SOC-010/011 + BUG-MXU-WDT-001 Fixed — doc align,
+  DMA bus semantics, MXU watchdog
+- No push. No worktree. Single worktree.
+
+--------------------------------------------------------------------------------
+8. CLEANUP RECEIPT
+--------------------------------------------------------------------------------
+- Scratch files created: none outside /tmp (heredoc-driven python only; no temp
+  artifacts written into the repo).
+- Background jobs: none started.
+- Untracked leftovers attributable to this todo: none (the `??` entries in git
+  status — .omo/notepads/rtl-open-bugs-cleanup/, .omo/plans/*.md, .omo/tmp/ —
+  pre-date this todo and are not staged).
+- No artifact written by another tool needed restoring (this todo ran no cocotb /
+  no VCS run, so results.xml and build/evidence/wrap-mxu-regression.txt were not
+  rewritten).
+
+================================================================================
+FINAL: LEDGER-STATUS: Fixed | STATS: 15-fixed-0-open-socrtl-4-fixed-0-open-module
+================================================================================

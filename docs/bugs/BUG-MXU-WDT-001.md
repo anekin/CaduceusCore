@@ -1,8 +1,8 @@
 # BUG-MXU-WDT-001: Controller Watchdog Timer Missing
 
 **Case**: MX-10
-**Severity**: Medium (functional gap, not correctness bug)
-**Status**: Open
+**Severity**: Major (functional gap, not correctness bug)
+**Status**: Fixed — wrapper AXI-layer watchdog, commit `73a59d6`. The fix mechanism, evidence, the five residuals and the explicit non-claim (the `STATUS.ERROR` behavior described below was NOT implemented) live in the authoritative ledger entry: `docs/bugs/bugs-module-level.md` → BUG-MXU-WDT-001.
 **Date**: 2026-06-29
 
 ## Description
