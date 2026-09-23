@@ -42,14 +42,16 @@
 //                   back 0 (:180-181).
 //   PCIE:           CTRL@0x00 [2:0]=mps stored, readback shifted to [3:1] with
 //                   bit0=0, bit3 (documented "enable") NOT implemented →
-//                   DOCUMENTED DIVERGENCE BUG-RTL-SOC-010;
+//                   ALIGNED: header :258 now says "NOT implemented; reads 0"
+//                   and the PCIE DOC-DIV row is retired (BUG-RTL-SOC-010
+//                   closed doc-side);
 //                   STATUS@0x04 RO; COMPLETER_ID@0x08 RW[15:0];
 //                   BAR0_BASE@0x0C RO 0x2000_0000; BAR0_MASK@0x10 RO
 //                   0xFFC0_0000; BAR1_BASE@0x14 RO 0x8000_0000; BAR1_MASK@0x18
-//                   RO 0x8000_0000 (documented "bit31=writable" NOT
-//                   implemented → BUG-RTL-SOC-010); MSIX_CTRL@0x1C
-//                   field-masked; IRQ_CTRL@0x20 field-masked + W1C[1];
-//                   offsets >= 0x24 UNMAPPED → pslverr=1
+//                   RO constant 0x8000_0000 → ALIGNED: header :264 now says
+//                   "RO constant; bit31 not writable" (same retirement);
+//                   MSIX_CTRL@0x1C field-masked; IRQ_CTRL@0x20 field-masked
+//                   + W1C[1]; offsets >= 0x24 UNMAPPED → pslverr=1
 //                   (pcie_ep_wrapper.v:296).
 //
 // Documented-divergence handling (todo 12 mandate): a check whose REAL
@@ -62,6 +64,13 @@
 //                       the doorbell DOC-DIV rows/mux entry were removed and
 //                       the 20 slots are now checked as real RW registers.
 //   BUG-RTL-SOC-010 — pcie_ep_wrapper header overstates CTRL[3]/BAR1_MASK
+//                     → RETIRED doc-side: header :258/:264 aligned with the
+//                       RTL (comments only, zero behavior change) and the
+//                       PCIE DOC-DIV rows/mux entry removed. The RTL was
+//                       deliberately NOT changed: waiver
+//                       docs/waivers/REMEDIATION-RTL-EXCEPTION-2026-08-28.md
+//                       authorizes rtl edits only for axi_crossbar.v +
+//                       npu_firmware.c.
 //   BUG-RTL-SOC-011 — rtl/ip/README DMA access classes (CMD W / STATUS R)
 //
 // pcie_dma_wrapper (AXI master M6, decoder port 7 @ 0x4000_7000) remains out
@@ -717,7 +726,7 @@ module apb_conformance_real_tb;
 
     // ACC_FIELD expected readbacks after w(0xFFFFFFFF) and w(0):
     //   PCIE CTRL: mps=7 stored → readback {28'h0, 7, 1'b0} = 0xE (bit3 enable
-    //              NOT stored, bit0 always 0) — pcie_ep_wrapper.v:304-306/:387
+    //              NOT implemented (by design), bit0 always 0) — pcie_ep_wrapper.v:304-306/:387
     //   MSIX_CTRL: vector=0xFF, msix_en=1 → 0x0000_FF01 (:328-329/:394)
     //   IRQ_CTRL:  err_irq_en=1, pending W1C'd to 0, irq_en=1 → 0x5 (:363-370/:395)
     localparam [31:0] REG_EXP_F [0:6][0:MAX_REGS-1] = '{
@@ -742,8 +751,9 @@ module apb_conformance_real_tb;
 
     // DOC-DIV flags: real behavior contradicts a DOCUMENTED spec (bug-filed)
     //   DMA    CMD 0x04 — rtl/ip/README.md:35 says W, RTL stores+reads back
-    //   PCIE   CTRL 0x00 — header :258 says [3]=enable (unimplemented)
-    //   PCIE   BAR1_MASK 0x18 — header :264 says bit31=writable (constant)
+    //   PCIE   CTRL 0x00 / BAR1_MASK 0x18 — RETIRED: header :258/:264 were
+    //                    aligned to the RTL (comments only), so the PCIE row
+    //                    below is all-zero (no DOC-DIV any more).
     //   DOORBELL 0x10/0x14 — RESOLVED: BUG-RTL-SOC-009 was fixed in RTL
     //                    (doorbell.v now implements LAST_STATUS@0x10 +
     //                    COMPLETION_STATUS[16]@0x14-0x50); the doorbell row
@@ -753,7 +763,7 @@ module apb_conformance_real_tb;
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd0, 32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
-        '{32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
+        '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0},
         '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0}
     };
@@ -781,7 +791,9 @@ module apb_conformance_real_tb;
         begin
             case (idx)
                 3: doc_bug = "BUG-RTL-SOC-011";  // DMA README access classes
-                4: doc_bug = "BUG-RTL-SOC-010";  // PCIe header overstates CTRL[3]/BAR1_MASK
+                // 4 (PCIE) intentionally absent: BUG-RTL-SOC-010 was retired
+                // doc-side (header :258/:264 aligned with the RTL), so the PCIE
+                // slave has no DOC-DIV row or check any more.
                 // 5 (DOORBELL) intentionally absent: BUG-RTL-SOC-009 was fixed
                 // in RTL, so the doorbell slave has no DOC-DIV row or check.
                 default: doc_bug = "BUG-RTL-SOC-???";
@@ -1232,7 +1244,7 @@ module apb_conformance_real_tb;
         $display("  Fails        : %0d   (unexpected — real RTL != REAL oracle)", fail_cnt);
         $display("  DOC-DIV      : %0d   (real RTL contradicts documented spec,",
                  doc_div_cnt);
-        $display("                 each bug-filed: BUG-RTL-SOC-010/011)");
+        $display("                 each bug-filed: BUG-RTL-SOC-010:retired / 011:active)");
         $display("  Write timeouts: %0d   Read timeouts: %0d",
                  write_timeouts, read_timeouts);
         $display("  Per-slave coverage (checks / fails / doc-div / psel_o asserts):");
@@ -1260,7 +1272,7 @@ module apb_conformance_real_tb;
             $display("TASK-12 RESULT: PARTIAL: %0d/7 peripherals covered (declared)",
                      covered);
         end else begin
-            $display("APB_CONFORMANCE_REAL: GREEN (%0d/7 peripherals, %0d checks, %0d doc-div [BUG-RTL-SOC-010/011])",
+            $display("APB_CONFORMANCE_REAL: GREEN (%0d/7 peripherals, %0d checks, %0d doc-div [BUG-RTL-SOC-010:retired / 011:active])",
                      covered, test_num, doc_div_cnt);
             $display("TASK-12 RESULT: GREEN (expected)");
         end

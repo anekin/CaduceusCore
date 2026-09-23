@@ -1,0 +1,470 @@
+case_id: task-1-rtl-open-bugs-cleanup
+plan: .omo/plans/rtl-open-bugs-cleanup.md (todo 1 — BUG-RTL-SOC-010 doc-side)
+branch: rtl-open-bugs-cleanup
+utc_start: 2026-09-23T10:52:00Z
+utc_written: 2026-09-23T11:05:00Z
+verdict: pass
+
+================================================================================
+JUDGMENT LINES (sole verdict tokens — machine grep-able)
+================================================================================
+B10-DOC: aligned
+B10-TB-RETIRED: pcie-docdiv-0
+B10-GATE: GREEN doc_div_cnt==2 slv_docdivs[4]==0 exact-grep==0
+
+================================================================================
+SCOPE
+================================================================================
+Doc-side fix of BUG-RTL-SOC-010 ("pcie_ep_wrapper header overstates implemented
+fields"), plus retirement of the PCIE DOC-DIV markers in the real-peripheral APB
+conformance TB.
+  - rtl/ip/pcie_ep_wrapper.v          : 2 header-comment table lines (COMMENTS ONLY)
+  - rtl/tb/apb_conformance_real_tb.sv : REG_DOCDIV PCIE row + doc_bug mux arm +
+                                        comments + 2 summary display strings
+ZERO RTL behavior change.  Firmware/spec/gen/sim/vendored IP untouched.
+
+WHY DOC-SIDE (and not an RTL fix) — the authoritative constraint
+  docs/waivers/REMEDIATION-RTL-EXCEPTION-2026-08-28.md ("允许修改的文件（Scope）"
+  table) authorizes product-code edits for EXACTLY TWO files:
+    #1 rtl/soc/axi_crossbar.v      (AR/AW accept-grant coupling)
+    #2 firmware/npu_firmware.c     (address allowlist + size check)
+  Its F4 scope gate states: "除上表两文件外，不得有其他 rtl/ / firmware/ 产品代码
+  改动（TB、runner、evidence、docs 不在此限）".  An RTL behavior fix for
+  BUG-RTL-SOC-010 (implementing CTRL[3]=enable) is therefore OUT OF SCOPE;
+  aligning the header with the RTL is the in-authority fix.  TB edits ARE
+  explicitly in scope ("TB、runner、evidence、docs 不在此限").
+
+================================================================================
+RTL FACTS ENCODED INTO THE HEADER (read + cited, not assumed)
+================================================================================
+F1. rtl/ip/pcie_ep_wrapper.v:301-307 (PCIE_CTRL always-block)
+      if (!rst_n) max_payload_size_reg <= 3'd0;
+      else if (apb_write && sel_ctrl) max_payload_size_reg <= pwdata[2:0];
+    -> the ONLY stored field is mps[2:0].  There is NO storage element for a
+       CTRL[3] "enable" bit.  A write of CTRL[3]=1 is silently dropped.
+F2. rtl/ip/pcie_ep_wrapper.v:387 (APB read-data mux, sel_ctrl arm)
+      assign prdata = sel_ctrl ? {28'h0, max_payload_size_reg, 1'b0} : ...
+    -> CTRL readback is {28'h0, mps, 1'b0}: bit0 is hardwired 0 and bit3 is
+       inside the 28'h0 field, i.e. reads 0 regardless of any write.
+       (Full-write w(0xFFFF_FFFF) readback = {28'h0, 3'd7, 1'b0} = 0x0000_000E,
+        asserted by the TB as REG_EXP_F[4][0] — DUAL evidence from the sim log:
+        "[PASS] field-full PCIE +0x00 (0x0000000e)".)
+F3. rtl/ip/pcie_ep_wrapper.v:393 (BAR1_MASK read arm)
+      sel_bar1_mask ? 32'h8000_0000 :   // 2 GB mask
+    -> a pure constant.  Unlike BAR1_BASE (:392) there is no register and no
+       write path; hostile writes leave it at 0x8000_0000 (TB asserts this via
+       ACC_CONST + REG_RST[4][6] = 0x8000_0000).  bit31 is NOT writable.
+F4. vendored rtl/ip/verilog-pcie/pcie_axi_master.v:58-130 — the module port list
+    (clk, rst, rx_req_tlp_*, tx_cpl_tlp_*, m_axi_*, and the "Configuration"
+    group: completer_id[15:0] + max_payload_size[2:0], plus status_error_*)
+    contains NO top-level `enable` port.  The instantiation at
+    rtl/ip/pcie_ep_wrapper.v:243-249 therefore does NOT (and cannot) connect an
+    enable.  Confirmed by grep: the ONLY `enable` token in the vendored file is
+    the INTERNAL hard-tie at pcie_axi_master.v:217 `.enable(1'b1)`.
+    => "CTRL[3]=enable wires to the IP enable input" is not implementable without
+       modifying vendored IP (forbidden: rtl/AGENTS.md "NEVER edit vendored
+       verilog-pcie").
+
+================================================================================
+EDITS APPLIED (exact)
+================================================================================
+E1. rtl/ip/pcie_ep_wrapper.v — header comment table, 2 lines, table alignment
+    preserved (Description column still starts at column 38):
+    -    //   0x00    RW      PCIE_CTRL          [2:0]=max_payload_size, [3]=enable
+    +    //   0x00    RW      PCIE_CTRL          [2:0]=max_payload_size ([3]=enable NOT implemented; reads 0)
+    -    //   0x18    RO      PCIE_BAR1_MASK     0x8000_0000 (2 GB, bit31=writable)
+    +    //   0x18    RO      PCIE_BAR1_MASK     0x8000_0000 (2 GB, RO constant; bit31 not writable)
+
+    COMMENT-ONLY PROOF (mechanical):
+      $ git diff --stat rtl/ip/pcie_ep_wrapper.v
+      1 file changed, 2 insertions(+), 2 deletions(-)
+      $ git diff -U0 rtl/ip/pcie_ep_wrapper.v | grep -E '^[+-]' \
+          | grep -vE '^(\+\+\+|---)' | grep -vE '^[+-]\s*//'
+      -> EMPTY.  Every changed line is a `//` comment line. ZERO behavior change.
+    Post-edit sha256: bdc25777993747cd1cd2f067cafbcd05bd1d36f469f2150176f471a2cb4d3d14
+      (pre-edit baseline ad6e7dd0af1e4059473e2d930dfefa600d5dc596ef013f770ff3eed71bbc9b4b)
+
+E2. rtl/tb/apb_conformance_real_tb.sv — 8 edit sites (24 insertions, 12 deletions)
+
+  (a) REG_DOCDIV[4] (PCIE) row — index0 (CTRL) and index6 (BAR1_MASK) 1 -> 0:
+      -  '{32'd1, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd1, 32'd0, ... },
+      +  '{32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, 32'd0, ... },
+      Row count re-verified = 7 rows (unchanged); DMA row (index1 = 1) PRESERVED.
+
+  (b) doc_bug() mux — REMOVED ONLY the `4:` arm; `3:` arm KEPT (todo 2 owns it):
+      -  4: doc_bug = "BUG-RTL-SOC-010";  // PCIe header overstates CTRL[3]/BAR1_MASK
+      +  // 4 (PCIE) intentionally absent: BUG-RTL-SOC-010 was retired
+      +  // doc-side (header :258/:264 aligned with the RTL), so the PCIE
+      +  // slave has no DOC-DIV row or check any more.
+      Kept: `3: doc_bug = "BUG-RTL-SOC-011";` (line 793) and `default:` (line 799).
+      SAFETY CHECK (why removing `4:` cannot leak "BUG-RTL-SOC-???"):
+        doc_bug(4) is reachable ONLY from the two REG_DOCDIV-guarded branches
+        (ACC_CONST :1092-1098, guarded call at :1096; ACC_FIELD :1129-1135,
+        guarded call at :1133).  PCIE's REG_ACC row (:671) is
+        {ACC_FIELD, ACC_RO, ACC_RWM, ACC_CONST x4, ACC_FIELD x2, ACC_UNMAP, RW x10}
+        — it contains NO ACC_WOS (4'd5) and NO ACC_DOCDIVR (4'd8), which are the
+        ONLY two arms that call check_docdiv(..., doc_bug(s)) UNCONDITIONALLY
+        (ACC_WOS :1117-1127 -> calls at :1120/:1125; ACC_DOCDIVR :1152-1161 ->
+        calls at :1154/:1159).  With REG_DOCDIV[4] all-zero, doc_bug(4) is
+        unreachable => the arm is dead code => removal is behavior-neutral.
+
+  (c) Header PCIE section (:43-53) — "DOCUMENTED DIVERGENCE" -> "ALIGNED/RETIRED":
+      CTRL arm : now cites "header :258 now says \"NOT implemented; reads 0\"" and
+                 "the PCIE DOC-DIV row is retired (BUG-RTL-SOC-010 closed doc-side)".
+      BAR1 arm : now cites "RO constant 0x8000_0000 -> ALIGNED: header :264 now
+                 says \"RO constant; bit31 not writable\" (same retirement)".
+  (c') Header bug list (:64 region) — BUG-RTL-SOC-010 entry rewritten to RETIRED,
+       explicitly recording WHY the RTL was not changed (waiver scope = only
+       axi_crossbar.v + npu_firmware.c).  BUG-RTL-SOC-011 line untouched.
+
+  (d) REG_EXP_F comment (:726) — now states the immutable RTL truth:
+      -  //              NOT stored, bit0 always 0) — pcie_ep_wrapper.v:304-306/:387
+      +  //              NOT implemented (by design), bit0 always 0) — pcie_ep_wrapper.v:304-306/:387
+      (ACC_FIELD semantics unchanged: still expects 0xE.)
+
+  (d') REG_DOCDIV comment block (:751-753) — the two PCIE annotation lines were
+       replaced by one RETIRED line, mirroring the existing DOORBELL precedent a
+       few lines below ("RESOLVED: ... the doorbell row below is therefore
+       all-zero (no DOC-DIV any more)").
+       DISCLOSURE: this is a 6th comment site beyond the plan's literal (a)-(e)
+       enumeration.  Justification: it is the annotation OF the very flags being
+       zeroed in (a); leaving it would have asserted "header :258 says [3]=enable
+       (unimplemented)" immediately above an all-zero PCIE row — a now-false
+       statement inside a commit whose entire purpose is doc/RTL alignment.
+       Comment-only; zero behavior impact; precedent-following.
+
+  (e) Main-block unconditional summary strings (display lines, NOT the
+      check_docdiv task body) — PCIE-retired wording:
+      :1247  - ... $display("                 each bug-filed: BUG-RTL-SOC-010/011)");
+             + ... $display("                 each bug-filed: BUG-RTL-SOC-010:retired / 011:active)");
+      :1275  - $display("APB_CONFORMANCE_REAL: GREEN (%0d/7 peripherals, %0d checks, %0d doc-div [BUG-RTL-SOC-010/011])",
+             + $display("APB_CONFORMANCE_REAL: GREEN (%0d/7 peripherals, %0d checks, %0d doc-div [BUG-RTL-SOC-010:retired / 011:active])",
+
+    NEGATIVE-SCOPE PROOF (protected regions untouched — changed-line count = 0):
+      MAX_REGS                                    -> 0 changed lines
+      "task automatic check"                      -> 0 changed lines
+      "task automatic check_docdiv"               -> 0 changed lines
+      "doc_div_cnt = doc_div_cnt + 1"             -> 0 changed lines
+      "slv_docdivs[slv]"                          -> 0 changed lines
+      DMA DOC-DIV row                             -> still present (1 occurrence of
+                                                     '{32'd0, 32'd1, 32'd0,...)
+    Non-comment changed lines are EXACTLY the 4 mandated semantic edits: the
+    REG_DOCDIV PCIE row, the doc_bug `4:` arm, and the 2 $display strings.
+    Post-edit sha256: 7cb386afb2404295321beb8b0f1a7e9719dee7a044e61d9205138825e0ac0e40
+      (pre-edit baseline 1b12bfc9c37db6b6df7db5c7a6e8e305f324a67638b6f6adac69497a9daa3e88)
+
+================================================================================
+HOW REG_DOCDIV AFFECTS COUNTS (predicted then confirmed — no hidden trap)
+================================================================================
+Both dispatch sites are mutually exclusive and each increments test_num exactly
+once (:1092-1098 ACC_CONST, :1129-1135 ACC_FIELD):
+    if (REG_DOCDIV[s][r]) check_docdiv(rd, EXPECTED, s, desc, doc_bug(s));
+    else                  check(rd, EXPECTED, s, desc);
+=> retiring a DOC-DIV flag moves a check from the doc_div bucket into the normal
+   pass bucket; it does NOT change Total checks.  PREDICTION: 263 checks, 2 doc-div.
+   CONFIRMED by the run below.
+
+================================================================================
+PROVENANCE
+================================================================================
+HEAD (pre-commit): 6c13c48950341c5d5e72b9430a5dd77dd8c2cafd
+$ git branch --show-current
+rtl-open-bugs-cleanup
+$ git rev-parse HEAD
+6c13c48950341c5d5e72b9430a5dd77dd8c2cafd
+BASE: chore(omo): P0 baseline — branch + provenance snapshot (rtl-open-bugs-cleanup)  [todo 0]
+HOST: invoked from sz0002 (dev host) — runner auto-forwarded over SSH to the EDA
+      server sz0001 per the verification-environment policy.  VCS never run locally.
+VCS: /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+     Runtime banner: "Compiler version V-2023.12-SP2_Full64; Runtime version
+     V-2023.12-SP2_Full64;  Sep 23 19:00 2026"
+
+FULL COMMANDS (both runs; identical command, different source revision)
+$ bash sim/regression/soc-verification-run.sh run_apb_conformance_real
+  (runner: hostname -s != sz0001 -> exec ssh -o BatchMode=yes -o ConnectTimeout=10
+   $USER@192.168.0.11 "bash '<repo>/sim/regression/soc-verification-run.sh'
+   'run_apb_conformance_real' '1'")
+  runner preamble: source /NAS/Tools/methodology/modules/init/bash
+                   module load vcs/vcs_2023.12sp2
+                   cd <repo>/sim/regression
+                   rm -rf simv_soc_cocotb simv_soc_cocotb.daidir csrc   # force full rebuild
+                   make run_apb_conformance_real
+  make --dry-run equivalent of the recipe actually executed:
+    vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps +v2k +lint=all \
+        +warn=all -f rtl/cpu/ibex.flist -f rtl/ip/verilog-axi.flist \
+        -f rtl/ip/verilog-pcie.flist -f rtl/soc/soc.flist \
+        rtl/tb/apb_conformance_real_tb.sv -top apb_conformance_real_tb \
+        -o sim/regression/simv_apb_conformance_real \
+        -l sim/regression/compile_apb_real.log
+    cd <repo> && ./sim/regression/simv_apb_conformance_real 2>&1 | tee ...
+    grep -q "APB_CONFORMANCE_REAL: GREEN" apb_conformance_real.log
+
+================================================================================
+PRECHECK — independent re-verification of todo 0
+================================================================================
+$ git branch --show-current                                  -> rtl-open-bugs-cleanup            PASS
+$ git log -1 --format=%s                                     -> chore(omo): P0 baseline — branch
+                                                               + provenance snapshot
+                                                               (rtl-open-bugs-cleanup)          PASS
+$ git show --name-only HEAD                                  -> exactly 3 paths, all under .omo/:
+                                                               .omo/drafts/rtl-open-bugs-cleanup.md
+                                                               .omo/evidence/task-0-rtl-open-bugs-cleanup.txt
+                                                               .omo/plans/rtl-open-bugs-cleanup.md
+                                                                                                PASS
+$ git status --porcelain | grep -cE '^ ?M'                    -> 8 (expected 7)               DELTA
+
+  DELTA EXPLAINED (1 line, benign, disclosed — NOT treated as a todo-0 failure):
+  $ git diff .omo/plans/rtl-open-bugs-cleanup.md
+    -  - [ ] 0. P0 基线：前置门 + 分支 + provenance + 7 行终拍断言
+    +  - [x] 0. P0 基线：前置门 + 分支 + provenance + 7 行终拍断言
+  mtime 2026-09-23 18:45:44 (+0800) — i.e. AFTER todo 0's commit at 18:42:05.
+  Cause: the orchestrator flipped todo 0's progress checkbox.  Todo 0's own
+  pre-commit snapshot recorded this path as UNTRACKED (`?? .omo/plans/...`); the
+  same commit then made it tracked, so the post-commit checkbox flip necessarily
+  appears as ` M`.  It is plan metadata: not product code, not in the protected
+  set, and its content delta is one character.
+  SUBSTANCE OF THE PRECHECK HOLDS — all 7 protected files re-hashed byte-identical
+  to todo 0's recorded AFTER-block (see below).  Proceeded on that basis with the
+  delta recorded here rather than discarding a verified-good baseline.
+
+================================================================================
+NO-MUTATION PROOF — 7 protected dirty files
+================================================================================
+$ sha256sum <the 7 files>   (after all edits, before commit)
+01c7e6fddafe480f711e8fbf1acc1cc7658c885efa2ae3604de962be215f0ef1  .omo/evidence/task-0-signoff-v3-runner.txt
+3c524bc23681b677bf762a763f8fe708891f1e03bf1123e4340e572c7cde07fc  .omo/evidence/task-20-uncertainty-kpis.json
+99baf8e38100691138403e90ca2f053fcef6e84ee13dcc4601dac9ee47dcd7d3  .omo/evidence/task-23-perf-spec-ci.txt
+152791981641928dc5f53aec1777d285a4cf2c6b61e79ababaabf0bbdd457af8  .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+048ec8c95dbebd4f08f872e8452414d0d61da72ec02dfc3715281e9a33e68b50  .omo/notepads/phase6-rtl-verification/learnings.md
+88b9174e88dab7bf71b1b4348004f13bc9cd9a9953aa988112b3da910099978e  build/evidence/fm-cv-chain.txt
+59657c08d3f9b53d7f411101968ae56150dfbcacfe3580dabae6f30dd35e9e69  build/evidence/w3-4-mobilenetv3-fm.txt
+
+MECHANICAL NON-MUTATION CHECK (not a visual comparison):
+  $ sha256sum <7 files> > now.txt
+  $ sed -n '/sha256 AFTER work/,/^$/p' .omo/evidence/task-0-rtl-open-bugs-cleanup.txt \
+      | grep -E '^[0-9a-f]{64}' > base.txt
+  $ diff -q base.txt now.txt   ->  no output (EMPTY) => byte-identical to todo 0
+=> none of the 7 was staged, committed, or modified.
+
+$ git status --porcelain | grep -cE '^ ?M'  -> 10 before commit
+    = 7 protected + .omo/plans/rtl-open-bugs-cleanup.md (the explained checkbox)
+      + the 2 files this todo intentionally edits.
+Pathspec-limited staging is used for the commit, so the 7 protected files cannot
+enter it.
+
+================================================================================
+PRE-EDIT BASELINE RUN (harness-health control — run BEFORE any edit)
+================================================================================
+Purpose: prove the TB/runner/environment were GREEN before attributing the
+post-edit result to this change (guards against blaming the edit for a
+pre-existing environment breakage).
+  Total checks : 263
+  Passes       : 263
+  Fails        : 0
+  DOC-DIV      : 4   (DMA 2 + PCIE 2)
+    MXU      : 51 / 0 / 0 / 172
+    SFU      : 22 / 0 / 0 / 76
+    VECTOR   : 37 / 0 / 0 / 130
+    DMA      : 43 / 0 / 2 / 146
+    PCIE     : 24 / 0 / 2 / 76        <-- 2 PCIE DOC-DIVs (BUG-RTL-SOC-010)
+    DOORBELL : 60 / 0 / 0 / 345
+    INTC     : 16 / 0 / 0 / 52
+  APB_CONFORMANCE_REAL: GREEN (7/7 peripherals, 263 checks, 4 doc-div [BUG-RTL-SOC-010/011])
+  TASK-12 RESULT: GREEN (expected)
+  $finish at simulation time 14636000  (tb line 1268)
+  Wed Sep 23 18:54:30 2026
+$ grep -cE '\[DOC-DIV\].*BUG-RTL-SOC-010' <baseline log>  ->  2
+  => the gate grep DISCRIMINATES: it is capable of matching BUG-RTL-SOC-010
+     emissions, and it did so pre-edit.  Its 0 post-edit count is therefore
+     meaningful, not an artifact of an ineffective pattern.
+Consistent with the previously recorded baseline
+(.omo/evidence/task-7-bug-009-doorbell-fix.txt:49 "GREEN + doc_div_cnt=4 +
+slv_docdivs[5]=0 + doorbell checks=60").
+
+================================================================================
+POST-EDIT RUN (the gate) — verbatim log excerpt
+================================================================================
+=== RUN LOG: sim/regression/apb_conformance_real.log ===
+Chronologic VCS simulator copyright 1991-2023
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Sep 23 19:00 2026
+...
+  [PASS] field-full PCIE +0x00 (0x0000000e)          <-- CTRL[3] reads 0 (RTL truth intact)
+  [PASS] ro-const PCIE +0x18 (0x80000000)            <-- BAR1_MASK constant (RTL truth intact)
+...
+ apb_conformance_real_tb — Final Report
+=====================================================
+  Total checks : 263
+  Passes       : 263
+  Fails        : 0   (unexpected — real RTL != REAL oracle)
+  DOC-DIV      : 2   (real RTL contradicts documented spec,
+                 each bug-filed: BUG-RTL-SOC-010:retired / 011:active)
+  Write timeouts: 0   Read timeouts: 0
+  Per-slave coverage (checks / fails / doc-div / psel_o asserts):
+    MXU      : 51 / 0 / 0 / 172
+    SFU      : 22 / 0 / 0 / 76
+    VECTOR      : 37 / 0 / 0 / 130
+    DMA      : 43 / 0 / 2 / 146
+    PCIE      : 24 / 0 / 0 / 76
+    DOORBELL      : 60 / 0 / 0 / 345
+    INTC      : 16 / 0 / 0 / 52
+=====================================================
+APB_CONFORMANCE_REAL: GREEN (7/7 peripherals, 263 checks, 2 doc-div [BUG-RTL-SOC-010:retired / 011:active])
+TASK-12 RESULT: GREEN (expected)
+=====================================================
+
+$finish called from file "rtl/tb/apb_conformance_real_tb.sv", line 1280.
+$finish at simulation time             14636000
+CPU Time:      0.650 seconds;       Data structure size:  12.0Mb
+Wed Sep 23 19:02:18 2026
+APB_CONFORMANCE_REAL: PASS
+[soc-run] RESULT: PASS for run_apb_conformance_real
+
+================================================================================
+MEASURED VALUES (recorded, NOT hardcoded — taken from the post-edit log)
+================================================================================
+                                       BASELINE      POST-EDIT     EXPECTED
+  APB_CONFORMANCE_REAL:                 GREEN         GREEN        GREEN
+  TASK-12 RESULT:                       GREEN         GREEN        GREEN
+  Total checks                          263           263          (unchanged)
+  Passes                                263           263
+  Fails                                 0             0
+  doc_div_cnt                           4             2            2      PASS
+  slv_docdivs[0] MXU                    0             0
+  slv_docdivs[1] SFU                    0             0
+  slv_docdivs[2] VECTOR                 0             0
+  slv_docdivs[3] DMA                    2             2            (todo 2)
+  slv_docdivs[4] PCIE                   2             0            0      PASS
+  slv_docdivs[5] DOORBELL               0             0
+  slv_docdivs[6] INTC                   0             0
+  write_timeouts / read_timeouts        0 / 0         0 / 0
+  $finish tb line                       1268          1280         (+12)
+  sim wall clock                        18:54:30      19:02:18
+
+  PER-SLAVE CHECKS (checks / fails / doc-div / psel_o asserts):
+    BASE   MXU      51 / 0 / 0 / 172 | SFU 22 / 0 / 0 / 76 | VECTOR 37 / 0 / 0 / 130
+           DMA      43 / 0 / 2 / 146 | PCIE 24 / 0 / 2 / 76 | DOORBELL 60 / 0 / 0 / 345
+           INTC     16 / 0 / 0 / 52
+    POST   MXU      51 / 0 / 0 / 172 | SFU 22 / 0 / 0 / 76 | VECTOR 37 / 0 / 0 / 130
+           DMA      43 / 0 / 2 / 146 | PCIE 24 / 0 / 0 / 76 | DOORBELL 60 / 0 / 0 / 345
+           INTC     16 / 0 / 0 / 52
+    => PCIE checks stay 24 (checks are re-bucketed, not removed) and PCIE
+       psel_o asserts stay 76 — i.e. the PCIE slave was exercised identically;
+       only its doc-div classification changed.  Every other slave is bit-identical.
+
+  REG_CNT [0:6] (rtl/tb/apb_conformance_real_tb.sv:641-642 — per-slave register
+  count driving the Phase-1 reset loop and the Phase-2 case loop):
+    '{32'd18, 32'd8, 32'd14, 32'd15, 32'd10, 32'd20, 32'd3}
+     MXU 18 | SFU 8 | VECTOR 14 | DMA 15 | PCIE 10 | DOORBELL 20 | INTC 3   (total 88)
+     UNCHANGED by this commit (0 changed lines matching REG_CNT).
+  MAX_REGS = 20 (:639) — UNCHANGED.
+
+  DOORBELL PER-SLAVE (explicitly requested): checks 60, fails 0, doc-div 0,
+  psel_o asserts 345 — identical to baseline and to todo 7 of
+  bug-009-doorbell-fix ("doorbell checks=60").
+  Phase 2b doorbell window-top/above-window edge checks: PASS
+  ("doorbell +0x50 window-top rw-full" / "rw-zero").
+
+================================================================================
+EXACT-GREP GATE — `grep -E '\[DOC-DIV\].*BUG-RTL-SOC-010' <log>` -> 0 hits
+================================================================================
+PROBE 1 (the plan's acceptance grep, case-sensitive):
+  $ grep -cE '\[DOC-DIV\].*BUG-RTL-SOC-010' sim/regression/apb_conformance_real.log
+  0                                                                                   PASS
+
+PROBE 2 (what DOES carry the uppercase [DOC-DIV] marker):
+  $ grep -nE '\[DOC-DIV\]' <log>
+  16:  DOC-DIV policy: real-vs-documented contradictions tagged [DOC-DIV]
+  186:         [DOC-DIV] real RTL contradicts documented spec — filed as BUG-RTL-SOC-011
+  188:         [DOC-DIV] real RTL contradicts documented spec — filed as BUG-RTL-SOC-011
+  => exactly 2 real [DOC-DIV] emissions remain, BOTH BUG-RTL-SOC-011 (DMA).
+     Zero PCIE emissions.  (Baseline had 4: 2x011 + 2x010.)
+
+PROBE 3 (every literal BUG-RTL-SOC-010 occurrence in the post-edit log):
+  $ grep -nF 'BUG-RTL-SOC-010' <log>
+  320:                 each bug-filed: BUG-RTL-SOC-010:retired / 011:active)
+  331:APB_CONFORMANCE_REAL: GREEN (7/7 peripherals, 263 checks, 2 doc-div [BUG-RTL-SOC-010:retired / 011:active])
+  => only the 2 main-block SUMMARY strings, in "retired" wording — which the plan
+     explicitly excludes from the gate ("主块汇总串已按 retired 口径更新，
+     BUG-RTL-SOC-010 单独出现在汇总串不算失败").  Neither line contains the
+     bracketed [DOC-DIV] marker.
+
+PROBE 4 (discrimination, tightened beyond the plan's requirement):
+  $ grep -icE '\[DOC-DIV\].*BUG-RTL-SOC-010' <log>   -> 0   (also 0 case-INSENSITIVE)
+  $ grep -cE 'filed as BUG-RTL-SOC-010' <log>        -> 0   (no check_docdiv emission for PCIE)
+  $ grep -cE 'filed as BUG-RTL-SOC-011' <log>        -> 2   (DMA still active — discriminating)
+  "filed as <id>" is the exact string emitted by check_docdiv (:958), so a count
+  of 0 proves no PCIE row was bucketed as a documented divergence — the strongest
+  available form of the gate.  The BUG-011 count of 2 proves the probe would have
+  caught a real emission had one occurred.
+
+================================================================================
+ADVERSARIAL CLASS PROBES
+================================================================================
+misleading_success_output — APPLICABLE -> PASS.  GREEN was NOT inferred from
+  terminal text.  The verdict is anchored on machine-grep-able lines INSIDE the
+  log: "APB_CONFORMANCE_REAL: GREEN (7/7 peripherals, 263 checks, 2 doc-div ...)",
+  "Total checks : 263" / "Fails : 0", and the per-slave "PCIE : 24 / 0 / 0 / 76".
+  The exact gate grep was re-run independently and additionally hardened with a
+  case-insensitive variant and a "filed as" discrimination count (all 0 for 010).
+  Additionally, the runner script's own exit status was cross-checked (EXIT=0) yet
+  deliberately NOT used as evidence.
+
+stale_state — APPLICABLE -> PASS.  Proof the sz0001 build actually recompiled and
+  the new TB (not a stale binary) produced the log:
+    - runner preamble line 4: "[soc-run] removing stale simv to force full rebuild"
+    - compile log mtime 2026-09-23 19:00:48 > TB edit 18:57:02 > wrapper edit 18:55:29
+    - simv mtime 2026-09-23 19:00:48 (rebuilt at 19:00:48)
+    - sim/regression/compile_apb_real.log:3383
+        "CPU time: 16.259 seconds to compile + 1.792 seconds to elab + .555 seconds to link"
+    - INDEPENDENT structural proof: the simulation's own $finish report moved
+        1268 -> 1280 (exactly +12 = the net comment/line delta of this commit:
+        header +2, bug-list +7, REG_DOCDIV annotation +1, doc_bug mux +2).  A stale
+        binary would still have reported line 1268.
+    - The runtime banner re-stamped: "Sep 23 19:00 2026"; sim closed 19:02:18.
+
+dirty_worktree — APPLICABLE -> PASS.  All 7 protected files re-hashed after all
+  edits and are byte-identical to todo 0's recorded baseline block (see the
+  NO-MUTATION PROOF section).  None staged, none committed (pathspec-only add).
+  The only extra ` M` beyond the 7 + this todo's 2 files is the explained
+  plan-checkbox flip.
+
+malformed_input — NOT APPLICABLE.  No external/untrusted input is parsed: the
+  commands are fixed literal git/sha256/grep/make invocations and one VCS run over
+  in-repo sources.  No parsing of user-supplied text.
+prompt_injection — NOT APPLICABLE.  No network access, no fetched content, no
+  third-party text interpreted as instructions.  In-repo comments were read as data.
+cancel_resume — NOT APPLICABLE.  Single-shot bounded task completed in one pass; no
+  resumable long-running flow, no partial-state handoff.
+hung_commands — NOT APPLICABLE.  No trigger fact appeared: both VCS runs terminated
+  normally (EXIT=0, "$finish at simulation time 14636000", CPU 0.660 s / 0.650 s) and
+  the TB carries a per-transaction watchdog with write_timeouts=0 read_timeouts=0.
+flaky_tests — NOT APPLICABLE.  No trigger fact appeared: the two runs are
+  deterministic and agree exactly where they must (Total checks 263 == 263,
+  $finish at simulation time 14636000 == 14636000, Fails 0 == 0, all 6 non-PCIE
+  slave rows bit-identical).  The single intentional difference is doc_div_cnt 4->2.
+repeated_interrupts — NOT APPLICABLE.  No interactive or interruptible sequence; no
+  retries were needed and none were performed.
+
+================================================================================
+NO_SILENT_SKIP
+================================================================================
+Every gate the plan names was evaluated and reported, including the two that could
+have failed: `doc_div_cnt == 2` (measured 2) and `slv_docdivs[4] == 0` (measured 0).
+Nothing was skipped, waived, or inferred.  The 6th (disclosed) comment edit site is
+reported above rather than hidden.  The PRECHECK `M`-count delta is reported above
+rather than silently rounded to 7.
+
+================================================================================
+COMMIT
+================================================================================
+$ git add rtl/ip/pcie_ep_wrapper.v rtl/tb/apb_conformance_real_tb.sv
+$ git add -f .omo/evidence/task-1-rtl-open-bugs-cleanup.txt
+$ git commit -m "docs(rtl/ip): align pcie_ep_wrapper header with RTL + retire PCIe DOC-DIV (BUG-RTL-SOC-010)"
+Staged set is EXACTLY these 3 paths — no `git add .`, no `-A`, no `commit -a`,
+no stash, no push, no worktree.  The 7 protected dirty files are NOT staged.
+Post-commit invariant: `git status --porcelain | grep -cE '^ ?M'` must be 8
+(7 protected + the plan checkbox).
+
+B10-DOC: aligned
+B10-TB-RETIRED: pcie-docdiv-0
+B10-GATE: GREEN doc_div_cnt==2 slv_docdivs[4]==0 exact-grep==0

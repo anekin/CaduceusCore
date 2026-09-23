@@ -255,13 +255,13 @@ module pcie_ep_wrapper #(
     //
     // Register map (offsets within the 4 KB APB window):
     //   Offset  Access  Name               Description
-    //   0x00    RW      PCIE_CTRL          [2:0]=max_payload_size, [3]=enable
+    //   0x00    RW      PCIE_CTRL          [2:0]=max_payload_size ([3]=enable NOT implemented; reads 0)
     //   0x04    RO      PCIE_STATUS        [0]=error_cor, [1]=error_uncor
     //   0x08    RW      PCIE_COMPLETER_ID  [15:0]=Bus/Dev/Fn ID
     //   0x0C    RO      PCIE_BAR0_BASE     0x2000_0000 (SRAM)
     //   0x10    RO      PCIE_BAR0_MASK     0xFFC0_0000 (4 MB)
     //   0x14    RO      PCIE_BAR1_BASE     0x8000_0000 (DRAM)
-    //   0x18    RO      PCIE_BAR1_MASK     0x8000_0000 (2 GB, bit31=writable)
+    //   0x18    RO      PCIE_BAR1_MASK     0x8000_0000 (2 GB, RO constant; bit31 not writable)
     //   0x1C    RW      PCIE_MSIX_CTRL     [0]=msix_en, [15:8]=vector_num
     //   0x20    RW      PCIE_IRQ_CTRL      [0]=irq_en, [1]=irq_pending(W1C),
     //                                       [2]=err_irq_en
