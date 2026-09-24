@@ -72,6 +72,20 @@ opencode_wa/
 # Generated evidence directory (timestamps/per-run output; keep final reports in reports/)
 build/evidence/
 
+# Regenerated wrapper-verification artifacts (todo 1 of wrp-defects-and-tooling-fixes):
+# the runners rewrite these in place, so tracking them produced dirty-worktree
+# noise instead of evidence.  Deliberately NAMED rules — never a blanket *.dbg.
+# Historical statics stay tracked (gitignore does not affect tracked files):
+#   wrap-bug005-result.txt, wrap-bug007-result.txt, wv-bug007-*.log.dbg,
+#   wv_bug005_logs/*.dbg, wrap-mxu-regression.RED-pre-RTL.txt
+build/evidence/wv_vector_logs/
+build/evidence/wrap-mxu-regression.txt
+build/evidence/wrap-regression-summary.txt
+build/evidence/wrap-sfu-debug.txt
+build/evidence/wrap-sfu-regression.txt
+build/evidence/wrap-vec-regression.txt
+build/evidence/wrap-vec-status.txt
+
 # Built software/runtime artifacts
 build/install/
 build/software/

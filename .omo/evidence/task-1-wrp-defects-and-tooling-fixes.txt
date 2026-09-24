@@ -1,0 +1,335 @@
+case_id: task-1-wrp-defects-and-tooling-fixes
+plan: .omo/plans/wrp-defects-and-tooling-fixes.md (todo 1 — 工具链可信度)
+utc_start: 2026-09-24T14:06Z (PRECHECK)   utc_written: 2026-09-24T16:20Z
+branch: wrp-defects-and-tooling-fixes       base/head at start: 7ce88a8f896bf00c2af8e202814e3a065c2e6ec1
+verdict: pass
+TOOLING: fixed
+
+SCOPE
+  (a) 3 broken Makefile wrapper targets; (b) fail-closed verdict parsing (shared helper +
+      fixtures + 2 proven silent leaks); (c) stale-simv / stale-csrc cleanup + a FORCED-REBUILD
+      FM-SOC baseline; (d) untrack the regenerated wrap-*/wv_vector_logs artifacts with NAMED
+      .gitignore rules while protecting historical statics.
+  Files touched: sim/regression/Makefile, sim/regression/soc-verification-run.sh,
+  sim/regression/run_ibex_full_rtl.sh, scripts/wv_run_mxu.sh, scripts/wv_run_sfu.sh,
+  scripts/wv_run_vector.sh, scripts/wv_regression.sh, scripts/parse_cocotb_verdict.sh (new),
+  sim/regression/fixtures/*.log (new), .gitignore, build/evidence/* (11 untrack deletions),
+  .omo/evidence/task-1-wrp-defects-and-tooling-fixes.txt, .omo/evidence/task-1-wrp-untrack-snapshot.txt.
+  NOT touched: rtl/**, sim/tests/**, sim/regression/csrc (does not exist), docs/**, README.md,
+  Makefile:72-78, Makefile dependency graph, scripts/wv_compile.sh, scripts/wv_f1_audit.sh
+  (the helper-route branch was taken, so the audit-path edit was NOT needed), firmware/.
+  scripts/wv_run_bug005.sh / wv_run_bug007.sh were read only (never edited).
+
+METHOD
+  VCS/cocotb runs went through repo runners only (sz0001 auto-SSH / p9_ssh); one sz0001 run at a
+  time; every long run bounded (`timeout -k 30`) with wall time recorded.  Verdicts were parsed by
+  the new helper or by hand — never inferred from a runner's prose or exit code.
+
+PRECHECK (all PASS)
+  branch == wrp-defects-and-tooling-fixes
+  git log -1 --format=%s == "chore(omo): P0 baseline — branch + provenance snapshot (wrp-defects-and-tooling-fixes)"
+  git show --name-only HEAD == 3 .omo/ paths (plan + draft + task-0 evidence)
+  M-set == 7 protected dirty files + .omo/plans/wrp-defects-and-tooling-fixes.md  (subset assertion holds)
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+(a) MAKEFILE WRAPPER TARGETS — BROKEN (Error 127) -> FIXED
+══════════════════════════════════════════════════════════════════════════════════════════════
+ROOT CAUSE (reproduced locally, no sz0001 needed — the recipe ran with cwd=sim/regression):
+  $ (cd sim/regression && bash scripts/wv_run_mxu.sh) ; echo rc=$?
+  bash: scripts/wv_run_mxu.sh: No such file or directory
+  rc=127
+  ...and p9_lib resolved REPO_ROOT only because the *script* path was wrong, so make aborted
+  before any VCS work: a target that could never run.
+FIX (house style `cd $(REPO_ROOT) && ...`, cf. :98/:403/:1022):
+  sim/regression/Makefile
+  -1307:	@cd $(REPO_ROOT) && bash scripts/wv_run_sfu.sh
+  -1311:	@cd $(REPO_ROOT) && bash scripts/wv_run_vector.sh
+  -1315:	@cd $(REPO_ROOT) && bash scripts/wv_run_mxu.sh
+  `git diff` shows exactly those 3 recipe lines changed (no dependency-graph change, :72-78 untouched).
+AFTER (proof, two independent invocations):
+  1) $ bash sim/regression/soc-verification-run.sh run_wrapper_mxu      # acceptance command
+     [soc-run] current host is sz0002; forwarding to 192.168.0.11
+     [soc-run] target=run_wrapper_mxu clean=1 repo=.../CaduceusCore
+     [soc-run] removing stale simv to force full rebuild
+     [soc-run] make run_wrapper_mxu
+     \033[0;33m[WRAPPER_MXU] Running MXU wrapper cocotb tests...\033[0m
+     [wv_run_mxu.sh] Compiling tb_mxu_wrapper on sz0001...
+     make: *** [run_wrapper_mxu] Error 255          # ssh self-loop gap on sz0001, see RESIDUALS
+     grep -c 'Error 127\|No such file or directory' == 0   -> the Error-127 class is GONE
+     (wall 1 s; log build/evidence/t1-wrap-mxu-runner.log)
+  2) $ cd sim/regression && timeout -k 30 1800 make run_wrapper_mxu     # full end-to-end, wall 160 s
+     [wv_run_mxu.sh] Compilation passed.
+     [wv_run_mxu.sh]   test_apb_regmap_rw: PASS [TESTS=1 PASS=1 FAIL=0 SKIP=0]
+     [wv_run_mxu.sh]   test_mxu_preload_single_tile: PASS [TESTS=1 PASS=1 FAIL=0 SKIP=0]
+     [wv_run_mxu.sh]   test_mxu_single_tile_compute: FAIL [TESTS=1 PASS=0 FAIL=1 SKIP=0]
+     [wv_run_mxu.sh]   test_mxu_store_out_burst: PASS [TESTS=1 PASS=1 FAIL=0 SKIP=0]
+     [wv_run_mxu.sh]   test_mxu_accumulate_mode: FAIL [TESTS=1 PASS=0 FAIL=1 SKIP=0]
+     [wv_run_mxu.sh]   test_mxu_wrapper_watchdog_timeout: PASS [TESTS=1 PASS=1 FAIL=0 SKIP=0]
+     [wv_run_mxu.sh] 2 test(s) FAILED.  -> make: *** [Makefile:1315: run_wrapper_mxu] Error 1
+     grep -c 'Error 127' == 0 ; 4 PASS / 2 FAIL == the known pre-existing WRP-1/WRP-2 signatures.
+     (log build/evidence/t1-wrap-mxu-make.log)
+  NULL-HYPOTHESIS CONTRAST: before this todo the same suite printed "[wv_run_mxu.sh] All 6 tests
+  PASSED." and exited 0 while two tests really FAILED (BLOCKER-2, task-4 evidence).  It now reports
+  2 FAIL and exits non-zero — the fail-closed path is what changed.
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+(b) FAIL-CLOSED VERDICT PARSING
+══════════════════════════════════════════════════════════════════════════════════════════════
+B-1  NEW scripts/parse_cocotb_verdict.sh (single source of truth for verdicts)
+  Contract: exit 0 = PASS iff (i) exactly ONE summary line `TESTS=<n> PASS=<n> FAIL=<n> SKIP=<n>`,
+  (ii) n>0, FAIL==0, SKIP==0, PASS==TESTS, (iii) per-test lines `** <name>  PASS|FAIL  **`
+  (ANSI-stripped) cross-check: count==TESTS and PASS count==PASS.  Everything else (missing /
+  duplicate / inconsistent summary, missing or disagreeing per-test lines, empty/missing log,
+  bad usage) exits 1 with a one-line reason on stderr.  stdout always carries
+  `COCOTB_VERDICT: PASS|FAIL TESTS=.. PASS=.. FAIL=.. SKIP=.. TEST_LINES=.. LOG=..`.
+  Multi-GB safety: cheap grep pre-filter before ANSI strip; no full-file command substitution.
+
+B-2  FIXTURE MATRIX (committed under sim/regression/fixtures/, runnable as the acceptance says)
+  $ bash scripts/parse_cocotb_verdict.sh sim/regression/fixtures/<f> ; echo rc=$?
+  verdict-pass.log              rc=0  PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1
+  verdict-fail.log              rc=1  FAIL (summary-not-all-pass TESTS=1 PASS=0 FAIL=1 SKIP=0)
+  verdict-sfu7.log              rc=1  FAIL TESTS=7 PASS=3 FAIL=4 SKIP=0 TEST_LINES=7   (real sfu shape)
+  verdict-sfu7-pass.log         rc=0  PASS TESTS=7 PASS=7 FAIL=0 SKIP=0 TEST_LINES=7   (n=7 all-pass)
+  verdict-summary-mismatch.log  rc=1  FAIL (per-test-status-mismatch: lines PASS=1 FAIL=1 vs summary PASS=2 FAIL=0)
+  verdict-truncated.log         rc=1  FAIL (summary-line-count=0 (expected exactly 1))
+  <missing file>                rc=1  FAIL (log-not-found)
+  <no args>                     rc=1  FAIL (usage)
+  <--log form>                  rc=0  PASS TESTS=1 PASS=1 FAIL=0 SKIP=0
+  Note: verdict-fail.log carries the REAL ANSI-coloured FAIL token (^[[31m FAIL ^[[49m) and the
+  required TESTS=1 PASS=0 FAIL=1 shape; sfu7 fixtures are byte-extracted from the real
+  build/evidence/wrap-sfu-regression.txt (7 per-test lines) — nothing hardcodes n.
+
+B-3  CONSTRUCTIVE PROOF OF THE ORIGINAL FALSE POSITIVE (same file, two parsers)
+  $ grep -qE 'TEST.*PASS' sim/regression/fixtures/verdict-fail.log ; echo rc=$?
+  rc=0   <- legacy pattern: reports PASS on a 100%-failing log
+  $ bash scripts/parse_cocotb_verdict.sh sim/regression/fixtures/verdict-fail.log ; echo rc=$?
+  rc=1   <- helper: FAIL, and it prints the self-consistency reason
+  Real-log cross-check (not fixtures):
+  build/evidence/wv-mxu-test_apb_regmap_rw.log        -> rc=0 PASS TESTS=1 PASS=1 FAIL=0
+  build/evidence/wv-mxu-test_mxu_single_tile_compute.log -> rc=1 FAIL TESTS=1 PASS=0 FAIL=1
+  build/evidence/wrap-sfu-regression.txt              -> rc=1 FAIL TESTS=7 PASS=3 FAIL=4 (07-23 snapshot)
+
+B-4  WIRING (helper call counts + every failure path exits non-zero)
+  $ grep -c 'parse_cocotb_verdict.sh' scripts/wv_run_mxu.sh scripts/wv_run_sfu.sh scripts/wv_run_vector.sh scripts/wv_regression.sh
+  2 / 3 / 3 / 4
+  $ grep -n -B2 '^\s*exit 0' <each script>   -> all four `exit 0` statements sit on PASS branches
+  (wv_run_mxu.sh:116-118 inside `if FAIL_COUNT -eq 0`; wv_run_sfu.sh:100-102 after the helper
+  returns 0; wv_run_vector.sh:129-131 inside `if FAIL_N -eq 0`; wv_regression.sh:290 after the
+  `TOTAL_NOTPASS -ne 0 -> exit 1` guard).  No bare `exit 0` remains on a failure path, and the
+  naive `grep -qE 'TEST.*PASS'` verdict is gone from executable code (only its post-mortem in a comment).
+  wv_run_mxu.sh: per-test verdict = helper(rc) -> PASS/FAIL counters; the verdict line is recorded
+  verbatim in wrap-mxu-regression.txt.
+  wv_run_sfu.sh: whole-module run; helper verdict + explicit rc=124/137 TIMEOUT classification.
+  wv_run_vector.sh: the verdict logic was REMOVED from the remote heredoc; it now runs locally on
+  each per-test log (`build/evidence/wv_vector_logs/<case>.log`), so a missing/ambiguous log FAILs.
+
+B-5  SILENT LEAK (i) — vector listed 5 of the module's 6 tests  -> CLOSED
+  `git grep` count of @cocotb.test() in sim/tests/wrapper/test_vector_wrapper.py == 6; the runner's
+  TESTS=() now lists all six, including `test_bug005_vector_nonaligned_wstrb` (by default, not
+  optional).  PROOF IT WAS A REAL LEAK, NOT A COSMETIC EDIT: on the freshly rebuilt simv the added
+  case FAILS (TESTS=1 PASS=0 FAIL=1) while the other five PASS -> the old 5-case list was hiding a
+  standing failure.  Per the plan the test is KEPT (not re-removed) and the failure is recorded:
+  build/evidence/wrap-vec-regression.txt -> "test_bug005_vector_nonaligned_wstrb: FAIL [...]" and
+  "=== Overall: FAIL (5/6 PASS, 1 FAIL) ===".
+
+B-6  SILENT LEAK (ii) — wv_regression.sh hardcoded counts + always exit 0  -> CLOSED (helper route)
+  Removed hardcodings (old :103-105 SFU_PASS=1/SFU_FAIL=4/SFU_TOTAL=5, :121 'ALL 5 PASS',
+  :141 'Summary: 5 PASS, 0 FAIL', plus the dependent "5/5" tallies).  All three suites now go
+  through the helper: SFU = the aggregate cocotb log; Vector/MXU = per-case logs whose case list is
+  read from the runner sources (`_runner_tests`, single source of truth, so a new case can never be
+  silently dropped from the aggregate).  Case count mismatch (logs found != cases declared) is a FAIL,
+  not a pass-by-default.  Exit status is now 0 only when all 3 suites are PASS.
+  BEFORE (07-23 artifact, wrong): "SFU wrapper: PARTIAL (1/5 PASS...)" / "Vector wrapper: PASS (5/5)" /
+  "MXU wrapper: PASS (5/5)" ... "Overall" absent; the script always exited 0.
+  AFTER (fresh run, derived): SFU 7 total 6 PASS 1 FAIL -> FAIL ; Vector 6 total 5 PASS 1 FAIL -> FAIL ;
+  MXU 6 total 4 PASS 2 FAIL -> FAIL ; "Overall: FAIL (0/3 suites PASS, 3 not-PASS)" ; exit=1.
+  Because the helper route was taken, scripts/wv_f1_audit.sh was intentionally NOT edited; its
+  existing greps still work when the suites pass and correctly fail otherwise (fail-closed either way).
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+(c) STALE-BINARY / STALE-ELAB CLEANUP + FORCED-REBUILD FM-SOC BASELINE
+══════════════════════════════════════════════════════════════════════════════════════════════
+C-1  sim/regression/soc-verification-run.sh CLEAN block (acceptance greps)
+     $ grep -c 'simv_apb_conformance_real' sim/regression/soc-verification-run.sh         -> 1
+     $ grep -cE 'REPO_ROOT/csrc' sim/regression/soc-verification-run.sh                    -> 1
+     (the pre-existing bare `csrc` line is kept but was NOT counted as satisfying the gate;
+      sim/regression/csrc does not exist -> `ls: cannot access 'sim/regression/csrc'`;
+      simv_soc_cocotb* was already covered -> not duplicated)
+     EFFECT, proven by state deltas around the run_wrapper_mxu invocation:
+       sim/regression/simv_apb_conformance_real      before sha 6ffc68eabc888724... (Sep 23 22:57) + .daidir
+                                                     after  ABSENT  -> `ls: cannot access ...`
+       $REPO_ROOT/csrc                               before dir mtime 2026-09-23 23:06:10, 596 files,
+                                                     listing-hash 4157c01a0d192c77
+                                                     after  old cache destroyed; the wrapper compile then
+                                                     created a NEW dir mtime 2026-09-24 22:25:08, 38 files,
+                                                     oldest file 22:24:37, listing-hash feffb27b5486aa0a
+     (mtime + file-set change => the September cache was really removed, not reused incrementally)
+
+C-2  sim/regression/run_ibex_full_rtl.sh — rm-before-rebuild + post-compile assert
+     $ grep -cE 'rm -rf "\$SIMV" "\$SIMV\.daidir" "\$BUILD_DIR/csrc"'   -> 1
+     $ grep -c '\$BUILD_DIR/csrc'                                       -> 2   (rm + -Mdir)
+     $ grep -c 'Reusing existing simv'                                  -> 0   (branch + echo removed)
+     $ grep -c 'x "\$SIMV"'                                             -> 1   (post-compile assert + exit 1)
+     EFFECT: build/ibex_full_rtl/simv_soc_ibex ABSENT before -> created 2026-09-24 22:29:17
+     (1878672 bytes, sha256 d2e71b221d199e4a0911c78bfbb5ace6acc2c2e8353b795722f794b0cc8986ac);
+     build/ibex_full_rtl/csrc ABSENT before -> 40 files, oldest 22:28:39, dir mtime 22:29:17.
+     Hash-vs-previous-binary proof: d2e71b22... != 72199d8ae5d8d69bb2e281a840e61bb81a8de530e6dadf8ed8ccf08837ae96ae
+     (the 09-22 binary the stale-state trap was proven on) and != 22d5e773... (the 09-23 21:18 fresh build).
+
+C-3  wv_run_sfu.sh / wv_run_vector.sh — inline `rm -rf simv + daidir` then rebuild, abort unless
+     [ -x $SIMV ]; scripts/wv_compile.sh is NOT used (it `set +e`s and never deletes).  Observed:
+     "[wv_run_sfu.sh] Forced rebuild OK." / "[wv_run_vector.sh] Forced rebuild OK." both times
+     (fresh binary mtimes during each run).
+
+C-4  FORCED-REBUILD FM-SOC BASELINE (primary freshness proof)
+     $ timeout -k 30 7500 ssh zhengs@192.168.0.11 "cd $REPO && timeout -k 30 7200 bash sim/regression/run_fm_soc_all.sh"
+     exit=0  wall=3171 s (52 min 51 s)   log build/evidence/t1-fm-soc-forced-rebuild.log (48339 bytes)
+     [INFO] Forcing full rebuild of simv_soc_ibex (rm -rf simv + daidir + csrc) ...
+     [INFO] Compile complete: .../build/ibex_full_rtl/simv_soc_ibex
+     [SUMMARY] Full RTL + Ibex (FM-SOC regression)
+       PASS: 25   SKIP: 8   FAIL: 0   TIMEOUT: 0
+     [SUMMARY] PASS=25 SKIP=8 FAIL=0 TIMEOUT=0 TOTAL=33          (33/33 accounted, exit 0)
+     SKIP set ID-by-ID: FM-SOC-014 015 016 017 019 021 022 023 — identical to the previous baseline.
+     => a forced rebuild reproduces the recorded 25/8/0/0/33 baseline EXACTLY: the earlier number was
+     not a stale-binary artifact, and no case changed class.  No new failures to attribute.
+     FIRMWARE (hash-bound; NOT rebuilt): sha256 6f261c6e35e65a190c887ba0dc50d604e2601e39b6aa99524ea5284a35165ec0
+     (11916 bytes, mtime 2026-09-01 23:20) — identical to the P0 baseline hash.
+     PROVENANCE (hash-binding of this very run): build/ibex_full_rtl/evidence/provenance-20260924T222917-125013.txt
+     carries provenance_simv_sha256=d2e71b22... (+flist/driver/firmware/golden/checkpoint hashes,
+     provenance_git_commit=7ce88a8f896bf00c2af8e202814e3a065c2e6ec1, provenance_git_dirty=true, i.e. the
+     run deliberately used this todo's working-tree scripts) and is prepended to all 33 case logs;
+     e.g. build/ibex_full_rtl/evidence/FM-SOC-032.log -> runner_classification=PASS with
+     "** TESTS=1 PASS=1 FAIL=0 SKIP=0 ...  16564915.50 ...**".
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+(d) UNTRACK REGENERATED ARTIFACTS + PROTECT HISTORICAL STATICS
+══════════════════════════════════════════════════════════════════════════════════════════════
+REWRITE SET (grepped from every runner that writes into build/evidence):
+  scripts/wv_run_mxu.sh -> wrap-mxu-regression.txt ; wv-mxu-<case>.log
+  scripts/wv_run_sfu.sh -> wrap-sfu-regression.txt (+ wrap-sfu-debug.txt from the T2 debug session)
+  scripts/wv_run_vector.sh -> wrap-vec-regression.txt, wrap-vec-status.txt, wv_vector_logs/<case>.log[.dbg]
+  scripts/wv_regression.sh -> wrap-regression-summary.txt
+  git ls-files BEFORE : 6 wrap-* (mxu-regression, sfu-regression, sfu-debug, vec-regression,
+                        vec-status, regression-summary) + 5 wv_vector_logs/*.dbg  = 11 files
+  snapshot first       : .omo/evidence/task-1-wrp-untrack-snapshot.txt (167077 bytes, 1752 lines;
+                        per-file sha256/bytes/lines/HEAD-blob + full byte-exact content)
+  $ git rm --cached <the 11 paths>          -> 11 staged deletions, files stay on disk
+  git ls-files AFTER  : wrap-* = 0 ;  wv_vector_logs = 0
+  PROTECTED (still tracked, never staged): build/evidence/wrap-bug005-result.txt,
+    wrap-bug007-result.txt, wv-bug007-mxu.log.dbg, wv-bug007-sfu.log.dbg,
+    wv_bug005_logs/bug005-sfu.log.dbg, wv_bug005_logs/bug005-vector.log.dbg   -> count 6 (unchanged)
+    (wrap-mxu-regression.RED-pre-RTL.txt is untracked-and-kept as well; no historical file was deleted)
+  .gitignore NAMED rules (lines 81-87, never a blanket *.dbg — verified `grep -cE '^\s*\*\.dbg'` == 0):
+    build/evidence/wv_vector_logs/  build/evidence/wrap-mxu-regression.txt
+    build/evidence/wrap-regression-summary.txt  build/evidence/wrap-sfu-debug.txt
+    build/evidence/wrap-sfu-regression.txt  build/evidence/wrap-vec-regression.txt
+    build/evidence/wrap-vec-status.txt
+  HONEST NOTE: `build/evidence/` was ALREADY ignored as a directory (.gitignore:73), and for paths
+  under an excluded directory git reports the directory rule and never evaluates deeper patterns —
+  so `git check-ignore -v` prints `.gitignore:73:build/evidence/` for these files.  The named rules
+  are therefore declarative intent + the operative rules if :73 is ever dropped; the FUNCTIONAL
+  untracking is done by `git rm --cached` (tracked files ignore .gitignore), which is why the
+  ls-files counts above are the acceptance evidence.  This matches the plan's own premise that
+  build/evidence was not meant to be ignored wholesale for these artifacts.
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+FOUND DEFECTS (newly proven while doing (b)/(c); all in the touched file set)
+══════════════════════════════════════════════════════════════════════════════════════════════
+F-1  wv_run_vector.sh could never import its own test module (pre-existing, now fixed)
+     Fresh run: the FIRST test died with `ModuleNotFoundError: No module named 'tests.wrapper'`
+     (sim/tests/wrapper/test_vector_wrapper.py:26 `from tests.wrapper.wrapper_common import ...`)
+     because the remote command exported only `PYTHONPATH=$PWD` (=REPO_ROOT) and not `$PWD/sim`.
+     The July logs only exist because that session had an ambient `PYTHONPATH=sim` (repo convention);
+     the runner is not self-contained.  Fixed: `export PYTHONPATH="$PWD/sim:$PWD:$PYTHONPATH"`.
+F-2  ...and that import failure HANGS instead of failing (cocotb error path spins forever)
+     After the traceback, cocotb's GPI event loop never exits (`AttributeError: 'NoneType' object has
+     no attribute 'log'` / "Passing event to upper layer failed"), so an unbounded runner waits
+     forever: the first attempt was killed by an outer 1800 s bound and left an ORPHANED remote simv
+     (PID 131691) which was then explicitly killed on sz0001.  Fixed with a per-test wall-clock bound
+     (`timeout -k 10 ${WV_TEST_TIMEOUT_S:-240}`) + explicit rc=124/137 TIMEOUT classification, and the
+     same whole-module bound (900 s) for the SFU runner.  After the fix the whole 6-case suite finishes
+     in 90 s.
+F-3  The same suite had been reported as "ALL 5 PASS" for two months on evidence that could not have
+     been produced by this runner (it would have hit F-1); a fail-closed runner is what surfaces this.
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+VALIDATION RUNS (serial on sz0001; wall time recorded; nothing left dangling)
+══════════════════════════════════════════════════════════════════════════════════════════════
+  run_wrapper_mxu via soc-verification-run.sh   1 s    (Error-127 check; ssh self-loop residual, see below)
+  make run_wrapper_mxu (sim/regression)        160 s   4 PASS / 2 FAIL, exit 1 (was: "All 6 PASSED", exit 0)
+  wv_run_vector.sh (fixed + bounded)            90 s   5 PASS / 1 FAIL (6 cases, incl. the added one), exit 1
+  wv_run_sfu.sh (bounded)                       35 s   TESTS=7 PASS=6 FAIL=1 SKIP=0, exit 1
+  wv_regression.sh (local, derived)              <1 s   Overall FAIL (0/3 suites PASS), exit 1
+  FM-SOC forced-rebuild baseline              3171 s   PASS=25 SKIP=8 FAIL=0 TIMEOUT=0 TOTAL=33, exit 0
+  Post-run `pgrep -af 'simv_tb_vector_wrapper|simv_tb_sfu_wrapper|simv_tb_mxu_wrapper|simv_soc_ibex'`
+  on sz0001 -> CLEAN (no dangling process).  Every invocation was individually bounded.
+SFU/vector may newly report FAIL — that is the fix working, not a regression.
+  (The three suites now truthfully report MXU 4/6, Vector 5/6, SFU 6/7; all previously presented as
+  PASS/PARTIAL by hardcoded or fail-open logic.)
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+RESIDUALS (named, not silent)
+══════════════════════════════════════════════════════════════════════════════════════════════
+R-1  SOC-VERIFICATION-RUNNER SELF-SSH GAP (environment, pre-existing, NOT introduced here):
+     `soc-verification-run.sh run_wrapper_mxu` now executes the recipe (no Error 127 — the acceptance
+     condition) but the wrapper script's p9_ssh self-loop on sz0001 fails:
+       Permission denied, please try again.  (x2)
+       Permission denied (publickey,password).
+       make: *** [run_wrapper_mxu] Error 255
+     i.e. `ssh zhengs@192.168.0.11` from sz0001 itself is not authorized (the p9_ssh helper always
+     targets 192.168.0.11, which works from the dev host sz0002 but not from sz0001).  The full
+     end-to-end path used instead is `make run_wrapper_mxu` from a host with sz0001 SSH access
+     (sz0002, run 2 above), which exercises the identical recipe.  Fixing the key is an environment
+     change outside this repo/todo; recorded in the notepads/issues instead of touched.
+R-2  scripts/wv_run_mxu.sh's per-test simv is still unbounded (its 6 cases finish in ~160 s including
+     compile, and no hang has ever been observed there); the bound was added only to the two runners
+     rewritten here (vector/sfu).
+R-3  scripts/wv_run_bug005.sh / wv_run_bug007.sh remain as-is (not in scope); their result files are
+     the protected statics and are transcribed — not re-derived — by wv_regression.sh.
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+ADVERSARIAL CLASSES (probe + recorded result)
+══════════════════════════════════════════════════════════════════════════════════════════════
+misleading_success_output APPLICABLE / PASS — headline probe.  Fixture-driven proof: the legacy
+  `grep -qE 'TEST.*PASS'` returns 0 on verdict-fail.log while the helper returns 1 (B-3); the same
+  contrast fired on live runs (MXU: "All 6 tests PASSED", exit 0 -> now 2 FAIL, exit 1).  No verdict
+  anywhere in this evidence comes from runner prose, an exit code, or terminal text: every one is
+  either the helper's stdout line or a hand-parsed cocotb summary/per-test line quoted verbatim.
+stale_state APPLICABLE / PASS — main risk.  Proofs: build/ibex_full_rtl/{simv_soc_ibex,csrc} were
+  ABSENT before the run and created during it (22:28:39-22:29:17); simv sha d2e71b22 differs from
+  both earlier binaries (72199d8a 09-22, 22d5e773 09-23); repo-root csrc 596 files/4157c01a ->
+  destroyed and rebuilt 38 files/feffb27b; simv_apb_conformance_real 6ffc68ea -> ABSENT; wrapper
+  simvs force-rebuilt each run; and every FM-SOC case log carries the hash-bound provenance header
+  (simv/flist/driver/firmware/golden/checkpoint sha256 + commit 7ce88a8 + dirty=true).
+dirty_worktree APPLICABLE / PASS — the 7 protected files were never staged (verified before the
+  commit: `git diff --cached --name-only` intersected with the 7 protected paths is empty); the
+  working tree artifacts the runners rewrite (results.xml + the now-untracked wrap-* files) were
+  handled: results.xml was restored to HEAD twice (871be10b...) and the wrap-* rewrites are
+  intentionally untracked after (d).  M-set during work = my own edits + the 7 protected + plan.
+hung_commands APPLICABLE / PASS — every long run bounded and its wall time recorded (160/90/35/3171 s;
+  FM-SOC outer 7500 s + inner 7200 s).  The one unbounded path that DID hang (the vector import bug,
+  before the fix) was killed, its orphaned remote simv (PID 131691) explicitly pkill'ed on sz0001, and
+  the fix makes the runner self-bounding.  Final pgrep on sz0001 == CLEAN.
+flaky_tests APPLICABLE / PASS — the 2 MXU failures reproduce byte-identically to the recorded
+  RED signatures (WRP-1/WRP-2), and the FM-SOC run reproduced the previous baseline exactly (25/8/0/0/33
+  with the same 8 SKIP IDs) on an independently rebuilt binary; nothing was borderline, so no re-run
+  was needed beyond the independent rebuild itself.  The vector/sfu results are first-run facts, not
+  flakes: their boundaries (5/6 and 6/7) are exact helper verdicts.
+malformed_input APPLICABLE / PASS — the fail fixture IS the malformed/negative input and is asserted
+  to be REJECTED (rc=1), together with a truncated/absent-summary fixture, a duplicate/ambiguous
+  summary rule, a summary-vs-per-test mismatch fixture, a missing file and empty argv (B-2).
+prompt_injection NOT APPLICABLE — no untrusted external content was fetched or executed; every input
+  is a repo-resident file authored in this session, and no text inside a log/plan changed the plan.
+cancel_resume NOT APPLICABLE — the todo ran as one uninterrupted sequence; the only interruption was
+  the deliberate kill of the hung vector attempt, whose entire state (dangling simv, half-written log,
+  stale evidence file) was recorded and cleaned before re-running with the fix.
+repeated_interrupts NOT APPLICABLE — no retry loop: each failing attempt was diagnosed, fixed at the
+  root (PYTHONPATH + bound), and then executed exactly once more.
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+CLEANUP
+══════════════════════════════════════════════════════════════════════════════════════════════
+  No background jobs (all runs synchronous and bounded).  Orphaned remote simv killed; final pgrep
+  CLEAN.  Scratch lived in /tmp/zhengs-wrp1 (outside the repo) and was removed.  results.xml restored
+  to HEAD.  All new build/evidence/* logs are in the ignored evidence dir.  The 7 protected dirty
+  files were left byte-identical and unstaged.  One commit, explicit pathspec, no push/worktree/stash.

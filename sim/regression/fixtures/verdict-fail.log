@@ -1,0 +1,11 @@
+     0.00ns INFO     cocotb.regression                  pytest not found, install it to enable better AssertionError messages
+     0.00ns INFO     cocotb.regression                  Found test sim.tests.wrapper.test_mxu_wrapper.test_mxu_single_tile_compute
+  2880.00ns INFO     cocotb.regression                  test_mxu_single_tile_compute [31mfailed[49m[39m
+                                                        AssertionError: Golden comparison failed: 3180 mismatches
+  2880.00ns INFO     cocotb.regression                  *************************************************************************************************************************
+                                                        ** TEST                                                             STATUS  SIM TIME (ns)  REAL TIME (s)  RATIO (ns/s) **
+                                                        *************************************************************************************************************************
+                                                        ** sim.tests.wrapper.test_mxu_wrapper.test_mxu_single_tile_compute  [31m FAIL [49m[39m       2880.00           0.67       4326.34  **
+                                                        *************************************************************************************************************************
+                                                        ** TESTS=1 PASS=0 FAIL=1 SKIP=0                                                  2880.00           0.75       3839.69  **
+                                                        *************************************************************************************************************************

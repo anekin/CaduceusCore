@@ -1,0 +1,12 @@
+                                                        ** TEST                                                                 STATUS  SIM TIME (ns)  REAL TIME (s)  RATIO (ns/s) **
+                                                        *****************************************************************************************************************************
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_apb_regmap_rw                 PASS         580.00           0.11       5108.93  **
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_sfu_softmax_normal            PASS        9430.00           0.14      65240.99  **
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_sfu_gelu_normal               PASS        2110.00           0.03      69463.92  **
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_sfu_width_converter_32to512   PASS        2230.00           0.03      74015.76  **
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_sfu_line_buffer_prefetch      PASS        2510.00           0.03      72562.81  **
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_bug005_sfu_nonaligned_xprop   PASS         150.00           0.00      46469.13  **
+                                                        ** sim.tests.wrapper.test_sfu_wrapper.test_bug007_sfu_start_hold         PASS        3610.00           0.06      57350.67  **
+                                                        *****************************************************************************************************************************
+                                                        ** TESTS=7 PASS=7 FAIL=0 SKIP=0                                                     20620.00           0.50      41169.84  **
+                                                        *****************************************************************************************************************************

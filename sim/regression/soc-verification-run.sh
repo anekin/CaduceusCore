@@ -43,6 +43,8 @@ cd "$SOC_DIR"
 if [[ "$CLEAN" == "1" ]]; then
     echo "[soc-run] removing stale simv to force full rebuild"
     rm -rf simv_soc_cocotb simv_soc_cocotb.daidir csrc
+    rm -rf simv_apb_conformance_real simv_apb_conformance_real.daidir
+    rm -rf "$REPO_ROOT/csrc"
 fi
 
 echo "[soc-run] make $TARGET"

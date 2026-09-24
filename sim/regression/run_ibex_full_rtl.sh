@@ -45,26 +45,29 @@ export TOPLEVEL_LANG=verilog
 export FM_SOC_RTL_MODE=ibex
 export TESTCASE=test_soc_ibex_full
 
-# Compile simv if not present
+# Always rebuild: the flist tracks FILES, not the RTL inside them, so a reused
+# simv is a stale simv after any RTL-only edit (proven near-miss false PASS).
+echo "[INFO] Forcing full rebuild of simv_soc_ibex (rm -rf simv + daidir + csrc) ..."
+rm -rf "$SIMV" "$SIMV.daidir" "$BUILD_DIR/csrc"
+vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps \
+    -kdb \
+    -Mdir="$BUILD_DIR/csrc" \
+    -f "$REPO_ROOT/rtl/cpu/ibex.flist" \
+    -f "$REPO_ROOT/rtl/ip/verilog-axi.flist" \
+    -f "$REPO_ROOT/rtl/ip/verilog-pcie.flist" \
+    -f "$REPO_ROOT/rtl/soc/soc.flist" \
+    "$REPO_ROOT/rtl/tb/tb_soc_ibex.v" \
+    -top tb_soc_ibex \
+    -o "$SIMV" \
+    -l "$BUILD_DIR/elaborate.log" \
+    +vpi \
+    -P "$PLI_TAB" \
+    -load "$COCOTB_VPI_LIB"
+echo "[INFO] Compile complete: $SIMV"
 if [ ! -x "$SIMV" ]; then
-    echo "[INFO] Compiling simv_soc_ibex ..."
-    vcs -full64 -sverilog -debug_access+all -timescale=1ns/1ps \
-        -kdb \
-        -Mdir="$BUILD_DIR/csrc" \
-        -f "$REPO_ROOT/rtl/cpu/ibex.flist" \
-        -f "$REPO_ROOT/rtl/ip/verilog-axi.flist" \
-        -f "$REPO_ROOT/rtl/ip/verilog-pcie.flist" \
-        -f "$REPO_ROOT/rtl/soc/soc.flist" \
-        "$REPO_ROOT/rtl/tb/tb_soc_ibex.v" \
-        -top tb_soc_ibex \
-        -o "$SIMV" \
-        -l "$BUILD_DIR/elaborate.log" \
-        +vpi \
-        -P "$PLI_TAB" \
-        -load "$COCOTB_VPI_LIB"
-    echo "[INFO] Compile complete: $SIMV"
-else
-    echo "[INFO] Reusing existing simv: $SIMV"
+    echo "[ERROR] compile returned without producing an executable simv: $SIMV"
+    echo "[ERROR] see $BUILD_DIR/elaborate.log"
+    exit 1
 fi
 
 # Run cases sequentially

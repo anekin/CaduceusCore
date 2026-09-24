@@ -4,11 +4,14 @@ set -euo pipefail
 # ==============================================================================
 # Task: wrapper-level-verification / T4 (Wave 1)
 #
-# Compiles tb_mxu_wrapper with cocotb VPI, runs all 5 test cases, and writes
-# results to build/evidence/wrap-mxu-regression.txt.
+# Compiles tb_mxu_wrapper with cocotb VPI, runs every case listed in TESTS
+# below, and writes results to build/evidence/wrap-mxu-regression.txt.
+# Verdicts are derived ONLY from scripts/parse_cocotb_verdict.sh (fail-closed).
 # ==============================================================================
 
 source "$(dirname "$0")/p9_lib/p9_sz0001.sh"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 BUILD_DIR="$REPO_ROOT/build/evidence"
 mkdir -p "$BUILD_DIR"
@@ -91,21 +94,19 @@ echo \"TEST_EXIT_CODE=\$RC\"
 
     p9_ssh "$RUN_CMD" > "$TEST_LOG" 2>&1
 
-    # Parse result — grep for PASS/FAIL in the log
-    # Cocotb reports "TEST ... PASS" or "TEST ... FAIL" at the end
-    if grep -qE 'TEST.*PASS' "$TEST_LOG" 2>/dev/null; then
+    # Verdict comes ONLY from the fail-closed helper: the previous
+    # `grep -qE 'TEST.*PASS'` also matched the FAILING summary line
+    # "TESTS=1 PASS=0 FAIL=1" and reported PASS (BLOCKER-2).
+    if VERDICT_LINE=$(bash "$SCRIPT_DIR/parse_cocotb_verdict.sh" --log "$TEST_LOG"); then
         RESULT="PASS"
         PASS_COUNT=$((PASS_COUNT + 1))
-    elif grep -qE 'TEST.*FAIL' "$TEST_LOG" 2>/dev/null; then
-        RESULT="FAIL"
-        FAIL_COUNT=$((FAIL_COUNT + 1))
     else
-        RESULT="UNKNOWN"
+        RESULT="FAIL"
         FAIL_COUNT=$((FAIL_COUNT + 1))
     fi
 
-    echo "  $TC: $RESULT" >> "$REGRESSION_FILE"
-    echo "[wv_run_mxu.sh]   $TC: $RESULT"
+    echo "  $TC: $RESULT [$VERDICT_LINE]" >> "$REGRESSION_FILE"
+    echo "[wv_run_mxu.sh]   $TC: $RESULT [$(echo "$VERDICT_LINE" | grep -oE 'TESTS=[0-9]+ PASS=[0-9]+ FAIL=[0-9]+ SKIP=[0-9]+')]"
 done
 
 # ── Summary ─────────────────────────────────────────────────────────────────

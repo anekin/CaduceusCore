@@ -1304,15 +1304,15 @@ help:
 
 run_wrapper_sfu:
 	@echo "$(YELLOW)[WRAPPER_SFU] Running SFU wrapper cocotb tests...$(NC)"
-	@bash scripts/wv_run_sfu.sh
+	@cd $(REPO_ROOT) && bash scripts/wv_run_sfu.sh
 
 run_wrapper_vector:
 	@echo "$(YELLOW)[WRAPPER_VECTOR] Running Vector wrapper cocotb tests...$(NC)"
-	@bash scripts/wv_run_vector.sh
+	@cd $(REPO_ROOT) && bash scripts/wv_run_vector.sh
 
 run_wrapper_mxu:
 	@echo "$(YELLOW)[WRAPPER_MXU] Running MXU wrapper cocotb tests...$(NC)"
-	@bash scripts/wv_run_mxu.sh
+	@cd $(REPO_ROOT) && bash scripts/wv_run_mxu.sh
 
 run_wrapper_all: run_wrapper_sfu run_wrapper_vector run_wrapper_mxu
 	@echo ""
