@@ -29,13 +29,25 @@
 //   (PL_LOAD_W_AR/W_R/A_AR/A_R wait for arready/rvalid, SO_RD_SCALE_AR/R for
 //   arready/rvalid, SO_WRITE_AW/W for awready/wready).  A slave that never
 //   answers would hang the wrapper forever and hold the AXI channels, so a
-//   free-running counter times the cycles spent in those states; every other
-//   state is progress and clears it.  On reaching WDT_TIMEOUT (a fixed
-//   localparam - deliberately no MMIO register and no software threshold) the
-//   wrapper latches the sticky WRP_STATUS[1], forces the waiting FSM back to
-//   IDLE (releasing the AXI request) and ORs the condition into irq, which is
-//   the shared MXU INTC bit0 line.  Software acknowledges with ANY write to
-//   WRP_CMD, bit0=0 included: a bit0=1-only ack would re-arm a pre-load.
+//   free-running counter times the cycles spent in those states.  The counter
+//   is a PER-PHASE budget: it is cleared once both sequencers have left the
+//   AXI-wait states (PL_READY / SO_IDLE / SO_TRANSFORM), i.e. once for the
+//   whole pre-load phase and once per store-out row.  It does NOT clear per
+//   transaction stretch: the K-tile turnover inside the pre-load is
+//   wait -> wait (PL_LOAD_W_R -(rlast, more tiles)-> PL_LOAD_W_AR), so one
+//   budget covers every tile of the phase.  Consequence: a deliberately slow
+//   slave (~244+ cycles/beat average) on a large-K pre-load could in principle
+//   reach the threshold.  What holds instead is the headroom argument below
+//   (>10x) plus the empirical result (clean FM-SOC 33-case and e2e MXU runs,
+//   no false trip observed), not a per-cycle reset.  On reaching WDT_TIMEOUT
+//   (a fixed localparam - deliberately no MMIO register and no software
+//   threshold) the wrapper latches the sticky WRP_STATUS[1], forces the
+//   waiting FSM back to IDLE (releasing the AXI request) and ORs the condition
+//   into irq, which is the shared MXU INTC bit0 line.  The trip itself is
+//   qualified by wdt_trip (below): a cycle in which a handshake actually
+//   completes is progress and is never treated as a stall.  Software
+//   acknowledges with ANY write to WRP_CMD, bit0=0 included: a bit0=1-only ack
+//   would re-arm a pre-load.
 //   Threshold rationale: the cocotb budget formula the firmware-driven perf
 //   tests use for MMUL (sim/cocotb_bridge.py:_estimate_timeout) is
 //   max(50000, M*N*K//64 + 20000); the largest shape in that suite
@@ -67,7 +79,7 @@
 //   rows queued (RED log: raw DONE at 2880 ns with rows 0..10 written), so a
 //   poller that then read SRAM saw rows >= 11 as stale zeros.
 //   Two boundaries are known and deliberately left as-is:
-//     (i)  An AXI watchdog trip inside store-out (wdt_fire && so_axi_wait
+//     (i)  An AXI watchdog trip inside store-out (wdt_trip && so_axi_wait
 //          forces the drain FSM back to SO_IDLE and drops the in-flight row)
 //          leaves DONE deasserted: the sticky WRP_STATUS[1] is the
 //          authoritative indicator for that fault path.  The WDT suite case
@@ -506,12 +518,17 @@ module mxu_soc_wrapper #(
     // sequencer sits in PL_LOAD_W_AR / PL_LOAD_W_R / PL_LOAD_A_AR / PL_LOAD_A_R
     // or the store-out sequencer sits in SO_RD_SCALE_AR / SO_RD_SCALE_R /
     // SO_WRITE_AW / SO_WRITE_W — i.e. exactly the states whose only exit is an
-    // AXI handshake.  Any other state (PL_IDLE, PL_READY, SO_IDLE,
-    // SO_TRANSFORM) is progress and clears the counter, so a long but healthy
-    // transaction can never accumulate to the threshold.  Equivalently the
-    // counter runs while the wrapper drives one of m_axi_arvalid / m_axi_rready
-    // / m_axi_awvalid / m_axi_wvalid, since those four are asserted by exactly
-    // those eight states and by no other state.
+    // AXI handshake.  It is cleared only when both sequencers have left those
+    // states (PL_READY / SO_IDLE / SO_TRANSFORM), so it is a PER-PHASE budget,
+    // not a per-stretch one: one budget covers the whole pre-load phase (the
+    // K-tile turnover is wait -> wait) and one covers each store-out row.  A
+    // legitimately slow slave (~244+ cycles/beat average) on a large-K pre-load
+    // can in principle reach WDT_TIMEOUT; the margin is the >10x threshold
+    // headroom documented in the header plus the empirical clean FM-SOC/e2e
+    // runs, not a per-cycle reset.  Equivalently the counter runs while the
+    // wrapper drives one of m_axi_arvalid / m_axi_rready / m_axi_awvalid /
+    // m_axi_wvalid, since those four are asserted by exactly those eight states
+    // and by no other state.
     localparam [19:0] WDT_TIMEOUT = 20'd1_000_000;
 
     reg  [19:0] wdt_cnt;
@@ -519,6 +536,8 @@ module mxu_soc_wrapper #(
     wire        so_axi_wait;
     wire        wdt_axi_wait;
     wire        wdt_fire;
+    wire        wdt_ax_hs;
+    wire        wdt_trip;
 
     assign pl_axi_wait  = (pl_state == PL_LOAD_W_AR) || (pl_state == PL_LOAD_W_R) ||
                           (pl_state == PL_LOAD_A_AR) || (pl_state == PL_LOAD_A_R);
@@ -527,6 +546,21 @@ module mxu_soc_wrapper #(
     // declaration and every reference in this file stays declared-before-use.
     assign wdt_axi_wait = pl_axi_wait || so_axi_wait;
     assign wdt_fire     = wdt_axi_wait && (wdt_cnt == WDT_TIMEOUT - 20'd1);
+
+    // A cycle in which any AXI channel handshake actually completes is progress,
+    // never a stall: forcing the FSM back to IDLE on such a cycle would discard
+    // an AR/AW burst the slave has already accepted or truncate a W burst
+    // without WLAST.  wdt_cnt saturates at WDT_TIMEOUT-1, so the trip is simply
+    // re-evaluated on the next stalled cycle — the gate defers the recovery by
+    // at most the current handshake, it cannot disarm the watchdog.  (An X on a
+    // slave-side ready/valid makes this expression X and therefore not-true in
+    // the `if` below, i.e. an unknown slave suppresses the trip; every TB and
+    // the FM-SOC AXI RAM drive these inputs to known values.)
+    assign wdt_ax_hs    = (m_axi_arvalid && m_axi_arready) ||
+                          (m_axi_rvalid  && m_axi_rready)  ||
+                          (m_axi_awvalid && m_axi_awready) ||
+                          (m_axi_wvalid  && m_axi_wready);
+    assign wdt_trip     = wdt_fire && !wdt_ax_hs;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n)
@@ -539,15 +573,19 @@ module mxu_soc_wrapper #(
 
     // Sticky trip flag.  Cleared by ANY write to WRP_CMD whatever the data,
     // because the software ack has to be usable with pwdata[0]=0: clearing on
-    // bit0=1 alone would make the ack itself re-arm a pre-load (wrp_trigger).
+    // bit0=1 alone would make the ack itself re-arm a pre-load.
+    // The clear is qualified with penable (the module's own wrp_trigger idiom
+    // above), so it takes effect in the APB ACCESS phase only: without it the
+    // flag would also clear during the SETUP phase of a write that is then
+    // aborted before the access phase.
     // A CMD write and a trip in the same cycle: the write wins, and the FSM
     // recovery below still happens.
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n)
             wrp_wdt_timeout <= 1'b0;
-        else if (wrp_cs && pwrite && (paddr == OFF_WRP_CMD))
+        else if (wrp_cs && pwrite && penable && (paddr == OFF_WRP_CMD))
             wrp_wdt_timeout <= 1'b0;
-        else if (wdt_fire)
+        else if (wdt_trip)
             wrp_wdt_timeout <= 1'b1;
     end
 
@@ -561,8 +599,10 @@ module mxu_soc_wrapper #(
             pl_k_tile_cnt  <= 16'd0;
             pl_cur_addr    <= 32'd0;
             wrp_load_done  <= 1'b0;
-        end else if (wdt_fire && pl_axi_wait) begin
-            // Abandon a pre-load that cannot make progress.  wrp_load_done is
+        end else if (wdt_trip && pl_axi_wait) begin
+            // Abandon a pre-load that cannot make progress.  wdt_trip excludes
+            // cycles that completed a handshake (see the watchdog section), so
+            // an AR the slave just accepted is never discarded.  wrp_load_done is
             // left as-is (it is only ever set from PL_LOAD_A_R / PL_READY, so
             // an aborted load reads back as not-done).
             pl_state <= PL_IDLE;
@@ -824,10 +864,12 @@ module mxu_soc_wrapper #(
             so_w_beat    <= 4'd0;
             so_scale_beat <= 8'd0;
             so_fifo_rd_ptr <= {SO_FIFO_PTR_W{1'b0}};
-        end else if (wdt_fire && so_axi_wait) begin
-            // Abandon a store-out that cannot make progress.  The row already
-            // popped from the FIFO is dropped: this is an aborted fault path,
-            // not data.
+        end else if (wdt_trip && so_axi_wait) begin
+            // Abandon a store-out that cannot make progress (same handshake
+            // qualifier as the pre-load recovery above: an AW or W beat the
+            // slave just accepted must not leave a burst without WLAST).  The
+            // row already popped from the FIFO is dropped: this is an aborted
+            // fault path, not data.
             so_state <= SO_IDLE;
         end else begin
             case (so_state)

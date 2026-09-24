@@ -876,16 +876,18 @@ PCIe DOC-DIV (BUG-RTL-SOC-010)`.
 #### Symptom
 
 rtl/ip/README.md:35-36 documents DMA CMD@0x04 as "W" and STATUS@0x08 as "R".
-The RTL (rtl/ip/dma_wrapper.v) implements:
-- CMD@0x04 as a STORED register: writes latch pwdata (dma_reg[1] <= pwdata,
-  :283-286) and reads return the stored value (:128/:310) — writing 0x42 reads
-  back 0x42. Only bit0 (START) is auto-cleared after the rising edge is
-  consumed (:209). This is the ONLY CMD in the design that is readable
-  (MXU/SFU/Vector CMDs are pulse write-only, readback 0).
-- STATUS@0x08 with a READ side effect: reading it clears DONE bit1
-  (:299-301). A polling loop that reads STATUS twice after completion sees
-  DONE=1 on the first read and DONE=0 on the second — an observable behavior
-  not documented anywhere.
+The RTL (rtl/ip/dma_wrapper.v) implements the pre-fix behavior below; its line
+citations were a mix of base `8ba7af1` and HEAD numbers (F2-2), so the numbers
+are dropped here — the surviving code is cited at HEAD in the Fix section:
+- CMD@0x04 as a STORED register: writes latch pwdata (`dma_reg[1] <= pwdata`)
+  and reads return the stored value — writing 0x42 reads back 0x42. Only bit0
+  (START) is auto-cleared after the rising edge is consumed. This is the ONLY
+  CMD in the design that is readable (MXU/SFU/Vector CMDs are pulse
+  write-only, readback 0).
+- STATUS@0x08 with a READ side effect: reading it clears DONE bit1 (that
+  read-clear statement was deleted by the fix below). A polling loop that reads
+  STATUS twice after completion sees DONE=1 on the first read and DONE=0 on the
+  second — an observable behavior not documented anywhere.
 
 #### Root Cause
 
@@ -903,8 +905,9 @@ read-cleared DONE. Aligning RTL to the ABI needs **zero spec/gen changes**.
 Two behavior changes:
 
 - **CMD@0x04 is write-only on the bus**: the read path returns `32'h0` for
-  `reg_idx == 4'd1`. The internal `dma_reg[1]` copy is **retained** — the FSM
-  depends on `dma_reg[1][0]`/`[1]` for START/ABORT and on the self-clear at `:209`;
+  `reg_idx == 4'd1` (HEAD `:133`). The internal `dma_reg[1]` copy is **retained**
+  (`dma_reg[1] <= pwdata` at HEAD `:290`) — the FSM depends on
+  `dma_reg[1][0]`/`[1]` for START/ABORT and on the self-clear at `:214` (HEAD);
   deleting the storage would break the transfer. It is an implementation detail the
   ABI never described.
 - **STATUS@0x08 read-clear of DONE removed**: `dma_reg[2][1]` is no longer cleared

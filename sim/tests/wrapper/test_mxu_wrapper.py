@@ -863,7 +863,11 @@ async def test_mxu_wrapper_watchdog_timeout(dut):
             f"[MXU_WRP_WDT] peak wdt_cnt = {peak_cnt} (threshold {WDT_TIMEOUT}, "
             f"sampled {WDT_PRESAMPLE} cycles early)"
         )
-    except Exception as exc:  # only the pre-RTL binary lacks this register
+    except (AttributeError, ValueError) as exc:
+        # Diagnostic probe only (no assertion depends on it): AttributeError =
+        # the pre-RTL binary has no wdt_cnt handle; ValueError = the bit string
+        # is unresolvable (X).  Anything else is a real TB/RTL error and must
+        # surface instead of being swallowed.
         peak_cnt = None
         dut._log.warning(f"[MXU_WRP_WDT-PROBE-UNAVAILABLE] wdt_cnt not visible: {exc}")
 

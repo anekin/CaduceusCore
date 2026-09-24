@@ -1,0 +1,235 @@
+case_id: task-4-wrp-defects-and-tooling-fixes
+plan: .omo/plans/wrp-defects-and-tooling-fixes.md (todo 4 — F2 评审意见收口, conformance TB 部分转 residual)
+utc_written: 2026-09-24T17:20Z
+branch: wrp-defects-and-tooling-fixes
+HEAD (pre-edit): 7179a822e54100db863d135fadc7df538f56e89b
+  git log -1 --format=%s == "fix(rtl/wrapper): preload honors WRP_K_TILES + TB programs K-tiles
+  before TRIG_LOAD (BUG-MXU-WRP-002)"   PASS
+host: sz0002 (drives the sz0001 VCS/cocotb via scripts/p9_lib/p9_sz0001.sh; running the runner ON sz0001
+  still fails with Error 255 — residual I-1, unchanged)
+source findings: .omo/evidence/f2-rtl-open-bugs-cleanup.txt (F2-1 MEDIUM, F2-3/F2-4/F2-5 LOW, F2-2 LOW
+  conformance-TB half frozen, F2-6 INFO)
+verdict: pass
+NITS: done
+
+EXACT COMMANDS
+  Suite (the proof, post-edit):  cd sim/regression && make run_wrapper_mxu   (== cd $REPO_ROOT && bash scripts/wv_run_mxu.sh)
+  Syntax check (TB):             python3 -m py_compile sim/tests/wrapper/test_mxu_wrapper.py   (OK)
+  RTL compile:                   performed inside the runner on sz0001 (VCS V-2023.12-SP2_Full64,
+                                 COMPILE_EXIT_CODE=0); cocotb v1.9.0
+  Judged-run timestamp:          2026-09-25 01:11:43 local (= 2026-09-24T17:11:43Z), wall clock 2m39s
+
+SCOPE (+/- vs HEAD, `git diff --numstat`)
+  rtl/wrapper/mxu_soc_wrapper.v          +65/-23 (comment rewrites + the wdt_ax_hs/wdt_trip gate + penable)
+  sim/tests/wrapper/test_mxu_wrapper.py  +5/-1
+  docs/bugs/bugs-soc-rtl.md              +15/-12
+  .omo/evidence/task-4-wrp-defects-and-tooling-fixes.txt (this file)
+  NOT touched: rtl/mxu/**, rtl/tb/apb_conformance_real_tb.sv (FROZEN), firmware/**, spec/**, gen/**,
+  docs/bugs/bugs-module-level.md (see residual R2), README.md, rtl/wrapper/* other than mxu_soc_wrapper.v.
+  WRP1-IRQ-RESIDUAL semantics, WRP_STATUS bit map, WDT_TIMEOUT value, INTC wiring, and the WRP-1/WRP-2
+  fixes (f65f5b9 / 7179a82) are byte-unchanged.
+
+════════════════════════════════════════════════════════════════════════════════════════
+A. ITEM-BY-ITEM BEFORE / AFTER
+════════════════════════════════════════════════════════════════════════════════════════
+
+(1) Watchdog "no false trip" comment corrected — F2-1 MEDIUM — WORDING ONLY
+  Site A (header, was :31-32 at HEAD, now :31-35):
+    BEFORE: "...so a free-running counter times the cycles spent in those states; every other
+             state is progress and clears it."
+    AFTER : "...so a free-running counter times the cycles spent in those states.  The counter
+             is a PER-PHASE budget: it is cleared once both sequencers have left the AXI-wait
+             states (PL_READY / SO_IDLE / SO_TRANSFORM), i.e. once for the whole pre-load phase
+             and once per store-out row.  It does NOT clear per transaction stretch: the K-tile
+             turnover inside the pre-load is wait -> wait (PL_LOAD_W_R -(rlast, more tiles)->
+             PL_LOAD_W_AR), so one budget covers every tile of the phase.  Consequence: a
+             deliberately slow slave (~244+ cycles/beat average) on a large-K pre-load could in
+             principle reach the threshold.  What holds instead is the headroom argument below
+             (>10x) plus the empirical result (clean FM-SOC 33-case and e2e MXU runs, no false
+             trip observed), not a per-cycle reset."
+    (the following sentence now also states: "The trip itself is qualified by wdt_trip (below): a
+      cycle in which a handshake actually completes is progress and is never treated as a stall.")
+  Site B (counter-rule comment, was :505-514 at HEAD, now :517-530):
+    BEFORE: "Any other state (PL_IDLE, PL_READY, SO_IDLE, SO_TRANSFORM) is progress and clears the
+             counter, so a long but healthy transaction can never accumulate to the threshold."
+    AFTER : "It is cleared only when both sequencers have left those states (PL_READY / SO_IDLE /
+             SO_TRANSFORM), so it is a PER-PHASE budget, not a per-stretch one: one budget covers
+             the whole pre-load phase (the K-tile turnover is wait -> wait) and one covers each
+             store-out row.  A legitimately slow slave (~244+ cycles/beat average) on a large-K
+             pre-load can in principle reach WDT_TIMEOUT; the margin is the >10x threshold headroom
+             documented in the header plus the empirical clean FM-SOC/e2e runs, not a per-cycle
+             reset."
+  Threshold rationale (the argument that DOES hold) is retained verbatim: max(50000, M*N*K//64 +
+  20000) -> 1*2048*2048//64 + 20000 = 85,536 vs WDT_TIMEOUT 1e6 (>10x).
+  ASSERTIONS: `grep -c "can never accumulate" rtl/wrapper/mxu_soc_wrapper.v` == 0;
+              `grep -c "every other state" rtl/wrapper/mxu_soc_wrapper.v` == 0;
+              `grep -c "PER-PHASE budget" rtl/wrapper/mxu_soc_wrapper.v` == 2; threshold unchanged
+              (`grep -n "WDT_TIMEOUT = 20'd1_000_000"` still exactly one hit).
+  NO behavior change (comments only).
+
+(2) Sticky-clear adds `penable` — F2-3 LOW — BEHAVIOR (APB timing only)
+    BEFORE: `else if (wrp_cs && pwrite && (paddr == OFF_WRP_CMD))`
+    AFTER : `else if (wrp_cs && pwrite && penable && (paddr == OFF_WRP_CMD))`
+    plus a comment stating the effect (clear now happens in the APB ACCESS phase; without it the
+    flag also cleared during the SETUP phase of a write that is then aborted before the access
+    phase). This matches the module's own `wrp_trigger` house idiom (:255).
+    ASSERTIONS: `grep -n "wrp_cs && pwrite && penable && (paddr == OFF_WRP_CMD)"` returns exactly 2 lines
+    — :255 (the unchanged `wrp_trigger` idiom, which continues `&& pwdata[0]`) and :586 (the fixed
+    sticky-clear condition).
+    EVIDENCE ON THE JUDGED RUN (WDT test, exercises the clear): the TB writes WRP_CMD=0x0 and reads
+    WRP_STATUS = 0x00000000 (was 0x00000002 before the write) — clear still works; full log line:
+      10100555.00ns INFO ... [MXU_WRP_WDT] WRP_STATUS after WRP_CMD=0x0 = 0x00000000
+    COVERAGE BOUNDARY (honest): the readback-after-write assertion cannot distinguish setup-phase
+    from access-phase clearing (both produce a cleared readback); the setup-vs-access distinction is
+    therefore a code-review-level correction verified statically, and the "aborted write" case is
+    not exercised by any test.
+
+(3) Recovery gate "no handshake this cycle" — F2-4 LOW — CHOICE: IMPLEMENTED (this is the default)
+    BEFORE: `end else if (wdt_fire && pl_axi_wait) begin`  and  `end else if (wdt_fire && so_axi_wait) begin`
+            sticky set: `else if (wdt_fire)`;  store-out boundary comment quoted `wdt_fire && so_axi_wait`
+    AFTER :
+      wire wdt_ax_hs = (m_axi_arvalid && m_axi_arready) ||
+                       (m_axi_rvalid  && m_axi_rready)  ||
+                       (m_axi_awvalid && m_axi_awready) ||
+                       (m_axi_wvalid  && m_axi_wready);
+      wire wdt_trip  = wdt_fire && !wdt_ax_hs;
+      sticky set   -> `else if (wdt_trip)`
+      PL recovery  -> `end else if (wdt_trip && pl_axi_wait) begin`
+      SO recovery  -> `end else if (wdt_trip && so_axi_wait) begin`
+      header boundary (i) now quotes `wdt_trip && so_axi_wait`
+    CHOICE + REASON (as required by the plan): implemented, not deferred as a residual, because
+      (a) the hazard is real and cheap to close: on the trip cycle the recovery branch outranks the
+          FSM case, so a completed AR/AW handshake would be discarded (slave already accepted the
+          burst) and a mid-row W beat would truncate the burst without WLAST;
+      (b) the gate cannot disarm the watchdog: wdt_cnt saturates at WDT_TIMEOUT-1 and is only cleared
+          by leaving the AXI-wait states, so wdt_fire stays high and wdt_trip is re-evaluated on the
+          very next cycle that has no handshake — the worst case is a one-cycle deferral;
+      (c) it is inert for every covered path: the WDT case's dead slave drives all readys to 0, so no
+          handshake ever completes and the trip cycle is unchanged.
+    FULL-GATE vs AR/AW-ONLY: all four channel handshakes are included (R/W beats too, not only the
+      AR/AW examples named in F2-4) because the two named hazards cover only half the damage: an
+      accepted R beat mid-burst would leave the slave's remaining beats to be consumed by an
+      unrelated later read, and a completed non-final W beat is exactly the "burst without WLAST"
+      case. A beat handshake is progress by definition of the counter (it advances pl_beat_cnt /
+      so_w_beat / so_scale_beat or completes the row).
+    X NOTE (recorded, not a claim): an X on a slave-side ready/valid makes wdt_ax_hs X -> not-true in
+      the `if`, i.e. an unknown slave suppresses the trip for that cycle. Every wrapper TB and the
+      FM-SOC AXI RAM drive these to known values; no `COCOTB_RESOLVE_X` was used or added.
+    COVERAGE BOUNDARY (honest): no test completes a handshake on the trip cycle, so the gate's
+      deferral branch is NOT positively exercised — it is justified statically (b,c) and by the
+      tripping path being unchanged: peak wdt_cnt = 999009 (identical to the value recorded in the
+      BUG-MXU-WDT-001 ledger entry) and the same recovery assertions (pl_state->IDLE, arvalid==0,
+      wdt_cnt==0, sticky bit, irq) all still pass.
+    ASSERTIONS: `grep -c "wdt_fire &&"` == 1 (only the wdt_trip definition); no `wdt_fire && pl_axi_wait`
+                / `wdt_fire && so_axi_wait` / bare `else if (wdt_fire)` left in the file.
+
+(4) Test probe narrowed — F2-5 LOW
+    BEFORE: `except Exception as exc:  # only the pre-RTL binary lacks this register`
+    AFTER : `except (AttributeError, ValueError) as exc:` + 4-line comment (AttributeError = no
+            wdt_cnt handle on a pre-RTL binary; ValueError = unresolvable bit string (X); anything
+            else is a real TB/RTL error and must surface)
+    The `dut._log.warning("[MXU_WRP_WDT-PROBE-UNAVAILABLE] ...")` line is KEPT (unchanged).
+    ASSERTIONS: `grep -c "except Exception" sim/tests/wrapper/test_mxu_wrapper.py` == 0;
+                `grep -c "MXU_WRP_WDT-PROBE-UNAVAILABLE" ... ` == 1; on the judged run the probe
+                SUCCEEDED (`peak wdt_cnt = 999009`, 0 hits for PROBE-UNAVAILABLE in the WDT log), so
+                the narrowing did not break the diagnostic path.
+
+(5) Doc line-refs (docs/bugs/bugs-soc-rtl.md, BUG-RTL-SOC-011 DMA CMD/STATUS paragraph) — F2-2 half
+    BEFORE (Symptom): "...writes latch pwdata (dma_reg[1] <= pwdata, :283-286) and reads return the
+      stored value (:128/:310) ... consumed (:209)." and "reading it clears DONE bit1 (:299-301)."
+    AFTER  (Symptom): numbers DROPPED (F2 sanctions "cite HEAD numbers or drop"), with a one-line
+      reason: "implements the pre-fix behavior below; its line citations were a mix of base
+      `8ba7af1` and HEAD numbers (F2-2), so the numbers are dropped here — the surviving code is
+      cited at HEAD in the Fix section". The paragraph is pre-fix prose, so HEAD numbers would have
+      pointed at the fix itself; the dropped-numbers form is the only non-misleading one.
+      The removed read-clear is now explicitly labelled: "(that read-clear statement was deleted by
+      the fix below)".
+    BEFORE (Fix bullet): "...for `reg_idx == 4'd1`. The internal `dma_reg[1]` copy is **retained** —
+      the FSM depends on ... and on the self-clear at `:209`;"
+    AFTER  (Fix bullet): "...for `reg_idx == 4'd1` (HEAD `:133`). ... **retained** (`dma_reg[1] <=
+      pwdata` at HEAD `:290`) — ... self-clear at `:214` (HEAD);"
+    HEAD NUMBERS VERIFIED against HEAD 7179a82: rtl/ip/dma_wrapper.v:133 = read mux (CMD -> 32'h0),
+      :214 = `dma_reg[1][0] <= 1'b0` START consumed, :290 = `dma_reg[1] <= pwdata`.
+    ASSERTIONS: `grep -c ":283-286\|:128/:310\|(:209)\|:299-301" docs/bugs/bugs-soc-rtl.md` == 0;
+                `grep -c "HEAD \`:133\`\|HEAD \`:290\`\|:214\` (HEAD)" docs/bugs/bugs-soc-rtl.md` == 3 lines
+                (:908/:909/:910) with 3 occurrences.
+
+RESIDUALS (recorded, deliberately NOT changed in this todo)
+  R1 (F2-2 conformance-TB half — FROZEN this wave): rtl/tb/apb_conformance_real_tb.sv still carries
+     the mixed-revision cites at `:24` and `:680` ("docs/bugs/bugs-soc-rtl.md:907" style refs into a
+     base revision). The file was NOT edited (`git diff --stat -- rtl/tb/apb_conformance_real_tb.sv`
+     is empty); todo 6 mirrors this residual in the ledger.
+  R2 (F2-1 second site, out of this commit's pathspec): docs/bugs/bugs-module-level.md:53-59 repeats
+     BOTH the overclaim ("is cleared by any FSM progress, so a long but healthy transaction can never
+     accumulate to the threshold") and the old trip condition (`wdt_fire && pl_axi_wait` /
+     `&& so_axi_wait`). The plan's todo-4 file scope is 4 paths and does not include this file, so it
+     is recorded here and in .omo/notepads/.../issues.md for todo 6/ledger follow-up.
+  R3 (run side-effect, tooling residual I-13): the wrapper run regenerated the TRACKED repo-root
+     cocotb report `results.xml` (seed + testcase list). It was restored with `git checkout --
+     results.xml` and is NOT staged; `results.xml` still being tracked is pre-existing residual I-13.
+  R4 (gate coverage boundary, from item 3 above): the deferral branch is not positively tested; noted
+     so that a future wave can add a "handshake completes on the trip cycle" TB case if desired.
+
+════════════════════════════════════════════════════════════════════════════════════════
+B. SUITE — `cd sim/regression && make run_wrapper_mxu` (sz0002 -> sz0001), 2026-09-25 01:11:43
+════════════════════════════════════════════════════════════════════════════════════════
+Per-test rows (verbatim from build/evidence/wrap-mxu-regression.txt, written 01:13:37):
+  test_apb_regmap_rw:                 PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+  test_mxu_preload_single_tile:       PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+  test_mxu_single_tile_compute:       PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+  test_mxu_store_out_burst:           PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+  test_mxu_accumulate_mode:           PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+  test_mxu_wrapper_watchdog_timeout:  PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+  Summary: 6 PASS, 0 FAIL (6 total)          runner stdout: "All 6 tests PASSED."   make rc = 0
+Watchdog case specifics (the test that exercises the penable clear; log
+build/evidence/wv-mxu-test_mxu_wrapper_watchdog_timeout.log):
+  [MXU_WRP_WDT] armed: pl_state=1 (PL_LOAD_W_AR), arvalid=1, arready=0, irq=0, threshold=1000000
+  [MXU_WRP_WDT] peak wdt_cnt = 999009 (threshold 1000000, sampled 1000 cycles early)
+  [MXU_WRP_WDT] WRP_STATUS = 0x00000002 (expect bit1 set)
+  [MXU_WRP_WDT] WRP_STATUS after WRP_CMD=0x0 = 0x00000000
+  TEST PASSED: test_mxu_wrapper_watchdog_timeout (total 16.8 s wall-clock) ; ** TESTS=1 PASS=1 FAIL=0 SKIP=0 **
+Freshness proof (stale_state):
+  simv sha256 BEFORE this todo's edit: 9482d618fd99120fabade570bf1a6e792dae42a04be5ef3545c220e839454c88
+                     (mtime 2026-09-25 00:50:39, i.e. todo 3's binary)
+  simv sha256 AFTER  (judged run):    13d7e664f679aecee8c6da321a5c7546407aae86099b0089c96848ec2d204a16
+                     (mtime 2026-09-25 01:11:43, size 1825824)
+  the runner rm -rf's "$SIMV" "$SIMV.daidir" before compiling, COMPILE_EXIT_CODE=0 was checked
+  (wv-compile-mxu-run.log), compile banner "Version V-2023.12-SP2_Full64 -- Fri Sep 25 01:10:59 2026",
+  "CPU time: 22.583 seconds to compile + 1.503 seconds to elab + .458 seconds to link"; all 6 source
+  files' shas after the run: mxu_soc_wrapper.v 5cb753bef10f0682996c0a5345b642be74e352c4cca3070319e285b1b818d6a2,
+  test_mxu_wrapper.py b235a86cbb6aa2cdfbfa7c8db4ca89d72ae35e808ccd3df07ade80d36b8a5609,
+  bugs-soc-rtl.md 51aefbf3621ebd212d20d95a7538f9d9406c238d2670cfcfa96199d525cdf761; source mtimes
+  (01:09-ish) predate the 01:11:43 simv.
+Verdict provenance: every row above is the fail-closed verdict of scripts/parse_cocotb_verdict.sh
+  (exactly one self-consistent summary line, n>0, PASS==TESTS, FAIL==SKIP==0, per-test cross-check),
+  not the runner's prose and not make's exit code.
+
+ADVERSARIAL CLASSES
+  misleading_success_output: APPLICABLE / PASS — per-test rows (TESTS=1 PASS=1 FAIL=0 SKIP=0) plus
+    runner rc=0 plus make rc=0 agree; no verdict is inferred from terminal prose.
+  stale_state: APPLICABLE / PASS — simv sha/mtime changed on the judged run and post-date the edits
+    (see Freshness proof), with the runner's forced rm+rebuild and checked COMPILE_EXIT_CODE=0.
+  dirty_worktree: APPLICABLE / PASS — M-set was {7 protected + plan} at precheck and the commit's
+    pathspec is exactly the 4 declared paths; none of the 7 protected files staged; `results.xml`
+    (run side-effect) restored, not staged; no `git add .`/`-A`/`commit -a`/stash/push/worktree.
+  flaky_tests: APPLICABLE-lite / PASS — the WDT assertion set is deterministic (dead slave: all
+    readys tied 0; peak count 999009 matches the ledger's recorded value); no borderline row was
+    seen, so no second full re-run was needed (a borderline result would have been re-run once).
+  malformed_input: NOT APPLICABLE — no external input is parsed; only fixed MMIO offsets and the
+    repo's own sources are consumed.
+  prompt_injection: NOT APPLICABLE — no untrusted text is read; only the repo's plan/RTL/TB/docs.
+  cancel_resume: NOT APPLICABLE — one uninterrupted serial session, no background jobs, no resume.
+  hung_commands: NOT APPLICABLE — the single suite run completed in 2m39s (rc=0); the WDT case is
+    bounded by the runner and finished 16.8 s; no orphaned simv left on sz0001.
+  repeated_interrupts: NOT APPLICABLE — no signals sent, no interrupted/retried run.
+
+CLEANUP
+  No background jobs. Scratch: /tmp/t4-mxu-run.log, /tmp/t4-simv-before.sha (removed at task end);
+  no repo scratch files besides this evidence. `results.xml` restored to HEAD. Notepads
+  (.omo/notepads/wrp-defects-and-tooling-fixes/{learnings,issues}.md) and the ledger line are
+  appended but NOT committed (task design). Nothing pushed; no worktree; no stash.
+
+════════════════════════════════════════════════════════════════════════════════════════
+C. JUDGEMENT
+════════════════════════════════════════════════════════════════════════════════════════
+NITS: done
