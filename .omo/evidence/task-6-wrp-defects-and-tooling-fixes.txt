@@ -1,0 +1,193 @@
+wrp-defects-and-tooling-fixes — TODO 6 EVIDENCE (ledger: BUG-MXU-WRP-001/002 as Fixed + README + residual close-out)
+================================================================================
+plan: .omo/plans/wrp-defects-and-tooling-fixes.md (todo 6 —
+      "台账：BUG-MXU-WRP-001/002 立案为 Fixed（4F/0O → 6F/0O）+ README + residual 收口")
+utc_written: 2026-09-24T18:50Z
+HEAD at start: 3597687 test(wrp-fixes): wrapper 6/6 + conformance + e2e mxu + FM-SOC 33 regression evidence
+branch: wrp-defects-and-tooling-fixes
+nature: DOCUMENTATION ONLY — zero code/TB/script/Makefile/spec/gen edits.
+
+================================================================================
+A. PRECHECK (all PASS, captured before any edit)
+================================================================================
+$ git branch --show-current
+wrp-defects-and-tooling-fixes
+
+$ git log -1 --format=%s
+test(wrp-fixes): wrapper 6/6 + conformance + e2e mxu + FM-SOC 33 regression evidence
+
+$ git status --porcelain | grep -E '^ ?M'          (at task start = exactly the allowed set)
+ M .omo/evidence/task-0-signoff-v3-runner.txt          <- protected (1/7)
+ M .omo/evidence/task-20-uncertainty-kpis.json         <- protected (2/7)
+ M .omo/evidence/task-23-perf-spec-ci.txt              <- protected (3/7)
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md  <- protected (4/7)
+ M .omo/notepads/phase6-rtl-verification/learnings.md  <- protected (5/7)
+ M .omo/plans/wrp-defects-and-tooling-fixes.md         <- allowed (plan file)
+ M build/evidence/fm-cv-chain.txt                      <- protected (6/7)
+ M build/evidence/w3-4-mobilenetv3-fm.txt              <- protected (7/7)
+=> 8 M-lines = {7 protected} ∪ {plan}; no edited-by-this-task file dirty yet. PASS
+(only the task's own two whitelisted docs + the evidence file are added by this todo;
+the plan's checkbox flip for todo 6 is part of the plan file's already-dirty diff, same
+pattern as todos 0-5: `git diff --stat` on the plan = 6 inserts / 6 deletes pre-edit.)
+
+================================================================================
+B. WHY THE TWO ENTRIES ARE FILEABLE AS Fixed (evidence trail, no new claims)
+================================================================================
+BUG-MXU-WRP-001  commit f65f5b9 `fix(rtl/wrapper): gate MXU DONE on store-out drain`
+  RED : .omo/evidence/task-2-wrp-defects-and-tooling-fixes.txt  (WRP1-FIX: done)
+        test_mxu_single_tile_compute FAIL — MISMATCH 3180/4096, max_abs_diff=6400,
+        first_mismatches=[(11,0),(11,2),(11,3),(11,4),(11,5)], DONE at 2880 ns with
+        only rows 0..10 written; RED source + log preserved at build/evidence/task-2-red/.
+  GREEN: same test 0/4096 mismatches, DONE at 6080 ns (one drain row after the last W
+        burst); suite 6/6 at 3a0e87c (.omo/evidence/task-4-wrp-defects-and-tooling-fixes.txt).
+BUG-MXU-WRP-002  commit 7179a82 `fix(rtl/wrapper): preload honors WRP_K_TILES + TB programs
+                 K-tiles before TRIG_LOAD`
+  RED : .omo/evidence/task-3-wrp-defects-and-tooling-fixes.txt  (WRP2-FIX: done)
+        test_mxu_accumulate_mode FAIL — `ValueError: Unresolvable bit in binary string: 'x'`
+        at 2940 ns; single len-32 weight + single len-64 activation burst (K=128, 1 tile).
+        Signature byte-identical to build/evidence/t4-2-wv-mxu-test_mxu_accumulate_mode.log.
+  GREEN: 6/6, `WRP_K_TILES=2 programmed + readback OK (K=128)`, 4 preload AR bursts,
+         accumulate K=128 bit-exact 4096/4096, X-hits 0/6 (GREEN#1 + independent GREEN#2).
+Cross-wave regression (both): .omo/evidence/task-5-wrp-defects-and-tooling-fixes.txt —
+  wrapper 6/6, conformance GREEN/doc-div 0, e2e mxu single+multi PASS, FM-SOC
+  25 pass / 8 skip / 0 fail / 0 timeout / 33 (== todo-1 forced-rebuild baseline).
+
+================================================================================
+C. ACCEPTANCE (plan todo 6, quoted verbatim)
+================================================================================
+$ grep -n "BUG-MXU-WRP-001\|BUG-MXU-WRP-002" docs/bugs/bugs-module-level.md
+149:  **Filed, fixed and closed as `BUG-MXU-WRP-001`** (2026-09-25 entry at the end of
+152:  **Filed, fixed and closed as `BUG-MXU-WRP-002`** (2026-09-25 entry at the end of
+245:### 2026-09-25 [Major] MXU STATUS.DONE Surfaced Before Store-Out Drain (BUG-MXU-WRP-001)
+272:`f65f5b9` (2026-09-24) — `fix(rtl/wrapper): gate MXU DONE on store-out drain (BUG-MXU-WRP-001)`.
+322:   `BUG-MXU-WRP-002`).
+326:### 2026-09-25 [Major] Preload K-Tile Count Derived From DIM0 Instead of WRP_K_TILES (BUG-MXU-WRP-002)
+352:`7179a82` (2026-09-24) — `fix(rtl/wrapper): preload honors WRP_K_TILES + TB programs K-tiles before TRIG_LOAD (BUG-MXU-WRP-002)`.
+  => 001 hits = 3 (>=2 PASS) ; 002 hits = 4 (>=2 PASS)
+
+$ grep -nE '\| Fixed \| 6 \||\| Open \| 0 \|' docs/bugs/bugs-module-level.md
+409:| Open | 0 |
+410:| Fixed | 6 |
+  (cross-check of the same table: `| Total bugs | 6 |` at :408)
+
+$ grep -n '6 = 6 Fixed' README.md
+26:| module-level | **6 = 6 Fixed / 0 Open** | （来源：docs/bugs/bugs-module-level.md） |
+39:| `docs/bugs/bugs-module-level.md` | 模块级 bug 台账：6 = 6 Fixed / 0 Open |
+  => 2 hits (>=2 PASS)
+
+$ grep -n '4 = 4 Fixed\|statistics stay at 4 Fixed' README.md docs/bugs/bugs-module-level.md
+  (no output)
+  => rc=1 (zero-hit) PASS
+  The superseded NOTE sentence was rewritten: `git diff` shows the new header
+  "module-level statistics are now **6 Fixed / 0 Open**, not the '4 Fixed / 0 Open'
+  recorded when this note was first written" — the old statistics sentence is gone.
+
+================================================================================
+D. EXTRA SELF-CHECKS (not plan-mandated; kept so the entry set and the table agree)
+================================================================================
+$ grep -nE '^### 20[0-9]{2}-|^\*\*Status\*\*:' docs/bugs/bugs-module-level.md
+30:### 2026-06-29 [Major] Controller Watchdog Timer Missing (BUG-MXU-WDT-001)
+33:**Status**: Fixed
+170:### 2026-07-02 [Minor] Perf Cycle Counter Off-by-One in READ_DIMS (BUG-MX-PERF-000)
+173:**Status**: Fixed
+193:### 2026-06-29 [Major] Exp LUT Default Entries=256 Causes Func Model Interpolation Error (BUG-001)
+196:**Status**: Fixed
+216:### 2026-08-12 [Medium] `_mxu_decode_cycles()` Undercounts Per-Tile Compute for M >= H (BUG-PERF-MXU-001)
+219:**Status**: Fixed
+245:### 2026-09-25 [Major] MXU STATUS.DONE Surfaced Before Store-Out Drain (BUG-MXU-WRP-001)
+248:**Status**: Fixed
+326:### 2026-09-25 [Major] Preload K-Tile Count Derived From DIM0 Instead of WRP_K_TILES (BUG-MXU-WRP-002)
+329:**Status**: Fixed
+=> Status: Fixed = 6 ; Status: Open = 0  -> agrees with `| Total bugs | 6 |` / `| Open | 0 |` /
+   `| Fixed | 6 |`. No new Open entry was created; the WDT entry's 5 residuals are untouched
+   except the R2 wording correction.
+
+$ grep -n "cleared by any\|cannot accumulate\|every other state" docs/bugs/bugs-module-level.md
+  (no output)  => rc=1 ; the F2-1/R2 overclaim is gone (replaced by the per-phase-budget wording,
+  and the trip condition now reads `wdt_trip && pl_axi_wait` / `wdt_trip && so_axi_wait` with
+  `wdt_trip = wdt_fire && !wdt_ax_hs`, matching HEAD rtl/wrapper/mxu_soc_wrapper.v:563/602/867.)
+
+$ grep -n "wdt_trip = wdt_fire" docs/bugs/bugs-module-level.md
+70:  where `wdt_trip = wdt_fire && !wdt_ax_hs`: a cycle in which a handshake actually
+
+Citation accuracy sweep (HEAD numbers re-verified by grep before writing, L14):
+  rtl/mxu/mxu_top.v:113  = `wire status_done;`        (the plan's :112 is off by one; :113 used)
+  rtl/mxu/controller.v:205 = `mac_reset_acc <= (k_tile == 16'd0) ? 1'b1 : 1'b0;`
+  firmware/npu-regmap.h:269-271 = npu_wait_done() `while (*status_reg & 1)` (BUSY poll)
+  firmware/npu_firmware.c:275-281 = npu_wait_done + 256-nop drain loop (load-bearing)
+  sim/cocotb_bridge.py:2392 `_poll_done` = BUSY-falling-edge completion (docstring)
+  rtl/wrapper/mxu_soc_wrapper.v:415 = `WRP1-IRQ-RESIDUAL:` marker (grep -c == 1)
+
+================================================================================
+E. RESIDUALS RECORDED (as notes, NOT as new bug IDs) — ledger lines
+================================================================================
+384-386  R1  conformance-TB line refs deferred (rtl/tb/apb_conformance_real_tb.sv :24/:680
+             frozen this wave; mirror of issues I-17)
+387-390  I-13 tracked root results.xml re-dirtied by every wrapper/cocotb run (restored with
+             `git checkout -- results.xml` in todos 2/3/4/5; not fixed)
+391-394  I-20 detached FM-SOC runner loses the shell exit status; suggested machine-readable
+             `[RUNNER-EXIT] rc=$?` trailer
+395-397  I-1  soc-verification-run.sh cannot run ON sz0001 (p9_ssh self-loop key); invoke from
+             a host with key access (sz0002 today)
+398-400  honest verdicts now visible: run_wrapper_sfu 6/7, run_wrapper_vector 5/6 — the
+             fail-closed parser working as intended, not regressions of WRP-1/WRP-2
+
+================================================================================
+F. ADVERSARIAL-CLASS PROBES
+================================================================================
+misleading_success_output  APPLICABLE / PASS — every acceptance result above is a raw grep
+    line printed into this file (hit counts stated next to the output); the zero-hit probes
+    are recorded with their rc=1, and the entry-inventory section was added as an independent
+    cross-check that the two new `Status: Fixed` lines actually make the table's 6/0/6 true.
+    No verdict is inferred from prose.
+dirty_worktree  APPLICABLE / PASS — started from the allowed 8-M set {7 protected} ∪ {plan};
+    this task edits exactly 2 tracked files (docs/bugs/bugs-module-level.md, README.md) plus
+    the plan's todo-6 checkbox (already-dirty file, stays unstaged); the commit stages exactly
+    3 paths (the 2 docs + this evidence with `git add -f`) and none of the 7 protected files;
+    no `git add .`/`-A`/`commit -a`/stash/push/worktree was used.
+stale_state        NOT APPLICABLE — docs-only todo; no binary/artifact is consumed, no
+    compiled state exists to go stale. (The plan's todo-5 freshness evidence is cited, not re-run.)
+malformed_input    NOT APPLICABLE — inputs are the repo's own ledger/README/plan/evidence text.
+prompt_injection   NOT APPLICABLE — no external or untrusted text is ingested.
+cancel_resume      NOT APPLICABLE — single synchronous session, no background jobs, no resume.
+hung_commands      NOT APPLICABLE — only grep/git-read commands; each returned immediately.
+flaky_tests        NOT APPLICABLE — no test executed (documentation-only change).
+repeated_interrupts NOT APPLICABLE — no signals sent, no interrupted run.
+
+================================================================================
+G. STAGING + COMMIT
+================================================================================
+$ git add docs/bugs/bugs-module-level.md README.md
+$ git add -f .omo/evidence/task-6-wrp-defects-and-tooling-fixes.txt
+$ git diff --cached --name-status
+A	.omo/evidence/task-6-wrp-defects-and-tooling-fixes.txt
+M	README.md
+M	docs/bugs/bugs-module-level.md
+$ git diff --cached --stat
+ .../task-6-wrp-defects-and-tooling-fixes.txt       | 182 ++++++++++++++++++
+ README.md                                          |   4 +-
+ docs/bugs/bugs-module-level.md                     | 207 +++++++++++++++++++--
+ 3 files changed, 379 insertions(+), 14 deletions(-)
+$ git diff --cached --name-only | grep -E 'task-0-signoff-v3-runner|task-20-uncertainty-kpis|task-23-perf-spec-ci|fm-e2e-qwen-cv-software-stack|phase6-rtl-verification|fm-cv-chain|w3-4-mobilenetv3-fm'
+  (no output) => rc=1 (none of the 7 protected files staged) PASS
+
+$ git commit -m 'docs(bugs): file BUG-MXU-WRP-001/002 as Fixed — wrapper drain/derivation defects (module ledger 6F/0O)'
+  (single commit; the plan's todo-6 checkbox flip stays unstaged by design, same as todos 0-5.)
+
+================================================================================
+H. CLEANUP RECEIPT
+================================================================================
+  No background jobs. No scratch files created (documentation todo; no /tmp artifacts).
+  Notepads (.omo/notepads/wrp-defects-and-tooling-fixes/{learnings,issues}.md, untracked by
+  task design) and .omo/start-work/ledger.jsonl (gitignored) are appended but NOT committed.
+  Nothing pushed; no worktree; no stash.
+
+================================================================================
+I. JUDGMENT
+================================================================================
+  LEDGER: done — BUG-MXU-WRP-001 / BUG-MXU-WRP-002 filed as Fixed (each >=2 hits, commit +
+  evidence cited), 2026-09-23 Note rewritten (WRP-1/2 removed, PROCESS-1/2/3 kept, statistics
+  corrected to 6 Fixed / 0 Open), F2-1/R2 watchdog overclaim replaced by the per-phase wording
+  (wdt_trip semantics included), residuals R1/I-13/I-20/I-1 + the SFU 6/7 / Vector 5/6 honest
+  verdicts recorded as notes, module stats 6/0/6 and README 2x `6 = 6 Fixed / 0 Open`, zero-hit
+  probes clean; diff ⊆ {docs/bugs/bugs-module-level.md, README.md, this evidence}.

@@ -52,13 +52,27 @@ Implementation: **wrapper AXI-layer watchdog** in `rtl/wrapper/mxu_soc_wrapper.v
   ~85.5 k cycles for the largest shape (K=N=2048), so 1 M has >10x headroom.
 - The counter runs **only** in the 8 AXI-handshake-only states
   (`PL_LOAD_W_AR`/`PL_LOAD_W_R`/`PL_LOAD_A_AR`/`PL_LOAD_A_R`,
-  `SO_RD_SCALE_AR`/`SO_RD_SCALE_R`/`SO_WRITE_AW`/`SO_WRITE_W`) and is cleared by any
-  FSM progress, so a long but healthy transaction can never accumulate to the
-  threshold.
+  `SO_RD_SCALE_AR`/`SO_RD_SCALE_R`/`SO_WRITE_AW`/`SO_WRITE_W`) and is a
+  **per-phase budget** (one budget for the whole pre-load phase, one per
+  store-out row): it is cleared once both sequencers have left the AXI-wait
+  states (`PL_READY`/`SO_IDLE`/`SO_TRANSFORM`), **not** per transaction stretch —
+  the K-tile turnover inside the pre-load is `wait → wait`
+  (`PL_LOAD_W_R -(rlast, more tiles)-> PL_LOAD_W_AR`), so one budget covers every
+  tile of the phase. Consequence: a deliberately slow slave (~244+ cycles/beat
+  average) on a large-K pre-load could in principle reach the threshold. What
+  holds instead is the headroom argument below plus the empirical result (clean
+  FM-SOC 33-case and e2e MXU runs, no false trip observed), not a per-cycle
+  reset. *(Wording corrected 2026-09-25 per F2-1/R2: the earlier counter-rule
+  claim — cleared on any FSM progress, therefore unable to accumulate — was wrong
+  about the transition rule.)*
 - On trip: sticky `wrp_wdt_timeout`, surgical FSM recovery back to IDLE (gated on
-  the FSM actually waiting — `wdt_fire && pl_axi_wait` / `&& so_axi_wait` — so a
-  legitimately set `LOAD_DONE` is never clobbered), and
-  `irq = mxu_irq | wrp_wdt_timeout` (shared INTC bit0).
+  the FSM actually waiting — `wdt_trip && pl_axi_wait` / `wdt_trip && so_axi_wait`,
+  where `wdt_trip = wdt_fire && !wdt_ax_hs`: a cycle in which a handshake actually
+  completes is progress and is never treated as a stall — so a legitimately set
+  `LOAD_DONE` is never clobbered), and
+  `irq = mxu_irq | wrp_wdt_timeout` (shared INTC bit0). `wdt_cnt` saturates at
+  `WDT_TIMEOUT-1` and `wdt_trip` re-evaluates on the next stalled cycle, so a
+  handshake-qualified deferral is at most 1 cycle and cannot disarm the watchdog.
 - `WRP_STATUS[1]` is sticky, cleared by **any** `WRP_CMD` write (clearing on
   `pwdata[0]=1` alone would make the software ack itself re-arm a pre-load).
 - New test `test_mxu_wrapper_watchdog_timeout`: peak `wdt_cnt = 999009`, trip after
@@ -126,20 +140,30 @@ clear works. The plan's todo-3 deviation line is the authoritative statement.
   is **partially** closed: a watchdog now exists, but not the `STATUS.ERROR`
   behavior MX-10 specifies (residual 1).
 
-**Note — defects / process debt discovered during this fix (NOT filed as new bug
-entries; module-level statistics stay at 4 Fixed / 0 Open):**
+**Note — defects / process debt discovered during this fix** *(rewritten
+2026-09-25; module-level statistics are now **6 Fixed / 0 Open**, not the
+"4 Fixed / 0 Open" recorded when this note was first written):*
 
 - `DEFECT-WRP-1` — store-out AXI drain precedes `STATUS.DONE`; firmware-visible
   (`MISMATCH: 3180/4096`, first mismatch row 11). `test_mxu_single_tile_compute`.
+  **Filed, fixed and closed as `BUG-MXU-WRP-001`** (2026-09-25 entry at the end of
+  this log).
 - `DEFECT-WRP-2` — `m_axi_wdata` X in accumulate mode. `test_mxu_accumulate_mode`.
+  **Filed, fixed and closed as `BUG-MXU-WRP-002`** (2026-09-25 entry at the end of
+  this log).
 - `PROCESS-1` — `run_wrapper_mxu` Makefile target missing `cd $(REPO_ROOT)` → Error 127.
 - `PROCESS-2` — runner verdict `grep -qE 'TEST.*PASS'` false-positives AND exits 0
   with real failures.
 - `PROCESS-3` — tracked `build/evidence/wrap-mxu-regression.txt` is unreliable
   (claims 5 PASS; the real HEAD control baseline was 1 PASS / 4 FAIL).
 
-Full detail: `.omo/notepads/rtl-open-bugs-cleanup/problems.md`. Flagged for a
-follow-up plan; not closed here.
+The three `PROCESS-*` items remain unfiled process debt; the follow-up wave
+(`c9a67d6`, branch `wrp-defects-and-tooling-fixes`) fixed the Makefile cwd
+(`PROCESS-1`), replaced the fail-open grep with the fail-closed
+`scripts/parse_cocotb_verdict.sh` (`PROCESS-2`) and untracked the regenerated
+artifacts (`PROCESS-3`) — evidence
+`.omo/evidence/task-1-wrp-defects-and-tooling-fixes.txt`. Full detail:
+`.omo/notepads/rtl-open-bugs-cleanup/problems.md`.
 
 ---
 
@@ -218,10 +242,169 @@ Lines 50-51 in `qwen_spec_gates.py` (and lines 125-126 in `model_scaling.py`) ov
 
 ---
 
+### 2026-09-25 [Major] MXU STATUS.DONE Surfaced Before Store-Out Drain (BUG-MXU-WRP-001)
+
+**Case**: MXU SoC wrapper — store-out path (`test_mxu_single_tile_compute`; firmware doorbell flow)
+**Status**: Fixed
+
+#### Description
+
+The wrapper's APB `STATUS` readback (`paddr == 0x008`) exposed the MXU engine's raw `status_done`,
+which `rtl/mxu/controller.v` asserts inside `S_DONE` — i.e. as soon as the last row has been queued
+into the store-out FIFO. The store-out drain FSM was still writing rows to SRAM over AXI4, so a
+poller that saw DONE and then read the output tile observed stale data.
+
+RED witness (pre-fix, todo 2 evidence): `test_mxu_single_tile_compute` failed with
+`MISMATCH: 3180/4096 elements differ, max_abs_diff=6400, first_mismatches=[(11,0),(11,2),(11,3),(11,4),(11,5)]`;
+`STATUS.DONE asserted` was logged at 2880 ns while only rows 0..10 had been written (last store W
+burst `awaddr 0x00040a00`), the drain needing 64 rows × 60 ns.
+
+#### Root Cause
+
+The engine's `status_done` is an `mxu_top`-internal wire (`rtl/mxu/mxu_top.v:113`), not a port: the
+wrapper's APB read mux forwarded the engine STATUS.DONE with **no connection to the store-out drain
+FSM**, so DONE was observable while rows 11+ were still queued. (`dbg_state == S_DONE` is itself a
+one-cycle condition — S_DONE returns to S_IDLE on the next cycle unless a new CMD.START arrives — so
+a raw passthrough could not have been used as a latch either.)
+
+#### Fix Commit
+
+`f65f5b9` (2026-09-24) — `fix(rtl/wrapper): gate MXU DONE on store-out drain (BUG-MXU-WRP-001)`.
+
+Implementation in `rtl/wrapper/mxu_soc_wrapper.v`:
+
+- `mxu_done_seen`: latched engine-done, set from `dbg_state == S_DONE`, cleared by the
+  `mmio_cs`-qualified CMD.START write (`mmio_cs && mmio_we && mmio_addr==12'h04 && mmio_wdata[0]`;
+  the qualifier is mandatory because `mmio_we`/`mmio_addr`/`mmio_wdata` are ungated raw APB signals).
+  Same-cycle priority: the clear wins over the set, so a new command never inherits the previous DONE.
+- `so_drain_done = so_fifo_empty && (so_state == SO_IDLE)`.
+- The AND of the two is surfaced as STATUS bit1 via the `apb_mmio_prdata_wrp` wrap **before** the APB
+  response mux, for `paddr == 12'h008` only; bit0 (BUSY) and bit2 (ERROR) pass through unchanged and
+  every other offset stays byte-identical.
+
+GREEN (todo 2): DONE moves 2880 ns → 6080 ns (+53 drained rows × 60 ns), asserted exactly one drain
+row after the last W burst, `Bit-exact match: 0 mismatches out of 4096 elements`.
+
+**Wording correction (recorded, important):** this fixes the **STATUS.DONE / APB read contract**.
+The BUSY-based waiters are unaffected and still need their own drain wait —
+`firmware/npu-regmap.h:269-271` (`npu_wait_done()`) polls `*status_reg & 1` (bit0 = BUSY), which the
+controller holds through the drain, and cocotb's `_poll_done` does the same. The 256-nop loop at
+`firmware/npu_firmware.c:275-281` therefore remains **LOAD-BEARING** (it gives the store-out FIFO time
+to drain before the caller DMAs the output tile) and must not be deleted on the strength of this fix.
+
+#### Evidence
+
+- `.omo/evidence/task-2-wrp-defects-and-tooling-fixes.txt` — `WRP1-FIX: done` / `WRP1-GATE: green`;
+  the RED signature is preserved at `build/evidence/task-2-red/` (the live per-test logs were
+  overwritten by the GREEN run); post-fix suite 6/6 at commit `3a0e87c`
+  (`.omo/evidence/task-4-wrp-defects-and-tooling-fixes.txt`).
+- Regression context: wrapper 6/6, conformance GREEN/doc-div 0, e2e mxu single+multi PASS, FM-SOC
+  25 pass / 8 skip / 0 fail / 0 timeout / 33 — `.omo/evidence/task-5-wrp-defects-and-tooling-fixes.txt`.
+
+**Residuals (4, recorded — not silently closed):**
+
+1. **IRQ unchanged** — `mxu_irq` still pulses in the cycle the controller enters `S_DONE`, i.e.
+   before the drain. A naive gate (`mxu_irq && so_drain_done`) would swallow the one-cycle pulse
+   forever and the INTC would never see a completion interrupt; a correct fix must latch `mxu_irq`
+   into a sticky `mxu_irq_seen` and ship with an IRQ_EN=1 test case. Marked in the RTL as
+   `WRP1-IRQ-RESIDUAL:` (`mxu_soc_wrapper.v:415`). The wrapper suite programs IRQ_EN=0, so no test
+   covers it.
+2. **Store-out WDT trip leaves DONE deasserted** — `wdt_trip && so_axi_wait` forces the drain FSM
+   back to `SO_IDLE` and drops the in-flight row; the sticky `WRP_STATUS[1]` is the authoritative
+   indicator for that fault path. The watchdog suite case covers only the pre-load path, not this one.
+3. **`so_fifo_empty` is pointer equality** (`wr_ptr == rd_ptr`), a valid "everything landed" test only
+   because the FIFO depth (64) equals `MAX_TILE`: one command pushes at most 64 rows, so the write
+   pointer never laps the read pointer as long as the per-row drain latency stays below 64 cycles
+   (measured ≈6 cycles/row in the wrapper TB, ≈11-15 in the FM-SOC mixed-mode runs). An `so_overflow`
+   tripwire for the "wr_ptr == rd_ptr while a capture is still in flight" case is a recorded future
+   item, not implemented in this wave.
+4. **K > 128 per command remains unsupported** — the internal buffers are 2 K-tiles deep (see
+   `BUG-MXU-WRP-002`).
+
+---
+
+### 2026-09-25 [Major] Preload K-Tile Count Derived From DIM0 Instead of WRP_K_TILES (BUG-MXU-WRP-002)
+
+**Case**: MXU preload + accumulate (`test_mxu_accumulate_mode`; K=128 multi-tile)
+**Status**: Fixed
+
+#### Description
+
+The wrapper's preload tile count was derived from the MXU `DIM0` register
+(`wrp_k_tiles_derived = (dim0_k == 0) ? 1 : ((dim0_k + 63) >> 6)`). Both real clients program the
+dedicated register — `firmware/npu_firmware.c:247-272` writes `WRP_K_TILES` then `WRP_CMD`, and
+`sim/cocotb_bridge.py:2267` does the same — but the TB wrote `DIM0` only **after** the preload
+handshake, so at preload time the derived count read the reset default 64. For K=128 exactly **one**
+K-tile was fetched, the second tile's buffers were never written, and the uninitialized entries
+surfaced as `X` on `m_axi_wdata` (`ValueError: Unresolvable bit in binary string: 'x'`).
+
+RED witness: `build/evidence/t4-2-wv-mxu-test_mxu_accumulate_mode.log:129,147,181-198,276-298`
+(single len-32 weight burst @0x10000 + single len-64 activation burst @0x20000; failure at 2940 ns).
+
+#### Root Cause
+
+A **phase** error, not a value error: every client agreed the count is `ceil(K/64)`, but `DIM0` is
+written a phase too late to be usable as the preload tile count. The TB was the only client relying
+on the wrapper's late derivation.
+
+#### Fix Commit
+
+`7179a82` (2026-09-24) — `fix(rtl/wrapper): preload honors WRP_K_TILES + TB programs K-tiles before TRIG_LOAD (BUG-MXU-WRP-002)`.
+
+- RTL: the preload count is `wrp_k_tiles_eff = (wrp_k_tiles == 16'd0) ? 16'd1 : wrp_k_tiles`
+  (`WRP_K_TILES`, 0x44); the `wrp_k_tiles_derived` wire and its now-dead `dim0_k` latch producer are
+  retired; the header usage flow now shows K_TILES written **before** TRIG_LOAD.
+- TB: `_preload_and_run` writes `OFF_WRP_K_TILES = (K + 63) // 64` after the base addresses and
+  **before** `TRIG_LOAD`, then reads it back and asserts equality; `test_mxu_accumulate_mode` asserts
+  the exact 4-burst preload geometry `[(0x10000,31),(0x10800,31),(0x20000,63),(0x21000,63)]`.
+
+GREEN: suite 6/6, `WRP_K_TILES=2 programmed + readback OK (K=128)`, K=128 accumulate bit-exact
+(4096/4096), X-hits 0/6 (RED: 1).
+
+#### Evidence
+
+`.omo/evidence/task-3-wrp-defects-and-tooling-fixes.txt` — `WRP2-FIX: done` / `WRP2-GATE: green`;
+RED signature byte-identical to the recorded log; GREEN#1 plus an independent flake re-run GREEN#2.
+
+**Notes (2, recorded):**
+
+1. **Exact only for K ≤ 128** — the internal buffers hold exactly 2 K-tiles (`W_BUF_DEPTH=64`,
+   `A_BUF_DEPTH=128`), so `WRP_K_TILES ∈ {1,2}` is honored exactly; K > 128 per command remains
+   unsupported (X) and the buffer depths were deliberately not changed in this wave.
+2. **`ctrl_acc_mode` is a dead controller input** — cross-K-tile accumulation is unconditional
+   (`rtl/mxu/controller.v` `mac_reset_acc <= (k_tile == 0)`, `:205`); the TB comment was corrected
+   accordingly. `COCOTB_RESOLVE_X` is **not** a valid approach for the X sighting (it would mask the
+   symptom instead of fixing the phase error; 0 hits in the diff and in the edited files).
+
+---
+
+**Note — residuals carried out of the wrapper-fix wave** *(recorded, no new bug IDs;
+last updated 2026-09-25):*
+
+- `R1` — **conformance-TB line references deferred**: `rtl/tb/apb_conformance_real_tb.sv:24`/`:680`
+  still carry the base/HEAD-mixed citations that were corrected on the doc side
+  (`docs/bugs/bugs-soc-rtl.md`). The TB was frozen for this wave (zero diff); mirror of issues `I-17`.
+- `I-13` — the tracked repo-root cocotb report `results.xml` is re-dirtied by every wrapper/cocotb
+  run (cocotb CWD = repo root) and was restored with `git checkout -- results.xml` each time
+  (todos 2/3/4/5); still **not fixed**. Real fix: `git rm --cached results.xml` or redirect
+  `COCOTB_RESULTS_FILE` to `build/evidence/`.
+- `I-20` — the FM-SOC runner launched detached (`nohup`) loses the shell exit status; the todo-5 run
+  was judged from 33/33 per-case `runner_classification` lines plus the runner's own post-loop rule
+  (`TOTAL != N_CASES` or `FAIL/TIMEOUT != 0` → `exit 1`). Suggested fix: append a machine-readable
+  `[RUNNER-EXIT] rc=$?` trailer (or `echo $? > "$RUN_DIR/exit_code"`).
+- `I-1` — `sim/regression/soc-verification-run.sh` cannot run **on** sz0001: the `p9_ssh` helper loops
+  to `192.168.0.11` and there is no self-loop key. Invoke it from a host with key access to sz0001
+  (sz0002 today).
+- **Honest verdicts now visible** (the fail-closed parser working as intended, not regressions):
+  `run_wrapper_sfu` 6/7 (one pre-existing SFU failure) and `run_wrapper_vector` 5/6 (the 6th case was
+  previously silently skipped and itself fails) — `.omo/evidence/task-5-wrp-defects-and-tooling-fixes.txt`.
+
+---
+
 ## Stats (Module-Level)
 
 | Metric | Value |
 |--------|:-----:|
-| Total bugs | 4 |
+| Total bugs | 6 |
 | Open | 0 |
-| Fixed | 4 |
+| Fixed | 6 |
