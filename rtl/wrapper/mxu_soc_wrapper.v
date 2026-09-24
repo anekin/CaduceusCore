@@ -49,6 +49,31 @@
 //   6. Write CMD.START → controller runs, wrapper drives broadcast buses
 //   7. Poll STATUS.DONE → read results from SRAM at WRP_OUT_BASE
 //
+// STATUS.DONE contract (BUG-MXU-WRP-001 — gated on store-out drain):
+//   STATUS.DONE ⇒ every store-out row of the command is already visible on the
+//   AXI4 write channel ("visible" = the W beat was accepted by the
+//   interconnect; B is fire-and-forget — m_axi_bready is tied 1 and the wrapper
+//   never gates progress on the write response).  Before this fix the raw
+//   controller status_done asserted as soon as the controller finished
+//   streaming rows into the store-out FIFO, while the drain still had 53 of 64
+//   rows queued (RED log: raw DONE at 2880 ns with rows 0..10 written), so a
+//   poller that then read SRAM saw rows >= 11 as stale zeros.
+//   Two boundaries are known and deliberately left as-is:
+//     (i)  An AXI watchdog trip inside store-out (wdt_fire && so_axi_wait
+//          forces the drain FSM back to SO_IDLE and drops the in-flight row)
+//          leaves DONE deasserted: the sticky WRP_STATUS[1] is the
+//          authoritative indicator for that fault path.  The WDT suite case
+//          covers only the pre-load path, not this one.
+//     (ii) so_fifo_empty is write-pointer == read-pointer, which is a valid
+//          "everything landed" test only because the FIFO depth (64) equals
+//          MAX_TILE: one command pushes at most 64 rows, so the write pointer
+//          never laps the read pointer as long as the per-row drain latency
+//          stays below 64 cycles (measured ≈6 cycles/row in this TB, ≈11-15 in
+//          the FM-SOC mixed-mode runs).
+//   Future item (recorded, NOT implemented in this wave): an so_overflow
+//   tripwire for the "wr_ptr == rd_ptr while a capture is still in flight"
+//   case, which would turn assumption (ii) into a checked condition.
+//
 // Must NOT modify mxu_top or any engine internals.
 // Preserves native debug ports for per-IP unit test.
 //=============================================================================
@@ -292,9 +317,54 @@ module mxu_soc_wrapper #(
                         (paddr == OFF_WRP_STATUS)      ? {30'd0, wrp_wdt_timeout, wrp_load_done} : 32'd0;
 
     //=========================================================================
+    // BUG-MXU-WRP-001 — STATUS.DONE gated on store-out drain completion
+    //=========================================================================
+    // mxu_done_seen: LATCHED engine-done.  dbg_state == S_DONE is a ONE-CYCLE
+    // condition (rtl/mxu/controller.v: S_DONE is entered on the clock after the
+    // last store_out row and returns to S_IDLE on the next cycle unless a new
+    // CMD.START arrives in the same cycle), so using it combinationally would
+    // make DONE a one-cycle pulse that drops again long before the drain ends.
+    // Clear on the CMD.START write.  The clear MUST be qualified with mmio_cs
+    // (= psel && penable, apb_to_mmio.v): mmio_we / mmio_addr / mmio_wdata are
+    // ungated raw APB signals, so without the qualifier the latch would be
+    // cleared on every idle bus cycle and could never set.
+    // Same-cycle priority: the CMD.START clear WINS over the S_DONE set, so a
+    // new command can never inherit the previous command's DONE.  This exact
+    // ordering is not exercised by the wrapper suite (commands never overlap
+    // there); it is a documented design choice.
+    localparam [11:0] MXU_OFF_CMD  = 12'h04;   // mxu_top CMD.START, bit0
+    localparam [11:0] MXU_OFF_STAT = 12'h08;   // mxu_top STATUS, bit1 = DONE
+    localparam [3:0]  MXU_S_DONE   = 4'd6;     // rtl/mxu/controller.v S_DONE
+
+    reg mxu_done_seen;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            mxu_done_seen <= 1'b0;
+        else if (mmio_cs && mmio_we && (mmio_addr == MXU_OFF_CMD) && mmio_wdata[0])
+            mxu_done_seen <= 1'b0;   // clear wins over the set below
+        else if (dbg_state == MXU_S_DONE)
+            mxu_done_seen <= 1'b1;
+    end
+
+    // Store-out drain complete.  Declared here so the APB read override below
+    // can use it; assigned next to the store-out FSM (after so_state and
+    // so_fifo_empty are declared) to keep every reference declared-before-use.
+    wire so_drain_done;
+
+    // STATUS read override: expose bit1 = engine-done && drain-done, i.e. the
+    // documented "DONE ⇒ store-out data already visible on the bus" contract.
+    // Applied to the apb_to_mmio read data BEFORE the APB response mux, so the
+    // mux structure is untouched: bit0 (BUSY) and bit2 (ERROR) pass through
+    // unchanged, and reads of every other offset stay byte-identical.
+    wire [31:0] mxu_status_prdata =
+        {apb_mmio_prdata[31:2], (mxu_done_seen && so_drain_done), apb_mmio_prdata[0]};
+    wire [31:0] apb_mmio_prdata_wrp =
+        (paddr == MXU_OFF_STAT) ? mxu_status_prdata : apb_mmio_prdata;
+
+    //=========================================================================
     // APB response mux — combine mxu MMIO and wrapper MMIO
     //=========================================================================
-    assign prdata  = apb_to_mxu_mmio ? apb_mmio_prdata : (wrp_cs ? wrp_prdata : 32'd0);
+    assign prdata  = apb_to_mxu_mmio ? apb_mmio_prdata_wrp : (wrp_cs ? wrp_prdata : 32'd0);
     assign pready  = 1'b1;
     assign pslverr = 1'b0;
 
@@ -316,6 +386,16 @@ module mxu_soc_wrapper #(
     // from AXI4 through the wrapper buffers)
     // mxu_irq is the engine's own interrupt; the wrapper ORs its watchdog
     // timeout into it (see the AXI watchdog section below).
+    //
+    // WRP1-IRQ-RESIDUAL: mxu_irq is a ONE-CYCLE PULSE — rtl/mxu/controller.v
+    // default-clears irq every cycle and sets it to irq_en only in S_DONE, so
+    // gating it naively with the store-out drain (e.g. `mxu_irq && so_drain_done`)
+    // would swallow the pulse forever and the INTC would never see a completion
+    // interrupt.  A correct future fix must LATCH mxu_irq into a sticky
+    // mxu_irq_seen and gate that latch instead, and must ship with an IRQ_EN=1
+    // test case.  No test in the wrapper suite covers an IRQ_EN=1 completion
+    // (it programs IRQ_EN=0, and the watchdog case is satisfied by the wdt bit),
+    // so the residual is recorded, not fixed, in this wave.
     wire mxu_irq;
     mxu_top #(
         .ADDR_WIDTH(12)
@@ -697,6 +777,14 @@ module mxu_soc_wrapper #(
     // after so_state is declared.
     assign so_axi_wait = (so_state == SO_RD_SCALE_AR) || (so_state == SO_RD_SCALE_R) ||
                          (so_state == SO_WRITE_AW)    || (so_state == SO_WRITE_W);
+
+    // BUG-MXU-WRP-001: store-out drain complete — the FIFO is empty AND the
+    // drain FSM is parked.  Declared with the APB read override near the top of
+    // the file; assigned here, after so_state and so_fifo_empty exist, to keep
+    // every reference declared-before-use (same pattern as so_axi_wait above).
+    // After a store-out WDT trip the abandoned rows are never popped, so this
+    // stays low and DONE stays deasserted (WRP_STATUS[1] is then authoritative).
+    assign so_drain_done = so_fifo_empty && (so_state == SO_IDLE);
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin

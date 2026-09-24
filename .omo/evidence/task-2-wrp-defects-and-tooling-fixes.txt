@@ -1,0 +1,258 @@
+case_id: task-2-wrp-defects-and-tooling-fixes
+plan: .omo/plans/wrp-defects-and-tooling-fixes.md (todo 2 — BUG-MXU-WRP-001：STATUS.DONE 门控到 store-out drain 完成)
+utc_start: 2026-09-24T16:11:08Z (RED)   utc_written: 2026-09-24T16:30Z
+branch: wrp-defects-and-tooling-fixes
+HEAD: c9a67d637dcbdcc2b4b57bdf456697b11d006183
+  git log -1 --format=%s == "chore(sim): fix wrapper targets + verdict parsing + simv/csrc cleaning + untrack regenerated artifacts"
+verdict: pass
+WRP1-FIX: done
+WRP1-GATE: green
+
+SCOPE
+  RTL: rtl/wrapper/mxu_soc_wrapper.v ONLY (+89/-1).  Evidence: this file.
+  NOT touched: rtl/mxu/** (incl. controller.v), rtl/soc/**, rtl/tb/** (incl. wrapper.flist),
+  sim/tests/**, sim/regression/**, scripts/**, firmware/**, spec/**, gen/**.
+  Behaviour NOT changed: WRP_STATUS load_done/wdt bits, watchdog threshold (WDT_TIMEOUT=1e6),
+  INTC wiring (assign irq = mxu_irq | wrp_wdt_timeout is untouched), no IRQ gate added,
+  no COCOTB_RESOLVE_X anywhere.
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+A. PRECHECK (all PASS, captured 2026-09-24T16:11Z before any edit)
+══════════════════════════════════════════════════════════════════════════════════════════════
+  branch == wrp-defects-and-tooling-fixes                                   PASS
+  git log -1 --format=%s == chore(sim): fix wrapper targets + verdict parsing + simv/csrc
+    cleaning + untrack regenerated artifacts                                PASS
+  git status --porcelain | grep -E '^ ?M' ⊂ {7 protected dirty files} ∪
+    {.omo/plans/wrp-defects-and-tooling-fixes.md} at start:
+      .omo/evidence/task-0-signoff-v3-runner.txt
+      .omo/evidence/task-20-uncertainty-kpis.json
+      .omo/evidence/task-23-perf-spec-ci.txt
+      .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+      .omo/notepads/phase6-rtl-verification/learnings.md
+      .omo/plans/wrp-defects-and-tooling-fixes.md
+      build/evidence/fm-cv-chain.txt
+      build/evidence/w3-4-mobilenetv3-fm.txt                                PASS (8 = 7 + plan)
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+B. RTL FACTS VERIFIED *BEFORE* THE EDIT (each read in the file, not assumed)
+══════════════════════════════════════════════════════════════════════════════════════════════
+  rtl/mxu/controller.v
+    :76          localparam S_DONE = 4'd6                    <- encoding confirmed (S_IDLE=4'd0)
+    :316-330     S_DONE branch: status_done <= 1'b1; irq <= irq_en;
+                 if (cmd_start) -> S_READ_DIMS (status_done <= 0) else -> S_IDLE
+                 => S_DONE is ONE CYCLE: combinational use is unusable as a DONE source
+    :145         default per-cycle clear of irq (irq <= 1'b0)  => irq is a ONE-CYCLE PULSE
+    :318         status_done <= 1'b1 in S_DONE; sticky (=/=> no default clear), cleared at
+                 :156 (S_IDLE + cmd_start) and :323 (S_DONE + cmd_start)
+    :295-303     S_STORE_OUT streams store_row 0..m_cur-1, then -> S_DONE
+  rtl/mxu/mxu_top.v
+    :112         status_done is an INTERNAL wire (not a wrapper port) — hence the dbg_state latch
+  rtl/wrapper/mxu_soc_wrapper.v (pre-edit numbering)
+    :297         assign prdata = apb_to_mxu_mmio ? apb_mmio_prdata : (wrp_cs ? wrp_prdata : 0)
+    :345         mxu_top .state(dbg_state) — the latch source is visible in the wrapper
+    :652         so_fifo_empty = (so_fifo_wr_ptr == so_fifo_rd_ptr)  (pointer equality)
+    :637-638     SO_FIFO_DEPTH = 64 = MAX_TILE (controller.v:67 MAX_TILE=16'd64)
+    :676/:716-785 SO_IDLE=3'd0; SO FSM :716-785
+    :714         wdt_fire && so_axi_wait -> so_state <= SO_IDLE (abandon in-flight row)
+    :773-779     SO_WRITE_W exits on m_axi_wvalid && m_axi_wready (W accepted = data visible)
+    :879         assign m_axi_bready = 1'b1 (B fire-and-forget)
+  rtl/wrapper/apb_to_mmio.v
+    :57          assign cs = psel && penable      <- the qualifier that makes mmio_cs usable
+    :58-60       we = pwrite; addr = paddr; wdata = pwdata  <- RAW, UNGATED APB signals
+                 => a clear term without mmio_cs would fire on every idle bus cycle
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+C. THE FIX (rtl/wrapper/mxu_soc_wrapper.v, +89/-1)
+══════════════════════════════════════════════════════════════════════════════════════════════
+  :52-76   header contract block: "STATUS.DONE ⇒ every store-out row already visible on the
+           AXI4 write channel"; "visible" defined as the W beat being accepted (B fire-and-forget);
+           boundaries (i)/(ii) and the future so_overflow tripwire are written out.
+  :320-346 latched engine-done:
+             localparam MXU_OFF_CMD=12'h04, MXU_OFF_STAT=12'h08, MXU_S_DONE=4'd6;
+             always @(posedge clk or negedge rst_n)
+               !rst_n                                         -> 0
+               mmio_cs && mmio_we && (mmio_addr==12'h04) && mmio_wdata[0] -> 0  (clear WINS)
+               dbg_state == MXU_S_DONE                        -> 1
+           (same-cycle priority: CMD.START clear beats the S_DONE set — documented; not
+            exercised by the suite because commands never overlap there.)
+  :352     wire so_drain_done;   (declared here for the read path; assigned at :787)
+  :355-361 read override WRAPS apb_mmio_prdata (the :297 ternary itself is NOT edited):
+             mxu_status_prdata = {apb_mmio_prdata[31:2], mxu_done_seen && so_drain_done,
+                                  apb_mmio_prdata[0]}
+             apb_mmio_prdata_wrp = (paddr == 12'h008) ? mxu_status_prdata : apb_mmio_prdata
+  :367     assign prdata = apb_to_mxu_mmio ? apb_mmio_prdata_wrp : (wrp_cs ? wrp_prdata : 0)
+           (only the operand name changed; bit0 BUSY / bit2 ERROR and all other offsets
+            pass through byte-identically.)
+  :390-399 WRP1-IRQ-RESIDUAL: marker (see section G)
+  :787     assign so_drain_done = so_fifo_empty && (so_state == SO_IDLE);
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+D. RED — RUN BEFORE ANY EDIT (2026-09-24T16:11:08Z, HEAD c9a67d6, unfixed wrapper)
+══════════════════════════════════════════════════════════════════════════════════════════════
+  Command (from sz0002, auto-SSH into sz0001; one run at a time):
+    bash scripts/wv_run_mxu.sh ; echo WRAPPER_RUN_EXIT=$?
+  Runner stdout per test (judged by scripts/parse_cocotb_verdict.sh, NOT by prose/exit code):
+    [wv_run_mxu.sh]   test_apb_regmap_rw: PASS [TESTS=1 PASS=1 FAIL=0 SKIP=0]
+    [wv_run_mxu.sh]   test_mxu_preload_single_tile: PASS [TESTS=1 PASS=1 FAIL=0 SKIP=0]
+    [wv_run_mxu.sh]   test_mxu_single_tile_compute: FAIL [TESTS=1 PASS=0 FAIL=1 SKIP=0]
+    [wv_run_mxu.sh]   test_mxu_store_out_burst: PASS [TESTS=1 PASS=1 FAIL=0 SKIP=0]
+    [wv_run_mxu.sh]   test_mxu_accumulate_mode: FAIL [TESTS=1 PASS=0 FAIL=1 SKIP=0]
+    [wv_run_mxu.sh]   test_mxu_wrapper_watchdog_timeout: PASS [TESTS=1 PASS=1 FAIL=0 SKIP=0]
+    WRAPPER_RUN_EXIT=1                       (4 PASS / 2 FAIL — matches the plan's baseline)
+  Signature captured from build/evidence/wv-mxu-test_mxu_single_tile_compute.log (RED):
+    250:  2240.00ns INFO cocotb.tb_mxu_wrapper.m_axi Write burst awid: 0x1 awaddr: 0x00040000 ...
+    254:  2300.00ns ... 0x00040100      258: 2360.00ns ... 0x00040200    ... 11 rows, 60 ns apart
+    290:  2840.00ns ... 0x00040a00      (rows 0..10 only; drain needs 64 x 60 ns)
+    293:  2880.00ns INFO cocotb.tb_mxu_wrapper  STATUS.DONE asserted -- compute complete
+    294:  2880.00ns ERROR cocotb.tb_mxu_wrapper  MISMATCH: 3180/4096 elements differ,
+          max_abs_diff=6400, first_mismatches=[(11, 0), (11, 2), (11, 3), (11, 4), (11, 5)]
+    306:  ** TESTS=1 PASS=0 FAIL=1 SKIP=0    2880.00 ...
+  BYTE-IDENTICAL to the recorded reference .omo/evidence/task-3-rtl-open-bugs-cleanup.txt:278-291
+  (rows 0-10 correct / first mismatch row 11 / 3180 of 4096 / DONE at 2880 ns while the drain
+  runs ~6 cyc/row).  Every field matches: mismatch count, max_abs_diff, first_mismatches tuple,
+  DONE timestamp, and the 0x00040a00 last-row-written.
+
+  RAW RED LOG PRESERVED (the live per-test logs at build/evidence/wv-mxu-*.log were overwritten by
+  the GREEN run, so the RED signature was re-captured into a distinct, still-present artifact):
+    build/evidence/task-2-red/mxu_soc_wrapper.v      = git show HEAD:rtl/wrapper/mxu_soc_wrapper.v
+      sha256 e82ab7cd015e9760ffa971fb4aa46b8911deb4e17a05edf6d03ba6a65923eec4 (RED source)
+    build/evidence/task-2-red/wrapper-red.flist      = rtl/tb/wrapper.flist with ONLY the wrapper
+      line re-pointed at that unmodified HEAD copy (flist in the tree NOT touched)
+    build/evidence/task-2-red/wv-compile-red.log     = V-2023.12-SP2_Full64 compile, exit 0
+    build/evidence/task-2-red/red-test-run.log       = RED re-capture stdout (sha256
+      d17f8174d7037cd2bc2230abb476088864c2bd1c02fbb1d768484095732bc33a for the -l log)
+    Re-capture signature (identical): APB read 0x08 -> data 02 00 00 00 (DONE) at 2880 ns,
+      MISMATCH: 3180/4096 ... first_mismatches=[(11, 0), (11, 2), (11, 3), (11, 4), (11, 5)],
+      ** TESTS=1 PASS=0 FAIL=1 SKIP=0  2880.00 **, $finish at simulation time 2880001.
+    NOTE (misleading_success_output class): the RED simv process itself exited 0 while the test
+    FAILED — the verdict exists only in the parsed summary line, never in the process status.
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+E. GREEN — SAME SUITE AFTER THE EDIT (2026-09-24T16:17:58Z start; compile 00:18:00 local)
+══════════════════════════════════════════════════════════════════════════════════════════════
+  Command: bash scripts/wv_run_mxu.sh ; echo WRAPPER_RUN_EXIT=$?
+  Per-test rows, verbatim (build/evidence/wrap-mxu-regression.txt + per-test logs):
+    test_apb_regmap_rw                 PASS [TESTS=1 PASS=1 FAIL=0 SKIP=0]
+    test_mxu_preload_single_tile       PASS [TESTS=1 PASS=1 FAIL=0 SKIP=0]
+    test_mxu_single_tile_compute       PASS [TESTS=1 PASS=1 FAIL=0 SKIP=0]   <- RED -> GREEN
+    test_mxu_store_out_burst           PASS [TESTS=1 PASS=1 FAIL=0 SKIP=0]
+    test_mxu_accumulate_mode           FAIL [TESTS=1 PASS=0 FAIL=1 SKIP=0]   <- WRP-2, todo 3
+    test_mxu_wrapper_watchdog_timeout  PASS [TESTS=1 PASS=1 FAIL=0 SKIP=0]
+    Summary: 5 PASS, 1 FAIL (6 total) ; WRAPPER_RUN_EXIT=1
+  cocotb per-test summary rows (never a runner summary):
+    ** sim.tests.wrapper.test_mxu_wrapper.test_apb_regmap_rw               PASS   1090.00  **
+    ** sim.tests.wrapper.test_mxu_wrapper.test_mxu_preload_single_tile     PASS   1230.00  **
+    ** sim.tests.wrapper.test_mxu_wrapper.test_mxu_single_tile_compute     PASS   6080.00  **
+    ** sim.tests.wrapper.test_mxu_wrapper.test_mxu_store_out_burst         PASS   6080.00  **
+    ** sim.tests.wrapper.test_mxu_wrapper.test_mxu_wrapper_watchdog_timeout PASS 10100555.00 **
+    ** sim.tests.wrapper.test_mxu_wrapper.test_mxu_accumulate_mode         FAIL   2940.00  **
+  The 4 tests that were green before stay green (apb_regmap_rw / preload_single_tile /
+  store_out_burst / watchdog).  Regression check: NONE.
+  accumulate_mode unchanged in MODE as well as status — still the cocotbext.axi write-coroutine
+  death on X (ValueError: Unresolvable bit in binary string: 'x' at 2940 ns), i.e. exactly the
+  WRP-2 defect owned by todo 3; it did NOT turn into a DONE timeout, so the drain gate did not
+  mask or move that defect.
+  GREEN single_tile_compute content (build/evidence/wv-mxu-test_mxu_single_tile_compute.log):
+    503:  6020.00ns ... Write burst awid: 0x1 awaddr: 0x00043f00 (row 63 — last row)
+    507:  6080.00ns INFO cocotb.tb_mxu_wrapper  STATUS.DONE asserted -- compute complete
+    508:  6080.00ns INFO cocotb.tb_mxu_wrapper  Bit-exact match: 0 mismatches out of 4096 elements
+    509:  6080.00ns INFO cocotb.tb_mxu_wrapper  TEST PASSED: test_mxu_single_tile_compute
+    516:  ** TESTS=1 PASS=1 FAIL=0 SKIP=0   6080.00 **
+    => DONE moves 2880 ns -> 6080 ns = +53 drained rows x 60 ns; DONE is asserted exactly one
+       drain row (60 ns) after the last W burst, and the 4096-element bit-exact compare passes
+       with zero mismatches (RED: rows >= 11 stale, 3180 mismatches).
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+F. FRESHNESS PROOF (the judged GREEN run was a FORCED rebuild of the edited RTL)
+══════════════════════════════════════════════════════════════════════════════════════════════
+  Source under test: rtl/wrapper/mxu_soc_wrapper.v  mtime 2026-09-25 00:17:21 +0800
+                     sha256 c7faf5548de705da8d5c785cc8512905785d39298390d0e32dcaf43be3a9d978
+  Judged binary:     build/evidence/simv_tb_mxu_wrapper  mtime 2026-09-25 00:18:44 +0800
+                     sha256 5a3412a00fe188e584bdcbfd83e3681cc6708fd883466c71055f04d3d3a13c33
+                     (binary mtime is 83 s AFTER the source edit => cannot be a stale simv)
+  Compile log line:  build/evidence/wv-compile-tb_mxu_wrapper.log:6
+                       Chronologic VCS (TM) Version V-2023.12-SP2_Full64 -- Fri Sep 25 00:18:00 2026
+                     :100  CPU time: 22.514 seconds to compile + 1.494 seconds to elab +
+                           .445 seconds to link
+                     wv-compile-mxu-run.log: COMPILE_EXIT_CODE=0 (compile happens before every
+                     suite run in scripts/wv_run_mxu.sh — todo 1's forced rebuild — so the judged
+                     run could not have reused an older simv).
+  Run completion:    each of the 6 per-test logs contains `$finish at simulation time ...`
+                     (grep -c '$finish' = 1|2 per log) and a VCS Simulation Report timestamp.
+  Verdict parser:    scripts/parse_cocotb_verdict.sh (todo 1, fail-closed) produced every PASS/FAIL
+                     row above; no verdict was inferred from runner prose or exit codes.
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+G. BOUNDARY / RESIDUAL STATEMENTS (also written into the RTL header + WRP1-IRQ-RESIDUAL marker)
+══════════════════════════════════════════════════════════════════════════════════════════════
+  1. DRAIN LATENCY.  Measured in this TB: consecutive store-out bursts are 60 ns apart at a 10 ns
+     clock => ≈6 cycles/row (RED log rows 0..10 at 2240/2300/.../2840 ns; GREEN rows up to 0x43f00
+     at 6020 ns).  FM-SOC mixed-mode figure ≈11-15 cycles/row is taken from the plan's analysis
+     (not re-measured here).  Both are far below the FIFO depth-equality assumption.
+  2. WDT TRIP DURING STORE-OUT.  wdt_fire && so_axi_wait forces so_state<=SO_IDLE and DROPS the
+     in-flight row (mxu_soc_wrapper.v:714 pre-edit / :784 post-edit region).  The abandoned rows
+     are never popped, so so_fifo_empty stays low and DONE stays DEASSERTED — the sticky
+     WRP_STATUS[1] is the authoritative indicator for that fault path.  The watchdog suite case
+     covers only the PRE-LOAD path (it asserts WRP_STATUS[1] with LOAD_DONE=0 and never enters
+     store-out), so this boundary is documented, not covered.
+  3. IRQ.  NOT CHANGED.  WRP1-IRQ-RESIDUAL marker at rtl/wrapper/mxu_soc_wrapper.v:390-399 states:
+     mxu_irq is a one-cycle pulse (controller.v:145 default clear vs :319 set), a naive
+     `mxu_irq && so_drain_done` gate would swallow it forever, any future gate must latch
+     mxu_irq_seen and ship with an IRQ_EN=1 test case, and no test currently covers an IRQ_EN=1
+     completion (the suite writes IRQ_EN=0).  Todo 6 mirrors this in the ledger.
+  4. so_overflow TRIPWIRE.  Recorded as a future item (header :73-75): "wr_ptr == rd_ptr while a
+     capture is still in flight" would turn the pointer-equality assumption into a checked
+     condition.  Deliberately NOT implemented in this wave.
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+H. ADVERSARIAL CLASSES — probes and results
+══════════════════════════════════════════════════════════════════════════════════════════════
+  misleading_success_output  APPLICABLE, mitigated: every verdict above is a per-test cocotb row
+      parsed by the fail-closed helper; the RED process exit code was 0 while its test FAILED and
+      the suite exit code was 1 for a 5-PASS run — both are recorded so neither can be mistaken
+      for the verdict.
+  stale_state                APPLICABLE, mitigated: binary mtime > source mtime (section F) and the
+      covered sha256 of the exact binary that produced the judged rows.
+  dirty_worktree             APPLICABLE, verified at commit time: M-set == 7 protected files +
+      plan + results.xml; results.xml was dirtied by the cocotb runs (cocotb writes it at
+      REPO_ROOT), was NOT staged, and was restored with `git checkout -- results.xml` before the
+      commit; none of the 7 protected files is staged.  The one-off RED re-capture wrote only
+      under gitignored build/evidence/task-2-red/ and a scratch flist copy there — rtl/tb/wrapper.
+      flist is unmodified (`git status` clean for it, sha unchanged).
+  flaky_tests                APPLICABLE-lite, probed: the RED signature was reproduced twice — the
+      original pre-edit run (16:11Z) and the preserved re-capture (00:23 local) — with identical
+      mismatch tuple, count, and DONE timestamp (2880.00 ns).  Not borderline, one comparison was
+      enough; no further re-rolls.
+  malformed_input            NOT APPLICABLE — this change consumes no external/user input; the only
+      inputs are the repo's own flist/TB and the edited RTL.
+  prompt_injection           NOT APPLICABLE — no untrusted text is processed as instructions; sim
+      logs are data, and verdicts come from a deterministic parser.
+  cancel_resume              NOT APPLICABLE — the work was a single serial session; nothing was
+      aborted and resumed (the RED re-capture is a deliberate, documented re-run, not a resume).
+  hung_commands              NOT APPLICABLE — no background jobs; every VCS/cocotb invocation was
+      bounded and each returned `$finish` (log-verified), longest test 10.1M ns / 14.5 s wall.
+  repeated_interrupts        NOT APPLICABLE — no interrupt-driven flow is exercised (IRQ_EN=0 in
+      the suite); the IRQ residual is recorded in section G.3.
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+I. CLEANUP RECEIPT
+══════════════════════════════════════════════════════════════════════════════════════════════
+  Removed: build/evidence/task-2-red/simv_tb_mxu_wrapper + .daidir (one-off RED binary/daidir).
+  Kept (small, all under gitignored build/evidence/task-2-red/): mxu_soc_wrapper.v (HEAD copy),
+    wrapper-red.flist, wv-compile-red.log, compile-run.log, red-test-run.log,
+    wv-mxu-red-test_mxu_single_tile_compute.log  — the preserved RED provenance, referenced by
+    section D.
+  results.xml: restored to HEAD (see H.dirty_worktree).  No background jobs left running.
+
+══════════════════════════════════════════════════════════════════════════════════════════════
+J. JUDGMENT
+══════════════════════════════════════════════════════════════════════════════════════════════
+  WRP1-FIX: done
+  WRP1-GATE: green
+  RED signature byte-identical to .omo/evidence/task-3-rtl-open-bugs-cleanup.txt:278-291
+  (3180/4096, max_abs_diff=6400, first_mismatches=[(11,0),(11,2),(11,3),(11,4),(11,5)], DONE at
+  2880 ns with 53/64 rows still queued); GREEN = same test 0 mismatches with DONE deferred to
+  6080 ns after the last drain row; the other 4 formerly-green tests unchanged; the fifth failure
+  (accumulate_mode / WRP-2) remains for todo 3 with an unchanged failure signature.
+  diff ⊆ {rtl/wrapper/mxu_soc_wrapper.v, .omo/evidence/task-2-wrp-defects-and-tooling-fixes.txt}
+  Commit: fix(rtl/wrapper): gate MXU DONE on store-out drain (BUG-MXU-WRP-001)
