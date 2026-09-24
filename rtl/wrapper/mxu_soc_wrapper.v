@@ -21,6 +21,8 @@
 //                                   (any write clears WRP_STATUS[1])
 //   0x40    WRP_STATUS      R       [0]=LOAD_DONE: pre-load complete
 //                                   [1]=WDT_TIMEOUT (sticky AXI watchdog trip)
+//   0x44    WRP_K_TILES     RW      number of 64-wide K-tiles to preload (>=1)
+//   0x48    WRP_DIM_N       RW      fallback N (latched MXU DIM1 wins)
 //
 // AXI watchdog (BUG-MXU-WDT-001):
 //   Both sequencers below park in states whose only exit is an AXI handshake
@@ -43,11 +45,17 @@
 // Usage flow:
 //   1. DMA copies weight/activation data to SRAM
 //   2. Write WRP_WEIGHT_BASE, WRP_ACT_BASE, WRP_OUT_BASE
-//   3. Write WRP_CMD[0]=1 → wrapper reads data from SRAM into internal buffers
+//   3. Write WRP_K_TILES = ceil(K/64), THEN write WRP_CMD[0]=1 → wrapper reads
+//      exactly WRP_K_TILES K-tiles from SRAM into internal buffers
+//      (BUG-MXU-WRP-002: the count must be programmed before TRIG_LOAD)
 //   4. Poll WRP_STATUS[0] → 1
-//   5. Write mxu MMIO (DIM0/DIM1/CTRL etc.)
+//   5. Write mxu MMIO (DIM0/DIM1/CTRL etc.) — DIM0 arrives AFTER the preload
+//      handshake and is therefore NOT usable as the preload tile count
 //   6. Write CMD.START → controller runs, wrapper drives broadcast buses
 //   7. Poll STATUS.DONE → read results from SRAM at WRP_OUT_BASE
+//
+//   This is the firmware/bridge order too: npu_firmware.c:247-272 writes
+//   WRP_K_TILES then WRP_CMD, and cocotb_bridge.py:2267 does the same.
 //
 // STATUS.DONE contract (BUG-MXU-WRP-001 — gated on store-out drain):
 //   STATUS.DONE ⇒ every store-out row of the command is already visible on the
@@ -234,34 +242,39 @@ module mxu_soc_wrapper #(
     wire       wrp_cs     = psel && (paddr >= 12'h030) && (paddr <= 12'h048);
     wire       wrp_trigger = wrp_cs && pwrite && penable && (paddr == OFF_WRP_CMD) && pwdata[0];
 
-    // ── P9-B: Latch K/N from MXU DIM0/DIM1 core register writes ─────
+    // ── P9-B: Latch N from MXU DIM1 core register writes ─────────────
     // The firmware compiler generates correct a4=0x40000000-based writes to
-    // MXU DIM0 (offset 0x0C, K in bits 31:16) and DIM1 (offset 0x10, N in
-    // bits 15:0) at 0x66c/0x670.  These go through the APB→MMIO bridge and
-    // are visible on mmio_addr/mmio_wdata/mmio_we.  Derive k_tiles and N
-    // from these latched values so the preload FSM does not depend on
-    // firmware-to-wrapper register writes (which GCC misroutes).
-    localparam [11:0] MXU_OFF_DIM0 = 12'h0C;
+    // MXU DIM1 (offset 0x10, N in bits 15:0) at 0x670.  These go through the
+    // APB→MMIO bridge and are visible on mmio_addr/mmio_wdata/mmio_we.  Derive
+    // N from that latched value (WRP_DIM_N is the fallback) so the store-out
+    // row width does not depend on firmware-to-wrapper register writes (which
+    // GCC misroutes).
+    // NOTE (BUG-MXU-WRP-002): K is deliberately NOT latched from DIM0 any
+    // more.  The preload FSM used to derive ceil(K/64) from the latched DIM0,
+    // but the usage flow writes DIM0 only AFTER the preload handshake — at
+    // preload time dim0_k was still the reset default 64, so K=128 fetched a
+    // single K-tile and the second tile was read out of uninitialized buffer
+    // entries (X on m_axi_wdata).  The count now comes from WRP_K_TILES (0x44),
+    // which software programs before TRIG_LOAD.
     localparam [11:0] MXU_OFF_DIM1 = 12'h10;
 
-    reg [15:0] dim0_k;    // K dimension latched from MXU DIM0 write
     reg [15:0] dim1_n;    // N dimension latched from MXU DIM1 write
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            dim0_k <= 16'd64;
             dim1_n <= 16'd64;
         end else if (mmio_we) begin
-            if (mmio_addr == MXU_OFF_DIM0)
-                dim0_k <= mmio_wdata[31:16];
             if (mmio_addr == MXU_OFF_DIM1)
                 dim1_n <= mmio_wdata[15:0];
         end
     end
 
-    // Derived k_tiles: ceil(K_fw / 64).  dim0_k holds K; default 64→1 tile.
-    wire [15:0] wrp_k_tiles_derived = (dim0_k == 16'd0) ? 16'd1 :
-                                      ((dim0_k + 16'd63) >> 6);
+    // Preload K-tile count (BUG-MXU-WRP-002): programmed via WRP_K_TILES
+    // (0x44) BEFORE WRP_CMD.TRIG_LOAD, by both the firmware
+    // (npu_firmware.c:247-272) and the cocotb bridge (cocotb_bridge.py:2267).
+    // 0 → 1 (never zero fetches): the reset default is already 1, and a
+    // soft-cleared register must not turn LOAD_DONE into a no-op.
+    wire [15:0] wrp_k_tiles_eff = (wrp_k_tiles == 16'd0) ? 16'd1 : wrp_k_tiles;
 
     // Derived N: from MXU DIM1, fall back to wrp_n register.
     wire [15:0] wrp_n_derived = (dim1_n != 16'd0) ? dim1_n : wrp_n;
@@ -470,6 +483,22 @@ module mxu_soc_wrapper #(
     localparam ACT_BEATS_PER_K    = 8'd64;
     localparam SCALE_BEATS        = 8'd4;
 
+    // ── Capacity bound: K <= 128 per command (BUG-MXU-WRP-002) ──────────
+    // The internal buffers hold exactly 2 K-tiles: weight_buf has
+    // W_BUF_DEPTH (=64) entries and one K-tile costs WEIGHT_BEATS_PER_K (=32),
+    // activation_buf has A_BUF_DEPTH (=128) entries and one K-tile costs
+    // ACT_BEATS_PER_K (=64).  The write indexes
+    //     weight_buf    [(pl_k_tile_cnt * 32) + pl_beat_cnt]
+    //     activation_buf[(pl_k_tile_cnt * 64) + pl_beat_cnt]
+    // stay in range only while pl_k_tile_cnt < 2, and the broadcast-bus read
+    // indexes (burst_cnt increments once per compute burst, i.e. per K-tile)
+    //     act_buf_idx = burst_cnt * 64 + data_cycle     (burst_cnt < 2)
+    //     w_buf_idx   = burst_cnt * 32 + data_cycle[13:1]
+    // leave the arrays at burst_cnt >= 2.  WRP_K_TILES is therefore honored
+    // exactly for K <= 128 (ceil(K/64) <= 2).  K > 128 per command stays
+    // UNSUPPORTED — the out-of-range reads yield X.  Raising the bound means
+    // deeper buffers and is deliberately out of scope for this fix.
+
     //=========================================================================
     // AXI watchdog (BUG-MXU-WDT-001)
     //=========================================================================
@@ -560,7 +589,7 @@ module mxu_soc_wrapper #(
                         weight_buf[(pl_k_tile_cnt * WEIGHT_BEATS_PER_K) + pl_beat_cnt] <= m_axi_rdata;
                         pl_beat_cnt <= pl_beat_cnt + 8'd1;
                         if (m_axi_rlast) begin
-                            if (pl_k_tile_cnt + 16'd1 < wrp_k_tiles_derived) begin
+                            if (pl_k_tile_cnt + 16'd1 < wrp_k_tiles_eff) begin
                                 pl_k_tile_cnt <= pl_k_tile_cnt + 16'd1;
                                 pl_beat_cnt   <= 8'd0;
                                 pl_cur_addr   <= pl_cur_addr + (WEIGHT_BEATS_PER_K * (AXI_DATA_WIDTH / 8));
@@ -586,7 +615,7 @@ module mxu_soc_wrapper #(
                         activation_buf[(pl_k_tile_cnt * ACT_BEATS_PER_K) + pl_beat_cnt] <= m_axi_rdata;
                         pl_beat_cnt <= pl_beat_cnt + 8'd1;
                         if (m_axi_rlast) begin
-                            if (pl_k_tile_cnt + 16'd1 < wrp_k_tiles_derived) begin
+                            if (pl_k_tile_cnt + 16'd1 < wrp_k_tiles_eff) begin
                                 pl_k_tile_cnt <= pl_k_tile_cnt + 16'd1;
                                 pl_beat_cnt   <= 8'd0;
                                 pl_cur_addr   <= pl_cur_addr + (ACT_BEATS_PER_K * (AXI_DATA_WIDTH / 8));
