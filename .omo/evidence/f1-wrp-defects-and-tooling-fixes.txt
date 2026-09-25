@@ -1,0 +1,154 @@
+F1 — PLAN COMPLIANCE AUDIT — .omo/plans/wrp-defects-and-tooling-fixes.md
+================================================================================
+auditor   : F1 (independent, read-only; this file is the only write)
+utc_written: 2026-09-24T18:59:20Z
+branch    : wrp-defects-and-tooling-fixes        HEAD: ba0bb3c172081ed7c102556ad3a55ec1f26237e0
+base      : main @ f1d9652
+method    : every claim below re-derived from the repo; quoted text is raw command
+            output captured during this audit. No summary was trusted.
+
+1. COMMIT ↔ PLAN MAPPING — PASS (7/7, exact subject match, planned order)
+$ git log --format='%H %s' f1d9652..HEAD
+ba0bb3c172081ed7c102556ad3a55ec1f26237e0 docs(bugs): file BUG-MXU-WRP-001/002 as Fixed — wrapper drain/derivation defects (module ledger 6F/0O)
+35976873665a7e7125c2a7fe7013161dfbbb3c11 test(wrp-fixes): wrapper 6/6 + conformance + e2e mxu + FM-SOC 33 regression evidence
+3a0e87cc9569c75d0b8f790c97b99ba1e1e87a11 chore(rtl/wrapper): address F2 review nits — comment wording, penable, recovery gate, probe scope
+7179a822e54100db863d135fadc7df538f56e89b fix(rtl/wrapper): preload honors WRP_K_TILES + TB programs K-tiles before TRIG_LOAD (BUG-MXU-WRP-002)
+f65f5b9ebc1ce29ae119c691a6931c9f39dce409 fix(rtl/wrapper): gate MXU DONE on store-out drain (BUG-MXU-WRP-001)
+c9a67d637dcbdcc2b4b57bdf456697b11d006183 chore(sim): fix wrapper targets + verdict parsing + simv/csrc cleaning + untrack regenerated artifacts
+7ce88a8f896bf00c2af8e202814e3a065c2e6ec1 chore(omo): P0 baseline — branch + provenance snapshot (wrp-defects-and-tooling-fixes)
+$ grep -n 'Commit:' <plan@HEAD>            (7 lines, todos 0..6)
+92:  Commit: Y | <t0> ... 100: <t1> | 108: <t2> | 116: <t3> | 124: <t4> | 132: <t5> | 140: <t6>
+=> each subject == its todo's `Commit:` line, byte-identical; order t6..t0 == planned 0..6
+   (log is newest-first). t0 commit = plan+draft+evidence only; t1 = scripts/fixtures/
+   Makefile/.gitignore + untrack deletions; t2 = wrapper+evidence; t3 = wrapper+TB+evidence;
+   t4 = wrapper+TB+bugs-soc-rtl+evidence; t5 = evidence only; t6 = ledger+README+evidence
+   (git log --name-only). Atomicity holds.
+
+2. EVIDENCE COMPLETENESS — PASS (all 7 files exist; judgment tokens quoted)
+  t0:154  P0-SNAPSHOT: pass
+  t1:6    TOOLING: fixed
+  t2:8-9  WRP1-FIX: done / WRP1-GATE: green
+  t3:10-11 WRP2-FIX: done / WRP2-GATE: green
+  t4:13   NITS: done
+  t5:15-18  REG-WRAPPER: 6-pass / REG-CONF: GREEN-docdiv-0 / REG-E2EMXU: single-pass,
+            multi-pass / REG-FMSOC: 25-pass-8-skip-0-fail-0-timeout-total-33
+            (== todo-1 baseline; same 8 SKIP IDs)
+  t6:188  LEDGER: done — BUG-MXU-WRP-001 / BUG-MXU-WRP-002 filed as Fixed (each >=2 hits,
+          commit + ...)   [each token also re-appears in its file's own closing block]
+
+3. RED → GREEN DUAL LOGS — PASS (byte-level, raw artifacts, not the prose)
+t2 RED signature, re-read from the preserved artifact:
+$ grep -nE 'MISMATCH|2880.00ns|PASS=0' build/evidence/task-2-red/red-test-run.log
+292:  2880.00ns INFO  cocotb.tb_mxu_wrapper.apb  Read complete addr: 0x00000008 ... data: 02 00 00 00
+293:  2880.00ns INFO  cocotb.tb_mxu_wrapper      STATUS.DONE asserted -- compute complete
+294:  2880.00ns ERROR cocotb.tb_mxu_wrapper      MISMATCH: 3180/4096 elements differ, max_abs_diff=6400, first_mismatches=[(11, 0), (11, 2), (11, 3), (11, 4), (11, 5)]
+306:  ** TESTS=1 PASS=0 FAIL=1 SKIP=0    2880.00 ...
+   == t2:106-111 / :124-126 claim, exact. Reference comparison: the same numbers live in
+   .omo/evidence/task-3-rtl-open-bugs-cleanup.txt:76-77 (`MISMATCH: 3180/4096 ... [(11, 0)...]` @2880ns)
+   and the DRIFT prose at :281 (`rows 0..10 in SRAM ... first golden mismatch is row 11`).
+   SHA check: build/evidence/task-2-red/mxu_soc_wrapper.v = e82ab7cd... (t2:118) MATCHES;
+   the `-l` log sha d17f8174... (t2:123) MATCHES wv-mxu-red-test_mxu_single_tile_compute.log.
+   (Citation nit F2 below: t2:252 cites ":278-291" for the byte-identical string, which is the
+   prose block; the verbatim string is at :76-77. Data verified either way.)
+t2 GREEN row + raw log:
+$ grep -nE 'Bit-exact match|6080.00ns' build/evidence/wv-mxu-test_mxu_single_tile_compute.log
+506:  6080.00ns ... Read start addr: 0x00000008 ...     512:  6140.00ns  Bit-exact match: 0 mismatches out of 4096 elements
+520:  ** TESTS=1 PASS=1 FAIL=0 SKIP=0  6140.00 ...
+t3 RED, re-read from the recorded reference log (plan-mandated compare target):
+$ grep -nE 'Unresolvable bit|2940.00ns' build/evidence/t4-2-wv-mxu-test_mxu_accumulate_mode.log
+279:  2940.00ns INFO  cocotb.regression  test_mxu_accumulate_mode failed
+298:  ValueError: Unresolvable bit in binary string: 'x'. Set the COCOTB_RESOLVE_X ...
+   `grep -c 'Unresolvable bit'` on that log = 1 == t3:136 claim.
+t3 GREEN: build/evidence/wrap-mxu-regression.txt (rewritten 01:26) lists all six tests
+   PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0]; accumulate log line 142 =
+   `WRP_K_TILES=2 programmed + readback OK (K=128)` with 4 AR bursts (0x10000/0x10800/0x20000/0x21000).
+
+4. CONSTRUCTIVE TOOLING VERIFICATION — PASS (re-run by the auditor just now)
+$ bash scripts/parse_cocotb_verdict.sh sim/regression/fixtures/verdict-fail.log ; echo $?
+COCOTB_VERDICT: FAIL TESTS=1 PASS=0 FAIL=1 SKIP=0 TEST_LINES=1 ...   -> exit=1
+$ .../verdict-pass.log  -> COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1 -> exit=0
+$ .../verdict-sfu7.log  -> COCOTB_VERDICT: FAIL TESTS=7 PASS=3 FAIL=4 SKIP=0 TEST_LINES=7 -> exit=1
+                            (matches the fixture body: 3 PASS / 4 FAIL — honest real-shape verdict)
+$ .../verdict-sfu7-pass.log -> PASS TESTS=7 PASS=7 ... exit=0; verdict-summary-mismatch.log ->
+   FAIL (per-test-status-mismatch) exit=1; verdict-truncated.log -> FAIL (summary-line-count=0) exit=1
+   => fail-closed contract holds; n is read, never hardcoded.
+$ grep -qE 'TEST.*PASS' sim/regression/fixtures/verdict-fail.log ; echo $?   -> 0
+$ grep -qE 'TEST.*PASS' sim/regression/fixtures/verdict-sfu7.log ; echo $?    -> 0
+   => the legacy one-liner returns 0 on a 1-FAIL and on a 4-FAIL fixture: the old bug is real.
+   Aggregator closes the second leak: scripts/wv_regression.sh:290 exits 1 when
+   TOTAL_NOTPASS != 0 (`if [ "$TOTAL_NOTPASS" -ne 0 ]; then ... exit 1`).
+
+5. BOUNDARY / MARKER CHECKS — PASS
+$ grep -n 'WRP1-IRQ-RESIDUAL' rtl/wrapper/mxu_soc_wrapper.v   -> 415 (count = 1)
+$ grep -nE 'K *<= *128|K > 128' rtl/wrapper/mxu_soc_wrapper.v -> 498 `Capacity bound: K <= 128 per
+   command (BUG-MXU-WRP-002)`, 510 `K > 128 per command stays [unsupported]`
+$ grep -nE 'K *<= *128|K > 128' docs/bugs/bugs-module-level.md -> 321 `K > 128 per command remains
+   unsupported`, 372 `WRP_K_TILES ∈ {1,2} is honored exactly; K > 128 ... remains`
+per-phase watchdog: mxu_soc_wrapper.v:33 `is a PER-PHASE budget: it is cleared once both sequencers
+   have left the ...`, :522 `states (PL_READY / SO_IDLE / SO_TRANSFORM), so it is a PER-PHASE budget`
+WDT-trip / drain-latency: :84 `An AXI watchdog trip inside store-out ... leaves DONE deasserted:
+   the sticky WRP_STATUS[1] is ...`, :90 `never laps the read pointer as long as the per-row drain
+   latency ...`, :855 `DONE stays deasserted (WRP_STATUS[1] is then authoritative)`
+pendable/pensible nits landed: :577 `The clear is qualified with penable`, CMD.START clear at :369
+   (`mmio_cs && mmio_we && (mmio_addr == MXU_OFF_CMD) && mmio_wdata[0]`), DONE wrap at :385
+   (`{apb_mmio_prdata[31:2], (mxu_done_seen && so_drain_done), ...}`), :856
+   `so_drain_done = so_fifo_empty && (so_state == SO_IDLE)`.
+Cleaning (todo 1c): soc-verification-run.sh:45-47 (`simv_apb_conformance_real*`, `$REPO_ROOT/csrc`);
+   run_ibex_full_rtl.sh:51 `rm -rf "$SIMV" "$SIMV.daidir" "$BUILD_DIR/csrc"` + :67 `[ ! -x ]` assert;
+   Makefile `cd $(REPO_ROOT)` present in the wrapper/conformance recipes.
+Untrack (todo 1d): 6 `wrap-*` + 5 `wv_vector_logs/*.dbg` git-rm'd; .gitignore:81-87 named rules only;
+   protected files still tracked: wrap-bug005/007-result.txt, wv-bug007-*.log.dbg,
+   wv_bug005_logs/*.dbg.
+
+6. NO-OVERCLAIM — PASS for every suite-level claim, with 2 documentation nits (F1/F2)
+  - t1:267 `The three suites now truthfully report MXU 4/6, Vector 5/6, SFU 6/7; all previously
+    presented as PASS/PARTIAL by hardcoded or fail-open logic` — corroborated by raw artifacts:
+    wrap-mxu-regression.txt (then 4/6), wrap-vec-regression.txt (`Overall: FAIL (5/6 PASS, 1 FAIL)`,
+    case `test_bug005_vector_nonaligned_wstrb: FAIL`), wrap-regression-summary.txt (`SFU: FAIL`,
+    `Tests: 7 total, 6 PASS, 1 FAIL`, `Overall: FAIL (0/3 suites PASS, 3 not-PASS)`).
+  - t5:254 / ledger:398-400 / t6:132 repeat the SFU 6/7 + Vector 5/6 honest verdicts — no claim of
+    a full sweep anywhere. Wrapper 6/6 claims are MXU-wrapper-suite-scoped and true
+    (`Summary: 6 PASS, 0 FAIL (6 total)` in the live artifact).
+  - README:650 (INFO, pre-existing, identical at f1d9652) still says `SFU Verify 19/19 ✅ ... 通过
+    batch regression` — a Phase-2 golden-batch claim for a DIFFERENT suite than the wrapper cocotb
+    suite now honestly reported as 6/7. Not falsified by this branch, unchanged by it; optional
+    clarification only.
+
+7. LEDGER ARITHMETIC — PASS
+$ grep -nE '\| *(Fixed|Open|Total)' docs/bugs/bugs-module-level.md  -> 408 `| Total bugs | 6 |`
+   409 `| Open | 0 |`   410 `| Fixed | 6 |`
+$ grep -n '6 = 6 Fixed / 0 Open' README.md  -> 26 and 39 (exactly 2 hits)
+$ grep -rn '4 = 4 Fixed' README.md docs/bugs/bugs-module-level.md   -> no match (probe rc=1)
+$ grep -rn 'statistics stay at 4 Fixed' README.md docs/bugs/bugs-module-level.md -> no match (rc=1)
+
+8. NO-SILENT-SKIP — PASS
+  8 SKIP IDs, identical to baseline: FM-SOC-014 015 016 017 019 021 022 023 (main logs
+  t1-fm-soc-forced-rebuild.log:737-782 and t5-fm-soc-rebuild.log; both summaries
+  `[SUMMARY] PASS=25 SKIP=8 FAIL=0 TIMEOUT=0 TOTAL=33`; 33/33 accounted, 0 new fails/timeouts).
+  Per-case logs build/ibex_full_rtl/evidence/FM-SOC-*.log carry `runner_classification=SKIP`.
+  Deferred conformance-TB item is an explicit residual: t4:158-160 (`R1 ... FROZEN this wave`,
+  `git diff --stat -- rtl/tb/apb_conformance_real_tb.sv` zero) and ledger:384-386.
+  Other accepted residuals verified as recorded: K>128 bounded claim (RTL:498-510, ledger:321/372);
+  IRQ marker (RTL:415); I-1 (t5:46/88, ledger:395-397); I-13 results.xml re-dirtied then restored
+  (t5:248-252, ledger:387-390; `results.xml` is clean in `git status` now); I-20 nohup rc not
+  captured (t5:212, ledger:391-394).
+
+F1 FINDINGS
+1. [LOW] .omo/evidence/task-5-wrp-defects-and-tooling-fixes.txt:201 — the single sentence
+   `cause recorded in the case logs: "skipped: direct APB/AXI case not applicable to Ibex RTL mode"`
+   describes only 2 of the 8 SKIP IDs. Raw per-case logs: FM-SOC-017/019 = "not applicable to Ibex
+   RTL mode"; FM-SOC-014/015/016/021/022/023 = "superseded by FM-SOC-027/032/10X". The SKIP set,
+   counts and fail-closed classification are correct (no silent skip); only the summarized cause is
+   wrong. Required fix: split the sentence into the two causes (evidence-only edit; follow-up commit).
+2. [LOW] .omo/evidence/task-2-wrp-defects-and-tooling-fixes.txt:252 cites
+   `.omo/evidence/task-3-rtl-open-bugs-cleanup.txt:278-291` as the byte-identical reference; the
+   verbatim `MISMATCH: 3180/4096 ... [(11,0),...]` string is at :76-77 (:278-291 is the BLOCKER-3
+   prose that states the same rows/ts). Required fix: correct the line range (no data change).
+3. [INFO] The plan file's 7 progress checkboxes are flipped only in the worktree
+   (`git diff HEAD -- .omo/plans/wrp-defects-and-tooling-fixes.md` = 7 `- [ ]`→`- [x]` lines, no other
+   text). The plan was in the pre-declared allowed-dirty set; optional final commit, no criterion hit.
+4. [INFO] README:650 pre-existing (unchanged since f1d9652) `SFU Verify 19/19 ✅ ... batch regression`
+   is a different (Phase-2 golden-batch) suite than the wrapper suite now honestly reported 6/7.
+   Not an overclaim introduced here; consider a suite-name qualifier in a later docs pass.
+
+VERDICT: APPROVE

@@ -83,7 +83,7 @@ Your next move: 计划已生成（dual 高精度复核 Round 1 的 2 BLOCKER + 4
 ## Todos
 > Implementation + Test = ONE todo. Never separate.
 <!-- APPEND TASK BATCHES BELOW THIS LINE WITH edit/apply_patch - never rewrite the headers above. -->
-- [ ] 0. P0 基线：前置门（含 f1d9652）+ 分支 + provenance + 快照断言
+- [x] 0. P0 基线：前置门（含 f1d9652）+ 分支 + provenance + 快照断言
   What to do / Must NOT do: (1) 前置门：`git log --oneline main -3` 必须含 `f1d9652`；不含 → STOP。(2) `git checkout -b wrp-defects-and-tooling-fixes main`（原地，禁 worktree）。(3) provenance：HEAD sha + branch；`sha256sum` 触碰文件基线：`rtl/wrapper/mxu_soc_wrapper.v`、`sim/tests/wrapper/test_mxu_wrapper.py`、`sim/regression/Makefile`、`sim/regression/soc-verification-run.sh`、`sim/regression/run_ibex_full_rtl.sh`、`scripts/wv_run_mxu.sh`、`scripts/wv_run_sfu.sh`、`scripts/wv_run_vector.sh`、`scripts/wv_regression.sh`、`docs/bugs/bugs-module-level.md`、`README.md`；固件 hex sha。(4) 落档 `.omo/evidence/task-0-…txt`，**内联** `git status --porcelain` 快照。(5) pathspec 提交 plan + draft（`git add -f`）+ evidence。(6) 终拍：`git status --porcelain | grep -cE '^ ?M'` == **7**（`??` 不计）。Must NOT：不动 7 dirty；不 push；不重建固件。
   Parallelization: Wave 1 | Blocked by: none（前置门 f1d9652） | Blocks: 1-6
   References: 同形先例 `.omo/plans/rtl-open-bugs-cleanup.md` todo 0 + `.omo/evidence/task-0-rtl-open-bugs-cleanup.txt`
@@ -91,7 +91,7 @@ Your next move: 计划已生成（dual 高精度复核 Round 1 的 2 BLOCKER + 4
   QA scenarios: happy=provenance + 快照 PASS；failure=main 无 f1d9652 或 M 行非 7 → STOP 记录。Evidence `.omo/evidence/task-0-wrp-defects-and-tooling-fixes.txt`
   Commit: Y | chore(omo): P0 baseline — branch + provenance snapshot (wrp-defects-and-tooling-fixes)
 
-- [ ] 1. 工具链可信度：坏 target + 判定解析 + 清理（simv + csrc）+ untrack 产物
+- [x] 1. 工具链可信度：坏 target + 判定解析 + 清理（simv + csrc）+ untrack 产物
   What to do / Must NOT do: (a) `Makefile` 三个 `run_wrapper_*` recipe 加 `cd $(REPO_ROOT) &&`。   (b) **判定解析（含两个已证的静默漏点）**：抽共享 helper（`scripts/parse_cocotb_verdict.sh <log>` 或 `--log` 干跑；vector 的 heredoc 内解析必须抽出）；规则 = 汇总行存在且自洽（`TESTS=<n> PASS=<n> FAIL=0 SKIP=0`，`n>0 && PASS==TESTS`）+ 逐用例行交叉核对，**不一致/缺失 → exit 1**；失败路径无裸 `exit 0`；fixtures（fail/pass；**真实 sfu=7、mxu=1，不得写死 n**）。**两个静默漏点必须收口**：(i) `wv_run_vector.sh:51-57` 的 `TESTS=()` 只列 5 个、模块实有 6 个（漏 `test_bug005_vector_nonaligned_wstrb`）→ **默认加入列表**（residual 仅为文档化例外、且必须具名），并删除硬编码 "5"/"7" 字样；(ii) `scripts/wv_regression.sh`（写 `wrap-regression-summary.txt`）自身硬编码 + fail-open（`:103-104/:121/:141`）且仍被 `wv_f1_audit.sh:87-91` 当审计证据 → 接入 helper 或记显式 residual 并从审计路径移除该产物。   (c) **清理**：`soc-verification-run.sh` CLEAN 块增补 `simv_apb_conformance_real*` + **`$REPO_ROOT/csrc`**（`sim/regression/csrc` 不存在；`simv_soc_cocotb*` 已被现有 CLEAN 覆盖，不重复加）；`run_ibex_full_rtl.sh`（复用分支 `:49`、echo `:67`）：先 `rm -rf "$SIMV" "$SIMV.daidir"` **并 `rm -rf "$BUILD_DIR/csrc"`**（该脚本用 `-Mdir="$BUILD_DIR/csrc"`，`:53`——与仓库根 `csrc` 是两处，都要清）再编译 + 编译后断言 `[ -x ]` 否则中止；`wv_run_sfu/vector.sh` 内联 rm+rebuild（**不走 `wv_compile.sh`**）；**跑一次强制重建后的 FM-SOC 新基线**（记录 pass/skip/fail/total；固件 hex hash-bound，记 sha；新失败 → 逐 case 归因，不改期望）。(d) **untrack**：grep 全部 runner 脚本确认重写集合（实测 6 个 `wrap-*` + 5 个 `wv_vector_logs/*.dbg`）→ `git rm --cached` + 快照进 `.omo/evidence/` + 加 `.gitignore` 规则；**保护** `wrap-bug005/007-result.txt`、`wv-bug007-*.log.dbg`、`wv_bug005_logs/*.dbg`。Must NOT：不动 Makefile:72-78；不改依赖图；不删历史证据。
   Parallelization: Wave 2 | Blocked by: 0 | Blocks: 2-5
   References: `sim/regression/Makefile:1305-1317`、`:98/:403/:1022`（house style）；`scripts/wv_run_mxu.sh:39,96-120`；`scripts/wv_run_sfu.sh:33-39,54,77-95`；`scripts/wv_run_vector.sh:29-42,70,75-106`；`scripts/wv_regression.sh`（写 summary）；`scripts/wv_compile.sh:17-32`（不采用）；`sim/regression/soc-verification-run.sh:40-46`；`sim/regression/run_ibex_full_rtl.sh:28-29,49,53,67,88,115`；`build/evidence/`（未 gitignore，`git check-ignore` exit 1）
@@ -99,7 +99,7 @@ Your next move: 计划已生成（dual 高精度复核 Round 1 的 2 BLOCKER + 4
   QA scenarios: happy=fixture fail→exit 1 / pass→exit 0；全绿样本 exit 0；failure=任一脚本仍 fail-open → 保留输出 STOP。Evidence `.omo/evidence/task-1-wrp-defects-and-tooling-fixes.txt`
   Commit: Y | chore(sim): fix wrapper targets + verdict parsing + simv/csrc cleaning + untrack regenerated artifacts
 
-- [ ] 2. BUG-MXU-WRP-001：STATUS.DONE 门控到 store-out drain 完成
+- [x] 2. BUG-MXU-WRP-001：STATUS.DONE 门控到 store-out drain 完成
   What to do / Must NOT do: `rtl/wrapper/mxu_soc_wrapper.v`：(1) **引擎完成源（禁止引用不存在网）**：`status_done` 是 mxu_top 内部 wire，wrapper 无端口——**单一路径（已核实）**：`mxu_done_seen` 是**锁存器**，由 `dbg_state == S_DONE` 置位（`S_DONE` 仅**一周期**：`controller.v:76`/`:316-328` 下一拍回 `S_IDLE`——**禁止组合使用**），清除 = CMD.START 写（**必须带 `mmio_cs` 限定**：`mmio_cs && mmio_we && mmio_addr==12'h04 && mmio_wdata[0]`——`mmio_we`/`mmio_addr`/`mmio_wdata` 是未门控裸信号（`apb_to_mmio.v:59-62`），少 `mmio_cs`(=psel∧penable) 会在总线空闲时把锁存逐拍清零；与 todo 4(2) 的 penable 惯例一致；镜像引擎 `controller.v:156/:323`）；**同拍优先级：CMD.START 写（清除）胜出**（否则新命令继承旧 DONE=1；6/6 门看不出来——单命令无重合、bug007 只查 DONE 已置位且数据错降级为 warning）。备用②（仅当①不可行）：APB 读时锁存 `apb_mmio_rdata[1]`——**禁止锁存被门控后的值**（自引用死锁），并写明读历史耦合的代价。(2) `mxu_done_seen`（粘滞，下次启动清）∧ `so_drain_done = so_fifo_empty && (so_state==SO_IDLE)`；读路径在 `:297` mux **之前**对 `paddr==12'h008` 包装 `apb_mmio_prdata`。(3) **语义与边界写明**（头注释 + evidence）："数据可见"=W 已接受（B fire-and-forget）；(i) store-out 期间 WDT trip → **DONE 保持 deassert、`WRP_STATUS[1]` 权威**（WDT 用例仅覆盖 preload 路径）；(ii) `so_fifo_empty` 为指针相等（深 64=MAX_TILE），假设"每行 drain 延迟 < 64 cycles"（实测 ≈6 cyc/行 wrapper、≈11-15 FM-SOC）；**本波不做、记为未来项**：`so_overflow` 跳线（`wr_ptr==rd_ptr` 且 `so_capture_en` 时置位）。(4) **IRQ：不改，显式 residual**；**禁止** `(mxu_irq && …)` 天真与门（单周期脉冲会被永久吞掉；无测试覆盖——`IRQ_EN=0`、WDT 用例由 wdt 位满足）；若实现 `mxu_irq_seen` 锁存则必须附 IRQ_EN=1 TB 用例。(5) 头注释注明新契约。Must NOT：不改 `rtl/mxu/**`；不改 TB 既有语义；不动 WRP_STATUS 的 load_done/wdt 位。
   Parallelization: Wave 3 | Blocked by: 1 | Blocks: 3（同文件）
   References: `mxu_soc_wrapper.v:297`（读 mux）、`:320-345`（mxu_top 实例，仅 `.irq`/`.state` 可见）、`:670-788`（SO FSM）、`:652`（empty=指针相等）、`:714`（WDT 强制回 IDLE）、`:778-779/:879`（W 接受/B fire-and-forget）、`:880`、`:50`（文档契约）；`rtl/mxu/mxu_top.v:112`（status_done 内部）、`controller.v:140-146`（irq 默认清零）、`:311/:316-328`（status_done 粘滞、S_DONE）、`:15` vs `:311`（注释矛盾，以代码为准）；RED 证据 `.omo/evidence/task-3-rtl-open-bugs-cleanup.txt:278-291`
@@ -107,7 +107,7 @@ Your next move: 计划已生成（dual 高精度复核 Round 1 的 2 BLOCKER + 4
   QA scenarios: happy=RED→GREEN 双日志 + 决策落档；failure=DONE 恒 0（源选错/首读时序）或某测回归 → 保留日志 STOP。Evidence `.omo/evidence/task-2-wrp-defects-and-tooling-fixes.txt`
   Commit: Y | fix(rtl/wrapper): gate MXU DONE on store-out drain (BUG-MXU-WRP-001)
 
-- [ ] 3. BUG-MXU-WRP-002：preload 改用 WRP_K_TILES + TB 在 TRIG_LOAD 前编程
+- [x] 3. BUG-MXU-WRP-002：preload 改用 WRP_K_TILES + TB 在 TRIG_LOAD 前编程
   What to do / Must NOT do: (1) RTL：preload tile 数改用 `wrp_k_tiles`(0x44)（`:483`/`:509`；`:238-239` 派生线退役）；`==0 → 1`；**写明适用边界：仅 K ≤ 128（2 K-tile 缓冲：params `:67`/`:70`、数组 `:363`/`:364`；索引 `:480`/`:506` 越界即丢失；`:595` `act_buf_idx` 在 `burst_cnt≥2` 越界）；K > 128 仍不支持（X），不改缓冲深度**；头注释流程改正。(2) TB：`_preload_and_run` 在基址写完后、**TRIG_LOAD（`:199`）之前**写 `OFF_WRP_K_TILES=(K+63)//64` 并**读回断言**；修正 accumulate 测试注释。(3) RED：现有失败日志 + 单 burst 对照。(4) 多 tile：e2e multi + FM-SOC 覆盖；疑点 → residual。Must NOT：不改 `rtl/mxu/**`；不用 `COCOTB_RESOLVE_X`；不改其它测试语义。
   Parallelization: Wave 3 | Blocked by: 2（同文件） | Blocks: 4,5
   References: `mxu_soc_wrapper.v:67,70,238-239,363-364,480,483,506,509,593-604,43-50`；`test_mxu_wrapper.py:194-199,208-215,~493-526`；`firmware/npu_firmware.c:247-272`；`cocotb_bridge.py:2267`；RED `build/evidence/t4-2-wv-mxu-test_mxu_accumulate_mode.log:129,147,181-198,276-298`
@@ -115,7 +115,7 @@ Your next move: 计划已生成（dual 高精度复核 Round 1 的 2 BLOCKER + 4
   QA scenarios: happy=RED→GREEN + 读回/计数断言；failure=仍 X 或结果错 → 保留日志 STOP。Evidence `.omo/evidence/task-3-wrp-defects-and-tooling-fixes.txt`
   Commit: Y | fix(rtl/wrapper): preload honors WRP_K_TILES + TB programs K-tiles before TRIG_LOAD (BUG-MXU-WRP-002)
 
-- [ ] 4. F2 评审意见收口（conformance TB 部分转 residual）
+- [x] 4. F2 评审意见收口（conformance TB 部分转 residual）
   What to do / Must NOT do: `mxu_soc_wrapper.v`：(1) 看门狗"无误触发"注释改正（per-phase 预算；大 K + 慢从机暴露；10× 余量仍成立）；(2) sticky 清除加 `penable`；(3) 恢复门加"本拍无握手"为**默认**——无法判定低风险则记 residual，**必须在 evidence 落明确选择 + 理由**；(4) `test_mxu_wrapper.py` 探测 `except` 收窄 `(AttributeError, ValueError)`；(5) `docs/bugs/bugs-soc-rtl.md` 行号引用修正（按内容定位）；**F2-2 的 conformance TB 部分冻结 → evidence + todo 6 显式 residual**。Must NOT：不改看门狗阈值/位定义；不改 INTC；不动 `rtl/tb/apb_conformance_real_tb.sv`。
   Parallelization: Wave 4 | Blocked by: 3 | Blocks: 5
   References: `.omo/evidence/f2-rtl-open-bugs-cleanup.txt`；`mxu_soc_wrapper.v:31,401-402,439,455,710`；`test_mxu_wrapper.py:792`；`docs/bugs/bugs-soc-rtl.md`（DMA 段）
@@ -123,7 +123,7 @@ Your next move: 计划已生成（dual 高精度复核 Round 1 的 2 BLOCKER + 4
   QA scenarios: happy=6/6 保持 + grep 断言；failure=任一回退 → 保留日志 STOP。Evidence `.omo/evidence/task-4-wrp-defects-and-tooling-fixes.txt`
   Commit: Y | chore(rtl/wrapper): address F2 review nits — comment wording, penable, recovery gate, probe scope
 
-- [ ] 5. 回归（sz0001 串行、强制清编译）：wrapper 6/6 + conformance + e2e mxu + FM-SOC 33
+- [x] 5. 回归（sz0001 串行、强制清编译）：wrapper 6/6 + conformance + e2e mxu + FM-SOC 33
   What to do / Must NOT do: 前置：强制清编译（`simv_apb_conformance_real`、`simv_soc_ibex*`、`simv_soc_cocotb*`、wrapper simv + `$REPO_ROOT/csrc`）+ 双重新鲜度证明。串行：(a) **经修复后的 Makefile target** `run_wrapper_mxu` → **6/6**（仍 Error 127 → STOP）；(b) `run_apb_conformance_real` → GREEN 263/`doc_div==0`；(c) `run_e2e_mxu_single`+`run_e2e_mxu_multi` → PASS；(d) `run_fm_soc_all.sh` → **对比 todo-1 新基线**（目标 0-fail-0-timeout/33；pass/skip 与基线一致或更好；8 SKIP ID 核对）。**实测记录，不硬编码**。Must NOT：并发 sz0001；跳 case；读汇总文案判 PASS。
   Parallelization: Wave 5 | Blocked by: 4 | Blocks: 6 | sz0001 串行
   References: `.omo/evidence/task-4-rtl-open-bugs-cleanup.txt`（上一轮口径）；`Makefile` conformance `:206-228`、wrapper `:1313-1315`、e2e `:571-596`
@@ -131,7 +131,7 @@ Your next move: 计划已生成（dual 高精度复核 Round 1 的 2 BLOCKER + 4
   QA scenarios: happy=四组全绿（wrapper 首次 6/6）；failure=任一不达 → 日志签名 STOP 回 todo 2/3/4 归因。Evidence `.omo/evidence/task-5-wrp-defects-and-tooling-fixes.txt`
   Commit: Y | test(wrp-fixes): wrapper 6/6 + conformance + e2e mxu + FM-SOC 33 regression evidence
 
-- [ ] 6. 台账：BUG-MXU-WRP-001/002 立案为 Fixed（4F/0O → 6F/0O）+ README + residual 收口
+- [x] 6. 台账：BUG-MXU-WRP-001/002 立案为 Fixed（4F/0O → 6F/0O）+ README + residual 收口
   What to do / Must NOT do: (1) 新增两条目（Fixed）——`BUG-MXU-WRP-001`（根因/修复/**措辞校正：修复的是 STATUS.DONE/APB 契约；BUSY-based 等待者（firmware `npu-regmap.h:268-270` 读 bit0=BUSY、cocotb `_poll_done`）不受影响、**256-nop 保持 load-bearing 不得删**；IRQ 未改记 residual（含 `WRP1-IRQ-RESIDUAL:` 标记）；WDT-trip/FIFO-latency 边界**）/commit/evidence；`BUG-MXU-WRP-002`（根因/修复/**仅 K ≤ 128 精确**/`ctrl_acc_mode` 死输入/`COCOTB_RESOLVE_X` 不可用）/commit/evidence。(2) **改写既有 Note**（WRP-1/2 从 "NOT filed … 4F/0O" 移除；保留 PROCESS-1/2/3；口径改 6F/0O）。(3) `README.md:26`/`:39` → `6 = 6 Fixed / 0 Open`。(4) 记 conformance-TB residual（F2-2）。(5) 判定行 `LEDGER:`。Must NOT：不写无 evidence 的 Fixed；不动 WDT 5 条 residual；不加新的 Open；不写无引用的条目。
   Parallelization: Wave 6 | Blocked by: 5 | Blocks: F1-F4
   References: `docs/bugs/bugs-module-level.md`（格式模板/统计表/WRP Note——**按内容定位**）；`README.md:26,39`；todo 2/3 的 Commit 行与 evidence
@@ -141,10 +141,14 @@ Your next move: 计划已生成（dual 高精度复核 Round 1 的 2 BLOCKER + 4
 
 ## Final verification wave
 > Runs in parallel after ALL todos. ALL must APPROVE. Surface results and wait for the user's explicit okay before declaring complete.
-- [ ] F1. Plan compliance audit - todos 0-6 逐条：evidence 存在、acceptance 复跑、判定行齐全、无 silent skip；**关键**：WRP-1/2 的 RED→GREEN 双日志在案且 RED 签名与记录一致；工具链"失败样本 exit 1"构造性验证在案；IRQ/WDT-trip/K≤128 三条边界声明在案（**`WRP1-IRQ-RESIDUAL:` 标记 grep 命中**）
-- [ ] F2. Code quality review - `mxu_soc_wrapper.v` 恰为设计内改动；**未引用不存在的网**（status_done 事件已用可见代理，且 S_DONE 为**锁存**非组合、**set/clear 同拍优先级已核实（清除胜出）**）；**无天真 IRQ 与门**且 `WRP1-IRQ-RESIDUAL:` 标记在案；`so_drain_done` 语义与两条边界写明；`wrp_k_tiles==0→1` 明确；`rtl/mxu/**`/`firmware/`/`spec/`/`gen/`/conformance TB 零改动；工具链 fail-closed 无依赖图改动（vector 漏测与 `wv_regression.sh` 的处置落文字）；`COCOTB_RESOLVE_X` 零使用；台账不 overclaim
-- [ ] F3. Real manual QA - fresh 独立复跑（sz0001，强制清编译）：经 Makefile target 的 wrapper 6/6、conformance GREEN/doc_div==0、e2e mxu multi PASS；对照 task-5 evidence；sz0001 不可达 ⇒ BLOCK，不降级
-- [ ] F4. Scope fidelity - `git diff $(git merge-base main HEAD) HEAD --name-only` ⊆ {rtl/wrapper/mxu_soc_wrapper.v, sim/tests/wrapper/test_mxu_wrapper.py, sim/regression/Makefile, sim/regression/soc-verification-run.sh, sim/regression/run_ibex_full_rtl.sh, scripts/wv_run_mxu.sh, scripts/wv_run_sfu.sh, scripts/wv_run_vector.sh, scripts/wv_regression.sh（若接入 helper；否则 grep-only 仅读）, scripts/wv_f1_audit.sh（仅当走"从审计路径移除该产物"分支）, scripts/parse_cocotb_verdict.sh（新 helper）, sim/regression/fixtures/*, .gitignore, docs/bugs/bugs-module-level.md, docs/bugs/bugs-soc-rtl.md（仅行号）, README.md, build/evidence/*（仅 enumerated untrack 集）, .omo/*}；`rtl/mxu/`/`rtl/soc/`/`firmware/`/`spec/`/`gen/`/vendored/`rtl/tb/apb_conformance_real_tb.sv` 零命中；7 dirty 不入任何提交；未 push；单 worktree；**untrack 集显式列出**
+> **F1-F4 状态（2026-09-25）：四项评审全部 APPROVE** —— F1 合规（7 commit 与计划 `Commit:` 行逐字一致、RED→GREEN 双日志签名一致、工具链"失败样本 exit 1"构造验证、`WRP1-IRQ-RESIDUAL:` 与三条边界在案）；F2 代码质量（Round-1 REJECT 的 1 个真错误"BUSY 持续到 drain"已改正措辞 → 复审 APPROVE）；F3 真实手工 QA 重跑（wrapper 6/6、conformance GREEN 263/0、e2e 287/923 cycles、FM-SOC 25/8/0/0/33 新二进制 `d516a216`）；F4 范围保真（40 文件 ⊆ 白名单、0 越界、0/7 受保护文件入库、未 push、单 worktree）。证据 `.omo/evidence/f{1..4}-wrp-defects-and-tooling-fixes.txt` + `.omo/evidence/f2fix-wrp-defects-and-tooling-fixes.txt`。
+> **勾选与合并被 Final Wave 门阻塞于用户 explicit okay（用户-only 决策）→ 按 boulder continuation 规则标记 `- [~]`，不视为完成。** 待用户拍板：批准合并（勾选 F1-F4 → 提交 `.omo` 记账 = 计划 + F 证据 + notepads → `--no-ff` 合并回 main，**不 push**）；以及未推送清单 A/B/C/D（`main` 领先 origin 8 个提交 + 本分支 8 个）。
+> **2026-09-25 用户回复「批准合并」** → F1-F4 勾选为 `- [x]`；合并由 orchestrator 以 `--no-ff` 执行（**不 push**）。**未推送清单 A/B/C/D 仍未决。**
+> **非阻塞遗留（已记录，不挡合并）**：F3 LOW（`run_fm_soc_all.sh` 缺 host 转发，裸跑立即报错不假 PASS）；I-1（sz0001 自环 SSH key）；I-13（`results.xml` 被 cocotb 碰脏、每次已还原）；I-20（FM-SOC `nohup` 丢 rc，建议加 `[RUNNER-EXIT]` trailer）；R1（conformance TB 行号冻结）；K>128 不支持（有界声明）；IRQ 未改（标记在案）；SFU 6/7 与 Vector 5/6 是修复生效后**首次可见的真实结论**，非回归。
+- [x] F1. Plan compliance audit - todos 0-6 逐条：evidence 存在、acceptance 复跑、判定行齐全、无 silent skip；**关键**：WRP-1/2 的 RED→GREEN 双日志在案且 RED 签名与记录一致；工具链"失败样本 exit 1"构造性验证在案；IRQ/WDT-trip/K≤128 三条边界声明在案（**`WRP1-IRQ-RESIDUAL:` 标记 grep 命中**）
+- [x] F2. Code quality review - `mxu_soc_wrapper.v` 恰为设计内改动；**未引用不存在的网**（status_done 事件已用可见代理，且 S_DONE 为**锁存**非组合、**set/clear 同拍优先级已核实（清除胜出）**）；**无天真 IRQ 与门**且 `WRP1-IRQ-RESIDUAL:` 标记在案；`so_drain_done` 语义与两条边界写明；`wrp_k_tiles==0→1` 明确；`rtl/mxu/**`/`firmware/`/`spec/`/`gen/`/conformance TB 零改动；工具链 fail-closed 无依赖图改动（vector 漏测与 `wv_regression.sh` 的处置落文字）；`COCOTB_RESOLVE_X` 零使用；台账不 overclaim
+- [x] F3. Real manual QA - fresh 独立复跑（sz0001，强制清编译）：经 Makefile target 的 wrapper 6/6、conformance GREEN/doc_div==0、e2e mxu multi PASS；对照 task-5 evidence；sz0001 不可达 ⇒ BLOCK，不降级
+- [x] F4. Scope fidelity - `git diff $(git merge-base main HEAD) HEAD --name-only` ⊆ {rtl/wrapper/mxu_soc_wrapper.v, sim/tests/wrapper/test_mxu_wrapper.py, sim/regression/Makefile, sim/regression/soc-verification-run.sh, sim/regression/run_ibex_full_rtl.sh, scripts/wv_run_mxu.sh, scripts/wv_run_sfu.sh, scripts/wv_run_vector.sh, scripts/wv_regression.sh（若接入 helper；否则 grep-only 仅读）, scripts/wv_f1_audit.sh（仅当走"从审计路径移除该产物"分支）, scripts/parse_cocotb_verdict.sh（新 helper）, sim/regression/fixtures/*, .gitignore, docs/bugs/bugs-module-level.md, docs/bugs/bugs-soc-rtl.md（仅行号）, README.md, build/evidence/*（仅 enumerated untrack 集）, .omo/*}；`rtl/mxu/`/`rtl/soc/`/`firmware/`/`spec/`/`gen/`/vendored/`rtl/tb/apb_conformance_real_tb.sv` 零命中；7 dirty 不入任何提交；未 push；单 worktree；**untrack 集显式列出**
 
 ## Commit strategy
 - 一个 todo 一个原子 commit；message 预声明于各 todo `Commit:` 行；evidence 随 todo 入库（`git add -f`）。

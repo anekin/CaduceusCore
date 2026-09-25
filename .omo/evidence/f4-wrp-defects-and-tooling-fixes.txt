@@ -1,0 +1,214 @@
+F4 SCOPE FIDELITY AUDIT — wrp-defects-and-tooling-fixes
+timestamp : 2026-09-25T00:00:00Z (run on sz0002 checkout, read-only)
+HEAD      : ba0bb3c172081ed7c102556ad3a55ec1f26237e0
+base      : f1d9652 (merge-base main HEAD = f1d96526cdbc1b404dcdcb932306624db89ddead)
+branch    : wrp-defects-and-tooling-fixes
+auditor   : F4 (independent, re-derived from git; read-only except this file)
+
+================================================================================
+[A1] OVERALL CHANGED-FILE SET  (40 files)
+================================================================================
+$ GIT_MASTER=1 git diff --name-only $(GIT_MASTER=1 git merge-base main HEAD) HEAD
+
+.gitignore
+.omo/drafts/wrp-defects-and-tooling-fixes.md
+.omo/evidence/task-0-wrp-defects-and-tooling-fixes.txt
+.omo/evidence/task-1-wrp-defects-and-tooling-fixes.txt
+.omo/evidence/task-1-wrp-untrack-snapshot.txt
+.omo/evidence/task-2-wrp-defects-and-tooling-fixes.txt
+.omo/evidence/task-3-wrp-defects-and-tooling-fixes.txt
+.omo/evidence/task-4-wrp-defects-and-tooling-fixes.txt
+.omo/evidence/task-5-wrp-defects-and-tooling-fixes.txt
+.omo/evidence/task-6-wrp-defects-and-tooling-fixes.txt
+.omo/plans/wrp-defects-and-tooling-fixes.md
+README.md
+build/evidence/wrap-mxu-regression.txt
+build/evidence/wrap-regression-summary.txt
+build/evidence/wrap-sfu-debug.txt
+build/evidence/wrap-vec-regression.txt
+build/evidence/wrap-vec-status.txt
+build/evidence/wv_vector_logs/test_apb_native_rw.log.dbg
+build/evidence/wv_vector_logs/test_apb_wrapper_rw.log.dbg
+build/evidence/wv_vector_logs/test_vector_add_normal.log.dbg
+build/evidence/wv_vector_logs/test_vector_chunk_burst_8beat.log.dbg
+build/evidence/wv_vector_logs/test_vector_conv_type_convert.log.dbg
+docs/bugs/bugs-module-level.md
+docs/bugs/bugs-soc-rtl.md
+rtl/wrapper/mxu_soc_wrapper.v
+scripts/parse_cocotb_verdict.sh
+scripts/wv_regression.sh
+scripts/wv_run_mxu.sh
+scripts/wv_run_sfu.sh
+scripts/wv_run_vector.sh
+sim/regression/Makefile
+sim/regression/fixtures/verdict-fail.log
+sim/regression/fixtures/verdict-pass.log
+sim/regression/fixtures/verdict-sfu7-pass.log
+sim/regression/fixtures/verdict-sfu7.log
+sim/regression/fixtures/verdict-summary-mismatch.log
+sim/regression/fixtures/verdict-truncated.log
+sim/regression/run_ibex_full_rtl.sh
+sim/regression/soc-verification-run.sh
+sim/tests/wrapper/test_mxu_wrapper.py
+
+whitelist escape check (scripted, one path per line):
+$ while read -r f; do grep -Fxq "$f" /tmp/f4_whitelist.txt && continue; case "$f" in .omo/*|build/evidence/*|sim/regression/fixtures/*) continue;; *) echo "OUTSIDE-WHITELIST: $f";; esac; done < /tmp/f4_diff.txt
+(no OUTSIDE-WHITELIST lines = PASS)          -> PASS: 0 escapes; fixtures present as 6 ADDITIONS (git ls-files sim/regression/fixtures/ = 6 entries)
+NOTE: scripts/wv_f1_audit.sh is tracked + UNMODIFIED (`git diff f1d9652..HEAD -- scripts/wv_f1_audit.sh` empty) => audit-path branch NOT taken; verified not a required deliverable.
+
+================================================================================
+[A2] FORBIDDEN ZERO-HIT
+================================================================================
+$ GIT_MASTER=1 git diff --name-only f1d9652..HEAD -- rtl/mxu/ rtl/soc/ rtl/intc/ rtl/sfu/ rtl/vector/ firmware/ spec/ gen/ rtl/tb/apb_conformance_real_tb.sv
+(empty)                                       -> PASS zero-hit
+
+$ GIT_MASTER=1 git diff --name-only f1d9652..HEAD -- sim/
+sim/regression/Makefile
+sim/regression/fixtures/verdict-fail.log
+sim/regression/fixtures/verdict-pass.log
+sim/regression/fixtures/verdict-sfu7-pass.log
+sim/regression/fixtures/verdict-sfu7.log
+sim/regression/fixtures/verdict-summary-mismatch.log
+sim/regression/fixtures/verdict-truncated.log
+sim/regression/run_ibex_full_rtl.sh
+sim/regression/soc-verification-run.sh
+sim/tests/wrapper/test_mxu_wrapper.py
+-> PASS: exactly {test_mxu_wrapper.py} + {Makefile, soc-verification-run.sh, run_ibex_full_rtl.sh, fixtures/*}
+
+$ GIT_MASTER=1 git diff --name-only f1d9652..HEAD -- rtl/
+rtl/wrapper/mxu_soc_wrapper.v
+-> PASS: only rtl/wrapper/mxu_soc_wrapper.v
+
+================================================================================
+[A3] PER-COMMIT PATH SETS  ($ git show --name-only --format="%h %s" <c>)
+================================================================================
+7ce88a8 chore(omo): P0 baseline — branch + provenance snapshot (wrp-defects-and-tooling-fixes)
+  A .omo/drafts/wrp-defects-and-tooling-fixes.md
+  A .omo/evidence/task-0-wrp-defects-and-tooling-fixes.txt
+  A .omo/plans/wrp-defects-and-tooling-fixes.md
+  -> matches declared todo0 (3 .omo/ paths)                                   PASS
+c9a67d6 chore(sim): fix wrapper targets + verdict parsing + simv/csrc cleaning + untrack regenerated artifacts
+  M .gitignore
+  A .omo/evidence/task-1-wrp-defects-and-tooling-fixes.txt
+  R090 build/evidence/wrap-sfu-regression.txt -> .omo/evidence/task-1-wrp-untrack-snapshot.txt
+  D build/evidence/wrap-mxu-regression.txt
+  D build/evidence/wrap-regression-summary.txt
+  D build/evidence/wrap-sfu-debug.txt
+  D build/evidence/wrap-vec-regression.txt
+  D build/evidence/wrap-vec-status.txt
+  D build/evidence/wv_vector_logs/test_apb_native_rw.log.dbg
+  D build/evidence/wv_vector_logs/test_apb_wrapper_rw.log.dbg
+  D build/evidence/wv_vector_logs/test_vector_add_normal.log.dbg
+  D build/evidence/wv_vector_logs/test_vector_chunk_burst_8beat.log.dbg
+  D build/evidence/wv_vector_logs/test_vector_conv_type_convert.log.dbg
+  A scripts/parse_cocotb_verdict.sh
+  M scripts/wv_regression.sh
+  M scripts/wv_run_mxu.sh
+  M scripts/wv_run_sfu.sh
+  M scripts/wv_run_vector.sh
+  M sim/regression/Makefile
+  A sim/regression/fixtures/verdict-{fail,pass,sfu7-pass,sfu7,summary-mismatch,truncated}.log (6)
+  M sim/regression/run_ibex_full_rtl.sh
+  M sim/regression/soc-verification-run.sh
+  -> matches declared todo1 scope (tooling + fixtures + .gitignore + untrack deletions)  PASS
+f65f5b9 fix(rtl/wrapper): gate MXU DONE on store-out drain (BUG-MXU-WRP-001)
+  A .omo/evidence/task-2-...txt ; M rtl/wrapper/mxu_soc_wrapper.v                  PASS
+7179a82 fix(rtl/wrapper): preload honors WRP_K_TILES + TB programs K-tiles (BUG-MXU-WRP-002)
+  A .omo/evidence/task-3-...txt ; M rtl/wrapper/mxu_soc_wrapper.v ; M sim/tests/wrapper/test_mxu_wrapper.py  PASS
+3a0e87c chore(rtl/wrapper): address F2 review nits — comment wording, penable, recovery gate, probe scope
+  A .omo/evidence/task-4-...txt ; M docs/bugs/bugs-soc-rtl.md ; M rtl/wrapper/mxu_soc_wrapper.v ; M sim/tests/wrapper/test_mxu_wrapper.py  PASS
+3597687 test(wrp-fixes): wrapper 6/6 + conformance + e2e mxu + FM-SOC 33 regression evidence
+  A .omo/evidence/task-5-...txt (evidence only)                                   PASS
+ba0bb3c docs(bugs): file BUG-MXU-WRP-001/002 as Fixed — ...
+  A .omo/evidence/task-6-...txt ; M README.md ; M docs/bugs/bugs-module-level.md   PASS
+
+================================================================================
+[A4] UNTRACK SET (deleted-from-index in c9a67d6)
+================================================================================
+$ GIT_MASTER=1 git show --name-status --format="" c9a67d6 | awk '$1 ~ /^(D|R)/'
+R090 build/evidence/wrap-sfu-regression.txt  .omo/evidence/task-1-wrp-untrack-snapshot.txt
+D    build/evidence/wrap-mxu-regression.txt
+D    build/evidence/wrap-regression-summary.txt
+D    build/evidence/wrap-sfu-debug.txt
+D    build/evidence/wrap-vec-regression.txt
+D    build/evidence/wrap-vec-status.txt
+D    build/evidence/wv_vector_logs/test_apb_native_rw.log.dbg
+D    build/evidence/wv_vector_logs/test_apb_wrapper_rw.log.dbg
+D    build/evidence/wv_vector_logs/test_vector_add_normal.log.dbg
+D    build/evidence/wv_vector_logs/test_vector_chunk_burst_8beat.log.dbg
+D    build/evidence/wv_vector_logs/test_vector_conv_type_convert.log.dbg
+-> ACTUAL SET = 6 wrap-* (5 D + 1 R-source) + 5 wv_vector_logs/*.dbg = exactly the enumerated
+   untrack set; contents preserved in .omo/evidence/task-1-wrp-untrack-snapshot.txt          PASS
+
+$ GIT_MASTER=1 git ls-files build/evidence/wrap-bug005-result.txt build/evidence/wrap-bug007-result.txt \
+    'build/evidence/wv-bug007-*.log.dbg' 'build/evidence/wv_bug005_logs/*.dbg'
+build/evidence/wrap-bug005-result.txt
+build/evidence/wrap-bug007-result.txt
+build/evidence/wv-bug007-mxu.log.dbg
+build/evidence/wv-bug007-sfu.log.dbg
+build/evidence/wv_bug005_logs/bug005-sfu.log.dbg
+build/evidence/wv_bug005_logs/bug005-vector.log.dbg
+-> 6/6 historical statics STILL TRACKED (none deleted)                                       PASS
+(.gitignore uses NAMED rules only, never a blanket *.dbg; header comment documents the protection)
+
+================================================================================
+[A5] PROTECTED-FILE PROBE
+================================================================================
+$ printf '%s\n' "$PROT" | while read -r p; do grep -Fxq "$p" /tmp/f4_diff.txt && echo "HIT: $p"; done
+(no HIT lines)                                -> PASS: 0/7 protected files in branch diff
+$ ... same over union of all 7 commits' --name-only
+(no HIT-IN-COMMIT lines)                      -> PASS: 0/7 protected files in ANY commit
+$ GIT_MASTER=1 git status --porcelain | grep '^ M'
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+ -> all 7 still ` M` in worktree, never staged/committed                              PASS
+
+================================================================================
+[A6] NOT PUSHED
+================================================================================
+$ GIT_MASTER=1 git log --oneline origin/main -3
+8ba7af1 Merge bug-009-doorbell-fix: BUG-RTL-SOC-009 Fixed — doorbell ABI status window implemented in RTL (F1-F4 all APPROVE)
+e6cf0d2 docs(bugs): BUG-RTL-SOC-009 Fixed — doorbell ABI status window implemented in RTL
+c8bb9f5 docs(abi): resolve doorbell KNOWN_DISCREPANCY — generator note fix + regen (HW window implemented)
+-> no branch commit present                                                            PASS
+$ GIT_MASTER=1 git branch -r --contains HEAD
+(empty)                                                                               PASS
+$ GIT_MASTER=1 git ls-remote --heads origin
+... 9 refs; no refs/heads/wrp-defects-and-tooling-fixes                               PASS
+$ GIT_MASTER=1 git rev-parse --abbrev-ref @{upstream} -> fatal: no upstream configured PASS
+INFO (pre-existing, out of scope): `git rev-list --count origin/main..HEAD` = 15 = this branch's 7
+commits + 8 predecessor-line commits (rtl-open-bugs-cleanup, base f1d9652 not yet on origin/main,
+which sits at bug-009 8ba7af1). No branch commit is reachable from any origin ref for this branch.
+
+================================================================================
+[A7] SINGLE WORKTREE
+================================================================================
+$ GIT_MASTER=1 git worktree list --porcelain
+worktree /home/prj/zhengs/caduceuscore/CaduceusCore
+HEAD ba0bb3c172081ed7c102556ad3a55ec1f26237e0
+branch refs/heads/wrp-defects-and-tooling-fixes
+-> exactly 1 entry                                                                     PASS
+
+================================================================================
+[A8] DIRTY SET
+================================================================================
+$ GIT_MASTER=1 git status --porcelain
+ M x7 (protected, above) ; M .omo/plans/wrp-defects-and-tooling-fixes.md
+?? .omo/notepads/wrp-defects-and-tooling-fixes/
+?? .omo/plans/bug-012-fix.md
+?? .omo/plans/dse-relic-retirement.md
+?? .omo/plans/fm-residual-cleanup.md
+?? .omo/plans/fm-verification-fixes.md
+?? .omo/plans/verification-env-sz0001.md
+?? .omo/tmp/
+-> expected = 7 protected + plan ✓ ; `??` = loop notepad + .omo/tmp/ + 5 scratch plan drafts = expected
+   class ("notepads, .omo/tmp/, scratch plan drafts")                                  PASS
+
+================================================================================
+VERDICT: APPROVE   (0 findings; all 8 audit axes PASS)
+================================================================================
