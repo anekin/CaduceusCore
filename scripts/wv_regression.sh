@@ -12,7 +12,7 @@ set -euo pipefail
 # Verdict source: the three cocotb suites are judged ONLY by
 # scripts/parse_cocotb_verdict.sh (summary line self-consistency + per-test
 # cross-check).  The earlier revision hardcoded "1 PASS / 4 FAIL / 5 total" for
-# SFU, grepped 'ALL 5 PASS' for Vector and 'Summary: 5 PASS, 0 FAIL' for MXU,
+# SFU, matched a fixed all-pass banner for Vector and a hardcoded summary line for MXU,
 # and always exited 0 — that is the fail-open pattern this aggregator no longer
 # has.  Exit status is now 0 only when all three suites are PASS.
 #

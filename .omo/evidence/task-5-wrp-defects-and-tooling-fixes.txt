@@ -198,7 +198,11 @@ result:
     => pass/skip EQUAL to baseline; 0 new failures; 0 timeouts.  No deviation to attribute.
        (this run is 434 s faster than the baseline — idle machine, same case set)
     SKIP set ID-by-ID (8, identical to baseline): FM-SOC-014 015 016 017 019 021 022 023
-       cause recorded in the case logs: "skipped: direct APB/AXI case not applicable to Ibex RTL mode"
+       causes recorded in the case logs (2 distinct causes; F1-1 correction):
+         FM-SOC-017/019 -> "skipped: direct APB/AXI case not applicable to Ibex RTL mode"
+         FM-SOC-014/015/016/021/022/023 -> "superseded by FM-SOC-027/032/10X"
+           (case-log `Message:` line 71 in each FM-SOC-0{14,15,16,21,22,23}.log;
+            source sim/rtl_soc_runner.py:4535)
 
 PER-CASE EVIDENCE (fail-closed): 33 lines `[PASS|SKIP] FM-SOC-…` in the main log AND one
 `runner_classification=` line in each build/ibex_full_rtl/evidence/FM-SOC-*.log — all 33 verified:

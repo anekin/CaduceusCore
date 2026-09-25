@@ -73,18 +73,23 @@ opencode_wa/
 build/evidence/
 
 # Regenerated wrapper-verification artifacts (todo 1 of wrp-defects-and-tooling-fixes):
-# the runners rewrite these in place, so tracking them produced dirty-worktree
-# noise instead of evidence.  Deliberately NAMED rules — never a blanket *.dbg.
-# Historical statics stay tracked (gitignore does not affect tracked files):
+# the runners rewrite these in place, so tracking them produced dirty-worktree noise
+# instead of evidence.  The enumerated rules that were added here for them are gone:
+# the pre-existing `build/evidence/` rule above already ignores every path under that
+# directory, so they added no protection (F2-3(a) correction, verified with
+# `git check-ignore -v`).  Keep it that way — and never add a blanket `*.dbg`.
+# Formerly enumerated here and now redundant (all covered by `build/evidence/`):
+#   wv_vector_logs/, wrap-mxu-regression.txt, wrap-regression-summary.txt,
+#   wrap-sfu-regression.txt, wrap-vec-regression.txt, wrap-vec-status.txt.
+# Historical statics stay tracked (gitignore does not apply to tracked files):
 #   wrap-bug005-result.txt, wrap-bug007-result.txt, wv-bug007-*.log.dbg,
-#   wv_bug005_logs/*.dbg, wrap-mxu-regression.RED-pre-RTL.txt
-build/evidence/wv_vector_logs/
-build/evidence/wrap-mxu-regression.txt
-build/evidence/wrap-regression-summary.txt
-build/evidence/wrap-sfu-debug.txt
-build/evidence/wrap-sfu-regression.txt
-build/evidence/wrap-vec-regression.txt
-build/evidence/wrap-vec-status.txt
+#   wv_bug005_logs/*.dbg
+# Two special cases, reconciled per F2-3(b)/(c):
+#   - wrap-sfu-debug.txt — 0 writers in scripts/ + sim/regression/ (at HEAD and at
+#     f1d9652): a one-off T2 debug capture, not a runner output -> restored to
+#     tracked with `git add -f` (byte-identical to its pre-untrack blob).
+#   - wrap-mxu-regression.RED-pre-RTL.txt — untracked-but-kept RED witness; ignored
+#     via `build/evidence/` above and deliberately retained on disk (NOT tracked).
 
 # Built software/runtime artifacts
 build/install/

@@ -285,12 +285,21 @@ Implementation in `rtl/wrapper/mxu_soc_wrapper.v`:
 GREEN (todo 2): DONE moves 2880 ns → 6080 ns (+53 drained rows × 60 ns), asserted exactly one drain
 row after the last W burst, `Bit-exact match: 0 mismatches out of 4096 elements`.
 
-**Wording correction (recorded, important):** this fixes the **STATUS.DONE / APB read contract**.
-The BUSY-based waiters are unaffected and still need their own drain wait —
-`firmware/npu-regmap.h:269-271` (`npu_wait_done()`) polls `*status_reg & 1` (bit0 = BUSY), which the
-controller holds through the drain, and cocotb's `_poll_done` does the same. The 256-nop loop at
-`firmware/npu_firmware.c:275-281` therefore remains **LOAD-BEARING** (it gives the store-out FIFO time
-to drain before the caller DMAs the output tile) and must not be deleted on the strength of this fix.
+**Wording correction (recorded, important; F2-1 correction):** this fixes the **STATUS.DONE / APB
+read contract** only. Neither status bit waited for the AXI store-out drain before the fix: in
+`S_DONE` the controller clears `status_busy` in the **same cycle** it sets `status_done`
+(`rtl/mxu/controller.v:317-318`), read back as `{29'd0, status_error, status_done, status_busy}` at
+`rtl/mxu/mmio_if.v:140`; the entry's own RED readback at 2880 ns was `0x00000002` (DONE set, BUSY
+clear) with 53/64 rows still queued. Post-fix only **bit1 = DONE** is drain-gated
+(`mxu_done_seen && so_drain_done`); **bit0 = BUSY still clears when the controller finishes streaming
+the rows into the store-out FIFO**, i.e. before the drain completes, so a BUSY-only waiter can still
+proceed ahead of the drain. That is the real reason the 256-nop loop at
+`firmware/npu_firmware.c:275-281` remains **LOAD-BEARING** (it gives the store-out FIFO time to drain
+before the caller DMAs the output tile) and must not be deleted on the strength of this fix. The
+BUSY-based waiters still need their own drain wait: `firmware/npu-regmap.h:269-271`
+(`npu_wait_done()`) spins on `*status_reg & 1` (bit0 = BUSY), and cocotb's `_poll_done`
+(`sim/cocotb_bridge.py:2392-2420`) polls bit0 as well — its bit1 branch is now drain-gated, but its
+"BUSY fell after having been high" fallback (`:2415-2418`) returns as soon as BUSY deasserts.
 
 #### Evidence
 
@@ -374,7 +383,9 @@ RED signature byte-identical to the recorded log; GREEN#1 plus an independent fl
 2. **`ctrl_acc_mode` is a dead controller input** — cross-K-tile accumulation is unconditional
    (`rtl/mxu/controller.v` `mac_reset_acc <= (k_tile == 0)`, `:205`); the TB comment was corrected
    accordingly. `COCOTB_RESOLVE_X` is **not** a valid approach for the X sighting (it would mask the
-   symptom instead of fixing the phase error; 0 hits in the diff and in the edited files).
+   symptom instead of fixing the phase error; 0 hits in the code paths of the branch diff —
+   `rtl/`+`sim/`+`scripts/`+`firmware/`+`spec/`+`gen/` = 0 — the token appears only in `.omo`
+   plan/evidence prose; F2-4 correction).
 
 ---
 

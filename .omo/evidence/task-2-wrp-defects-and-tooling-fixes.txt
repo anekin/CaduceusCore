@@ -249,7 +249,8 @@ J. JUDGMENT
 ══════════════════════════════════════════════════════════════════════════════════════════════
   WRP1-FIX: done
   WRP1-GATE: green
-  RED signature byte-identical to .omo/evidence/task-3-rtl-open-bugs-cleanup.txt:278-291
+  RED signature byte-identical to the verbatim block at
+  .omo/evidence/task-3-rtl-open-bugs-cleanup.txt:76-77 (prose restatement at :278-291):
   (3180/4096, max_abs_diff=6400, first_mismatches=[(11,0),(11,2),(11,3),(11,4),(11,5)], DONE at
   2880 ns with 53/64 rows still queued); GREEN = same test 0 mismatches with DONE deferred to
   6080 ns after the last drain row; the other 4 formerly-green tests unchanged; the fifth failure

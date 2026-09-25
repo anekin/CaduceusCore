@@ -1,0 +1,259 @@
+F2-FIX + F1-LOW REMEDIATION — .omo/plans/wrp-defects-and-tooling-fixes.md
+=================================================================================
+auditor   : F2-fix worker (surgical follow-up to the F-wave; read-only on RTL/TB)
+date      : 2026-09-25
+branch    : wrp-defects-and-tooling-fixes
+pre-fix   : HEAD ba0bb3c172081ed7c102556ad3a55ec1f26237e0 (base f1d9652)
+scope     : docs/bugs/bugs-module-level.md, scripts/wv_regression.sh, .gitignore,
+            .omo/evidence/task-2/-task-5, this file, build/evidence/wrap-sfu-debug.txt.
+            ZERO RTL/TB/firmware behaviour change -> no VCS/cocotb run needed.
+sources   : .omo/evidence/f2-wrp-defects-and-tooling-fixes.txt (REJECT: 1 MEDIUM + 2 LOW + 1 NIT)
+            .omo/evidence/f1-wrp-defects-and-tooling-fixes.txt (APPROVE: 2 LOW)
+
+==================================================================================
+A. PRECHECK
+==================================================================================
+$ git branch --show-current ; git log -1 --format=%s
+wrp-defects-and-tooling-fixes
+docs(bugs): file BUG-MXU-WRP-001/002 as Fixed — wrapper drain/derivation defects (module ledger 6F/0O)
+-> branch and HEAD subject match the task precheck (byte-identical).
+
+M-set at start = 9: the 7 protected files + .omo/plans/wrp-defects-and-tooling-fixes.md
++ results.xml.  results.xml was I-13 runner noise re-dirtied by an F-wave cocotb suite run
+(the tracked cocotb report; CWD = repo root), NOT a content edit of this task:
+    -    <property name="random_seed" value="1784777386" />
+    -    <testcase name="test_bug007_sfu_start_hold" ... sim_time_ns="3600.001" ... />
+    +    <property name="random_seed" value="1790276311" />
+    +    <testcase name="test_mxu_wrapper_watchdog_timeout" ... sim_time_ns="10100555.001" ... />
+$ git checkout -- results.xml          # established I-13 practice (todos 2/3/4/5), never staged
+$ git status --porcelain | grep -cE '^ ?M'
+8                                      # == {7 protected} ∪ {plan file} -> PRECHECK PASS
+(7 protected, untouched: .omo/evidence/task-0-signoff-v3-runner.txt, .omo/evidence/task-20-uncertainty-kpis.json,
+ .omo/evidence/task-23-perf-spec-ci.txt, .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md,
+ .omo/notepads/phase6-rtl-verification/learnings.md, build/evidence/fm-cv-chain.txt,
+ build/evidence/w3-4-mobilenetv3-fm.txt)
+
+==================================================================================
+B. F2-1 MEDIUM — false ledger claim — FIXED
+==================================================================================
+F2 finding: docs/bugs/bugs-module-level.md:290 "which the controller holds through the drain" is
+false; rtl/mxu/controller.v:317-319 deasserts status_busy in S_DONE in the same cycle it sets
+status_done.
+
+RTL re-verified at the pre-fix HEAD (verbatim, `cat -n rtl/mxu/controller.v`):
+   316                S_DONE: begin
+   317                    status_busy  <= 1'b0;
+   318                    status_done  <= 1'b1;
+   319                    irq          <= irq_en;
+and the read path (`rtl/mxu/mmio_if.v`):
+   140                12'h08: rdata = {29'd0, status_error, status_done, status_busy};
+-> BUSY clears with DONE in S_DONE; BUSY does NOT cover the AXI/store-out drain.  The pre-fix
+0x08 readback at 2880 ns was 0x00000002 (DONE set, BUSY clear, 53/64 rows still queued) — the
+entry's own RED witness.
+
+Rewrite (docs/bugs/bugs-module-level.md:288-302 now reads):
+    **Wording correction (recorded, important; F2-1 correction):** this fixes the **STATUS.DONE / APB
+    read contract** only. Neither status bit waited for the AXI store-out drain before the fix: in
+    `S_DONE` the controller clears `status_busy` in the **same cycle** it sets `status_done`
+    (`rtl/mxu/controller.v:317-318`), read back as `{29'd0, status_error, status_done, status_busy}` at
+    `rtl/mxu/mmio_if.v:140`; the entry's own RED readback at 2880 ns was `0x00000002` (DONE set, BUSY
+    clear) with 53/64 rows still queued. Post-fix only **bit1 = DONE** is drain-gated
+    (`mxu_done_seen && so_drain_done`); **bit0 = BUSY still clears when the controller finishes streaming
+    the rows into the store-out FIFO**, i.e. before the drain completes, so a BUSY-only waiter can still
+    proceed ahead of the drain. That is the real reason the 256-nop loop at
+    `firmware/npu_firmware.c:275-281` remains **LOAD-BEARING** ... [conclusion unchanged]
+    ... cocotb's `_poll_done` (`sim/cocotb_bridge.py:2392-2420`) polls bit0 as well — its bit1 branch
+    is now drain-gated, but its "BUSY fell after having been high" fallback (`:2415-2418`) returns as
+    soon as BUSY deasserts.
+
+Acceptance (F2's own grep):
+$ grep -n 'holds through the drain' docs/bugs/bugs-module-level.md ; echo $?
+(none) rc=1                                     -> the false claim is gone
+Conclusion unchanged (256-nop LOAD-BEARING) but the reason is now the corrected one.
+Waiter facts re-verified: firmware/npu-regmap.h:269-271 `while (*status_reg & 1)` (bit0=BUSY);
+npu_firmware.c:275-281 still carries the 256-nop loop; cocotb `_poll_done` reads
+`busy = status & 0x1`, `done = status & 0x2` (sim/cocotb_bridge.py:2407-2408).
+
+==================================================================================
+C. F2-2 LOW — scripts/wv_regression.sh literal tokens — FIXED (comment only)
+==================================================================================
+$ grep -nE 'SFU_PASS=1|ALL 5 PASS|Summary: 5 PASS' scripts/wv_regression.sh ; echo $?
+(none) rc=1                                     -> 0 hits (was 1 hit at :15 pre-fix)
+
+Diff is the wording of the pre-existing header comment, nothing else:
+    -# SFU, grepped 'ALL 5 PASS' for Vector and 'Summary: 5 PASS, 0 FAIL' for MXU,
+    +# SFU, matched a fixed all-pass banner for Vector and a hardcoded summary line for MXU,
+No logic, no exit path, no helper call changed (full diff = that one line).
+
+==================================================================================
+D. F2-3 LOW — .gitignore accuracy — FIXED (3 sub-items)
+==================================================================================
+(a) redundancy with the pre-existing line 73 `build/evidence/` — proven:
+    $ git check-ignore -v build/evidence/wrap-sfu-debug.txt build/evidence/new-thing.txt \
+        build/evidence/wrap-mxu-regression.RED-pre-RTL.txt
+    .gitignore:73:build/evidence/   build/evidence/wrap-sfu-debug.txt
+    .gitignore:73:build/evidence/   build/evidence/new-thing.txt
+    .gitignore:73:build/evidence/   build/evidence/wrap-mxu-regression.RED-pre-RTL.txt
+    => all 7 enumerated rules added ZERO protection; they were removed and the comment now
+       states the redundancy (with the `git check-ignore -v` method) plus the "never a blanket
+       `*.dbg`" guidance and the named set that used to be there.
+
+(b) wrap-sfu-debug.txt = static historical artifact -> RESTORED TO TRACKED:
+    $ grep -rn 'wrap-sfu-debug' scripts/ sim/regression/ ; echo $?
+    (none) rc=1                                  -> 0 writers
+    $ git show f1d9652:scripts/wv_run_sfu.sh | grep -n 'wrap-sfu-debug' ; echo $?
+    (none) rc=1                                  -> 0 writers BEFORE the tooling rewrite too
+    $ git grep -n 'wrap-sfu-debug' f1d9652 -- scripts/ sim/regression/ sim/ ; echo $?
+    (none) rc=1                                  -> whole pre-rewrite tree: no writer
+    $ stat -c '%s %y' build/evidence/wrap-sfu-debug.txt
+    479 2026-07-23 12:55:34 ...                  -> one-off T2 debug capture (content: an EDA-env
+                                                    banner + `bash: /tmp/sfu_debug.sh: No such file`)
+    $ sha256sum build/evidence/wrap-sfu-debug.txt
+    $ git show c9a67d6^:build/evidence/wrap-sfu-debug.txt | sha256sum
+    918df4c4341f7ac8466f436fa4740dc2fc39b15f3f702251f4b46eee757031fa  (both)
+    -> byte-identical to the pre-untrack blob (introduced by 7c54fd3, untracked by c9a67d6).
+    => static artifact, NOT a per-run output: restored with
+       $ git add -f build/evidence/wrap-sfu-debug.txt   # git ls-files now lists it
+       and its ignore rule dropped.
+    NOTE (supersedes one plan acceptance count): the todo-1 acceptance
+    `git ls-files build/evidence | grep -cE '...wrap-sfu-debug...' == 0` becomes 1 by design —
+    the F2 finding prescribes restore-if-static, and the static-ness evidence above is conclusive.
+    The historical statics that must stay tracked still are (git ls-files):
+      build/evidence/wrap-bug005-result.txt
+      build/evidence/wrap-bug007-result.txt
+      build/evidence/wrap-sfu-debug.txt          <- restored (F2-3b)
+      build/evidence/wv-bug007-mxu.log.dbg
+      build/evidence/wv-bug007-sfu.log.dbg
+      build/evidence/wv_bug005_logs/bug005-sfu.log.dbg
+      build/evidence/wv_bug005_logs/bug005-vector.log.dbg
+
+(c) wrap-mxu-regression.RED-pre-RTL.txt label — corrected:
+    $ git ls-files build/evidence/wrap-mxu-regression.RED-pre-RTL.txt ; echo $?
+    (empty) rc=0                                 -> NOT tracked (297 bytes, mtime 2026-09-23 20:41)
+    It is an untracked-but-kept RED witness (ignored via `build/evidence/`, deliberately retained
+    on disk).  The old comment listed it under "Historical statics stay tracked" — false; the new
+    comment states "untracked-but-kept ... (NOT tracked)".
+
+.gitignore diff (full):
+    @@ -73,18 +73,23 @@ opencode_wa/
+     build/evidence/
+     
+     # Regenerated wrapper-verification artifacts (todo 1 of wrp-defects-and-tooling-fixes):
+    -# the runners rewrite these in place, so tracking them produced dirty-worktree
+    -# noise instead of evidence.  Deliberately NAMED rules — never a blanket *.dbg.
+    -# Historical statics stay tracked (gitignore does not affect tracked files):
+    +# the runners rewrite these in place, so tracking them produced dirty-worktree noise
+    +# instead of evidence.  The enumerated rules that were added here for them are gone:
+    +# the pre-existing `build/evidence/` rule above already ignores every path under that
+    +# directory, so they added no protection (F2-3(a) correction, verified with
+    +# `git check-ignore -v`).  Keep it that way — and never add a blanket `*.dbg`.
+    +# Formerly enumerated here and now redundant (all covered by `build/evidence/`):
+    +#   wv_vector_logs/, wrap-mxu-regression.txt, wrap-regression-summary.txt,
+    +#   wrap-sfu-regression.txt, wrap-vec-regression.txt, wrap-vec-status.txt.
+    +# Historical statics stay tracked (gitignore does not apply to tracked files):
+     #   wrap-bug005-result.txt, wrap-bug007-result.txt, wv-bug007-*.log.dbg,
+    -#   wv_bug005_logs/*.dbg, wrap-mxu-regression.RED-pre-RTL.txt
+    -build/evidence/wv_vector_logs/
+    -build/evidence/wrap-mxu-regression.txt
+    -build/evidence/wrap-regression-summary.txt
+    -build/evidence/wrap-sfu-debug.txt
+    -build/evidence/wrap-sfu-regression.txt
+    -build/evidence/wrap-vec-regression.txt
+    -build/evidence/wrap-vec-status.txt
+    +#   wv_bug005_logs/*.dbg
+    +# Two special cases, reconciled per F2-3(b)/(c):
+    +#   - wrap-sfu-debug.txt — 0 writers in scripts/ + sim/regression/ (at HEAD and at
+    +#     f1d9652): a one-off T2 debug capture, not a runner output -> restored to
+    +#     tracked with `git add -f` (byte-identical to its pre-untrack blob).
+    +#   - wrap-mxu-regression.RED-pre-RTL.txt — untracked-but-kept RED witness; ignored
+    +#     via `build/evidence/` above and deliberately retained on disk (NOT tracked).
+
+==================================================================================
+E. F2-4 NIT — COCOTB_RESOLVE_X "0 hits in the diff" — FIXED (scoped to code)
+==================================================================================
+     $ git diff f1d9652..HEAD | grep -c 'COCOTB_RESOLVE_X'
+     14                                        # whole-branch diff: .omo prose + docs only
+     $ git diff f1d9652..HEAD -- rtl/ sim/ scripts/ firmware/ spec/ gen/ | grep -c 'COCOTB_RESOLVE_X'
+     0                                         # code paths: 0
+Ledger note 2 (docs/bugs/bugs-module-level.md:385-388 now) reads:
+    "... 0 hits in the code paths of the branch diff —
+     `rtl/`+`sim/`+`scripts/`+`firmware/`+`spec/`+`gen/` = 0 — the token appears only in `.omo`
+     plan/evidence prose; F2-4 correction)."
+
+==================================================================================
+F. F1-1 LOW — task-5 SKIP causes — FIXED
+==================================================================================
+Per-case logs (build/ibex_full_rtl/evidence/FM-SOC-*.log, `Message:` line 71 in each):
+    FM-SOC-017: 'IbexRunner FM-SOC-017: PASS — skipped: direct APB/AXI case not applicable to Ibex RTL mode'
+    FM-SOC-019: 'IbexRunner FM-SOC-019: PASS — skipped: direct APB/AXI case not applicable to Ibex RTL mode'
+    FM-SOC-014/015/016/021/022/023: '... PASS — superseded by FM-SOC-027/032/10X'
+      (message source: sim/rtl_soc_runner.py:4535; the runner's classifier greps it at
+       sim/regression/run_ibex_full_rtl.sh:129)
+`.omo/evidence/task-5-wrp-defects-and-tooling-fixes.txt:200-205` now records the two causes
+separately (FM-SOC-017/019 vs FM-SOC-014/015/016/021/022/023).  Counts/SKIP set unchanged.
+
+==================================================================================
+G. F1-2 LOW — task-2 RED citation — FIXED
+==================================================================================
+Verbatim witness block (the byte-identical MISMATCH string):
+    .omo/evidence/task-3-rtl-open-bugs-cleanup.txt:76-77
+        76:       "MISMATCH: 3180/4096 elements differ, max_abs_diff=6400,
+        77:        first_mismatches=[(11, 0), (11, 2), (11, 3), (11, 4), (11, 5)]"  @2880ns
+:278-291 is the BLOCKER-3 prose that restates the same rows/timestamp.
+`.omo/evidence/task-2-wrp-defects-and-tooling-fixes.txt:252-253` now cites ":76-77 (prose
+restatement at :278-291)".  No data changed.
+
+==================================================================================
+H. TOUCHED-SET / NO-RTL STATEMENT
+==================================================================================
+STAGED SET — verbatim `git diff --cached --name-status` captured pre-commit:
+    M	.gitignore
+    A	.omo/evidence/f2fix-wrp-defects-and-tooling-fixes.txt
+    M	.omo/evidence/task-2-wrp-defects-and-tooling-fixes.txt
+    M	.omo/evidence/task-5-wrp-defects-and-tooling-fixes.txt
+    A	build/evidence/wrap-sfu-debug.txt
+    M	docs/bugs/bugs-module-level.md
+    M	scripts/wv_regression.sh
+WORKTREE — verbatim `git status --porcelain` captured after the
+`git add -f build/evidence/wrap-sfu-debug.txt` step (before staging the other six;
+F-wave review outputs still untracked):
+ M .gitignore
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-2-wrp-defects-and-tooling-fixes.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/evidence/task-5-wrp-defects-and-tooling-fixes.txt
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M .omo/plans/wrp-defects-and-tooling-fixes.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+A  build/evidence/wrap-sfu-debug.txt
+ M docs/bugs/bugs-module-level.md
+ M scripts/wv_regression.sh
+?? .omo/evidence/f1-wrp-defects-and-tooling-fixes.txt
+?? .omo/evidence/f2-wrp-defects-and-tooling-fixes.txt
+?? .omo/evidence/f4-wrp-defects-and-tooling-fixes.txt
+?? .omo/notepads/wrp-defects-and-tooling-fixes/
+?? .omo/plans/bug-012-fix.md
+?? .omo/plans/dse-relic-retirement.md
+?? .omo/plans/fm-residual-cleanup.md
+?? .omo/plans/fm-verification-fixes.md
+?? .omo/plans/verification-env-sz0001.md
+?? .omo/tmp/
+Of the ` M` lines above, the 7 protected dirty files (task-0-signoff-v3-runner.txt,
+task-20-uncertainty-kpis.json, task-23-perf-spec-ci.txt, the two notepad learnings, fm-cv-chain.txt,
+w3-4-mobilenetv3-fm.txt) and the plan file were deliberately left unstaged (grep against the staged
+set returns rc=1).
+No RTL / TB / firmware / spec / gen / Makefile / runner-logic file appears in the diff.  The 7
+protected dirty files and the plan file remain unstaged.  The other 5 wrap-* / wv_vector_logs
+artifacts stay untracked as designed; wrap-sfu-debug.txt is the single exception, restored with
+the evidence above.
+
+==================================================================================
+I. JUDGMENT
+==================================================================================
+  F2-FIX: done       (F2-1 MEDIUM wording corrected + F2-2 LOW + F2-3 a/b/c + F2-4 NIT)
+  F1-LOW: done       (F1-1 task-5 causes split; F1-2 task-2 citation corrected)
+  RTL-BEHAVIOUR: unchanged   (docs/scripts/.gitignore/evidence only)
+  Commit: chore(wrp-fixes): address F2 reject + F1 low findings — ledger wording, gitignore accuracy, evidence citations
