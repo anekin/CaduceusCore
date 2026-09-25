@@ -1,0 +1,6 @@
+     0.00ns INFO     cocotb.regression                  running test_apb_regmap_rw (1/1)
+  1090.00ns INFO     cocotb.regression                  test_apb_regmap_rw passed
+  1090.00ns INFO     cocotb.regression                  ***************************************************************************************************************
+                                                        ** TEST                                                   STATUS  SIM TIME (ns)  REAL TIME (s)  RATIO (ns/s) **
+                                                        ***************************************************************************************************************
+                                                        ** sim.tests.wrapper.test_mxu_wrapper.test_apb_regmap_rw   PASS        1090.00           0.24       4493.34  **

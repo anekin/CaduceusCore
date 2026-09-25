@@ -1,0 +1,197 @@
+================================================================================
+F3 — wrp-defects-and-tooling-fixes : REAL MANUAL QA RE-RUN (fresh execution)
+================================================================================
+branch    : wrp-defects-and-tooling-fixes
+HEAD      : ad30841ec7c9446bb6e53584bb81f481af0f7777  (ad30841)
+  delta above recorded-evidence commit 3a0e87c VERIFIED no-behaviour-change:
+  ad30841 + ba0bb3c touch only .gitignore / README.md / docs/bugs / .omo evidence /
+  build/evidence/wrap-sfu-debug.txt and ONE comment-only edit in
+  scripts/wv_regression.sh (diff hunk is inside a leading '#' comment block).
+run host  : sz0002 (all commands); EDA/VCS work forced onto sz0001 (192.168.0.11).
+            STRICTLY SERIAL — one VCS run at a time.
+run window: 2026-09-25T00:52:25Z .. 2026-09-25T01:59:45Z (UTC; = 08:52..09:59 +0800)
+compare   : .omo/evidence/task-5-wrp-defects-and-tooling-fixes.txt (recorded)
+            .omo/evidence/task-1-wrp-defects-and-tooling-fixes.txt (FM-SOC baseline)
+
+JUDGMENT LINES (freshly reproduced, judged from per-test/per-case lines)
+  REG-WRAPPER: 6-pass                     (fresh, 160 s)
+  REG-CONF:    GREEN-docdiv-0             (fresh, 263/263, 307 s)
+  REG-E2EMXU:  single-pass 287 cy, multi-pass 923 cy  (both fresh)
+  REG-FMSOC:   PASS=25 SKIP=8 FAIL=0 TIMEOUT=0 TOTAL=33 (fresh, ~2713 s)
+
+--------------------------------------------------------------------------------
+(a) WRAPPER MXU — 6/6
+--------------------------------------------------------------------------------
+command (from sz0002): cd sim/regression && timeout -k 15 900 make run_wrapper_mxu
+  MAKE_RC=0   START=2026-09-25T00:53:13Z  END=2026-09-25T00:55:53Z  WALL=160 s
+  (recorded task-5: WALL=161 s; delta -1 s)
+freshness (force-clean + rebuild in scripts/wv_run_mxu.sh):
+  pre-run  build/evidence/simv_tb_mxu_wrapper  mtime Sep 25 02:56  sha256 ceb3732b6724d8f4…
+  post-run build/evidence/simv_tb_mxu_wrapper  mtime Sep 25 08:53  sha256 7f429f7915913837…
+  build/evidence/wv-compile-mxu-run.log tail:
+    rm -rf "${SIMV}.daidir" "${SIMV}"   (script pre-step)
+    CPU time: 23.258 seconds to compile + 1.522 seconds to elab + .431 seconds to link
+    COMPILE_EXIT_CODE=0
+PER-TEST ROWS — build/evidence/wrap-mxu-regression.txt (rewritten 2026-09-25 08:54:00),
+each row independently re-derived by scripts/parse_cocotb_verdict.sh (rc=0 for all six):
+  test_apb_regmap_rw           : PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1] rc=0
+  test_mxu_preload_single_tile : PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1] rc=0
+  test_mxu_single_tile_compute : PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1] rc=0
+  test_mxu_store_out_burst     : PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1] rc=0
+  test_mxu_accumulate_mode     : PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1] rc=0
+  test_mxu_wrapper_watchdog_timeout : PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1] rc=0
+  Summary: 6 PASS, 0 FAIL (6 total)
+  make-tail: "[wv_run_mxu.sh] All 6 tests PASSED."
+  $finish at simulation time (per test): 1090001 / 1230001 / 6140001 / 6140001 / 7820001 /
+  10100555001
+NOTE (cosmetic, NOT a skip; same as task-5): "Makefile:73: VCS not found in PATH.
+  Skipping VCS-based tests." prints on sz0002 — run_wrapper_mxu's recipe does not use
+  $(VCS)/$(SIMV_RUN); the remote compile really ran (COMPILE_EXIT_CODE=0 + sha change).
+
+--------------------------------------------------------------------------------
+(b) APB CONFORMANCE (real peripherals) — GREEN / 263 / 0 doc-div
+--------------------------------------------------------------------------------
+command: bash sim/regression/soc-verification-run.sh run_apb_conformance_real
+  SCRIPT_RC=0  START=2026-09-25T00:56:22Z  END=2026-09-25T01:01:29Z  WALL=307 s
+  (recorded task-5: WALL=308 s; delta -1 s)
+head of log (forwarding + forced rebuild):
+  [soc-run] current host is sz0002; forwarding to 192.168.0.11
+  [soc-run] target=run_apb_conformance_real clean=1 repo=/home/prj/zhengs/caduceuscore/CaduceusCore
+  [soc-run] removing stale simv to force full rebuild
+freshness: pre-run sim/regression/simv_apb_conformance_real ABSENT -> post-run present
+  mtime Sep 25 08:59, sha256 1959022e48e05d4c35b9f04f05dea8ad; compile "CPU time: 26.659
+  seconds to compile + 1.612 seconds to elab + .465 seconds to link".
+FINAL REPORT (raw):
+  Total checks : 263
+  Passes       : 263
+  Fails        : 0   (unexpected — real RTL != REAL oracle)
+  DOC-DIV      : 0   (real RTL contradicts documented spec,
+                 each bug-filed: BUG-RTL-SOC-010/011:retired)
+  Write timeouts: 0   Read timeouts: 0
+  Per-slave coverage (checks / fails / doc-div / psel_o asserts):
+    MXU      : 51 / 0 / 0 / 172
+    SFU      : 22 / 0 / 0 / 76
+    VECTOR      : 37 / 0 / 0 / 130
+    DMA      : 43 / 0 / 0 / 146
+    PCIE      : 24 / 0 / 0 / 76
+    DOORBELL      : 60 / 0 / 0 / 345
+    INTC      : 16 / 0 / 0 / 52
+  APB_CONFORMANCE_REAL: GREEN (7/7 peripherals, 263 checks, 0 doc-div [BUG-RTL-SOC-010/011:retired])
+  TASK-12 RESULT: GREEN (expected)
+  $finish called from file "rtl/tb/apb_conformance_real_tb.sv", line 1291.
+  $finish at simulation time             14636000
+  APB_CONFORMANCE_REAL: PASS
+  [soc-run] RESULT: PASS for run_apb_conformance_real
+INDEX BINDING (FACTS ask slv_docdivs[3]/[4] == 0) — rtl/tb/apb_conformance_real_tb.sv:
+  itoa_slv case 0..6 = MXU,SFU,VECTOR,DMA,PCIE,DOORBELL,INTC (:1297-1310);
+  integer slv_docdivs [0:6] (:605). Therefore index 3 = DMA row (43 / 0 / 0 / 146)
+  and index 4 = PCIE row (24 / 0 / 0 / 76) -> slv_docdivs[3]==0 and slv_docdivs[4]==0.
+  doorbell = index 5 row "DOORBELL : 60 / 0 / 0 / 345" -> 60 checks, 0 doc-div.
+
+--------------------------------------------------------------------------------
+(c) E2E MXU — multi 923 cycles, single 287 cycles
+--------------------------------------------------------------------------------
+command (multi): bash sim/regression/soc-verification-run.sh run_e2e_mxu_multi
+  SCRIPT_RC=0  START=2026-09-25T01:02:03Z  END=2026-09-25T01:07:13Z  WALL=310 s
+  (recorded task-5: WALL=311 s; delta -1 s)
+  bridge line: "3934.50ns WARNING cocotb_bridge [e2e_mxu_multi_tile] PASS in 923 cycles"
+  (recorded: 923 cycles)
+  per-test: "** TESTS=1 PASS=1 FAIL=0 SKIP=0 ... 3934.50 ... **"
+  $finish at simulation time              3934501   (recorded: 3934501)
+  freshness: sim/regression/simv_soc_cocotb ABSENT pre-run -> present sha256
+  0fde2b89134bd41dcaedd5fa1bce395f; "[soc-run] RESULT: PASS for run_e2e_mxu_multi"
+command (single; NOT skipped — ran because budget allowed):
+  bash sim/regression/soc-verification-run.sh run_e2e_mxu_single
+  SCRIPT_RC=0  START=2026-09-25T01:07:42Z  END=2026-09-25T01:12:52Z  WALL=310 s
+  (recorded task-5: WALL=310 s; delta 0 s)
+  bridge line: "12796.50ns WARNING cocotb_bridge [e2e_mxu_single_tile] PASS in 287 cycles"
+  (recorded: 287 cycles)
+  per-test: "** TESTS=1 PASS=1 FAIL=0 SKIP=0 ... 12796.50 ... **"
+  $finish at simulation time             12796501   (recorded: 12796501)
+  freshness: simv rebuilt again inside this invocation -> sha256
+  c8f3e3d1a44e0823ea1a20fa0113cb4c; "E2E_MXU_SINGLE: PASS"
+
+--------------------------------------------------------------------------------
+(d) FM-SOC 33 — FRESHLY REPRODUCED (not merely compared)
+--------------------------------------------------------------------------------
+invocation nuance (script does NOT self-forward; must run ON sz0001 — same as task-1/5):
+  ssh zhengs@192.168.0.11 "cd $REPO && nohup timeout -k 30 7500 bash \
+      sim/regression/run_fm_soc_all.sh > build/evidence/f3-fm-soc-rebuild.log 2>&1 &"
+  (a naive `bash sim/regression/run_fm_soc_all.sh` on sz0002 aborts immediately with
+   "ERROR: /NAS/Tools/EDA/env/modules.bash not found — is this the EDA server?"; rc=1,
+   zero cases run — no false PASS possible. See F3 FINDING 1.)
+wall: start 09:14:32 (+0800, pid 191740 etime-derived) .. last log write 09:59:45 (+0800,
+  log mtime) = WALL ~2713 s (~45.2 min). Recorded task-5: 2737 s (delta -24 s, -0.9%);
+  task-1 baseline: 3171 s.
+freshness (forced rebuild, hash-chained):
+  build/evidence/f3-fm-soc-rebuild.log:15  [INFO] Forcing full rebuild of simv_soc_ibex (rm -rf simv + daidir + csrc) ...
+  build/evidence/f3-fm-soc-rebuild.log:610 [INFO] Compile complete: .../build/ibex_full_rtl/simv_soc_ibex
+  simv sha256: pre-run 78ca912f139331fb09b1cf9b926db07b (mtime Sep 25 03:17)
+               post-run d516a21662a5ce2333a8f303af73d9a5
+  build/ibex_full_rtl/evidence/provenance-20260925T091527-191743.txt:
+    provenance_simv_sha256=d516a21662a5ce2333a8f303af73d9a5998a27f749ddd75d55b58903f903fd98
+    provenance_git_commit=ad30841ec7c9446bb6e53584bb81f481af0f7777
+    provenance_firmware_sha256=6f261c6e35e65a190c887ba0dc50d604e2601e39b6aa99524ea5284a35165ec0
+      (hash-bound, NOT rebuilt — identical to task-5 provenance)
+  in-flight CPU progress proof: PID 195977 simv_soc_ibex +FM_SOC_CASE_ID=FM-SOC-032,
+    CPU 00:08:46 -> 00:09:06 over 20 s wall @ 97.9% (not hung).
+summary (raw):
+  [SUMMARY] Full RTL + Ibex (FM-SOC regression)
+    PASS:    25
+    SKIP:    8
+    FAIL:    0
+    TIMEOUT: 0
+  [SUMMARY] PASS=25 SKIP=8 FAIL=0 TIMEOUT=0 TOTAL=33
+  33 per-case `[PASS|SKIP] FM-SOC-…` lines counted (33/33 accounted).
+SKIP set ID-by-ID (8) — identical to task-5 and task-1 baseline:
+  FM-SOC-014 FM-SOC-015 FM-SOC-016 FM-SOC-017 FM-SOC-019 FM-SOC-021 FM-SOC-022 FM-SOC-023
+  reasons (from per-case logs):
+    FM-SOC-014/015/016/021/022/023 -> "superseded by FM-SOC-027/032/10X" marker present
+    FM-SOC-017/019 -> "IbexRunner FM-SOC-017: PASS — skipped: direct APB/AXI case not
+                       applicable to Ibex RTL mode" (same for 019)
+deep per-case checks (fail-closed, from build/ibex_full_rtl/evidence/):
+  FM-SOC-032: TESTS=1 PASS=1 FAIL=0 SKIP=0 at 12084915.50 ns  (recorded: 12084915.50 ns)
+  FM-SOC-10X: TESTS=1 PASS=1 FAIL=0 SKIP=0 at   946875.50 ns  (recorded:   946875.50 ns)
+
+--------------------------------------------------------------------------------
+COMPARISON TABLE — recorded vs fresh
+--------------------------------------------------------------------------------
+  flow              recorded (task-5)      fresh (F3)              verdict
+  wrapper MXU       6/6, WALL 161 s        6/6, WALL 160 s         match
+  conformance       GREEN 263/0, 308 s     GREEN 263/0, 307 s      match
+  e2e mxu multi     PASS 923 cy, 311 s     PASS 923 cy, 310 s      match
+  e2e mxu single    PASS 287 cy, 310 s     PASS 287 cy, 310 s      match
+  FM-SOC 33         25/8/0/0/33, 2737 s    25/8/0/0/33, ~2713 s     match (8 SKIPs identical)
+  FM-SOC baseline   (task-1) 25/8/0/0/33, simv d2e71b22, 3171 s -> same set; fresh simv
+                    d516a216 (force-rebuilt); no new FAIL/TIMEOUT anywhere.
+
+--------------------------------------------------------------------------------
+F3 FINDINGS
+--------------------------------------------------------------------------------
+F3-1 (LOW, tooling consistency — NOT a regression, does not affect any acceptance row):
+  run_fm_soc_all.sh does not auto-forward to sz0001 while soc-verification-run.sh does;
+  AGENTS.md COMMANDS lists it as "EDA server: full 33-case FM-SOC regression" without the
+  ssh requirement, so an invocation from sz0002 fails instantly (rc=1, 0 cases; no silent
+  PASS). Evidence: F3 fresh attempt -> "ERROR: /NAS/Tools/EDA/env/modules.bash not found".
+  Required fix (optional follow-up): add the same host-forward guard as
+  soc-verification-run.sh, or annotate the AGENTS.md command with the ssh form.
+F3-2 (INFO): wall times differ <=1% vs recorded (160/307/310/310/2713 vs 161/308/311/310/2737 s);
+  FM-SOC ran ~24 s faster — idle-machine noise, no verdict impact.
+No deviations attributable to any accepted residual (K>128 bound, IRQ, I-1/I-13/I-20,
+FU 6/7 + Vector 5/6) were observed in the four re-run flows.
+
+--------------------------------------------------------------------------------
+HYGIENE / SIDE-EFFECT BOUND
+--------------------------------------------------------------------------------
+- No product file / TB / script / doc was modified. git status --porcelain count was 19
+  before the FM-SOC run (provenance_git_porcelain_count=19) and is 19 after; the only
+  tracked `M build/evidence/*` entries are the two pre-existing dirty files
+  (fm-cv-chain.txt, w3-4-mobilenetv3-fm.txt), exactly as task-5 recorded.
+- All runner outputs I produced are gitignored under .gitignore:73 `build/evidence/`
+  (checked with `git check-ignore -v`): wrap-mxu-regression.txt, simv_tb_mxu_wrapper,
+  simv_apb_conformance_real, simv_soc_cocotb, f3-fm-soc-rebuild.log.
+- Raw logs kept at /tmp/f3-qa/{qa1-wrapper,qa2-conformance,qa3-e2e-multi,
+  qa3b-e2e-single}.log (sz0002) and build/evidence/f3-fm-soc-rebuild.log (sz0001).
+- No orphaned processes: FM-SOC launch pid 191740 finished and is gone.
+
+F3 VERDICT: APPROVE

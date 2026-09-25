@@ -1,0 +1,137 @@
+F2 CODE-QUALITY REVIEW — branch wrp-defects-and-tooling-fixes (base f1d9652, HEAD ba0bb3c)
+Reviewer: F2 (read-only except this file)
+Date: 2026-09-25
+Scope: re-derived from diffs; no summary trusted.
+
+------------------------------------------------------------------
+A. FORBIDDEN ZERO-DIFF (item 2) — PASS
+$ git diff f1d9652..HEAD -- rtl/mxu/ rtl/soc/ rtl/intc/ rtl/sfu/ rtl/vector/ firmware/ \
+    spec/ gen/ rtl/tb/apb_conformance_real_tb.sv sim/models/apb_peripheral.py sim/regmap.py | wc -c
+0
+$ git diff --name-status f1d9652..HEAD   (touched set = .gitignore, .omo/*, README.md,
+  build/evidence/* (11 tracked deletions), docs/bugs/{module-level,soc-rtl}.md,
+  rtl/wrapper/mxu_soc_wrapper.v, scripts/{parse_cocotb_verdict,wv_regression,wv_run_mxu,
+  wv_run_sfu,wv_run_vector}.sh, sim/regression/{Makefile,run_ibex_full_rtl.sh,
+  soc-verification-run.sh,fixtures/*}, sim/tests/wrapper/test_mxu_wrapper.py)
+
+B. WRAPPER (item 1) — PASS  (rtl/wrapper/mxu_soc_wrapper.v; wrapper/TB sha256 @3a0e87c == HEAD)
+b1 latch/clear: reg mxu_done_seen (:366-371); clear `mmio_cs && mmio_we && (mmio_addr==12'h04)
+   && mmio_wdata[0]` (:368) + `else if (dbg_state == MXU_S_DONE)` (:370); clear-wins documented
+   (:352-358). mmio_cs == psel && penable proven at rtl/wrapper/apb_to_mmio.v:59.
+b2 drain: `assign so_drain_done = so_fifo_empty && (so_state == SO_IDLE);` (:856); read wrap
+   `{apb_mmio_prdata[31:2], (mxu_done_seen && so_drain_done), apb_mmio_prdata[0]}` for
+   paddr==0x008 (:384-387); mux ternary structure intact:
+   `assign prdata = apb_to_mxu_mmio ? apb_mmio_prdata_wrp : (wrp_cs ? wrp_prdata : 32'd0);` (:392).
+b3 derived wire: `grep -c wrp_k_tiles_derived` = 0; `dim0_k` appears only inside the explanatory
+   comment (:267); `dim1_n` (:273-281) and `wrp_n_derived` (:292) retained and consumed (:973-974);
+   `wrp_k_tiles_eff = (wrp_k_tiles==0)?1:wrp_k_tiles` (:289) drives both rlast tile-turnovers
+   (:632,:658).
+b4 IRQ: `assign irq = mxu_irq | wrp_wdt_timeout;` (:593) byte-identical to base (:446) — no drain
+   AND; `WRP1-IRQ-RESIDUAL:` present (:415-421) with pulse semantics + required future latch.
+b5 watchdog: per-phase wording (:520-531, "cleared only when both sequencers have left…
+   PL_READY / SO_IDLE / SO_TRANSFORM", turnover wait->wait); matches code
+   `else if (!wdt_axi_wait) wdt_cnt <= 0` (:570-571). `penable` added to sticky clear (:585);
+   `wdt_trip` used for the set (:587) and both recoveries (:602,:867); WDT_TIMEOUT unchanged
+   (base :406 == HEAD :532 == 20'd1_000_000).
+b6 K>128 bound documented with the exact indexing proof (:497-509), no overclaim.
+
+C. TEST FILE (item 3) — PASS
+$ git diff f1d9652..HEAD -- sim/tests/wrapper/test_mxu_wrapper.py   (only: _start_ar_monitor new,
+  _preload_and_run K_TILES write+readback, accumulate mode AR assertion + docstring, probe scope)
+K_TILES: written after the 3 base writes and before TRIG_LOAD, then read back + asserted
+  (`k_tiles=(K+63)//64`, `assert k_tiles_rb == k_tiles`) — verify by reading the file at HEAD.
+AR assertion non-vacuous: opt-in list param, `assert ar_bursts == expected_bursts`; task-3 evidence
+  :221 records the observed `[(65536,31),(67584,31),(131072,63),(135168,63)]` and :223 the RED
+  2-burst set. Monitor start/stop bracket = preload phase only.
+Probe narrowed: `except (AttributeError, ValueError)` (was `except Exception`). No TODO/FIXME/
+  placeholder (grep 0). Remaining `except` sites are the file-top ImportError and an unrelated
+  TimeoutError. ctrl_acc_mode dead-input claims verified (rtl/mxu/controller.v:37 decl, no read;
+  :205 `mac_reset_acc <= (k_tile == 0)`; wrapper consumes CTRL[2] as wrp_acc_mode :250/:303/:813).
+Not-a-finding: MXU runner lists 6 cases while the module has 7 decorated tests; test #6
+  (test_bug007_consecutive_dispatch) is routed to scripts/wv_run_bug007.sh by the module's own
+  docstring (:12-13) and wv_run_bug007.sh:125 sets that TESTCASE — documented exclusion, not a
+  silent skip.
+
+D. TOOLING (item 4) — PASS
+Parser fail-closed, re-executed by me on every committed fixture:
+  verdict-pass.log rc=0; verdict-sfu7-pass.log rc=0 (TESTS=7 PASS=7);
+  verdict-fail.log rc=1 (summary-not-all-pass); verdict-sfu7.log rc=1 (3P/4F);
+  verdict-summary-mismatch.log rc=1 (per-test-status-mismatch); verdict-truncated.log rc=1
+  (summary-line-count=0); missing file rc=1; empty file rc=1. Exactly-one-summary + per-test
+  cross-check + zero-test guard are all enforced.
+Routing: wv_regression.sh:35/:100; wv_run_sfu.sh:111; wv_run_vector.sh:124; wv_run_mxu.sh:100.
+Exit paths: wv_regression exits 1 unless TOTAL_NOTPASS==0 (:287-290); sfu/vector exit 1 on
+  compile failure, timeout (rc 124/137) and non-PASS verdict; mxu exits 1 on any FAIL_COUNT>0.
+  No bare `exit 0` on a failure path in the four runners.
+wv_run_vector.sh TESTS = 6 names == the module's 6 @cocotb.test() (incl.
+  test_bug005_vector_nonaligned_wstrb).
+Makefile: `cd $(REPO_ROOT) &&` on the 3 wrapper targets; REPO_ROOT := $(abspath $(SIM_DIR)/..)
+  (Makefile:50); only those 3 lines changed (dependency graph + :72-78 fallback untouched).
+run_ibex_full_rtl.sh: `rm -rf "$SIMV" "$SIMV.daidir" "$BUILD_DIR/csrc"` before vcs, then
+  `if [ ! -x "$SIMV" ] … exit 1`.
+soc-verification-run.sh CLEAN: +simv_apb_conformance_real(+.daidir), +"$REPO_ROOT/csrc" (:45-47).
+
+E. .gitignore (item 5) — PASS with 2 comment nits (see findings 3)
+Named rules only, no blanket `*.dbg` (:75-87). Historical statics still tracked (git ls-files):
+  wrap-bug005-result.txt, wrap-bug007-result.txt, wv-bug007-{mxu,sfu}.log.dbg,
+  wv_bug005_logs/*.dbg. Untracked under build/evidence == runner outputs only
+  (`git status --porcelain -uall -- build/evidence` shows only the 2 protected dirty .txt).
+  Deleted-from-index set (11) == the plan's enumerated rewrite list (6 wrap-* + 5 .dbg).
+
+F. LEDGER (item 6) — FAIL on one sentence (finding 1); everything else verified
+Verified against evidence: 2880→6080 ns, 3180/4096 + max_abs_diff 6400 + first_mismatches,
+  bit-exact 0/4096, WRP_K_TILES readback lines, X-hits, RED log refs
+  (t4-2…accumulate_mode.log:129/147/181-199/276-298 all match), commit refs f65f5b9/7179a82,
+  mxu_top.v:113 = `wire status_done;`, dma_wrapper HEAD :133/:290/:214, npu-regmap.h:269-271,
+  npu_firmware.c:275-281 256-nop, cocotb_bridge.py:2267. No claim that IRQ is fixed (residual 1)
+  or that K>128 works (residual 4 / note 1). 4F/0O → 6F/0O consistent with README.md.
+FALSE CLAIM: docs/bugs/bugs-module-level.md:290 "which the controller holds through the drain".
+
+FINDINGS
+1. MEDIUM (false ledger claim) docs/bugs/bugs-module-level.md:289-291 — "npu_wait_done() polls
+   bit0 = BUSY, which the controller holds through the drain". Contradicted by the RTL and by the
+   entry's own RED witness: rtl/mxu/controller.v:317-319 clears status_busy in S_DONE in the same
+   cycle it sets status_done; rtl/mxu/mmio_if.v:140
+   `12'h08: rdata = {29'd0, status_error, status_done, status_busy}`; the pre-fix 0x08 readback at
+   2880 ns was 0x00000002 (DONE set, BUSY clear) with 53/64 rows still queued. BUSY therefore does
+   NOT cover the AXI drain. Required fix: reword (busy clears with raw DONE in S_DONE; neither
+   bit waits for the drain — cocotb _poll_done's bit1 branch is now drain-gated — which is exactly
+   why the 256-nop remains load-bearing).
+2. LOW scripts/wv_regression.sh:15 — the prescribed acceptance grep
+   `grep -nE "SFU_PASS=1|ALL 5 PASS|Summary: 5 PASS"` returns 1 (historical comment quoting the
+   removed fail-open logic), not 0. Verdicts/counts are all derived (no hardcode). Fix: reword the
+   comment so the literal tokens do not appear.
+3. LOW .gitignore:75-87 — (a) redundant with the pre-existing line 73 `build/evidence/` (verified
+   `git check-ignore -v build/evidence/new-thing.txt` → line 73); (b) no script writes
+   wrap-sfu-debug.txt (grep of scripts/ + sim/regression/ = 0 writers); (c) :80 lists
+   wrap-mxu-regression.RED-pre-RTL.txt as "stays tracked" but it is untracked (task-1 evidence
+   :221 says, correctly, "untracked-and-kept"). Fix: correct/drop the name.
+4. NIT docs/bugs/bugs-module-level.md (WRP-002 note 2) — "0 hits in the diff and in the edited
+   files" for COCOTB_RESOLVE_X is true for code paths (rtl/ sim/ scripts/) but false for the
+   branch diff as a whole (token appears in .omo plan/evidence prose). Say "no hits in code".
+
+VERDICT: REJECT
+(only trigger = finding 1, a false ledger claim; findings 2-4 are comment nits. All code, tooling,
+zero-diff, test-file and evidence checks pass; the fix is one sentence.)
+
+── ROUND 2 (post-fix, HEAD ad30841) ──
+All five findings independently re-derived as fixed:
+1. MEDIUM resolved — docs/bugs/bugs-module-level.md:288-302 rewritten: S_DONE clears status_busy in the
+   same cycle it sets status_done (rtl/mxu/controller.v:317-318; readback mmio_if.v:140); pre-fix neither
+   bit waited for the drain; post-fix only bit1=DONE is drain-gated, bit0=BUSY still clears on
+   row-stream completion → the corrected reason the npu_firmware.c:275-281 256-nop stays load-bearing.
+   `grep -n 'holds through the drain' docs/` → rc=1 (only this fix-evidence file quotes the removed text).
+2. LOW resolved — `grep -nE "SFU_PASS=1|ALL 5 PASS|Summary: 5 PASS" scripts/wv_regression.sh` → rc=1 (0 hits);
+   diff = exactly 1 comment line; verdict logic untouched.
+3. LOW resolved — 7 enumerated .gitignore rules removed as redundant (`git check-ignore -v` resolves all
+   probes to .gitignore:73 build/evidence/); build/evidence/wrap-sfu-debug.txt restored to tracked
+   (static: 0 writers, blob ed1cb678… identical to f1d9652); RED-pre-RTL witness relabeled
+   "untracked-but-kept"; mandated statics still tracked.
+4. NIT resolved — COCOTB_RESOLVE_X claim scoped to code paths (0 hits in rtl/ sim/ scripts/ firmware/ spec/ gen/).
+Round-1 clean set re-checked: forbidden-path diff still 0 bytes; wrapper/TB sha256 unchanged
+(5cb753be…/b235a86c… → the judged 6/6 tree is what HEAD carries); ad30841 touched only .gitignore,
+.omo evidence, build/evidence/wrap-sfu-debug.txt (static restore), docs ledger, 1 comment line.
+Remaining (process-only, non-blocking): 2 NITs — the --amend note (e9ad4f0→ad30841) exists only in
+.omo/notepads/wrp-defects-and-tooling-fixes/issues.md:227, not in a committed artifact; wrp notepads untracked.
+
+VERDICT: APPROVE

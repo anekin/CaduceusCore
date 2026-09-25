@@ -176,16 +176,51 @@ def _read_from_ram(ram, addr: int, length: int) -> bytes:
     """Backdoor-read bytes from AxiRam at addr."""
     return ram.read(addr, length)
 
+def _start_ar_monitor(dut, bursts: list) -> dict:
+    """Record every AXI AR burst handshake (araddr, arlen) into ``bursts``.
+
+    Returns a flag dict; set flag["run"] = False to stop the sampler.  The
+    wrapper raises m_axi_arvalid only from the preload AR states (PL_LOAD_W_AR
+    / PL_LOAD_A_AR) and from the store-out scale fetch, which is gated on
+    SCALE_ADDR != 0 and never runs in this suite.  A burst is one arvalid &&
+    arready handshake, so consecutive cycles with arvalid held are counted
+    once.
+    """
+    flag = {"run": True}
+
+    async def _sample():
+        prev_arvalid = 0
+        while flag["run"]:
+            await RisingEdge(dut.clk)
+            v = dut.m_axi_arvalid.value
+            r = dut.m_axi_arready.value
+            cur = int(v) if v.is_resolvable else 0
+            if (cur and r.is_resolvable and int(r) and not prev_arvalid):
+                a = dut.m_axi_araddr.value
+                l = dut.m_axi_arlen.value
+                if a.is_resolvable and l.is_resolvable:
+                    bursts.append((int(a), int(l)))
+            prev_arvalid = cur
+
+    cocotb.start_soon(_sample())
+    return flag
+
+
 async def _preload_and_run(
     dut, apb, ram, M, K, N,
     wgt_bytes: bytes, act_bytes: bytes,
     ctrl_val: int = 0,
     timeout: int = 100000,
+    ar_bursts=None,
 ):
     """Common flow: write AxiRam → preload → set MXU MMIO → START → wait DONE.
 
     Returns total store-out bytes read from AxiRam at OUT_BASE.
     Caller is responsible for comparing against golden.
+
+    If ``ar_bursts`` is a list, every preload AXI AR burst (addr, arlen) is
+    recorded into it (BUG-MXU-WRP-002 mechanical evidence); other callers pass
+    nothing and see the previous behaviour unchanged.
     """
     # 1. Write weight/activation data to AxiRam (backdoor)
     _write_to_ram(ram, WGT_BASE, wgt_bytes)
@@ -196,10 +231,26 @@ async def _preload_and_run(
     await write_reg(apb, 0, OFF_WRP_ACT_BASE,    ACT_BASE)
     await write_reg(apb, 0, OFF_WRP_OUT_BASE,    OUT_BASE)
 
-    # 3. Trigger preload via WRP_CMD[0]
+    # 3. BUG-MXU-WRP-002: program the preload K-tile count BEFORE TRIG_LOAD.
+    # The preload FSM fetches exactly WRP_K_TILES 64-wide K-tiles.  The MXU
+    # DIM0 write in step 6 lands only after the preload handshake, so the FSM
+    # cannot use it (that was the defect: DIM0 still read its reset default 64
+    # at preload time, so K=128 fetched a single K-tile).  (K+63)//64 keeps
+    # K<=64 at one tile — no change for the single-tile tests — and is 2 for
+    # K=128.
+    k_tiles = (K + 63) // 64
+    await write_reg(apb, 0, OFF_WRP_K_TILES, k_tiles)
+    k_tiles_rb = await read_reg(apb, 0, OFF_WRP_K_TILES)
+    assert k_tiles_rb == k_tiles, (
+        f"WRP_K_TILES readback mismatch for K={K}: wrote {k_tiles}, "
+        f"read {k_tiles_rb}")
+    dut._log.info(f"WRP_K_TILES={k_tiles} programmed + readback OK (K={K})")
+
+    # 4. Trigger preload via WRP_CMD[0]
+    ar_flag = _start_ar_monitor(dut, ar_bursts) if ar_bursts is not None else None
     await write_reg(apb, 0, OFF_WRP_CMD, 0x0000_0001)
 
-    # 4. Wait for WRP_STATUS[0] = LOAD_DONE
+    # 5. Wait for WRP_STATUS[0] = LOAD_DONE
     # NOTE (pre-existing harness gap, repaired here): wait_done() falls back to
     # `apb._bus.clk` when clk is omitted, and cocotbext-axi 0.1.28's ApbMaster
     # exposes no `_bus` -> AttributeError.  test_sfu_wrapper.py /
@@ -207,9 +258,11 @@ async def _preload_and_run(
     # call sites.  Passing dut.clk changes no assertion, only the clock source.
     await wait_done(apb, 0, OFF_WRP_STATUS, done_bit=0, timeout_cycles=timeout,
                     clk=dut.clk)
+    if ar_flag is not None:
+        ar_flag["run"] = False
     dut._log.info("Preload complete (WRP_STATUS.LOAD_DONE=1)")
 
-    # 5. Set MXU MMIO: CTRL, DIM0, DIM1
+    # 6. Set MXU MMIO: CTRL, DIM0, DIM1
     await write_reg(apb, 0, OFF_CTRL,   ctrl_val)
     await write_reg(apb, 0, OFF_DIM0,   (K << 16) | (M & 0xFFFF))
     await write_reg(apb, 0, OFF_DIM1,   N & 0xFFFF)
@@ -221,16 +274,16 @@ async def _preload_and_run(
     await write_reg(apb, 0, OFF_SCALE_ADDR, 0)
     await write_reg(apb, 0, OFF_IRQ_EN,     0)
 
-    # 6. CMD.START
+    # 7. CMD.START
     dut._log.info(f"Issuing CMD.START (M={M}, K={K}, N={N}, ctrl={ctrl_val:#x})")
     await write_reg(apb, 0, OFF_CMD, 0x0000_0001)
 
-    # 7. Wait STATUS.DONE (done_bit=1 = STATUS[1])
+    # 8. Wait STATUS.DONE (done_bit=1 = STATUS[1])
     await wait_done(apb, 0, OFF_STATUS, done_bit=1, timeout_cycles=timeout,
                     clk=dut.clk)
     dut._log.info("STATUS.DONE asserted -- compute complete")
 
-    # 8. Read store-out from AxiRam (rows of 64*4 = 256 bytes each)
+    # 9. Read store-out from AxiRam (rows of 64*4 = 256 bytes each)
     out_bytes_total = M * N * 4
     out_data = _read_from_ram(ram, OUT_BASE, out_bytes_total)
     return out_data
@@ -491,10 +544,16 @@ async def test_mxu_store_out_burst(dut):
 
 @cocotb.test()
 async def test_mxu_accumulate_mode(dut):
-    """K=128 across two tiles with ctrl_acc_mode=1.
+    """K=128 across two K-tiles with ctrl_val=CTRL_ACC_MODE.
 
-    Sets CTRL[2]=1 so the accumulator does NOT reset between K-tiles.
-    Generates golden for (64, 128, 64) in one shot and compares.
+    Cross-K-tile accumulation inside one command is UNCONDITIONAL: the
+    controller resets the MAC accumulator only on the first K-tile of a command
+    (`mac_reset_acc <= (k_tile == 0)` — rtl/mxu/controller.v:205) and its
+    `ctrl_acc_mode` port is dead there (declared at controller.v:37, never
+    read).  CTRL[2] is consumed by the wrapper's store-out FP32 dequant path
+    (mxu_soc_wrapper.v wrp_acc_mode), not by the engine.  CTRL_ACC_MODE is kept
+    here to exercise that wrapper path; the (64,128,64) one-shot golden is
+    compared bit-exactly.
     """
     cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
     await ClockCycles(dut.clk, 5)
@@ -519,11 +578,26 @@ async def test_mxu_accumulate_mode(dut):
     dut._log.info(f"Weight beats expected: {len(wbytes)//64} (per-tile: {len(wbytes)//64//2})")
     dut._log.info(f"Activation beats expected: {len(abytes)//64}")
 
-    # Run with ctrl_acc_mode = 1 (CTRL bit 2)
+    # WRP_K_TILES must make the preload fetch TWO K-tiles per operand: two
+    # 32-beat weight bursts then two 64-beat activation bursts.  Pre-fix the
+    # FSM fetched one of each and the second tile's buffer entries stayed X
+    # (RED fingerprint: t4-2-wv-mxu-test_mxu_accumulate_mode.log:129,147).
+    ar_bursts = []
     out_data = await _preload_and_run(dut, apb, ram, M, K, N,
                                        wbytes, abytes,
                                        ctrl_val=CTRL_ACC_MODE,
-                                       timeout=100000)
+                                       timeout=100000,
+                                       ar_bursts=ar_bursts)
+
+    expected_bursts = [
+        (WGT_BASE,           31),   # weight   K-tile 0: 32 beats x 64 B = 2048 B
+        (WGT_BASE + 2048,    31),   # weight   K-tile 1
+        (ACT_BASE,           63),   # act      K-tile 0: 64 beats x 64 B = 4096 B
+        (ACT_BASE + 4096,    63),   # act      K-tile 1
+    ]
+    assert ar_bursts == expected_bursts, \
+        f"preload AR bursts mismatch: {ar_bursts} != {expected_bursts}"
+    dut._log.info(f"Preload AR bursts (K=128): {ar_bursts}")
 
     # Decode result
     result = np.zeros((M, N), dtype=np.int32)
@@ -789,7 +863,11 @@ async def test_mxu_wrapper_watchdog_timeout(dut):
             f"[MXU_WRP_WDT] peak wdt_cnt = {peak_cnt} (threshold {WDT_TIMEOUT}, "
             f"sampled {WDT_PRESAMPLE} cycles early)"
         )
-    except Exception as exc:  # only the pre-RTL binary lacks this register
+    except (AttributeError, ValueError) as exc:
+        # Diagnostic probe only (no assertion depends on it): AttributeError =
+        # the pre-RTL binary has no wdt_cnt handle; ValueError = the bit string
+        # is unresolvable (X).  Anything else is a real TB/RTL error and must
+        # surface instead of being swallowed.
         peak_cnt = None
         dut._log.warning(f"[MXU_WRP_WDT-PROBE-UNAVAILABLE] wdt_cnt not visible: {exc}")
 

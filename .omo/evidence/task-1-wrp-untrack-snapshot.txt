@@ -1,3 +1,44 @@
+case_id: task-1-wrp-defects-and-tooling-fixes — untrack snapshot
+plan: .omo/plans/wrp-defects-and-tooling-fixes.md (todo 1, item d)
+utc: 2026-09-24T14:20:23Z
+head: 7ce88a8f896bf00c2af8e202814e3a065c2e6ec1
+branch: wrp-defects-and-tooling-fixes
+purpose: byte-exact snapshot of the regenerated wrapper evidence about to be
+         removed from the index (git rm --cached) and covered by named
+         .gitignore rules.  These files are rewritten in place by
+         scripts/wv_run_{mxu,sfu,vector}.sh and scripts/wv_regression.sh,
+         so tracking them produced dirty-worktree noise, not evidence.
+
+before_tracked_wrap_star_count: 6
+before_tracked_wv_vector_logs_count: 5
+
+=== INDEX (sha256 / bytes / lines / git blob at HEAD) ===
+build/evidence/wrap-mxu-regression.txt                                 47297ba3506783d24b31b49a5386a1370a6dfacd1b1ee8fda38631c6fc7efc3c       255 bytes     10 lines  blob=d0282a306b502977d027566dd4a61b0adf398fe6
+build/evidence/wrap-sfu-regression.txt                                 4749219f8b76be663b398d000b5264497a9dcd20f9328f47fb2b8ad642dfa116    150926 bytes   1485 lines  blob=463f16a18696e07b456f63baf60066cd48c1ff10
+build/evidence/wrap-sfu-debug.txt                                      918df4c4341f7ac8466f436fa4740dc2fc39b15f3f702251f4b46eee757031fa       479 bytes      9 lines  blob=ed1cb678f920b6d3c0dc42cb82c9cee0fd174168
+build/evidence/wrap-vec-regression.txt                                 7577909b4cfa5406eb5afe8604546f0f89ada50401d0dc69c831f6eba662f78b       255 bytes      9 lines  blob=20974f1234444614e2d09d62a8e1833935c45aba
+build/evidence/wrap-vec-status.txt                                     46e3298d106e0e5cdc0932f8ac8a01772a6156158f29e5ff1d29081364c93720        26 bytes      1 lines  blob=97a93049ba3f177efc6462ea887af85db77901f6
+build/evidence/wrap-regression-summary.txt                             ed9211276c1e0b9cefa1878487cf4cfa26cdfbd0f85340cd62722c6cb7e286d4      1612 bytes     53 lines  blob=a17d417e9da23381a0de698ba657f8f04af49d5f
+build/evidence/wv_vector_logs/test_apb_native_rw.log.dbg               0dd3ee55fd2ea5f23578c8091df151942604dc5f2623c83d6f107814b43007c0       543 bytes      9 lines  blob=debcc932ed8abf9dabeff1f5cad92ef002032296
+build/evidence/wv_vector_logs/test_apb_wrapper_rw.log.dbg              5cb5430432cc9039bf4c5d78626720e61d7ec42d28780ba79b6f0a92f1e42d19       544 bytes      9 lines  blob=7ab5b725cad11de44ff41e50352c8c0851d2299d
+build/evidence/wv_vector_logs/test_vector_add_normal.log.dbg           795e4fee30259bcfa275ac87f4a0fca061d35657a74c1935615f8b146939725d      1179 bytes     17 lines  blob=a1fdbe14ba31c37f25ca3a633d900aa05fa41acf
+build/evidence/wv_vector_logs/test_vector_chunk_burst_8beat.log.dbg    49933f426850aa9e24ab49d6e300d09c95096f77f04dca558e7f2beb979b82e4      5611 bytes     73 lines  blob=6c1f1f673d672685dea6f9218758d6d07864c7dc
+build/evidence/wv_vector_logs/test_vector_conv_type_convert.log.dbg    c81f5e3254c756bb2917ee1e37bd7432458df24dead99ff6abd26d465f8134e2      1187 bytes     17 lines  blob=41691dd46f15a35a444145714987084a83c0bdf7
+
+=== FILE: build/evidence/wrap-mxu-regression.txt ===
+
+=== MXU Wrapper Regression 2026-07-23 08:44:25 ===
+
+  test_apb_regmap_rw: PASS
+  test_mxu_preload_single_tile: PASS
+  test_mxu_single_tile_compute: PASS
+  test_mxu_store_out_burst: PASS
+  test_mxu_accumulate_mode: PASS
+
+Summary: 5 PASS, 0 FAIL (5 total)
+=== END: build/evidence/wrap-mxu-regression.txt ===
+
+=== FILE: build/evidence/wrap-sfu-regression.txt ===
 /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
 === CaduceusCore EDA Environment ===
 VCS:         /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/bin/vcs
@@ -1483,3 +1524,229 @@ Thu Jul 23 16:07:40 2026
 === Regression Summary ===
 
 RUN_EXIT_CODE=0
+=== END: build/evidence/wrap-sfu-regression.txt ===
+
+=== FILE: build/evidence/wrap-sfu-debug.txt ===
+/NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+=== CaduceusCore EDA Environment ===
+VCS:         /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/bin/vcs
+VCS_HOME:    /NAS/Tools/EDA/synopsys/VCS_V-2023.12-SP2_P/vcs/V-2023.12-SP2/
+Python:      Python 3.11.9
+PLI_TAB:     /home/prj/zhengs/caduceuscore/CaduceusCore/sim/regression/pli.tab
+LICENSE:     27020@sz0001
+====================================
+bash: /tmp/sfu_debug.sh: No such file or directory
+=== END: build/evidence/wrap-sfu-debug.txt ===
+
+=== FILE: build/evidence/wrap-vec-regression.txt ===
+=== Vector Wrapper Regression Thu Jul 23 08:41:55 CST 2026 ===
+
+  test_apb_native_rw: PASS
+  test_apb_wrapper_rw: PASS
+  test_vector_add_normal: PASS
+  test_vector_chunk_burst_8beat: PASS
+  test_vector_conv_type_convert: PASS
+
+=== Overall: ALL 5 PASS ===
+=== END: build/evidence/wrap-vec-regression.txt ===
+
+=== FILE: build/evidence/wrap-vec-status.txt ===
+wrap-vec-regression: PASS
+=== END: build/evidence/wrap-vec-status.txt ===
+
+=== FILE: build/evidence/wrap-regression-summary.txt ===
+=== Wrapper-Level Regression Summary ===
+Date: 2026-07-23 11:41:29 CST
+Plan:  wrapper-level-verification (Waves 0-3)
+
+--- SFU Wrapper ---
+# NOTE: The 4 operand tests timed out after 3 GB evidence capture limit.
+#       Counts below are from the verified T2 debugging session.
+  Tests: 5 total, 1 PASS, 4 FAIL
+  BUG-RTL-SOC-WV-001: STATUS.DONE never asserts (BLOCKER)
+  Status: PARTIAL (1/5 PASS; 4/5 blocked by WV-001)
+  SFU: PARTIAL
+
+--- Vector Wrapper ---
+  Tests: 5 total, 5 PASS, 0 FAIL
+  Status: PASS
+  Vector: PASS
+
+--- MXU Wrapper ---
+  Tests: 5 total, 5 PASS, 0 FAIL
+  Status: PASS
+  MXU: PASS
+
+--- BUG-005 (AXI Sparse Slave X-Propagation) ---
+  SFU:   FAIL-TIMEOUT (blocked by BUG-RTL-SOC-WV-001)
+  Vector: X_PROP/FAIL (X-propagation confirmed)
+  BUG-005 SFU: BLOCKED (WV-001)
+  BUG-005 Vector: X_PROP/FAIL
+
+--- BUG-007 (Consecutive Multi-Op Dispatch) ---
+  MXU: FAIL (warm-up MMUL DONE timeout)
+  SFU: PASS (start_hold replay verified)
+  BUG-007 MXU: FAIL
+  BUG-007 SFU: PASS
+
+--- Overall ---
+
+  SFU wrapper:      PARTIAL (1/5 PASS; 4 blocked by BUG-RTL-SOC-WV-001)
+  Vector wrapper:   PASS (5/5)
+  MXU wrapper:      PASS (5/5)
+  BUG-005:          SFU=BLOCKED, Vector=X_PROP
+  BUG-007:          MXU=FAIL (DONE timeout), SFU=PASS
+
+  New bugs logged:  BUG-RTL-SOC-WV-001 (SFU STATUS.DONE never asserts)
+
+---
+Evidence base:
+  SFU:    build/evidence/wrap-sfu-regression.txt
+  Vector: build/evidence/wrap-vec-regression.txt
+  MXU:    build/evidence/wrap-mxu-regression.txt
+  BUG005: build/evidence/wrap-bug005-result.txt
+  BUG007: build/evidence/wrap-bug007-result.txt
+
+Generated: 2026-07-23T11:41:29+08:00
+=== END: build/evidence/wrap-regression-summary.txt ===
+
+=== FILE: build/evidence/wv_vector_logs/test_apb_native_rw.log.dbg ===
+Command: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/simv_tb_vector_wrapper -l build/evidence/wv_vector_logs/test_apb_native_rw.log.dbg
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Jul 23 08:41 2026
+$finish at simulation time               480001
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 480001 ps
+CPU Time:      0.790 seconds;       Data structure size:   9.1Mb
+Thu Jul 23 08:42:06 2026
+=== END: build/evidence/wv_vector_logs/test_apb_native_rw.log.dbg ===
+
+=== FILE: build/evidence/wv_vector_logs/test_apb_wrapper_rw.log.dbg ===
+Command: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/simv_tb_vector_wrapper -l build/evidence/wv_vector_logs/test_apb_wrapper_rw.log.dbg
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Jul 23 08:42 2026
+$finish at simulation time               360001
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 360001 ps
+CPU Time:      0.780 seconds;       Data structure size:   9.1Mb
+Thu Jul 23 08:42:16 2026
+=== END: build/evidence/wv_vector_logs/test_apb_wrapper_rw.log.dbg ===
+
+=== FILE: build/evidence/wv_vector_logs/test_vector_add_normal.log.dbg ===
+Command: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/simv_tb_vector_wrapper -l build/evidence/wv_vector_logs/test_vector_add_normal.log.dbg
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Jul 23 08:42 2026
+[VEC_WRP_STORE] chunk=0 beat=0 wlast=0 addr=0x20002000 data=0x00000330fffffd5f
+[VEC_WRP_STORE] chunk=0 beat=1 wlast=0 addr=0x20002040 data=0xffffffda000003f3
+[VEC_WRP_STORE] chunk=0 beat=2 wlast=0 addr=0x20002080 data=0x000001b5000000b0
+[VEC_WRP_STORE] chunk=0 beat=3 wlast=0 addr=0x200020c0 data=0xffffff8600000315
+[VEC_WRP_STORE] chunk=0 beat=4 wlast=0 addr=0x20002100 data=0xfffffd8e00000023
+[VEC_WRP_STORE] chunk=0 beat=5 wlast=0 addr=0x20002140 data=0x000001af00000197
+[VEC_WRP_STORE] chunk=0 beat=6 wlast=0 addr=0x20002180 data=0xffffffe7ffffffb2
+[VEC_WRP_STORE] chunk=0 beat=7 wlast=1 addr=0x200021c0 data=0x00000055fffffd9f
+$finish at simulation time               850001
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 850001 ps
+CPU Time:      0.820 seconds;       Data structure size:   9.1Mb
+Thu Jul 23 08:42:27 2026
+=== END: build/evidence/wv_vector_logs/test_vector_add_normal.log.dbg ===
+
+=== FILE: build/evidence/wv_vector_logs/test_vector_chunk_burst_8beat.log.dbg ===
+Command: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/simv_tb_vector_wrapper -l build/evidence/wv_vector_logs/test_vector_chunk_burst_8beat.log.dbg
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Jul 23 08:42 2026
+[VEC_WRP_STORE] chunk=0 beat=0 wlast=0 addr=0x20002000 data=0xffffffb600000013
+[VEC_WRP_STORE] chunk=0 beat=1 wlast=0 addr=0x20002040 data=0xffffffb400000044
+[VEC_WRP_STORE] chunk=0 beat=2 wlast=0 addr=0x20002080 data=0x0000004500000024
+[VEC_WRP_STORE] chunk=0 beat=3 wlast=0 addr=0x200020c0 data=0x00000027ffffff80
+[VEC_WRP_STORE] chunk=0 beat=4 wlast=0 addr=0x20002100 data=0xffffffb0ffffffc8
+[VEC_WRP_STORE] chunk=0 beat=5 wlast=0 addr=0x20002140 data=0xffffffc2ffffffe3
+[VEC_WRP_STORE] chunk=0 beat=6 wlast=0 addr=0x20002180 data=0x00000056ffffffe2
+[VEC_WRP_STORE] chunk=0 beat=7 wlast=1 addr=0x200021c0 data=0x0000003900000055
+[VEC_WRP_STORE] chunk=1 beat=0 wlast=0 addr=0x20002200 data=0x00000076ffffff76
+[VEC_WRP_STORE] chunk=1 beat=1 wlast=0 addr=0x20002240 data=0x00000079ffffffef
+[VEC_WRP_STORE] chunk=1 beat=2 wlast=0 addr=0x20002280 data=0xffffffe700000064
+[VEC_WRP_STORE] chunk=1 beat=3 wlast=0 addr=0x200022c0 data=0xfffffffeffffffa1
+[VEC_WRP_STORE] chunk=1 beat=4 wlast=0 addr=0x20002300 data=0x00000058ffffffcd
+[VEC_WRP_STORE] chunk=1 beat=5 wlast=0 addr=0x20002340 data=0x0000001900000013
+[VEC_WRP_STORE] chunk=1 beat=6 wlast=0 addr=0x20002380 data=0x0000001efffffffe
+[VEC_WRP_STORE] chunk=1 beat=7 wlast=1 addr=0x200023c0 data=0x000000490000002b
+[VEC_WRP_STORE] chunk=2 beat=0 wlast=0 addr=0x20002400 data=0x00000054ffffffcd
+[VEC_WRP_STORE] chunk=2 beat=1 wlast=0 addr=0x20002440 data=0x0000001dffffff5d
+[VEC_WRP_STORE] chunk=2 beat=2 wlast=0 addr=0x20002480 data=0x000000980000003a
+[VEC_WRP_STORE] chunk=2 beat=3 wlast=0 addr=0x200024c0 data=0x0000002300000040
+[VEC_WRP_STORE] chunk=2 beat=4 wlast=0 addr=0x20002500 data=0x0000004e00000033
+[VEC_WRP_STORE] chunk=2 beat=5 wlast=0 addr=0x20002540 data=0x000000180000005f
+[VEC_WRP_STORE] chunk=2 beat=6 wlast=0 addr=0x20002580 data=0xffffffb0ffffffd5
+[VEC_WRP_STORE] chunk=2 beat=7 wlast=1 addr=0x200025c0 data=0x000000120000002f
+[VEC_WRP_STORE] chunk=3 beat=0 wlast=0 addr=0x20002600 data=0x00000043ffffff8b
+[VEC_WRP_STORE] chunk=3 beat=1 wlast=0 addr=0x20002640 data=0xffffffd1fffffffe
+[VEC_WRP_STORE] chunk=3 beat=2 wlast=0 addr=0x20002680 data=0x0000006400000004
+[VEC_WRP_STORE] chunk=3 beat=3 wlast=0 addr=0x200026c0 data=0xfffffff300000029
+[VEC_WRP_STORE] chunk=3 beat=4 wlast=0 addr=0x20002700 data=0xfffffff0ffffffaf
+[VEC_WRP_STORE] chunk=3 beat=5 wlast=0 addr=0x20002740 data=0xffffff4d0000004d
+[VEC_WRP_STORE] chunk=3 beat=6 wlast=0 addr=0x20002780 data=0xffffffdd0000007f
+[VEC_WRP_STORE] chunk=3 beat=7 wlast=1 addr=0x200027c0 data=0x000000790000006f
+[VEC_WRP_STORE] chunk=4 beat=0 wlast=0 addr=0x20002800 data=0x0000002f00000030
+[VEC_WRP_STORE] chunk=4 beat=1 wlast=0 addr=0x20002840 data=0x0000004200000061
+[VEC_WRP_STORE] chunk=4 beat=2 wlast=0 addr=0x20002880 data=0xfffffff3ffffffe2
+[VEC_WRP_STORE] chunk=4 beat=3 wlast=0 addr=0x200028c0 data=0x00000011ffffff99
+[VEC_WRP_STORE] chunk=4 beat=4 wlast=0 addr=0x20002900 data=0xffffffbdffffffcb
+[VEC_WRP_STORE] chunk=4 beat=5 wlast=0 addr=0x20002940 data=0xffffffecffffffff
+[VEC_WRP_STORE] chunk=4 beat=6 wlast=0 addr=0x20002980 data=0x00000005ffffffca
+[VEC_WRP_STORE] chunk=4 beat=7 wlast=1 addr=0x200029c0 data=0x0000001400000029
+[VEC_WRP_STORE] chunk=5 beat=0 wlast=0 addr=0x20002a00 data=0x0000008f00000015
+[VEC_WRP_STORE] chunk=5 beat=1 wlast=0 addr=0x20002a40 data=0x0000006fffffffa7
+[VEC_WRP_STORE] chunk=5 beat=2 wlast=0 addr=0x20002a80 data=0x00000007ffffffeb
+[VEC_WRP_STORE] chunk=5 beat=3 wlast=0 addr=0x20002ac0 data=0x00000001ffffffd9
+[VEC_WRP_STORE] chunk=5 beat=4 wlast=0 addr=0x20002b00 data=0x0000001800000029
+[VEC_WRP_STORE] chunk=5 beat=5 wlast=0 addr=0x20002b40 data=0x0000004500000046
+[VEC_WRP_STORE] chunk=5 beat=6 wlast=0 addr=0x20002b80 data=0x0000003a00000035
+[VEC_WRP_STORE] chunk=5 beat=7 wlast=1 addr=0x20002bc0 data=0x0000002800000050
+[VEC_WRP_STORE] chunk=6 beat=0 wlast=0 addr=0x20002c00 data=0xfffffff200000064
+[VEC_WRP_STORE] chunk=6 beat=1 wlast=0 addr=0x20002c40 data=0xffffffa9ffffffe1
+[VEC_WRP_STORE] chunk=6 beat=2 wlast=0 addr=0x20002c80 data=0xffffffcd0000005f
+[VEC_WRP_STORE] chunk=6 beat=3 wlast=0 addr=0x20002cc0 data=0xffffffae00000009
+[VEC_WRP_STORE] chunk=6 beat=4 wlast=0 addr=0x20002d00 data=0x0000000f00000040
+[VEC_WRP_STORE] chunk=6 beat=5 wlast=0 addr=0x20002d40 data=0x0000006d0000007e
+[VEC_WRP_STORE] chunk=6 beat=6 wlast=0 addr=0x20002d80 data=0x00000005ffffffa3
+[VEC_WRP_STORE] chunk=6 beat=7 wlast=1 addr=0x20002dc0 data=0x00000008ffffff73
+[VEC_WRP_STORE] chunk=7 beat=0 wlast=0 addr=0x20002e00 data=0x00000039ffffffcc
+[VEC_WRP_STORE] chunk=7 beat=1 wlast=0 addr=0x20002e40 data=0xffffffe30000007d
+[VEC_WRP_STORE] chunk=7 beat=2 wlast=0 addr=0x20002e80 data=0x0000001bffffffef
+[VEC_WRP_STORE] chunk=7 beat=3 wlast=0 addr=0x20002ec0 data=0xffffff600000004f
+[VEC_WRP_STORE] chunk=7 beat=4 wlast=0 addr=0x20002f00 data=0x000000c2ffffff8f
+[VEC_WRP_STORE] chunk=7 beat=5 wlast=0 addr=0x20002f40 data=0xffffffc20000007b
+[VEC_WRP_STORE] chunk=7 beat=6 wlast=0 addr=0x20002f80 data=0xffffff99ffffffe4
+[VEC_WRP_STORE] chunk=7 beat=7 wlast=1 addr=0x20002fc0 data=0xffffffc4ffffffec
+$finish at simulation time              3210001
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 3210001 ps
+CPU Time:      0.880 seconds;       Data structure size:   9.1Mb
+Thu Jul 23 08:42:38 2026
+=== END: build/evidence/wv_vector_logs/test_vector_chunk_burst_8beat.log.dbg ===
+
+=== FILE: build/evidence/wv_vector_logs/test_vector_conv_type_convert.log.dbg ===
+Command: /home/prj/zhengs/caduceuscore/CaduceusCore/build/evidence/simv_tb_vector_wrapper -l build/evidence/wv_vector_logs/test_vector_conv_type_convert.log.dbg
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2_Full64; Runtime version V-2023.12-SP2_Full64;  Jul 23 08:42 2026
+[VEC_WRP_STORE] chunk=0 beat=0 wlast=0 addr=0x20002000 data=0x67fe6d437196f44d
+[VEC_WRP_STORE] chunk=0 beat=1 wlast=0 addr=0x20002040 data=0xf2a0f2fd700cf1c5
+[VEC_WRP_STORE] chunk=0 beat=2 wlast=0 addr=0x20002080 data=0xf1bdee6b72186f6c
+[VEC_WRP_STORE] chunk=0 beat=3 wlast=0 addr=0x200020c0 data=0xe465ed34f430f082
+[VEC_WRP_STORE] chunk=0 beat=4 wlast=0 addr=0x20002100 data=0x0000000000000000
+[VEC_WRP_STORE] chunk=0 beat=5 wlast=0 addr=0x20002140 data=0x0000000000000000
+[VEC_WRP_STORE] chunk=0 beat=6 wlast=0 addr=0x20002180 data=0x0000000000000000
+[VEC_WRP_STORE] chunk=0 beat=7 wlast=1 addr=0x200021c0 data=0x0000000000000000
+$finish at simulation time              3210001
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 3210001 ps
+CPU Time:      0.830 seconds;       Data structure size:   9.1Mb
+Thu Jul 23 08:42:48 2026
+=== END: build/evidence/wv_vector_logs/test_vector_conv_type_convert.log.dbg ===
+

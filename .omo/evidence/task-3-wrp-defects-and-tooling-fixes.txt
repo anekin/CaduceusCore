@@ -1,0 +1,281 @@
+case_id: task-3-wrp-defects-and-tooling-fixes
+plan: .omo/plans/wrp-defects-and-tooling-fixes.md (todo 3 — BUG-MXU-WRP-002：preload 改用 WRP_K_TILES + TB 在 TRIG_LOAD 前编程)
+utc_start: 2026-09-24T16:36:19Z (RED)   utc_written: 2026-09-24T16:55Z
+branch: wrp-defects-and-tooling-fixes
+HEAD: f65f5b9ebc1ce29ae119c691a6931c9f39dce409
+  git log -1 --format=%s == "fix(rtl/wrapper): gate MXU DONE on store-out drain (BUG-MXU-WRP-001)"   PASS
+host: sz0002 (runs the sz0001 VCS/cocotb via scripts/p9_lib/p9_sz0001.sh; running the runner ON sz0001 still
+  fails with Error 255 — residual I-1 in .omo/notepads/wrp-defects-and-tooling-fixes/issues.md, unchanged)
+verdict: pass
+WRP2-FIX: done
+WRP2-GATE: green
+
+EXACT COMMANDS
+  RED  (pre-fix, HEAD + todo-2 tree):  cd sim/regression && make run_wrapper_mxu    (== bash scripts/wv_run_mxu.sh)
+  GREEN#1 (post-fix):                 cd sim/regression && make run_wrapper_mxu
+  GREEN#2 (flake re-run, same srcs):  cd sim/regression && make run_wrapper_mxu
+  Userspace/python syntax check:      python3 -m py_compile sim/tests/wrapper/test_mxu_wrapper.py  (OK)
+  Toolchain on the judged runs:       VCS V-2023.12-SP2_Full64, cocotb v1.9.0 (/NAS/Tools/anaconda3/envs/py3.11)
+
+SCOPE (+/- vs HEAD; diff ⊆ allowed set)
+  rtl/wrapper/mxu_soc_wrapper.v        (+79/-23)
+  sim/tests/wrapper/test_mxu_wrapper.py (+63/-10)
+  .omo/evidence/task-3-wrp-defects-and-tooling-fixes.txt (this file)
+  NOT touched: rtl/mxu/** (controller.v/mac_array.v/...), firmware/**, spec/**, gen/**,
+  rtl/tb/**, sim/regression/**, scripts/**, rtl/wrapper/* except mxu_soc_wrapper.v,
+  docs/bugs/**, README.md.  WRP-1 gating logic from f65f5b9 (mxu_done_seen latch, so_drain_done,
+  STATUS read override, WRP1-IRQ-RESIDUAL) is byte-unchanged.
+  Behaviour NOT changed: WRP_STATUS bits, watchdog threshold/wiring, IRQ, buffer depths
+  (W_BUF_DEPTH=64 / A_BUF_DEPTH=128 untouched), register map (0x44 stays RW 16-bit, reset 1).
+  No COCOTB_RESOLVE_X anywhere (grep: 0 hits in the diff and in the edited files).
+
+  File hashes (sha256)
+    rtl/wrapper/mxu_soc_wrapper.v        pre-edit c7faf5548de705da8d5c785cc8512905785d39298390d0e32dcaf43be3a9d978
+                                         post    aa01c0a218307f2db601e3add7bc234eb662d40e306f281dde454a4912e4c1bc
+    sim/tests/wrapper/test_mxu_wrapper.py pre-edit 8b1f6dbfcf66d2c780e71e6963d5e8df10eef487170caeaa79ef5966555ab60a
+                                         post    38f481d301ce9113f1a6e09f677cb29f57b91f1fb9ff7c8b1ea0994e342b346b
+    build/evidence/simv_tb_mxu_wrapper   RED    af58239024de27cd877655f2e722189cc70f19df840993d6b85b40d91d628069
+                                         GREEN1 032039fafa2463e72a409e752601c1c21291994c5591fb855c83fa67dbfca3e8
+                                         GREEN2 9482d618fd99120fabade570bf1a6e792dae42a04be5ef3545c220e839454c88
+      (each judged run rm -rf's simv+daidir and recompiles — see FRESHNESS below; the sha differs per
+       build because VCS embeds the build time, so the *behavioural* deltas below are the load-bearing proof)
+
+════════════════════════════════════════════════════════════════════════════════════════
+A. PRECHECK (all PASS, captured before any edit)
+════════════════════════════════════════════════════════════════════════════════════════
+  git branch --show-current == wrp-defects-and-tooling-fixes                              PASS
+  git log -1 --format=%s == fix(rtl/wrapper): gate MXU DONE on store-out drain (BUG-MXU-WRP-001)  PASS
+  git status --porcelain | grep -E '^ ?M' == exactly 8 lines = {7 protected} ∪ {plan}       PASS
+      .omo/evidence/task-0-signoff-v3-runner.txt
+      .omo/evidence/task-20-uncertainty-kpis.json
+      .omo/evidence/task-23-perf-spec-ci.txt
+      .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+      .omo/notepads/phase6-rtl-verification/learnings.md
+      .omo/plans/wrp-defects-and-tooling-fixes.md
+      build/evidence/fm-cv-chain.txt
+      build/evidence/w3-4-mobilenetv3-fm.txt
+
+════════════════════════════════════════════════════════════════════════════════════════
+B. CONSUMER ACCOUNTING BEFORE RETIRING THE DERIVED WIRE  (required by the todo)
+════════════════════════════════════════════════════════════════════════════════════════
+  $ grep -n 'wrp_k_tiles_derived' rtl/wrapper/mxu_soc_wrapper.v        [HEAD content]
+    263:  wire [15:0] wrp_k_tiles_derived = (dim0_k == 16'd0) ? 16'd1 : ((dim0_k + 16'd63) >> 6);
+    563:      if (pl_k_tile_cnt + 16'd1 < wrp_k_tiles_derived) begin      <- preload weight chain
+    589:      if (pl_k_tile_cnt + 16'd1 < wrp_k_tiles_derived) begin      <- preload activation chain
+    (the plan's :238-239/:483/:509 are pre-todo-2 numbering: todo 2 inserted the WRP-1 gating block, so in
+     HEAD they are :263-264/:563/:589, and after this edit the source is :277 with consumers :592/:618.)
+  dim0_k accounting (would have become dead once the wire retired):
+    $ grep -n 'dim0_k\|MXU_OFF_DIM0' rtl/wrapper/mxu_soc_wrapper.v   [HEAD]
+    244 (localparam MXU_OFF_DIM0), 247 (reg), 252 (reset), 255-256 (latch), 262-263 (comment+wire)
+    → the ONLY consumer was the derived wire, so the latch was removed with it (kept: MXU_OFF_DIM1/dim1_n,
+      still consumed by wrp_n_derived for the store-out row width).
+  Repo-wide consumers of the wire (excl. build/ and .omo/):
+    scripts/p9_fix_branch_b.sh:18   if ! grep -q 'wrp_k_tiles_derived' "$WRAPPER"; then ... exit 1
+    → historical one-off P9-B script (guard only; not referenced by any Makefile target or live
+      regression path — grep of Makefile/*.sh shows only phase9 plan/doc references).  Its guard is
+      superseded by this fix and would now exit 1 if re-run.  RESIDUAL R2 below; NOT touched because
+      this todo's commit is a 3-path pathspec commit.
+    sim/diagnose_mmu_path.py:66, scripts/p9_diag_harness.sh:94  read `.wrp_k_tiles` (read-only probes,
+      unaffected — the register keeps its name/semantics).
+  Post-edit grep (proof of retirement + new source):
+    $ grep -n 'wrp_k_tiles_derived\|wrp_k_tiles_eff' rtl/wrapper/mxu_soc_wrapper.v
+    277: wire [15:0] wrp_k_tiles_eff = (wrp_k_tiles == 16'd0) ? 16'd1 : wrp_k_tiles;
+    592: if (pl_k_tile_cnt + 16'd1 < wrp_k_tiles_eff) begin
+    618: if (pl_k_tile_cnt + 16'd1 < wrp_k_tiles_eff) begin
+    → 0 hits for wrp_k_tiles_derived; wrp_k_tiles (0x44) is the only tile-count source.
+
+  Who programs 0x44 today (no silent client may rely on the removed DIM0 derivation):
+    firmware/npu_firmware.c:248-254  mxu_wrapper_preload() writes wrp[MXU_WRP_K_TILES/4] = k_tiles = (K+63)/64 (:264)
+                                     BEFORE MXU_WRP_CMD (:247-272)                          ✓
+    sim/cocotb_bridge.py:2267        _mxu_preload() writes base+WRP_K_TILES before base+WRP_CMD ✓
+                                     (multi-tile caller at :4711 passes k_tiles explicitly)
+    sim/tests/wrapper/test_mxu_wrapper.py  _preload_and_run() — ADDED by this todo (before TRIG_LOAD) ✓
+    sim/mmio_bridge.py:119-131       Python bridge does not model the preload FSM (it acks LOAD_DONE
+                                     immediately), so K_TILES is inert there — no regression
+    others                           read-only diagnostics only (see above)
+
+  TB K values in use (bound/clamp check — (K+63)//64 must keep single-tile tests at 1):
+    K=64 : test_mxu_preload_single_tile, test_mxu_single_tile_compute, test_mxu_store_out_burst,
+           test_bug007_consecutive_dispatch (manual preload, reset default 1 is already correct),
+           test_mxu_wrapper_watchdog_timeout                              → (64+63)//64 = 1  (no change)
+    K=128: test_mxu_accumulate_mode                                     → (128+63)//64 = 2  (the fix)
+    K=128 is exactly at the capacity bound (see §E), nothing larger is used or claimed.
+
+════════════════════════════════════════════════════════════════════════════════════════
+C. RED — pre-fix suite is 5 PASS / 1 FAIL, identical to the recorded signature
+════════════════════════════════════════════════════════════════════════════════════════
+  Per-test rows (verbatim from the RED wrap-mxu-regression.txt, captured before GREEN overwrote it;
+  these are the parser's fail-closed per-test verdicts, NOT the runner's prose):
+      test_apb_regmap_rw: PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+      test_mxu_preload_single_tile: PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+      test_mxu_single_tile_compute: PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+      test_mxu_store_out_burst: PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+      test_mxu_accumulate_mode: FAIL [COCOTB_VERDICT: FAIL TESTS=1 PASS=0 FAIL=1 SKIP=0 TEST_LINES=1]
+      test_mxu_wrapper_watchdog_timeout: PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+      Summary: 5 PASS, 1 FAIL (6 total)     (make rc=1; runner prints "1 test(s) FAILED")
+
+  RED fingerprint — SINGLE preload burst pair for K=128 (should be two pairs):
+    129:   170.00ns INFO cocotb.tb_mxu_wrapper.m_axi  Read burst arid: 0x0 araddr: 0x00010000 arlen: 31 arsize: 6 arprot: 0
+    147:   510.00ns INFO cocotb.tb_mxu_wrapper.m_axi  Read burst arid: 0x0 araddr: 0x00020000 arlen: 63 arsize: 6 arprot: 0
+           (one 32-beat weight burst + one 64-beat activation burst; the second K-tile is never fetched)
+    then the store-out W beat carries X:
+    279:  2940.00ns INFO  cocotb.regression  test_mxu_accumulate_mode failed
+    298:  ValueError: Unresolvable bit in binary string: 'x'. Set the COCOTB_RESOLVE_X environment
+          variable to configure how special values are resolved.
+          (cocotbext axi_slave.py:154 int(w.wdata) ← cocotb/binary.py:84 resolve_error)
+    304:  ** TESTS=1 PASS=0 FAIL=1 SKIP=0   2940.00  0.77  3812.78 **
+
+  Signature comparison vs the recorded RED log build/evidence/t4-2-wv-mxu-test_mxu_accumulate_mode.log
+  (same line numbers, byte-identical except the wall-clock ratio):
+    line 129: IDENTICAL      (170.00ns, single len-32 weight burst @0x10000)
+    line 147: IDENTICAL      (510.00ns, single len-64 activation burst @0x20000)
+    line 279: IDENTICAL      (2940.00ns test_mxu_accumulate_mode failed)
+    line 298: IDENTICAL      (ValueError: Unresolvable bit in binary string: 'x')
+    line 304: differs only in the REAL TIME/RATIO columns (0.77/3812.78 vs 0.84/3480.13) — expected
+    $finish: 2940001 ns (t4-2 log: same 2940 ns failure point)
+  X-hit count in the RED accumulate log: 1 ('Unresolvable bit')
+
+  Why (root cause, already established by the three review rounds — not re-litigated here):
+  the FSM derived ceil(K/64) from the latched MXU DIM0 (HEAD :263-264), but every real client writes
+  DIM0 AFTER the preload handshake (firmware npu_firmware.c:247-272; this TB wrote it at preload-
+  step 5, i.e. after LOAD_DONE).  At preload time dim0_k was the reset default 64 → 1 tile → the
+  broadcast indexes pl_k_tile_cnt>=1 / burst_cnt>=1 read uninitialized weight_buf[32..63] /
+  activation_buf[64..127] (HEAD :560,:586,:673-674) → X on the bus → X on m_axi_wdata.
+
+════════════════════════════════════════════════════════════════════════════════════════
+D. FIX
+════════════════════════════════════════════════════════════════════════════════════════
+  RTL rtl/wrapper/mxu_soc_wrapper.v
+    1. Header register table now lists 0x44 WRP_K_TILES (RW, >=1) and 0x48 WRP_DIM_N (RW).
+    2. Usage flow corrected: step 3 = "Write WRP_K_TILES = ceil(K/64), THEN write WRP_CMD[0]=1";
+       step 5 notes DIM0 arrives AFTER the preload handshake and is NOT usable as the tile count.
+       Cited as consistent with npu_firmware.c:247-272 and cocotb_bridge.py:2267.
+    3. Retired the DIM0-derived wire + the dim0_k latch (see §B); new source of truth:
+         wire [15:0] wrp_k_tiles_eff = (wrp_k_tiles == 16'd0) ? 16'd1 : wrp_k_tiles;
+       consumed by both preload comparisons (was :563/:589, now :592/:618).
+    4. New capacity-bound comment block above the FSM stating the K <= 128 limit (see §E).
+  TB sim/tests/wrapper/test_mxu_wrapper.py
+    5. _preload_and_run(): after the base-address writes and BEFORE TRIG_LOAD:
+         k_tiles = (K + 63) // 64 ; write OFF_WRP_K_TILES ; read back ; assert equal
+       (the readback assert runs on every test that uses the helper, incl. the K=64 ones).
+    6. New _start_ar_monitor() helper: samples m_axi_arvalid/arready on each clock and records one
+       (araddr, arlen) per AR handshake; opt-in via the new ar_bursts= parameter (default None →
+       other callers byte-identical behaviour).
+    7. test_mxu_accumulate_mode: passes ar_bursts and mechanically asserts the exact 4-burst preload
+       list [(WGT,31),(WGT+2048,31),(ACT,63),(ACT+4096,63)].
+    8. Stale accumulate comment corrected: cross-K-tile accumulation is UNCONDITIONAL
+       (controller.v:205 mac_reset_acc <= (k_tile == 0)); controller's ctrl_acc_mode is dead
+       (declared controller.v:37, only other hit is the :204 comment — record only, rtl/mxu/** untouched);
+       CTRL[2] is consumed by the wrapper's store-out FP32 dequant path.
+
+════════════════════════════════════════════════════════════════════════════════════════
+E. CAPACITY BOUND WRITTEN INTO THE RTL (K <= 128 per command)
+════════════════════════════════════════════════════════════════════════════════════════
+  The internal buffers hold exactly 2 K-tiles:
+    weight_buf[W_BUF_DEPTH=64]     : 1 K-tile = WEIGHT_BEATS_PER_K = 32 entries → tiles 0,1 fit
+    activation_buf[A_BUF_DEPTH=128]: 1 K-tile = ACT_BEATS_PER_K    = 64 entries → tiles 0,1 fit
+    write indexes weight_buf[(pl_k_tile_cnt*32)+pl_beat_cnt] / activation_buf[(pl_k_tile_cnt*64)+pl_beat_cnt]
+    read  indexes act_buf_idx = burst_cnt*64 + data_cycle, w_buf_idx = burst_cnt*32 + data_cycle[13:1]
+    (burst_cnt increments once per compute burst == per K-tile) → both leave the arrays at index >= 2.
+  ⇒ WRP_K_TILES is honored exactly for K <= 128 (ceil(K/64) <= 2).  K > 128 per command stays
+    UNSUPPORTED (out-of-range reads yield X).  Buffer depths are deliberately NOT changed (out of scope).
+
+════════════════════════════════════════════════════════════════════════════════════════
+F. GREEN — 6/6 PASS, no X, golden match, mechanical preload assertions
+════════════════════════════════════════════════════════════════════════════════════════
+  FRESHNESS (the judged binary really contains the edited sources):
+    - The runner rm -rf's "$SIMV" "$SIMV.daidir" before every compile, and compile exit is checked
+      (COMPILE_EXIT_CODE=0; the script aborts on non-zero).
+    - Compile log build/evidence/wv-compile-tb_mxu_wrapper.log:
+        "Chronologic VCS (TM) Version V-2023.12-SP2_Full64 -- Fri Sep 25 00:49:54 2026"
+        "CPU time: 24.186 seconds to compile + 1.519 seconds to elab + .454 seconds to link"
+      (GREEN#2; GREEN#1's line read 22.826 s to compile — that log was replaced by GREEN#2, L11)
+      simv mtime 2026-09-25 00:50:39 +0800, i.e. AFTER both source edits (RTL 00:41:52, TB 00:43:44).
+    - Behavioural deltas only the edited sources can produce:
+        NEW log line "WRP_K_TILES=2 programmed + readback OK (K=128)"  — printed only by the new TB code
+        NEW burst geometry: 4 preload AR bursts instead of 2 — only possible with the new RTL source
+    - $finish at simulation time 7820001 ns (RED: 2940001 ns) and the test now reaches the golden
+      comparison instead of dying at 2940 ns.
+
+  Per-test rows, GREEN#2 (per-test parser verdicts; runner summary is quoted only as a cross-check):
+      test_apb_regmap_rw: PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+      test_mxu_preload_single_tile: PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+      test_mxu_single_tile_compute: PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+      test_mxu_store_out_burst: PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+      test_mxu_accumulate_mode: PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+      test_mxu_wrapper_watchdog_timeout: PASS [COCOTB_VERDICT: PASS TESTS=1 PASS=1 FAIL=0 SKIP=0 TEST_LINES=1]
+      Summary: 6 PASS, 0 FAIL (6 total)      make rc=0   → suite 5/6 RED → 6/6 GREEN
+
+  MECHANICAL PRELOAD ASSERTION #1 — wrp_k_tiles readback (primary; every helper caller):
+      test_mxu_single_tile_compute : "WRP_K_TILES=1 programmed + readback OK (K=64)"
+      test_mxu_store_out_burst     : "WRP_K_TILES=1 programmed + readback OK (K=64)"
+      test_mxu_accumulate_mode     : "WRP_K_TILES=2 programmed + readback OK (K=128)"
+      (assert k_tiles_rb == (K+63)//64 inside _preload_and_run; a mismatch raises AssertionError)
+
+  MECHANICAL PRELOAD ASSERTION #2 — AR burst geometry (test_mxu_accumulate_mode, K=128):
+      log lines (GREEN#2):
+        230.00ns  Read burst araddr: 0x00010000 arlen: 31      ← weight K-tile 0 (32 x 64 B = 2048 B)
+        570.00ns  Read burst araddr: 0x00010800 arlen: 31      ← weight K-tile 1
+        910.00ns  Read burst araddr: 0x00020000 arlen: 63      ← act    K-tile 0 (64 x 64 B = 4096 B)
+       1570.00ns  Read burst araddr: 0x00021000 arlen: 63      ← act    K-tile 1
+       7820.00ns "Preload AR bursts (K=128): [(65536, 31), (67584, 31), (131072, 63), (135168, 63)]"
+      assert ar_bursts == [(0x10000,31),(0x10800,31),(0x20000,63),(0x21000,63)]  → PASS
+      RED comparison: only [(0x10000,31),(0x20000,63)] appeared (see §C).
+
+  GOLDEN / X:
+      accumulate 7820.00ns: "Accumulate mode K=128: bit-exact match (4096 elements)" → TEST PASSED
+      single_tile_compute 6140.00ns: "Bit-exact match: 0 mismatches out of 4096 elements" → TEST PASSED
+      X-scan over the 6 GREEN logs ('Unresolvable bit'): 0/6 hits (RED accumulate log: 1 hit)
+      (COCOTB_RESOLVE_X was never set: the wrapper run exports only MODULE/TOPLEVEL/TESTCASE/ANSI.)
+
+  FLAKE PROBE (adversarial class flaky_tests, applicable-lite):
+      GREEN#1 and GREEN#2 are independent full recompiles+runs of the same sources; both are 6/6 PASS,
+      both show the identical 4-burst list and the identical readback lines (burst-geometry diff: empty),
+      and both logs have 0 X-hits.  simv sha differs per run (VCS build timestamp), behaviour does not.
+
+════════════════════════════════════════════════════════════════════════════════════════
+G. ADVERSARIAL-CLASS PROBES
+════════════════════════════════════════════════════════════════════════════════════════
+  misleading_success_output (APPLICABLE) — probed: every verdict quoted above is the per-test row from
+    scripts/parse_cocotb_verdict.sh (fail-closed: exactly one self-consistent summary line, n>0,
+    PASS==TESTS, FAIL==SKIP==0, plus per-test cross-check).  No conclusion is drawn from the runner's
+    prose or from make's exit code alone.  The runner's own summary is quoted only as a cross-check.
+  stale_state (APPLICABLE) — probed: simv/daidir are removed by the runner before each compile
+    (COMPILE_EXIT_CODE=0), compile banner + CPU line + simv mtime post-date the edits, and two
+    behaviour signatures exist only in the edited sources (new log line, 4-burst geometry).
+  dirty_worktree (APPLICABLE) — probed: M-set after the work = 7 protected + plan + exactly the two
+    allowed source files (10 lines); none of the 7 protected files is staged.  The wrapper runs
+    regenerate the tracked cocotb report results.xml at the repo root (a side effect, not a change):
+    restored with `git checkout -- results.xml`; recorded as residual R3.
+  flaky_tests (APPLICABLE-lite) — probed: see FLAKE PROBE (GREEN#1 == GREEN#2 behaviourally).
+  malformed_input (NOT APPLICABLE) — the helpers take only the TB's own test vectors; no external input.
+  prompt_injection (NOT APPLICABLE) — no untrusted text is consumed; sources are the repo's own plan/RTL.
+  cancel_resume (NOT APPLICABLE) — single serial session, no background jobs, no resume mid-fix.
+  hung_commands (NOT APPLICABLE) — every make invocation was bounded (timeout 1500) and all exited
+    rc=0/rc=1 normally; no orphaned simv (the wrapper runner's 6 cases finished in ~4 min each).
+  repeated_interrupts (NOT APPLICABLE) — no signals sent; runs completed uninterrupted.
+
+════════════════════════════════════════════════════════════════════════════════════════
+H. RESIDUALS / NOTES (recorded, not fixed here)
+════════════════════════════════════════════════════════════════════════════════════════
+  R1 K > 128 per command remains UNSUPPORTED (X): buffers are 2 K-tiles deep by design; the fix bounds
+     the claim instead of growing them.  Any future K > 128 support must deepen W_BUF_DEPTH/A_BUF_DEPTH
+     and the burst_cnt indexing together.
+  R2 scripts/p9_fix_branch_b.sh:18 still greps for `wrp_k_tiles_derived` and would exit 1 if re-run.
+     Historical one-off P9-B guard (superseded by this fix); not wired into any Makefile target or live
+     regression path.  Left untouched (3-path pathspec commit).
+  R3 results.xml is tracked and regenerated in the repo root by every wrapper suite run (its committed
+     copy is from an older SFU run).  Restored to HEAD here; candidate for the todo-1 untrack list in a
+     later wave.
+  R4 Multi-tile end-to-end coverage (run_e2e_mxu_multi / FM-SOC) belongs to todo 5.  No doubt carried
+     into it: the firmware (npu_firmware.c:247-272) and the cocotb bridge (cocotb_bridge.py:2267,
+     multi-tile call site :4711) both program WRP_K_TILES before TRIG_LOAD — the TB was the outlier.
+  R5 WRP1-IRQ-RESIDUAL (one-cycle mxu_irq pulse, not drain-gated) is unchanged by this todo.
+  R6 rtl/tb/apb_conformance_real_tb.sv (F2-2, frozen) exercises 0x44 only as a 16-bit R/W register with
+     a write mask and never triggers a preload, so the register-map contract is unaffected.
+
+════════════════════════════════════════════════════════════════════════════════════════
+I. JUDGEMENT
+════════════════════════════════════════════════════════════════════════════════════════
+WRP2-FIX: done
+WRP2-GATE: green

@@ -1,0 +1,154 @@
+case_id: task-0-wrp-defects-and-tooling-fixes
+plan: .omo/plans/wrp-defects-and-tooling-fixes.md (todo 0 — P0 baseline)
+utc_start: 2026-09-24T14:00:39Z
+utc_written: 2026-09-24T14:02:08Z
+verdict: pass
+scope: git/evidence only — ZERO product-code changes (rtl/, sim/, scripts/, firmware/, docs/, spec/, gen/, README.md untouched)
+
+METHOD
+precondition_gate: git log --oneline main -3 -> MUST contain f1d9652 (else STOP, create nothing)
+branch_create: git checkout -b wrp-defects-and-tooling-fixes main (in-place, NO worktree)
+hash_tool: sha256sum (GNU coreutils)
+firmware: sha256sum firmware/build/npu_firmware.hex (existing hex recorded only — firmware NOT rebuilt)
+protected_dirty: 7 parallel-session-owned files hashed BEFORE and AFTER all work; neither staged nor committed
+commit: pathspec-only (plan + draft + evidence via `git add -f`); no `git add .` / `-A` / `commit -a` / `stash` / push
+
+PRECONDITION GATE (main -3)
+$ git log --oneline main -3
+f1d9652 Merge rtl-open-bugs-cleanup: BUG-RTL-SOC-010/011 + BUG-MXU-WDT-001 Fixed — doc align, DMA bus semantics, MXU watchdog (F1-F4 all APPROVE)
+b8f7589 chore(omo): record F1-F4 APPROVE verdicts + user-approved merge (rtl-open-bugs-cleanup)
+1af5c70 docs(bugs): BUG-RTL-SOC-010/011 + BUG-MXU-WDT-001 Fixed — doc align, DMA bus semantics, MXU watchdog
+$ git branch --show-current
+main
+$ git rev-parse HEAD
+f1d96526cdbc1b404dcdcb932306624db89ddead
+GATE: f1d9652 present at main tip (main tip == f1d96526cdbc1b404dcdcb932306624db89ddead) -> PASS
+
+BRANCH CREATE
+$ git checkout -b wrp-defects-and-tooling-fixes main
+Switched to a new branch 'wrp-defects-and-tooling-fixes'
+M	.omo/evidence/task-0-signoff-v3-runner.txt
+M	.omo/evidence/task-20-uncertainty-kpis.json
+M	.omo/evidence/task-23-perf-spec-ci.txt
+M	.omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+M	.omo/notepads/phase6-rtl-verification/learnings.md
+M	build/evidence/fm-cv-chain.txt
+M	build/evidence/w3-4-mobilenetv3-fm.txt
+  (the 7 protected dirty files were carried across the checkout UNCHANGED — not staged, not touched)
+
+PROVENANCE
+BRANCH: wrp-defects-and-tooling-fixes
+$ git branch --show-current
+wrp-defects-and-tooling-fixes
+$ git rev-parse HEAD
+f1d96526cdbc1b404dcdcb932306624db89ddead
+BASE: main @ f1d96526cdbc1b404dcdcb932306624db89ddead
+$ git merge-base --is-ancestor f1d9652 HEAD ; echo rc=$?
+rc=0
+FIRMWARE_HEX_SHA: 6f261c6e35e65a190c887ba0dc50d604e2601e39b6aa99524ea5284a35165ec0  firmware/build/npu_firmware.hex
+  (file exists, 11916 bytes, mtime 2026-09-01 23:20:03 +0800 — recorded only, NOT rebuilt)
+
+TOUCHED-FILE BASELINE HASHES (11 files this plan will modify)
+$ sha256sum rtl/wrapper/mxu_soc_wrapper.v sim/tests/wrapper/test_mxu_wrapper.py sim/regression/Makefile sim/regression/soc-verification-run.sh sim/regression/run_ibex_full_rtl.sh scripts/wv_run_mxu.sh scripts/wv_run_sfu.sh scripts/wv_run_vector.sh scripts/wv_regression.sh docs/bugs/bugs-module-level.md README.md
+e82ab7cd015e9760ffa971fb4aa46b8911deb4e17a05edf6d03ba6a65923eec4  rtl/wrapper/mxu_soc_wrapper.v
+8b1f6dbfcf66d2c780e71e6963d5e8df10eef487170caeaa79ef5966555ab60a  sim/tests/wrapper/test_mxu_wrapper.py
+948bedfd265d915a4801e9f69a220e0418b3bf3c7b4f44db464ee9732020f1fd  sim/regression/Makefile
+0ef8072ce06cad31a6f25db3ea90e7218d6a99b9b3cbae84572c624590a086a1  sim/regression/soc-verification-run.sh
+ce4d18ff254ab03754e53ec7f52c8f2e1bba32a9d52fc8345401230580a6fa25  sim/regression/run_ibex_full_rtl.sh
+a2c94a7e43338cf79d9c0b291fc908893ca47486a89a42d22549dbdd32b332f4  scripts/wv_run_mxu.sh
+9c4f51c2d95f834a0df80f957d8735193151141e5e1cc5f64ffae7c412850725  scripts/wv_run_sfu.sh
+8625ed654609f0fda6d141c014c8d6461a68d6ad8a271933edd479335af70341  scripts/wv_run_vector.sh
+74e3d4d1022b0d9140341ca61e8312788aa46dfa8772c5faff55f675740df04c  scripts/wv_regression.sh
+f94c3c04200ebe67ae7d17eb8b28e264f626af251187a5a1718add461a2a2fe7  docs/bugs/bugs-module-level.md
+fb345c1245d8342d319f3a0367bfef9bc5a6e1f5674a634b18d9bf0c165bf934  README.md
+
+INLINE git status --porcelain SNAPSHOT (pre-commit; full literal output, no dangling reference)
+$ git status --porcelain
+ M .omo/evidence/task-0-signoff-v3-runner.txt
+ M .omo/evidence/task-20-uncertainty-kpis.json
+ M .omo/evidence/task-23-perf-spec-ci.txt
+ M .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+ M .omo/notepads/phase6-rtl-verification/learnings.md
+ M build/evidence/fm-cv-chain.txt
+ M build/evidence/w3-4-mobilenetv3-fm.txt
+?? .omo/plans/bug-012-fix.md
+?? .omo/plans/dse-relic-retirement.md
+?? .omo/plans/fm-residual-cleanup.md
+?? .omo/plans/fm-verification-fixes.md
+?? .omo/plans/verification-env-sz0001.md
+?? .omo/plans/wrp-defects-and-tooling-fixes.md
+?? .omo/tmp/
+M-LINE COUNT: $ git status --porcelain | grep -cE '^ ?M'  ->  7
+7 M lines are EXACTLY the 7 parallel-session dirty files in Scope Must-NOT (order as listed):
+  .omo/evidence/task-0-signoff-v3-runner.txt
+  .omo/evidence/task-20-uncertainty-kpis.json
+  .omo/evidence/task-23-perf-spec-ci.txt
+  .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+  .omo/notepads/phase6-rtl-verification/learnings.md
+  build/evidence/fm-cv-chain.txt
+  build/evidence/w3-4-mobilenetv3-fm.txt
+Untracked (`??`) entries are EXPECTED pre-existing artifacts (the 5 scratch plan drafts
+[bug-012-fix / dse-relic-retirement / fm-residual-cleanup / fm-verification-fixes / verification-env-sz0001],
+this plan's own file, and .omo/tmp/) and are NOT counted by the M-line assertion.
+
+7 PROTECTED DIRTY FILES — sha256 BEFORE work (captured on main, pre-branch)
+$ sha256sum .omo/evidence/task-0-signoff-v3-runner.txt .omo/evidence/task-20-uncertainty-kpis.json .omo/evidence/task-23-perf-spec-ci.txt .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md .omo/notepads/phase6-rtl-verification/learnings.md build/evidence/fm-cv-chain.txt build/evidence/w3-4-mobilenetv3-fm.txt
+01c7e6fddafe480f711e8fbf1acc1cc7658c885efa2ae3604de962be215f0ef1  .omo/evidence/task-0-signoff-v3-runner.txt
+3c524bc23681b677bf762a763f8fe708891f1e03bf1123e4340e572c7cde07fc  .omo/evidence/task-20-uncertainty-kpis.json
+99baf8e38100691138403e90ca2f053fcef6e84ee13dcc4601dac9ee47dcd7d3  .omo/evidence/task-23-perf-spec-ci.txt
+152791981641928dc5f53aec1777d285a4cf2c6b61e79ababaabf0bbdd457af8  .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+048ec8c95dbebd4f08f872e8452414d0d61da72ec02dfc3715281e9a33e68b50  .omo/notepads/phase6-rtl-verification/learnings.md
+88b9174e88dab7bf71b1b4348004f13bc9cd9a9953aa988112b3da910099978e  build/evidence/fm-cv-chain.txt
+59657c08d3f9b53d7f411101968ae56150dfbcacfe3580dabae6f30dd35e9e69  build/evidence/w3-4-mobilenetv3-fm.txt
+
+7 PROTECTED DIRTY FILES — sha256 AFTER work (same command, identical output)
+$ sha256sum .omo/evidence/task-0-signoff-v3-runner.txt .omo/evidence/task-20-uncertainty-kpis.json .omo/evidence/task-23-perf-spec-ci.txt .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md .omo/notepads/phase6-rtl-verification/learnings.md build/evidence/fm-cv-chain.txt build/evidence/w3-4-mobilenetv3-fm.txt
+01c7e6fddafe480f711e8fbf1acc1cc7658c885efa2ae3604de962be215f0ef1  .omo/evidence/task-0-signoff-v3-runner.txt
+3c524bc23681b677bf762a763f8fe708891f1e03bf1123e4340e572c7cde07fc  .omo/evidence/task-20-uncertainty-kpis.json
+99baf8e38100691138403e90ca2f053fcef6e84ee13dcc4601dac9ee47dcd7d3  .omo/evidence/task-23-perf-spec-ci.txt
+152791981641928dc5f53aec1777d285a4cf2c6b61e79ababaabf0bbdd457af8  .omo/notepads/fm-e2e-qwen-cv-software-stack/learnings.md
+048ec8c95dbebd4f08f872e8452414d0d61da72ec02dfc3715281e9a33e68b50  .omo/notepads/phase6-rtl-verification/learnings.md
+88b9174e88dab7bf71b1b4348004f13bc9cd9a9953aa988112b3da910099978e  build/evidence/fm-cv-chain.txt
+59657c08d3f9b53d7f411101968ae56150dfbcacfe3580dabae6f30dd35e9e69  build/evidence/w3-4-mobilenetv3-fm.txt
+$ diff <(BEFORE capture file) <(AFTER capture file) ; echo rc=$?
+rc=0   (zero lines of difference)
+
+ADVERSARIAL CLASS PROBES
+dirty_worktree: APPLICABLE -> PROBED: all 7 protected files hashed before AND after; diff empty (rc=0);
+  M-line count 7 == 7; none of the 7 was staged (pathspec-limited `git add -f` of 3 other paths);
+  the branch checkout carried the 7 modified files over without touching them.
+misleading_success_output: APPLICABLE -> PROBED: verdict NOT inferred from terminal text. Independently
+  re-verified with `git branch --show-current` (wrp-defects-and-tooling-fixes), `git rev-parse HEAD`
+  (f1d96526cdbc1b404dcdcb932306624db89ddead), `git log -1 --format='%H%n%s'` (exact commit subject),
+  `git diff --cached --name-only` (exactly the 3 staged paths) and `wc -l` on this file (non-empty: 154).
+  Evidence content is machine-grep-able; `P0-SNAPSHOT: pass` is the sole verdict token.
+malformed_input: NOT APPLICABLE — no external/untrusted text or user input is parsed; only fixed git/sha256 CLI invocations.
+prompt_injection: NOT APPLICABLE — no external content is fetched or interpreted in this task.
+cancel_resume: NOT APPLICABLE — single-shot bounded task; no resumable long-running flow.
+stale_state: NOT APPLICABLE — HEAD/branch captured live at run time; branch created in-place from main this run.
+hung_commands: NOT APPLICABLE — all commands are bounded, synchronous, sub-second git/sha256/mkdir calls; no waits.
+flaky_tests: NOT APPLICABLE — no tests executed (no pytest, no VCS); nothing to be flaky.
+repeated_interrupts: NOT APPLICABLE — no interactive or interruptible sequence; no partial-state risk.
+
+COMMIT (pathspec-only: plan + draft + this evidence)
+$ git add -f .omo/plans/wrp-defects-and-tooling-fixes.md .omo/drafts/wrp-defects-and-tooling-fixes.md .omo/evidence/task-0-wrp-defects-and-tooling-fixes.txt
+$ git diff --cached --name-only   ->  exactly these 3 paths (verified before commit)
+  .omo/drafts/wrp-defects-and-tooling-fixes.md
+  .omo/evidence/task-0-wrp-defects-and-tooling-fixes.txt
+  .omo/plans/wrp-defects-and-tooling-fixes.md
+$ git commit -m "chore(omo): P0 baseline — branch + provenance snapshot (wrp-defects-and-tooling-fixes)"
+  (commit sha recorded post-commit in .omo/start-work/ledger.jsonl; exactly 3 paths, 0 product files)
+
+POST-COMMIT INVARIANT (reproduce after the commit)
+$ git branch --show-current                                                        ->  MUST be wrp-defects-and-tooling-fixes
+$ git log -1 --format='%H%n%s'                                                     ->  MUST match the exact commit message above
+$ git status --porcelain | grep -cE '^ ?M'                                         ->  MUST be 7
+$ wc -l .omo/evidence/task-0-wrp-defects-and-tooling-fixes.txt                     ->  MUST be non-zero
+  Guarantee: staging is pathspec-limited to the 3 paths above; `git commit` writes only staged
+  content, so it cannot modify any of the 7 protected files. Their AFTER hashes above remain valid.
+  Notepads (.omo/notepads/wrp-defects-and-tooling-fixes/) and .omo/start-work/ledger.jsonl are NOT
+  committed (both gitignored: .gitignore:91 `.omo/drafts/`, .gitignore:93 `.omo/start-work/`).
+  Pre-commit assertion values captured in this run: branch=wrp-defects-and-tooling-fixes,
+  HEAD=f1d96526cdbc1b404dcdcb932306624db89ddead, M-count=7.
+
+P0-SNAPSHOT: pass
