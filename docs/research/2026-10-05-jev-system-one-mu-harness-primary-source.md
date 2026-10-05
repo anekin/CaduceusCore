@@ -5,7 +5,7 @@ type: primary-source-verification
 trigger: 用户分享微信稿《把Jev整合进Harness，开源项目拿下黑客松总冠军！》（智猩猩AI，2026-10-05）
 topics: [T1-Hermes自我进化, T3-Agent方法论]
 vault_note: 阅读存档/2026-10-05-把Jev整合进Harness-mu黑客松冠军-一手源核实.md
-ima_synced: "2026-10-05 已同步 ima Research；⚠️ 禁止重复同步（文件名含日期，已加本字段作护栏）"
+ima_synced: "2026-10-05 已同步 ima Research(folder_7500790050594871)，回读验证命中（Research 20→21）；⚠️ 禁止重复同步（本字段即护栏，ima_sync.py 已识别）。注：同日首次同步误用脚本旧默认值（Mercury 根 folder_7501435130349554），在 Research/Mercury 根留下一条副本，ima openapi 无删除/移动能力（实测 move_knowledge 返回 code:0 但为 no-op），需在 ima UI 手动清理。"
 research_loop_feedback: 本报告补上一条此前完全空白的线索——harness 层出现「专职做判断的小模型」层；建议把「判定点清点 + shadow 试点」列入 T1 下一轮实验候选。
 ---
 
