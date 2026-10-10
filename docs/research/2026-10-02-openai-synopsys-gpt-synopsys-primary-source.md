@@ -45,3 +45,13 @@
 - 本机 Clash 订阅 **2026-10-01 到期**（`/proxies` 53 节点 alive 全 false）→ 系统代理 7890 端口虽 Open，但**所有境外流量失败**（curl SSL error 35 / CDP 浏览器 ERR_CONNECTION_CLOSED）。
 - **解法**：`curl -X PATCH http://127.0.0.1:9090/configs -H "Content-Type: application/json" -d '{"mode":"direct"}'` 切 direct 后，`news.synopsys.com` / `api.github.com` / `stockanalysis.com` / `163.com` 全部**直连 200**（Google、DDG 仍不可用；Bing 直连 302）。
 - 微信文章：curl 直取一次成功（`var nickname/biz/ct/msg_title` + `#js_content` 精确正则）。
+
+## 五、2026-10-10 复核（同一篇号稿被再次分享）
+
+用户 2026-10-10 再次分享**同一 URL**（`.../s/mRWZBIpfsohblXQg02wLjg`，「AI寒武纪」，发文 `ct=1790812200` → 2026-10-01 07:50）。本次取官方 **newsroom + investor 两版全文**逐字复核（代理已恢复，脚本 `Vault/temp/fetch_gptsynopsys_body.py`），结果：
+
+**① 修正一处**：官方稿**副标题确写** `collaborate as **preferred partners**` → 「首选合作伙伴」**不是中文稿自加**（Vault 笔记 10-02 的「措辞放大」判定已更正）。
+
+**② 六条增量逐条发现**（Vault 笔记同批补入）：① 官方 `optimized to use Synopsys EDA tools` 的 **optimized** 被中文稿丢弃 ② licence 用途限定 `for development of the specialized model`（非开放工具访问）③ `agent harness` 被泛化成「智能体框架」④ 「像资深芯片工程师一样**思考**」vs 官方 `as expert engineers` / `native expert user`（强调**使用**工具）= 轻微抬高 ⑤ 无发布时点（forward-looking 覆盖 timing/availability；letsdatascience 10-05 明写 no release date exists）⑥ 官方路线句 `Today… **The next leap** is…` 被改写成背景句，**厂商「通用模型+harness 是当下、模型专精是下一步」的表态被弱化**。
+
+**③ 复核未推翻**：本报告原结论（数据不入训/加密/保留期一致、bundled compute+model+licenses 一致、early engagements 一致、数亿美元后训练出自 Investor Day 问答而非新闻稿）全部成立。**本篇无需修订，仅补上述四点措辞层发现。**
