@@ -55,3 +55,12 @@
 **② 六条增量逐条发现**（Vault 笔记同批补入）：① 官方 `optimized to use Synopsys EDA tools` 的 **optimized** 被中文稿丢弃 ② licence 用途限定 `for development of the specialized model`（非开放工具访问）③ `agent harness` 被泛化成「智能体框架」④ 「像资深芯片工程师一样**思考**」vs 官方 `as expert engineers` / `native expert user`（强调**使用**工具）= 轻微抬高 ⑤ 无发布时点（forward-looking 覆盖 timing/availability；letsdatascience 10-05 明写 no release date exists）⑥ 官方路线句 `Today… **The next leap** is…` 被改写成背景句，**厂商「通用模型+harness 是当下、模型专精是下一步」的表态被弱化**。
 
 **③ 复核未推翻**：本报告原结论（数据不入训/加密/保留期一致、bundled compute+model+licenses 一致、early engagements 一致、数亿美元后训练出自 Investor Day 问答而非新闻稿）全部成立。**本篇无需修订，仅补上述四点措辞层发现。**
+
+## 六、2026-10-10 专家转述登记（**待核实**，勿当事实引用）
+
+用户转述 **黄宇（华为海思 EDA 首席架构师 / EDA 实验室主任**，前 Mentor Graphics Sr. Key Expert、20 年美国 EDA 经验，身份已核）10-10 发言：① 开发垂类大模型 ② 两家组工程师联合团队 ③ **Synopsys 会开放部分 EDA 源代码给 OpenAI** ④ 未来卖模型两边分成。
+
+- ①④ ✅ 与官方口径一致（`specialized model` / `revenue sharing`）；② ⚠️ 官方写 `closely collaborate on R&D`（未见 joint engineering team 逐字）；
+- ③ ❌ **无任何公开源支持**：官方措辞是 `OpenAI to license Synopsys' EDA tools **for development of the specialized model**`（使用许可，非源码）；英文 PR 与媒体全文无 source code / open source 字样；Ghazi 公开表态方向相反（`IP cannot get sucked into… nonstarter`；自家 agent 用 `proprietary APIs and data`）。
+- 判读：**触及官方明确未披露的许可范围细节** → 公开源不能证实也不能证伪。最可能是把「授权工具（含内部 API/脚本/数据访问）用于训练」转述成「开放源码」（后训练需要的是可编程接口 + ground-truth 反馈，不是 RTL/算法源码）。
+- 验证路径（待办）：Synopsys 10-K/10-Q 许可与 IP 披露 → 后续电话会问答 → OpenAI 工程博客 → 黄宇公开演讲实录（百度检索未找到）。
