@@ -6,6 +6,7 @@ trigger: 用户分享微信稿《听完 a16z 合伙人谈「下一个 25 万亿�
 topics: [T3-Agent方法论, T15-NPU架构搜索, T6-投资研究]
 vault_note: 阅读存档/2026-10-11-a16z-DavidGeorge-下一个25万亿-智见RoboWeek中文稿核实.md
 research_loop_feedback: 外部一线 VC 用「用户只关心结果、不关心调用几次模型」定义应用层护城河 —— 这是 harness 论（模型定上限、harness 定逼近度）在产业侧的独立印证，可直接引用。另：算力需求多头论据的最强版本来自 a16z 本人，但他主动给出两个反证（编程是特例 / 算法效率突破），做 NPU 需求预测时 MUST 把这两条作为假设边界写进模型。
+vault_note_synced: "阅读存档稿已同步 ima Research(folder_7500790050594871)，2026-10-15 回读命中（41→42）。本报告（npu 仓库）未单独同步 ima，避免同一内容双份。"
 ---
 
 # 一手源核实：a16z David George × Jack Altman（AI / Autonomy / Next $25 Trillion）
